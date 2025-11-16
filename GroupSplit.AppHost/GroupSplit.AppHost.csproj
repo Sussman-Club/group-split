@@ -8,4 +8,8 @@
         <UserSecretsId>031551fd-13d2-4a55-a125-47bb17c6ec44</UserSecretsId>
     </PropertyGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
+    </ItemGroup>
+
 </Project>
