@@ -1,8 +1,10 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "group-split.ServiceDefaults", "group-split.ServiceDefaults\group-split.ServiceDefaults.csproj", "{1E334123-49E5-49C4-9EC1-000AF1E7E464}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.ServiceDefaults", "GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj", "{1E334123-49E5-49C4-9EC1-000AF1E7E464}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "group-split.AppHost", "group-split.AppHost\group-split.AppHost.csproj", "{6BE5E200-16A1-4270-A3B0-153E60C61646}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.AppHost", "GroupSplit.AppHost\GroupSplit.AppHost.csproj", "{6BE5E200-16A1-4270-A3B0-153E60C61646}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.API", "GroupSplit.API\GroupSplit.API.csproj", "{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +20,9 @@ Global
 		{6BE5E200-16A1-4270-A3B0-153E60C61646}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6BE5E200-16A1-4270-A3B0-153E60C61646}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6BE5E200-16A1-4270-A3B0-153E60C61646}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

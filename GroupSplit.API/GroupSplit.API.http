@@ -1,0 +1,6 @@
+@GroupSplit.API_HostAddress = http://localhost:5144
+
+GET {{GroupSplit.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
