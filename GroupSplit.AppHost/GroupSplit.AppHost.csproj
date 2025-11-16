@@ -10,6 +10,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
+      <ProjectReference Include="..\GroupSplit.Web\GroupSplit.Web.csproj" />
     </ItemGroup>
 
 </Project>
