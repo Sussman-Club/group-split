@@ -205,3 +205,44 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# .NET / C# / Visual Studio
+
+# Build results
+bin/
+obj/
+out/
+artifacts/
+
+# .NET user-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# Visual Studio cache
+.vs/
+
+# ASP.NET
+project.lock.json
+project.fragment.lock.json
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+*.nuspec
+*.psmdcp
+
+# Rider
+.idea/
+
+# Azure Functions local settings
+local.settings.json
+
+# Logs
+*.log
+
+# Generated files
+Generated/
