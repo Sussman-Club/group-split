@@ -3,6 +3,8 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<GroupSplit_API>("API").WithScalarUrl();
+var backend = builder.AddProject<GroupSplit_API>("API").WithScalarUrl();
+
+builder.AddProject<GroupSplit_Web>("Web").WithReference(backend);
 
 builder.Build().Run();
