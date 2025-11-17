@@ -14,6 +14,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Data.Migrations.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Web", "GroupSplit.Web\GroupSplit.Web.csproj", "{80672012-B99B-486E-B5C2-8C78049C336C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Identity", "GroupSplit.Identity\GroupSplit.Identity.csproj", "{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "identity", "identity", "{711D6BA9-2B9A-4539-88E2-A4E28F66CDF7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Identity.Migrations.PostgreSQL", "GroupSplit.Identity.Migrations.PostgreSQL\GroupSplit.Identity.Migrations.PostgreSQL.csproj", "{3028069A-1670-4211-B892-6DFBA3E2CFF2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,9 +50,19 @@ Global
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3028069A-1670-4211-B892-6DFBA3E2CFF2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3028069A-1670-4211-B892-6DFBA3E2CFF2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3028069A-1670-4211-B892-6DFBA3E2CFF2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3028069A-1670-4211-B892-6DFBA3E2CFF2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8D8C8C84-929E-42A8-B6C3-9810C19FEA3E} = {F6F12F20-A153-4F18-8568-D7F7E04E80D4}
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B} = {F6F12F20-A153-4F18-8568-D7F7E04E80D4}
+		{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC} = {711D6BA9-2B9A-4539-88E2-A4E28F66CDF7}
+		{3028069A-1670-4211-B892-6DFBA3E2CFF2} = {711D6BA9-2B9A-4539-88E2-A4E28F66CDF7}
 	EndGlobalSection
 EndGlobal

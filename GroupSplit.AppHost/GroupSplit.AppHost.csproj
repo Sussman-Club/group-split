@@ -11,6 +11,7 @@
     <ItemGroup>
       <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
       <ProjectReference Include="..\GroupSplit.Data.Migrations.PostgreSQL\GroupSplit.Data.Migrations.PostgreSQL.csproj"/>
+      <ProjectReference Include="..\GroupSplit.Identity.Migrations.PostgreSQL\GroupSplit.Identity.Migrations.PostgreSQL.csproj" />
       <ProjectReference Include="..\GroupSplit.Web\GroupSplit.Web.csproj"  />
     </ItemGroup>
 
