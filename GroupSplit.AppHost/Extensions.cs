@@ -75,6 +75,11 @@ public static class Extensions
             return migrator;
         }
     }
+    
+    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder, [ResourceName] string name)
+    {
+        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef");
+    }
 
     extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {

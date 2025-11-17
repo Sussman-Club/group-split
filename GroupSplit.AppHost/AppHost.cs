@@ -6,7 +6,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 var dbServer = builder.AddPostgres("db-server");
 var db = dbServer.AddDatabase("db");
 
-db.AddMigrator<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>();
+if (builder.ExecutionContext.IsRunMode)
+{
+    var installer = builder.AddEfInstaller("dotnet-ef-installer");
+    db.AddMigrator<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>().WaitForCompletion(installer);
+}
 
 var backend = builder.AddProject<GroupSplit_API>("API")
     .WaitFor(db)
