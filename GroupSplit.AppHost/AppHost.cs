@@ -16,6 +16,6 @@ var backend = builder.AddProject<GroupSplit_API>("API")
     .WaitFor(db)
     .WithScalarUrl();
 
-builder.AddProject<GroupSplit_Web>("Web").WithReference(backend);
+builder.AddProject<Projects.GroupSplit_App_Web>("web");
 
 builder.Build().Run();
