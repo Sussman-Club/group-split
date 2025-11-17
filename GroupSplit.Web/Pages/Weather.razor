@@ -15,29 +15,50 @@
 }
 else
 {
-    <MudTable Items="@forecasts" Hover="true" Striped="true">
-        <HeaderContent>
-            <MudTh>Date</MudTh>
-            <MudTh>Temp. (C)</MudTh>
-            <MudTh>Temp. (F)</MudTh>
-            <MudTh>Summary</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Date">@context.Date.ToShortDateString()</MudTd>
-            <MudTd DataLabel="Temp. (C)">@context.TemperatureC</MudTd>
-            <MudTd DataLabel="Temp. (F)">@context.TemperatureF</MudTd>
-            <MudTd DataLabel="Summary">@context.Summary</MudTd>
-        </RowTemplate>
-    </MudTable>
+    <MudDataGrid Items="@forecasts" Hover="true" Striped="true" Filterable="true" SortMode="SortMode.Multiple">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Weather Forecast</MudText>
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="x => x.Date" Title="Date" Format="d" />
+            <PropertyColumn Property="x => x.TemperatureC" Title="Temp. (C)" />
+            <PropertyColumn Property="x => x.TemperatureF" Title="Temp. (F)" />
+            <PropertyColumn Property="x => x.Summary" Title="Summary" />
+        </Columns>
+        <PagerContent>
+            <MudDataGridPager T="WeatherForecast" />
+        </PagerContent>
+    </MudDataGrid>
 }
 
 @code {
     private WeatherForecast[]? forecasts;
+    private string _searchString = "";
 
     protected override async Task OnInitializedAsync()
     {
         forecasts = await Http.GetFromJsonAsync<WeatherForecast[]>("sample-data/weather.json");
     }
+
+    private Func<WeatherForecast, bool> _quickFilter => x =>
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+
+        if (x.Date.ToString().Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (x.Summary?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+
+        if (x.TemperatureC.ToString().Contains(_searchString))
+            return true;
+
+        if (x.TemperatureF.ToString().Contains(_searchString))
+            return true;
+
+        return false;
+    };
 
     public class WeatherForecast
     {
