@@ -15,27 +15,12 @@
 }
 else
 {
-    <table class="table">
-        <thead>
-        <tr>
-            <th>Date</th>
-            <th aria-label="Temperature in Celsius">Temp. (C)</th>
-            <th aria-label="Temperature in Fahrenheit">Temp. (F)</th>
-            <th>Summary</th>
-        </tr>
-        </thead>
-        <tbody>
-        @foreach (var forecast in forecasts)
-        {
-            <tr>
-                <td>@forecast.Date.ToShortDateString()</td>
-                <td>@forecast.TemperatureC</td>
-                <td>@forecast.TemperatureF</td>
-                <td>@forecast.Summary</td>
-            </tr>
-        }
-        </tbody>
-    </table>
+    <FluentDataGrid Items="@forecasts.AsQueryable()">
+        <PropertyColumn Property="@(p => p.Date)" Sortable="true" />
+        <PropertyColumn Title="Temp. (C)" Property="@(p => p.TemperatureC)" Sortable="true"/>
+        <PropertyColumn Title="Temp. (F)" Property="@(p => p.TemperatureF)" Sortable="true" />
+        <PropertyColumn Property="@(p => p.Summary)" />
+    </FluentDataGrid>
 }
 
 @code {
