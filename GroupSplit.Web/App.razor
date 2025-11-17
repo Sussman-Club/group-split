@@ -1,4 +1,5 @@
 ﻿<MudThemeProvider />
+@* <MudThemeProvider Theme="@_customTheme" /> *@
 <MudPopoverProvider />
 <MudDialogProvider />
 
@@ -8,3 +9,47 @@
         <FocusOnNavigate RouteData="@routeData" Selector="h1"/>
     </Found>
 </Router>
+
+@* @code { *@
+@*     private readonly MudTheme _customTheme = new() *@
+@*     { *@
+@*         PaletteLight = new PaletteLight *@
+@*         { *@
+@*             Primary = "#1976D2",        // Blue *@
+@*             Secondary = "#0288D1",      // Light Blue *@
+@*             Tertiary = "#42A5F5",       // Lighter Blue *@
+@*             AppbarBackground = "#1565C0", // Dark Blue *@
+@*             AppbarText = "#FFFFFF", *@
+@*             DrawerBackground = "#FFFFFF", *@
+@*             DrawerText = "rgba(0,0,0, 0.87)", *@
+@*             Success = "#4CAF50", *@
+@*             Info = "#2196F3",           // Blue for info *@
+@*             Warning = "#FF9800", *@
+@*             Error = "#F44336", *@
+@*             Dark = "#424242", *@
+@*             TextPrimary = "rgba(0,0,0, 0.87)", *@
+@*             TextSecondary = "rgba(0,0,0, 0.60)", *@
+@*             Background = "#F5F5F5", *@
+@*             Surface = "#FFFFFF" *@
+@*         }, *@
+@*         PaletteDark = new PaletteDark *@
+@*         { *@
+@*             Primary = "#42A5F5",        // Lighter Blue for dark mode *@
+@*             Secondary = "#64B5F6",      // Even lighter blue *@
+@*             Tertiary = "#90CAF9", *@
+@*             AppbarBackground = "#1E88E5", *@
+@*             AppbarText = "#FFFFFF", *@
+@*             DrawerBackground = "#1E1E1E", *@
+@*             DrawerText = "#FFFFFF", *@
+@*             Success = "#66BB6A", *@
+@*             Info = "#42A5F5", *@
+@*             Warning = "#FFA726", *@
+@*             Error = "#EF5350", *@
+@*             Dark = "#212121", *@
+@*             TextPrimary = "rgba(255,255,255, 0.87)", *@
+@*             TextSecondary = "rgba(255,255,255, 0.60)", *@
+@*             Background = "#121212", *@
+@*             Surface = "#1E1E1E" *@
+@*         } *@
+@*     }; *@
+@* } *@
