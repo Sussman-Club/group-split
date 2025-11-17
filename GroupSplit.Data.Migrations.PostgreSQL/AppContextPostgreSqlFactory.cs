@@ -10,11 +10,11 @@ public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppContex
     public AppContext CreateDbContext(string[] args)
     {
         var config = new ConfigurationManager();
-        
-        config.AddCommandLine(args);
-        config.AddEnvironmentVariables();
-        config.AddEnvironmentVariables("DOTNET_");
+
         config.AddUserSecrets<AppContextPostgreSqlFactory>();
+        config.AddEnvironmentVariables("DOTNET_");
+        config.AddEnvironmentVariables();
+        config.AddCommandLine(args);
         
         var optionsBuilder = new DbContextOptionsBuilder<AppContext>();
 
