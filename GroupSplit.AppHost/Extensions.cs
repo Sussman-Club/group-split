@@ -34,7 +34,7 @@ public static class Extensions
             where TMigrationsProject : IProjectMetadata, new()
         {
             name ??= $"migrator-{dbBuilder.Resource.Name}";
-            
+
             var metadata = new TMigrationsProject();
 
             var migrator = dbBuilder.ApplicationBuilder
@@ -52,12 +52,13 @@ public static class Extensions
                 })
                 .WithEnvironment("ConnectionStrings:DefaultConnection", dbBuilder.Resource.ConnectionStringExpression)
                 .WithParentRelationship(dbBuilder.Resource);
-            
+
             var healthCheckName = $"{name}-health-check";
 
             dbBuilder.ApplicationBuilder.Services.AddHealthChecks().AddAsyncCheck(healthCheckName, _ =>
             {
-                var rns = dbBuilder.ApplicationBuilder.ExecutionContext.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                var rns = dbBuilder.ApplicationBuilder.ExecutionContext.ServiceProvider
+                    .GetRequiredService<ResourceNotificationService>();
 
                 if (!rns.TryGetCurrentState(name, out var state))
                     return Task.FromResult(HealthCheckResult.Unhealthy("Migrator resource not found."));
@@ -75,10 +76,16 @@ public static class Extensions
             return migrator;
         }
     }
-    
-    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder, [ResourceName] string name)
+
+    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder,
+        [ResourceName] string name)
     {
-        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef");
+        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef")
+            .OnInitializeResource(async (r, e, ct) =>
+            {
+                var rns = e.Services.GetRequiredService<ResourceNotificationService>();
+                await rns.PublishUpdateAsync(r, pre => pre with { IsHidden = true });
+            });
     }
 
     extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
