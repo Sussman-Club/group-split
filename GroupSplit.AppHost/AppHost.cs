@@ -16,6 +16,11 @@ var backend = builder.AddProject<GroupSplit_API>("API")
     .WaitFor(db)
     .WithScalarUrl();
 
-builder.AddProject<Projects.GroupSplit_App_Web>("web");
+builder.AddProject<GroupSplit_App_Web>("web");
+
+var mauiapp = builder.AddMauiProject("mauiapp", @"../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
+
+mauiapp.AddWindowsDevice()
+    .WithReference(backend);
 
 builder.Build().Run();

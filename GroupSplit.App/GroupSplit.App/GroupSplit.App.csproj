@@ -64,6 +64,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\GroupSplit.App.ServiceDefaults\GroupSplit.App.ServiceDefaults.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />
   </ItemGroup>
 
