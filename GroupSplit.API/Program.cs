@@ -1,3 +1,4 @@
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Users;
 using GroupSplit.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -22,7 +23,7 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
 var app = builder.Build();
 
