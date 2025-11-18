@@ -1,4 +1,5 @@
 using GroupSplit.API.Extensions;
+using GroupSplit.API.OpenApi;
 using GroupSplit.API.Users;
 using GroupSplit.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -26,7 +27,10 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 // Add NSwag for build-time OpenAPI spec generation
-builder.Services.AddOpenApiDocument();
+builder.Services.AddOpenApiDocument(options =>
+{
+    options.OperationProcessors.Add(new ExcludePathPrefixOperationProcessor("/users"));
+});
 
 // Add CORS
 builder.Services.AddCors(options =>
