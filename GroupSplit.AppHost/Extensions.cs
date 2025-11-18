@@ -103,7 +103,6 @@ public static class Extensions
                 .WithUrlForEndpoint("http", _ => new ResourceUrlAnnotation
                 {
                     Url = "/scalar/v1",
-                    DisplayText = "Scalar API",
                     DisplayLocation = UrlDisplayLocation.SummaryAndDetails
                 });
         }
