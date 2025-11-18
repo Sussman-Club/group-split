@@ -1,5 +1,6 @@
 using GroupSplit.App.Web.Components;
 using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.ApiClient;
 using GroupSplit.App.Web.Services;
 using MudBlazor.Services;
 
@@ -16,6 +17,13 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
+
+// Add HTTP client for API (server-side)
+builder.Services.AddScoped<IClient>(sp =>
+{
+    var httpClient = new HttpClient();
+    return new Client("http://localhost:5144", httpClient);
+});
 
 var app = builder.Build();
 
