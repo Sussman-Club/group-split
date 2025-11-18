@@ -1,10 +1,29 @@
+using GroupSplit.API.Extensions;
+using GroupSplit.API.Users;
+using GroupSplit.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure auth
+builder.Services.AddAuthentication().AddBearerToken(IdentityConstants.BearerScheme);
+builder.Services.AddAuthorizationBuilder();
+
+// Configure identity
+builder.Services.AddIdentityCore<User>()
+    .AddEntityFrameworkStores<AppIdentityContext>()
+    .AddApiEndpoints();
+
+builder.Services.AddDbContext<AppIdentityContext>(options =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("identity"));
+});
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
 var app = builder.Build();
 
@@ -16,6 +35,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.MapUsers();
 
 var summaries = new[]
 {
@@ -34,7 +55,8 @@ app.MapGet("/weatherforecast", () =>
             .ToArray();
         return forecast;
     })
-    .WithName("GetWeatherForecast");
+    .WithName("GetWeatherForecast")
+    .RequireAuthorization();
 
 app.Run();
 

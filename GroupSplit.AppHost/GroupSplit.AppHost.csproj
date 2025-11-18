@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.0.0">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.0.0">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -11,10 +11,12 @@
     <ItemGroup>
       <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
       <ProjectReference Include="..\GroupSplit.Data.Migrations.PostgreSQL\GroupSplit.Data.Migrations.PostgreSQL.csproj"/>
-      <ProjectReference Include="..\GroupSplit.Web\GroupSplit.Web.csproj"  />
+      <ProjectReference Include="..\GroupSplit.Identity.Migrations.PostgreSQL\GroupSplit.Identity.Migrations.PostgreSQL.csproj" />
+        <ProjectReference Include="..\GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj" />
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="Aspire.Hosting.Maui" Version="13.0.0-preview.1.25560.3" />
       <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.0.0" />
     </ItemGroup>
 
