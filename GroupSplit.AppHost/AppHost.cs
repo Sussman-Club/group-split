@@ -14,12 +14,17 @@ if (builder.ExecutionContext.IsRunMode)
     identityDb.AddMigrator<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>().WaitForCompletion(installer);
 }
 
-var backend = builder.AddProject<GroupSplit_API>("API")
+var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
     .WithScalarUrl();
 
-builder.AddProject<GroupSplit_Web>("Web").WithReference(backend);
+builder.AddProject<GroupSplit_App_Web>("web");
+
+var mauiapp = builder.AddMauiProject("app", @"../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
+
+mauiapp.AddWindowsDevice()
+    .WithReference(backend);
 
 builder.Build().Run();
