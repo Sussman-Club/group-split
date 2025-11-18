@@ -4,8 +4,8 @@ using Projects;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var dbServer = builder.AddPostgres("db-server").WithDataVolume();
-var db = dbServer.AddDatabase("db");
-var identityDb = dbServer.AddDatabase("identity");
+var db = dbServer.AddDatabase("db").WithResetDbCommand();
+var identityDb = dbServer.AddDatabase("identity").WithResetDbCommand();
 
 if (builder.ExecutionContext.IsRunMode)
 {
@@ -18,6 +18,7 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
+    .WithDataPopulationCommand()
     .WithScalarUrl();
 
 builder.AddProject<GroupSplit_App_Web>("web");
