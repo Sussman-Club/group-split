@@ -1,5 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11205.157 d18.0
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.ServiceDefaults", "GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj", "{1E334123-49E5-49C4-9EC1-000AF1E7E464}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.AppHost", "GroupSplit.AppHost\GroupSplit.AppHost.csproj", "{6BE5E200-16A1-4270-A3B0-153E60C61646}"
@@ -12,7 +15,17 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Data", "GroupSpl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Data.Migrations.PostgreSQL", "GroupSplit.Data.Migrations.PostgreSQL\GroupSplit.Data.Migrations.PostgreSQL.csproj", "{D2475000-B74C-43B6-8D8C-AD12AE4C920B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Web", "GroupSplit.Web\GroupSplit.Web.csproj", "{80672012-B99B-486E-B5C2-8C78049C336C}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "App", "App", "{0E39090E-3161-4E8D-9AE2-0329F1E96BD6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App", "GroupSplit.App\GroupSplit.App\GroupSplit.App.csproj", "{39635C6F-BA11-8A5E-6EF4-5A969F134135}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App.Shared", "GroupSplit.App\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj", "{E34C7820-3253-EC33-95BC-47F2C7BBC021}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App.Web", "GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj", "{4C7BCA26-23C2-EBE9-0060-BD602545E923}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App.Web.Client", "GroupSplit.App\GroupSplit.App.Web.Client\GroupSplit.App.Web.Client.csproj", "{F2BFF19E-E0B3-3665-2F79-FF96420D29C9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App.ServiceDefaults", "GroupSplit.App.ServiceDefaults\GroupSplit.App.ServiceDefaults.csproj", "{C1721A7F-342E-4038-AF96-CD31589A111A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -32,10 +45,6 @@ Global
 		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6E379F9E-E649-44FA-8A1F-F08EA11EA6BF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{80672012-B99B-486E-B5C2-8C78049C336C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{80672012-B99B-486E-B5C2-8C78049C336C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{80672012-B99B-486E-B5C2-8C78049C336C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{80672012-B99B-486E-B5C2-8C78049C336C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{8D8C8C84-929E-42A8-B6C3-9810C19FEA3E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{8D8C8C84-929E-42A8-B6C3-9810C19FEA3E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D8C8C84-929E-42A8-B6C3-9810C19FEA3E}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -44,9 +53,40 @@ Global
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39635C6F-BA11-8A5E-6EF4-5A969F134135}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39635C6F-BA11-8A5E-6EF4-5A969F134135}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39635C6F-BA11-8A5E-6EF4-5A969F134135}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39635C6F-BA11-8A5E-6EF4-5A969F134135}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E34C7820-3253-EC33-95BC-47F2C7BBC021}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E34C7820-3253-EC33-95BC-47F2C7BBC021}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E34C7820-3253-EC33-95BC-47F2C7BBC021}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E34C7820-3253-EC33-95BC-47F2C7BBC021}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4C7BCA26-23C2-EBE9-0060-BD602545E923}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4C7BCA26-23C2-EBE9-0060-BD602545E923}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4C7BCA26-23C2-EBE9-0060-BD602545E923}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4C7BCA26-23C2-EBE9-0060-BD602545E923}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2BFF19E-E0B3-3665-2F79-FF96420D29C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2BFF19E-E0B3-3665-2F79-FF96420D29C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2BFF19E-E0B3-3665-2F79-FF96420D29C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2BFF19E-E0B3-3665-2F79-FF96420D29C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1721A7F-342E-4038-AF96-CD31589A111A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1721A7F-342E-4038-AF96-CD31589A111A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1721A7F-342E-4038-AF96-CD31589A111A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1721A7F-342E-4038-AF96-CD31589A111A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8D8C8C84-929E-42A8-B6C3-9810C19FEA3E} = {F6F12F20-A153-4F18-8568-D7F7E04E80D4}
 		{D2475000-B74C-43B6-8D8C-AD12AE4C920B} = {F6F12F20-A153-4F18-8568-D7F7E04E80D4}
+		{39635C6F-BA11-8A5E-6EF4-5A969F134135} = {0E39090E-3161-4E8D-9AE2-0329F1E96BD6}
+		{E34C7820-3253-EC33-95BC-47F2C7BBC021} = {0E39090E-3161-4E8D-9AE2-0329F1E96BD6}
+		{4C7BCA26-23C2-EBE9-0060-BD602545E923} = {0E39090E-3161-4E8D-9AE2-0329F1E96BD6}
+		{F2BFF19E-E0B3-3665-2F79-FF96420D29C9} = {0E39090E-3161-4E8D-9AE2-0329F1E96BD6}
+		{C1721A7F-342E-4038-AF96-CD31589A111A} = {0E39090E-3161-4E8D-9AE2-0329F1E96BD6}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {00EDADA1-745E-4B68-B938-B078A2D8417F}
 	EndGlobalSection
 EndGlobal

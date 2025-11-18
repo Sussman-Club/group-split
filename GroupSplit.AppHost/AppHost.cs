@@ -12,10 +12,15 @@ if (builder.ExecutionContext.IsRunMode)
     db.AddMigrator<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>().WaitForCompletion(installer);
 }
 
-var backend = builder.AddProject<GroupSplit_API>("API")
+var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WithScalarUrl();
 
-builder.AddProject<GroupSplit_Web>("Web").WithReference(backend);
+builder.AddProject<GroupSplit_App_Web>("web");
+
+var mauiapp = builder.AddMauiProject("app", @"../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
+
+mauiapp.AddWindowsDevice()
+    .WithReference(backend);
 
 builder.Build().Run();
