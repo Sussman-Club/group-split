@@ -9,6 +9,8 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 // Configure auth
 builder.Services.AddAuthentication().AddBearerToken(IdentityConstants.BearerScheme);
 builder.Services.AddAuthorizationBuilder();
@@ -35,15 +37,34 @@ builder.Services.AddOpenApiDocument(options =>
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    var urls = new List<string>();
+
+    // Try to get the web service URL from Aspire configuration
+    var httpUrl = builder.Configuration["services:web:http:0"];
+    var httpsUrl = builder.Configuration["services:web:https:0"];
+
+    if (!string.IsNullOrEmpty(httpUrl))
+        urls.Add(httpUrl);
+
+    if (!string.IsNullOrEmpty(httpsUrl))
+        urls.Add(httpsUrl);
+
+    // Fallback to local URLs if running outside Aspire
+    if (urls.Count == 0)
+        urls.AddRange(["http://localhost:5041", "https://localhost:7287"]);
+
+    options.AddPolicy("AllowBlazorClient", policy =>
     {
-        policy.WithOrigins("http://localhost:5041", "https://localhost:7041")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins([.. urls])
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
 var app = builder.Build();
+
+app.MapDefaultEndpoints();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -52,11 +73,15 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+// CORS must come before UseHttpsRedirection to add headers to redirect responses
+app.UseCors("AllowBlazorClient");
+
 app.UseHttpsRedirection();
 
-app.MapUsers();
+app.UseAuthentication();
+app.UseAuthorization();
 
-app.UseCors();
+app.MapUsers();
 
 var summaries = new[]
 {

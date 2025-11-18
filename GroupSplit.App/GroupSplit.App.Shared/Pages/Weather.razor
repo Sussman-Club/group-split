@@ -59,6 +59,11 @@
         {
             forecasts = await ApiClient.GetWeatherForecastAsync();
         }
+        catch (ApiClient.ApiException apiEx)
+        {
+            errorMessage = $"API Error (Status {apiEx.StatusCode}): {apiEx.Message}";
+            Console.WriteLine($"Full error: {apiEx}");
+        }
         catch (Exception ex)
         {
             errorMessage = $"Error loading weather forecast: {ex.Message}";
