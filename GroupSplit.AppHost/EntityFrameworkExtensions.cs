@@ -37,9 +37,7 @@ public static class EntityFrameworkExtensions
         {
             commandName ??= "reset";
 
-            dbResourceBuilder.ApplicationBuilder.Services
-                .AddCommandMigratorsServices()
-                .TryAddSingleton<DatabaseResetService>();
+            dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             return dbResourceBuilder.WithCommand(commandName, "Reset Database",
                 async context =>
@@ -47,12 +45,10 @@ public static class EntityFrameworkExtensions
                     var cancellationToken = context.CancellationToken;
                     var logger = context.ServiceProvider.GetRequiredService<ResourceLoggerService>()
                         .GetLogger(dbResourceBuilder.Resource);
-                    var dbResetService = context.ServiceProvider.GetRequiredService<DatabaseResetService>();
                     var migrationRunner = context.ServiceProvider.GetRequiredService<CommandMigrationRunner>();
 
-                    var success =
-                        await dbResetService.ResetDatabaseAsync(dbResourceBuilder, logger, cancellationToken)
-                        && await migrationRunner.RunAsync(dbResourceBuilder, logger, cancellationToken);
+                    var success = await migrationRunner.RunDropAsync(dbResourceBuilder, logger, cancellationToken) &&
+                                  await migrationRunner.RunUpdateAsync(dbResourceBuilder, logger, cancellationToken);
 
                     return new ExecuteCommandResult { Success = success };
                 }, new CommandOptions
@@ -76,7 +72,7 @@ public static class EntityFrameworkExtensions
                     .GetLogger(dbResourceBuilder.Resource);
                 var migrationRunner = context.ServiceProvider.GetRequiredService<CommandMigrationRunner>();
 
-                var success = await migrationRunner.RunAsync(dbResourceBuilder, logger, cancellationToken);
+                var success = await migrationRunner.RunUpdateAsync(dbResourceBuilder, logger, cancellationToken);
 
                 return new ExecuteCommandResult { Success = success };
             }, new CommandOptions { IconName = "Database" });
@@ -110,7 +106,7 @@ public static class EntityFrameworkExtensions
                         .GetRequiredService<ResourceLoggerService>()
                         .GetLogger(dbResourceBuilder.Resource);
 
-                    await migrationRunner.RunAsync(dbResourceBuilder, logger, ct);
+                    await migrationRunner.RunUpdateAsync(dbResourceBuilder, logger, ct);
                 }
                 catch (Exception ex)
                 {
@@ -211,49 +207,100 @@ public static class EntityFrameworkExtensions
         }
     }
 
+    internal interface IMigrationCommand
+    {
+        string Name { get; }
+        List<string> BuildArguments(string projectPath);
+    }
+
+    internal sealed class UpdateDatabaseCommand : IMigrationCommand
+    {
+        public string Name => "Update";
+
+        public List<string> BuildArguments(string projectPath) =>
+        [
+            "ef", "database", "update",
+            "--no-build",
+            "--project", projectPath,
+            "--startup-project", projectPath
+        ];
+    }
+
+    internal sealed class DropDatabaseCommand : IMigrationCommand
+    {
+        public string Name => "Drop";
+
+        public List<string> BuildArguments(string projectPath) =>
+        [
+            "ef", "database", "drop",
+            "--force",
+            "--no-build",
+            "--project", projectPath,
+            "--startup-project", projectPath
+        ];
+    }
+
     internal class CommandMigrationRunner(
         IProcessCommandService processCommandService,
         CommandMigratorRegistry registry,
         ILogger<CommandMigrationRunner> defaultLogger)
     {
-        public async Task<bool> RunAsync<TDatabaseResource>(
+        public Task<bool> RunUpdateAsync<TDatabaseResource>(
             IResourceBuilder<TDatabaseResource> db,
             ILogger? logger = null,
-            CancellationToken cancellationToken = default) where TDatabaseResource : IResourceWithConnectionString
+            CancellationToken cancellationToken = default)
+            where TDatabaseResource : IResourceWithConnectionString
+            => RunAsync(db, new UpdateDatabaseCommand(), logger, cancellationToken);
+
+        public Task<bool> RunDropAsync<TDatabaseResource>(
+            IResourceBuilder<TDatabaseResource> db,
+            ILogger? logger = null,
+            CancellationToken cancellationToken = default)
+            where TDatabaseResource : IResourceWithConnectionString
+            => RunAsync(db, new DropDatabaseCommand(), logger, cancellationToken);
+
+        private async Task<bool> RunAsync<TDatabaseResource>(
+            IResourceBuilder<TDatabaseResource> db,
+            IMigrationCommand command,
+            ILogger? logger = null,
+            CancellationToken cancellationToken = default)
+            where TDatabaseResource : IResourceWithConnectionString
         {
             logger ??= defaultLogger;
 
             registry.Set(db.Resource.Name, CommandMigrationState.Pending);
 
-            var metadata = db.Resource.Annotations.OfType<MigrationProjectMetadataAnnotation>().FirstOrDefault();
+            var metadata = db.Resource.Annotations
+                .OfType<MigrationProjectMetadataAnnotation>()
+                .FirstOrDefault();
 
             if (metadata is null)
             {
-                logger.LogError("💥 No migration project metadata found for database {Db}", db.Resource.Name);
+                logger.LogError("💥 No migration metadata found for {Db}", db.Resource.Name);
                 registry.Set(db.Resource.Name, CommandMigrationState.Failed);
                 return false;
             }
 
             try
             {
-                var cs = await db.Resource.ConnectionStringExpression.GetValueAsync(cancellationToken);
+                var connectionString = await db.Resource.ConnectionStringExpression
+                    .GetValueAsync(cancellationToken);
 
-                logger.LogInformation("🚀 Running migrations for database {Db} using project {Project}",
+                logger.LogInformation(
+                    "Running {Command} command for database {Db} using project {Project}",
+                    command.Name,
                     db.Resource.Name,
                     metadata.ProjectPath);
+
                 registry.Set(db.Resource.Name, CommandMigrationState.Running);
 
                 var result = await processCommandService.RunProcessAndCaptureOutputAsync(
-                    logger, "dotnet",
-                    new List<string>
+                    logger,
+                    "dotnet",
+                    command.BuildArguments(metadata.ProjectPath),
+                    new Dictionary<string, string?>
                     {
-                        "ef", "database", "update",
-                        "--project", metadata.ProjectPath,
-                        "--startup-project", metadata.ProjectPath,
-                        "--verbose"
-                    }, new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:DefaultConnection"] = cs
+                        ["ConnectionStrings:DefaultConnection"] = connectionString
                     },
                     cancellationToken);
 
@@ -263,84 +310,18 @@ public static class EntityFrameworkExtensions
                     return true;
                 }
 
-                logger.LogError("💥 Migrations failed (exit {Code}).", result.ExitCode);
-                registry.Set(db.Resource.Name, CommandMigrationState.Failed);
-                return false;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "💥 Error running migrations");
-                registry.Set(db.Resource.Name, CommandMigrationState.Failed);
-                return false;
-            }
-        }
-    }
-
-    internal class DatabaseResetService(
-        IProcessCommandService processCommandService,
-        CommandMigratorRegistry registry,
-        ILogger<DatabaseResetService> defaultLogger)
-    {
-        public async Task<bool> ResetDatabaseAsync<TDatabaseResource>(
-            IResourceBuilder<TDatabaseResource> db,
-            ILogger? logger = null,
-            CancellationToken cancellationToken = default)
-            where TDatabaseResource : IResourceWithConnectionString
-        {
-            logger ??= defaultLogger;
-
-            var metadata = db.Resource.Annotations.OfType<MigrationProjectMetadataAnnotation>().FirstOrDefault();
-
-            if (metadata is null)
-            {
-                logger.LogError("💥 No migration project metadata found for database {Db}", db.Resource.Name);
-                registry.Set(db.Resource.Name, CommandMigrationState.Failed);
-                return false;
-            }
-
-            try
-            {
-                var cs = await db.Resource.ConnectionStringExpression.GetValueAsync(cancellationToken);
-
-                logger.LogInformation(
-                    "♻️ Resetting database {Db} using migrations project {Project}",
+                logger.LogError(
+                    "💥 Command {Command} failed for {Db} (exit {Code}).",
+                    command.Name,
                     db.Resource.Name,
-                    metadata.ProjectPath);
+                    result.ExitCode);
 
-                registry.Set(db.Resource.Name, CommandMigrationState.Running);
-
-                logger.LogInformation("🗑️ Dropping database {Db} via dotnet-ef", db.Resource.Name);
-
-                var dropResult = await processCommandService.RunProcessAndCaptureOutputAsync(
-                    logger,
-                    "dotnet",
-                    new List<string>
-                    {
-                        "ef", "database", "drop",
-                        "--force",
-                        "--no-build",
-                        "--project", metadata.ProjectPath,
-                        "--startup-project", metadata.ProjectPath,
-                        "--verbose"
-                    },
-                    new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:DefaultConnection"] = cs
-                    },
-                    cancellationToken);
-
-                if (dropResult.ExitCode != 0)
-                {
-                    logger.LogError("💥 dotnet-ef drop failed (exit {Code}).", dropResult.ExitCode);
-                    registry.Set(db.Resource.Name, CommandMigrationState.Failed);
-                    return false;
-                }
-
-                return true;
+                registry.Set(db.Resource.Name, CommandMigrationState.Failed);
+                return false;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "💥 Unexpected error resetting database {Db}", db.Resource.Name);
+                logger.LogError(ex, "💥 Unexpected error running {Command} for {Db}", command.Name, db.Resource.Name);
                 registry.Set(db.Resource.Name, CommandMigrationState.Failed);
                 return false;
             }
