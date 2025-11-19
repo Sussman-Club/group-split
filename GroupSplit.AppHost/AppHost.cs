@@ -3,7 +3,6 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// var dockerEngine = builder.AddDockerEngine();
 builder.EnsureDockerIsRunning();
 
 var dbServer = builder
