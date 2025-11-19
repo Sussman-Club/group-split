@@ -1,20 +1,19 @@
 using System.Diagnostics;
-using Aspire.Hosting.Eventing;
 
 namespace GroupSplit.AppHost;
 
 /// <summary>
-/// Helper class for managing Docker Engine lifecycle.
-/// Ensures Docker is running and ready before container operations.
+///     Helper class for managing Docker Engine lifecycle.
+///     Ensures Docker is running and ready before container operations.
 /// </summary>
 internal static class DockerHelper
 {
     /// <summary>
-    /// Ensures Docker Engine is running and ready.
-    /// Automatically starts Docker Desktop if not running and waits for it to be ready.
+    ///     Ensures Docker Engine is running and ready.
+    ///     Automatically starts Docker Desktop if not running and waits for it to be ready.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// Thrown if Docker Desktop is not installed or fails to start within the timeout period.
+    ///     Thrown if Docker Desktop is not installed or fails to start within the timeout period.
     /// </exception>
     public static async Task EnsureDockerIsRunningAsync()
     {
@@ -35,7 +34,7 @@ internal static class DockerHelper
         const int maxRetries = 60; // 60 seconds timeout
         const int delayMs = 1000; // 1 second between retries
 
-        for (int i = 0; i < maxRetries; i++)
+        for (var i = 0; i < maxRetries; i++)
         {
             if (await IsDockerReadyAsync())
             {
@@ -44,13 +43,8 @@ internal static class DockerHelper
             }
 
             if (i == 0)
-            {
                 Console.WriteLine("Waiting for Docker engine to start...");
-            }
-            else if ((i + 1) % 10 == 0)
-            {
-                Console.WriteLine($"Still waiting for Docker... ({i + 1}s)");
-            }
+            else if ((i + 1) % 10 == 0) Console.WriteLine($"Still waiting for Docker... ({i + 1}s)");
 
             await Task.Delay(delayMs);
         }
@@ -60,15 +54,15 @@ internal static class DockerHelper
     }
 
     /// <summary>
-    /// Checks if Docker Engine is running and responsive.
+    ///     Checks if Docker Engine is running and responsive.
     /// </summary>
     /// <returns>
-    /// A task that represents the asynchronous operation.
-    /// The task result contains <c>true</c> if Docker is running and responsive to commands; otherwise, <c>false</c>.
+    ///     A task that represents the asynchronous operation.
+    ///     The task result contains <c>true</c> if Docker is running and responsive to commands; otherwise, <c>false</c>.
     /// </returns>
     /// <remarks>
-    /// This method runs 'docker info' to verify Docker daemon is accessible.
-    /// Returns false if the command fails or throws any exception.
+    ///     This method runs 'docker info' to verify Docker daemon is accessible.
+    ///     Returns false if the command fails or throws any exception.
     /// </remarks>
     private static async Task<bool> IsDockerReadyAsync()
     {
@@ -84,24 +78,30 @@ internal static class DockerHelper
     }
 
     /// <summary>
-    /// Starts Docker Desktop based on the current operating system.
+    ///     Starts Docker Desktop based on the current operating system.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// Thrown on Windows if Docker Desktop executable is not found in expected installation paths.
+    ///     Thrown on Windows if Docker Desktop executable is not found in expected installation paths.
     /// </exception>
     /// <remarks>
-    /// <para>
-    /// This method uses platform-specific commands to start Docker:
-    /// </para>
-    /// <list type="bullet">
-    /// <item><description>Windows: Launches Docker Desktop.exe from Program Files or LocalAppData</description></item>
-    /// <item><description>macOS: Uses 'open -a Docker' to launch Docker.app</description></item>
-    /// <item><description>Linux: Uses 'sudo systemctl start docker' to start the Docker service</description></item>
-    /// </list>
-    /// <para>
-    /// The process is started without waiting for completion since Docker Desktop
-    /// takes time to initialize and we'll poll for readiness separately.
-    /// </para>
+    ///     <para>
+    ///         This method uses platform-specific commands to start Docker:
+    ///     </para>
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <description>Windows: Launches Docker Desktop.exe from Program Files or LocalAppData</description>
+    ///         </item>
+    ///         <item>
+    ///             <description>macOS: Uses 'open -a Docker' to launch Docker.app</description>
+    ///         </item>
+    ///         <item>
+    ///             <description>Linux: Uses 'sudo systemctl start docker' to start the Docker service</description>
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         The process is started without waiting for completion since Docker Desktop
+    ///         takes time to initialize and we'll poll for readiness separately.
+    ///     </para>
     /// </remarks>
     private static void StartDocker()
     {
@@ -118,10 +118,8 @@ internal static class DockerHelper
             var dockerPath = dockerPaths.FirstOrDefault(File.Exists);
 
             if (dockerPath == null)
-            {
                 throw new InvalidOperationException(
                     "Docker Desktop executable not found. Please ensure Docker Desktop is installed.");
-            }
             StartProcess(dockerPath);
         }
         else if (OperatingSystem.IsMacOS())
@@ -135,14 +133,14 @@ internal static class DockerHelper
     }
 
     /// <summary>
-    /// Runs a process asynchronously with the specified filename and arguments.
+    ///     Runs a process asynchronously with the specified filename and arguments.
     /// </summary>
     /// <param name="fileName">The executable to run</param>
     /// <param name="arguments">Optional arguments to pass</param>
     /// <param name="redirectOutput">Whether to redirect standard output and error</param>
     /// <returns>
-    /// A task that represents the asynchronous operation.
-    /// The task result contains the exit code of the process.
+    ///     A task that represents the asynchronous operation.
+    ///     The task result contains the exit code of the process.
     /// </returns>
     private static async Task<int> RunProcessAsync(
         string fileName,
@@ -156,24 +154,24 @@ internal static class DockerHelper
     }
 
     /// <summary>
-    /// Starts a process asynchronously without waiting for it to complete.
+    ///     Starts a process asynchronously without waiting for it to complete.
     /// </summary>
     /// <param name="fileName">The executable to run</param>
     /// <param name="arguments">Optional arguments to pass</param>
     /// <remarks>
-    /// This is a fire-and-forget method used to launch processes that will run independently.
-    /// The task completes immediately after starting the process, not when the process exits.
+    ///     This is a fire-and-forget method used to launch processes that will run independently.
+    ///     The task completes immediately after starting the process, not when the process exits.
     /// </remarks>
     private static void StartProcess(
         string fileName,
         string? arguments = null)
     {
-        var process = CreateProcess(fileName, arguments, redirectOutput: true);
+        var process = CreateProcess(fileName, arguments, true);
         process.Start();
     }
 
     /// <summary>
-    /// Creates a configured Process instance ready to start.
+    ///     Creates a configured Process instance ready to start.
     /// </summary>
     /// <param name="fileName">The executable to run</param>
     /// <param name="arguments">Optional arguments to pass</param>
@@ -193,10 +191,7 @@ internal static class DockerHelper
             RedirectStandardError = redirectOutput
         };
 
-        if (!string.IsNullOrEmpty(arguments))
-        {
-            startInfo.Arguments = arguments;
-        }
+        if (!string.IsNullOrEmpty(arguments)) startInfo.Arguments = arguments;
 
         return new Process { StartInfo = startInfo };
     }

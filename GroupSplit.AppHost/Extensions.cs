@@ -1,37 +1,56 @@
-using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.AppHost;
 
 public static class Extensions
 {
+    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder,
+        [ResourceName] string name)
+    {
+        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef")
+            .OnInitializeResource(async (r, e, ct) =>
+            {
+                var rns = e.Services.GetRequiredService<ResourceNotificationService>();
+                await rns.PublishUpdateAsync(r, pre => pre with { IsHidden = true });
+            });
+    }
+
+    /// <summary>
+    ///     Ensures Docker Engine is running, automatically starting Docker Desktop if needed.
+    ///     Waits up to 60 seconds for Docker to become ready.
+    /// </summary>
+    public static async Task<IDistributedApplicationBuilder> EnsureDockerIsRunning(
+        this IDistributedApplicationBuilder builder)
+    {
+        await DockerHelper.EnsureDockerIsRunningAsync();
+        return builder;
+    }
+
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbBuilder)
         where TDatabaseResource : IResourceWithParent, IResourceWithConnectionString
     {
         /// <summary>
-        /// Adds an EF Core migrator as an executable resource for the database.
+        ///     Adds an EF Core migrator as an executable resource for the database.
         /// </summary>
         /// <param name="name">
-        /// (Optional) The name of the resource. This name will be used for service discovery when referenced as a dependency.
+        ///     (Optional) The name of the resource. This name will be used for service discovery when referenced as a dependency.
         /// </param>
         /// <typeparam name="TMigrationsProject">
-        /// The project metadata type that contains the EF Core migrations.
+        ///     The project metadata type that contains the EF Core migrations.
         /// </typeparam>
         /// <returns>
-        /// A reference to the <see cref="IResourceBuilder{T}"/>.
+        ///     A reference to the <see cref="IResourceBuilder{T}" />.
         /// </returns>
         /// <remarks>
-        /// <para>
-        /// This resource runs <c>dotnet ef database update</c> for the specified migrations project
-        /// using the database connection string.
-        /// </para>
-        /// <para>
-        /// A health check is automatically added to the database resource. Dependent resources will wait
-        /// until the migration has completed successfully.
-        /// </para>
+        ///     <para>
+        ///         This resource runs <c>dotnet ef database update</c> for the specified migrations project
+        ///         using the database connection string.
+        ///     </para>
+        ///     <para>
+        ///         A health check is automatically added to the database resource. Dependent resources will wait
+        ///         until the migration has completed successfully.
+        ///     </para>
         /// </remarks>
         public IResourceBuilder<ExecutableResource> AddMigrator<TMigrationsProject>([ResourceName] string? name = null)
             where TMigrationsProject : IProjectMetadata, new()
@@ -39,7 +58,7 @@ public static class Extensions
             name ??= $"migrator-{dbBuilder.Resource.Name}";
 
             var metadata = new TMigrationsProject();
-            
+
             var parentBuilder = dbBuilder.ApplicationBuilder.CreateResourceBuilder(dbBuilder.Resource.Parent);
 
             var migrator = dbBuilder.ApplicationBuilder
@@ -83,17 +102,6 @@ public static class Extensions
         }
     }
 
-    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder,
-        [ResourceName] string name)
-    {
-        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef")
-            .OnInitializeResource(async (r, e, ct) =>
-            {
-                var rns = e.Services.GetRequiredService<ResourceNotificationService>();
-                await rns.PublishUpdateAsync(r, pre => pre with { IsHidden = true });
-            });
-    }
-
     extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
         public IResourceBuilder<T> WithScalarUrl()
@@ -102,9 +110,7 @@ public static class Extensions
                 .WithUrls(ctx =>
                 {
                     foreach (var url in ctx.Urls.Where(x => x.Endpoint?.EndpointName is "http" or "https"))
-                    {
                         url.DisplayLocation = UrlDisplayLocation.DetailsOnly;
-                    }
                 })
                 .WithUrlForEndpoint("http", _ => new ResourceUrlAnnotation
                 {
@@ -113,16 +119,4 @@ public static class Extensions
                 });
         }
     }
-
-    /// <summary>
-    /// Ensures Docker Engine is running, automatically starting Docker Desktop if needed.
-    /// Waits up to 60 seconds for Docker to become ready.
-    /// </summary>
-    public static async Task<IDistributedApplicationBuilder> EnsureDockerIsRunning(
-        this IDistributedApplicationBuilder builder)
-    {
-        await DockerHelper.EnsureDockerIsRunningAsync();
-        return builder;
-    }
-    
 }
