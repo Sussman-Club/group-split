@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App.Web.Client",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.App.ServiceDefaults", "GroupSplit.App.ServiceDefaults\GroupSplit.App.ServiceDefaults.csproj", "{C1721A7F-342E-4038-AF96-CD31589A111A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Shared", "GroupSplit.Shared\GroupSplit.Shared.csproj", "{CAD9456F-3590-4133-A5BE-4B3BF407A1D2}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Identity", "GroupSplit.Identity\GroupSplit.Identity.csproj", "{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Identity", "Identity", "{711D6BA9-2B9A-4539-88E2-A4E28F66CDF7}"
@@ -96,6 +98,10 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+		{CAD9456F-3590-4133-A5BE-4B3BF407A1D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CAD9456F-3590-4133-A5BE-4B3BF407A1D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CAD9456F-3590-4133-A5BE-4B3BF407A1D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CAD9456F-3590-4133-A5BE-4B3BF407A1D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8D8C8C84-929E-42A8-B6C3-9810C19FEA3E} = {F6F12F20-A153-4F18-8568-D7F7E04E80D4}

@@ -1,4 +1,5 @@
 using GroupSplit.Identity;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.HttpResults;
