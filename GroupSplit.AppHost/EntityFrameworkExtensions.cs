@@ -118,7 +118,7 @@ public static class EntityFrameworkExtensions
                         .GetRequiredService<ResourceLoggerService>()
                         .GetLogger(dbResourceBuilder.Resource);
 
-                    logger.LogError(ex, "💥 Error during automatic migrations on startup");
+                    logger.LogError(ex, "Error during automatic migrations on startup");
 
                     registry.Set(dbResourceBuilder.Resource.Name, CommandMigrationState.Idle);
                 }
@@ -276,7 +276,7 @@ public static class EntityFrameworkExtensions
 
             if (metadata is null)
             {
-                logger.LogError("💥 No migration metadata found for {Db}", db.Resource.Name);
+                logger.LogError("No migration metadata found for {Db}", db.Resource.Name);
                 registry.Set(db.Resource.Name, CommandMigrationState.Failed);
                 return false;
             }
@@ -311,7 +311,7 @@ public static class EntityFrameworkExtensions
                 }
 
                 logger.LogError(
-                    "💥 Command {Command} failed for {Db} (exit {Code}).",
+                    "Command {Command} failed for {Db} (exit {Code}).",
                     command.Name,
                     db.Resource.Name,
                     result.ExitCode);
@@ -321,7 +321,8 @@ public static class EntityFrameworkExtensions
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "💥 Unexpected error running {Command} for {Db}", command.Name, db.Resource.Name);
+                logger.LogError(ex, "Unexpected error running {Command} command for {Db}", command.Name,
+                    db.Resource.Name);
                 registry.Set(db.Resource.Name, CommandMigrationState.Failed);
                 return false;
             }
