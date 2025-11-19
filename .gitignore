@@ -479,3 +479,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
+# Generated NSwag API client (do not commit)
+GroupSplit.App/GroupSplit.App.Shared/ApiClient/ApiClient.g.cs
+

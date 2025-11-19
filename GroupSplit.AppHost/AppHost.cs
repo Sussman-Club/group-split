@@ -30,7 +30,8 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WithReference(identityDb)
     .WithScalarUrl();
 
-builder.AddProject<GroupSplit_App_Web>("web");
+var frontend = builder.AddProject<GroupSplit_App_Web>("web").WithReference(backend);
+backend.WithReference(frontend);
 
 var mauiapp = builder.AddMauiProject("app", @"../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
 

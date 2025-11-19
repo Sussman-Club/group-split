@@ -1,5 +1,6 @@
 using GroupSplit.App.Web.Components;
 using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.ApiClient;
 using GroupSplit.App.Web.Services;
 using MudBlazor.Services;
 
@@ -16,6 +17,17 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
+
+// Add HTTP client for API (server-side)
+builder.Services.AddScoped<IClient>(sp =>
+{
+    var apiUrl = sp.GetRequiredService<IConfiguration>()["services:api:http:0"]
+                 ?? sp.GetRequiredService<IConfiguration>()["services:api:https:0"]
+                 ?? "http://localhost:5144"; // Fallback for local development
+
+    var httpClient = new HttpClient { BaseAddress = new Uri(apiUrl) };
+    return new Client(apiUrl, httpClient);
+});
 
 var app = builder.Build();
 
@@ -44,5 +56,15 @@ app.MapRazorComponents<App>()
     .AddAdditionalAssemblies(
         typeof(GroupSplit.App.Shared._Imports).Assembly,
         typeof(GroupSplit.App.Web.Client._Imports).Assembly);
+
+// Provide API URL configuration to the WebAssembly client
+app.MapGet("/api/config", (IConfiguration config) =>
+{
+    var apiUrl = config["services:api:http:0"]
+                 ?? config["services:api:https:0"]
+                 ?? "http://localhost:5144";
+
+    return Results.Json(new { ApiUrl = apiUrl });
+});
 
 app.Run();
