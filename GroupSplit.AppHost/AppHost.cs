@@ -17,9 +17,9 @@ if (builder.ExecutionContext.IsRunMode)
 {
     builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.WithMigrationOrchestration<GroupSplit_Data_Migrations_PostgreSQL>();
+    db.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>();
 
-    identityDb.WithMigrationOrchestration<GroupSplit_Identity_Migrations_PostgreSQL>();
+    identityDb.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>();
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
