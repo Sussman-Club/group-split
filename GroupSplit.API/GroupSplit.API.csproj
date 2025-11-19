@@ -8,12 +8,20 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.0.0"/>
+        <PackageReference Include="NSwag.AspNetCore" Version="14.6.2" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0-rc.2" />
         <PackageReference Include="Scalar.AspNetCore" Version="2.10.3" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
       <ProjectReference Include="..\GroupSplit.Identity\GroupSplit.Identity.csproj" />
+      <ProjectReference Include="..\GroupSplit.Shared\GroupSplit.Shared.csproj" />
     </ItemGroup>
+
+    <Target Name="GenerateOpenApiSpec" AfterTargets="Build">
+        <Exec Command="dotnet nswag run nswag-api.json /variables:Configuration=$(Configuration)" />
+    </Target>
 
 </Project>

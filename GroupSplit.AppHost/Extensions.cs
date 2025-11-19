@@ -39,6 +39,8 @@ public static class Extensions
             name ??= $"migrator-{dbBuilder.Resource.Name}";
 
             var metadata = new TMigrationsProject();
+            
+            var parentBuilder = dbBuilder.ApplicationBuilder.CreateResourceBuilder(dbBuilder.Resource.Parent);
 
             var migrator = dbBuilder.ApplicationBuilder
                 .AddExecutable(name, "dotnet", ".")
@@ -54,7 +56,8 @@ public static class Extensions
                     ctx.Args.Add("--verbose");
                 })
                 .WithEnvironment("ConnectionStrings:DefaultConnection", dbBuilder.Resource.ConnectionStringExpression)
-                .WithParentRelationship(dbBuilder.Resource);
+                .WithParentRelationship(dbBuilder.Resource)
+                .WaitFor(parentBuilder);
 
             var healthCheckName = $"{name}-health-check";
 
