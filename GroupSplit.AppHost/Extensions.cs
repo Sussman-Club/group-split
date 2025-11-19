@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.AppHost;
 
@@ -109,5 +113,14 @@ public static class Extensions
                     DisplayLocation = UrlDisplayLocation.SummaryAndDetails
                 });
         }
+    }
+
+    /// <summary>
+    /// Adds an eventing subscriber that ensures Docker is running before starting container resources.
+    /// </summary>
+    public static IDistributedApplicationBuilder AddDockerLifecycleHook(this IDistributedApplicationBuilder builder)
+    {
+        builder.Services.TryAddEventingSubscriber<DockerStartupEventingSubscriber>();
+        return builder;
     }
 }
