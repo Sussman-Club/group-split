@@ -31,13 +31,8 @@
     <Folder Include="ApiClient\" />
   </ItemGroup>
 
-<!--  <ItemGroup>-->
-<!--    <Folder Include="ApiClient\" />-->
-<!--  </ItemGroup>-->
-
   <Target Name="NSwag"
-          BeforeTargets="PrepareForBuild"
-          DependsOnTargets="ResolveProjectReferences">
+          BeforeTargets="CoreCompile" Inputs="..\..\GroupSplit.API\obj\GroupSplit.API.json" Outputs="ApiClient\">
     <PropertyGroup>
       <OpenApiSpecPath>..\..\GroupSplit.API\obj\GroupSplit.API.json</OpenApiSpecPath>
     </PropertyGroup>
@@ -57,6 +52,10 @@
 
     <Message Text="$(NSwagOutput)" Condition="'$(NSwagExitCode)' == '0'" Importance="low" />
     <Error Text="$(NSwagOutput)" Condition="'$(NSwagExitCode)' != '0'" />
+
+	<ItemGroup>
+	  <Compile Include="ApiClient\**\*.cs"></Compile>
+	</ItemGroup>
   </Target>
 
 
