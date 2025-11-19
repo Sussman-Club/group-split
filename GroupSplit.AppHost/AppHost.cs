@@ -32,7 +32,6 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
-    .WithDataPopulationCommand()
     .WithScalarUrl();
 
 var frontend = builder.AddProject<GroupSplit_App_Web>("web").WithReference(backend);
