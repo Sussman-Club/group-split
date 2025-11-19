@@ -4,6 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <CoreBuildDependsOn>
+      NSwag;
+      $(CoreBuildDependsOn)
+    </CoreBuildDependsOn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,12 +27,30 @@
     </ProjectReference>
   </ItemGroup>
 
-  <Target Name="NSwag" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+  <ItemGroup>
+    <Folder Include="ApiClient\" />
+  </ItemGroup>
+
+<!--  <ItemGroup>-->
+<!--    <Folder Include="ApiClient\" />-->
+<!--  </ItemGroup>-->
+
+  <Target Name="NSwag"
+          BeforeTargets="PrepareForBuild"
+          DependsOnTargets="ResolveProjectReferences">
     <PropertyGroup>
       <OpenApiSpecPath>..\..\GroupSplit.API\obj\GroupSplit.API.json</OpenApiSpecPath>
     </PropertyGroup>
 
-    <Exec ConsoleToMSBuild="true" ContinueOnError="true" Command="dotnet nswag run nswag.json /variables:Configuration=$(Configuration),InputOpenApiSpec=$(OpenApiSpecPath)">
+    <!-- Generate the OpenAPI spec in the API project -->
+    <MSBuild Projects="..\..\GroupSplit.API\GroupSplit.API.csproj"
+             Targets="GenerateOpenApiSpec"
+             Properties="Configuration=$(Configuration)" />
+
+    <!-- Generate the C# API client from that spec -->
+    <Exec ConsoleToMSBuild="true"
+          ContinueOnError="true"
+          Command="dotnet nswag run nswag.json /variables:Configuration=$(Configuration),InputOpenApiSpec=$(OpenApiSpecPath)">
       <Output TaskParameter="ExitCode" PropertyName="NSwagExitCode" />
       <Output TaskParameter="ConsoleOutput" PropertyName="NSwagOutput" />
     </Exec>
@@ -36,5 +58,6 @@
     <Message Text="$(NSwagOutput)" Condition="'$(NSwagExitCode)' == '0'" Importance="low" />
     <Error Text="$(NSwagOutput)" Condition="'$(NSwagExitCode)' != '0'" />
   </Target>
+
 
 </Project>
