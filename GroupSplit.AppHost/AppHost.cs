@@ -13,13 +13,19 @@ var identityDb = dbServer.AddDatabase("identity");
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    var installer = builder.AddEfInstaller("dotnet-ef-installer");
+    builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.AddMigrator<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>()
-        .WaitForCompletion(installer);
+    db
+        .WithMigrationProject<GroupSplit_Data_Migrations_PostgreSQL>()
+        .WithResetDbCommand()
+        .WithMigrateCommand()
+        .AutoMigrateOnStartup();
 
-    identityDb.AddMigrator<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>()
-        .WaitForCompletion(installer);
+    identityDb
+        .WithMigrationProject<GroupSplit_Identity_Migrations_PostgreSQL>()
+        .WithResetDbCommand()
+        .WithMigrateCommand()
+        .AutoMigrateOnStartup();
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
