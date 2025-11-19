@@ -1,7 +1,16 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
 namespace GroupSplit.AppHost;
 
 public static class Extensions
 {
+    public static IServiceCollection AddDefaultServices(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IProcessCommandService, ProcessCommandService>();
+        return services;
+    }
+    
     extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
         public IResourceBuilder<T> WithScalarUrl()

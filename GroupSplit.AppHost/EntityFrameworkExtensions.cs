@@ -17,6 +17,16 @@ public static class EntityFrameworkExtensions
 
     extension(IResourceBuilder<PostgresDatabaseResource> dbResourceBuilder)
     {
+        public IResourceBuilder<PostgresDatabaseResource> WithMigrationOrchestration<TMigrationsProject>()
+            where TMigrationsProject : IProjectMetadata, new()
+        {
+            return dbResourceBuilder
+                .WithMigrationProject<TMigrationsProject>()
+                .WithResetDbCommand()
+                .WithMigrateCommand()
+                .AutoMigrateOnStartup();
+        }
+
         public IResourceBuilder<PostgresDatabaseResource> WithMigrationProject<TMigrationsProject>()
             where TMigrationsProject : IProjectMetadata, new()
         {
@@ -28,7 +38,7 @@ public static class EntityFrameworkExtensions
             commandName ??= "reset";
 
             dbResourceBuilder.ApplicationBuilder.Services
-                .TryAddCommandMigratorsServices()
+                .AddCommandMigratorsServices()
                 .TryAddSingleton<DatabaseResetService>();
 
             return dbResourceBuilder.WithCommand(commandName, "Reset Database",
@@ -56,7 +66,7 @@ public static class EntityFrameworkExtensions
         {
             commandName ??= "migrate";
 
-            dbResourceBuilder.ApplicationBuilder.Services.TryAddCommandMigratorsServices();
+            dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             return dbResourceBuilder.WithCommand(commandName, "Run EF Core migrations", async context =>
             {
@@ -73,7 +83,7 @@ public static class EntityFrameworkExtensions
 
         public IResourceBuilder<PostgresDatabaseResource> AutoMigrateOnStartup()
         {
-            dbResourceBuilder.ApplicationBuilder.Services.TryAddCommandMigratorsServices();
+            dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             var efInstaller = dbResourceBuilder.ApplicationBuilder.Resources.OfType<ExecutableResource>()
                 .First(x => x.Name == "dotnet-ef-installer");
@@ -146,7 +156,7 @@ public static class EntityFrameworkExtensions
         {
             name ??= $"cmd-migrator-{dbResourceBuilder.Resource.Name}";
 
-            dbResourceBuilder.ApplicationBuilder.Services.TryAddCommandMigratorsServices();
+            dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             var healthCheckName = $"{name}-health-check";
 
@@ -169,7 +179,7 @@ public static class EntityFrameworkExtensions
         }
     }
 
-    private static IServiceCollection TryAddCommandMigratorsServices(this IServiceCollection services)
+    private static IServiceCollection AddCommandMigratorsServices(this IServiceCollection services)
     {
         services.TryAddSingleton<CommandMigratorRegistry>();
         services.TryAddSingleton<CommandMigrationRunner>();
@@ -223,72 +233,38 @@ public static class EntityFrameworkExtensions
                 return false;
             }
 
+            var processCommandService = db.ApplicationBuilder.ExecutionContext.ServiceProvider
+                .GetRequiredService<IProcessCommandService>();
+
             try
             {
                 var cs = await db.Resource.ConnectionStringExpression.GetValueAsync(cancellationToken);
 
+                logger.LogInformation("🚀 Running migrations for database {Db} using project {Project}", dbName,
+                    metadata.ProjectPath);
                 registry.Set(dbName, CommandMigrationState.Running);
 
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "dotnet",
-                    ArgumentList =
+                var result = await processCommandService.RunProcessAndCaptureOutputAsync(
+                    logger, "dotnet",
+                    new List<string>
                     {
                         "ef", "database", "update",
                         "--project", metadata.ProjectPath,
                         "--startup-project", metadata.ProjectPath,
                         "--verbose"
-                    },
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    Environment =
+                    }, new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:DefaultConnection"] = cs
-                    }
-                };
+                    },
+                    cancellationToken);
 
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation("▶️ Executing EF migrations for {Project}...", metadata.ProjectPath);
-                }
-
-                using var p = new System.Diagnostics.Process();
-                p.StartInfo = psi;
-
-                p.OutputDataReceived += (_, e) =>
-                {
-                    if (e.Data is not null && logger.IsEnabled(LogLevel.Information))
-                    {
-                        logger.LogInformation("{Data}", e.Data);
-                    }
-                };
-
-                p.ErrorDataReceived += (_, e) =>
-                {
-                    if (e.Data is not null && logger.IsEnabled(LogLevel.Error))
-                    {
-                        logger.LogError("{Data}", e.Data);
-                    }
-                };
-
-                p.Start();
-                p.BeginOutputReadLine();
-                p.BeginErrorReadLine();
-
-                await p.WaitForExitAsync(cancellationToken);
-
-                if (p.ExitCode == 0)
+                if (result.ExitCode == 0)
                 {
                     registry.Set(dbName, CommandMigrationState.Succeeded);
                     return true;
                 }
 
-                if (logger.IsEnabled(LogLevel.Error))
-                {
-                    logger.LogError("💥 Migrations failed (exit {Code}).", p.ExitCode);
-                }
-
+                logger.LogError("💥 Migrations failed (exit {Code}).", result.ExitCode);
                 registry.Set(dbName, CommandMigrationState.Failed);
                 return false;
             }
@@ -315,31 +291,39 @@ public static class EntityFrameworkExtensions
                 var cs = await dbBuilder.Resource.Parent.ConnectionStringExpression
                     .GetValueAsync(cancellationToken);
 
-                var csb = new NpgsqlConnectionStringBuilder(cs);
-                var dbName = dbBuilder.Resource.DatabaseName;
+                var csb = new NpgsqlConnectionStringBuilder(cs)
+                {
+                    Database = "postgres",
+                    KeepAlive = 5
+                };
 
+                var dbName = dbBuilder.Resource.DatabaseName;
                 logger.LogInformation("🔁 Resetting database {db}", dbName);
 
                 await using var conn = new NpgsqlConnection(csb.ConnectionString);
                 await conn.OpenAsync(cancellationToken);
 
-                var terminateSql = $"""
-                                    SELECT pg_terminate_backend(pid)
-                                    FROM pg_stat_activity
-                                    WHERE datname = '{dbName}'
-                                    AND pid <> pg_backend_pid();
-                                    """;
+                await using (var terminate = new NpgsqlCommand(
+                                 $"""
+                                  SELECT pg_terminate_backend(pid)
+                                  FROM pg_stat_activity
+                                  WHERE datname = '{dbName}'
+                                  AND pid <> pg_backend_pid();
+                                  """,
+                                 conn))
+                {
+                    await terminate.ExecuteNonQueryAsync(cancellationToken);
+                }
 
-                await using (var cmd = new NpgsqlCommand(terminateSql, conn))
-                    await cmd.ExecuteNonQueryAsync(cancellationToken);
-
-                await using (var cmd = new NpgsqlCommand(
-                                 $"DROP DATABASE IF EXISTS \"{dbName}\";", conn))
-                    await cmd.ExecuteNonQueryAsync(cancellationToken);
-
-                await using (var cmd = new NpgsqlCommand(
-                                 $"CREATE DATABASE \"{dbName}\";", conn))
-                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                await using (var reset = new NpgsqlCommand(
+                                 $"""
+                                  DROP DATABASE IF EXISTS "{dbName}";
+                                  CREATE DATABASE "{dbName}";
+                                  """,
+                                 conn))
+                {
+                    await reset.ExecuteNonQueryAsync(cancellationToken);
+                }
 
                 logger.LogInformation("🎉 Database {db} dropped and recreated successfully", dbName);
                 return true;
