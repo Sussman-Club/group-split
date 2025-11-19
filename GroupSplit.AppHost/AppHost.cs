@@ -3,7 +3,7 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.EnsureDockerIsRunning();
+await builder.EnsureDockerIsRunning();
 
 var dbServer = builder
     .AddPostgres("db-server")

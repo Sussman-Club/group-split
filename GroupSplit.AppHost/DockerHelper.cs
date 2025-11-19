@@ -1,21 +1,7 @@
 using System.Diagnostics;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Eventing;
 
 namespace GroupSplit.AppHost;
-
-/// <summary>
-/// Lifecycle hook that ensures Docker Engine is running before the application starts.
-/// </summary>
-internal sealed class DockerLifecycleHook : IDistributedApplicationLifecycleHook
-{
-    /// <summary>
-    /// Executes before the application starts to ensure Docker is running and ready.
-    /// </summary>
-    public async Task BeforeStartAsync(DistributedApplicationModel appModel, CancellationToken cancellationToken = default)
-    {
-        await DockerHelper.EnsureDockerIsRunningAsync();
-    }
-}
 
 /// <summary>
 /// Helper class for managing Docker Engine lifecycle.
@@ -113,7 +99,7 @@ internal static class DockerHelper
     /// <item><description>Linux: Uses 'sudo systemctl start docker' to start the Docker service</description></item>
     /// </list>
     /// <para>
-    /// The process is started asynchronously (waitForExit: false) since Docker Desktop
+    /// The process is started without waiting for completion since Docker Desktop
     /// takes time to initialize and we'll poll for readiness separately.
     /// </para>
     /// </remarks>
@@ -136,16 +122,15 @@ internal static class DockerHelper
                 throw new InvalidOperationException(
                     "Docker Desktop executable not found. Please ensure Docker Desktop is installed.");
             }
-
-            RunProcess(dockerPath);
+            StartProcess(dockerPath);
         }
         else if (OperatingSystem.IsMacOS())
         {
-            RunProcess("open", "-a Docker");
+            StartProcess("open", "-a Docker");
         }
         else // Linux
         {
-            RunProcess("bash", "-c \"sudo systemctl start docker\"");
+            StartProcess("bash", "-c \"sudo systemctl start docker\"");
         }
     }
 
@@ -164,6 +149,41 @@ internal static class DockerHelper
         string? arguments = null,
         bool redirectOutput = true)
     {
+        using var process = CreateProcess(fileName, arguments, redirectOutput);
+        process.Start();
+        await process.WaitForExitAsync();
+        return process.ExitCode;
+    }
+
+    /// <summary>
+    /// Starts a process asynchronously without waiting for it to complete.
+    /// </summary>
+    /// <param name="fileName">The executable to run</param>
+    /// <param name="arguments">Optional arguments to pass</param>
+    /// <remarks>
+    /// This is a fire-and-forget method used to launch processes that will run independently.
+    /// The task completes immediately after starting the process, not when the process exits.
+    /// </remarks>
+    private static void StartProcess(
+        string fileName,
+        string? arguments = null)
+    {
+        var process = CreateProcess(fileName, arguments, redirectOutput: true);
+        process.Start();
+    }
+
+    /// <summary>
+    /// Creates a configured Process instance ready to start.
+    /// </summary>
+    /// <param name="fileName">The executable to run</param>
+    /// <param name="arguments">Optional arguments to pass</param>
+    /// <param name="redirectOutput">Whether to redirect standard output and error</param>
+    /// <returns>A configured Process instance</returns>
+    private static Process CreateProcess(
+        string fileName,
+        string? arguments,
+        bool redirectOutput)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
@@ -178,39 +198,6 @@ internal static class DockerHelper
             startInfo.Arguments = arguments;
         }
 
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-        await process.WaitForExitAsync();
-        return process.ExitCode;
-    }
-
-    /// <summary>
-    /// Runs a process with the specified filename and arguments without waiting for completion.
-    /// </summary>
-    /// <param name="fileName">The executable to run</param>
-    /// <param name="arguments">Optional arguments to pass</param>
-    /// <remarks>
-    /// This is a fire-and-forget method used to launch processes that will run independently.
-    /// </remarks>
-    private static void RunProcess(
-        string fileName,
-        string? arguments = null)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        if (!string.IsNullOrEmpty(arguments))
-        {
-            startInfo.Arguments = arguments;
-        }
-
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
+        return new Process { StartInfo = startInfo };
     }
 }

@@ -115,16 +115,13 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Ensures Docker Engine is running before the application starts.
-    /// Automatically starts Docker Desktop if it's not already running.
-    /// This registers a lifecycle hook that runs asynchronously before resources start,
-    /// ensuring Docker is ready before Aspire attempts to add container resources.
+    /// Ensures Docker Engine is running, automatically starting Docker Desktop if needed.
+    /// Waits up to 60 seconds for Docker to become ready.
     /// </summary>
-    public static IDistributedApplicationBuilder EnsureDockerIsRunning(
+    public static async Task<IDistributedApplicationBuilder> EnsureDockerIsRunning(
         this IDistributedApplicationBuilder builder)
     {
-        // Register the lifecycle hook to check Docker asynchronously before the app starts
-        builder.Services.TryAddLifecycleHook<DockerLifecycleHook>();
+        await DockerHelper.EnsureDockerIsRunningAsync();
         return builder;
     }
     
