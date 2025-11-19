@@ -116,11 +116,89 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Adds an eventing subscriber that ensures Docker is running before starting container resources.
+    /// Ensures Docker Engine is running before configuring container resources.
+    /// Automatically starts Docker Desktop if it's not already running.
+    /// This runs synchronously during builder configuration to ensure Docker is ready
+    /// before Aspire attempts to add container resources.
     /// </summary>
-    public static IDistributedApplicationBuilder AddDockerLifecycleHook(this IDistributedApplicationBuilder builder)
+    public static IDistributedApplicationBuilder EnsureDockerIsRunning(
+        this IDistributedApplicationBuilder builder)
     {
-        builder.Services.TryAddEventingSubscriber<DockerStartupEventingSubscriber>();
+        // Run Docker check synchronously before any resources are added
+        var startInfo = GetDockerCheckStartInfo();
+        if (startInfo != null)
+        {
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    "Docker failed to start. Please ensure Docker Desktop is installed and try again.");
+            }
+        }
+
         return builder;
     }
+
+    private static ProcessStartInfo? GetDockerCheckStartInfo()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new ProcessStartInfo
+            {
+                FileName = "powershell",
+                Arguments = """
+                    -NoProfile -Command "
+                    function Test-DockerReady {
+                        (docker info 2>$null) -and (docker version 2>$null) -and (docker ps 2>$null)
+                    }
+
+                    if (!(Test-DockerReady)) {
+                        Write-Host 'Docker is not running. Starting Docker Desktop...'
+                        $dockerPaths = @(
+                            \"$env:ProgramFiles\Docker\Docker\Docker Desktop.exe\",
+                            \"$env:LOCALAPPDATA\Programs\Docker\Docker\Docker Desktop.exe\"
+                        )
+                        $dockerPath = $dockerPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                        Start-Process $dockerPath
+                    }
+                    Write-Host 'Docker is ready!'
+                    "
+                    """,
+                UseShellExecute = false,
+                CreateNoWindow = false
+            };
+        }
+        else // macOS and Linux
+        {
+            var startCommand = OperatingSystem.IsMacOS()
+                ? "open -a Docker"
+                : "sudo systemctl start docker";
+
+            return new ProcessStartInfo
+            {
+                FileName = "bash",
+                Arguments = $$"""
+                    -c "
+                    docker_is_ready() {
+                        docker info > /dev/null 2>&1 && \
+                        docker version > /dev/null 2>&1 && \
+                        docker ps > /dev/null 2>&1
+                    }
+
+                    if ! docker_is_ready; then
+                        echo 'Docker is not running. Starting Docker...'
+                        {{startCommand}}
+                        echo 'Docker starting...'
+                    fi
+                    "
+                    """,
+                UseShellExecute = false,
+                CreateNoWindow = false
+            };
+        }
+    }
+    
 }

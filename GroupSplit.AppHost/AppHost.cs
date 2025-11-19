@@ -3,8 +3,8 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Register lifecycle hook to ensure Docker is running before starting containers
-builder.AddDockerLifecycleHook();
+// var dockerEngine = builder.AddDockerEngine();
+builder.EnsureDockerIsRunning();
 
 var dbServer = builder
     .AddPostgres("db-server")
