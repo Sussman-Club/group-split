@@ -1,9 +1,7 @@
 using GroupSplit.App.Shared.Services;
-using GroupSplit.App.Shared.ApiClient;
+using GroupSplit.Shared;
 using GroupSplit.App.Web.Client.Services;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using System.Net.Http.Json;
 
@@ -30,7 +28,7 @@ builder.Services.AddScoped<IClient>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var httpClient = httpClientFactory.CreateClient("ApiClient");
-    return new Client(httpClient.BaseAddress!.AbsoluteUri, httpClient);
+    return new Client(httpClient);
 });
 
 await builder.Build().RunAsync();

@@ -1,6 +1,6 @@
 using GroupSplit.App.Web.Components;
 using GroupSplit.App.Shared.Services;
-using GroupSplit.App.Shared.ApiClient;
+using GroupSplit.Shared;
 using GroupSplit.App.Web.Services;
 using MudBlazor.Services;
 
@@ -26,7 +26,7 @@ builder.Services.AddScoped<IClient>(sp =>
                  ?? "http://localhost:5144"; // Fallback for local development
 
     var httpClient = new HttpClient { BaseAddress = new Uri(apiUrl) };
-    return new Client(apiUrl, httpClient);
+    return new Client(httpClient);
 });
 
 var app = builder.Build();
