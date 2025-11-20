@@ -5,12 +5,15 @@ namespace GroupSplit.AppHost;
 
 public static class Extensions
 {
-    public static IServiceCollection AddDefaultServices(this IServiceCollection services)
+    extension(IServiceCollection services)
     {
-        services.TryAddSingleton<IProcessCommandService, ProcessCommandService>();
-        return services;
+        public IServiceCollection AddDefaultServices()
+        {
+            services.TryAddSingleton<IProcessCommandService, ProcessCommandService>();
+            return services;
+        }
     }
-    
+
     extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
         public IResourceBuilder<T> WithScalarUrl()

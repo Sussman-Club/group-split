@@ -7,30 +7,34 @@ public record RunProcessAndCaptureStdOutResult(int ExitCode);
 
 public interface IProcessCommandService
 {
-    Task<RunProcessAndCaptureStdOutResult> RunProcessAndCaptureOutputAsync(
-        ILogger logger, string path, ICollection<string>? arguments, IDictionary<string, string?>? env,
+    Task<RunProcessAndCaptureStdOutResult> RunProcessAndCaptureOutputAsync(string fileName,
+        string? workingDirectory = null, ICollection<string>? arguments = null,
+        IDictionary<string, string?>? environment = null, ILogger? logger = null,
         CancellationToken cancellationToken = default);
 }
 
-internal class ProcessCommandService : IProcessCommandService
+internal class ProcessCommandService(ILogger<ProcessCommandService> defaultLogger) : IProcessCommandService
 {
-    public async Task<RunProcessAndCaptureStdOutResult> RunProcessAndCaptureOutputAsync(
-        ILogger logger, string path, ICollection<string>? arguments = null, IDictionary<string, string?>? env = null,
+    public async Task<RunProcessAndCaptureStdOutResult> RunProcessAndCaptureOutputAsync(string fileName,
+        string? workingDirectory = null, ICollection<string>? arguments = null,
+        IDictionary<string, string?>? environment = null, ILogger? logger = null,
         CancellationToken cancellationToken = default)
     {
+        workingDirectory ??= Directory.GetCurrentDirectory();
         arguments ??= Array.Empty<string>();
-        env ??= new Dictionary<string, string?>();
-        
+        environment ??= new Dictionary<string, string?>();
+        logger ??= defaultLogger;
+
         using var process = new Process();
 
         process.StartInfo = new ProcessStartInfo
         {
-            WorkingDirectory = Directory.GetCurrentDirectory(),
-            FileName = path,
+            WorkingDirectory = workingDirectory,
+            FileName = fileName,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            WindowStyle = ProcessWindowStyle.Hidden
+            WindowStyle = ProcessWindowStyle.Hidden,
         };
 
         foreach (var arg in arguments)
@@ -38,7 +42,7 @@ internal class ProcessCommandService : IProcessCommandService
             process.StartInfo.ArgumentList.Add(arg);
         }
 
-        foreach (var (key, value) in env)
+        foreach (var (key, value) in environment)
         {
             process.StartInfo.EnvironmentVariables[key] = value;
         }
@@ -67,7 +71,7 @@ internal class ProcessCommandService : IProcessCommandService
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to start process {process}.", path);
+            logger.LogDebug(ex, "Failed to start process {process}.", fileName);
             return new RunProcessAndCaptureStdOutResult(-1);
         }
 
@@ -75,7 +79,7 @@ internal class ProcessCommandService : IProcessCommandService
 
         if (process.ExitCode != 0)
         {
-            logger.LogDebug("Process {process} exited with code {exitCode}.", path, process.ExitCode);
+            logger.LogDebug("Process {process} exited with code {exitCode}.", fileName, process.ExitCode);
         }
 
         return new RunProcessAndCaptureStdOutResult(process.ExitCode);

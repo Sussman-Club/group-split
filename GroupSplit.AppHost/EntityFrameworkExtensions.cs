@@ -8,10 +8,12 @@ namespace GroupSplit.AppHost;
 
 public static class EntityFrameworkExtensions
 {
-    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder,
-        [ResourceName] string name)
+    extension(IDistributedApplicationBuilder builder)
     {
-        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef");
+        public IResourceBuilder<ExecutableResource> AddEfInstaller([ResourceName] string name)
+        {
+            return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef");
+        }
     }
 
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbResourceBuilder)
@@ -33,10 +35,8 @@ public static class EntityFrameworkExtensions
             return dbResourceBuilder.WithAnnotation(new MigrationProjectMetadataAnnotation<TMigrationsProject>());
         }
 
-        public IResourceBuilder<TDatabaseResource> WithResetDbCommand([ResourceName] string? commandName = null)
+        public IResourceBuilder<TDatabaseResource> WithResetDbCommand(string commandName = "reset")
         {
-            commandName ??= "reset";
-
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             return dbResourceBuilder.WithCommand(commandName, "Reset Database",
@@ -59,10 +59,8 @@ public static class EntityFrameworkExtensions
                 });
         }
 
-        public IResourceBuilder<TDatabaseResource> WithMigrateCommand([ResourceName] string? commandName = null)
+        public IResourceBuilder<TDatabaseResource> WithMigrateCommand(string commandName = "migrate")
         {
-            commandName ??= "migrate";
-
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             return dbResourceBuilder.WithCommand(commandName, "Run EF Core migrations", async context =>
@@ -149,7 +147,7 @@ public static class EntityFrameworkExtensions
             return dbResourceBuilder;
         }
 
-        private IResourceBuilder<TDatabaseResource> WithCommandMigratorHealth([ResourceName] string? name = null)
+        private IResourceBuilder<TDatabaseResource> WithCommandMigratorHealth(string? name = null)
         {
             name ??= $"cmd-migrator-{dbResourceBuilder.Resource.Name}";
 
@@ -295,14 +293,14 @@ public static class EntityFrameworkExtensions
                 registry.Set(db.Resource.Name, CommandMigrationState.Running);
 
                 var result = await processCommandService.RunProcessAndCaptureOutputAsync(
-                    logger,
                     "dotnet",
-                    command.BuildArguments(metadata.ProjectPath),
-                    new Dictionary<string, string?>
+                    arguments: command.BuildArguments(metadata.ProjectPath),
+                    environment: new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:DefaultConnection"] = connectionString
                     },
-                    cancellationToken);
+                    logger: logger,
+                    cancellationToken: cancellationToken);
 
                 if (result.ExitCode == 0)
                 {
