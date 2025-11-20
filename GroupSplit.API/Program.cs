@@ -108,7 +108,6 @@ app.MapGet("/weatherforecast", () =>
             .ToArray();
         return forecast;
     })
-    .WithName("GetWeatherForecast")
-    .RequireAuthorization();
+    .WithName("GetWeatherForecast");
 
 app.Run();

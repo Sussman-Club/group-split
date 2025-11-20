@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace GroupSplit.Shared;
+namespace GroupSplit.API.Users;
 
 public class ExternalUserInfo
 {
