@@ -1,10 +1,10 @@
 using GroupSplit.API.Extensions;
-using GroupSplit.API.OpenApi;
 using GroupSplit.API.Users;
 using GroupSplit.Identity;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using GroupSplit.Shared;
+using NSwag.Generation.Processors;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,10 +28,42 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+
 // Add NSwag for build-time OpenAPI spec generation
 builder.Services.AddOpenApiDocument(options =>
 {
-    options.OperationProcessors.Add(new ExcludePathPrefixOperationProcessor("/users"));
+    options.OperationProcessors.Add(new OperationProcessor(ctx =>
+        !ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+});
+builder.Services.AddOpenApiDocument(options =>
+{
+    options.DocumentName = "identity";
+    options.OperationProcessors.Add(new OperationProcessor(ctx =>
+        ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+    
+    options.DocumentProcessors.Add(new ActionDocumentProcessor(ctx =>
+    {
+        var document = ctx.Document;
+        
+        foreach (var (schemaName, schema) in document.Components.Schemas)
+        {
+            // Try to see if this schema was created from a .NET type
+            var type = schema.ExtensionData != null &&
+                       schema.ExtensionData.TryGetValue("x-type", out var tObj) &&
+                       tObj is Type t &&
+                       t.FullName?.StartsWith("GroupSplit.Shared") is true
+                ? t
+                : null;
+
+            // If you don't have x-type extensions, you may instead track types
+            // via a SchemaProcessor (see below) and mark them in ExtensionData.
+
+            if (type is not null)
+            {
+                document.Components.Schemas.Remove(schemaName);
+            }
+        }
+    }));
 });
 
 // Add CORS

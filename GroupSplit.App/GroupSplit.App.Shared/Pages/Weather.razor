@@ -1,6 +1,5 @@
 ﻿@page "/weather"
 @using GroupSplit.Shared
-@using GroupSplit.App.Shared.ApiClient
 @inject IClient ApiClient
 
 <PageTitle>Weather</PageTitle>
@@ -59,7 +58,7 @@
         {
             forecasts = await ApiClient.GetWeatherForecastAsync();
         }
-        catch (ApiClient.ApiException apiEx)
+        catch (ApiException apiEx)
         {
             errorMessage = $"API Error (Status {apiEx.StatusCode}): {apiEx.Message}";
             Console.WriteLine($"Full error: {apiEx}");

@@ -3,12 +3,12 @@
   "documentGenerator": {
     "aspNetCoreToOpenApi": {
       "project": "$(Project)",
-      "documentName": "v1",
+      "documentName": "identity",
       "msBuildProjectExtensionsPath": null,
       "configuration": "$(Configuration)",
       "runtime": null,
       "targetFramework": null,
-      "noBuild": false,
+      "noBuild": true,
       "msBuildOutputPath": null,
       "verbose": false,
       "workingDirectory": null,
@@ -47,7 +47,7 @@
       "injectHttpClient": true,
       "disposeHttpClient": false,
       "protectedMethods": [],
-      "generateExceptionClasses": true,
+      "generateExceptionClasses": false,
       "exceptionClass": "ApiException",
       "wrapDtoExceptions": true,
       "useHttpClientCreationMethod": false,
@@ -71,9 +71,7 @@
       "queryNullValue": "",
       "className": "{controller}Client",
       "operationGenerationMode": "MultipleClientsFromFirstTagAndOperationId",
-      "additionalNamespaceUsages": [
-        "GroupSplit.Shared"
-      ],
+      "additionalNamespaceUsages": [],
       "additionalContractNamespaceUsages": [],
       "generateOptionalParameters": false,
       "generateJsonMethods": false,
@@ -114,7 +112,7 @@
       "inlineNamedDictionaries": false,
       "inlineNamedTuples": true,
       "inlineNamedAny": false,
-      "generateDtoTypes": false,
+      "generateDtoTypes": true,
       "generateOptionalPropertiesAsNullable": false,
       "generateNullableReferenceTypes": true,
       "templateDirectory": null,
@@ -123,7 +121,7 @@
       "enumNameGeneratorType": null,
       "serviceHost": null,
       "serviceSchemes": null,
-      "output": "obj/Generated/ApiClient/ApiClient.g.cs",
+      "output": "obj/Generated/ApiClient/IdentityClient.g.cs",
       "newLineBehavior": "Auto"
     }
   }
