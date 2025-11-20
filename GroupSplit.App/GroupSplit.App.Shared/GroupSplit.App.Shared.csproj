@@ -4,10 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <CoreBuildDependsOn>
-      NSwag;
-      $(CoreBuildDependsOn)
-    </CoreBuildDependsOn>
+    <ApiProject>..\..\GroupSplit.API\GroupSplit.API.csproj</ApiProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,45 +15,25 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.2.0" />
     <PackageReference Include="MudBlazor" Version="8.14.0" />
+    <PackageReference Include="NSwag.MSBuild" Version="14.6.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\GroupSplit.Shared\GroupSplit.Shared.csproj" />
-    <ProjectReference Include="..\..\GroupSplit.API\GroupSplit.API.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="ApiClient\" />
+    <Compile Include="obj\Generated\**\*.cs">
+      <Visible>false</Visible>
+    </Compile>
   </ItemGroup>
 
-  <Target Name="NSwag"
-          BeforeTargets="CoreCompile" Inputs="..\..\GroupSplit.API\obj\GroupSplit.API.json" Outputs="ApiClient\">
-    <PropertyGroup>
-      <OpenApiSpecPath>..\..\GroupSplit.API\obj\GroupSplit.API.json</OpenApiSpecPath>
-    </PropertyGroup>
-
-    <!-- Generate the OpenAPI spec in the API project -->
-    <MSBuild Projects="..\..\GroupSplit.API\GroupSplit.API.csproj"
-             Targets="GenerateOpenApiSpec"
-             Properties="Configuration=$(Configuration)" />
-
-    <!-- Generate the C# API client from that spec -->
-    <Exec ConsoleToMSBuild="true"
-          ContinueOnError="true"
-          Command="dotnet nswag run nswag.json /variables:Configuration=$(Configuration),InputOpenApiSpec=$(OpenApiSpecPath)">
-      <Output TaskParameter="ExitCode" PropertyName="NSwagExitCode" />
-      <Output TaskParameter="ConsoleOutput" PropertyName="NSwagOutput" />
-    </Exec>
-
-    <Message Text="$(NSwagOutput)" Condition="'$(NSwagExitCode)' == '0'" Importance="low" />
-    <Error Text="$(NSwagOutput)" Condition="'$(NSwagExitCode)' != '0'" />
-
-	<ItemGroup>
-	  <Compile Include="ApiClient\**\*.cs"></Compile>
-	</ItemGroup>
+  <Target Name="NSwag" BeforeTargets="CoreCompile" Condition=" '$(Configuration)' == 'Debug' ">
+    <Exec WorkingDirectory="$(ProjectDir)" EnvironmentVariables="ASPNETCORE_ENVIRONMENT=Development" Command="$(NSwagExe_Net100) run nswag.json /variables:Configuration=$(Configuration),Project=$(ApiProject)"/>
+    <Exec WorkingDirectory="$(ProjectDir)" EnvironmentVariables="ASPNETCORE_ENVIRONMENT=Development" Command="$(NSwagExe_Net100) run identity.nswag.json /variables:Configuration=$(Configuration),Project=$(ApiProject)"/>
   </Target>
-
 
 </Project>

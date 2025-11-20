@@ -1,10 +1,10 @@
 using GroupSplit.API.Extensions;
-using GroupSplit.API.OpenApi;
 using GroupSplit.API.Users;
 using GroupSplit.Identity;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using GroupSplit.Shared;
+using NSwag.Generation.Processors;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,10 +28,18 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+
 // Add NSwag for build-time OpenAPI spec generation
 builder.Services.AddOpenApiDocument(options =>
 {
-    options.OperationProcessors.Add(new ExcludePathPrefixOperationProcessor("/users"));
+    options.OperationProcessors.Add(new OperationProcessor(ctx =>
+        !ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+});
+builder.Services.AddOpenApiDocument(options =>
+{
+    options.DocumentName = "identity";
+    options.OperationProcessors.Insert(0, new OperationProcessor(ctx =>
+        ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
 });
 
 // Add CORS
@@ -100,7 +108,6 @@ app.MapGet("/weatherforecast", () =>
             .ToArray();
         return forecast;
     })
-    .WithName("GetWeatherForecast")
-    .RequireAuthorization();
+    .WithName("GetWeatherForecast");
 
 app.Run();
