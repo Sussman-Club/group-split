@@ -3,6 +3,8 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+builder.Services.AddDefaultServices();
+
 var dbServer = builder
     .AddPostgres("db-server")
     .WithDataVolume()
@@ -13,13 +15,11 @@ var identityDb = dbServer.AddDatabase("identity");
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    var installer = builder.AddEfInstaller("dotnet-ef-installer");
+    builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.AddMigrator<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>()
-        .WaitForCompletion(installer);
+    db.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>();
 
-    identityDb.AddMigrator<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>()
-        .WaitForCompletion(installer);
+    identityDb.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>();
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
@@ -31,7 +31,7 @@ var backend = builder.AddProject<GroupSplit_API>("api")
 var frontend = builder.AddProject<GroupSplit_App_Web>("web").WithReference(backend);
 backend.WithReference(frontend);
 
-var mauiapp = builder.AddMauiProject("app", @"../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
+var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
 
 mauiapp.AddWindowsDevice()
     .WithReference(backend);
