@@ -3,7 +3,6 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-await builder.EnsureDockerIsRunning();
 
 var dbServer = builder
     .AddPostgres("db-server")
@@ -15,6 +14,8 @@ var identityDb = dbServer.AddDatabase("identity");
 
 if (builder.ExecutionContext.IsRunMode)
 {
+    await builder.EnsureDockerIsRunning();
+
     var installer = builder.AddEfInstaller("dotnet-ef-installer");
 
     db.AddMigrator<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>()

@@ -28,7 +28,9 @@ internal static class DockerHelper
 
         // Start Docker if not running
         Console.WriteLine("Docker is not running. Starting Docker Desktop...");
-        StartDocker();
+        if (!await TryStartDockerAsync())
+            throw new InvalidOperationException(
+                "Docker failed. Please ensure Docker Desktop is installed and try again, or run it manually.");
 
         // Wait for Docker to be ready with timeout
         const int maxRetries = 60; // 60 seconds timeout
@@ -50,7 +52,7 @@ internal static class DockerHelper
         }
 
         throw new InvalidOperationException(
-            $"Docker failed to start within {maxRetries} seconds. Please ensure Docker Desktop is installed and try again.");
+            $"Docker failed to start within {maxRetries} seconds. Please ensure Docker Desktop is installed and try again, or run it manually.");
     }
 
     /// <summary>
@@ -68,8 +70,19 @@ internal static class DockerHelper
     {
         try
         {
-            var exitCode = await RunProcessAsync("docker", "info");
-            return exitCode == 0;
+            return await RunProcessAsync("docker", "info") == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> TryStartDockerAsync()
+    {
+        try
+        {
+            return await StartDockerAsync() == 0;
         }
         catch
         {
@@ -103,7 +116,7 @@ internal static class DockerHelper
     ///         takes time to initialize and we'll poll for readiness separately.
     ///     </para>
     /// </remarks>
-    private static void StartDocker()
+    private static async Task<int> StartDockerAsync()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -120,16 +133,13 @@ internal static class DockerHelper
             if (dockerPath == null)
                 throw new InvalidOperationException(
                     "Docker Desktop executable not found. Please ensure Docker Desktop is installed.");
-            StartProcess(dockerPath);
+            return await RunProcessAsync(dockerPath);
         }
-        else if (OperatingSystem.IsMacOS())
-        {
-            StartProcess("open", "-a Docker");
-        }
-        else // Linux
-        {
-            StartProcess("bash", "-c \"sudo systemctl start docker\"");
-        }
+
+        if (OperatingSystem.IsMacOS()) return await RunProcessAsync("open", "-a Docker");
+
+        // Linux
+        return await RunProcessAsync("bash", "-c \"sudo systemctl start docker\"");
     }
 
     /// <summary>
@@ -151,23 +161,6 @@ internal static class DockerHelper
         process.Start();
         await process.WaitForExitAsync();
         return process.ExitCode;
-    }
-
-    /// <summary>
-    ///     Starts a process asynchronously without waiting for it to complete.
-    /// </summary>
-    /// <param name="fileName">The executable to run</param>
-    /// <param name="arguments">Optional arguments to pass</param>
-    /// <remarks>
-    ///     This is a fire-and-forget method used to launch processes that will run independently.
-    ///     The task completes immediately after starting the process, not when the process exits.
-    /// </remarks>
-    private static void StartProcess(
-        string fileName,
-        string? arguments = null)
-    {
-        var process = CreateProcess(fileName, arguments, true);
-        process.Start();
     }
 
     /// <summary>

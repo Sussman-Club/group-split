@@ -5,27 +5,30 @@ namespace GroupSplit.AppHost;
 
 public static class Extensions
 {
-    public static IResourceBuilder<ExecutableResource> AddEfInstaller(this IDistributedApplicationBuilder builder,
-        [ResourceName] string name)
+    extension<TDistributedApplicationBuilder>(TDistributedApplicationBuilder builder)
+        where TDistributedApplicationBuilder : IDistributedApplicationBuilder
     {
-        return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef")
-            .OnInitializeResource(async (r, e, ct) =>
-            {
-                var rns = e.Services.GetRequiredService<ResourceNotificationService>();
-                await rns.PublishUpdateAsync(r, pre => pre with { IsHidden = true });
-            });
+        /// <summary>
+        ///     Ensures Docker Engine is running, automatically starting Docker Desktop if needed.
+        ///     Waits up to 60 seconds for Docker to become ready.
+        /// </summary>
+        public async Task<TDistributedApplicationBuilder> EnsureDockerIsRunning()
+        {
+            await DockerHelper.EnsureDockerIsRunningAsync();
+            return builder;
+        }
+
+        public IResourceBuilder<ExecutableResource> AddEfInstaller([ResourceName] string name)
+        {
+            return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef")
+                .OnInitializeResource(async (r, e, ct) =>
+                {
+                    var rns = e.Services.GetRequiredService<ResourceNotificationService>();
+                    await rns.PublishUpdateAsync(r, pre => pre with { IsHidden = true });
+                });
+        }
     }
 
-    /// <summary>
-    ///     Ensures Docker Engine is running, automatically starting Docker Desktop if needed.
-    ///     Waits up to 60 seconds for Docker to become ready.
-    /// </summary>
-    public static async Task<IDistributedApplicationBuilder> EnsureDockerIsRunning(
-        this IDistributedApplicationBuilder builder)
-    {
-        await DockerHelper.EnsureDockerIsRunningAsync();
-        return builder;
-    }
 
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbBuilder)
         where TDatabaseResource : IResourceWithParent, IResourceWithConnectionString
