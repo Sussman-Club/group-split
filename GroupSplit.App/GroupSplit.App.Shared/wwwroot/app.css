@@ -1,0 +1,10 @@
+/* Keep nav text color constant while highlighting only the icon on selection */
+.mud-nav-link.mud-nav-link-active {
+    /* Use the default/inherited text color instead of Mud's active color */
+    color: var(--mud-palette-primary-text);
+}
+
+/* Set only the icon to the primary accent color */
+.mud-nav-link.active .mud-nav-link-icon {
+    fill: var(--mud-palette-primary); /* match Primary from _customTheme */
+}
