@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace GroupSplit.AppHost;
 
@@ -13,31 +14,22 @@ public static class Extensions
             return services;
         }
     }
-    
-    extension<TDistributedApplicationBuilder>(TDistributedApplicationBuilder builder)
-        where TDistributedApplicationBuilder : IDistributedApplicationBuilder
+
+    extension<THost>(THost host) where THost : IHost
     {
         /// <summary>
         ///     Ensures Docker Engine is running, automatically starting Docker Desktop if needed.
         ///     Waits up to 60 seconds for Docker to become ready.
         /// </summary>
-        public async Task<TDistributedApplicationBuilder> EnsureDockerIsRunning()
+        public async Task EnsureDockerIsRunning()
         {
-            await DockerHelper.EnsureDockerIsRunningAsync();
-            return builder;
-        }
-
-        public IResourceBuilder<ExecutableResource> AddEfInstaller([ResourceName] string name)
-        {
-            return builder.AddExecutable(name, "dotnet", ".", "tool", "install", "--global", "dotnet-ef")
-                .OnInitializeResource(async (r, e, ct) =>
-                {
-                    var rns = e.Services.GetRequiredService<ResourceNotificationService>();
-                    await rns.PublishUpdateAsync(r, pre => pre with { IsHidden = true });
-                });
+            var cancellation = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellation,
+                new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token);
+            var dockerRunner = ActivatorUtilities.CreateInstance<DockerRunner>(host.Services);
+            await dockerRunner.EnsureDockerIsRunningAsync(cts.Token);
         }
     }
-
 
     extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {

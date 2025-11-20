@@ -1,12 +1,8 @@
-using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.AppHost;
 
-/// <summary>
-///     Helper class for managing Docker Engine lifecycle.
-///     Ensures Docker is running and ready before container operations.
-/// </summary>
-internal static class DockerHelper
+public class DockerRunner(IProcessCommandService processCommandService, ILogger<DockerRunner> logger)
 {
     /// <summary>
     ///     Ensures Docker Engine is running and ready.
@@ -15,22 +11,26 @@ internal static class DockerHelper
     /// <exception cref="InvalidOperationException">
     ///     Thrown if Docker Desktop is not installed or fails to start within the timeout period.
     /// </exception>
-    public static async Task EnsureDockerIsRunningAsync()
+    public async Task EnsureDockerIsRunningAsync(CancellationToken cancellationToken = default)
     {
-        Console.WriteLine("Checking Docker status...");
+        logger.LogInformation("Checking Docker status...");
 
         // Check if Docker is already running
-        if (await IsDockerReadyAsync())
+        if (await IsDockerReadyAsync(cancellationToken))
         {
-            Console.WriteLine("Docker is already running and ready.");
+            logger.LogInformation("Docker is already running and ready.");
             return;
         }
 
         // Start Docker if not running
-        Console.WriteLine("Docker is not running. Starting Docker Desktop...");
+        logger.LogInformation("Docker is not running. Starting Docker Desktop...");
+
         if (!await TryStartDockerAsync())
-            throw new InvalidOperationException(
-                "Docker failed. Please ensure Docker Desktop is installed and try again, or run it manually.");
+        {
+            logger.LogError(
+                "Docker failed to start. Please ensure Docker Desktop is installed and try again, or run it manually.");
+            return;
+        }
 
         // Wait for Docker to be ready with timeout
         const int maxRetries = 60; // 60 seconds timeout
@@ -38,21 +38,24 @@ internal static class DockerHelper
 
         for (var i = 0; i < maxRetries; i++)
         {
-            if (await IsDockerReadyAsync())
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (await IsDockerReadyAsync(cancellationToken))
             {
-                Console.WriteLine("Docker is ready!");
+                logger.LogInformation("Docker is ready!");
                 return;
             }
 
             if (i == 0)
-                Console.WriteLine("Waiting for Docker engine to start...");
-            else if ((i + 1) % 10 == 0) Console.WriteLine($"Still waiting for Docker... ({i + 1}s)");
+                logger.LogInformation("Waiting for Docker engine to start...");
+            else if ((i + 1) % 10 == 0) logger.LogInformation("Still waiting for Docker... ({seconds}s)", i + 1);
 
-            await Task.Delay(delayMs);
+            await Task.Delay(delayMs, cancellationToken);
         }
 
-        throw new InvalidOperationException(
-            $"Docker failed to start within {maxRetries} seconds. Please ensure Docker Desktop is installed and try again, or run it manually.");
+        logger.LogError(
+            "Docker failed to start within {maxRetries} seconds. Please ensure Docker Desktop is installed and try again, or run it manually.",
+            maxRetries);
     }
 
     /// <summary>
@@ -66,19 +69,26 @@ internal static class DockerHelper
     ///     This method runs 'docker info' to verify Docker daemon is accessible.
     ///     Returns false if the command fails or throws any exception.
     /// </remarks>
-    private static async Task<bool> IsDockerReadyAsync()
+    private async Task<bool> IsDockerReadyAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            return await RunProcessAsync("docker", "info") == 0;
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
+
+            var result =
+                await processCommandService.RunProcessAndCaptureAsync("docker", arguments: ["info"],
+                    cancellationToken: cts.Token);
+
+            return result.ExitCode == 0;
         }
-        catch
+        catch (OperationCanceledException)
         {
             return false;
         }
     }
 
-    private static async Task<bool> TryStartDockerAsync()
+    private async Task<bool> TryStartDockerAsync()
     {
         try
         {
@@ -116,7 +126,7 @@ internal static class DockerHelper
     ///         takes time to initialize and we'll poll for readiness separately.
     ///     </para>
     /// </remarks>
-    private static async Task<int> StartDockerAsync()
+    private async Task<int> StartDockerAsync(CancellationToken cancellationToken = default)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -133,59 +143,25 @@ internal static class DockerHelper
             if (dockerPath == null)
                 throw new InvalidOperationException(
                     "Docker Desktop executable not found. Please ensure Docker Desktop is installed.");
-            return await RunProcessAsync(dockerPath);
+
+            var result = await processCommandService.RunProcessAndCaptureAsync(dockerPath, cancellationToken: cancellationToken);
+            return result.ExitCode;
         }
 
-        if (OperatingSystem.IsMacOS()) return await RunProcessAsync("open", "-a Docker");
-
-        // Linux
-        return await RunProcessAsync("bash", "-c \"sudo systemctl start docker\"");
-    }
-
-    /// <summary>
-    ///     Runs a process asynchronously with the specified filename and arguments.
-    /// </summary>
-    /// <param name="fileName">The executable to run</param>
-    /// <param name="arguments">Optional arguments to pass</param>
-    /// <param name="redirectOutput">Whether to redirect standard output and error</param>
-    /// <returns>
-    ///     A task that represents the asynchronous operation.
-    ///     The task result contains the exit code of the process.
-    /// </returns>
-    private static async Task<int> RunProcessAsync(
-        string fileName,
-        string? arguments = null,
-        bool redirectOutput = true)
-    {
-        using var process = CreateProcess(fileName, arguments, redirectOutput);
-        process.Start();
-        await process.WaitForExitAsync();
-        return process.ExitCode;
-    }
-
-    /// <summary>
-    ///     Creates a configured Process instance ready to start.
-    /// </summary>
-    /// <param name="fileName">The executable to run</param>
-    /// <param name="arguments">Optional arguments to pass</param>
-    /// <param name="redirectOutput">Whether to redirect standard output and error</param>
-    /// <returns>A configured Process instance</returns>
-    private static Process CreateProcess(
-        string fileName,
-        string? arguments,
-        bool redirectOutput)
-    {
-        var startInfo = new ProcessStartInfo
+        if (OperatingSystem.IsMacOS())
         {
-            FileName = fileName,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = redirectOutput,
-            RedirectStandardError = redirectOutput
-        };
+            var result = await processCommandService.RunProcessAndCaptureAsync("open", arguments: ["-a", "Docker"],
+                cancellationToken: cancellationToken);
+            return result.ExitCode;
+        }
 
-        if (!string.IsNullOrEmpty(arguments)) startInfo.Arguments = arguments;
+        if (OperatingSystem.IsLinux())
+        {
+            var result = await processCommandService.RunProcessAndCaptureAsync("bash",
+                arguments: ["-c", "sudo systemctl start docker"], cancellationToken: cancellationToken);
+            return result.ExitCode;
+        }
 
-        return new Process { StartInfo = startInfo };
+        throw new InvalidOperationException("Unsupported operating system.");
     }
 }

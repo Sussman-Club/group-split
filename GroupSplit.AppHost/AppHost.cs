@@ -15,8 +15,6 @@ var identityDb = dbServer.AddDatabase("identity");
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    await builder.EnsureDockerIsRunning();
-
     builder.AddEfInstaller("dotnet-ef-installer");
 
     db.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>();
@@ -38,4 +36,11 @@ var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/Gr
 mauiapp.AddWindowsDevice()
     .WithReference(backend);
 
-builder.Build().Run();
+var host = builder.Build();
+
+if (builder.ExecutionContext.IsRunMode)
+{
+    await host.EnsureDockerIsRunning();
+}
+
+host.Run();
