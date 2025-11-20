@@ -27,7 +27,7 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+builder.Services.AddOpenApi(options => options.AddBearerTokenAuthentication());
 
 // Add NSwag for build-time OpenAPI spec generation
 builder.Services.AddOpenApiDocument(options =>

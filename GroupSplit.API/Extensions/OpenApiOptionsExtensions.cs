@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OpenApi;
@@ -6,67 +5,42 @@ using Microsoft.OpenApi;
 
 namespace GroupSplit.API.Extensions;
 
-public class BearerSecuritySchemeTransformer(IAuthenticationSchemeProvider authenticationSchemeProvider)
-    : IOpenApiDocumentTransformer
+public static class OpenApiOptionsExtensions
 {
-    public async Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context,
-        CancellationToken cancellationToken)
+    extension(OpenApiOptions options)
     {
-        var authenticationSchemes = await authenticationSchemeProvider.GetAllSchemesAsync();
-        if (authenticationSchemes.All(s => s.Name != IdentityConstants.BearerScheme))
-            return;
-
-        document.Components ??= new OpenApiComponents();
-        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-
-        document.Components.SecuritySchemes[IdentityConstants.BearerScheme] =
-            new OpenApiSecurityScheme
+        public OpenApiOptions AddBearerTokenAuthentication()
+        {
+            var scheme = new OpenApiSecurityScheme
             {
                 Type = SecuritySchemeType.Http,
                 Name = IdentityConstants.BearerScheme,
-                Scheme = "bearer",
-                In = ParameterLocation.Header,
-                BearerFormat = "Json Web Token"
+                Scheme = "Bearer"
             };
 
-        var apiDescriptions = context.DescriptionGroups
-            .SelectMany(g => g.Items)
-            .ToList();
-
-        // Apply it as a requirement whenever the endpoint has an Authorize attribute
-        foreach (var (openApiPath, value) in document.Paths)
-        {
-            if (value.Operations is null)
-                continue;
-
-            foreach (var (method, operation) in value.Operations)
+            options.AddDocumentTransformer((document, _, _) =>
             {
-                var httpMethod = method.ToString().ToUpperInvariant();
+                document.Components ??= new OpenApiComponents();
+                document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+                document.Components.SecuritySchemes.Add(IdentityConstants.BearerScheme, scheme);
+                return Task.CompletedTask;
+            });
 
-                var match = apiDescriptions.FirstOrDefault(a =>
-                    a.HttpMethod?.Equals(httpMethod, StringComparison.OrdinalIgnoreCase) == true &&
-                    a.RelativePath?.Equals(openApiPath.Trim('/'), StringComparison.OrdinalIgnoreCase) == true);
-
-                if (match is null)
-                    continue;
-
-                var hasAuthorize = match.ActionDescriptor.EndpointMetadata
-                    .OfType<AuthorizeAttribute>()
-                    .Any();
-
-                var hasAllowAnonymous = match.ActionDescriptor.EndpointMetadata
-                    .OfType<AllowAnonymousAttribute>()
-                    .Any();
-
-                if (!hasAuthorize || hasAllowAnonymous)
-                    continue;
+            options.AddOperationTransformer((operation, context, _) =>
+            {
+                if (!context.Description.ActionDescriptor.EndpointMetadata.OfType<IAuthorizeData>().Any())
+                    return Task.CompletedTask;
 
                 operation.Security ??= [];
                 operation.Security.Add(new OpenApiSecurityRequirement
                 {
-                    [new OpenApiSecuritySchemeReference(IdentityConstants.BearerScheme, document)] = []
+                    [new OpenApiSecuritySchemeReference(IdentityConstants.BearerScheme, context.Document)] = []
                 });
-            }
+
+                return Task.CompletedTask;
+            });
+
+            return options;
         }
     }
 }
