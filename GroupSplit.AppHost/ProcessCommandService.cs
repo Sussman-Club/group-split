@@ -7,7 +7,7 @@ public record RunProcessAndCaptureStdOutResult(int ExitCode);
 
 public interface IProcessCommandService
 {
-    Task<RunProcessAndCaptureStdOutResult> RunProcessAndCaptureOutputAsync(string fileName,
+    Task<RunProcessAndCaptureStdOutResult> RunProcessAsync(string fileName,
         string? workingDirectory = null, ICollection<string>? arguments = null,
         IDictionary<string, string?>? environment = null, ILogger? logger = null,
         CancellationToken cancellationToken = default);
@@ -15,7 +15,7 @@ public interface IProcessCommandService
 
 internal class ProcessCommandService(ILogger<ProcessCommandService> defaultLogger) : IProcessCommandService
 {
-    public async Task<RunProcessAndCaptureStdOutResult> RunProcessAndCaptureOutputAsync(string fileName,
+    public async Task<RunProcessAndCaptureStdOutResult> RunProcessAsync(string fileName,
         string? workingDirectory = null, ICollection<string>? arguments = null,
         IDictionary<string, string?>? environment = null, ILogger? logger = null,
         CancellationToken cancellationToken = default)
