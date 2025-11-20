@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251118031829_AddingRules")]
-    partial class AddingRules
+    [Migration("20251120032810_AddUserIdentity")]
+    partial class AddUserIdentity
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -48,9 +48,15 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                     b.Property<Guid>("RuleVersionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RuleVersionId");
+
+                    b.HasIndex("UserId", "RuleVersionId")
+                        .IsUnique();
 
                     b.ToTable("PercentRuleUser");
                 });
@@ -104,6 +110,31 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.Transaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Transaction");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -113,6 +144,31 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("User");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.UserIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdentityId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserIdentity");
                 });
 
             modelBuilder.Entity("GroupUser", b =>
@@ -152,7 +208,15 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("GroupSplit.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("RuleVersion");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Rule", b =>
@@ -177,6 +241,36 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                     b.Navigation("Rule");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.Transaction", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Group", "Group")
+                        .WithMany("Transactions")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", "User")
+                        .WithMany("Transactions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.UserIdentity", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", "User")
+                        .WithOne("Identity")
+                        .HasForeignKey("GroupSplit.Data.Entities.UserIdentity", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("GroupUser", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Group", null)
@@ -195,11 +289,21 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>
                 {
                     b.Navigation("Rules");
+
+                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Rule", b =>
                 {
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.User", b =>
+                {
+                    b.Navigation("Identity")
+                        .IsRequired();
+
+                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleVersion", b =>

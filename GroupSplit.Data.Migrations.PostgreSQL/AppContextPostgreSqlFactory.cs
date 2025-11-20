@@ -5,9 +5,9 @@ using Microsoft.Extensions.Configuration;
 
 namespace GroupSplit.Data.Migrations.PostgreSQL;
 
-public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppContext>
+public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
-    public AppContext CreateDbContext(string[] args)
+    public AppDbContext CreateDbContext(string[] args)
     {
         var config = new ConfigurationManager();
 
@@ -16,12 +16,12 @@ public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppContex
         config.AddEnvironmentVariables();
         config.AddCommandLine(args);
         
-        var optionsBuilder = new DbContextOptionsBuilder<AppContext>();
+        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
 
         var connectionString = config.GetConnectionString("DefaultConnection") ?? "Host=localhost;Port=5432;Database=my_db;Username=my_user;Password=my_password";
         
         optionsBuilder.UseNpgsql(connectionString, b => b.MigrationsAssembly(Assembly.GetAssembly(typeof(AppContextPostgreSqlFactory))!));
         
-        return new AppContext(optionsBuilder.Options);
+        return new AppDbContext(optionsBuilder.Options);
     }
 }

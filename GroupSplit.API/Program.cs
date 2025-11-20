@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NSwag.Generation.Processors;
 using Scalar.AspNetCore;
+using GroupSplit.Data;
+using GroupSplit.API.Endpoints;
+using GroupSplit.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +27,13 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("identity"));
 });
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("db"));
+});
+
+builder.Services.AddSingleton<IUserService, UserService>();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -109,5 +119,7 @@ app.MapGet("/weatherforecast", () =>
         return forecast;
     })
     .WithName("GetWeatherForecast");
+
+app.MapGroupApi();
 
 app.Run();

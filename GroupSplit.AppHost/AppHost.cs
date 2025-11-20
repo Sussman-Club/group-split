@@ -24,6 +24,7 @@ if (builder.ExecutionContext.IsRunMode)
 
 var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
+    .WithReference(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
     .WithScalarUrl();
