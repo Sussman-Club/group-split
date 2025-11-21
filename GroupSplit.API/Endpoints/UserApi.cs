@@ -14,7 +14,7 @@ public static class UserApi
             group.WithTags("Users");
 
             group.MapGetCurrentUser();
-        
+
             return group;
         }
     }
@@ -24,13 +24,14 @@ public static class UserApi
         private RouteHandlerBuilder MapGetCurrentUser()
         {
             return group.MapGet("/me", async (
-                IUserService userService) =>
-            {
-                var user = await userService.GetCurrentUser();
-                var userInfo = new UserInfo(user.Id);
-                return Results.Ok(userInfo);
-            })
-            .Produces<UserInfo>();
+                    IUserService userService) =>
+                {
+                    var user = await userService.GetCurrentUser();
+                    var userInfo = new UserInfo(user.Id);
+                    return Results.Ok(userInfo);
+                })
+                .WithName("GetCurrentUser")
+                .Produces<UserInfo>();
         }
     }
 }

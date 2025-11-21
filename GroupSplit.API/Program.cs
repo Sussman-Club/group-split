@@ -1,5 +1,4 @@
 using GroupSplit.API.Extensions;
-using GroupSplit.API.Users;
 using GroupSplit.Identity;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Identity;
@@ -8,6 +7,7 @@ using NSwag.Generation.Processors;
 using Scalar.AspNetCore;
 using GroupSplit.Data;
 using GroupSplit.API.Endpoints;
+using GroupSplit.API.Identity;
 using GroupSplit.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);

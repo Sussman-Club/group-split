@@ -29,26 +29,28 @@ public static class GroupApi
         private RouteHandlerBuilder MapCreate()
         {
             return group.MapPost(string.Empty, async (
-                [FromServices] IGroupService groupService,
-                CancellationToken ct) =>
-            {
-                var createdGroup = await groupService.CreateGroup(ct);
-                var groupInfo = new GroupInfo(createdGroup.Id);
-                return Results.Ok(groupInfo);
-            })
+                    [FromServices] IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    var createdGroup = await groupService.CreateGroup(ct);
+                    var groupInfo = new GroupInfo(createdGroup.Id);
+                    return Results.Ok(groupInfo);
+                })
+                .WithName("CreateGroup")
                 .Produces<GroupInfo>();
         }
 
         private RouteHandlerBuilder MapGetAllGroups()
         {
             return group.MapGet(string.Empty, async (
-                [FromServices] IGroupService groupService,
-                CancellationToken ct) =>
-            {
-                var groups = await groupService.GetAllGroups(ct);
-                var groupInfos = groups.Select(g => new GroupInfo(g.Id)).ToListAsync(cancellationToken: ct);
-                return Results.Ok(groupInfos);
-            })
+                    [FromServices] IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    var groups = await groupService.GetAllGroups(ct);
+                    var groupInfos = groups.Select(g => new GroupInfo(g.Id)).ToListAsync(cancellationToken: ct);
+                    return Results.Ok(groupInfos);
+                })
+                .WithName("GetAllGroups")
                 .Produces<GroupInfo[]>();
         }
     }
