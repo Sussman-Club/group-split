@@ -3,7 +3,6 @@ using GroupSplit.Shared;
 using GroupSplit.App.Web.Client.Services;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
-using System.Net.Http.Json;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -13,24 +12,15 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
-// Fetch API URL from server configuration endpoint
-using var configHttpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
-var configResponse = await configHttpClient.GetFromJsonAsync<ApiConfig>("/api/config");
-var apiUrl = (configResponse?.ApiUrl ?? "http://localhost:5144").TrimEnd('/');
-
 // Add HTTP client for API
-builder.Services.AddHttpClient("ApiClient", client =>
+builder.Services.AddHttpClient<IWeatherClient, WeatherClient>("ApiClient", client =>
 {
-    client.BaseAddress = new Uri(apiUrl);
-});
-
-builder.Services.AddScoped<IClient>(sp =>
-{
-    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-    var httpClient = httpClientFactory.CreateClient("ApiClient");
-    return new Client(httpClient);
+    var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
+    {
+        Path = "api/"
+    };
+    
+    client.BaseAddress = uriBuilder.Uri;
 });
 
 await builder.Build().RunAsync();
-
-record ApiConfig(string ApiUrl);
