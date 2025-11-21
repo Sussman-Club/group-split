@@ -5,7 +5,7 @@
 @if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
 {
     <!-- Group Header -->
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
@@ -15,11 +15,6 @@
                 @_members.Count members · @_transactions.Count expenses
             </MudText>
         </MudStack>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Outlined.Add">
-            Add Expense
-        </MudButton>
     </MudStack>
 }
 
@@ -105,7 +100,8 @@
                     <MudStack Spacing="2">
                         @foreach (var transaction in _transactions)
                         {
-                            <MudCard Elevation="0" Outlined="true" Class="cursor-pointer" @onclick="() => ViewExpenseDetails(transaction)">
+                            <MudCard Elevation="0" Outlined="true" Class="cursor-pointer"
+                                     @onclick="() => ViewExpenseDetails(transaction)">
                                 <MudCardContent>
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
                                         <MudStack Spacing="1" Class="flex-grow-1">
@@ -142,41 +138,40 @@
                     </MudStack>
                 </MudStack>
             </MudPaper>
-
             <!-- My Groups -->
             <MudPaper Elevation="1" Class="pa-4" Style="min-width: 280px; max-width: 320px;">
-        <MudStack Spacing="3">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Outlined.Groups" Color="Color.Primary" Size="Size.Medium"/>
-                <MudText Typo="Typo.h6" Class="font-weight-bold">My Groups</MudText>
-            </MudStack>
-            <MudDivider/>
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Outlined.Groups" Color="Color.Primary" Size="Size.Medium"/>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">My Groups</MudText>
+                    </MudStack>
+                    <MudDivider/>
 
-            <MudStack Spacing="1">
-                @foreach (var group in _userGroups)
-                {
-                    <MudButton Variant="@(_selectedGroupId == group.Id ? Variant.Filled : Variant.Text)"
-                               Color="@(_selectedGroupId == group.Id ? Color.Primary : Color.Default)"
-                               StartIcon="@Icons.Material.Outlined.Group"
-                               FullWidth="true"
-                               Class="justify-start"
-                               OnClick="() => SelectGroup(group.Id)">
-                        <MudStack Spacing="0" Class="flex-grow-1">
-                            <MudText Typo="Typo.body2">@group.Name</MudText>
-                            <MudText Typo="Typo.caption">@group.MemberCount members</MudText>
-                        </MudStack>
+                    <MudStack Spacing="1">
+                        @foreach (var group in _userGroups)
+                        {
+                            <MudButton Variant="@(_selectedGroupId == group.Id ? Variant.Filled : Variant.Text)"
+                                       Color="@(_selectedGroupId == group.Id ? Color.Primary : Color.Default)"
+                                       StartIcon="@Icons.Material.Outlined.Group"
+                                       FullWidth="true"
+                                       Class="justify-start"
+                                       OnClick="() => SelectGroup(group.Id)">
+                                <MudStack Spacing="0" Class="flex-grow-1">
+                                    <MudText Typo="Typo.body2">@group.Name</MudText>
+                                    <MudText Typo="Typo.caption">@group.MemberCount members</MudText>
+                                </MudStack>
+                            </MudButton>
+                        }
+                    </MudStack>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.Add"
+                               FullWidth="true">
+                        Create Group
                     </MudButton>
-                }
-            </MudStack>
-
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Outlined.Add"
-                       FullWidth="true">
-                Create Group
-            </MudButton>
-        </MudStack>
-    </MudPaper>
+                </MudStack>
+            </MudPaper>
         </MudStack>
     }
     else
@@ -189,6 +184,19 @@
         </MudPaper>
     }
 </MudStack>
+
+
+@if (_selectedGroupId != Guid.Empty)
+{
+    <div class="fab-extended" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;">
+        <MudIconButton Icon="@Icons.Material.Filled.Add"
+                       Size="Size.Large"
+                       Style="color: var(--mud-palette-primary-text)"
+                       aria-label="Add Expense"
+                       Class="fab-button"/>
+        <span class="fab-text">Expense</span>
+    </div>
+}
 
 @code {
     private const string CurrentUserName = "John Doe";
@@ -305,5 +313,43 @@
         background-color: var(--mud-palette-primary-hover) !important;
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .fab-extended {
+        display: inline-flex;
+        align-items: center;
+        background-color: var(--mud-palette-primary);
+        border-radius: 28px;
+        padding: 0;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, .2), 0 6px 10px 0 rgba(0, 0, 0, .14), 0 1px 18px 0 rgba(0, 0, 0, .12);
+    }
+
+    .fab-extended:hover {
+        box-shadow: 0 5px 5px -3px rgba(0, 0, 0, .2), 0 8px 10px 1px rgba(0, 0, 0, .14), 0 3px 14px 2px rgba(0, 0, 0, .12);
+    }
+
+    .fab-extended .fab-button {
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .fab-extended .fab-text {
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        color: white;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        padding-right: 0;
+    }
+
+    .fab-extended:hover .fab-text {
+        max-width: 200px;
+        opacity: 1;
+        padding-right: 20px;
+        padding-left: 8px;
     }
 </style>
