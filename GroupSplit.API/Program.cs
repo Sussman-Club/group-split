@@ -122,5 +122,6 @@ app.MapGet("/weatherforecast", () =>
     .WithName("GetWeatherForecast");
 
 app.MapGroupApi();
+app.MapUserApi();
 
 app.Run();
