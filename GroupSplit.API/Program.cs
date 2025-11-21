@@ -34,40 +34,23 @@ builder.Services.AddOpenApiDocument(options =>
 {
     options.OperationProcessors.Add(new OperationProcessor(ctx =>
         !ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+    
+    options.OperationProcessors.Add(new OperationProcessor(ctx =>
+    {
+        if (ctx.OperationDescription.Operation.Tags.Count == 0)
+        {
+            ctx.OperationDescription.Operation.Tags.Add("api");
+            // We add a default tag so we do not get a weird IClient in the generated files.
+        }
+
+        return true;
+    }));
 });
 builder.Services.AddOpenApiDocument(options =>
 {
     options.DocumentName = "identity";
     options.OperationProcessors.Insert(0, new OperationProcessor(ctx =>
         ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
-});
-
-// Add CORS
-builder.Services.AddCors(options =>
-{
-    var urls = new List<string>();
-
-    // Try to get the web service URL from Aspire configuration
-    var httpUrl = builder.Configuration["services:web:http:0"];
-    var httpsUrl = builder.Configuration["services:web:https:0"];
-
-    if (!string.IsNullOrEmpty(httpUrl))
-        urls.Add(httpUrl);
-
-    if (!string.IsNullOrEmpty(httpsUrl))
-        urls.Add(httpsUrl);
-
-    // Fallback to local URLs if running outside Aspire
-    if (urls.Count == 0)
-        urls.AddRange(["http://localhost:5041", "https://localhost:7287"]);
-
-    options.AddPolicy("AllowBlazorClient", policy =>
-    {
-        policy.WithOrigins([.. urls])
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
 });
 
 var app = builder.Build();
@@ -81,13 +64,7 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-// CORS must come before UseHttpsRedirection to add headers to redirect responses
-app.UseCors("AllowBlazorClient");
-
 app.UseHttpsRedirection();
-
-app.UseAuthentication();
-app.UseAuthorization();
 
 app.MapUsers();
 
@@ -108,6 +85,7 @@ app.MapGet("/weatherforecast", () =>
             .ToArray();
         return forecast;
     })
-    .WithName("GetWeatherForecast");
+    .WithName("GetWeatherForecast")
+    .WithTags("weather");
 
 app.Run();
