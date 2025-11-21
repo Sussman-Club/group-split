@@ -24,23 +24,27 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
-// Add HTTP client for API (server-side)
-builder.Services.AddScoped<IClient>(sp =>
-{
-    var apiUrl = sp.GetRequiredService<IConfiguration>()["services:api:http:0"]
-                 ?? sp.GetRequiredService<IConfiguration>()["services:api:https:0"]
-                 ?? "http://localhost:5144"; // Fallback for local development
+// Add the forwarder to make sending requests to the backend easier
+builder.Services.AddHttpForwarderWithServiceDiscovery();
 
-    var httpClient = new HttpClient { BaseAddress = new Uri(apiUrl) };
-    return new Client(httpClient);
+// Add HTTP client for API (server-side)
+builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
+{
+    client.BaseAddress = new Uri("https+http://api");
 });
 
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
+app.MapApiForwarder();
+
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
+}
+else
 {
     app.UseExceptionHandler("/Error", true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
@@ -56,15 +60,5 @@ app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
     .MapRenderMode(app);
-
-// Provide API URL configuration to the WebAssembly client
-app.MapGet("/api/config", (IConfiguration config) =>
-{
-    var apiUrl = config["services:api:http:0"]
-                 ?? config["services:api:https:0"]
-                 ?? "http://localhost:5144";
-
-    return Results.Json(new { ApiUrl = apiUrl });
-});
 
 app.Run();
