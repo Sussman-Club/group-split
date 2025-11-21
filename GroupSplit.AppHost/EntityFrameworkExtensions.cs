@@ -292,7 +292,7 @@ public static class EntityFrameworkExtensions
 
                 registry.Set(db.Resource.Name, CommandMigrationState.Running);
 
-                var result = await processCommandService.RunProcessAsync(
+                var result = await processCommandService.RunProcessAndLogOutputAsync(
                     "dotnet",
                     arguments: command.BuildArguments(metadata.ProjectPath),
                     environment: new Dictionary<string, string?>
