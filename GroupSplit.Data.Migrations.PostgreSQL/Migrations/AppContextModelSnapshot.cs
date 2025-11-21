@@ -10,7 +10,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
 {
-    [DbContext(typeof(AppContext))]
+    [DbContext(typeof(AppDbContext))]
     partial class AppContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
@@ -138,9 +138,40 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("PersonalGroupId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("PersonalGroupId")
+                        .IsUnique();
+
                     b.ToTable("User");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.UserIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdentityId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserIdentity");
                 });
 
             modelBuilder.Entity("GroupUser", b =>
@@ -232,6 +263,28 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.User", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Group", "PersonalGroup")
+                        .WithOne()
+                        .HasForeignKey("GroupSplit.Data.Entities.User", "PersonalGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PersonalGroup");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.UserIdentity", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", "User")
+                        .WithOne("Identity")
+                        .HasForeignKey("GroupSplit.Data.Entities.UserIdentity", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("GroupUser", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Group", null)
@@ -261,6 +314,9 @@ namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.User", b =>
                 {
+                    b.Navigation("Identity")
+                        .IsRequired();
+
                     b.Navigation("Transactions");
                 });
 

@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace GroupSplit.Data.Migrations.PostgreSQL.Migrations
 {
-    [DbContext(typeof(AppContext))]
+    [DbContext(typeof(AppDbContext))]
     [Migration("20251118032652_AddingUserToRuleUser")]
     partial class AddingUserToRuleUser
     {

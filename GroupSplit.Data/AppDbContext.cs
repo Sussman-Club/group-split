@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Data;
 
-public class AppContext(DbContextOptions<AppContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -11,6 +11,11 @@ public class AppContext(DbContextOptions<AppContext> options) : DbContext(option
         {
             entity.HasMany(user => user.Groups)
                 .WithMany(group => group.Users);
+
+            entity.HasOne(user => user.PersonalGroup)
+                .WithOne()
+                .HasForeignKey<User>("PersonalGroupId")
+                .IsRequired();
         });
 
         modelBuilder.Entity<Group>();
@@ -68,6 +73,20 @@ public class AppContext(DbContextOptions<AppContext> options) : DbContext(option
 
             entity.HasOne(transaction => transaction.Group)
                 .WithMany(group => group.Transactions)
+                .IsRequired();
+        });
+
+        modelBuilder.Entity<UserIdentity>(entity =>
+        {
+            entity.Property(userIndentity => userIndentity.IdentityId)
+                .IsRequired()
+                .HasMaxLength(128);
+
+            entity.HasIndex(userIdentity => userIdentity.IdentityId).IsUnique();
+
+            entity.HasOne(userIdentity => userIdentity.User)
+                .WithOne(user => user.Identity)
+                .HasForeignKey<UserIdentity>("UserId")
                 .IsRequired();
         });
 

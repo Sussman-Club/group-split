@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NSwag.Generation.Processors;
 using Scalar.AspNetCore;
+using GroupSplit.Data;
+using GroupSplit.API.Endpoints;
+using GroupSplit.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +28,14 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("identity"));
 });
 
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("db"));
+});
+
+builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddScoped<IGroupService, GroupService>();
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi(options => options.AddBearerTokenAuthentication());
@@ -33,7 +44,7 @@ builder.Services.AddOpenApi(options => options.AddBearerTokenAuthentication());
 builder.Services.AddOpenApiDocument(options =>
 {
     options.OperationProcessors.Add(new OperationProcessor(ctx =>
-        !ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+        !ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
     
     options.OperationProcessors.Add(new OperationProcessor(ctx =>
     {
@@ -50,7 +61,7 @@ builder.Services.AddOpenApiDocument(options =>
 {
     options.DocumentName = "identity";
     options.OperationProcessors.Insert(0, new OperationProcessor(ctx =>
-        ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+        ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
 });
 
 var app = builder.Build();
@@ -66,7 +77,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapUsers();
+app.MapIdentity();
 
 var summaries = new[]
 {
@@ -87,5 +98,8 @@ app.MapGet("/weatherforecast", () =>
     })
     .WithName("GetWeatherForecast")
     .WithTags("weather");
+
+app.MapGroupApi();
+app.MapUserApi();
 
 app.Run();
