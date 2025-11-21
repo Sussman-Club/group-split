@@ -34,6 +34,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddScoped<IGroupService, GroupService>();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -43,13 +44,13 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 builder.Services.AddOpenApiDocument(options =>
 {
     options.OperationProcessors.Add(new OperationProcessor(ctx =>
-        !ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+        !ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
 });
 builder.Services.AddOpenApiDocument(options =>
 {
     options.DocumentName = "identity";
     options.OperationProcessors.Insert(0, new OperationProcessor(ctx =>
-        ctx.OperationDescription.Path.StartsWith("/users", StringComparison.OrdinalIgnoreCase)));
+        ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
 });
 
 // Add CORS
@@ -99,7 +100,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapUsers();
+app.MapIdentity();
 
 var summaries = new[]
 {

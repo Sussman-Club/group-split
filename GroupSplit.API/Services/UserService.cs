@@ -40,7 +40,7 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
 
         user = new User
         {
-            Identity = { IdentityId = claimUserId },
+            Identity = new UserIdentity { IdentityId = claimUserId },
             PersonalGroup = personalGroup,
             Groups = { personalGroup }
         };

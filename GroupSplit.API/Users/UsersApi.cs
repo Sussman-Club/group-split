@@ -9,11 +9,11 @@ namespace GroupSplit.API.Users;
 
 public static class UsersApi
 {
-    public static RouteGroupBuilder MapUsers(this IEndpointRouteBuilder routes)
+    public static RouteGroupBuilder MapIdentity(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/users");
+        var group = routes.MapGroup("/identity");
 
-        group.WithTags("Users");
+        group.WithTags("Identity");
 
         group.MapIdentityApi<User>();
         group.MapExternalLoginApi();

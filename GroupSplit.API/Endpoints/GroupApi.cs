@@ -1,59 +1,43 @@
 ﻿using GroupSplit.API.Services;
-using GroupSplit.Data;
-using GroupSplit.Data.Entities;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Endpoints;
 
 public static class GroupApi
 {
-    extension (IEndpointRouteBuilder routeBuilder) 
+    public static RouteGroupBuilder MapGroupApi(this IEndpointRouteBuilder routeBuilder)
     {
-        public RouteGroupBuilder MapGroupApi()
+        var group = routeBuilder
+            .MapGroup("/groups")
+            .RequireAuthorization();
+
+        group.WithTags("Groups");
+
+        group.MapCreate();
+        group.MapGetAllGroups();
+
+        return group;
+    }
+
+    private static RouteHandlerBuilder MapCreate(this RouteGroupBuilder group)
+    {
+        return group.MapPost(string.Empty, async (
+            [FromServices] IGroupService groupService,
+            CancellationToken ct) =>
         {
-            var group = routeBuilder
-                .MapGroup("/groups")
-                .RequireAuthorization();
+            var createdGroup = await groupService.CreateGroup(ct);
+            return Results.Ok(new { createdGroup.Id });
+        });
+    }
 
-            group.WithTags("Groups");
-
-            group.MapCreate();
-            group.MapGetAllGroups();
-
-            return group;
-        }
-
-        private RouteHandlerBuilder MapCreate()
+    private static RouteHandlerBuilder MapGetAllGroups(this RouteGroupBuilder group)
+    {
+        return group.MapGet(string.Empty, async (
+            [FromServices] IGroupService groupService,
+            CancellationToken ct) =>
         {
-            return routeBuilder.MapPost(string.Empty, async (
-                [FromServices] AppDbContext context, 
-                [FromServices] IUserService userService,
-                CancellationToken ct) =>
-            {
-                var user = await userService.GetCurrentUser();
-
-                var group = new Group
-                {
-                    Users = { user }
-                };
-
-                context.Add(group);
-                await context.SaveChangesAsync(ct);
-            });
-        }
-
-        private RouteHandlerBuilder MapGetAllGroups()
-        {
-            return routeBuilder.MapGet(string.Empty, async (
-                [FromServices] AppDbContext context,
-                [FromServices] IUserService userService,
-                CancellationToken ct) =>
-            {
-                var user = await userService.GetCurrentUser();
-                await context.Entry(user).Collection(u => u.Groups).LoadAsync();
-                return Results.Ok(user.Groups.Select(g => new { g.Id, personal = user.PersonalGroup.Id == g.Id }));
-            });
-        }
+            var groups = await groupService.GetAllGroups(ct);
+            return Results.Ok(groups);
+        });
     }
 }
