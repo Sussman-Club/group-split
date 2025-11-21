@@ -1,9 +1,7 @@
 ﻿using GroupSplit.Data;
-using GroupSplit.API.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using System.Security.Claims;
 
 namespace GroupSplit.API.Test.Base;
@@ -12,7 +10,7 @@ namespace GroupSplit.API.Test.Base;
 /// Base class for API tests that provides dependency injection, test database, and mocked HTTP context with an authenticated user.
 /// Uses the shared ApiTestFixture for assembly-level configuration.
 /// </summary>
-public class ApiTest : IAsyncLifetime
+public class ApiUnitTest : IAsyncLifetime
 {
     /// <summary>
     /// The service provider for this specific test instance.
@@ -39,7 +37,7 @@ public class ApiTest : IAsyncLifetime
     /// <summary>
     /// Constructor that receives the shared fixture from xUnit.
     /// </summary>
-    public ApiTest(ApiTestFixture fixture)
+    public ApiUnitTest(ApiTestFixture fixture)
     {
         Fixture = fixture;
     }
@@ -60,8 +58,7 @@ public class ApiTest : IAsyncLifetime
             options.UseInMemoryDatabase(databaseName));
         
         // 2. Setup and register mocked HTTP context accessor (unique user per test)
-        var mockHttpContextAccessor = CreateMockHttpContextAccessor(TestUserId);
-        services.AddSingleton<IHttpContextAccessor>(mockHttpContextAccessor.Object);
+        services.AddSingleton<IHttpContextAccessor>(sp => CreateTestHttpContextAccessor(sp, TestUserId));
         
         // Allow derived classes to add more test-specific services
         ConfigureTestServices(services);
@@ -109,41 +106,27 @@ public class ApiTest : IAsyncLifetime
     }
     
     /// <summary>
-    /// Creates a mocked HTTP context accessor with an authenticated user.
+    /// Creates an HTTP context accessor with an authenticated user.
     /// </summary>
-    private Mock<IHttpContextAccessor> CreateMockHttpContextAccessor(string userId)
+    private static IHttpContextAccessor CreateTestHttpContextAccessor(IServiceProvider sp, string userId)
     {
-        // Create claims principal with user ID
-        var claims = new List<Claim>
+        var accessor = new HttpContextAccessor();
+
+        var claims = new[]
         {
-            new(ClaimTypes.NameIdentifier, userId)
+            new Claim(ClaimTypes.NameIdentifier, userId)
         };
+
         var identity = new ClaimsIdentity(claims, "TestAuth");
-        var claimsPrincipal = new ClaimsPrincipal(identity);
-        
-        // Create a lazy service provider that will be resolved after BuildServiceProvider
-        IServiceProvider? serviceProvider = null;
-        var mockServiceProvider = new Mock<IServiceProvider>();
-        mockServiceProvider
-            .Setup(sp => sp.GetService(It.IsAny<Type>()))
-            .Returns<Type>(type =>
-            {
-                // Lazy resolve from the actual service provider once it's built
-                serviceProvider ??= ServiceProvider;
-                return serviceProvider?.GetService(type);
-            });
-        
-        // Create mock HTTP context
-        var mockHttpContext = new Mock<HttpContext>();
-        mockHttpContext.Setup(c => c.User).Returns(claimsPrincipal);
-        mockHttpContext.Setup(c => c.RequestServices).Returns(mockServiceProvider.Object);
-        mockHttpContext.Setup(c => c.RequestAborted).Returns(CancellationToken.None);
-        
-        // Setup HTTP context accessor
-        var mockHttpContextAccessor = new Mock<IHttpContextAccessor>();
-        mockHttpContextAccessor.Setup(a => a.HttpContext).Returns(mockHttpContext.Object);
-        
-        return mockHttpContextAccessor;
+        var principal = new ClaimsPrincipal(identity);
+
+        accessor.HttpContext = new DefaultHttpContext
+        {
+            User = principal,
+            RequestServices = sp
+        };
+
+        return accessor;
     }
     
     /// <summary>

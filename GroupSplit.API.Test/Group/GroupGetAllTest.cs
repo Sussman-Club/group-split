@@ -1,7 +1,6 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
-using Microsoft.EntityFrameworkCore;
 using UserEntity = GroupSplit.Data.Entities.User;
 
 namespace GroupSplit.API.Test.Group;
@@ -9,7 +8,7 @@ namespace GroupSplit.API.Test.Group;
 /// <summary>
 /// Tests for GET /groups endpoint via GroupService.GetAllGroups
 /// </summary>
-public class GroupGetAllTest(ApiTestFixture fixture) : ApiTest(fixture)
+public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
 
     [Fact]

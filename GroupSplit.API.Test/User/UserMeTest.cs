@@ -1,6 +1,5 @@
 ﻿using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.User;
@@ -8,7 +7,7 @@ namespace GroupSplit.API.Test.User;
 /// <summary>
 /// Tests for the /users/me endpoint via UserService
 /// </summary>
-public class UserMeTest(ApiTestFixture fixture) : ApiTest(fixture)
+public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
 
     [Fact]

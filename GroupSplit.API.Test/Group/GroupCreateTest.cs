@@ -7,7 +7,7 @@ namespace GroupSplit.API.Test.Group;
 /// <summary>
 /// Tests for POST /groups endpoint via GroupService.CreateGroup
 /// </summary>
-public class GroupCreateTest(ApiTestFixture fixture) : ApiTest(fixture)
+public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     [Fact]
     public async Task CreateGroup_CreatesNewGroupAndAddsCurrentUser()
