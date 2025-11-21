@@ -1,13 +1,12 @@
 using GroupSplit.Identity;
-using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 
-namespace GroupSplit.API.Users;
+namespace GroupSplit.API.Identity;
 
-public static class UsersApi
+public static class IdentityApi
 {
     public static RouteGroupBuilder MapIdentity(this IEndpointRouteBuilder routes)
     {
@@ -17,10 +16,10 @@ public static class UsersApi
 
         group.MapIdentityApi<User>();
         group.MapExternalLoginApi();
-        
+
         return group;
     }
-    
+
     public static RouteGroupBuilder MapExternalLoginApi(this RouteGroupBuilder group)
     {
         group.MapPost("/token/{provider}",
