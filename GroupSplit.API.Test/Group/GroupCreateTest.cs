@@ -1,6 +1,5 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Group;
@@ -8,12 +7,8 @@ namespace GroupSplit.API.Test.Group;
 /// <summary>
 /// Tests for POST /groups endpoint via GroupService.CreateGroup
 /// </summary>
-public class GroupCreateTest : ApiTest
+public class GroupCreateTest(ApiTestFixture fixture) : ApiTest(fixture)
 {
-    public GroupCreateTest(ApiTestFixture fixture) : base(fixture)
-    {
-    }
-
     [Fact]
     public async Task CreateGroup_CreatesNewGroupAndAddsCurrentUser()
     {
@@ -29,7 +24,7 @@ public class GroupCreateTest : ApiTest
 
         // Assert
         Assert.NotNull(result);
-        Assert.NotEqual<Guid>(Guid.Empty, result.Id); // Should have an ID after saving
+        Assert.NotEqual(Guid.Empty, result.Id); // Should have an ID after saving
         
         // Verify the group was saved to database with the user
         var groupInDb = await DbContext.Set<GroupSplit.Data.Entities.Group>()

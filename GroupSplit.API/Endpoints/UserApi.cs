@@ -4,27 +4,33 @@ namespace GroupSplit.API.Endpoints;
 
 public static class UserApi
 {
-    public static RouteGroupBuilder MapUserApi(this IEndpointRouteBuilder routes)
+    extension(IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/users")
-            .RequireAuthorization();
-        group.WithTags("Users");
+        public RouteGroupBuilder MapUserApi()
+        {
+            var group = routes.MapGroup("/users")
+                .RequireAuthorization();
+            group.WithTags("Users");
 
-        group.MapGetCurrentUser();
+            group.MapGetCurrentUser();
         
-        return group;
+            return group;
+        }
     }
 
-    private static RouteHandlerBuilder MapGetCurrentUser(this RouteGroupBuilder group)
+    extension(RouteGroupBuilder group)
     {
-        return group.MapGet("/me", async (
-            IUserService userService) =>
+        private RouteHandlerBuilder MapGetCurrentUser()
         {
-            var user = await userService.GetCurrentUser();
-            return Results.Ok(new
+            return group.MapGet("/me", async (
+                IUserService userService) =>
             {
-                user.Id,
+                var user = await userService.GetCurrentUser();
+                return Results.Ok(new
+                {
+                    user.Id,
+                });
             });
-        });
+        }
     }
 }

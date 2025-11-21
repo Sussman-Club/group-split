@@ -5,39 +5,45 @@ namespace GroupSplit.API.Endpoints;
 
 public static class GroupApi
 {
-    public static RouteGroupBuilder MapGroupApi(this IEndpointRouteBuilder routeBuilder)
+    extension(IEndpointRouteBuilder routeBuilder)
     {
-        var group = routeBuilder
-            .MapGroup("/groups")
-            .RequireAuthorization();
+        public RouteGroupBuilder MapGroupApi()
+        {
+            var group = routeBuilder
+                .MapGroup("/groups")
+                .RequireAuthorization();
 
-        group.WithTags("Groups");
+            group.WithTags("Groups");
 
-        group.MapCreate();
-        group.MapGetAllGroups();
+            group.MapCreate();
+            group.MapGetAllGroups();
 
-        return group;
+            return group;
+        }
     }
 
-    private static RouteHandlerBuilder MapCreate(this RouteGroupBuilder group)
+    extension(RouteGroupBuilder group)
     {
-        return group.MapPost(string.Empty, async (
-            [FromServices] IGroupService groupService,
-            CancellationToken ct) =>
+        private RouteHandlerBuilder MapCreate()
         {
-            var createdGroup = await groupService.CreateGroup(ct);
-            return Results.Ok(new { createdGroup.Id });
-        });
-    }
+            return group.MapPost(string.Empty, async (
+                [FromServices] IGroupService groupService,
+                CancellationToken ct) =>
+            {
+                var createdGroup = await groupService.CreateGroup(ct);
+                return Results.Ok(new { createdGroup.Id });
+            });
+        }
 
-    private static RouteHandlerBuilder MapGetAllGroups(this RouteGroupBuilder group)
-    {
-        return group.MapGet(string.Empty, async (
-            [FromServices] IGroupService groupService,
-            CancellationToken ct) =>
+        private RouteHandlerBuilder MapGetAllGroups()
         {
-            var groups = await groupService.GetAllGroups(ct);
-            return Results.Ok(groups);
-        });
+            return group.MapGet(string.Empty, async (
+                [FromServices] IGroupService groupService,
+                CancellationToken ct) =>
+            {
+                var groups = await groupService.GetAllGroups(ct);
+                return Results.Ok(groups);
+            });
+        }
     }
 }
