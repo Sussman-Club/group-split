@@ -1,41 +1,32 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GroupSplit.AppHost;
 
 public record RunProcessResult(int ExitCode);
 
-public record RunProcessAndCaptureOutputResult(int ExitCode, string StdOut = "", string StdErr = "");
+public record RunProcessAndCaptureOutputResult(int ExitCode, string StdOut = "", string StdErr = "")
+    : RunProcessResult(ExitCode);
+
+public record ProcessRunOptions(
+    Action<string>? OnStdOut,
+    Action<string>? OnStdErr,
+    bool KillOnCancel = true
+);
 
 public interface IProcessCommandService
 {
-    Task<RunProcessResult> RunProcessAsync(string fileName,
-        string? workingDirectory = null, ICollection<string>? arguments = null,
-        IDictionary<string, string?>? environment = null, ILogger? logger = null,
-        CancellationToken cancellationToken = default);
-
-    Task<RunProcessAndCaptureOutputResult> RunProcessAndCaptureAsync(
-        string fileName,
-        string? workingDirectory = null,
-        ICollection<string>? arguments = null,
-        IDictionary<string, string?>? environment = null,
+    Task<int> RunProcessAsync(string fileName, string? workingDirectory, ICollection<string>? arguments,
+        IDictionary<string, string?>? environment, ProcessRunOptions? options = null,
         CancellationToken cancellationToken = default);
 }
 
-public class ProcessCommandService(ILogger<ProcessCommandService> defaultLogger) : IProcessCommandService
+public class ProcessCommandService : IProcessCommandService
 {
-    private record ProcessRunOptions(
-        Action<string>? OnStdOut,
-        Action<string>? OnStdErr
-    );
-
-    private async Task<int> RunInternalAsync(
-        string fileName,
-        string? workingDirectory,
-        ICollection<string>? arguments,
-        IDictionary<string, string?>? environment,
-        ProcessRunOptions options,
-        CancellationToken cancellationToken)
+    public async Task<int> RunProcessAsync(string fileName, string? workingDirectory, ICollection<string>? arguments,
+        IDictionary<string, string?>? environment, ProcessRunOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -64,13 +55,13 @@ public class ProcessCommandService(ILogger<ProcessCommandService> defaultLogger)
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data != null)
-                options.OnStdOut?.Invoke(e.Data);
+                options?.OnStdOut?.Invoke(e.Data);
         };
 
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data != null)
-                options.OnStdErr?.Invoke(e.Data);
+                options?.OnStdErr?.Invoke(e.Data);
         };
 
         try
@@ -84,70 +75,86 @@ public class ProcessCommandService(ILogger<ProcessCommandService> defaultLogger)
             return -1;
         }
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (options?.KillOnCancel == true) process.Kill();
+            throw;
+        }
 
         return process.ExitCode;
     }
+}
 
-    public async Task<RunProcessResult> RunProcessAsync(
-        string fileName,
-        string? workingDirectory = null,
-        ICollection<string>? arguments = null,
-        IDictionary<string, string?>? environment = null,
-        ILogger? logger = null,
-        CancellationToken cancellationToken = default)
+internal static class ProcessCommandServiceExtensions
+{
+    extension(IProcessCommandService processCommandService)
     {
-        logger ??= defaultLogger;
+        public async Task<RunProcessResult> RunProcessAndLogOutputAsync(string fileName,
+            string? workingDirectory = null,
+            ICollection<string>? arguments = null,
+            IDictionary<string, string?>? environment = null,
+            ILogger? logger = null,
+            bool killOnCancel = true,
+            CancellationToken cancellationToken = default)
+        {
+            logger ??= NullLogger.Instance;
 
-        var exitCode = await RunInternalAsync(
-            fileName,
-            workingDirectory,
-            arguments,
-            environment,
-            new ProcessRunOptions(
-                OnStdOut: s =>
-                {
-                    if (logger.IsEnabled(LogLevel.Information))
-                        logger.LogInformation("{Data}", s);
-                },
-                OnStdErr: s =>
-                {
-                    if (logger.IsEnabled(LogLevel.Error))
-                        logger.LogError("{Data}", s);
-                }
-            ),
-            cancellationToken
-        );
+            var exitCode = await processCommandService.RunProcessAsync(
+                fileName,
+                workingDirectory,
+                arguments,
+                environment,
+                new ProcessRunOptions(
+                    OnStdOut: s =>
+                    {
+                        if (logger.IsEnabled(LogLevel.Information))
+                            logger.LogInformation("{Data}", s);
+                    },
+                    OnStdErr: s =>
+                    {
+                        if (logger.IsEnabled(LogLevel.Error))
+                            logger.LogError("{Data}", s);
+                    },
+                    KillOnCancel: killOnCancel
+                ),
+                cancellationToken
+            );
 
-        return new RunProcessResult(exitCode);
-    }
+            return new RunProcessResult(exitCode);
+        }
 
-    public async Task<RunProcessAndCaptureOutputResult> RunProcessAndCaptureAsync(
-        string fileName,
-        string? workingDirectory = null,
-        ICollection<string>? arguments = null,
-        IDictionary<string, string?>? environment = null,
-        CancellationToken cancellationToken = default)
-    {
-        var stdOut = new StringWriter();
-        var stdErr = new StringWriter();
+        public async Task<RunProcessAndCaptureOutputResult> RunProcessAndCaptureOutputAsync(string fileName,
+            string? workingDirectory = null,
+            ICollection<string>? arguments = null,
+            IDictionary<string, string?>? environment = null,
+            bool killOnCancel = true,
+            CancellationToken cancellationToken = default)
+        {
+            var stdOut = new StringWriter();
+            var stdErr = new StringWriter();
 
-        var exitCode = await RunInternalAsync(
-            fileName,
-            workingDirectory,
-            arguments,
-            environment,
-            new ProcessRunOptions(
-                OnStdOut: s => stdOut.WriteLine(s),
-                OnStdErr: s => stdErr.WriteLine(s)
-            ),
-            cancellationToken
-        );
+            var exitCode = await processCommandService.RunProcessAsync(
+                fileName,
+                workingDirectory,
+                arguments,
+                environment,
+                new ProcessRunOptions(
+                    OnStdOut: s => stdOut.WriteLine(s),
+                    OnStdErr: s => stdErr.WriteLine(s),
+                    KillOnCancel: killOnCancel
+                ),
+                cancellationToken
+            );
 
-        return new RunProcessAndCaptureOutputResult(
-            exitCode,
-            stdOut.ToString(),
-            stdErr.ToString()
-        );
+            return new RunProcessAndCaptureOutputResult(
+                exitCode,
+                stdOut.ToString(),
+                stdErr.ToString()
+            );
+        }
     }
 }

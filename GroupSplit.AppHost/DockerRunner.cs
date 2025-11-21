@@ -8,9 +8,6 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
     ///     Ensures Docker Engine is running and ready.
     ///     Automatically starts Docker Desktop if not running and waits for it to be ready.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    ///     Thrown if Docker Desktop is not installed or fails to start within the timeout period.
-    /// </exception>
     public async Task EnsureDockerIsRunningAsync(CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Checking Docker status...");
@@ -25,7 +22,7 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
         // Start Docker if not running
         logger.LogInformation("Docker is not running. Starting Docker Desktop...");
 
-        if (!await TryStartDockerAsync())
+        if (!await TryStartDockerAsync(cancellationToken))
         {
             logger.LogError(
                 "Docker failed to start. Please ensure Docker Desktop is installed and try again, or run it manually.");
@@ -67,7 +64,6 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
     /// </returns>
     /// <remarks>
     ///     This method runs 'docker info' to verify Docker daemon is accessible.
-    ///     Returns false if the command fails or throws any exception.
     /// </remarks>
     private async Task<bool> IsDockerReadyAsync(CancellationToken cancellationToken = default)
     {
@@ -77,7 +73,7 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
 
             var result =
-                await processCommandService.RunProcessAndCaptureAsync("docker", arguments: ["info"],
+                await processCommandService.RunProcessAndCaptureOutputAsync("docker", arguments: ["info"],
                     cancellationToken: cts.Token);
 
             return result.ExitCode == 0;
@@ -88,11 +84,13 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
         }
     }
 
-    private async Task<bool> TryStartDockerAsync()
+    private async Task<bool> TryStartDockerAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            return await StartDockerAsync() == 0;
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
+            return await StartDockerAsync(cts.Token) == 0;
         }
         catch
         {
@@ -103,9 +101,6 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
     /// <summary>
     ///     Starts Docker Desktop based on the current operating system.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    ///     Thrown on Windows if Docker Desktop executable is not found in expected installation paths.
-    /// </exception>
     /// <remarks>
     ///     <para>
     ///         This method uses platform-specific commands to start Docker:
@@ -121,11 +116,10 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
     ///             <description>Linux: Uses 'sudo systemctl start docker' to start the Docker service</description>
     ///         </item>
     ///     </list>
-    ///     <para>
-    ///         The process is started without waiting for completion since Docker Desktop
-    ///         takes time to initialize and we'll poll for readiness separately.
-    ///     </para>
     /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    ///     Thrown when the current platform is unsupported, or when Docker Desktop cannot be located on Windows.
+    /// </exception>
     private async Task<int> StartDockerAsync(CancellationToken cancellationToken = default)
     {
         if (OperatingSystem.IsWindows())
@@ -144,20 +138,21 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
                 throw new InvalidOperationException(
                     "Docker Desktop executable not found. Please ensure Docker Desktop is installed.");
 
-            var result = await processCommandService.RunProcessAndCaptureAsync(dockerPath, cancellationToken: cancellationToken);
+            var result =
+                await processCommandService.RunProcessAndCaptureOutputAsync(dockerPath, cancellationToken: cancellationToken);
             return result.ExitCode;
         }
 
         if (OperatingSystem.IsMacOS())
         {
-            var result = await processCommandService.RunProcessAndCaptureAsync("open", arguments: ["-a", "Docker"],
+            var result = await processCommandService.RunProcessAndCaptureOutputAsync("open", arguments: ["-a", "Docker"],
                 cancellationToken: cancellationToken);
             return result.ExitCode;
         }
 
         if (OperatingSystem.IsLinux())
         {
-            var result = await processCommandService.RunProcessAndCaptureAsync("bash",
+            var result = await processCommandService.RunProcessAndCaptureOutputAsync("bash",
                 arguments: ["-c", "sudo systemctl start docker"], cancellationToken: cancellationToken);
             return result.ExitCode;
         }
