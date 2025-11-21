@@ -1,52 +1,68 @@
-﻿@* MudBlazor navigation menu replacing legacy Bootstrap markup *@
+﻿@using GroupSplit.App.Shared.Models
+@* MudBlazor navigation menu replacing legacy Bootstrap markup *@
 <MudNavMenu Class="pa-2">
-    
-    <MudNavLink Href="/"
-                Match="NavLinkMatch.All"
-                Icon="@Icons.Material.Filled.Dashboard"
-                IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Dashboard</MudText>
-    </MudNavLink>
-    <MudNavLink Href="/transactions"
-                Icon="@Icons.Material.Filled.Receipt"
-                IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Transactions</MudText>
-    </MudNavLink>
-    <MudNavLink Href="/groups"
-                Icon="@Icons.Material.Filled.Groups"
-                IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Groups</MudText>
-    </MudNavLink>
-    <MudNavLink Href="/spending"
-                Icon="@Icons.Material.Filled.TrendingUp"
-                IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Spending</MudText>
-    </MudNavLink>
+    @for (var i = 0; i < _menuSections.Count; i++)
+    {
+        var menuSection = _menuSections[i];
 
-    <MudDivider Class="my-4"/>
+        // Add divider for all sections except the first one
+        if (i > 0)
+        {
+            <MudDivider Class="my-4"/>
+        }
 
-    <MudText Typo="Typo.caption" Class="px-4 py-2 text-uppercase" Color="Color.Primary"
-             Style="letter-spacing: 0.5px; font-weight: 600;">Testing
-    </MudText>
-    <MudNavLink Href="/weather"
-                Icon="@Icons.Material.Filled.Cloud"
-                IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Weather</MudText>
-    </MudNavLink>
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Home</MudText>
-    </MudNavLink>
-    <MudNavLink Href="/counter" Icon="@Icons.Material.Filled.AddBox" IconColor="Color.Primary"
-                Class="rounded-lg my-1 nav-link-custom">
-        <MudText Typo="Typo.body2" Class="font-weight-medium">Counter</MudText>
-    </MudNavLink>
+        @if (!string.IsNullOrWhiteSpace(menuSection.Title))
+        {
+            <MudText Typo="Typo.subtitle2"
+                     Class="px-4 py-2 text-uppercase"
+                     Color="Color.Primary"
+                     Style="letter-spacing: 0.5px; font-weight: 600; text-transform: uppercase;">
+                @menuSection.Title
+            </MudText>
+        }
+
+
+        @foreach (var item in menuSection.Items)
+        {
+            <MudNavLink Href="@item.Href"
+                        Match="@item.Match"
+                        Icon="@item.Icon"
+                        IconColor="Color.Primary"
+                        Class="rounded-lg my-1 nav-link-custom">
+                <MudText Typo="Typo.body2" Class="font-weight-medium">@item.Text</MudText>
+            </MudNavLink>
+        }
+    }
 </MudNavMenu>
+
+@code {
+
+    private readonly List<MenuSection> _menuSections = new()
+    {
+        new MenuSection
+        {
+            // No title
+            Items =
+            {
+                new MenuItem { Href = "/", Text = "Dashboard", Icon = Icons.Material.Filled.Dashboard, Match = NavLinkMatch.All },
+                new MenuItem { Href = "/transactions", Text = "Transactions", Icon = Icons.Material.Filled.Receipt },
+                new MenuItem { Href = "/groups", Text = "Groups", Icon = Icons.Material.Filled.Groups },
+                new MenuItem { Href = "/spending", Text = "Spending", Icon = Icons.Material.Filled.TrendingUp }
+            }
+        },
+
+        new MenuSection
+        {
+            Title = "Testing",
+            Items =
+            {
+                new MenuItem { Href = "/weather", Text = "Weather", Icon = Icons.Material.Filled.Cloud },
+                new MenuItem { Href = "/counter", Text = "Counter", Icon = Icons.Material.Filled.AddBox }
+            }
+        }
+    };
+
+}
 
 <style>
     .nav-link-custom {
@@ -56,10 +72,5 @@
     .nav-link-custom:hover {
         background-color: var(--mud-palette-primary-hover) !important;
         transform: translateX(4px);
-    }
-
-    .mud-nav-link-active {
-        background-color: var(--mud-palette-action-default-hover) !important;
-        border-left: 3px solid var(--mud-palette-primary);
     }
 </style>
