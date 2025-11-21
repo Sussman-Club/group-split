@@ -97,7 +97,8 @@ app.MapGet("/weatherforecast", () =>
         return forecast;
     })
     .WithName("GetWeatherForecast")
-    .WithTags("weather");
+    .WithTags("weather")
+    .RequireAuthorization();
 
 app.MapGroupApi();
 app.MapUserApi();
