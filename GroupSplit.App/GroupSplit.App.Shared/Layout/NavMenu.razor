@@ -1,6 +1,65 @@
 ﻿@* MudBlazor navigation menu replacing legacy Bootstrap markup *@
-<MudNavMenu>
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
-    <MudNavLink Href="/counter" Icon="@Icons.Material.Filled.AddBox">Counter</MudNavLink>
-    <MudNavLink Href="/weather" Icon="@Icons.Material.Filled.List">Weather</MudNavLink>
+<MudNavMenu Class="pa-2">
+    
+    <MudNavLink Href="/"
+                Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Dashboard"
+                IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Dashboard</MudText>
+    </MudNavLink>
+    <MudNavLink Href="/transactions"
+                Icon="@Icons.Material.Filled.Receipt"
+                IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Transactions</MudText>
+    </MudNavLink>
+    <MudNavLink Href="/groups"
+                Icon="@Icons.Material.Filled.Groups"
+                IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Groups</MudText>
+    </MudNavLink>
+    <MudNavLink Href="/spending"
+                Icon="@Icons.Material.Filled.TrendingUp"
+                IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Spending</MudText>
+    </MudNavLink>
+
+    <MudDivider Class="my-4"/>
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 text-uppercase" Color="Color.Primary"
+             Style="letter-spacing: 0.5px; font-weight: 600;">Testing
+    </MudText>
+    <MudNavLink Href="/weather"
+                Icon="@Icons.Material.Filled.Cloud"
+                IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Weather</MudText>
+    </MudNavLink>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Home</MudText>
+    </MudNavLink>
+    <MudNavLink Href="/counter" Icon="@Icons.Material.Filled.AddBox" IconColor="Color.Primary"
+                Class="rounded-lg my-1 nav-link-custom">
+        <MudText Typo="Typo.body2" Class="font-weight-medium">Counter</MudText>
+    </MudNavLink>
 </MudNavMenu>
+
+<style>
+    .nav-link-custom {
+        transition: all 0.2s ease;
+    }
+
+    .nav-link-custom:hover {
+        background-color: var(--mud-palette-primary-hover) !important;
+        transform: translateX(4px);
+    }
+
+    .mud-nav-link-active {
+        background-color: var(--mud-palette-action-default-hover) !important;
+        border-left: 3px solid var(--mud-palette-primary);
+    }
+</style>
