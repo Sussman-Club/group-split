@@ -36,4 +36,11 @@ var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/Gr
 mauiapp.AddWindowsDevice()
     .WithReference(backend);
 
-builder.Build().Run();
+var host = builder.Build();
+
+if (builder.ExecutionContext.IsRunMode)
+{
+    await host.EnsureDockerIsRunning();
+}
+
+host.Run();
