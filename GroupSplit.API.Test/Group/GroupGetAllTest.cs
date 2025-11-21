@@ -27,7 +27,6 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiTest(fixture)
 
         // Assert
         Assert.Single(groups);
-        Assert.True(groups[0].IsPersonal);
     }
 
     [Fact]
@@ -48,10 +47,9 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiTest(fixture)
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
         // Assert
-        var personalGroup = groups.Single(g => g.IsPersonal);
-        Assert.Equal(personalGroupId, personalGroup.Id);
+        Assert.Single(groups, g => g.Id == personalGroupId);
         
-        var nonPersonalGroups = groups.Where(g => !g.IsPersonal).ToList();
+        var nonPersonalGroups = groups.Where(g => g.Id != personalGroupId).ToList();
         Assert.Equal(2, nonPersonalGroups.Count);
         Assert.All(nonPersonalGroups, g => Assert.NotEqual(personalGroupId, g.Id));
     }

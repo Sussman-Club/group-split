@@ -1,5 +1,7 @@
 ﻿using GroupSplit.API.Services;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -31,8 +33,10 @@ public static class GroupApi
                 CancellationToken ct) =>
             {
                 var createdGroup = await groupService.CreateGroup(ct);
-                return Results.Ok(new { createdGroup.Id });
-            });
+                var groupInfo = new GroupInfo(createdGroup.Id);
+                return Results.Ok(groupInfo);
+            })
+                .Produces<GroupInfo>();
         }
 
         private RouteHandlerBuilder MapGetAllGroups()
@@ -42,8 +46,10 @@ public static class GroupApi
                 CancellationToken ct) =>
             {
                 var groups = await groupService.GetAllGroups(ct);
-                return Results.Ok(groups);
-            });
+                var groupInfos = groups.Select(g => new GroupInfo(g.Id)).ToListAsync(cancellationToken: ct);
+                return Results.Ok(groupInfos);
+            })
+                .Produces<GroupInfo[]>();
         }
     }
 }

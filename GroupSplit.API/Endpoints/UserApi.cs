@@ -1,4 +1,5 @@
 ﻿using GroupSplit.API.Services;
+using GroupSplit.Shared;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -26,11 +27,10 @@ public static class UserApi
                 IUserService userService) =>
             {
                 var user = await userService.GetCurrentUser();
-                return Results.Ok(new
-                {
-                    user.Id,
-                });
-            });
+                var userInfo = new UserInfo(user.Id);
+                return Results.Ok(userInfo);
+            })
+            .Produces<UserInfo>();
         }
     }
 }
