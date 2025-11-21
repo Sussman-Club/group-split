@@ -1,0 +1,140 @@
+@page "/transactions"
+
+<PageTitle>Transactions</PageTitle>
+
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+    <MudStack Spacing="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Outlined.Receipt" Color="Color.Primary" Size="Size.Large"/>
+            <MudText Typo="Typo.h5" Class="font-weight-bold">Transactions</MudText>
+        </MudStack>
+    </MudStack>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Outlined.Add"
+               OnClick="OpenAddTransactionDialog">
+        Add Transaction
+    </MudButton>
+</MudStack>
+
+<MudTextField @bind-Value="_searchString"
+              Placeholder="Search transactions..."
+              Adornment="Adornment.Start"
+              AdornmentIcon="@Icons.Material.Outlined.Search"
+              IconSize="Size.Medium"
+              Immediate="true"
+              Variant="Variant.Outlined"
+              Class="flex-grow-1 pa-6"/>
+
+<MudDataGrid T="TransactionViewModel"
+             Items="@FilteredTransactions"
+             Filterable="true"
+             FilterMode="DataGridFilterMode.Simple"
+             Hover="true"
+             Dense="false"
+             Bordered="false"
+             Class="ma-6"
+             Striped="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Date" Title="Date" Filterable="false">
+            <CellTemplate>
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.body2">@context.Item.Date.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption"
+                             Color="Color.Secondary">@context.Item.Date.ToShortTimeString()</MudText>
+                </MudStack>
+            </CellTemplate>
+        </PropertyColumn>
+
+        <PropertyColumn Property="x => x.GroupName" Title="Group" Filterable="true">
+            <CellTemplate>
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                    @context.Item.GroupName
+                </MudChip>
+            </CellTemplate>
+        </PropertyColumn>
+
+        <PropertyColumn Property="x => x.Amount" Title="Amount" Filterable="false">
+            <CellTemplate>
+                <MudText Typo="Typo.body1" Class="font-weight-bold" Color="Color.Success">
+                    $@context.Item.Amount.ToString("N2")
+                </MudText>
+            </CellTemplate>
+        </PropertyColumn>
+
+        <TemplateColumn Title="Actions" Filterable="false">
+            <CellTemplate>
+                <MudStack Row="true" Spacing="1">
+                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="() => EditTransaction(context.Item)"/>
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="() => DeleteTransaction(context.Item)"/>
+                </MudStack>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-8">
+            <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">No transactions found</MudText>
+        </MudStack>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private string _searchString = "";
+    private const string CurrentUserName = "John Doe"; // TODO: Get from authentication context
+
+    // All transactions from database (filtered by current user)
+    private readonly List<TransactionViewModel> _transactions = new()
+    {
+        // Only showing current user's (John Doe) transactions
+        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-1), GroupName = "Vacation 2024", UserName = CurrentUserName, Amount = 125.50m },
+        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-7), GroupName = "Weekend Trip", UserName = CurrentUserName, Amount = 89.25m },
+        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-10), GroupName = "Office Lunch", UserName = CurrentUserName, Amount = 32.75m },
+        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-14), GroupName = "Vacation 2024", UserName = CurrentUserName, Amount = 200.00m },
+        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-20), GroupName = "Roommates", UserName = CurrentUserName, Amount = 156.80m },
+        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-25), GroupName = "Weekend Trip", UserName = CurrentUserName, Amount = 45.00m }
+    };
+
+    private IEnumerable<TransactionViewModel> FilteredTransactions =>
+        _transactions.Where(t =>
+        {
+            var matchesSearch = string.IsNullOrWhiteSpace(_searchString) ||
+                                t.GroupName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                                t.Amount.ToString().Contains(_searchString);
+
+            return matchesSearch;
+        }).OrderByDescending(t => t.Date);
+
+    private void OpenAddTransactionDialog()
+    {
+        // TODO: Implement add transaction dialog
+    }
+
+    private void EditTransaction(TransactionViewModel transaction)
+    {
+        // TODO: Implement edit transaction
+    }
+
+    private void DeleteTransaction(TransactionViewModel transaction)
+    {
+        // TODO: Implement delete transaction
+    }
+
+
+    private class TransactionViewModel
+    {
+        public Guid Id { get; set; }
+        public DateTime Date { get; set; }
+        public string GroupName { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
+
+}
