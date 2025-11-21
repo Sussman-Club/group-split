@@ -1,16 +1,22 @@
-using GroupSplit.App.Web.Components;
 using GroupSplit.App.Shared.Services;
-using GroupSplit.Shared;
+using GroupSplit.App.Web;
+using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
+using GroupSplit.Shared;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Initialize render mode configuration
+// RenderModeConfig.Initialize(builder.Environment.IsDevelopment());
+RenderModeConfig.Initialize(builder.Environment.IsDevelopment());
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveWebAssemblyComponents();
+    .AddRenderModeComponents();
+
 
 // Add device-specific services used by the GroupSplit.App.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -34,16 +40,13 @@ var app = builder.Build();
 app.MapDefaultEndpoints();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment())
 {
-    app.UseWebAssemblyDebugging();
-}
-else
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler("/Error", true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
@@ -52,10 +55,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
-    .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(
-        typeof(GroupSplit.App.Shared._Imports).Assembly,
-        typeof(GroupSplit.App.Web.Client._Imports).Assembly);
+    .MapRenderMode(app);
 
 // Provide API URL configuration to the WebAssembly client
 app.MapGet("/api/config", (IConfiguration config) =>
