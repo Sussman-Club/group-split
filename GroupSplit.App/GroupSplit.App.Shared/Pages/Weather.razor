@@ -1,8 +1,12 @@
 ﻿@page "/weather"
+@using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IWeatherClient ApiClient
+@inject IFormFactor FormFactor
 
 <PageTitle>Weather</PageTitle>
+
+@(FormFactor.GetFormFactor())
 
 <MudPaper Elevation="4" Class="pa-6">
     <MudStack Spacing="2">
@@ -19,7 +23,7 @@
                 <MudText Typo="Typo.body2">@errorMessage</MudText>
             </MudAlert>
         }
-        else if (forecasts == null)
+        else if (Forecasts == null)
         {
             <MudStack AlignItems="AlignItems.Center" JustifyContent="Center" Class="my-4">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-2" />
@@ -28,7 +32,7 @@
         }
         else
         {
-            <MudTable Items="forecasts" Hover="true" Dense="true" Bordered="true" Elevation="0" Class="mt-2">
+            <MudTable Items="Forecasts" Hover="true" Dense="true" Bordered="true" Elevation="0" Class="mt-2">
                 <HeaderContent>
                     <MudTh>Date</MudTh>
                     <MudTh aria-label="Temperature in Celsius">Temp. (C)</MudTh>
@@ -49,14 +53,15 @@
 </MudPaper>
 
 @code {
-    private ICollection<WeatherForecast>? forecasts;
+    [PersistentState]
+    public ICollection<WeatherForecast>? Forecasts { get; set; }
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            forecasts = await ApiClient.GetWeatherForecastAsync();
+            Forecasts ??= await ApiClient.GetWeatherForecastAsync();
         }
         catch (ApiException apiEx)
         {

@@ -3,11 +3,19 @@ using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Web;
 using GroupSplit.Shared;
 using GroupSplit.App.Web.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddAuthorizationBuilder();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -26,7 +34,16 @@ builder.Services.AddHttpForwarderWithServiceDiscovery();
 builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
 {
     client.BaseAddress = new Uri("https+http://api");
+}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
+
+builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
+{
+    client.BaseAddress = new Uri("https+http://api");
 });
+
+// NOTE: The BFF invokes AuthService from the client-side only.
+// This registration exists only to satisfy DI requirements.
+builder.Services.AddSingleton<IAuthService, AuthService>();
 
 var app = builder.Build();
 
@@ -57,5 +74,7 @@ app.MapRazorComponents<App>()
     .AddAdditionalAssemblies(
         typeof(GroupSplit.App.Shared._Imports).Assembly,
         typeof(GroupSplit.App.Web.Client._Imports).Assembly);
+
+app.MapIdentity();
 
 app.Run();
