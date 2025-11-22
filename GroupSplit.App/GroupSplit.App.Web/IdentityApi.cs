@@ -27,17 +27,6 @@ public static class IdentityApi
                 async (RegisterRequest request, IIdentityClient client) =>
                 {
                     await client.PostIdentityRegisterAsync(request);
-
-                    var login = new LoginRequest { Email = request.Email, Password = request.Password };
-
-                    var tokenResponse = await client.PostIdentityLoginAsync(
-                        useCookies: false,
-                        useSessionCookies: false,
-                        login
-                    );
-
-                    var userInfo = new UserIdentityInfo(login.Email);
-                    return SignIn(userInfo, tokenResponse.AccessToken);
                 });
             return group;
         }

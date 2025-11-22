@@ -6,6 +6,12 @@ namespace GroupSplit.App.Web.Client.Services;
 
 public class AuthService(HttpClient client) : IAuthService
 {
+    public async Task Register(RegisterRequest request, CancellationToken ct)
+    {
+        var response = await client.PostAsJsonAsync("auth/register", request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+    
     public async Task Login(LoginRequest request, CancellationToken ct)
     {
         var response = await client.PostAsJsonAsync("auth/login", request, ct);
@@ -15,12 +21,6 @@ public class AuthService(HttpClient client) : IAuthService
     public async Task Logout()
     {
         var response = await client.PostAsync("auth/logout", null);
-        response.EnsureSuccessStatusCode();
-    }
-
-    public async Task Register(RegisterRequest request, CancellationToken ct)
-    {
-        var response = await client.PostAsJsonAsync("auth/register", request, ct);
         response.EnsureSuccessStatusCode();
     }
 }
