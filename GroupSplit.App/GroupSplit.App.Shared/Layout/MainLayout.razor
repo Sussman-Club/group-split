@@ -1,7 +1,7 @@
 ﻿@inherits LayoutComponentBase
 
 @* Required *@
-<MudThemeProvider Theme="_customTheme"/>
+<MudThemeProvider Theme="_theme"/>
 <MudPopoverProvider/>
 
 @* Needed for dialogs *@
@@ -11,45 +11,46 @@
 <MudSnackbarProvider/>
 
 
-<MudLayout>
-    <MudDrawer Open="true" Variant="DrawerVariant.Persistent" Elevation="2" Class="d-flex flex-column">
-        <MudStack Spacing="0" Class="flex-shrink-0">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="pa-5 pb-4 flex-row">
-                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">Group Split</MudText>
-                    <MudText Typo="Typo.caption">Split expenses fairly</MudText>
+<CascadingValue Value="_theme">
+    <MudLayout>
+        <MudDrawer Open="true" Variant="DrawerVariant.Persistent" Elevation="2" Class="d-flex flex-column">
+            <MudStack Spacing="0" Class="flex-shrink-0">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="pa-5 pb-4 flex-row">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">Group Split</MudText>
+                        <MudText Typo="Typo.caption">Split expenses fairly</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider/>
+            </MudStack>
+            <MudStack Class="flex-grow-1 py-4 overflow-y-auto">
+                <NavMenu/>
+            </MudStack>
+            <MudStack Spacing="0" Class="flex-shrink-0 mud-secondary">
+                <MudDivider Class="mb-3"/>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="pa-4">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudAvatar Color="Color.Primary" Size="Size.Small">U</MudAvatar>
+                        <MudText Typo="Typo.body2" Class="font-weight-medium">User</MudText>
+                    </MudStack>
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Color="Color.Default"
+                                   Size="Size.Small"/>
                 </MudStack>
             </MudStack>
-            <MudDivider/>
-        </MudStack>
-        <MudStack Class="flex-grow-1 py-4 overflow-y-auto">
-            <NavMenu/>
-        </MudStack>
-        <MudStack Spacing="0" Class="flex-shrink-0 mud-secondary"
-                  Style="background-color: var(--mud-palette-secondary-darken);">
-            <MudDivider Class="mb-3"/>
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="pa-4">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <MudAvatar Color="Color.Primary" Size="Size.Small">U</MudAvatar>
-                    <MudText Typo="Typo.body2" Class="font-weight-medium">User</MudText>
-                </MudStack>
-                <MudIconButton Icon="@Icons.Material.Filled.Settings"
-                               Color="Color.Default"
-                               Size="Size.Small"/>
-            </MudStack>
-        </MudStack>
-    </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-            @Body
-        </MudContainer>
-    </MudMainContent>
-</MudLayout>
+        </MudDrawer>
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+    </MudLayout>
+</CascadingValue>
 
 @code {
 
-    private readonly MudTheme _customTheme = new()
+    private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
         {
@@ -59,11 +60,11 @@
             Success = "#22817a", // Green for success states
             TextPrimary = "#2A2A2A", // Deep Charcoal
             TextSecondary = "#2A2A2A", // Deep Charcoal
-            Surface = "#F5F0E6", // Neutral surface
-            Background = "#FAF7F0", // Light optimistic background
+            Surface = "#FAF7F0", // Neutral surface
+            Background = "#F5F0E6", // Light optimistic background
             BackgroundGray = "#E0D5CB", // Soft neutral
             Divider = "#E0D5CB", // Soft neutral for borders
-            DrawerBackground = "#F5F0E6", // Neutral drawer background
+            DrawerBackground = "#FAF7F0", // Neutral drawer background
             AppbarBackground = "#22817a", // Green app bar
             AppbarText = "#FFFFFF" // White text on green
         },
@@ -80,5 +81,7 @@
             Divider = "#E0D5CB" // Soft neutral for borders
         }
     };
+
+    [CascadingParameter] private MudTheme CustomTheme { get; set; }
 
 }

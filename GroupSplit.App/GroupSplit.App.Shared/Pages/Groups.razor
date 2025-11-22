@@ -1,4 +1,5 @@
 @page "/groups"
+@using GroupSplit.App.Shared.Components
 
 <PageTitle>Groups</PageTitle>
 
@@ -100,7 +101,7 @@
                     <MudStack Spacing="2">
                         @foreach (var transaction in _transactions)
                         {
-                            <MudCard Elevation="0" Outlined="true" Class="cursor-pointer"
+                            <MudCard Elevation="0" Outlined="true" Class="hover-slide-right"
                                      @onclick="() => ViewExpenseDetails(transaction)">
                                 <MudCardContent>
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
@@ -188,17 +189,11 @@
 
 @if (_selectedGroupId != Guid.Empty)
 {
-    <div class="fab-extended" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;">
-        <MudIconButton Icon="@Icons.Material.Filled.Add"
-                       Size="Size.Large"
-                       Style="color: var(--mud-palette-primary-text)"
-                       aria-label="Add Expense"
-                       Class="fab-button"/>
-        <span class="fab-text">Expense</span>
-    </div>
+    <ExtendedFab Label="Expense" AlwaysExtended="true"/>
 }
 
 @code {
+    [CascadingParameter] public required MudTheme Theme { get; set; }
     private const string CurrentUserName = "John Doe";
     private Guid _selectedGroupId = Guid.Empty;
     private string? _selectedGroupName;
@@ -303,53 +298,3 @@
     }
 
 }
-
-<style>
-    .cursor-pointer {
-        transition: all 0.2s ease;
-    }
-
-    .cursor-pointer:hover {
-        background-color: var(--mud-palette-primary-hover) !important;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    .fab-extended {
-        display: inline-flex;
-        align-items: center;
-        background-color: var(--mud-palette-primary);
-        border-radius: 28px;
-        padding: 0;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, .2), 0 6px 10px 0 rgba(0, 0, 0, .14), 0 1px 18px 0 rgba(0, 0, 0, .12);
-    }
-
-    .fab-extended:hover {
-        box-shadow: 0 5px 5px -3px rgba(0, 0, 0, .2), 0 8px 10px 1px rgba(0, 0, 0, .14), 0 3px 14px 2px rgba(0, 0, 0, .12);
-    }
-
-    .fab-extended .fab-button {
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-
-    .fab-extended .fab-text {
-        max-width: 0;
-        opacity: 0;
-        overflow: hidden;
-        white-space: nowrap;
-        color: white;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        padding-right: 0;
-    }
-
-    .fab-extended:hover .fab-text {
-        max-width: 200px;
-        opacity: 1;
-        padding-right: 20px;
-        padding-left: 8px;
-    }
-</style>

@@ -1,4 +1,6 @@
 @page "/transactions"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
 
 <PageTitle>Transactions</PageTitle>
 
@@ -12,12 +14,14 @@
     </MudStack>
 </MudStack>
 
+
 <MudTextField @bind-Value="_searchString"
               Placeholder="Search transactions..."
               Adornment="Adornment.Start"
               AdornmentIcon="@Icons.Material.Outlined.Search"
               IconSize="Size.Medium"
               Immediate="true"
+              Style="@Theme.PaletteLight.Surface.BackgroundColorStyle"
               Variant="Variant.Outlined"
               Class="flex-grow-1 pa-6"/>
 
@@ -80,57 +84,10 @@
     </NoRecordsContent>
 </MudDataGrid>
 
-<div class="fab-extended" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;">
-    <MudIconButton Icon="@Icons.Material.Filled.Add"
-                   Size="Size.Large"
-                   Style="color: var(--mud-palette-primary-text)"
-                   aria-label="Add Transaction"
-                   Class="fab-button"/>
-    <span class="fab-text">Transaction</span>
-</div>
-
-
-<style>
-    .fab-extended {
-        display: inline-flex;
-        align-items: center;
-        background-color: var(--mud-palette-primary);
-        border-radius: 28px;
-        padding: 0;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, .2), 0 6px 10px 0 rgba(0, 0, 0, .14), 0 1px 18px 0 rgba(0, 0, 0, .12);
-    }
-
-    .fab-extended:hover {
-        box-shadow: 0 5px 5px -3px rgba(0, 0, 0, .2), 0 8px 10px 1px rgba(0, 0, 0, .14), 0 3px 14px 2px rgba(0, 0, 0, .12);
-    }
-
-    .fab-extended .fab-button {
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-
-    .fab-extended .fab-text {
-        max-width: 0;
-        opacity: 0;
-        overflow: hidden;
-        white-space: nowrap;
-        color: white;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        padding-right: 0;
-    }
-
-    .fab-extended:hover .fab-text {
-        max-width: 200px;
-        opacity: 1;
-        padding-right: 20px;
-        padding-left: 8px;
-    }
-</style>
+<ExtendedFab Label="Transaction"/>
 
 @code {
+    [CascadingParameter] public required MudTheme Theme { get; set; }
     private string _searchString = "";
     private const string CurrentUserName = "John Doe"; // TODO: Get from authentication context
 

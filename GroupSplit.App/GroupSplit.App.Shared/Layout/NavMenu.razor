@@ -28,7 +28,7 @@
                         Match="@item.Match"
                         Icon="@item.Icon"
                         IconColor="Color.Primary"
-                        Class="rounded-lg my-1 nav-link-custom">
+                        Class="rounded-lg my-1 hover-slide-right">
                 <MudText Typo="Typo.body2" Class="font-weight-medium">@item.Text</MudText>
             </MudNavLink>
         }
@@ -63,14 +63,3 @@
     };
 
 }
-
-<style>
-    .nav-link-custom {
-        transition: all 0.2s ease;
-    }
-
-    .nav-link-custom:hover {
-        background-color: var(--mud-palette-primary-hover) !important;
-        transform: translateX(4px);
-    }
-</style>
