@@ -1,6 +1,6 @@
 ﻿@using GroupSplit.App.Shared.Models
 @* MudBlazor navigation menu replacing legacy Bootstrap markup *@
-<MudNavMenu Class="pa-2">
+<MudNavMenu>
     @for (var i = 0; i < _menuSections.Count; i++)
     {
         var menuSection = _menuSections[i];
@@ -13,29 +13,51 @@
 
         @if (!string.IsNullOrWhiteSpace(menuSection.Title))
         {
-            <MudText Typo="Typo.subtitle2"
-                     Class="px-4 py-2 text-uppercase"
-                     Color="Color.Primary"
-                     Style="letter-spacing: 0.5px; font-weight: 600; text-transform: uppercase;">
-                @menuSection.Title
-            </MudText>
+            @if (Mini)
+            {
+                <div class="py-2"></div>
+            }
+            else
+            {
+                <MudText Typo="Typo.subtitle2"
+                         Class="px-4 py-2 text-uppercase"
+                         Color="Color.Primary"
+                         Style="letter-spacing: 0.5px; font-weight: 600; text-transform: uppercase;">
+                    @menuSection.Title
+                </MudText>
+            }
         }
 
 
         @foreach (var item in menuSection.Items)
         {
-            <MudNavLink Href="@item.Href"
-                        Match="@item.Match"
-                        Icon="@item.Icon"
-                        IconColor="Color.Primary"
-                        Class="rounded-lg my-1 hover-slide-right">
-                <MudText Typo="Typo.body2" Class="font-weight-medium">@item.Text</MudText>
-            </MudNavLink>
+            @if (Mini)
+            {
+                <MudTooltip Text="@item.Text" Placement="Placement.Right">
+                    <MudNavLink Href="@item.Href"
+                                Match="@item.Match"
+                                Icon="@item.Icon"
+                                IconColor="Color.Primary"
+                                Class="rounded-lg my-1 hover-slide-right">
+                    </MudNavLink>
+                </MudTooltip>
+            }
+            else
+            {
+                <MudNavLink Href="@item.Href"
+                            Match="@item.Match"
+                            Icon="@item.Icon"
+                            IconColor="Color.Primary"
+                            Class="rounded-lg my-1 hover-slide-right">
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">@item.Text</MudText>
+                </MudNavLink>
+            }
         }
     }
 </MudNavMenu>
 
 @code {
+    [Parameter] public bool Mini { get; set; }
 
     private readonly List<MenuSection> _menuSections = new()
     {

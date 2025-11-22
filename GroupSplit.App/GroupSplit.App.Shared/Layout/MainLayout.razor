@@ -1,4 +1,5 @@
-﻿@inherits LayoutComponentBase
+﻿@using GroupSplit.App.Shared.Extensions
+@inherits LayoutComponentBase
 
 @* Required *@
 <MudThemeProvider Theme="_theme"/>
@@ -13,32 +14,30 @@
 
 <CascadingValue Value="_theme">
     <MudLayout>
-        <MudDrawer Open="true" Variant="DrawerVariant.Persistent" Elevation="2" Class="d-flex flex-column">
-            <MudStack Spacing="0" Class="flex-shrink-0">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="pa-5 pb-4 flex-row">
-                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">Group Split</MudText>
-                        <MudText Typo="Typo.caption">Split expenses fairly</MudText>
-                    </MudStack>
+        <MudAppBar Elevation="1" Dense>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                               Color="Color.Inherit"
+                               Edge="Edge.Start"
+                               OnClick="@ToggleDrawer"/>
+                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Inherit"/>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Group Split</MudText>
+            </MudStack>
+            <MudSpacer/>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Style="@_theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
+                        U
+                    </MudAvatar>
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">User</MudText>
                 </MudStack>
-                <MudDivider/>
+                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                               Color="Color.Inherit"/>
             </MudStack>
-            <MudStack Class="flex-grow-1 py-4 overflow-y-auto">
-                <NavMenu/>
-            </MudStack>
-            <MudStack Spacing="0" Class="flex-shrink-0 mud-secondary">
-                <MudDivider Class="mb-3"/>
-                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="pa-4">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <MudAvatar Color="Color.Primary" Size="Size.Small">U</MudAvatar>
-                        <MudText Typo="Typo.body2" Class="font-weight-medium">User</MudText>
-                    </MudStack>
-                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
-                                   Color="Color.Default"
-                                   Size="Size.Small"/>
-                </MudStack>
-            </MudStack>
+        </MudAppBar>
+        <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Mini" Elevation="2"
+                   ClipMode="DrawerClipMode.Always">
+            <NavMenu Mini="!_drawerOpen"/>
         </MudDrawer>
         <MudMainContent>
             <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
@@ -49,6 +48,12 @@
 </CascadingValue>
 
 @code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
 
     private readonly MudTheme _theme = new()
     {
