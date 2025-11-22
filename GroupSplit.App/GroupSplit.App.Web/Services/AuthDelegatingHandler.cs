@@ -31,6 +31,6 @@ internal class AuthDelegatingHandler(IHttpContextAccessor httpContextAccessor) :
 
     protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        throw new InvalidOperationException("Sync operations are not supported.");
     }
 }

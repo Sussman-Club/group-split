@@ -9,16 +9,16 @@ public class AuthService : IAuthService
 {
     public Task Login(LoginRequest request, CancellationToken ct)
     {
-        throw new NotImplementedException();
+        throw new InvalidOperationException("Auth operations are not supported on server-side.");
     }
 
     public Task Register(RegisterRequest request, CancellationToken ct)
     {
-        throw new NotImplementedException();
+        throw new InvalidOperationException("Auth operations are not supported on server-side.");
     }
 
     public Task Logout()
     {
-        throw new NotImplementedException();
+        throw new InvalidOperationException("Auth operations are not supported on server-side.");
     }
 }
