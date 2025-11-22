@@ -35,14 +35,8 @@ public static class RenderModeConfig
             .AddAdditionalAssemblies(typeof(_Imports).Assembly);
 
         if (!IsDevelopment)
-        {
             builder.AddInteractiveWebAssemblyRenderMode()
                 .AddAdditionalAssemblies(typeof(Client._Imports).Assembly);
-
-            app.UseExceptionHandler("/Error", true);
-            // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-            app.UseHsts();
-        }
 
         return builder;
     }
