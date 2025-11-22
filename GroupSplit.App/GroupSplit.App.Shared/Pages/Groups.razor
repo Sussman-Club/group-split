@@ -1,5 +1,6 @@
 @page "/groups"
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
 
 <PageTitle>Groups</PageTitle>
 
@@ -19,7 +20,7 @@
     </MudStack>
 }
 
-<MudStack Spacing="4">
+<MudStack Spacing="4" Class="mb-10">
     @if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
     {
         <!-- Balance Row -->
@@ -105,32 +106,21 @@
                                      @onclick="() => ViewExpenseDetails(transaction)">
                                 <MudCardContent>
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                        <MudStack Spacing="1" Class="flex-grow-1">
+                                        <MudStack Spacing="0" Class="flex-grow-1">
                                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                                <MudAvatar Color="Color.Primary"
-                                                           Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
-                                                <MudText Typo="Typo.body1" Class="font-weight-medium">Expense
-                                                    by @transaction.PaidByName</MudText>
+                                                <MudAvatar Color="Color.Primary" Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
+                                                <MudText Typo="Typo.body2" Class="font-weight-medium">@transaction.Name</MudText>
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@transaction.Category</MudChip>
                                             </MudStack>
-                                            <MudStack Row="true" Spacing="3" Class="ml-10">
-                                                <MudText Typo="Typo.caption">
-                                                    Paid by <strong>@transaction.PaidByName</strong>
-                                                </MudText>
-                                            </MudStack>
+                                            <MudText Typo="Typo.caption" Class="ml-10">
+                                                Paid by <strong>@transaction.PaidByName</strong> on @transaction.Date.ToShortDateString()
+                                            </MudText>
                                         </MudStack>
                                         <MudStack AlignItems="AlignItems.End" Spacing="0">
                                             <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
                                                 $@transaction.Amount.ToString("N2")
                                             </MudText>
-                                            @if (transaction.PaidByName == CurrentUserName)
-                                            {
-                                                <MudText Typo="Typo.caption" Color="Color.Success">You paid</MudText>
-                                            }
-                                            else
-                                            {
-                                                <MudText Typo="Typo.caption">Split
-                                                    with @_members.Count</MudText>
-                                            }
+                                            <MudText Typo="Typo.caption">@transaction.RuleName</MudText>
                                         </MudStack>
                                     </MudStack>
                                 </MudCardContent>
@@ -140,39 +130,21 @@
                 </MudStack>
             </MudPaper>
             <!-- My Groups -->
-            <MudPaper Elevation="1" Class="pa-4" Style="min-width: 280px; max-width: 320px;">
-                <MudStack Spacing="3">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <MudIcon Icon="@Icons.Material.Outlined.Groups" Color="Color.Primary" Size="Size.Medium"/>
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">My Groups</MudText>
-                    </MudStack>
-                    <MudDivider/>
+            <MudStack Spacing="4">
+                <GroupsList Title="My Groups"
+                            Icon="@Icons.Material.Outlined.Groups"
+                            Groups="_userGroups"
+                            SelectedGroupId="_selectedGroupId"
+                            OnGroupSelect="SelectGroup"
+                            ShowCreateButton="true"/>
 
-                    <MudStack Spacing="1">
-                        @foreach (var group in _userGroups)
-                        {
-                            <MudButton Variant="@(_selectedGroupId == group.Id ? Variant.Filled : Variant.Text)"
-                                       Color="@(_selectedGroupId == group.Id ? Color.Primary : Color.Default)"
-                                       StartIcon="@Icons.Material.Outlined.Group"
-                                       FullWidth="true"
-                                       Class="justify-start"
-                                       OnClick="() => SelectGroup(group.Id)">
-                                <MudStack Spacing="0" Class="flex-grow-1">
-                                    <MudText Typo="Typo.body2">@group.Name</MudText>
-                                    <MudText Typo="Typo.caption">@group.MemberCount members</MudText>
-                                </MudStack>
-                            </MudButton>
-                        }
-                    </MudStack>
-
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Primary"
-                               StartIcon="@Icons.Material.Outlined.Add"
-                               FullWidth="true">
-                        Create Group
-                    </MudButton>
-                </MudStack>
-            </MudPaper>
+                <GroupsList Title="Archived Groups"
+                            Icon="@Icons.Material.Outlined.Archive"
+                            Groups="_archivedGroups"
+                            SelectedGroupId="_selectedGroupId"
+                            OnGroupSelect="SelectGroup"
+                            ShowCreateButton="false"/>
+            </MudStack>
         </MudStack>
     }
     else
@@ -187,7 +159,7 @@
 </MudStack>
 
 
-@if (_selectedGroupId != Guid.Empty)
+@if (_selectedGroupId != Guid.Empty && !_isSelectedGroupArchived)
 {
     <ExtendedFab Label="Expense" AlwaysExtended="true"/>
 }
@@ -197,6 +169,7 @@
     private const string CurrentUserName = "John Doe";
     private Guid _selectedGroupId = Guid.Empty;
     private string? _selectedGroupName;
+    private bool _isSelectedGroupArchived = false;
     private decimal _userBalance;
 
     // Mock data - replace with API calls
@@ -206,6 +179,12 @@
         new GroupListItem { Id = Guid.NewGuid(), Name = "Roommates", MemberCount = 3 },
         new GroupListItem { Id = Guid.NewGuid(), Name = "Office Lunch", MemberCount = 5 },
         new GroupListItem { Id = Guid.NewGuid(), Name = "Weekend Trip", MemberCount = 4 }
+    };
+
+    private readonly List<GroupListItem> _archivedGroups = new()
+    {
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Summer 2023", MemberCount = 3 },
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Old Roommates", MemberCount = 2 }
     };
 
     private List<DebtInfo> _owedToYou = new();
@@ -225,8 +204,25 @@
     private void SelectGroup(Guid groupId)
     {
         _selectedGroupId = groupId;
+
+        // Check if it's in active groups
         var group = _userGroups.FirstOrDefault(g => g.Id == groupId);
-        _selectedGroupName = group?.Name;
+        if (group != null)
+        {
+            _selectedGroupName = group.Name;
+            _isSelectedGroupArchived = false;
+        }
+        else
+        {
+            // Check if it's in archived groups
+            group = _archivedGroups.FirstOrDefault(g => g.Id == groupId);
+            if (group != null)
+            {
+                _selectedGroupName = group.Name;
+                _isSelectedGroupArchived = true;
+            }
+        }
+
         LoadGroupData();
     }
 
@@ -258,10 +254,10 @@
         // Mock: Recent transactions
         _transactions = new List<TransactionInfo>
         {
-            new() { Id = Guid.NewGuid(), Amount = 120.00m, PaidByName = CurrentUserName },
-            new() { Id = Guid.NewGuid(), Amount = 45.50m, PaidByName = "Jane Smith" },
-            new() { Id = Guid.NewGuid(), Amount = 320.00m, PaidByName = CurrentUserName },
-            new() { Id = Guid.NewGuid(), Amount = 85.20m, PaidByName = "Bob Wilson" }
+            new() { Id = Guid.NewGuid(), Name = "Dinner at Italian Restaurant", Amount = 120.00m, PaidByName = CurrentUserName, Category = "Food", Date = DateTime.Now.AddDays(-1), RuleName = "Split Equally" },
+            new() { Id = Guid.NewGuid(), Name = "Taxi to Airport", Amount = 45.50m, PaidByName = "Jane Smith", Category = "Transport", Date = DateTime.Now.AddDays(-2), RuleName = "Split Equally" },
+            new() { Id = Guid.NewGuid(), Name = "Hotel Booking", Amount = 320.00m, PaidByName = CurrentUserName, Category = "Accommodation", Date = DateTime.Now.AddDays(-5), RuleName = "Split by Percentage" },
+            new() { Id = Guid.NewGuid(), Name = "Concert Tickets", Amount = 85.20m, PaidByName = "Bob Wilson", Category = "Entertainment", Date = DateTime.Now.AddDays(-7), RuleName = "Split Equally" }
         };
     }
 
@@ -269,13 +265,6 @@
     {
         // TODO: Implement expense details dialog/modal
         // Show expense details: description, amount, who paid, date, how it was split, etc.
-    }
-
-    private class GroupListItem
-    {
-        public Guid Id { get; set; }
-        public string Name { get; set; } = "";
-        public int MemberCount { get; set; }
     }
 
     private class DebtInfo
@@ -293,8 +282,12 @@
     private class TransactionInfo
     {
         public Guid Id { get; set; }
+        public string Name { get; set; } = "";
         public decimal Amount { get; set; }
         public string PaidByName { get; set; } = "";
+        public string Category { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string RuleName { get; set; } = "";
     }
 
 }
