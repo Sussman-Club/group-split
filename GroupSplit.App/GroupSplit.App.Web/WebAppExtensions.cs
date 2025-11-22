@@ -1,3 +1,6 @@
+using System.Net.Http.Headers;
+using GroupSplit.App.Web.Authentication;
+using Microsoft.AspNetCore.Authentication;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.Transforms;
 
@@ -13,7 +16,7 @@ public static class WebAppExtensions
         {
             var group = app.MapGroup("/api");
             
-            // group.RequireAuthorization(); // Uncomment to require authorization
+            group.RequireAuthorization();
 
             group.MapForwarder("{*path}","https+http://api", new ForwarderRequestConfig(), b =>
             {
@@ -24,8 +27,8 @@ public static class WebAppExtensions
                         requestTransformContext.Path = other;
                     }
                     
-                    // Do requests transformations as needed here.
-                    await ValueTask.CompletedTask;
+                    var accessToken = await requestTransformContext.HttpContext.GetTokenAsync(TokenNames.AccessToken);
+                    requestTransformContext.ProxyRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
                 });
             });
             
