@@ -34,7 +34,7 @@ builder.Services.AddHttpForwarderWithServiceDiscovery();
 builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
 {
     client.BaseAddress = new Uri("https+http://api");
-});
+}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
 
 builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
 {
