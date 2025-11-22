@@ -11,7 +11,7 @@ builder.AddServiceDefaults();
 
 // Initialize render mode configuration
 // RenderModeConfig.Initialize(builder.Environment.IsDevelopment());
-RenderModeConfig.Initialize(builder.Environment.IsDevelopment());
+RenderModeConfig.Initialize(true);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

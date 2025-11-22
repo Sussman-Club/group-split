@@ -7,7 +7,7 @@
 @if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
 {
     <!-- Group Header -->
-    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
@@ -16,6 +16,23 @@
             <MudText Typo="Typo.body2">
                 @_members.Count members · @_transactions.Count expenses
             </MudText>
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Settings"
+                       OnClick="ManageRules">
+                Manage Rules
+            </MudButton>
+            @if (!_isSelectedGroupArchived)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Tertiary"
+                           StartIcon="@Icons.Material.Outlined.Archive"
+                           OnClick="ArchiveGroup">
+                    Archive
+                </MudButton>
+            }
         </MudStack>
     </MudStack>
 }
@@ -108,12 +125,16 @@
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
                                         <MudStack Spacing="0" Class="flex-grow-1">
                                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                                <MudAvatar Color="Color.Primary" Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
-                                                <MudText Typo="Typo.body2" Class="font-weight-medium">@transaction.Name</MudText>
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@transaction.Category</MudChip>
+                                                <MudAvatar Color="Color.Primary"
+                                                           Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
+                                                <MudText Typo="Typo.body2"
+                                                         Class="font-weight-medium">@transaction.Name</MudText>
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                                         Color="Color.Primary">@transaction.Category</MudChip>
                                             </MudStack>
                                             <MudText Typo="Typo.caption" Class="ml-10">
-                                                Paid by <strong>@transaction.PaidByName</strong> on @transaction.Date.ToShortDateString()
+                                                Paid by <strong>@transaction.PaidByName</strong>
+                                                on @transaction.Date.ToShortDateString()
                                             </MudText>
                                         </MudStack>
                                         <MudStack AlignItems="AlignItems.End" Spacing="0">
@@ -169,7 +190,7 @@
     private const string CurrentUserName = "John Doe";
     private Guid _selectedGroupId = Guid.Empty;
     private string? _selectedGroupName;
-    private bool _isSelectedGroupArchived = false;
+    private bool _isSelectedGroupArchived;
     private decimal _userBalance;
 
     // Mock data - replace with API calls
@@ -265,6 +286,39 @@
     {
         // TODO: Implement expense details dialog/modal
         // Show expense details: description, amount, who paid, date, how it was split, etc.
+    }
+
+    private void ManageRules()
+    {
+        // TODO: Implement manage rules dialog/page
+        // Allow user to create, edit, and delete splitting rules
+    }
+
+    private void ArchiveGroup()
+    {
+        if (_selectedGroupId == Guid.Empty || _isSelectedGroupArchived)
+            return;
+
+        // Find the group in active groups
+        var group = _userGroups.FirstOrDefault(g => g.Id == _selectedGroupId);
+        if (group != null)
+        {
+            // Move to archived groups
+            _userGroups.Remove(group);
+            _archivedGroups.Add(group);
+
+            // Select first available group or clear selection
+            if (_userGroups.Any())
+            {
+                SelectGroup(_userGroups.First().Id);
+            }
+            else
+            {
+                _selectedGroupId = Guid.Empty;
+                _selectedGroupName = null;
+                _isSelectedGroupArchived = false;
+            }
+        }
     }
 
     private class DebtInfo
