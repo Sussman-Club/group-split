@@ -10,13 +10,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 // Initialize render mode configuration
-// RenderModeConfig.Initialize(builder.Environment.IsDevelopment());
-RenderModeConfig.Initialize(true);
+RenderModeConfig.Initialize(builder.Configuration.GetValue<RenderModePreference>("RenderMode"));
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddRenderModeComponents();
-
 
 // Add device-specific services used by the GroupSplit.App.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
