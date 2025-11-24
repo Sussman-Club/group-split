@@ -1,5 +1,4 @@
-﻿using System;
-namespace GroupSplit.Data.Entities;
+﻿namespace GroupSplit.Data.Entities;
 
 public class UserIdentity : Entity
 {
