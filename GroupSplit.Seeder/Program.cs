@@ -5,11 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddDbContext<AppIdentityContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("identity")));
+builder.Services.AddDbContext<AppIdentityContext>(
+    options => options.UseNpgsql(builder.Configuration.GetConnectionString("identity")),
+    ServiceLifetime.Transient);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("db")));
+builder.Services.AddDbContext<AppDbContext>(
+    options => options.UseNpgsql(builder.Configuration.GetConnectionString("db")),
+    ServiceLifetime.Transient);
 
 builder.Services.Configure<SeederOptions>(builder.Configuration.GetSection("Seeder"));
 

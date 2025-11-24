@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.Seeder;
 
-public static class ServiceCollectionExtensions
+public static class SeederServiceCollectionExtensions
 {
     extension(IServiceCollection services)
     {

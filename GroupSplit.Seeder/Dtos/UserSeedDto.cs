@@ -4,5 +4,5 @@ public class UserSeedDto
 {
     public required string ExternalUserId { get; set; }
     public Guid? PersonalGroupId { get; set; }
-    public List<Guid> GroupIds { get; set; } = [];
+    public IReadOnlyCollection<Guid> GroupIds { get; set; } = [];
 }
