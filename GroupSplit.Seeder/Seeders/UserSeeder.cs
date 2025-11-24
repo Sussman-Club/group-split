@@ -21,14 +21,18 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, IOptions<Se
 
         if (dto.PersonalGroupId is not null)
         {
-            user.PersonalGroup = await DbContext.Set<Group>().FindAsync([dto.PersonalGroupId.Value], ct);
-            if (user.PersonalGroup != null) user.Groups.Add(user.PersonalGroup);
+            var personalGroup = await DbContext.Set<Group>().FindAsync([dto.PersonalGroupId.Value], ct);
+            if (personalGroup is not null)
+            {
+                user.PersonalGroup = personalGroup;
+                user.Groups.Add(personalGroup);
+            }
         }
 
         foreach (var gid in dto.GroupIds)
         {
             var group = await DbContext.Set<Group>().FindAsync([gid], ct);
-            if (group != null)
+            if (group is not null)
                 user.Groups.Add(group);
         }
 
