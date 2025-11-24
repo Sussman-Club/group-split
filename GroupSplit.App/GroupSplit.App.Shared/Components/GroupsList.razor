@@ -1,0 +1,50 @@
+@using GroupSplit.App.Shared.Models
+@namespace GroupSplit.App.Shared.Components
+
+<MudPaper Elevation="1" Class="pa-4" Style="min-width: 280px; max-width: 320px;">
+    <MudStack Spacing="3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icon" Color="Color.Primary" Size="Size.Medium"/>
+            <MudText Typo="Typo.h6" Class="font-weight-bold">@Title</MudText>
+        </MudStack>
+        <MudDivider/>
+
+        <MudStack Spacing="1">
+            @foreach (var group in Groups)
+            {
+                <MudButton Variant="@(SelectedGroupId == group.Id ? Variant.Filled : Variant.Text)"
+                           Color="@(SelectedGroupId == group.Id ? Color.Primary : Color.Default)"
+                           StartIcon="@Icons.Material.Outlined.Group"
+                           FullWidth="true"
+                           Class="justify-start"
+                           OnClick="() => OnGroupSelect.InvokeAsync(group.Id)">
+                    <MudStack Spacing="0" Class="flex-grow-1">
+                        <MudText Typo="Typo.body2">@group.Name</MudText>
+                        <MudText Typo="Typo.caption">@group.MemberCount members</MudText>
+                    </MudStack>
+                </MudButton>
+            }
+        </MudStack>
+
+        @if (ShowCreateButton)
+        {
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Add"
+                       FullWidth="true"
+                       OnClick="OnCreateClick">
+                Create Group
+            </MudButton>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Groups";
+    [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.Groups;
+    [Parameter] public List<GroupListItem> Groups { get; set; } = new();
+    [Parameter] public Guid SelectedGroupId { get; set; }
+    [Parameter] public EventCallback<Guid> OnGroupSelect { get; set; }
+    [Parameter] public bool ShowCreateButton { get; set; }
+    [Parameter] public EventCallback OnCreateClick { get; set; }
+}

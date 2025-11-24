@@ -1,37 +1,90 @@
-﻿@inherits LayoutComponentBase
+﻿@using GroupSplit.App.Shared.Extensions
+@inherits LayoutComponentBase
 
 @* Required *@
-<MudThemeProvider />
-<MudPopoverProvider />
+<MudThemeProvider Theme="_theme"/>
+<MudPopoverProvider/>
 
 @* Needed for dialogs *@
-<MudDialogProvider />
+<MudDialogProvider/>
 
 @* Needed for snackbars *@
-<MudSnackbarProvider />
+<MudSnackbarProvider/>
 
 
-<MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-        <MudText Typo="Typo.h5" Class="ml-3">Application</MudText>
-        <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Color="Color.Inherit" Edge="Edge.End" />
-    </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-        <NavMenu />
-    </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-            @Body
-        </MudContainer>
-    </MudMainContent>
-</MudLayout>
+<CascadingValue Value="_theme">
+    <MudLayout>
+        <MudAppBar Elevation="1" Dense>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                               Color="Color.Inherit"
+                               Edge="Edge.Start"
+                               OnClick="@ToggleDrawer"/>
+                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Inherit"/>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Group Split</MudText>
+            </MudStack>
+            <MudSpacer/>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Style="@_theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
+                        U
+                    </MudAvatar>
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">User</MudText>
+                </MudStack>
+                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                               Color="Color.Inherit"/>
+            </MudStack>
+        </MudAppBar>
+        <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Mini" Elevation="2"
+                   ClipMode="DrawerClipMode.Always">
+            <NavMenu Mini="!_drawerOpen"/>
+        </MudDrawer>
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+    </MudLayout>
+</CascadingValue>
+
 @code {
-    bool _drawerOpen = true;
+    private bool _drawerOpen = true;
 
-    void DrawerToggle()
+    private void ToggleDrawer()
     {
         _drawerOpen = !_drawerOpen;
     }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#22817a", // Bright natural green
+            Secondary = "#F5F0E6", // Soft neutral
+            Tertiary = "#CB6E3A", // Warm clay accent
+            Success = "#22817a", // Green for success states
+            TextPrimary = "#2A2A2A", // Deep Charcoal
+            TextSecondary = "#2A2A2A", // Deep Charcoal
+            Surface = "#FAF7F0", // Neutral surface
+            Background = "#F5F0E6", // Light optimistic background
+            BackgroundGray = "#E0D5CB", // Soft neutral
+            Divider = "#E0D5CB", // Soft neutral for borders
+            DrawerBackground = "#FAF7F0", // Neutral drawer background
+            AppbarBackground = "#22817a", // Green app bar
+            AppbarText = "#FFFFFF" // White text on green
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#22817a", // Bright natural green
+            Secondary = "#F5F0E6", // Soft neutral
+            Tertiary = "#CB6E3A", // Warm clay accent
+            Success = "#22817a", // Green for success states
+            TextPrimary = "#F5F0E6", // Neutral for dark mode text
+            Surface = "#2A2A2A", // Deep Charcoal for surfaces
+            Background = "#1A1A1A", // Very dark background
+            BackgroundGray = "#3A3A3A", // Lighter charcoal
+            Divider = "#E0D5CB" // Soft neutral for borders
+        }
+    };
+
 }

@@ -2,22 +2,23 @@
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <base href="/" />
-    <ResourcePreloader />
-    <link rel="stylesheet" href="_content/GroupSplit.App.Shared/app.css" />
-    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
-    <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet" />
-    <ImportMap />
-    <link rel="icon" type="image/png" href="_content/GroupSplit.App.Shared/favicon.png" />
-    <HeadOutlet @rendermode="InteractiveWebAssembly" />
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <base href="/"/>
+    <ResourcePreloader/>
+    <link href="@Assets["GroupSplit.App.Web.styles.css"]" rel="stylesheet">
+    <link rel="stylesheet" href="_content/GroupSplit.App.Shared/app.css"/>
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet"/>
+    <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet"/>
+    <ImportMap/>
+    <link rel="icon" type="image/png" href="_content/GroupSplit.App.Shared/favicon.png"/>
+    <HeadOutlet @rendermode="RenderModeConfig.Current"/>
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveWebAssembly" />
-    <script src="@Assets["_framework/blazor.web.js"]"></script>
-    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+<Routes @rendermode="RenderModeConfig.Current"/>
+<script src="@Assets["_framework/blazor.web.js"]"></script>
+<script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
 </body>
 
 </html>

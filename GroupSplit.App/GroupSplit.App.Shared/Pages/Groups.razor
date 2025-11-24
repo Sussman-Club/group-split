@@ -1,0 +1,359 @@
+@page "/groups"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
+
+<PageTitle>Groups</PageTitle>
+
+@if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
+{
+    <!-- Group Header -->
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+        <MudStack Spacing="1">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">@_selectedGroupName</MudText>
+            </MudStack>
+            <MudText Typo="Typo.body2">
+                @_members.Count members · @_transactions.Count expenses
+            </MudText>
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Settings"
+                       OnClick="ManageRules">
+                Manage Rules
+            </MudButton>
+            @if (!_isSelectedGroupArchived)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.PersonAdd"
+                           OnClick="AddMember">
+                    Add Member
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Tertiary"
+                           StartIcon="@Icons.Material.Outlined.Archive"
+                           OnClick="ArchiveGroup">
+                    Archive
+                </MudButton>
+            }
+        </MudStack>
+    </MudStack>
+}
+
+<MudStack Spacing="4" Class="mb-10">
+    @if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
+    {
+        <!-- Balance Row -->
+        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
+            <!-- Your Balance -->
+            <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Your Balance</MudText>
+
+                    @if (_userBalance > 0)
+                    {
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="py-4">
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold">You are owed
+                                    $@_userBalance.ToString("N2")</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @foreach (var debt in _owedToYou)
+                                    {
+                                        <div>@debt.Name owes you <strong>$@debt.Amount.ToString("N2")</strong></div>
+                                    }
+                                </MudText>
+                            </MudStack>
+                        </MudAlert>
+                    }
+                    else if (_userBalance < 0)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="py-4">
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold">You owe
+                                    $@(Math.Abs(_userBalance).ToString("N2"))</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @foreach (var debt in _youOwe)
+                                    {
+                                        <div>You owe @debt.Name <strong>$@debt.Amount.ToString("N2")</strong></div>
+                                    }
+                                </MudText>
+                            </MudStack>
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                            <MudText Typo="Typo.body1">You're all settled up! 🎉</MudText>
+                        </MudAlert>
+                    }
+                </MudStack>
+            </MudPaper>
+
+            <!-- Group Balances -->
+            <MudPaper Elevation="2" Class="pa-6" Style="min-width: 280px; max-width: 320px;">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Group Balances</MudText>
+                    <MudStack Spacing="2">
+                        @foreach (var member in _members)
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@member.Name[0]</MudAvatar>
+                                    <MudText Typo="Typo.body2">@member.Name</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.body2" Class="font-weight-medium"
+                                         Color="@(member.Balance > 0 ? Color.Success : member.Balance < 0 ? Color.Error : Color.Default)">
+                                    @(member.Balance >= 0 ? "+" : "")$@member.Balance.ToString("N2")
+                                </MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudStack>
+
+        <!-- Expenses Row -->
+        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
+            <!-- Expenses List -->
+            <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Recent Expenses</MudText>
+
+                    <MudStack Spacing="2">
+                        @foreach (var transaction in _transactions)
+                        {
+                            <MudCard Elevation="0" Outlined="true" Class="hover-slide-right"
+                                     @onclick="() => ViewExpenseDetails(transaction)">
+                                <MudCardContent>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                        <MudStack Spacing="0" Class="flex-grow-1">
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudAvatar Color="Color.Primary"
+                                                           Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
+                                                <MudText Typo="Typo.body2"
+                                                         Class="font-weight-medium">@transaction.Name</MudText>
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                                         Color="Color.Primary">@transaction.Category</MudChip>
+                                            </MudStack>
+                                            <MudText Typo="Typo.caption" Class="ml-10">
+                                                Paid by <strong>@transaction.PaidByName</strong>
+                                                on @transaction.Date.ToShortDateString()
+                                            </MudText>
+                                        </MudStack>
+                                        <MudStack AlignItems="AlignItems.End" Spacing="0">
+                                            <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
+                                                $@transaction.Amount.ToString("N2")
+                                            </MudText>
+                                            <MudText Typo="Typo.caption">@transaction.RuleName</MudText>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+            <!-- My Groups -->
+            <MudStack Spacing="4">
+                <GroupsList Title="My Groups"
+                            Icon="@Icons.Material.Outlined.Groups"
+                            Groups="_userGroups"
+                            SelectedGroupId="_selectedGroupId"
+                            OnGroupSelect="SelectGroup"
+                            ShowCreateButton="true"/>
+
+                <GroupsList Title="Archived Groups"
+                            Icon="@Icons.Material.Outlined.Archive"
+                            Groups="_archivedGroups"
+                            SelectedGroupId="_selectedGroupId"
+                            OnGroupSelect="SelectGroup"
+                            ShowCreateButton="false"/>
+            </MudStack>
+        </MudStack>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="pa-10">
+            <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                <MudIcon Icon="@Icons.Material.Outlined.Groups" Size="Size.Large"/>
+                <MudText Typo="Typo.h6">Select a group to view details</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+
+@if (_selectedGroupId != Guid.Empty && !_isSelectedGroupArchived)
+{
+    <ExtendedFab Label="Expense" AlwaysExtended="true"/>
+}
+
+@code {
+    [CascadingParameter] public required MudTheme Theme { get; set; }
+    private const string CurrentUserName = "John Doe";
+    private Guid _selectedGroupId = Guid.Empty;
+    private string? _selectedGroupName;
+    private bool _isSelectedGroupArchived;
+    private decimal _userBalance;
+
+    // Mock data - replace with API calls
+    private readonly List<GroupListItem> _userGroups = new()
+    {
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Vacation 2024", MemberCount = 4 },
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Roommates", MemberCount = 3 },
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Office Lunch", MemberCount = 5 },
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Weekend Trip", MemberCount = 4 }
+    };
+
+    private readonly List<GroupListItem> _archivedGroups = new()
+    {
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Summer 2023", MemberCount = 3 },
+        new GroupListItem { Id = Guid.NewGuid(), Name = "Old Roommates", MemberCount = 2 }
+    };
+
+    private List<DebtInfo> _owedToYou = new();
+    private List<DebtInfo> _youOwe = new();
+    private List<MemberBalance> _members = new();
+    private List<TransactionInfo> _transactions = new();
+
+    protected override void OnInitialized()
+    {
+        // Select first group by default
+        if (_userGroups.Any())
+        {
+            SelectGroup(_userGroups.First().Id);
+        }
+    }
+
+    private void SelectGroup(Guid groupId)
+    {
+        _selectedGroupId = groupId;
+
+        // Check if it's in active groups
+        var group = _userGroups.FirstOrDefault(g => g.Id == groupId);
+        if (group != null)
+        {
+            _selectedGroupName = group.Name;
+            _isSelectedGroupArchived = false;
+        }
+        else
+        {
+            // Check if it's in archived groups
+            group = _archivedGroups.FirstOrDefault(g => g.Id == groupId);
+            if (group != null)
+            {
+                _selectedGroupName = group.Name;
+                _isSelectedGroupArchived = true;
+            }
+        }
+
+        LoadGroupData();
+    }
+
+    private void LoadGroupData()
+    {
+        // TODO: Load from API - these are mock calculations
+        // In reality, you'd fetch transactions and calculate balances
+
+        // Mock: Calculate user's balance
+        _userBalance = 45.50m;
+
+        _owedToYou = new List<DebtInfo>
+        {
+            new() { Name = "Jane Smith", Amount = 25.00m },
+            new() { Name = "Bob Wilson", Amount = 20.50m }
+        };
+
+        _youOwe = new List<DebtInfo>();
+
+        // Mock: Group member balances
+        _members = new List<MemberBalance>
+        {
+            new() { Name = CurrentUserName, Balance = 45.50m },
+            new() { Name = "Jane Smith", Balance = -25.00m },
+            new() { Name = "Bob Wilson", Balance = -20.50m },
+            new() { Name = "Alice Johnson", Balance = 0.00m }
+        };
+
+        // Mock: Recent transactions
+        _transactions = new List<TransactionInfo>
+        {
+            new() { Id = Guid.NewGuid(), Name = "Dinner at Italian Restaurant", Amount = 120.00m, PaidByName = CurrentUserName, Category = "Food", Date = DateTime.Now.AddDays(-1), RuleName = "Split Equally" },
+            new() { Id = Guid.NewGuid(), Name = "Taxi to Airport", Amount = 45.50m, PaidByName = "Jane Smith", Category = "Transport", Date = DateTime.Now.AddDays(-2), RuleName = "Split Equally" },
+            new() { Id = Guid.NewGuid(), Name = "Hotel Booking", Amount = 320.00m, PaidByName = CurrentUserName, Category = "Accommodation", Date = DateTime.Now.AddDays(-5), RuleName = "Split by Percentage" },
+            new() { Id = Guid.NewGuid(), Name = "Concert Tickets", Amount = 85.20m, PaidByName = "Bob Wilson", Category = "Entertainment", Date = DateTime.Now.AddDays(-7), RuleName = "Split Equally" }
+        };
+    }
+
+    private void ViewExpenseDetails(TransactionInfo transaction)
+    {
+        // TODO: Implement expense details dialog/modal
+        // Show expense details: description, amount, who paid, date, how it was split, etc.
+    }
+
+    private void ManageRules()
+    {
+        // TODO: Implement manage rules dialog/page
+        // Allow user to create, edit, and delete splitting rules
+    }
+
+    private void AddMember()
+    {
+        // TODO: Implement add member dialog
+        // Allow user to add new members to the group
+    }
+
+    private void ArchiveGroup()
+    {
+        if (_selectedGroupId == Guid.Empty || _isSelectedGroupArchived)
+            return;
+
+        // Find the group in active groups
+        var group = _userGroups.FirstOrDefault(g => g.Id == _selectedGroupId);
+        if (group != null)
+        {
+            // Move to archived groups
+            _userGroups.Remove(group);
+            _archivedGroups.Add(group);
+
+            // Select first available group or clear selection
+            if (_userGroups.Any())
+            {
+                SelectGroup(_userGroups.First().Id);
+            }
+            else
+            {
+                _selectedGroupId = Guid.Empty;
+                _selectedGroupName = null;
+                _isSelectedGroupArchived = false;
+            }
+        }
+    }
+
+    private class DebtInfo
+    {
+        public string Name { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
+
+    private class MemberBalance
+    {
+        public string Name { get; set; } = "";
+        public decimal Balance { get; set; }
+    }
+
+    private class TransactionInfo
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string PaidByName { get; set; } = "";
+        public string Category { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string RuleName { get; set; } = "";
+    }
+
+}

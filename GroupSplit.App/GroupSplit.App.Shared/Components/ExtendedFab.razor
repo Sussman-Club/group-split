@@ -1,0 +1,25 @@
+@using GroupSplit.App.Shared.Extensions
+@namespace GroupSplit.App.Shared.Components
+
+<div class="fab-extended @(AlwaysExtended ? "fab-always-extended" : "")"
+     style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;"
+     @onclick="OnClick">
+    <MudIconButton Icon="@Icon"
+                   Size="Size.Large"
+                   Style="@Theme.PaletteLight.PrimaryContrastText.ColorStyle"
+                   aria-label="@AriaLabel"
+                   Class="fab-button"/>
+    <span class="fab-text">@Label</span>
+</div>
+
+@code {
+    [CascadingParameter] public required MudTheme Theme { get; set; }
+
+    [Parameter] public string Label { get; set; } = "Add";
+    [Parameter] public bool AlwaysExtended { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Add;
+
+    private string AriaLabel => $"Add {Label}";
+}
+
