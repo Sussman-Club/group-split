@@ -1,4 +1,4 @@
-namespace GroupSplit.Seeder.Dtos;
+namespace GroupSplit.Seeder.Seeders.DTOs;
 
 public class IdentityUserSeedDto
 {
@@ -8,5 +8,5 @@ public class IdentityUserSeedDto
     public required string Password { get; set; }
     public bool EmailConfirmed { get; set; } = false;
 
-    // public string[]? Roles { get; set; }
+    // public IReadOnlyCollection<string> Roles { get; set; } = [];
 }

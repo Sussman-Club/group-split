@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GroupSplit.Seeder.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Seeder.Seeders.Base;
@@ -33,7 +34,10 @@ public class DbContextSeeder<TEntity, TDto>(
         return Task.FromResult(JsonSerializer.SerializeToNode(dto).Deserialize<TEntity>());
     }
 
-    protected virtual Task<bool> ExistsAsync(TEntity entity, CancellationToken ct) => Task.FromResult(false);
+    protected virtual Task<bool> ExistsAsync(TEntity entity, CancellationToken ct)
+    {
+        return Task.FromResult(false);
+    }
 
     protected virtual Task AddEntityAsync(TEntity entity, TDto dto, CancellationToken ct = default)
     {

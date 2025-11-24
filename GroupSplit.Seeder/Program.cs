@@ -1,6 +1,8 @@
 using GroupSplit.Data;
 using GroupSplit.Identity;
 using GroupSplit.Seeder;
+using GroupSplit.Seeder.Options;
+using GroupSplit.Seeder.Orchestration;
 using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -16,8 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(
 builder.Services.Configure<SeederOptions>(builder.Configuration.GetSection("Seeder"));
 
 builder.Services.AddSeedDataSources();
-builder.Services.AddIdentityDatabaseSeeder();
-builder.Services.AddDatabaseSeeders();
+builder.Services.AddSeeders();
 
 builder.Services.AddHostedService<DatabaseSeederRunner>();
 

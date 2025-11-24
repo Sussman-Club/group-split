@@ -1,13 +1,15 @@
 using GroupSplit.Identity;
-using GroupSplit.Seeder.Dtos;
+using GroupSplit.Seeder.Abstractions;
+using GroupSplit.Seeder.DataSources;
+using GroupSplit.Seeder.Options;
 using GroupSplit.Seeder.Seeders;
-using GroupSplit.Seeder.Seeders.Base;
+using GroupSplit.Seeder.Seeders.DTOs;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace GroupSplit.Seeder;
 
-public static class SeederServiceCollectionExtensions
+public static class ServiceCollectionSeederExtensions
 {
     extension(IServiceCollection services)
     {
@@ -19,17 +21,15 @@ public static class SeederServiceCollectionExtensions
             return services;
         }
 
-        public IServiceCollection AddDatabaseSeeders()
+        public IServiceCollection AddSeeders()
         {
-            services.AddSeeder<GroupSeeder>();
-            services.AddSeeder<UserSeeder>();
-            return services;
-        }
-
-        public IServiceCollection AddIdentityDatabaseSeeder()
-        {
+            // Identity seeders
             services.AddIdentityCore<User>().AddEntityFrameworkStores<AppIdentityContext>();
             services.AddSeeder<IdentityUserSeeder>();
+
+            // App seeders
+            services.AddSeeder<GroupSeeder>();
+            services.AddSeeder<UserSeeder>();
             return services;
         }
 
@@ -39,16 +39,16 @@ public static class SeederServiceCollectionExtensions
             return services;
         }
 
-        private void AddSeedSource<T>(Func<SeederOptions, string> pathSelector)
+        private void AddSeedSource<TDto>(Func<SeederOptions, string> pathSelector)
         {
-            services.AddSingleton<ISeedDataSource<T>>(sp =>
+            services.AddSingleton<ISeedDataSource<TDto>>(sp =>
             {
                 var options = sp.GetRequiredService<IOptions<SeederOptions>>().Value;
-                var logger = sp.GetRequiredService<ILogger<JsonArrayFileDataSource<T>>>();
+                var logger = sp.GetRequiredService<ILogger<JsonArrayFileDataSource<TDto>>>();
 
                 var path = pathSelector(options);
 
-                return new JsonArrayFileDataSource<T>(path, logger);
+                return new JsonArrayFileDataSource<TDto>(path, logger);
             });
         }
     }

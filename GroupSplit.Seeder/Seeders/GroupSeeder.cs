@@ -1,7 +1,8 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
-using GroupSplit.Seeder.Dtos;
+using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
+using GroupSplit.Seeder.Seeders.DTOs;
 
 namespace GroupSplit.Seeder.Seeders;
 

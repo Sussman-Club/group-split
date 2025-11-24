@@ -1,6 +1,6 @@
-using GroupSplit.Seeder.Seeders.Base;
+using GroupSplit.Seeder.Abstractions;
 
-namespace GroupSplit.Seeder;
+namespace GroupSplit.Seeder.Orchestration;
 
 public static class SeederOrderingExtensions
 {

@@ -1,6 +1,6 @@
 using GroupSplit.Identity;
-using GroupSplit.Seeder.Dtos;
-using GroupSplit.Seeder.Seeders.Base;
+using GroupSplit.Seeder.Abstractions;
+using GroupSplit.Seeder.Seeders.DTOs;
 using Microsoft.AspNetCore.Identity;
 
 namespace GroupSplit.Seeder.Seeders;
@@ -40,7 +40,7 @@ public class IdentityUserSeeder(
             }
 
             // Uncomment to seed roles
-            // if (dto.Roles is not null)
+            // if (dto.Roles is {Count: > 0})
             // {
             //     foreach (var role in dto.Roles)
             //     {

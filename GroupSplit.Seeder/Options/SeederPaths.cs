@@ -1,9 +1,4 @@
-namespace GroupSplit.Seeder;
-
-public sealed class SeederOptions
-{
-    public required SeederPaths Paths { get; init; }
-}
+namespace GroupSplit.Seeder.Options;
 
 public sealed class SeederPaths
 {

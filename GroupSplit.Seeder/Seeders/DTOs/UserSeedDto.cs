@@ -1,4 +1,4 @@
-namespace GroupSplit.Seeder.Dtos;
+namespace GroupSplit.Seeder.Seeders.DTOs;
 
 public class UserSeedDto
 {

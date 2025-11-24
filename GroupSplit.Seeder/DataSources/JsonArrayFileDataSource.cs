@@ -1,17 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using GroupSplit.Seeder.Abstractions;
 
-namespace GroupSplit.Seeder.Seeders.Base;
-
-public interface ISeeder
-{
-    Task SeedAsync(CancellationToken ct = default);
-}
-
-public interface ISeedDataSource<TDto>
-{
-    IAsyncEnumerable<TDto> ReadAsync(CancellationToken ct = default);
-}
+namespace GroupSplit.Seeder.DataSources;
 
 public sealed class JsonArrayFileDataSource<TDto>(string path, ILogger<JsonArrayFileDataSource<TDto>> logger)
     : ISeedDataSource<TDto>
@@ -27,8 +18,7 @@ public sealed class JsonArrayFileDataSource<TDto>(string path, ILogger<JsonArray
         await using var stream = File.OpenRead(path);
         var dtos = JsonSerializer.DeserializeAsyncEnumerable<TDto>(stream, cancellationToken: ct);
         await foreach (var dto in dtos)
-        {
-            if (dto is not null) yield return dto;
-        }
+            if (dto is not null)
+                yield return dto;
     }
 }
