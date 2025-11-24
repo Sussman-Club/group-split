@@ -15,9 +15,9 @@ public static class ServiceCollectionSeederExtensions
     {
         public IServiceCollection AddSeedDataSources()
         {
-            services.AddSeedSource<GroupSeedDto>(opt => opt.Paths.Groups);
-            services.AddSeedSource<UserSeedDto>(opt => opt.Paths.Users);
-            services.AddSeedSource<IdentityUserSeedDto>(opt => opt.Paths.IdentityUsers);
+            services.AddJsonSeedSource<GroupSeedDto>(opt => opt.Paths.Groups);
+            services.AddJsonSeedSource<UserSeedDto>(opt => opt.Paths.Users);
+            services.AddJsonSeedSource<IdentityUserSeedDto>(opt => opt.Paths.IdentityUsers);
             return services;
         }
 
@@ -39,7 +39,7 @@ public static class ServiceCollectionSeederExtensions
             return services;
         }
 
-        private void AddSeedSource<TDto>(Func<SeederOptions, string> pathSelector)
+        private void AddJsonSeedSource<TDto>(Func<SeederOptions, string> pathSelector)
         {
             services.AddSingleton<ISeedDataSource<TDto>>(sp =>
             {

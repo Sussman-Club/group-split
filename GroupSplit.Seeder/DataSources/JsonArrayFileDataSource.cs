@@ -16,9 +16,12 @@ public sealed class JsonArrayFileDataSource<TDto>(string path, ILogger<JsonArray
         }
 
         await using var stream = File.OpenRead(path);
+
         var dtos = JsonSerializer.DeserializeAsyncEnumerable<TDto>(stream, cancellationToken: ct);
+
         await foreach (var dto in dtos)
-            if (dto is not null)
-                yield return dto;
+        {
+            if (dto is not null) yield return dto;
+        }
     }
 }

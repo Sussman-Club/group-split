@@ -26,8 +26,10 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
         }
 
         foreach (var groupId in dto.GroupIds)
+        {
             if (await DbContext.Set<Group>().FindAsync([groupId], ct) is { } group)
                 user.Groups.Add(group);
+        }
 
         return user;
     }
