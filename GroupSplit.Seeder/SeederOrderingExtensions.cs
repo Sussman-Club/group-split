@@ -4,7 +4,7 @@ namespace GroupSplit.Seeder;
 
 public static class SeederOrderingExtensions
 {
-    public static List<List<IDatabaseSeeder>> TopologicallySort(this IEnumerable<IDatabaseSeeder> seeders)
+    public static List<List<ISeeder>> TopologicallySort(this IEnumerable<ISeeder> seeders)
     {
         var seederList = seeders.ToList();
         var typeLookup = seederList.ToDictionary(s => s.GetType());
@@ -40,7 +40,7 @@ public static class SeederOrderingExtensions
         }
 
         // Kahn's algorithm: find all nodes with indegree 0
-        var layers = new List<List<IDatabaseSeeder>>();
+        var layers = new List<List<ISeeder>>();
 
         var queue = new Queue<Type>(
             indegree.Where(kv => kv.Value == 0).Select(kv => kv.Key)
@@ -48,7 +48,7 @@ public static class SeederOrderingExtensions
 
         while (queue.Count != 0)
         {
-            var layer = new List<IDatabaseSeeder>();
+            var layer = new List<ISeeder>();
             var nextQueue = new Queue<Type>();
 
             while (queue.Count != 0)

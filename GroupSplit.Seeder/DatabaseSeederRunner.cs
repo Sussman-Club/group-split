@@ -11,7 +11,7 @@ public class DatabaseSeederRunner(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
 
-        var seeders = scope.ServiceProvider.GetServices<IDatabaseSeeder>().ToList();
+        var seeders = scope.ServiceProvider.GetServices<ISeeder>().ToList();
 
         logger.LogInformation("Discovered {Count} seeders: {SeederList}",
             seeders.Count,

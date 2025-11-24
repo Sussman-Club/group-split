@@ -15,6 +15,7 @@ builder.Services.AddDbContext<AppDbContext>(
 
 builder.Services.Configure<SeederOptions>(builder.Configuration.GetSection("Seeder"));
 
+builder.Services.AddSeedDataSources();
 builder.Services.AddIdentityDatabaseSeeder();
 builder.Services.AddDatabaseSeeders();
 

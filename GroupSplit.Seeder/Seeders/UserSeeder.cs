@@ -2,15 +2,14 @@ using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Dtos;
 using GroupSplit.Seeder.Seeders.Base;
-using Microsoft.Extensions.Options;
 
 namespace GroupSplit.Seeder.Seeders;
 
 [DependsOn(typeof(GroupSeeder))]
-public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, IOptions<SeederOptions> options)
-    : AppDbContextJsonSeeder<User, UserSeedDto>(db, options.Value.Paths.Users, logger)
+public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSource<UserSeedDto> source)
+    : AppDbContextSeeder<User, UserSeedDto>(db, source, logger)
 {
-    protected override async Task<User?> ConvertEntityAsync(UserSeedDto dto, CancellationToken ct = default)
+    protected override async Task<User?> MapAsync(UserSeedDto dto, CancellationToken ct = default)
     {
         var user = new User
         {
