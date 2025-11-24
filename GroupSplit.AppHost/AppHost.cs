@@ -24,12 +24,14 @@ if (builder.ExecutionContext.IsRunMode)
 
 var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
+    .WithReference(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
     .WithScalarUrl();
 
-var frontend = builder.AddProject<GroupSplit_App_Web>("web").WithReference(backend);
-backend.WithReference(frontend);
+var frontend = builder.AddProject<GroupSplit_App_Web>("web")
+    .WaitFor(backend)
+    .WithReference(backend);
 
 var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
 

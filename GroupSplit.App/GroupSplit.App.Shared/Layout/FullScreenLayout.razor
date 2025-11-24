@@ -1,0 +1,11 @@
+@inherits LayoutComponentBase
+
+@* Minimal layout for standalone pages like Login. Includes Mud providers so Mud components work without MainLayout. *@
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudPaper Width="100dvw" Height="100dvh">
+    @Body
+</MudPaper>
