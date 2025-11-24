@@ -39,7 +39,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.AppHost.Test", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.API.Test", "GroupSplit.API.Test\GroupSplit.API.Test.csproj", "{1DBD5210-7311-4398-AC48-57BD382DA0CC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Seeder", "GroupSplit.Seeder\GroupSplit.Seeder.csproj", "{C9F1DFB4-21A1-445D-9539-1EDE0177C7C3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Seeder", "GroupSplit.Seeder\GroupSplit.Seeder.csproj", "{1F017D4A-7309-4BC8-9E72-7F1B1459295C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -107,10 +107,10 @@ Global
 		{1DBD5210-7311-4398-AC48-57BD382DA0CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1DBD5210-7311-4398-AC48-57BD382DA0CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1DBD5210-7311-4398-AC48-57BD382DA0CC}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C9F1DFB4-21A1-445D-9539-1EDE0177C7C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C9F1DFB4-21A1-445D-9539-1EDE0177C7C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C9F1DFB4-21A1-445D-9539-1EDE0177C7C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C9F1DFB4-21A1-445D-9539-1EDE0177C7C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

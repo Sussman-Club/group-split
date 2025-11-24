@@ -1,44 +1,39 @@
 using GroupSplit.Seeder.Seeders.Base;
-using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.Seeder;
 
-public class DatabaseSeederRunner
+public class DatabaseSeederRunner(
+    ILogger<DatabaseSeederRunner> logger,
+    IHostApplicationLifetime applicationLifetime,
+    IServiceScopeFactory scopeFactory) : BackgroundService
 {
-    private readonly IEnumerable<IDatabaseSeeder> _seeders;
-    private readonly ILogger<DatabaseSeederRunner> _logger;
-
-    public DatabaseSeederRunner(IEnumerable<IDatabaseSeeder> seeders, ILogger<DatabaseSeederRunner> logger)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _seeders = seeders.OrderBy(s => s.Order);
-        _logger = logger;
-    }
+        await using var scope = scopeFactory.CreateAsyncScope();
 
-    public async Task RunAsync(CancellationToken ct = default)
-    {
-        _logger.LogInformation("Starting database seeding with {Count} seeders...", _seeders.Count());
-
-        foreach (var seeder in _seeders)
+        var seeders = scope.ServiceProvider.GetServices<IDatabaseSeeder>();
+        foreach (var seeder in seeders.OrderBy(s => s.Order))
         {
             var typeName = seeder.GetType().Name;
             try
             {
-                _logger.LogInformation("Seeding {Seeder} (Order {Order})...", typeName, seeder.Order);
-                await seeder.SeedAsync(ct);
-                _logger.LogInformation("Seeder {Seeder} completed successfully.", typeName);
+                logger.LogInformation("Seeding {Seeder} (Order {Order})...", typeName, seeder.Order);
+                await seeder.SeedAsync(stoppingToken);
+                logger.LogInformation("Seeder {Seeder} completed successfully.", typeName);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("Seeding cancelled for {Seeder}", typeName);
+                logger.LogWarning("Seeding cancelled for {Seeder}", typeName);
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Seeder {Seeder} failed", typeName);
+                logger.LogError(ex, "Seeder {Seeder} failed", typeName);
                 throw;
             }
         }
 
-        _logger.LogInformation("Database seeding completed.");
+        logger.LogInformation("Database seeding completed.");
+        applicationLifetime.StopApplication();
     }
 }

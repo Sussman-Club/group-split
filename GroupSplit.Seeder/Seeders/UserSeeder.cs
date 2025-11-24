@@ -2,20 +2,15 @@ using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Dtos;
 using GroupSplit.Seeder.Seeders.Base;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace GroupSplit.Seeder.Seeders;
 
-public class UserSeeder(AppDbContext db, string path, ILogger<UserSeeder> logger)
-    : JsonSeeder<User, UserSeedDto, AppDbContext>(db, path, logger)
+public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, IOptions<SeederOptions> options)
+    : DbContextJsonSeeder<User, UserSeedDto, AppDbContext>(db, options.Value.Paths.Users, logger, 1)
 {
-    private readonly AppDbContext _db = db;
-    public override int Order => 1;
-
-    protected override async Task<User?> ConvertEntityAsync(UserSeedDto? dto, CancellationToken ct = default)
+    protected override async Task<User?> ConvertEntityAsync(UserSeedDto dto, CancellationToken ct = default)
     {
-        if (dto is null) return null;
-
         var user = new User
         {
             Identity = new UserIdentity
@@ -26,13 +21,13 @@ public class UserSeeder(AppDbContext db, string path, ILogger<UserSeeder> logger
 
         if (dto.PersonalGroupId is not null)
         {
-            user.PersonalGroup = await _db.Set<Group>().FindAsync([dto.PersonalGroupId.Value], ct);
+            user.PersonalGroup = await DbContext.Set<Group>().FindAsync([dto.PersonalGroupId.Value], ct);
             if (user.PersonalGroup != null) user.Groups.Add(user.PersonalGroup);
         }
 
         foreach (var gid in dto.GroupIds)
         {
-            var group = await _db.Set<Group>().FindAsync([gid], ct);
+            var group = await DbContext.Set<Group>().FindAsync([gid], ct);
             if (group != null)
                 user.Groups.Add(group);
         }

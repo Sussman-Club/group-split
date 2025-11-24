@@ -1,11 +1,7 @@
-using GroupSplit.Data;
-using GroupSplit.Data.Entities;
 using GroupSplit.Identity;
 using GroupSplit.Seeder.Seeders;
 using GroupSplit.Seeder.Seeders.Base;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.Seeder;
 
@@ -15,46 +11,22 @@ public static class ServiceCollectionExtensions
     {
         public IServiceCollection AddDatabaseSeeders()
         {
-            services.AddScoped<IDatabaseSeeder>(sp =>
-                new JsonSeeder<Group, AppDbContext>(
-                    sp.GetRequiredService<AppDbContext>(),
-                    GetFilePath("groups.json"),
-                    sp.GetRequiredService<ILogger<JsonSeeder<Group, AppDbContext>>>()
-                )
-            );
-
-            services.AddScoped<IDatabaseSeeder>(sp =>
-                new UserSeeder(
-                    sp.GetRequiredService<AppDbContext>(),
-                    GetFilePath("users.json"),
-                    sp.GetRequiredService<ILogger<UserSeeder>>()
-                )
-            );
-
+            services.AddSeeder<GroupSeeder>();
+            services.AddSeeder<UserSeeder>();
             return services;
         }
 
         public IServiceCollection AddIdentityDatabaseSeeder()
         {
-            services.AddIdentityCore<Identity.User>()
-                .AddEntityFrameworkStores<AppIdentityContext>();
-
-            services.AddScoped<IDatabaseSeeder>(sp =>
-                new IdentityUserSeeder(
-                    sp.GetRequiredService<UserManager<Identity.User>>(),
-                    // sp.GetRequiredService<RoleManager<IdentityRole>>(),
-                    GetFilePath("identity-users.json"),
-                    sp.GetRequiredService<ILogger<IdentityUserSeeder>>()
-                )
-            );
-
+            services.AddIdentityCore<User>().AddEntityFrameworkStores<AppIdentityContext>();
+            services.AddSeeder<IdentityUserSeeder>();
             return services;
         }
-    }
 
-    private static string GetFilePath(string fileName)
-    {
-        var relativePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "SeedData", fileName);
-        return Path.GetFullPath(relativePath);
+        private IServiceCollection AddSeeder<TDatabaseSeeder>() where TDatabaseSeeder : class, IDatabaseSeeder
+        {
+            services.TryAddEnumerable(ServiceDescriptor.Scoped<IDatabaseSeeder, TDatabaseSeeder>());
+            return services;
+        }
     }
 }

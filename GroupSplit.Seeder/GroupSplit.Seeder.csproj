@@ -1,25 +1,24 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Worker">
 
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>dotnet-GroupSplit.Seeder-361159df-1089-4935-a74e-f59cee95174c</UserSecretsId>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+        <!--        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />-->
+        <!--        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">-->
+        <!--            <PrivateAssets>all</PrivateAssets>-->
+        <!--            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>-->
+        <!--        </PackageReference>-->
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0"/>
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\GroupSplit.Data\GroupSplit.Data.csproj" />
-      <ProjectReference Include="..\GroupSplit.Identity\GroupSplit.Identity.csproj" />
+        <ProjectReference Include="..\GroupSplit.Data\GroupSplit.Data.csproj"/>
+        <ProjectReference Include="..\GroupSplit.Identity\GroupSplit.Identity.csproj"/>
     </ItemGroup>
-
 </Project>

@@ -1,77 +1,59 @@
-using System.Text.Json;
 using GroupSplit.Identity;
 using GroupSplit.Seeder.Dtos;
 using GroupSplit.Seeder.Seeders.Base;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace GroupSplit.Seeder.Seeders;
 
 public sealed class IdentityUserSeeder(
     UserManager<User> userManager,
     // RoleManager<IdentityRole> roleManager,
-    string jsonPath,
-    ILogger<IdentityUserSeeder> logger)
-    : IDatabaseSeeder
+    ILogger<IdentityUserSeeder> logger,
+    IOptions<SeederOptions> options)
+    : JsonSeeder<User, IdentityUserSeedDto>(options.Value.Paths.IdentityUsers, logger)
 {
-    public int Order => 0;
-
-    public async Task SeedAsync(CancellationToken ct = default)
+    protected override async Task AddEntityAsync(User entity, IdentityUserSeedDto dto, CancellationToken ct = default)
     {
-        if (!File.Exists(jsonPath))
+        var result = await userManager.CreateAsync(entity, dto.Password);
+        if (!result.Succeeded)
         {
-            logger.LogWarning("File not found: {JsonPath}", jsonPath);
+            logger.LogError("Failed to create user {User}: {Errors}",
+                dto.UserName, string.Join("; ", result.Errors.Select(e => e.Description)));
             return;
         }
 
-        logger.LogInformation("Loading identity users from {JsonPath}", jsonPath);
+        // if (dto.Roles != null)
+        // {
+        //     foreach (var role in dto.Roles)
+        //     {
+        //         if (!await roleManager.RoleExistsAsync(role))
+        //             await roleManager.CreateAsync(new IdentityRole(role));
+        //
+        //         await userManager.AddToRoleAsync(user, role);
+        //     }
+        // }
 
-        var json = await File.ReadAllTextAsync(jsonPath, ct);
-        var dtos = JsonSerializer.Deserialize<List<IdentityUserSeedDto>>(json);
+        logger.LogInformation("Seeded user {User}", dto.UserName);
+    }
 
-        if (dtos is not { Count: > 0 })
+    protected override async Task<User?> ConvertEntityAsync(IdentityUserSeedDto dto, CancellationToken ct = default)
+    {
+        var existing = await userManager.FindByNameAsync(dto.UserName);
+        if (existing != null)
         {
-            logger.LogWarning("No user entries found.");
-            return;
+            logger.LogInformation("User '{User}' already exists. Skipping.", dto.UserName);
+            return null;
         }
 
-        foreach (var dto in dtos)
+        var user = new User
         {
-            var existing = await userManager.FindByNameAsync(dto.UserName);
-            if (existing != null)
-            {
-                logger.LogInformation("User '{User}' already exists. Skipping.", dto.UserName);
-                continue;
-            }
+            Id = dto.Id,
+            UserName = dto.UserName,
+            Email = dto.Email,
+            EmailConfirmed = dto.EmailConfirmed
+        };
 
-            var user = new User
-            {
-                Id = dto.Id,
-                UserName = dto.UserName,
-                Email = dto.Email,
-                EmailConfirmed = dto.EmailConfirmed
-            };
-
-            var result = await userManager.CreateAsync(user, dto.Password);
-            if (!result.Succeeded)
-            {
-                logger.LogError("Failed to create user {User}: {Errors}",
-                    dto.UserName, string.Join("; ", result.Errors.Select(e => e.Description)));
-                continue;
-            }
-
-            // if (dto.Roles != null)
-            // {
-            //     foreach (var role in dto.Roles)
-            //     {
-            //         if (!await roleManager.RoleExistsAsync(role))
-            //             await roleManager.CreateAsync(new IdentityRole(role));
-            //
-            //         await userManager.AddToRoleAsync(user, role);
-            //     }
-            // }
-
-            logger.LogInformation("Seeded user {User}", dto.UserName);
-        }
+        return user;
     }
 }

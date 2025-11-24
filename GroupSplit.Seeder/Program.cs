@@ -1,24 +1,22 @@
-﻿using GroupSplit.Data;
+using GroupSplit.Data;
 using GroupSplit.Identity;
 using GroupSplit.Seeder;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
-var host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((context, services) =>
-    {
-        var config = context.Configuration;
+var builder = Host.CreateApplicationBuilder(args);
 
-        services.AddDbContext<AppIdentityContext>(options => options.UseNpgsql(config.GetConnectionString("identity")));
-        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(config.GetConnectionString("db")));
+builder.Services.AddDbContext<AppIdentityContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("identity")));
 
-        services.AddIdentityDatabaseSeeder();
-        services.AddDatabaseSeeders();
-        services.AddScoped<DatabaseSeederRunner>();
-    })
-    .Build();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("db")));
 
-var databaseSeederRunner = host.Services.GetRequiredService<DatabaseSeederRunner>();
-await databaseSeederRunner.RunAsync();
+builder.Services.Configure<SeederOptions>(builder.Configuration.GetSection("Seeder"));
+
+builder.Services.AddIdentityDatabaseSeeder();
+builder.Services.AddDatabaseSeeders();
+
+builder.Services.AddHostedService<DatabaseSeederRunner>();
+
+var host = builder.Build();
+host.Run();

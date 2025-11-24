@@ -1,21 +1,14 @@
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.Seeder.Seeders.Base;
 
-public class JsonSeeder<TEntity, TContext>(TContext db, string jsonPath, ILogger logger)
-    : JsonSeeder<TEntity, TEntity, TContext>(db, jsonPath, logger)
-    where TEntity : class
-    where TContext : DbContext;
-
-public class JsonSeeder<TEntity, TDto, TContext>(TContext db, string jsonPath, ILogger logger) : IDatabaseSeeder
-    where TEntity : class
-    where TDto : class
-    where TContext : DbContext
+public abstract class JsonSeeder<TEntity, TDto>(
+    string jsonPath,
+    ILogger<JsonSeeder<TEntity, TDto>> logger,
+    int order = 0) : IDatabaseSeeder
 {
-    public virtual int Order => 0;
-    
+    public int Order => order;
+
     public async Task SeedAsync(CancellationToken ct = default)
     {
         if (!File.Exists(jsonPath))
@@ -26,37 +19,37 @@ public class JsonSeeder<TEntity, TDto, TContext>(TContext db, string jsonPath, I
 
         logger.LogInformation("Loading {JsonPath}", jsonPath);
 
-        var json = await File.ReadAllTextAsync(jsonPath, ct);
+        await using var stream = File.OpenRead(jsonPath);
 
-        var dtos = JsonSerializer.Deserialize<List<TDto>>(json);
+        var dtos = JsonSerializer.DeserializeAsyncEnumerable<TDto>(stream, cancellationToken: ct);
 
-        if (dtos is null || dtos.Count == 0)
+        var elementsCount = 0;
+
+        await foreach (var dto in dtos)
+        {
+            if (dto is null) continue;
+            var entity = await ConvertEntityAsync(dto, ct);
+            if (entity is null) continue;
+            await AddEntityAsync(entity, dto, ct);
+            elementsCount++;
+        }
+
+        if (elementsCount is 0)
         {
             logger.LogWarning("No items found in {JsonPath}", jsonPath);
             return;
         }
 
-        var entities = new List<TEntity>();
+        await SaveAsync(ct);
 
-        foreach (var dto in dtos)
-        {
-            var entity = await ConvertEntityAsync(dto, ct);
-            if (entity != null) 
-                entities.Add(entity);
-        }
-
-        db.Set<TEntity>().AddRange(entities);
-        await db.SaveChangesAsync(ct);
-
-        logger.LogInformation("Seeded {Count} {Type} entities.", entities.Count, typeof(TEntity).Name);
+        logger.LogInformation("Seeded {Count} {Type} entities.", elementsCount, typeof(TEntity).Name);
     }
 
-    protected virtual Task<TEntity?> ConvertEntityAsync(TDto? dto, CancellationToken ct = default)
+    protected virtual Task SaveAsync(CancellationToken ct = default)
     {
-        return Task.FromResult(dto switch
-        {
-            null => null,
-            _ => JsonSerializer.Deserialize<TEntity>(JsonSerializer.Serialize(dto))
-        });
+        return Task.CompletedTask;
     }
+
+    protected abstract Task AddEntityAsync(TEntity entity, TDto dto, CancellationToken ct = default);
+    protected abstract Task<TEntity?> ConvertEntityAsync(TDto dto, CancellationToken ct = default);
 }
