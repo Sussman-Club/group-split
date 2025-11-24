@@ -27,6 +27,12 @@
             @if (!_isSelectedGroupArchived)
             {
                 <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.PersonAdd"
+                           OnClick="AddMember">
+                    Add Member
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
                            Color="Color.Tertiary"
                            StartIcon="@Icons.Material.Outlined.Archive"
                            OnClick="ArchiveGroup">
@@ -292,6 +298,12 @@
     {
         // TODO: Implement manage rules dialog/page
         // Allow user to create, edit, and delete splitting rules
+    }
+
+    private void AddMember()
+    {
+        // TODO: Implement add member dialog
+        // Allow user to add new members to the group
     }
 
     private void ArchiveGroup()
