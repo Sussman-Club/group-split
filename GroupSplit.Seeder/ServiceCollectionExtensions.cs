@@ -1,7 +1,9 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Identity;
 using GroupSplit.Seeder.Seeders;
 using GroupSplit.Seeder.Seeders.Base;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -30,12 +32,29 @@ public static class ServiceCollectionExtensions
             );
 
             return services;
-
-            string GetFilePath(string fileName)
-            {
-                var relativePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "SeedData", fileName);
-                return Path.GetFullPath(relativePath);
-            }
         }
+
+        public IServiceCollection AddIdentityDatabaseSeeder()
+        {
+            services.AddIdentityCore<Identity.User>()
+                .AddEntityFrameworkStores<AppIdentityContext>();
+
+            services.AddScoped<IDatabaseSeeder>(sp =>
+                new IdentityUserSeeder(
+                    sp.GetRequiredService<UserManager<Identity.User>>(),
+                    // sp.GetRequiredService<RoleManager<IdentityRole>>(),
+                    GetFilePath("identity-users.json"),
+                    sp.GetRequiredService<ILogger<IdentityUserSeeder>>()
+                )
+            );
+
+            return services;
+        }
+    }
+
+    private static string GetFilePath(string fileName)
+    {
+        var relativePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "SeedData", fileName);
+        return Path.GetFullPath(relativePath);
     }
 }

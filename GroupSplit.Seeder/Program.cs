@@ -14,6 +14,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddDbContext<AppIdentityContext>(options => options.UseNpgsql(config.GetConnectionString("identity")));
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(config.GetConnectionString("db")));
 
+        services.AddIdentityDatabaseSeeder();
         services.AddDatabaseSeeders();
         services.AddScoped<DatabaseSeederRunner>();
     })
