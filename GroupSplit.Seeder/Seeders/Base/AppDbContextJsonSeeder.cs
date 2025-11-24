@@ -6,9 +6,8 @@ namespace GroupSplit.Seeder.Seeders.Base;
 public class AppDbContextJsonSeeder<TEntity, TDto>(
     AppDbContext db,
     string jsonPath,
-    ILogger<AppDbContextJsonSeeder<TEntity, TDto>> logger,
-    int order = 0)
-    : DbContextJsonSeeder<TEntity, TDto, AppDbContext>(db, jsonPath, logger, order)
+    ILogger<AppDbContextJsonSeeder<TEntity, TDto>> logger)
+    : DbContextJsonSeeder<TEntity, TDto, AppDbContext>(db, jsonPath, logger)
     where TEntity : Entity
 {
     protected override async Task AddEntityAsync(TEntity entity, TDto dto, CancellationToken ct = default)

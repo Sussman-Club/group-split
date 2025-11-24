@@ -4,11 +4,8 @@ namespace GroupSplit.Seeder.Seeders.Base;
 
 public abstract class JsonSeeder<TEntity, TDto>(
     string jsonPath,
-    ILogger<JsonSeeder<TEntity, TDto>> logger,
-    int order = 0) : IDatabaseSeeder
+    ILogger<JsonSeeder<TEntity, TDto>> logger) : IDatabaseSeeder
 {
-    public int Order => order;
-
     public async Task SeedAsync(CancellationToken ct = default)
     {
         if (!File.Exists(jsonPath))

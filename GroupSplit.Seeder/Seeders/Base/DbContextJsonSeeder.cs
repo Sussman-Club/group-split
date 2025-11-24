@@ -6,9 +6,8 @@ namespace GroupSplit.Seeder.Seeders.Base;
 public class DbContextJsonSeeder<TEntity, TDto>(
     DbContext db,
     string jsonPath,
-    ILogger<DbContextJsonSeeder<TEntity, TDto>> logger,
-    int order = 0)
-    : JsonSeeder<TEntity, TDto>(jsonPath, logger, order)
+    ILogger<DbContextJsonSeeder<TEntity, TDto>> logger)
+    : JsonSeeder<TEntity, TDto>(jsonPath, logger)
     where TEntity : class
 {
     protected DbContext DbContext => db;
@@ -33,9 +32,8 @@ public class DbContextJsonSeeder<TEntity, TDto>(
 public class DbContextJsonSeeder<TEntity, TDto, TDbContext>(
     TDbContext db,
     string jsonPath,
-    ILogger<DbContextJsonSeeder<TEntity, TDto, TDbContext>> logger,
-    int order = 0)
-    : DbContextJsonSeeder<TEntity, TDto>(db, jsonPath, logger, order)
+    ILogger<DbContextJsonSeeder<TEntity, TDto, TDbContext>> logger)
+    : DbContextJsonSeeder<TEntity, TDto>(db, jsonPath, logger)
     where TDbContext : DbContext
     where TEntity : class
 {
