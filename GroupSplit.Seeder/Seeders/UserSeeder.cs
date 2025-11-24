@@ -25,7 +25,10 @@ public class UserSeeder(AppDbContext db, string path, ILogger<UserSeeder> logger
         };
 
         if (dto.PersonalGroupId is not null)
+        {
             user.PersonalGroup = await _db.Set<Group>().FindAsync([dto.PersonalGroupId.Value], ct);
+            if (user.PersonalGroup != null) user.Groups.Add(user.PersonalGroup);
+        }
 
         foreach (var gid in dto.GroupIds)
         {
