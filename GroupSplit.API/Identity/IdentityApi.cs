@@ -1,26 +1,25 @@
 using GroupSplit.Identity;
-using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 
-namespace GroupSplit.API.Users;
+namespace GroupSplit.API.Identity;
 
-public static class UsersApi
+public static class IdentityApi
 {
-    public static RouteGroupBuilder MapUsers(this IEndpointRouteBuilder routes)
+    public static RouteGroupBuilder MapIdentity(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/users");
+        var group = routes.MapGroup("/identity");
 
-        group.WithTags("Users");
+        group.WithTags("Identity");
 
         group.MapIdentityApi<User>();
         group.MapExternalLoginApi();
-        
+
         return group;
     }
-    
+
     public static RouteGroupBuilder MapExternalLoginApi(this RouteGroupBuilder group)
     {
         group.MapPost("/token/{provider}",

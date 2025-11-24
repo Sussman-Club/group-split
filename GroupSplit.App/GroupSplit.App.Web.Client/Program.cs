@@ -12,6 +12,12 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
+// Add Auth client
+builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
+{
+    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
+});
+
 // Add HTTP client for API
 builder.Services.AddHttpClient<IWeatherClient, WeatherClient>("ApiClient", client =>
 {

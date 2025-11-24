@@ -30,28 +30,33 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
         }
 
         // Wait for Docker to be ready with timeout
-        const int maxRetries = 60; // 60 seconds timeout
-        const int delayMs = 1000; // 1 second between retries
+        const int maxRetries = 30;
+        const int delayMs = 1000;
 
-        for (var i = 0; i < maxRetries; i++)
+        logger.LogInformation("Waiting for Docker engine to start...");
+
+        for (var retry = 1; retry <= maxRetries; retry++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (await IsDockerReadyAsync(cancellationToken))
+            if (cancellationToken.IsCancellationRequested)
             {
-                logger.LogInformation("Docker is ready!");
+                logger.LogWarning(
+                    "Docker startup wait was cancelled. Please ensure Docker Desktop is installed and try again, or run it manually.");
                 return;
             }
 
-            if (i == 0)
-                logger.LogInformation("Waiting for Docker engine to start...");
-            else if ((i + 1) % 10 == 0) logger.LogInformation("Still waiting for Docker... ({seconds}s)", i + 1);
+            if (await IsDockerReadyAsync(cancellationToken))
+            {
+                logger.LogInformation("Docker is ready.");
+                return;
+            }
 
-            await Task.Delay(delayMs, cancellationToken);
+            logger.LogDebug("Retry {retry}/{maxRetries}... Docker not ready yet.", retry, maxRetries);
+
+            await Task.Delay(delayMs, CancellationToken.None);
         }
 
-        logger.LogError(
-            "Docker failed to start within {maxRetries} seconds. Please ensure Docker Desktop is installed and try again, or run it manually.",
+        logger.LogWarning(
+            "Docker failed to start within {maxRetries} retries. Please ensure Docker Desktop is installed and try again, or run it manually.",
             maxRetries);
     }
 
@@ -80,6 +85,11 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
         }
         catch (OperationCanceledException)
         {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error checking Docker status.");
             return false;
         }
     }
@@ -139,13 +149,15 @@ public class DockerRunner(IProcessCommandService processCommandService, ILogger<
                     "Docker Desktop executable not found. Please ensure Docker Desktop is installed.");
 
             var result =
-                await processCommandService.RunProcessAndCaptureOutputAsync(dockerPath, cancellationToken: cancellationToken);
+                await processCommandService.RunProcessAndCaptureOutputAsync(dockerPath,
+                    cancellationToken: cancellationToken);
             return result.ExitCode;
         }
 
         if (OperatingSystem.IsMacOS())
         {
-            var result = await processCommandService.RunProcessAndCaptureOutputAsync("open", arguments: ["-a", "Docker"],
+            var result = await processCommandService.RunProcessAndCaptureOutputAsync("open",
+                arguments: ["-a", "Docker"],
                 cancellationToken: cancellationToken);
             return result.ExitCode;
         }
