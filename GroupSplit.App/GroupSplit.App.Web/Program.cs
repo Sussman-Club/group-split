@@ -18,7 +18,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
 
 // Initialize render mode configuration
-RenderModeConfig.Initialize(builder.Configuration.GetValue<RenderModePreference>("RenderMode"));
+var renderModePreference = builder.Configuration.GetValue<RenderModePreference>("RenderMode");
+RenderModeConfig.Initialize(renderModePreference);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
