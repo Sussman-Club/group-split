@@ -15,6 +15,13 @@ public sealed class IdentityUserSeeder(
 {
     protected override async Task AddEntityAsync(User entity, IdentityUserSeedDto dto, CancellationToken ct = default)
     {
+        var existing = await userManager.FindByIdAsync(dto.Id);
+        if (existing is not null)
+        {
+            logger.LogInformation("User with id {Id} already exists. Skipping.", dto.Id);
+            return;
+        }
+
         var result = await userManager.CreateAsync(entity, dto.Password);
         if (!result.Succeeded)
         {
@@ -23,7 +30,7 @@ public sealed class IdentityUserSeeder(
             return;
         }
 
-        // if (dto.Roles != null)
+        // if (dto.Roles is not null)
         // {
         //     foreach (var role in dto.Roles)
         //     {
@@ -37,15 +44,8 @@ public sealed class IdentityUserSeeder(
         logger.LogInformation("Seeded user {User}", dto.UserName);
     }
 
-    protected override async Task<User?> ConvertEntityAsync(IdentityUserSeedDto dto, CancellationToken ct = default)
+    protected override Task<User?> ConvertEntityAsync(IdentityUserSeedDto dto, CancellationToken ct = default)
     {
-        var existing = await userManager.FindByNameAsync(dto.UserName);
-        if (existing != null)
-        {
-            logger.LogInformation("User '{User}' already exists. Skipping.", dto.UserName);
-            return null;
-        }
-
         var user = new User
         {
             Id = dto.Id,
@@ -54,6 +54,6 @@ public sealed class IdentityUserSeeder(
             EmailConfirmed = dto.EmailConfirmed
         };
 
-        return user;
+        return Task.FromResult(user)!;
     }
 }

@@ -7,4 +7,4 @@ using Microsoft.Extensions.Options;
 namespace GroupSplit.Seeder.Seeders;
 
 public class GroupSeeder(AppDbContext db, ILogger<GroupSeeder> logger, IOptions<SeederOptions> options)
-    : DbContextJsonSeeder<Group, GroupSeedDto, AppDbContext>(db, options.Value.Paths.Groups, logger);
+    : AppDbContextJsonSeeder<Group, GroupSeedDto>(db, options.Value.Paths.Groups, logger);

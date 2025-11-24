@@ -7,12 +7,13 @@ using Microsoft.Extensions.Options;
 namespace GroupSplit.Seeder.Seeders;
 
 public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, IOptions<SeederOptions> options)
-    : DbContextJsonSeeder<User, UserSeedDto, AppDbContext>(db, options.Value.Paths.Users, logger, SeederOrder.Users)
+    : AppDbContextJsonSeeder<User, UserSeedDto>(db, options.Value.Paths.Users, logger, SeederOrder.Users)
 {
     protected override async Task<User?> ConvertEntityAsync(UserSeedDto dto, CancellationToken ct = default)
     {
         var user = new User
         {
+            Id = dto.Id,
             Identity = new UserIdentity
             {
                 IdentityId = dto.ExternalUserId
