@@ -1,8 +1,8 @@
-using GroupSplit.App.Web.Components;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Web;
-using GroupSplit.Shared;
+using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using MudBlazor.Services;
 
@@ -12,14 +12,18 @@ builder.AddServiceDefaults();
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie();
+    .AddCookie(options => options.ConfigureOptions());
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
 
+// Initialize render mode configuration
+var renderModePreference = builder.Configuration.GetValue<RenderModePreference>("RenderMode");
+RenderModeConfig.Initialize(renderModePreference);
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveWebAssemblyComponents();
+    .AddRenderModeComponents();
 
 // Add device-specific services used by the GroupSplit.App.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -62,6 +66,7 @@ else
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
@@ -70,10 +75,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
-    .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(
-        typeof(GroupSplit.App.Shared._Imports).Assembly,
-        typeof(GroupSplit.App.Web.Client._Imports).Assembly);
+    .MapRenderMode(app);
 
 app.MapIdentity();
 

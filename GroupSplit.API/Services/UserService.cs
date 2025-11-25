@@ -36,13 +36,21 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
             return user;
         }
 
-        var personalGroup = new Group();
+        var personalGroup = new Group
+        {
+            Name = "Personal"
+        };
 
         user = new User
         {
+            FirstName = "Test",
+            LastName = "User",
             Identity = new UserIdentity { IdentityId = claimUserId },
             PersonalGroup = personalGroup,
-            Groups = { personalGroup }
+            Groups =
+            {
+                personalGroup
+            }
         };
 
         users.Add(user);

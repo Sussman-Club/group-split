@@ -1,19 +1,21 @@
 ﻿@page "/counter"
+@using GroupSplit.App.Shared.Extensions
 
 <PageTitle>Counter</PageTitle>
 
 <MudCard Elevation="12" Class="pa-4">
     <MudCardHeader Class="justify-center">
         <MudStack AlignItems="AlignItems.Center" Spacing="1">
-            <MudIcon Icon="@Icons.Material.Filled.Calculate" Color="Color.Primary" Size="Size.Large" />
+            <MudIcon Icon="@Icons.Material.Filled.Calculate" Color="Color.Primary" Size="Size.Large"/>
             <MudText Typo="Typo.h5" Class="fw-bold">Counter</MudText>
         </MudStack>
     </MudCardHeader>
-    <MudDivider Class="mb-4" />
+    <MudDivider Class="mb-4"/>
     <MudCardContent>
         <MudStack AlignItems="AlignItems.Center" Spacing="2">
             <MudText Typo="Typo.caption" Color="Color.Secondary">Current value</MudText>
-            <MudPaper Elevation="0" Class="d-flex justify-center align-center" Style="width:120px;height:120px;border-radius:60px;background:var(--mud-palette-primary-light);">
+            <MudPaper Elevation="0" Class="d-flex justify-center align-center"
+                      Style=@StyleHelper.NewBackgroundColor(Theme.PaletteLight.PrimaryLighten).Add("width:120px;height:120px;border-radius:60px;")>
                 <MudText Typo="Typo.h3" Class="fw-bold" Color="Color.Primary">@currentCount</MudText>
             </MudPaper>
         </MudStack>
@@ -22,17 +24,36 @@
         <MudStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" Class="w-100" Spacing="2">
             <MudButtonGroup Variant="Variant.Filled" Color="Color.Primary">
                 <MudButton OnClick="IncrementCount" StartIcon="@Icons.Material.Filled.Add">Increment</MudButton>
-                <MudButton Disabled="@(!canDecrement)" OnClick="DecrementCount" StartIcon="@Icons.Material.Filled.Remove">Decrement</MudButton>
+                <MudButton Disabled="@(!canDecrement)" OnClick="DecrementCount"
+                           StartIcon="@Icons.Material.Filled.Remove">Decrement
+                </MudButton>
             </MudButtonGroup>
-            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Refresh" Disabled="@(currentCount==0)" OnClick="Reset">Reset</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Refresh"
+                       Disabled="@(currentCount == 0)" OnClick="Reset">Reset
+            </MudButton>
         </MudStack>
     </MudCardActions>
 </MudCard>
 
 @code {
-    private int currentCount = 0;
+    [CascadingParameter] public required MudTheme Theme { get; set; }
+
+    private int currentCount;
     private bool canDecrement => currentCount > 0;
-    private void IncrementCount() => currentCount++;
-    private void DecrementCount() { if (canDecrement) currentCount--; }
-    private void Reset() => currentCount = 0;
+
+    private void IncrementCount()
+    {
+        currentCount++;
+    }
+
+    private void DecrementCount()
+    {
+        if (canDecrement) currentCount--;
+    }
+
+    private void Reset()
+    {
+        currentCount = 0;
+    }
+
 }
