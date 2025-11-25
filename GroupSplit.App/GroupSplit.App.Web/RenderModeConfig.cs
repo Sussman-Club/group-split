@@ -57,7 +57,7 @@ public static class RenderModeConfig
             case RenderModePreference.WebAssemblyFirst:
                 builder
                     .AddInteractiveWebAssemblyRenderMode()
-                    .AddAdditionalAssemblies(typeof(Client._Imports).Assembly);
+                    .AddAdditionalAssemblies(typeof(_Imports).Assembly, typeof(Client._Imports).Assembly);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
