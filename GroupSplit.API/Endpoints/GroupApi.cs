@@ -52,7 +52,7 @@ public static class GroupApi
                     var groupResponses = await groups.SelectDto().ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupResponses);
                 })
-                .WithName("GetAllGroups")
+                .WithName("GetGroups")
                 .Produces<GroupResponse[]>();
         }
 

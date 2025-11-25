@@ -214,7 +214,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        UserGroups ??= await GroupsClient.GetAllGroupsAsync();
+        UserGroups ??= await GroupsClient.GetGroupsAsync();
         if (UserGroups.Any())
         {
             SelectGroup(UserGroups.First().Id);
