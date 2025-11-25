@@ -12,7 +12,7 @@ builder.AddServiceDefaults();
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie();
+    .AddCookie(options => options.ConfigureOptions());
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
