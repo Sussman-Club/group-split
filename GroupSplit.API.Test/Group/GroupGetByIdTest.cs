@@ -2,6 +2,7 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using Microsoft.EntityFrameworkCore;
 using UserEntity = GroupSplit.Data.Entities.User;
 
 namespace GroupSplit.API.Test.Group;
@@ -27,10 +28,11 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act
         var result = await groupService.GetGroupById(created.Id, TestContext.Current.CancellationToken);
+        var group = await result.FirstOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(created.Id, result.Id);
+        Assert.NotNull(group);
+        Assert.Equal(created.Id, group.Id);
     }
 
     [Fact]
@@ -47,7 +49,7 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var result = await groupService.GetGroupById(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -89,6 +91,6 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var result = await groupService.GetGroupById(otherUserGroup.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 }

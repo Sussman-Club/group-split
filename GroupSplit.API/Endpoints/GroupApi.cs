@@ -1,4 +1,5 @@
 ﻿using GroupSplit.API.Services;
+using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +36,7 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     var createdGroup = await groupService.CreateGroup(request, ct);
-                    var groupInfo = new GroupResponse(createdGroup.Id);
+                    var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1);
                     return Results.Ok(groupInfo);
                 })
                 .WithName("CreateGroup")
@@ -49,8 +50,8 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     var groups = await groupService.GetAllGroups(ct);
-                    var groupInfos = groups.Select(g => new GroupResponse(g.Id)).ToListAsync(cancellationToken: ct);
-                    return Results.Ok(groupInfos);
+                    var groupResponses = await groups.SelectDto().ToListAsync(cancellationToken: ct);
+                    return Results.Ok(groupResponses);
                 })
                 .WithName("GetAllGroups")
                 .Produces<GroupResponse[]>();
@@ -58,17 +59,28 @@ public static class GroupApi
 
         private RouteHandlerBuilder MapGetGroupById()
         {
-            return group.MapGet("{id}",
+            return group.MapGet("{id:guid}",
                     async (Guid id, [FromServices] IGroupService groupService, CancellationToken ct) =>
                     {
                         var group = await groupService.GetGroupById(id, ct);
-                        if (group is null) return Results.NotFound();
-                        var groupInfo = new GroupResponse(group.Id);
-                        return Results.Ok(groupInfo);
+                        var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+
+                        if (groupResponse is null) return Results.NotFound();
+
+                        return Results.Ok(groupResponse);
                     })
                 .WithName("GetGroupById")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+    }
+
+    extension(IQueryable<Group> groups)
+    {
+        private IQueryable<GroupResponse> SelectDto()
+        {
+            return from @group in groups
+                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
         }
     }
 }
