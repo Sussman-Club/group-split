@@ -340,7 +340,10 @@
 
         var dialogResult = await dialogReference.Result;
 
-        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not CreateGroupRequest request)
+        if (dialogResult is null || dialogResult.Canceled)
+            return;
+        
+        if (dialogResult.Data is not CreateGroupRequest request)
         {
             Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);
             return;
