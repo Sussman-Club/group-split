@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using UserEntity = GroupSplit.Data.Entities.User;
 
 namespace GroupSplit.API.Test.Group;
@@ -21,7 +22,8 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await userService.GetCurrentUser();
 
         // Create an additional group for the current user
-        var created = await groupService.CreateGroup(TestContext.Current.CancellationToken);
+        var created = await groupService.CreateGroup(new CreateGroupRequest { Name = "My Extra Group" },
+            TestContext.Current.CancellationToken);
 
         // Act
         var result = await groupService.GetGroupById(created.Id, TestContext.Current.CancellationToken);

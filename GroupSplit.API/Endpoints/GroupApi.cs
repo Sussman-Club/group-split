@@ -34,7 +34,7 @@ public static class GroupApi
                     [FromServices] IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var createdGroup = await groupService.CreateGroup(ct);
+                    var createdGroup = await groupService.CreateGroup(request, ct);
                     var groupInfo = new GroupResponse(createdGroup.Id);
                     return Results.Ok(groupInfo);
                 })
