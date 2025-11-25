@@ -9,6 +9,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         modelBuilder.Entity<User>(entity =>
         {
+            entity.Property(user => user.FirstName).HasMaxLength(64).IsRequired();
+            entity.Property(user => user.LastName).HasMaxLength(64);
+            
             entity.HasMany(user => user.Groups)
                 .WithMany(group => group.Users);
 
@@ -18,7 +21,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .IsRequired();
         });
 
-        modelBuilder.Entity<Group>();
+        modelBuilder.Entity<Group>(entity =>
+        {
+            entity.Property(group => group.Name).HasMaxLength(64).IsRequired();
+
+            entity.HasIndex(group => group.Name);
+        });
 
         modelBuilder.Entity<Rule>(entity =>
         {
@@ -67,13 +75,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.Property(transaction => transaction.Amount).IsRequired().HasPrecision(18, 2);
 
+            entity.Property(transaction => transaction.DateTime).IsRequired();
+            entity.Property(transaction => transaction.Name).HasMaxLength(128).IsRequired();
+            entity.Property(transaction => transaction.Description).HasMaxLength(256);
+            
             entity.HasOne(transaction => transaction.User)
                 .WithMany(user => user.Transactions)
                 .IsRequired();
 
-            entity.HasOne(transaction => transaction.Group)
+            entity.HasOne(transaction => transaction.RuleVersion)
                 .WithMany(group => group.Transactions)
                 .IsRequired();
+            
+            entity.HasIndex(transaction => transaction.DateTime);
+            entity.HasIndex(transaction => transaction.Name);
         });
 
         modelBuilder.Entity<UserIdentity>(entity =>

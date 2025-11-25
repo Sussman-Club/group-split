@@ -61,12 +61,21 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Create a different user and a group that only that user belongs to
         var otherUser = new UserEntity
         {
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
+            Identity = new UserIdentity
+            {
+                IdentityId = Guid.NewGuid()
+                    .ToString()
+            },
             PersonalGroup = new GroupSplit.Data.Entities.Group()
+            {
+                Name = "Personal"
+            },
+            FirstName = "Random"
         };
 
         var otherUserGroup = new GroupSplit.Data.Entities.Group
         {
+            Name = "Other Group",
             Users = { otherUser }
         };
 

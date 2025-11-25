@@ -30,7 +30,11 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
         var group = new Group
         {
-            Users = { user }
+            Users =
+            {
+                user
+            },
+            Name = Guid.NewGuid().ToString()
         };
 
         context.Add(group);
