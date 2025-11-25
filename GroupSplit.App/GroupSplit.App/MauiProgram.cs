@@ -1,10 +1,6 @@
 ﻿using GroupSplit.App.Services;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using MudBlazor.Services;
 
 namespace GroupSplit.App;
 

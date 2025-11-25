@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Hosting;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -36,6 +39,10 @@ public static class Extensions
                 http.AddServiceDiscovery();
             });
 
+            builder.Services.TryAddEnumerable(
+                ServiceDescriptor.Transient<IMauiInitializeService, OpenTelemetryInitializer>(_ =>
+                    new OpenTelemetryInitializer()));
+
             // Uncomment the following to restrict the allowed schemes for service discovery.
             // builder.Services.Configure<ServiceDiscoveryOptions>(options =>
             // {
@@ -44,6 +51,8 @@ public static class Extensions
 
             return builder;
         }
+        
+        
 
         public TBuilder ConfigureOpenTelemetry()
         {
@@ -108,6 +117,16 @@ public static class Extensions
         }
     }
 
+    private class OpenTelemetryInitializer : IMauiInitializeService
+    {
+        public void Initialize(IServiceProvider services)
+        {
+            services.GetService<MeterProvider>();
+            services.GetService<TracerProvider>();
+            services.GetService<LoggerProvider>();
+        }
+    }
+    
     extension(WebApplication app)
     {
         public WebApplication MapDefaultEndpoints()
