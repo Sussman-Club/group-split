@@ -1,8 +1,10 @@
 [
   {
-    "Id": "D7E485E3-E062-4D28-8D26-2E2C74188AEE"
+    "Id": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "Name": "Vacation 2024"
   },
   {
-    "Id": "B590CE87-CC57-4214-AE89-A420DB8656F9"
+    "Id": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Name": "Home"
   }
 ]

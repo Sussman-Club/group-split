@@ -15,15 +15,14 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
         var user = new User
         {
             Id = dto.Id,
-            Identity = new UserIdentity { IdentityId = dto.ExternalUserId }
+            FirstName = dto.FirstName,
+            LastName = dto.LastName,
+            Identity = new UserIdentity { IdentityId = dto.ExternalUserId },
         };
-
-        if (dto.PersonalGroupId is { } personalGroupId &&
-            await DbContext.Set<Group>().FindAsync([personalGroupId], ct) is { } personalGroup)
-        {
-            user.PersonalGroup = personalGroup;
-            user.Groups.Add(personalGroup);
-        }
+        
+        var personalGroup = new Group { Name = "Me, myself and I" };
+        user.PersonalGroup = personalGroup;
+        user.Groups.Add(personalGroup);
 
         foreach (var groupId in dto.GroupIds)
         {
