@@ -27,11 +27,13 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WithReference(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
-    .WithScalarUrl();
+    .WithScalarUrl()
+    .WithHttpHealthCheck("/health");
 
 var frontend = builder.AddProject<GroupSplit_App_Web>("web")
     .WaitFor(backend)
-    .WithReference(backend);
+    .WithReference(backend)
+    .WithHttpHealthCheck("/health");
 
 var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
 
