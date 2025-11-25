@@ -1,7 +1,6 @@
 ﻿using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Endpoints;
@@ -20,7 +19,7 @@ public static class GroupApi
 
             group.MapCreate();
             group.MapGetAllGroups();
-            group.MapGetGroupById();
+            group.MapGetGroup();
 
             return group;
         }
@@ -31,8 +30,8 @@ public static class GroupApi
         private RouteHandlerBuilder MapCreate()
         {
             return group.MapPost(string.Empty, async (
-                    [FromBody] CreateGroupRequest request,
-                    [FromServices] IGroupService groupService,
+                    CreateGroupRequest request,
+                    IGroupService groupService,
                     CancellationToken ct) =>
                 {
                     var createdGroup = await groupService.CreateGroup(request, ct);
@@ -46,7 +45,7 @@ public static class GroupApi
         private RouteHandlerBuilder MapGetAllGroups()
         {
             return group.MapGet(string.Empty, async (
-                    [FromServices] IGroupService groupService,
+                    IGroupService groupService,
                     CancellationToken ct) =>
                 {
                     var groups = await groupService.GetAllGroups(ct);
@@ -57,10 +56,12 @@ public static class GroupApi
                 .Produces<GroupResponse[]>();
         }
 
-        private RouteHandlerBuilder MapGetGroupById()
+        private RouteHandlerBuilder MapGetGroup()
         {
-            return group.MapGet("{id:guid}",
-                    async (Guid id, [FromServices] IGroupService groupService, CancellationToken ct) =>
+            return group.MapGet("{id:guid}", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
                     {
                         var group = await groupService.GetGroupById(id, ct);
                         var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
@@ -69,7 +70,7 @@ public static class GroupApi
 
                         return Results.Ok(groupResponse);
                     })
-                .WithName("GetGroupById")
+                .WithName("GetGroup")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
