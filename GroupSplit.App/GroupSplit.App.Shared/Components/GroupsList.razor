@@ -1,4 +1,4 @@
-@using GroupSplit.App.Shared.Models
+@using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 
 <MudPaper Elevation="1" Class="pa-4" Style="min-width: 280px; max-width: 320px;">
@@ -42,7 +42,7 @@
 @code {
     [Parameter] public string Title { get; set; } = "Groups";
     [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.Groups;
-    [Parameter] public List<GroupListItem> Groups { get; set; } = new();
+    [Parameter] public ICollection<GroupResponse> Groups { get; set; } = [];
     [Parameter] public Guid SelectedGroupId { get; set; }
     [Parameter] public EventCallback<Guid> OnGroupSelect { get; set; }
     [Parameter] public bool ShowCreateButton { get; set; }
