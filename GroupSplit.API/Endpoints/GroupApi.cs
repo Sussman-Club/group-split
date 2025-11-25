@@ -19,6 +19,7 @@ public static class GroupApi
 
             group.MapCreate();
             group.MapGetAllGroups();
+            group.MapGetGroupById();
 
             return group;
         }
@@ -29,15 +30,16 @@ public static class GroupApi
         private RouteHandlerBuilder MapCreate()
         {
             return group.MapPost(string.Empty, async (
+                    [FromBody] CreateGroupRequest request,
                     [FromServices] IGroupService groupService,
                     CancellationToken ct) =>
                 {
                     var createdGroup = await groupService.CreateGroup(ct);
-                    var groupInfo = new GroupInfo(createdGroup.Id);
+                    var groupInfo = new GroupResponse(createdGroup.Id);
                     return Results.Ok(groupInfo);
                 })
                 .WithName("CreateGroup")
-                .Produces<GroupInfo>();
+                .Produces<GroupResponse>();
         }
 
         private RouteHandlerBuilder MapGetAllGroups()
@@ -47,11 +49,26 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     var groups = await groupService.GetAllGroups(ct);
-                    var groupInfos = groups.Select(g => new GroupInfo(g.Id)).ToListAsync(cancellationToken: ct);
+                    var groupInfos = groups.Select(g => new GroupResponse(g.Id)).ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupInfos);
                 })
                 .WithName("GetAllGroups")
-                .Produces<GroupInfo[]>();
+                .Produces<GroupResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapGetGroupById()
+        {
+            return group.MapGet("{id}",
+                    async (Guid id, [FromServices] IGroupService groupService, CancellationToken ct) =>
+                    {
+                        var group = await groupService.GetGroupById(id, ct);
+                        if (group is null) return Results.NotFound();
+                        var groupInfo = new GroupResponse(group.Id);
+                        return Results.Ok(groupInfo);
+                    })
+                .WithName("GetGroupById")
+                .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }
 }
