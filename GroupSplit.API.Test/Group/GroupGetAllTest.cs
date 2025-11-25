@@ -66,11 +66,16 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Create a group for another user (simulate another user's group)
         var otherUser = new UserEntity
         {
+            FirstName = "Other",
             Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
             PersonalGroup = new GroupSplit.Data.Entities.Group()
+            {
+                Name = "Personal"
+            }
         };
         var otherUserGroup = new GroupSplit.Data.Entities.Group
         {
+            Name = "Other Group",
             Users = { otherUser }
         };
         DbContext.Set<UserEntity>().Add(otherUser);
