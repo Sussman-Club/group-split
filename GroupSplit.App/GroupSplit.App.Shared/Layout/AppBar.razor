@@ -60,5 +60,6 @@
     private async Task TryLogout(MouseEventArgs args)
     {
         await AuthService.Logout();
+        Nav.NavigateTo("/login");
     }
 }

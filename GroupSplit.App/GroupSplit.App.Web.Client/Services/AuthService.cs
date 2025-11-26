@@ -1,6 +1,6 @@
-﻿using System.Net.Http.Json;
-using GroupSplit.App.Shared.Services;
+﻿using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
+using System.Net.Http.Json;
 
 namespace GroupSplit.App.Web.Client.Services;
 

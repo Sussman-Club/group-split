@@ -17,11 +17,13 @@ public static class OptionsExtensions
                     return Task.CompletedTask;
                 }
 
-                var returnUrl = Uri.EscapeDataString(ctx.Request.Path + ctx.Request.QueryString.ToString());
-                var loginUrl = $"/login?returnUrl={returnUrl}";
-                ctx.Response.Redirect(loginUrl);
-                return Task.CompletedTask;
+                // Normalizing the return URL and redirecting to login page
+                var path = ctx.Request.Path;
+                var returnUrl = Uri.EscapeDataString(path + ctx.Request.QueryString.ToString());
+                var returnQuery = path.Value == "/" || string.IsNullOrEmpty(path.Value) ? "" : $"?returnUrl={returnUrl}";
+                ctx.Response.Redirect($"/login{returnQuery}");
 
+                return Task.CompletedTask;
             };
 
             // Prevent redirect on 403

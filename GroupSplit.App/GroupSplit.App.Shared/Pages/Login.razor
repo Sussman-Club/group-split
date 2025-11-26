@@ -69,7 +69,36 @@
         await LoginForm.Validate();
         if (!success)
             return;
+
         await AuthService.Login(new LoginRequest() { Email = Username!, Password = Password! }, CancellationToken.None);
-        Nav.NavigateTo("/");
+        await NavigateToReturnUrl();
+    }
+
+    private async Task NavigateToReturnUrl()
+    {
+        // If a returnUrl exists, navigate to it (relative to base), otherwise go to home
+        var uri = new Uri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var returnUrlRaw = query.Get("returnUrl");
+
+        if (string.IsNullOrWhiteSpace(returnUrlRaw))
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        // Normalize to a relative path against BaseUri
+        var baseUri = new Uri(Nav.BaseUri, UriKind.Absolute);
+        // If returnUrlRaw is already relative, combine; if absolute on same host, make relative
+        if (Uri.TryCreate(returnUrlRaw, UriKind.Relative, out var relativeTarget))
+        {
+            var target = new Uri(baseUri, relativeTarget);
+            var relFinal = baseUri.MakeRelativeUri(target).ToString();
+            Nav.NavigateTo(relFinal);
+        }
+        else
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+        } 
     }
 }
