@@ -1,6 +1,9 @@
 @page "/groups"
 @using GroupSplit.App.Shared.Components
-@using GroupSplit.App.Shared.Models
+@using GroupSplit.Shared
+@inject IGroupsClient GroupsClient
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <PageTitle>Groups</PageTitle>
 
@@ -160,10 +163,11 @@
             <MudStack Spacing="4">
                 <GroupsList Title="My Groups"
                             Icon="@Icons.Material.Outlined.Groups"
-                            Groups="_userGroups"
+                            Groups="UserGroups"
                             SelectedGroupId="_selectedGroupId"
                             OnGroupSelect="SelectGroup"
-                            ShowCreateButton="true"/>
+                            ShowCreateButton="true"
+                            OnCreateClick="OpenCreateDialogAsync"/>
 
                 <GroupsList Title="Archived Groups"
                             Icon="@Icons.Material.Outlined.Archive"
@@ -199,33 +203,24 @@
     private bool _isSelectedGroupArchived;
     private decimal _userBalance;
 
-    // Mock data - replace with API calls
-    private readonly List<GroupListItem> _userGroups = new()
-    {
-        new GroupListItem { Id = Guid.NewGuid(), Name = "Vacation 2024", MemberCount = 4 },
-        new GroupListItem { Id = Guid.NewGuid(), Name = "Roommates", MemberCount = 3 },
-        new GroupListItem { Id = Guid.NewGuid(), Name = "Office Lunch", MemberCount = 5 },
-        new GroupListItem { Id = Guid.NewGuid(), Name = "Weekend Trip", MemberCount = 4 }
-    };
+    [PersistentState] public ICollection<GroupResponse> UserGroups { get; set; } = null!;
 
-    private readonly List<GroupListItem> _archivedGroups = new()
-    {
-        new GroupListItem { Id = Guid.NewGuid(), Name = "Summer 2023", MemberCount = 3 },
-        new GroupListItem { Id = Guid.NewGuid(), Name = "Old Roommates", MemberCount = 2 }
-    };
+    private readonly List<GroupResponse> _archivedGroups = [];
 
     private List<DebtInfo> _owedToYou = new();
     private List<DebtInfo> _youOwe = new();
     private List<MemberBalance> _members = new();
     private List<TransactionInfo> _transactions = new();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // Select first group by default
-        if (_userGroups.Any())
+        UserGroups ??= await GroupsClient.GetGroupsAsync();
+        if (UserGroups.Any())
         {
-            SelectGroup(_userGroups.First().Id);
+            SelectGroup(UserGroups.First().Id);
         }
+
+        await base.OnInitializedAsync();
     }
 
     private void SelectGroup(Guid groupId)
@@ -233,7 +228,7 @@
         _selectedGroupId = groupId;
 
         // Check if it's in active groups
-        var group = _userGroups.FirstOrDefault(g => g.Id == groupId);
+        var group = UserGroups.FirstOrDefault(g => g.Id == groupId);
         if (group != null)
         {
             _selectedGroupName = group.Name;
@@ -312,17 +307,17 @@
             return;
 
         // Find the group in active groups
-        var group = _userGroups.FirstOrDefault(g => g.Id == _selectedGroupId);
+        var group = UserGroups.FirstOrDefault(g => g.Id == _selectedGroupId);
         if (group != null)
         {
             // Move to archived groups
-            _userGroups.Remove(group);
+            UserGroups.Remove(group);
             _archivedGroups.Add(group);
 
             // Select first available group or clear selection
-            if (_userGroups.Any())
+            if (UserGroups.Any())
             {
-                SelectGroup(_userGroups.First().Id);
+                SelectGroup(UserGroups.First().Id);
             }
             else
             {
@@ -331,6 +326,31 @@
                 _isSelectedGroupArchived = false;
             }
         }
+    }
+
+    private async Task OpenCreateDialogAsync()
+    {
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+
+        var dialogReference = await DialogService.ShowAsync<CreateGroupDialog>("Create a group", options);
+
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+            return;
+        
+        if (dialogResult.Data is not CreateGroupRequest request)
+        {
+            Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);
+            return;
+        }
+
+        var group = await GroupsClient.CreateGroupAsync(request);
+        UserGroups.Add(group);
     }
 
     private class DebtInfo

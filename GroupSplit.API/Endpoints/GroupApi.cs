@@ -1,6 +1,6 @@
 ﻿using GroupSplit.API.Services;
+using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Endpoints;
@@ -19,6 +19,7 @@ public static class GroupApi
 
             group.MapCreate();
             group.MapGetAllGroups();
+            group.MapGetGroup();
 
             return group;
         }
@@ -29,29 +30,58 @@ public static class GroupApi
         private RouteHandlerBuilder MapCreate()
         {
             return group.MapPost(string.Empty, async (
-                    [FromServices] IGroupService groupService,
+                    CreateGroupRequest request,
+                    IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var createdGroup = await groupService.CreateGroup(ct);
-                    var groupInfo = new GroupInfo(createdGroup.Id);
+                    var createdGroup = await groupService.CreateGroup(request, ct);
+                    var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1);
                     return Results.Ok(groupInfo);
                 })
                 .WithName("CreateGroup")
-                .Produces<GroupInfo>();
+                .Produces<GroupResponse>();
         }
 
         private RouteHandlerBuilder MapGetAllGroups()
         {
             return group.MapGet(string.Empty, async (
-                    [FromServices] IGroupService groupService,
+                    IGroupService groupService,
                     CancellationToken ct) =>
                 {
                     var groups = await groupService.GetAllGroups(ct);
-                    var groupInfos = groups.Select(g => new GroupInfo(g.Id)).ToListAsync(cancellationToken: ct);
-                    return Results.Ok(groupInfos);
+                    var groupResponses = await groups.SelectDto().ToListAsync(cancellationToken: ct);
+                    return Results.Ok(groupResponses);
                 })
-                .WithName("GetAllGroups")
-                .Produces<GroupInfo[]>();
+                .WithName("GetGroups")
+                .Produces<GroupResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapGetGroup()
+        {
+            return group.MapGet("{id:guid}", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                    {
+                        var group = await groupService.GetGroupById(id, ct);
+                        var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+
+                        if (groupResponse is null) return Results.NotFound();
+
+                        return Results.Ok(groupResponse);
+                    })
+                .WithName("GetGroup")
+                .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+    }
+
+    extension(IQueryable<Group> groups)
+    {
+        private IQueryable<GroupResponse> SelectDto()
+        {
+            return from @group in groups
+                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
         }
     }
 }

@@ -1,0 +1,55 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            @MudDialog.Title
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="@form" Model="@model">
+            <MudTextField
+                @bind-Value="model.Name"
+                For="@(() => model.Name)"
+                Label="Name"
+                Immediate="true"
+            />
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+
+        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
+            Submit
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    MudForm form;
+
+    private bool loading = false;
+
+    private CreateGroupRequest model = new();
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(model));
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+}

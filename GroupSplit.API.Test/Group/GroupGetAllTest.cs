@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using UserEntity = GroupSplit.Data.Entities.User;
 
 namespace GroupSplit.API.Test.Group;
@@ -10,14 +11,13 @@ namespace GroupSplit.API.Test.Group;
 /// </summary>
 public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
-
     [Fact]
     public async Task GetAllGroups_WhenUserHasOnlyPersonalGroup_ReturnsPersonalGroupMarked()
     {
         // Arrange
         var groupService = GetService<IGroupService>();
         var userService = GetService<IUserService>();
-        
+
         // Ensure user exists (which creates personal group)
         await userService.GetCurrentUser();
 
@@ -34,20 +34,22 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var groupService = GetService<IGroupService>();
         var userService = GetService<IUserService>();
-        
+
         var user = await userService.GetCurrentUser();
         var personalGroupId = user.PersonalGroup.Id;
-        
+
         // Create additional groups
-        await groupService.CreateGroup(TestContext.Current.CancellationToken);
-        await groupService.CreateGroup(TestContext.Current.CancellationToken);
+        await groupService.CreateGroup(new CreateGroupRequest { Name = "Test Group 1" },
+            TestContext.Current.CancellationToken);
+        await groupService.CreateGroup(new CreateGroupRequest { Name = "Test Group 2" },
+            TestContext.Current.CancellationToken);
 
         // Act
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
         // Assert
         Assert.Single(groups, g => g.Id == personalGroupId);
-        
+
         var nonPersonalGroups = groups.Where(g => g.Id != personalGroupId).ToList();
         Assert.Equal(2, nonPersonalGroups.Count);
         Assert.All(nonPersonalGroups, g => Assert.NotEqual(personalGroupId, g.Id));
@@ -59,10 +61,11 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var groupService = GetService<IGroupService>();
         var userService = GetService<IUserService>();
-        
+
         var currentUser = await userService.GetCurrentUser();
-        await groupService.CreateGroup(TestContext.Current.CancellationToken);
-        
+        await groupService.CreateGroup(new CreateGroupRequest { Name = "My Group" },
+            TestContext.Current.CancellationToken);
+
         // Create a group for another user (simulate another user's group)
         var otherUser = new UserEntity
         {

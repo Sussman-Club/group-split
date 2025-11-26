@@ -64,6 +64,8 @@ builder.Services.AddOpenApiDocument(options =>
         ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
 });
 
+builder.Services.AddValidation();
+
 var app = builder.Build();
 
 app.MapDefaultEndpoints();

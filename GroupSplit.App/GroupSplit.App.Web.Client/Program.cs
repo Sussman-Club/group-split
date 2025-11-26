@@ -29,4 +29,14 @@ builder.Services.AddHttpClient<IWeatherClient, WeatherClient>("ApiClient", clien
     client.BaseAddress = uriBuilder.Uri;
 });
 
+builder.Services.AddHttpClient<IGroupsClient, GroupsClient>(client =>
+{
+    var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
+    {
+        Path = "api/"
+    };
+    
+    client.BaseAddress = uriBuilder.Uri;
+});
+
 await builder.Build().RunAsync();
