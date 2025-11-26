@@ -60,6 +60,7 @@ public static class TransactionApi
                     GroupName = transaction.RuleVersion.Rule.Group.Name,
                     PaidByName = transaction.User.FirstName +
                                  (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                    Category = transaction.RuleVersion.Rule.Category
                 };
         }
 
