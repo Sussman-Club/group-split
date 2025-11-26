@@ -18,6 +18,7 @@ public static class TransactionApi
             group.WithTags("Transactions");
 
             group.MapGetAll();
+            group.MapCreate();
 
             return group;
         }
@@ -42,6 +43,19 @@ public static class TransactionApi
                 })
                 .WithName("GetTransactions")
                 .Produces<TransactionResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapCreate()
+        {
+            return group.MapPost(string.Empty, async (
+                    CreateTransactionRequest request,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transaction = await transactionService.Create(request, ct);
+                    return Results.Ok();
+                })
+                .WithName("CreateTransaction");
         }
     }
 

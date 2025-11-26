@@ -1,7 +1,6 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
-using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
 
