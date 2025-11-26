@@ -7,17 +7,17 @@
 
 <PageTitle>Groups</PageTitle>
 
-@if (_selectedGroup != null)
+@if (SelectedGroup != null)
 {
     <!-- Group Header -->
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
-                <MudText Typo="Typo.h4" Class="font-weight-bold">@_selectedGroup.Name</MudText>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">@SelectedGroup.Name</MudText>
             </MudStack>
             <MudText Typo="Typo.body2">
-                @_members.Count members · @_transactions.Count expenses
+                @SelectedGroup.MemberCount members · @Transactions.Count expenses
             </MudText>
         </MudStack>
         <MudStack Row="true" Spacing="2">
@@ -27,7 +27,7 @@
                        OnClick="ManageRules">
                 Manage Rules
             </MudButton>
-            @if (!_selectedGroup.IsArchive)
+            @if (!SelectedGroup.IsArchive)
             {
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
@@ -47,7 +47,7 @@
 }
 
 <MudStack Spacing="4" Class="mb-10">
-    @if (_selectedGroup != null)
+    @if (SelectedGroup != null)
     {
         <!-- Balance Row -->
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
@@ -122,49 +122,15 @@
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
             <!-- Expenses List -->
             <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <MudStack Spacing="3">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Recent Expenses</MudText>
-
-                    <MudStack Spacing="2">
-                        @foreach (var transaction in _transactions)
-                        {
-                            <MudCard Elevation="0" Outlined="true" Class="hover-slide-right"
-                                     @onclick="() => ViewExpenseDetails(transaction)">
-                                <MudCardContent>
-                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                        <MudStack Spacing="0" Class="flex-grow-1">
-                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                                <MudAvatar Color="Color.Primary"
-                                                           Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
-                                                <MudText Typo="Typo.body2"
-                                                         Class="font-weight-medium">@transaction.Name</MudText>
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                                         Color="Color.Primary">@transaction.Category</MudChip>
-                                            </MudStack>
-                                            <MudText Typo="Typo.caption" Class="ml-10">
-                                                Paid by <strong>@transaction.PaidByName</strong>
-                                                on @transaction.Date.ToShortDateString()
-                                            </MudText>
-                                        </MudStack>
-                                        <MudStack AlignItems="AlignItems.End" Spacing="0">
-                                            <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
-                                                $@transaction.Amount.ToString("N2")
-                                            </MudText>
-                                            <MudText Typo="Typo.caption">@transaction.RuleName</MudText>
-                                        </MudStack>
-                                    </MudStack>
-                                </MudCardContent>
-                            </MudCard>
-                        }
-                    </MudStack>
-                </MudStack>
+                <TransactionsList Title="Recent Expenses"
+                                  Transactions="Transactions"/>
             </MudPaper>
             <!-- My Groups -->
             <MudStack Spacing="4">
                 <GroupsList Title="My Groups"
                             Icon="@Icons.Material.Outlined.Groups"
                             Groups="UserGroups"
-                            @bind-SelectedGroup="_selectedGroup"
+                            @bind-SelectedGroup="SelectedGroup"
                             @bind-SelectedGroup:after="@OnSelectedGroupChanged"
                             ShowCreateButton="true"
                             OnCreateClick="OpenCreateDialogAsync"/>
@@ -172,7 +138,7 @@
                 <GroupsList Title="Archived Groups"
                             Icon="@Icons.Material.Outlined.Archive"
                             Groups="_archivedGroups"
-                            @bind-SelectedGroup="_selectedGroup"
+                            @bind-SelectedGroup="SelectedGroup"
                             @bind-SelectedGroup:after="@OnSelectedGroupChanged"
                             ShowCreateButton="false"/>
             </MudStack>
@@ -190,25 +156,24 @@
 </MudStack>
 
 
-@if (_selectedGroup is { IsArchive: false })
+@if (SelectedGroup is { IsArchive: false })
 {
     <ExtendedFab Label="Expense" AlwaysExtended="true"/>
 }
 
 @code {
     [CascadingParameter] public required MudTheme Theme { get; set; }
-    private decimal _userBalance;
-
-    private GroupResponse? _selectedGroup;
 
     [PersistentState] public ICollection<GroupResponse> UserGroups { get; set; } = null!;
+    [PersistentState] public GroupResponse? SelectedGroup { get; set; }
+    [PersistentState] public List<TransactionResponse> Transactions { get; set; } = null!;
 
     private readonly List<GroupResponse> _archivedGroups = [];
 
+    private decimal _userBalance;
     private List<DebtInfo> _owedToYou = new();
     private List<DebtInfo> _youOwe = new();
     private List<MemberBalance> _members = new();
-    private List<TransactionInfo> _transactions = new();
 
     private CancellationTokenSource? _loadCts;
 
@@ -216,9 +181,9 @@
     protected override async Task OnInitializedAsync()
     {
         UserGroups ??= await GroupsClient.GetGroupsAsync();
-        _selectedGroup = UserGroups.FirstOrDefault();
-        if (_selectedGroup != null)
+        if (SelectedGroup is null)
         {
+            SelectedGroup = UserGroups.FirstOrDefault();
             await OnSelectedGroupChanged();
         }
 
@@ -227,23 +192,11 @@
 
     private async Task OnSelectedGroupChanged()
     {
-        if (_selectedGroup is null) return;
+        if (SelectedGroup is null) return;
 
-        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(_selectedGroup.Id, null, null);
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id, null, null);
 
-        _transactions = apiTransactions
-            .Select(t => new TransactionInfo
-            {
-                Id = t.Id,
-                Name = t.Name,
-                Amount = t.Amount,
-                PaidByName = t.PaidByName,
-                Category = t.Category,
-                RuleName = string.Empty,
-                Date = t.Date.DateTime
-            })
-            .OrderByDescending(t => t.Date)
-            .ToList();
+        Transactions = apiTransactions.OrderByDescending(t => t.Date).ToList();
 
         // TODO: Replace with real balances once API provides endpoints
         // For now, keep placeholders minimal and neutral
@@ -251,12 +204,6 @@
         _owedToYou = new List<DebtInfo>();
         _youOwe = new List<DebtInfo>();
         _members = new List<MemberBalance>();
-    }
-
-    private void ViewExpenseDetails(TransactionInfo transaction)
-    {
-        // TODO: Implement expense details dialog/modal
-        // Show expense details: description, amount, who paid, date, how it was split, etc.
     }
 
     private void ManageRules()
@@ -312,17 +259,6 @@
     {
         public string Name { get; set; } = "";
         public decimal Balance { get; set; }
-    }
-
-    private class TransactionInfo
-    {
-        public Guid Id { get; set; }
-        public string Name { get; set; } = "";
-        public decimal Amount { get; set; }
-        public string PaidByName { get; set; } = "";
-        public string Category { get; set; } = "";
-        public DateTime Date { get; set; }
-        public string RuleName { get; set; } = "";
     }
 
 }
