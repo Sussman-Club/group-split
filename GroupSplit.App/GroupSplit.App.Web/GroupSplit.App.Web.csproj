@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="10.0.0" />
     <ProjectReference Include="..\..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Web.Client\GroupSplit.App.Web.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
   </ItemGroup>

@@ -1,0 +1,64 @@
+﻿@using System.Text.Json
+@using GroupSplit.App.Shared.Services
+@inject IAuthService AuthService
+@inject NavigationManager Nav
+
+<MudAppBar Elevation="1" Dense>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
+        @if (ToggleDrawer.HasDelegate)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           Edge="Edge.Start"
+                           OnClick="@ToggleDrawer" />
+        }
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Inherit" />
+        <MudText Typo="Typo.h6" Class="font-weight-bold">Group Split</MudText>
+    </MudStack>
+    <MudSpacer />
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        @if (AuthenticationState?.User?.Identity?.IsAuthenticated ?? false)
+        {
+            <MudMenu Dense AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <MudStack Style="height: var(--mud-appbar-height)" Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.body2" Class="font-weight-medium">@Username</MudText>
+                        <MudAvatar Style="@_theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
+                            @(string.Join("", Username.Split(", ").Reverse().Select(s => s[0])))
+                        </MudAvatar>
+                    </MudStack>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Label="Account"></MudMenuItem>
+                    <MudDivider></MudDivider>
+                    <MudMenuItem Label="Log Out" OnClick="TryLogout"></MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+        else
+        {
+            <MudButton OnClick="@(() => Nav.NavigateTo("/login"))">Log In</MudButton>  
+        }
+    </MudStack>
+</MudAppBar>
+
+@code {
+    [Parameter] public EventCallback ToggleDrawer { get; set; }
+
+    [CascadingParameter] public Task<AuthenticationState> AuthenticationStateTask { get; set; }
+    [CascadingParameter] public MudTheme _theme { get; set; }
+
+    private AuthenticationState? AuthenticationState { get; set; }
+    private string? Username => AuthenticationState?.User.Claims.First().Value;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        AuthenticationState = await AuthenticationStateTask;
+        await base.OnParametersSetAsync();
+    }
+
+    private async Task TryLogout(MouseEventArgs args)
+    {
+        await AuthService.Logout();
+    }
+}

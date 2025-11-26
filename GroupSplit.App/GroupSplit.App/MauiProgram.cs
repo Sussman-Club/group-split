@@ -1,6 +1,8 @@
 ﻿using GroupSplit.App.Services;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
+using Microsoft.Extensions.Logging;
+using MudBlazor.Services;
 
 namespace GroupSplit.App;
 
@@ -37,8 +39,6 @@ public static class MauiProgram
 
         // Add MudBlazor services
         builder.Services.AddMudServices();
-
-        builder.AddServiceDefaults();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

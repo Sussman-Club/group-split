@@ -13,42 +13,37 @@
 
 
 <CascadingValue Value="_theme">
-    <MudLayout>
-        <MudAppBar Elevation="1" Dense>
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
-                <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                               Color="Color.Inherit"
-                               Edge="Edge.Start"
-                               OnClick="@ToggleDrawer"/>
-                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Inherit"/>
-                <MudText Typo="Typo.h6" Class="font-weight-bold">Group Split</MudText>
-            </MudStack>
-            <MudSpacer/>
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <MudAvatar Style="@_theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
-                        U
-                    </MudAvatar>
-                    <MudText Typo="Typo.body2" Class="font-weight-medium">User</MudText>
-                </MudStack>
-                <MudIconButton Icon="@Icons.Material.Filled.Settings"
-                               Color="Color.Inherit"/>
-            </MudStack>
-        </MudAppBar>
-        <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Mini" Elevation="2"
-                   ClipMode="DrawerClipMode.Always">
-            <NavMenu Mini="!_drawerOpen"/>
-        </MudDrawer>
-        <MudMainContent>
-            <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-                @Body
-            </MudContainer>
-        </MudMainContent>
-    </MudLayout>
+    <AuthorizeView>
+        <Authorized>
+            <MudLayout>
+                <AppBar ToggleDrawer="ToggleDrawer"/>
+                <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Mini" Elevation="2"
+                           ClipMode="DrawerClipMode.Always">
+                    <NavMenu Mini="!_drawerOpen" />
+                </MudDrawer>
+                <MudMainContent>
+                    <MudContainer MaxWidth="MaxWidth.Medium" Class="pt-6">
+                        @Body
+                    </MudContainer>
+                </MudMainContent>
+            </MudLayout>
+        </Authorized>
+        <NotAuthorized>
+            <MudLayout Class="d-flex" Style="min-height: 100dvh">
+                <AppBar/>
+                <MudMainContent Class="flex-1">
+                    <MudContainer MaxWidth="MaxWidth.Medium" Class="d-flex flex-column" Style="min-height: 100%">
+                        @Body
+                    </MudContainer>
+                </MudMainContent>
+            </MudLayout>
+        </NotAuthorized>
+    </AuthorizeView>
 </CascadingValue>
 
 @code {
     private bool _drawerOpen = true;
+
 
     private void ToggleDrawer()
     {

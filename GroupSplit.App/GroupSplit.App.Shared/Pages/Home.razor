@@ -1,18 +1,20 @@
 ﻿@page "/"
 @using GroupSplit.App.Shared.Services
+@using Microsoft.AspNetCore.Authorization
 @inject IFormFactor FormFactor
+@attribute [AllowAnonymous]
 
 <PageTitle>Home</PageTitle>
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
     <MudPaper Elevation="4" Class="pa-6">
         <MudStack Spacing="2">
-            <MudStack Direction="Row" AlignItems="AlignItems.Center" Spacing="1">
+            <MudStack AlignItems="AlignItems.Center" Spacing="1">
                 <MudIcon Color="Color.Primary" Icon="@Icons.Material.Filled.Home" Size="Size.Large"/>
                 <MudText Typo="Typo.h4" Class="fw-bold">Welcome</MudText>
             </MudStack>
             <MudText Typo="Typo.subtitle1" Color="Color.Secondary">Your cross-platform GroupSplit experience</MudText>
             <MudDivider/>
-            <MudStack Direction="Row" Spacing="2">
+            <MudStack Spacing="2">
                 <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled"
                          Icon="@Icons.Material.Filled.Devices">Form Factor: @factor</MudChip>
                 <MudChip T="string" Color="Color.Info" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Apps">

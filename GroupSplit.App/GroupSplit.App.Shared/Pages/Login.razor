@@ -1,16 +1,15 @@
 ﻿@page "/login"
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
-@layout FullScreenLayout
 @inject IAuthService AuthService
 @inject NavigationManager Nav
+@inject IFormFactor FormFactor
+@attribute [AllowAnonymous]
 
 
-<MudStack Row Class="mud-height-full mud-width-full d-flex"
+<MudStack Row Class="flex-1"
           AlignItems="AlignItems.Center"
-          Justify="Justify.SpaceAround"
-          Style="background-color:var(--mud-palette-background-gray);">
-
+          Justify="Justify.SpaceAround">
     <MudPaper Square MaxWidth="440px" MinWidth="440px">
         <MudStack Class="pa-8" Spacing="5">
             <MudText Typo="Typo.subtitle2">
@@ -23,11 +22,13 @@
                 <MudStack Spacing="5">
                     <MudTextField @bind-Value="Username"
                                   Placeholder="Email"
+                                  Immediate
                                   OnlyValidateIfDirty>
                     </MudTextField>
                     <MudTextField @bind-Value="Password"
                                   InputType="InputType.Password"
                                   Placeholder="Password"
+                                  Immediate
                                   OnlyValidateIfDirty>
                     </MudTextField>
                     <MudText Typo="Typo.subtitle2">
@@ -50,11 +51,16 @@
 
 
 @code {
-    private string? Username { get; set; }
-    private string? Password { get; set; }
+    [PersistentState] public string? Username { get; set; }
+    [PersistentState] public string? Password { get; set; }
     private bool success { get; set; } = false;
 
     MudForm? LoginForm { get; set; }
+
+    protected override Task OnInitializedAsync()
+    {
+        return base.OnInitializedAsync();
+    }
 
     public async Task TryLogin()
     {
