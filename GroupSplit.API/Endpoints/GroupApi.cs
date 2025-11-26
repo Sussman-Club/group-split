@@ -20,6 +20,7 @@ public static class GroupApi
             group.MapCreate();
             group.MapGetAllGroups();
             group.MapGetGroup();
+            group.MapGetGroupTransactions();
 
             return group;
         }
@@ -62,17 +63,35 @@ public static class GroupApi
                     Guid id,
                     IGroupService groupService,
                     CancellationToken ct) =>
-                    {
-                        var group = await groupService.GetGroupById(id, ct);
-                        var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                {
+                    var group = await groupService.GetGroupById(id, ct);
+                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
-                        if (groupResponse is null) return Results.NotFound();
+                    if (groupResponse is null) return Results.NotFound();
 
-                        return Results.Ok(groupResponse);
-                    })
+                    return Results.Ok(groupResponse);
+                })
                 .WithName("GetGroup")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapGetGroupTransactions()
+        {
+            return group.MapGet("{id:guid}/transactions", async (
+                    Guid id,
+                    [AsParameters] TransactionFilter filter,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactions = await transactionService.GetAll(ct);
+                    var transactionResponses = await transactions
+                        .Where(x => x.RuleVersion.Rule.Group.Id == id)
+                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
+                    return Results.Ok(transactionResponses);
+                })
+                .WithName("GetGroupTransactions")
+                .Produces<TransactionResponse[]>();
         }
     }
 

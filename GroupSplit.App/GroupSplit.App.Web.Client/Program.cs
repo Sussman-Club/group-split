@@ -39,4 +39,14 @@ builder.Services.AddHttpClient<IGroupsClient, GroupsClient>(client =>
     client.BaseAddress = uriBuilder.Uri;
 });
 
+builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =>
+{
+    var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
+    {
+        Path = "api/"
+    };
+    
+    client.BaseAddress = uriBuilder.Uri;
+});
+
 await builder.Build().RunAsync();
