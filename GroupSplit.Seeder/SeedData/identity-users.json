@@ -1,0 +1,22 @@
+[
+  {
+    "Id": "FFDFB4C9-6321-49EA-9160-0F618ACF6D4B",
+    "Email": "daniel@test.com",
+    "Password": "123!@#aA"
+  },
+  {
+    "Id": "F1C2D3E4-5678-90AB-CDEF-1234567890AB",
+    "Email": "loraine@test.com",
+    "Password": "123!@#aA"
+  },
+  {
+    "Id": "9F8E7D6C-5B4A-3C2D-1E0F-1234567890AB",
+    "Email": "anabel@test.com",
+    "Password": "123!@#aA"
+  },
+  {
+    "Id": "0A1B2C3D-4E5F-6071-8293-0A1B2C3D4E5F",
+    "Email": "omar@test.com",
+    "Password": "123!@#aA"
+  }
+]

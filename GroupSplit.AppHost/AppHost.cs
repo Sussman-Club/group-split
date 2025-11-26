@@ -40,6 +40,13 @@ var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/Gr
 mauiapp.AddWindowsDevice()
     .WithReference(backend);
 
+var seeder = builder.AddProject<GroupSplit_Seeder>("seeder")
+    .WaitFor(db)
+    .WithReference(db)
+    .WaitFor(identityDb)
+    .WithReference(identityDb)
+    .WithExplicitStart();
+
 var host = builder.Build();
 
 if (builder.ExecutionContext.IsRunMode)
