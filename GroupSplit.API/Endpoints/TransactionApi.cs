@@ -29,12 +29,16 @@ public static class TransactionApi
         {
             return group.MapGet(string.Empty, async (
                     [AsParameters] TransactionFilter filter,
+                    IUserService userService,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
+                    var user = await userService.GetCurrentUser();
                     var transactions = await transactionService.GetAll(ct);
-                    var groupInfos = await transactions.ApplyFilter(filter).SelectDto().ToListAsync(ct);
-                    return Results.Ok(groupInfos);
+                    var transactionResponses = await transactions
+                        .Where(x => x.User.Id == user.Id)
+                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
+                    return Results.Ok(transactionResponses);
                 })
                 .WithName("GetTransactions")
                 .Produces<TransactionResponse[]>();

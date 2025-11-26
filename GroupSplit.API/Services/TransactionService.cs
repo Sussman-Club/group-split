@@ -25,7 +25,6 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
             from rule in @group.Rules
             from version in rule.Versions
             from transaction in version.Transactions
-            where transaction.User.Id == user.Id
             select transaction;
 
         return query;
