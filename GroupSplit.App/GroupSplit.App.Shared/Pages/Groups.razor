@@ -7,14 +7,14 @@
 
 <PageTitle>Groups</PageTitle>
 
-@if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
+@if (_selectedGroup != null)
 {
     <!-- Group Header -->
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
-                <MudText Typo="Typo.h4" Class="font-weight-bold">@_selectedGroupName</MudText>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">@_selectedGroup.Name</MudText>
             </MudStack>
             <MudText Typo="Typo.body2">
                 @_members.Count members · @_transactions.Count expenses
@@ -27,7 +27,7 @@
                        OnClick="ManageRules">
                 Manage Rules
             </MudButton>
-            @if (!_isSelectedGroupArchived)
+            @if (!_selectedGroup.IsArchive)
             {
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
@@ -47,7 +47,7 @@
 }
 
 <MudStack Spacing="4" Class="mb-10">
-    @if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
+    @if (_selectedGroup != null)
     {
         <!-- Balance Row -->
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
@@ -164,16 +164,16 @@
                 <GroupsList Title="My Groups"
                             Icon="@Icons.Material.Outlined.Groups"
                             Groups="UserGroups"
-                            SelectedGroupId="_selectedGroupId"
-                            OnGroupSelect="SelectGroup"
+                            @bind-SelectedGroup="_selectedGroup"
+                            @bind-SelectedGroup:after="@OnSelectedGroupChanged"
                             ShowCreateButton="true"
                             OnCreateClick="OpenCreateDialogAsync"/>
 
                 <GroupsList Title="Archived Groups"
                             Icon="@Icons.Material.Outlined.Archive"
                             Groups="_archivedGroups"
-                            SelectedGroupId="_selectedGroupId"
-                            OnGroupSelect="SelectGroup"
+                            @bind-SelectedGroup="_selectedGroup"
+                            @bind-SelectedGroup:after="@OnSelectedGroupChanged"
                             ShowCreateButton="false"/>
             </MudStack>
         </MudStack>
@@ -190,18 +190,16 @@
 </MudStack>
 
 
-@if (_selectedGroupId != Guid.Empty && !_isSelectedGroupArchived)
+@if (_selectedGroup is { IsArchive: false })
 {
     <ExtendedFab Label="Expense" AlwaysExtended="true"/>
 }
 
 @code {
     [CascadingParameter] public required MudTheme Theme { get; set; }
-    private const string CurrentUserName = "John Doe";
-    private Guid _selectedGroupId = Guid.Empty;
-    private string? _selectedGroupName;
-    private bool _isSelectedGroupArchived;
     private decimal _userBalance;
+
+    private GroupResponse? _selectedGroup;
 
     [PersistentState] public ICollection<GroupResponse> UserGroups { get; set; } = null!;
 
@@ -212,75 +210,47 @@
     private List<MemberBalance> _members = new();
     private List<TransactionInfo> _transactions = new();
 
+    private CancellationTokenSource? _loadCts;
+
+
     protected override async Task OnInitializedAsync()
     {
         UserGroups ??= await GroupsClient.GetGroupsAsync();
-        if (UserGroups.Any())
+        _selectedGroup = UserGroups.FirstOrDefault();
+        if (_selectedGroup != null)
         {
-            SelectGroup(UserGroups.First().Id);
+            await OnSelectedGroupChanged();
         }
 
         await base.OnInitializedAsync();
     }
 
-    private void SelectGroup(Guid groupId)
+    private async Task OnSelectedGroupChanged()
     {
-        _selectedGroupId = groupId;
+        if (_selectedGroup is null) return;
 
-        // Check if it's in active groups
-        var group = UserGroups.FirstOrDefault(g => g.Id == groupId);
-        if (group != null)
-        {
-            _selectedGroupName = group.Name;
-            _isSelectedGroupArchived = false;
-        }
-        else
-        {
-            // Check if it's in archived groups
-            group = _archivedGroups.FirstOrDefault(g => g.Id == groupId);
-            if (group != null)
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(_selectedGroup.Id, null, null);
+
+        _transactions = apiTransactions
+            .Select(t => new TransactionInfo
             {
-                _selectedGroupName = group.Name;
-                _isSelectedGroupArchived = true;
-            }
-        }
+                Id = t.Id,
+                Name = t.Name,
+                Amount = t.Amount,
+                PaidByName = t.PaidByName,
+                Category = t.Category,
+                RuleName = string.Empty,
+                Date = t.Date.DateTime
+            })
+            .OrderByDescending(t => t.Date)
+            .ToList();
 
-        LoadGroupData();
-    }
-
-    private void LoadGroupData()
-    {
-        // TODO: Load from API - these are mock calculations
-        // In reality, you'd fetch transactions and calculate balances
-
-        // Mock: Calculate user's balance
-        _userBalance = 45.50m;
-
-        _owedToYou = new List<DebtInfo>
-        {
-            new() { Name = "Jane Smith", Amount = 25.00m },
-            new() { Name = "Bob Wilson", Amount = 20.50m }
-        };
-
+        // TODO: Replace with real balances once API provides endpoints
+        // For now, keep placeholders minimal and neutral
+        _userBalance = 0m;
+        _owedToYou = new List<DebtInfo>();
         _youOwe = new List<DebtInfo>();
-
-        // Mock: Group member balances
-        _members = new List<MemberBalance>
-        {
-            new() { Name = CurrentUserName, Balance = 45.50m },
-            new() { Name = "Jane Smith", Balance = -25.00m },
-            new() { Name = "Bob Wilson", Balance = -20.50m },
-            new() { Name = "Alice Johnson", Balance = 0.00m }
-        };
-
-        // Mock: Recent transactions
-        _transactions = new List<TransactionInfo>
-        {
-            new() { Id = Guid.NewGuid(), Name = "Dinner at Italian Restaurant", Amount = 120.00m, PaidByName = CurrentUserName, Category = "Food", Date = DateTime.Now.AddDays(-1), RuleName = "Split Equally" },
-            new() { Id = Guid.NewGuid(), Name = "Taxi to Airport", Amount = 45.50m, PaidByName = "Jane Smith", Category = "Transport", Date = DateTime.Now.AddDays(-2), RuleName = "Split Equally" },
-            new() { Id = Guid.NewGuid(), Name = "Hotel Booking", Amount = 320.00m, PaidByName = CurrentUserName, Category = "Accommodation", Date = DateTime.Now.AddDays(-5), RuleName = "Split by Percentage" },
-            new() { Id = Guid.NewGuid(), Name = "Concert Tickets", Amount = 85.20m, PaidByName = "Bob Wilson", Category = "Entertainment", Date = DateTime.Now.AddDays(-7), RuleName = "Split Equally" }
-        };
+        _members = new List<MemberBalance>();
     }
 
     private void ViewExpenseDetails(TransactionInfo transaction)
@@ -303,29 +273,8 @@
 
     private void ArchiveGroup()
     {
-        if (_selectedGroupId == Guid.Empty || _isSelectedGroupArchived)
-            return;
-
-        // Find the group in active groups
-        var group = UserGroups.FirstOrDefault(g => g.Id == _selectedGroupId);
-        if (group != null)
-        {
-            // Move to archived groups
-            UserGroups.Remove(group);
-            _archivedGroups.Add(group);
-
-            // Select first available group or clear selection
-            if (UserGroups.Any())
-            {
-                SelectGroup(UserGroups.First().Id);
-            }
-            else
-            {
-                _selectedGroupId = Guid.Empty;
-                _selectedGroupName = null;
-                _isSelectedGroupArchived = false;
-            }
-        }
+        // TODO: Implement archive group dialog
+        // Allow user to archive the selected group
     }
 
     private async Task OpenCreateDialogAsync()
@@ -342,7 +291,7 @@
 
         if (dialogResult is null || dialogResult.Canceled)
             return;
-        
+
         if (dialogResult.Data is not CreateGroupRequest request)
         {
             Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);

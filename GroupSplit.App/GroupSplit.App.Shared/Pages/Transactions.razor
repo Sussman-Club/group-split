@@ -1,6 +1,8 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.Shared
+@inject ITransactionsClient TransactionsClient
 
 <PageTitle>Transactions</PageTitle>
 
@@ -25,8 +27,8 @@
               Variant="Variant.Outlined"
               Class="flex-grow-1 pa-6"/>
 
-<MudDataGrid T="TransactionViewModel"
-             Items="@FilteredTransactions"
+<MudDataGrid T="TransactionResponse"
+             Items="@UserTransactions"
              Filterable="true"
              FilterMode="DataGridFilterMode.Simple"
              Hover="true"
@@ -38,10 +40,15 @@
         <PropertyColumn Property="x => x.Date" Title="Date" Filterable="false">
             <CellTemplate>
                 <MudStack Spacing="0">
-                    <MudText Typo="Typo.body2">@context.Item.Date.ToShortDateString()</MudText>
-                    <MudText Typo="Typo.caption"
-                             Color="Color.Secondary">@context.Item.Date.ToShortTimeString()</MudText>
+                    <MudText Typo="Typo.body2">@context.Item.Date.DateTime.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption">@context.Item.Date.DateTime.ToShortTimeString()</MudText>
                 </MudStack>
+            </CellTemplate>
+        </PropertyColumn>
+        
+        <PropertyColumn Property="x => x.Name" Title="Name" Filterable="true">
+            <CellTemplate>
+                <MudText Typo="Typo.body2">@context.Item.Name</MudText>
             </CellTemplate>
         </PropertyColumn>
 
@@ -89,53 +96,28 @@
 @code {
     [CascadingParameter] public required MudTheme Theme { get; set; }
     private string _searchString = "";
-    private const string CurrentUserName = "John Doe"; // TODO: Get from authentication context
 
-    // All transactions from database (filtered by current user)
-    private readonly List<TransactionViewModel> _transactions = new()
+    [PersistentState] public ICollection<TransactionResponse> UserTransactions { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync()
     {
-        // Only showing current user's (John Doe) transactions
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-1), GroupName = "Vacation 2024", UserName = CurrentUserName, Amount = 125.50m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-7), GroupName = "Weekend Trip", UserName = CurrentUserName, Amount = 89.25m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-10), GroupName = "Office Lunch", UserName = CurrentUserName, Amount = 32.75m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-14), GroupName = "Vacation 2024", UserName = CurrentUserName, Amount = 200.00m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-20), GroupName = "Roommates", UserName = CurrentUserName, Amount = 156.80m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-25), GroupName = "Weekend Trip", UserName = CurrentUserName, Amount = 45.00m }
-    };
-
-    private IEnumerable<TransactionViewModel> FilteredTransactions =>
-        _transactions.Where(t =>
-        {
-            var matchesSearch = string.IsNullOrWhiteSpace(_searchString) ||
-                                t.GroupName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
-                                t.Amount.ToString().Contains(_searchString);
-
-            return matchesSearch;
-        }).OrderByDescending(t => t.Date);
+        UserTransactions ??= await TransactionsClient.GetTransactionsAsync(null, null);
+        await base.OnInitializedAsync();
+    }
 
     private void OpenAddTransactionDialog()
     {
         // TODO: Implement add transaction dialog
     }
 
-    private void EditTransaction(TransactionViewModel transaction)
+    private void EditTransaction(TransactionResponse transaction)
     {
         // TODO: Implement edit transaction
     }
 
-    private void DeleteTransaction(TransactionViewModel transaction)
+    private void DeleteTransaction(TransactionResponse transaction)
     {
         // TODO: Implement delete transaction
-    }
-
-
-    private class TransactionViewModel
-    {
-        public Guid Id { get; set; }
-        public DateTime Date { get; set; }
-        public string GroupName { get; set; } = "";
-        public string UserName { get; set; } = "";
-        public decimal Amount { get; set; }
     }
 
 }

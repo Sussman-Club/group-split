@@ -12,12 +12,12 @@
         <MudStack Spacing="1">
             @foreach (var group in Groups)
             {
-                <MudButton Variant="@(SelectedGroupId == group.Id ? Variant.Filled : Variant.Text)"
-                           Color="@(SelectedGroupId == group.Id ? Color.Primary : Color.Default)"
+                <MudButton Variant="@(SelectedGroup.Id == group.Id ? Variant.Filled : Variant.Text)"
+                           Color="@(SelectedGroup.Id == group.Id ? Color.Primary : Color.Default)"
                            StartIcon="@Icons.Material.Outlined.Group"
                            FullWidth="true"
                            Class="justify-start"
-                           OnClick="() => OnGroupSelect.InvokeAsync(group.Id)">
+                           OnClick="@(_ => SelectedGroupChanged.InvokeAsync(group))">
                     <MudStack Spacing="0" Class="flex-grow-1">
                         <MudText Typo="Typo.body2">@group.Name</MudText>
                         <MudText Typo="Typo.caption">@group.MemberCount members</MudText>
@@ -43,8 +43,8 @@
     [Parameter] public string Title { get; set; } = "Groups";
     [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.Groups;
     [Parameter] public ICollection<GroupResponse> Groups { get; set; } = [];
-    [Parameter] public Guid SelectedGroupId { get; set; }
-    [Parameter] public EventCallback<Guid> OnGroupSelect { get; set; }
+    [Parameter] public GroupResponse SelectedGroup { get; set; } = null!;
+    [Parameter] public EventCallback<GroupResponse> SelectedGroupChanged { get; set; }
     [Parameter] public bool ShowCreateButton { get; set; }
     [Parameter] public EventCallback OnCreateClick { get; set; }
 }
