@@ -21,13 +21,13 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(TestUserId, result.Identity.IdentityId);
+        Assert.Equal(TestUserClaims.UserId, result.Identity.IdentityId);
         Assert.NotNull(result.PersonalGroup);
         Assert.Contains(result.PersonalGroup, result.Groups);
 
         // Verify user was saved to database
         var userInDb = await DbContext.Set<GroupSplit.Data.Entities.User>()
-            .FirstOrDefaultAsync(u => u.Identity.IdentityId == TestUserId, TestContext.Current.CancellationToken);
+            .FirstOrDefaultAsync(u => u.Identity.IdentityId == TestUserClaims.UserId, TestContext.Current.CancellationToken);
 
         Assert.NotNull(userInDb);
         Assert.Equal(result.Id, userInDb.Id);
@@ -46,5 +46,32 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Assert
         Assert.Equal(firstCall.Id, secondCall.Id);
         Assert.Equal(firstCall.Identity.IdentityId, secondCall.Identity.IdentityId);
+    }
+
+    [Fact]
+    public async Task GetCurrentUser_Email()
+    {
+        // Arrange
+        var userService = GetService<IUserService>();
+
+        // Act
+        var result = await userService.GetCurrentUser();
+
+        // Assert
+        Assert.Equal(TestUserClaims.Email, result.Email);
+    }
+
+    [Fact]
+    public async Task GetCurrentUser_Different()
+    {
+        // Arrange
+        var userService = GetService<IUserService>();
+        var firstUser = await userService.GetCurrentUser();
+
+        // Arrange different user
+        var secondUser = await CreateNewUser();
+
+        // Assert
+        Assert.NotEqual(firstUser.Id, secondUser.Id);
     }
 }

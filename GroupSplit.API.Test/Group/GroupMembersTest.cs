@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GroupSplit.API.Test.Group;
 
 /// <summary>
-/// Tests for GET /groups/{id} via GroupService.GetGroupById
+/// Tests for GET /groups/members via GroupService.GetGroupMembers
 /// </summary>
 public class GroupMembersTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {

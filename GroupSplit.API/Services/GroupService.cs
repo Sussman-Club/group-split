@@ -26,6 +26,12 @@ public interface IGroupService
     /// Gets the members of a group by ID
     /// </summary>
     Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default);
+
+
+    /// <summary>
+    /// Adds a member to a gruopy by ID and emails
+    /// </summary>
+    Task AddGroupMembers(Guid groupId, AddMemberRequest request, CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
@@ -69,5 +75,19 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return from gr in await GetGroupById(groupId, cancellationToken)
                from user in gr.Users
                select user;
+    }
+
+    public async Task AddGroupMembers(Guid groupId, AddMemberRequest request, CancellationToken cancellationToken = default)
+    {
+        var groupQuery = await GetGroupById(groupId, cancellationToken);
+        var group = await groupQuery.FirstOrDefaultAsync();
+        if (group is null)
+            throw new ArgumentException("Group was not found");
+        var users = from user in context.Set<User>()
+                    where request.Emails.Contains(user.Email)
+                    select user;
+        await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
+            group.Users.Add(user);
+        await context.SaveChangesAsync();
     }
 }

@@ -20,6 +20,8 @@ public static class GroupApi
             group.MapCreate();
             group.MapGetAllGroups();
             group.MapGetGroup();
+            group.MapGetMembers();
+            group.MapAddMember();
 
             return group;
         }
@@ -89,6 +91,22 @@ public static class GroupApi
                     .WithName("GetGroupMembers")
                     .Produces<UserInfo[]>()
                     .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapAddMember()
+        {
+            return group.MapPost("{id:guid}/members", async (
+                    Guid id,
+                    AddMemberRequest request,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    // Implementation for adding a member would go here
+                    await groupService.AddGroupMembers(id, request);
+                    return Results.Ok();
+                })
+                .WithName("AddGroupMember")
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }
 
