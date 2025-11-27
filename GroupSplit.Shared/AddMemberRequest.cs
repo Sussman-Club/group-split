@@ -1,3 +1,12 @@
-﻿namespace GroupSplit.Shared;
+﻿using System.ComponentModel.DataAnnotations;
 
-public record AddMemberRequest(string[] Emails);
+namespace GroupSplit.Shared;
+
+public record AddMemberRequest(HashSet<UserIdentifier> UserIdentifiers);
+
+public record UserIdentifier
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = null!;
+}

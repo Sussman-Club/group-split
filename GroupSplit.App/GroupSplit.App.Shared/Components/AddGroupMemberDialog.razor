@@ -1,0 +1,99 @@
+﻿@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            @MudDialog.Title
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+
+        <MudForm @ref="@form" Model="@model">
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudTextField For="@(() => currentInput.Email)"
+                              @bind-Value="currentInput.Email"
+                              Label="User Email"
+                              Variant="Variant.Outlined"
+                              OnKeyDown="HandleKeyDown"
+                              Immediate
+                              Placeholder="Type an email..." />
+                <MudIconButton Icon="@Icons.Material.Rounded.Add" OnClick="AddMemberToList" Color="Color.Primary"/>
+            </MudStack>
+        </MudForm>
+        <MudChipSet T="string" Style="padding-top: 5px;">
+            @foreach (var userIdentifier in model.UserIdentifiers)
+            {
+                <MudChip T="UserIdentifier" Value=userIdentifier CloseIcon="@Icons.Material.Rounded.Close"
+                         OnClose="CloseChip" Variant="Variant.Outlined" Color="Color.Primary">
+                    @userIdentifier.Email
+                </MudChip>
+            }
+        </MudChipSet>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@Cancel" Variant="Variant.Outlined">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit" Variant="Variant.Outlined">
+            Submit
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    MudForm form;
+    private UserIdentifier currentInput = new() { Email = string.Empty };
+
+    private bool loading = false;
+
+    private AddMemberRequest model = new([]);
+
+    private async Task AddMemberToList()
+    {
+        await form.Validate();
+        if (!form.IsValid) return;
+
+        var email = currentInput.Email.Trim();
+
+        // Avoid duplicates (record equality already helps, but be explicit for case-insensitive)
+        if (model.UserIdentifiers.Any(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        model.UserIdentifiers.Add(new UserIdentifier { Email = email });
+
+        // Reset input (new instance so DataAnnotations re-run cleanly)
+        currentInput = new UserIdentifier { Email = string.Empty };
+        StateHasChanged();
+    }
+
+    private async void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await AddMemberToList();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(model));
+        }
+    }
+
+    private void CloseChip(MudChip<UserIdentifier> chip)
+    {
+        if (chip.Value is not null)
+            model.UserIdentifiers.Remove(chip.Value);
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+}

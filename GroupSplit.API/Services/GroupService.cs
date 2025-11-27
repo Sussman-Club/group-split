@@ -84,7 +84,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         if (group is null)
             throw new ArgumentException("Group was not found");
         var users = from user in context.Set<User>()
-                    where request.Emails.Contains(user.Email)
+                    where request.UserIdentifiers.Select(ui => ui.Email).Contains(user.Email)
                     select user;
         await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
             group.Users.Add(user);
