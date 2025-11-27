@@ -35,7 +35,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var createdGroup = await groupService.CreateGroup(request, ct);
+                    var createdGroup = await groupService.Create(request, ct);
                     var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1);
                     return Results.Ok(groupInfo);
                 })
@@ -49,7 +49,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var groups = await groupService.GetAllGroups(ct);
+                    var groups = await groupService.List(ct);
                     var groupResponses = await groups.SelectDto().ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupResponses);
                 })
@@ -64,7 +64,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var group = await groupService.GetGroupById(id, ct);
+                    var group = await groupService.Get(id, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null) return Results.NotFound();
@@ -84,7 +84,7 @@ public static class GroupApi
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
-                    var transactions = await transactionService.GetAll(ct);
+                    var transactions = await transactionService.List(ct);
                     var transactionResponses = await transactions
                         .Where(x => x.RuleVersion.Rule.Group.Id == id)
                         .ApplyFilter(filter).SelectDto().ToListAsync(ct);

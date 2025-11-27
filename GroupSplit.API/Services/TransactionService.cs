@@ -7,7 +7,10 @@ namespace GroupSplit.API.Services;
 
 public interface ITransactionService
 {
-    Task<IQueryable<Transaction>> GetAll(CancellationToken cancellationToken = default);
+    Task<IQueryable<Transaction>> List(CancellationToken cancellationToken = default);
+
+    Task<IQueryable<Transaction>> Get(Guid id, CancellationToken cancellationToken = default);
+
     ValueTask<Transaction> Create(CreateTransactionRequest request, CancellationToken cancellationToken = default);
 
     ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
@@ -18,7 +21,7 @@ public interface ITransactionService
 
 public class TransactionService(IUserService userService, AppDbContext dbContext) : ITransactionService
 {
-    public async Task<IQueryable<Transaction>> GetAll(CancellationToken cancellationToken = default)
+    public async Task<IQueryable<Transaction>> List(CancellationToken cancellationToken = default)
     {
         var currentUser = await userService.GetCurrentUser();
 
@@ -29,6 +32,13 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
             select transaction;
 
         return query;
+    }
+
+    public async Task<IQueryable<Transaction>> Get(Guid id, CancellationToken cancellationToken = default)
+    {
+        var transactions = await List(cancellationToken);
+
+        return transactions.Where(t => t.Id == id);
     }
 
     public async ValueTask<Transaction> Create(CreateTransactionRequest request,
@@ -82,10 +92,60 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         return transaction;
     }
 
-    public ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
+    public async ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var currentUser = await userService.GetCurrentUser();
+        var userGroups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
+
+        var query = from transaction in await Get(id, cancellationToken)
+            from ruleVersion in (from userGroup in userGroups
+                from rule in userGroup.Rules
+                from ruleVersion in rule.Versions
+                where ruleVersion.Id == request.RuleVersionId
+                select ruleVersion).DefaultIfEmpty()
+            from payingUser in (from payingUser in dbContext.Set<User>()
+                where payingUser.Id == request.PaidByUserId &&
+                      (from userGroup in userGroups
+                          where (from groupUser in userGroup.Users
+                              where groupUser == payingUser
+                              select 1).Any()
+                          select 1).Any()
+                select payingUser).DefaultIfEmpty()
+            select new
+            {
+                PayingUserBelongsToGroup = payingUser == null ||
+                                           (from user in ruleVersion.Rule.Group.Users
+                                               where user == payingUser
+                                               select 1)
+                                           .Any(),
+                Transaction = transaction,
+                PayingUser = payingUser,
+                RuleVersion = ruleVersion
+            };
+
+        var result = await query.FirstOrDefaultAsync(cancellationToken);
+
+        if (result is null) throw new Exception("Transaction not found");
+
+        if (result.RuleVersion is null) throw new Exception("Rule version not found");
+
+        if (result.PayingUser is null) throw new Exception("Paid by user not found");
+
+        if (!result.PayingUserBelongsToGroup) throw new Exception("Paid by user is not in the group");
+
+        var updatedTransaction = result.Transaction;
+
+        updatedTransaction.Amount = request.Amount;
+        updatedTransaction.DateTime = request.DateTime;
+        updatedTransaction.Name = request.Name;
+        updatedTransaction.Description = request.Description;
+        updatedTransaction.RuleVersion = result.RuleVersion;
+        updatedTransaction.User = result.PayingUser;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return updatedTransaction;
     }
 
     public Task<bool> Delete(Guid id, CancellationToken cancellationToken = default)

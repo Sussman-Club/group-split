@@ -9,22 +9,22 @@ public interface IGroupService
     /// <summary>
     /// Creates a new group for the current user.
     /// </summary>
-    ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default);
+    ValueTask<Group> Create(CreateGroupRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets all groups for the current user.
     /// </summary>
-    Task<IQueryable<Group>> GetAllGroups(CancellationToken cancellationToken = default);
+    Task<IQueryable<Group>> List(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a group by ID for the current user.
     /// </summary>
-    Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
+    Task<IQueryable<Group>> Get(Guid groupId, CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
 {
-    public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<Group> Create(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
         var user = await userService.GetCurrentUser();
 
@@ -43,7 +43,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return group;
     }
 
-    public async Task<IQueryable<Group>> GetAllGroups(CancellationToken cancellationToken = default)
+    public async Task<IQueryable<Group>> List(CancellationToken cancellationToken = default)
     {
         var user = await userService.GetCurrentUser();
 
@@ -51,9 +51,9 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return context.Entry(user).Collection(u => u.Groups).Query();
     }
 
-    public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<Group>> Get(Guid groupId, CancellationToken cancellationToken = default)
     {
-        var groups = await GetAllGroups(cancellationToken);
+        var groups = await List(cancellationToken);
         return groups.Where(g => g.Id == groupId);
     }
 }

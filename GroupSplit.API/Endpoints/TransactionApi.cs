@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Endpoints;
@@ -19,6 +20,7 @@ public static class TransactionApi
 
             group.MapGetAll();
             group.MapCreate();
+            group.MapUpdate();
 
             return group;
         }
@@ -35,7 +37,7 @@ public static class TransactionApi
                     CancellationToken ct) =>
                 {
                     var user = await userService.GetCurrentUser();
-                    var transactions = await transactionService.GetAll(ct);
+                    var transactions = await transactionService.List(ct);
                     var transactionResponses = await transactions
                         .Where(x => x.User.Id == user.Id)
                         .ApplyFilter(filter).SelectDto().ToListAsync(ct);
@@ -56,6 +58,36 @@ public static class TransactionApi
                     return Results.Ok();
                 })
                 .WithName("CreateTransaction");
+        }
+
+        private RouteHandlerBuilder MapUpdate()
+        {
+            return group.MapPatch("{id:guid}", async (
+                Guid id,
+                JsonPatchDocument<UpdateTransactionRequest> patchDocument,
+                ITransactionService transactionService,
+                CancellationToken ct) =>
+            {
+                var transactions = await transactionService.Get(id, ct);
+                var transactionUpdateRequest = await (from t in transactions
+                    select new UpdateTransactionRequest
+                    {
+                        Amount = t.Amount,
+                        Description = t.Description,
+                        Name = t.Name,
+                        DateTime = t.DateTime,
+                        PaidByUserId = t.User.Id,
+                        RuleVersionId = t.RuleVersion.Id
+                    }).FirstOrDefaultAsync(ct);
+
+                if (transactionUpdateRequest is null) return Results.NotFound();
+                
+                patchDocument.ApplyTo(transactionUpdateRequest);
+                
+                await transactionService.Update(id, transactionUpdateRequest, ct);
+                
+                return Results.Ok();
+            });
         }
     }
 
