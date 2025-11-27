@@ -21,6 +21,11 @@ public interface IGroupService
     /// Gets a group by ID for the current user.
     /// </summary>
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the members of a group by ID
+    /// </summary>
+    Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
@@ -54,7 +59,15 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
     public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
     {
-        var groups = await GetAllGroups(cancellationToken);
-        return groups.Where(g => g.Id == groupId);
+        return from g in await GetAllGroups(cancellationToken)
+               where g.Id == groupId
+               select g;
+    }
+
+    public async Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        return from gr in await GetGroupById(groupId, cancellationToken)
+               from user in gr.Users
+               select user;
     }
 }

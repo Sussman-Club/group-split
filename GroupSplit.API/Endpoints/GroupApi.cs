@@ -74,6 +74,22 @@ public static class GroupApi
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
+
+        private RouteHandlerBuilder MapGetMembers()
+        {
+            return group.MapGet("{id:guid}/members", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                    {
+                        var members = (await groupService.GetGroupMembers(id)).SelectDto();
+                        var userResponse = await members.ToListAsync(ct);
+                        return userResponse is null ? Results.NotFound() : Results.Ok(userResponse);
+                    })
+                    .WithName("GetGroupMembers")
+                    .Produces<UserInfo[]>()
+                    .ProducesProblem(StatusCodes.Status404NotFound);
+        }
     }
 
     extension(IQueryable<Group> groups)
@@ -81,7 +97,16 @@ public static class GroupApi
         private IQueryable<GroupResponse> SelectDto()
         {
             return from @group in groups
-                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
+                   select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
+        }
+    }
+
+    extension(IQueryable<User> users)
+    {
+        private IQueryable<UserInfo> SelectDto()
+        {
+            return from user in users
+                   select new UserInfo(user.Id, user.FirstName, user.LastName);
         }
     }
 }
