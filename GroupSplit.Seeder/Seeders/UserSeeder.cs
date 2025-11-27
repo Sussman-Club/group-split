@@ -17,6 +17,7 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
             Id = dto.Id,
             FirstName = dto.FirstName,
             LastName = dto.LastName,
+            Email = dto.Email,
             Identity = new UserIdentity { IdentityId = dto.ExternalUserId },
         };
         

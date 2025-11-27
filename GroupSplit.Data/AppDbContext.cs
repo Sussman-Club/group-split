@@ -9,9 +9,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         modelBuilder.Entity<User>(entity =>
         {
-            entity.Property(user => user.FirstName).HasMaxLength(64).IsRequired();
+            entity.Property(user => user.FirstName).HasMaxLength(64);
             entity.Property(user => user.LastName).HasMaxLength(64);
-            
+            entity.Property(user => user.Email).HasMaxLength(128);
+
             entity.HasMany(user => user.Groups)
                 .WithMany(group => group.Users);
 
@@ -19,6 +20,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithOne()
                 .HasForeignKey<User>("PersonalGroupId")
                 .IsRequired();
+
+            entity.HasIndex(user => user.Email).IsUnique();
         });
 
         modelBuilder.Entity<Group>(entity =>
