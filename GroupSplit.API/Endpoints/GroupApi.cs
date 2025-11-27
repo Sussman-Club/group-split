@@ -22,6 +22,8 @@ public static class GroupApi
             group.MapGetGroup();
             group.MapGetGroupTransactions();
             group.MapGetGroupRules();
+            group.MapGetMembers();
+            group.MapAddMember();
 
             return group;
         }
@@ -36,7 +38,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var createdGroup = await groupService.Create(request, ct);
+                    var createdGroup = await groupService.CreateGroup(request, ct);
                     var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1);
                     return Results.Ok(groupInfo);
                 })
@@ -50,7 +52,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var groups = await groupService.List(ct);
+                    var groups = await groupService.GetAllGroups(ct);
                     var groupResponses = await groups.SelectDto().ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupResponses);
                 })
@@ -65,7 +67,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var group = await groupService.Get(id, ct);
+                    var group = await groupService.GetGroupById(id, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null) return Results.NotFound();
@@ -112,6 +114,38 @@ public static class GroupApi
                 .WithName("GetGroupRules")
                 .Produces<TransactionResponse[]>();
         }
+
+        private RouteHandlerBuilder MapGetMembers()
+        {
+            return group.MapGet("{id:guid}/members", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                    {
+                        var members = (await groupService.GetGroupMembers(id, ct)).SelectDto();
+                        var userResponse = await members.ToListAsync(ct);
+                        return Results.Ok(userResponse);
+                    })
+                    .WithName("GetGroupMembers")
+                    .Produces<UserInfo[]>()
+                    .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapAddMember()
+        {
+            return group.MapPost("{id:guid}/members", async (
+                    Guid id,
+                    AddMemberRequest request,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    // Implementation for adding a member would go here
+                    await groupService.AddGroupMembers(id, request, ct);
+                    return Results.Ok();
+                })
+                .WithName("AddGroupMember")
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
     }
 
     extension(IQueryable<Group> groups)
@@ -119,7 +153,16 @@ public static class GroupApi
         private IQueryable<GroupResponse> SelectDto()
         {
             return from @group in groups
-                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
+                   select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
+        }
+    }
+
+    extension(IQueryable<User> users)
+    {
+        private IQueryable<UserInfo> SelectDto()
+        {
+            return from user in users
+                   select new UserInfo(user.Id, user.FirstName, user.LastName);
         }
     }
 }

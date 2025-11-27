@@ -21,7 +21,7 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var initialGroupCount = user.Groups.Count;
 
         // Act
-        var result = await groupService.Create(new CreateGroupRequest { Name = "Test Group" },
+        var result = await groupService.CreateGroup(new CreateGroupRequest { Name = "Test Group" },
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -49,9 +49,9 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var groupService = GetService<IGroupService>();
 
         // Act
-        var group1 = await groupService.Create(new CreateGroupRequest { Name = "Group 1" },
+        var group1 = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group 1" },
             TestContext.Current.CancellationToken);
-        var group2 = await groupService.Create(new CreateGroupRequest { Name = "Group 2" },
+        var group2 = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group 2" },
             TestContext.Current.CancellationToken);
 
         // Assert

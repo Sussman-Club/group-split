@@ -3,6 +3,7 @@
     "Id": "94F67FC0-F549-46ED-AD81-D6DF79225396",
     "FirstName": "Daniel",
     "LastName": "Rivero",
+    "Email": "daniel@test.com",
     "ExternalUserId": "FFDFB4C9-6321-49EA-9160-0F618ACF6D4B",
     "GroupIds": [
       "B590CE87-CC57-4214-AE89-A420DB8656F9",
@@ -13,6 +14,7 @@
     "Id": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "FirstName": "Anabel",
     "LastName": "Benítez",
+    "Email": "anabel@test.com",
     "ExternalUserId": "9F8E7D6C-5B4A-3C2D-1E0F-1234567890AB",
     "GroupIds": [
       "12345678-9ABC-DEF0-1234-56789ABCDEF0"
@@ -22,6 +24,7 @@
     "Id": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
     "FirstName": "Loraine",
     "LastName": "Monteagudo",
+    "Email": "loraine@test.com",
     "ExternalUserId": "F1C2D3E4-5678-90AB-CDEF-1234567890AB",
     "GroupIds": [
       "B590CE87-CC57-4214-AE89-A420DB8656F9",
@@ -32,8 +35,9 @@
     "Id": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
     "FirstName": "Omar",
     "LastName": "Rivero",
+    "Email": "omar@test.com",
     "ExternalUserId": "0A1B2C3D-4E5F-6071-8293-0A1B2C3D4E5F",
-    "GroupIds":[
+    "GroupIds": [
       "B590CE87-CC57-4214-AE89-A420DB8656F9",
       "12345678-9ABC-DEF0-1234-56789ABCDEF0"
     ]

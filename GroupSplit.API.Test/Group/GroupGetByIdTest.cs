@@ -23,11 +23,11 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await userService.GetCurrentUser();
 
         // Create an additional group for the current user
-        var created = await groupService.Create(new CreateGroupRequest { Name = "My Extra Group" },
+        var created = await groupService.CreateGroup(new CreateGroupRequest { Name = "My Extra Group" },
             TestContext.Current.CancellationToken);
 
         // Act
-        var result = await groupService.Get(created.Id, TestContext.Current.CancellationToken);
+        var result = await groupService.GetGroupById(created.Id, TestContext.Current.CancellationToken);
         var group = await result.FirstOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -46,7 +46,7 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await userService.GetCurrentUser();
 
         // Act
-        var result = await groupService.Get(Guid.NewGuid(), TestContext.Current.CancellationToken);
+        var result = await groupService.GetGroupById(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(result);
@@ -88,7 +88,7 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var result = await groupService.Get(otherUserGroup.Id, TestContext.Current.CancellationToken);
+        var result = await groupService.GetGroupById(otherUserGroup.Id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(result);

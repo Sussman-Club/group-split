@@ -1,3 +1,3 @@
 namespace GroupSplit.Shared;
 
-public record UserInfo(Guid Id, string FirstName, string? LastName);
+public record UserInfo(Guid Id, string? FirstName, string? LastName);

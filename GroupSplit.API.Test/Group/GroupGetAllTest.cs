@@ -22,7 +22,7 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await userService.GetCurrentUser();
 
         // Act
-        var groups = (await groupService.List(TestContext.Current.CancellationToken)).ToList();
+        var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
         // Assert
         Assert.Single(groups);
@@ -39,13 +39,13 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var personalGroupId = user.PersonalGroup.Id;
 
         // Create additional groups
-        await groupService.Create(new CreateGroupRequest { Name = "Test Group 1" },
+        await groupService.CreateGroup(new CreateGroupRequest { Name = "Test Group 1" },
             TestContext.Current.CancellationToken);
-        await groupService.Create(new CreateGroupRequest { Name = "Test Group 2" },
+        await groupService.CreateGroup(new CreateGroupRequest { Name = "Test Group 2" },
             TestContext.Current.CancellationToken);
 
         // Act
-        var groups = (await groupService.List(TestContext.Current.CancellationToken)).ToList();
+        var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
         // Assert
         Assert.Single(groups, g => g.Id == personalGroupId);
@@ -63,7 +63,7 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var userService = GetService<IUserService>();
 
         var currentUser = await userService.GetCurrentUser();
-        await groupService.Create(new CreateGroupRequest { Name = "My Group" },
+        await groupService.CreateGroup(new CreateGroupRequest { Name = "My Group" },
             TestContext.Current.CancellationToken);
 
         // Create a group for another user (simulate another user's group)
@@ -86,7 +86,7 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var groups = (await groupService.List(TestContext.Current.CancellationToken)).ToList();
+        var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
         // Assert
         // Should only return current user's groups (1 personal + 1 created = 2)
