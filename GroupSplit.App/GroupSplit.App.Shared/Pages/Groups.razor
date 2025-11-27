@@ -4,6 +4,7 @@
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject MudTheme Theme
 
 <PageTitle>Groups</PageTitle>
 
@@ -196,7 +197,6 @@
 }
 
 @code {
-    [CascadingParameter] public required MudTheme Theme { get; set; }
     private const string CurrentUserName = "John Doe";
     private Guid _selectedGroupId = Guid.Empty;
     private string? _selectedGroupName;
