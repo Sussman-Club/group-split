@@ -4,6 +4,7 @@ using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,9 @@ builder.Services
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
+
+// Add shared services
+builder.Services.AddSharedServices();
 
 // Initialize render mode configuration
 var renderModePreference = builder.Configuration.GetValue<RenderModePreference>("RenderMode");
@@ -79,6 +83,9 @@ else
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseAntiforgery();
 

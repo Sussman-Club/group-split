@@ -1,6 +1,8 @@
 using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
 using GroupSplit.App.Web.Client.Services;
+using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
 
@@ -11,6 +13,9 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
+
+// Add shared services
+builder.Services.AddSharedServices();
 
 // Add Auth client
 builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
@@ -26,6 +31,16 @@ builder.Services.AddHttpClient<IWeatherClient, WeatherClient>("ApiClient", clien
         Path = "api/"
     };
     
+    client.BaseAddress = uriBuilder.Uri;
+});
+
+builder.Services.AddHttpClient<IUsersClient, UsersClient>("UserClient", client =>
+{
+    var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
+    {
+        Path = "api/"
+    };
+
     client.BaseAddress = uriBuilder.Uri;
 });
 
@@ -48,5 +63,10 @@ builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =
     
     client.BaseAddress = uriBuilder.Uri;
 });
+
+// Add authorization services
+builder.Services.AddAuthorizationCore();
+builder.Services.AddSingleton<UserClientAuthenticationStateProvider>();
+builder.Services.AddSingleton<AuthenticationStateProvider>(ActivatorUtilities.GetServiceOrCreateInstance<UserClientAuthenticationStateProvider>);
 
 await builder.Build().RunAsync();

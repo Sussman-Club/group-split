@@ -4,6 +4,7 @@
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject MudTheme Theme
 
 <PageTitle>Groups</PageTitle>
 
@@ -162,8 +163,6 @@
 }
 
 @code {
-    [CascadingParameter] public required MudTheme Theme { get; set; }
-
     [PersistentState] public ICollection<GroupResponse> UserGroups { get; set; } = null!;
     [PersistentState] public GroupResponse? SelectedGroup { get; set; }
     [PersistentState] public List<TransactionResponse> Transactions { get; set; } = null!;

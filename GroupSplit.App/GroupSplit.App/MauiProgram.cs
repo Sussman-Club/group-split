@@ -1,6 +1,8 @@
 ﻿using GroupSplit.App.Services;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
+using Microsoft.Extensions.Logging;
+using MudBlazor.Services;
 
 namespace GroupSplit.App;
 
@@ -15,6 +17,9 @@ public static class MauiProgram
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
             });
+
+        // Add shared services
+        builder.Services.AddSharedServices();
 
         // Add device-specific services used by the GroupSplit.App.Shared project
         builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -37,8 +42,6 @@ public static class MauiProgram
 
         // Add MudBlazor services
         builder.Services.AddMudServices();
-
-        builder.AddServiceDefaults();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

@@ -1,5 +1,6 @@
 ﻿@page "/counter"
 @using GroupSplit.App.Shared.Extensions
+@inject MudTheme Theme
 
 <PageTitle>Counter</PageTitle>
 
@@ -36,8 +37,6 @@
 </MudCard>
 
 @code {
-    [CascadingParameter] public required MudTheme Theme { get; set; }
-
     private int currentCount;
     private bool canDecrement => currentCount > 0;
 

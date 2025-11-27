@@ -5,6 +5,7 @@
 @inject ITransactionsClient TransactionsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject MudTheme Theme
 
 <PageTitle>Transactions</PageTitle>
 
@@ -96,7 +97,6 @@
 <ExtendedFab Label="Transaction" OnClick="@OpenAddTransactionDialog"/>
 
 @code {
-    [CascadingParameter] public required MudTheme Theme { get; set; }
     private string _searchString = "";
 
     [PersistentState] public ICollection<TransactionResponse> UserTransactions { get; set; } = null!;
