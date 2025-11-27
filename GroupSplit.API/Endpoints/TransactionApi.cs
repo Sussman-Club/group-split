@@ -21,6 +21,7 @@ public static class TransactionApi
             group.MapGetAll();
             group.MapCreate();
             group.MapUpdate();
+            group.MapDelete();
 
             return group;
         }
@@ -81,13 +82,24 @@ public static class TransactionApi
                     }).FirstOrDefaultAsync(ct);
 
                 if (transactionUpdateRequest is null) return Results.NotFound();
-                
+
                 patchDocument.ApplyTo(transactionUpdateRequest);
-                
+
                 await transactionService.Update(id, transactionUpdateRequest, ct);
-                
+
                 return Results.Ok();
             });
+        }
+
+        private RouteHandlerBuilder MapDelete()
+        {
+            return group.MapDelete("{id:guid}",
+                async (Guid id, ITransactionService transactionService, CancellationToken ct) =>
+                {
+                    await transactionService.Delete(id, ct);
+                    return Results.Ok();
+                }
+            );
         }
     }
 

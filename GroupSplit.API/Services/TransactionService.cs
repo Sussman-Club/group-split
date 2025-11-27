@@ -16,7 +16,7 @@ public interface ITransactionService
     ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<bool> Delete(Guid id, CancellationToken cancellationToken = default);
+    Task Delete(Guid id, CancellationToken cancellationToken = default);
 }
 
 public class TransactionService(IUserService userService, AppDbContext dbContext) : ITransactionService
@@ -148,8 +148,13 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         return updatedTransaction;
     }
 
-    public Task<bool> Delete(Guid id, CancellationToken cancellationToken = default)
+    public async Task Delete(Guid id, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var query = await Get(id, cancellationToken);
+        var transaction = await query.FirstOrDefaultAsync(cancellationToken);
+        if (transaction is null)
+            throw new Exception("Transaction not found");
+        dbContext.Remove(transaction);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }
