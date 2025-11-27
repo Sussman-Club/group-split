@@ -77,12 +77,8 @@
 
     private async Task Submit()
     {
-        await form.Validate();
 
-        if (form.IsValid)
-        {
-            MudDialog.Close(DialogResult.Ok(model));
-        }
+        MudDialog.Close(DialogResult.Ok(model));
     }
 
     private void CloseChip(MudChip<UserIdentifier> chip)

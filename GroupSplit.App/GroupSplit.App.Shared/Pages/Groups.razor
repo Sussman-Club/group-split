@@ -364,6 +364,13 @@
 
         if (dialogResult is null || dialogResult.Canceled)
             return;
+        if (dialogResult.Data is not AddMemberRequest request)
+        {
+            Snackbar.Add("Dialog did not return a valid member request. Please try again.", Severity.Error);
+            return;
+        }
+
+        await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
     }
 
     private class DebtInfo
