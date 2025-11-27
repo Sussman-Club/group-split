@@ -13,6 +13,9 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
+// Add shared services
+builder.Services.AddSharedServices();
+
 // Add Auth client
 builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
 {

@@ -18,6 +18,9 @@ builder.Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
 
+// Add shared services
+builder.Services.AddSharedServices();
+
 // Initialize render mode configuration
 var renderModePreference = builder.Configuration.GetValue<RenderModePreference>("RenderMode");
 RenderModeConfig.Initialize(renderModePreference);

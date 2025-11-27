@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Services
 @inject IAuthService AuthService
 @inject NavigationManager Nav
+@inject MudTheme Theme
 
 <MudAppBar Elevation="1" Dense>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
@@ -23,7 +24,7 @@
                 <ActivatorContent>
                     <MudStack Style="height: var(--mud-appbar-height)" Row="true" AlignItems="AlignItems.Center" Spacing="2">
                         <MudText Typo="Typo.body2" Class="font-weight-medium">@Username</MudText>
-                        <MudAvatar Style="@_theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
+                        <MudAvatar Style="@Theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
                             @(string.Join("", Username.Split(", ").Reverse().Select(s => s[0])))
                         </MudAvatar>
                     </MudStack>
@@ -46,7 +47,6 @@
     [Parameter] public EventCallback ToggleDrawer { get; set; }
 
     [CascadingParameter] public Task<AuthenticationState> AuthenticationStateTask { get; set; }
-    [CascadingParameter] public MudTheme _theme { get; set; }
 
     private AuthenticationState? AuthenticationState { get; set; }
     private string? Username => AuthenticationState?.User.Claims.First().Value;

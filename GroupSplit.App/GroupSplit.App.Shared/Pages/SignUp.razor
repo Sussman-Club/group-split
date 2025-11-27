@@ -4,13 +4,12 @@
 @using GroupSplit.Shared
 @inject IAuthService AuthService
 @inject NavigationManager Nav
+@layout FullScreenLayout
 @attribute [AllowAnonymous]
 
-<MudStack Row Class="mud-height-full mud-width-full d-flex"
+<MudStack Row Class="flex-1"
           AlignItems="AlignItems.Center"
-          Justify="Justify.SpaceAround"
-          Style="background-color:var(--mud-palette-background-gray);">
-
+          Justify="Justify.SpaceAround">
     <MudPaper Square MaxWidth="440px" MinWidth="440px">
         <MudStack Class="pa-8" Spacing="5">
             <MudText Typo="Typo.subtitle2">

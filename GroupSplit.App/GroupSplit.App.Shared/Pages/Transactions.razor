@@ -1,6 +1,7 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
+@inject MudTheme Theme
 
 <PageTitle>Transactions</PageTitle>
 
@@ -87,7 +88,6 @@
 <ExtendedFab Label="Transaction"/>
 
 @code {
-    [CascadingParameter] public required MudTheme Theme { get; set; }
     private string _searchString = "";
     private const string CurrentUserName = "John Doe"; // TODO: Get from authentication context
 

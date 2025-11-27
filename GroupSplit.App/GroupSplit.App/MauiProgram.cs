@@ -18,6 +18,9 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
             });
 
+        // Add shared services
+        builder.Services.AddSharedServices();
+
         // Add device-specific services used by the GroupSplit.App.Shared project
         builder.Services.AddSingleton<IFormFactor, FormFactor>();
         builder.Services.AddSingleton<AuthService>();
