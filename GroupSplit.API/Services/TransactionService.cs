@@ -79,7 +79,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         var transaction = new Transaction
         {
             Amount = request.Amount,
-            DateTime = request.Date,
+            DateTime = request.DateTime,
             Name = request.Name,
             Description = request.Description,
             RuleVersion = ruleVersion.Version,

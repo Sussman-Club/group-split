@@ -21,6 +21,7 @@ public static class GroupApi
             group.MapGetAllGroups();
             group.MapGetGroup();
             group.MapGetGroupTransactions();
+            group.MapGetGroupRules();
 
             return group;
         }
@@ -91,6 +92,24 @@ public static class GroupApi
                     return Results.Ok(transactionResponses);
                 })
                 .WithName("GetGroupTransactions")
+                .Produces<TransactionResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapGetGroupRules()
+        {
+            return group.MapGet("{id:guid}/rules", async (
+                    Guid id,
+                    IRulesService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var rules = await transactionService.List(ct);
+                    var ruleResponses = await rules
+                        .Where(x => x.Rule.Group.Id == id)
+                        .Include(x => x.Rule)
+                        .ToListAsync(ct);
+                    return Results.Ok(ruleResponses);
+                })
+                .WithName("GetGroupRules")
                 .Produces<TransactionResponse[]>();
         }
     }
