@@ -1,6 +1,5 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
-@using GroupSplit.App.Shared.Extensions
 @using GroupSplit.Shared
 @inject ITransactionsClient TransactionsClient
 @inject IDialogService DialogService
@@ -111,7 +110,7 @@
     {
         var options = new DialogOptions
         {
-            MaxWidth = MaxWidth.ExtraSmall,
+            MaxWidth = MaxWidth.Small,
             FullWidth = true
         };
 
@@ -128,6 +127,8 @@
             return;
         }
 
+        await TransactionsClient.CreateTransactionAsync(request);
+
         UserTransactions = await TransactionsClient.GetTransactionsAsync(null, null);
         StateHasChanged();
     }
@@ -141,5 +142,4 @@
     {
         // TODO: Implement delete transaction
     }
-
 }

@@ -1,5 +1,6 @@
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
 
 <MudDialog>
     <TitleContent>
@@ -17,6 +18,7 @@
                     @bind-Value="model.Name"
                     For="@(() => model.Name)"
                     Label="Name"
+                    Variant="Variant.Outlined"
                     Immediate="true"/>
 
                 @* Description *@
@@ -24,15 +26,19 @@
                     @bind-Value="model.Description"
                     For="@(() => model.Description)"
                     Label="Description"
+                    Variant="Variant.Outlined"
                     Immediate="true"
-                    Lines="3"
-                    Variant="Variant.Outlined"/>
+                    Lines="3"/>
 
                 @* Amount *@
                 <MudNumericField
                     @bind-Value="model.Amount"
                     For="@(() => model.Amount)"
                     Label="Amount"
+                    Variant="Variant.Outlined"
+                    Adornment="Adornment.Start" 
+                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentColor="Color.Primary"
                     Immediate="true"
                     HideSpinButtons="true"/>
 
@@ -41,15 +47,59 @@
                     @* Date *@
                     <MudDatePicker
                         @bind-Date="selectedDate"
-                        Label="Transaction Date"/>
+                        Label="Transaction Date"
+                        Variant="Variant.Outlined"/>
 
                     @* Time *@
                     <MudTimePicker
                         @bind-Time="selectedTime"
                         Label="Transaction Time"
+                        Variant="Variant.Outlined"
                         AmPm="true"/>
 
                 </MudStack>
+
+                @* Group Selection *@
+                <MudSelect T="Guid?"
+                           Label="Group"
+                           Variant="Variant.Outlined"
+                           @bind-Value="SelectedGroupId"
+                           @bind-Value:after="OnGroupChanged"
+                           Clearable="false"
+                           Placeholder="">
+                    @foreach (var g in UserGroups)
+                    {
+                        <MudSelectItem T="Guid?" Value="@g.Id">@g.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @* Category Selection *@
+                <MudSelect T="Guid?"
+                           Label="Category"
+                           Variant="Variant.Outlined"
+                           @bind-Value="model.RuleVersionId"
+                           Disabled="@(!GroupCategories.Any())"
+                           Clearable="false"
+                           Placeholder="">
+                    @foreach (var c in GroupCategories)
+                    {
+                        <MudSelectItem T="Guid?" Value="@c.Id">@c.Category</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @* User Selection *@
+                <MudSelect T="Guid?"
+                           Label="Paid By"
+                           Variant="Variant.Outlined"
+                           @bind-Value="model.PaidByUserId"
+                           Disabled="@(!GroupUsers.Any())"
+                           Clearable="false"
+                           Placeholder="">
+                    @foreach (var u in GroupUsers)
+                    {
+                        <MudSelectItem T="Guid?" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                    }
+                </MudSelect>
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -77,6 +127,37 @@
 
     private DateTime? selectedDate = DateTime.Today;
     private TimeSpan? selectedTime = DateTime.Now.TimeOfDay;
+
+    // Group / categories / users state
+    private ICollection<GroupResponse> UserGroups = [];
+    private Guid? SelectedGroupId;
+    private ICollection<RuleVersionResponse> GroupCategories = [];
+    private ICollection<UserInfo> GroupUsers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserGroups = await GroupsClient.GetGroupsAsync();
+        await LoadGroupDetails();
+    }
+
+    private async Task OnGroupChanged()
+    {
+        await LoadGroupDetails();
+        StateHasChanged();
+    }
+
+    private async Task LoadGroupDetails()
+    {
+        if (SelectedGroupId is not {} groupId)
+        {
+            GroupCategories = [];
+            GroupUsers = [];
+            return;
+        }
+
+        GroupCategories = await GroupsClient.GetGroupRulesAsync(groupId);
+        GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
+    }
 
     private async Task Submit()
     {

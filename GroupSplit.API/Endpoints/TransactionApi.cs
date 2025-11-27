@@ -58,11 +58,10 @@ public static class TransactionApi
                     // TODO: Change this when we support time zones
                     request.DateTime = request.DateTime.ToUniversalTime();
 
-                    var transaction = await transactionService.Create(request, ct);
+                    await transactionService.Create(request, ct);
                     return Results.Ok();
                 })
-                .WithName("CreateTransaction")
-                .Produces<TransactionResponse>();
+                .WithName("CreateTransaction");
         }
 
         private RouteHandlerBuilder MapUpdate()

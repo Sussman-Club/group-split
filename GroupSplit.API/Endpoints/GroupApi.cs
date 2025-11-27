@@ -108,11 +108,12 @@ public static class GroupApi
                     var ruleResponses = await rules
                         .Where(x => x.Rule.Group.Id == id)
                         .Include(x => x.Rule)
+                        .SelectDto()
                         .ToListAsync(ct);
                     return Results.Ok(ruleResponses);
                 })
                 .WithName("GetGroupRules")
-                .Produces<TransactionResponse[]>();
+                .Produces<RuleVersionResponse[]>();
         }
 
         private RouteHandlerBuilder MapGetMembers()
@@ -163,6 +164,15 @@ public static class GroupApi
         {
             return from user in users
                    select new UserInfo(user.Id, user.FirstName, user.LastName);
+        }
+    }
+
+    extension(IQueryable<RuleVersion> ruleVersions)
+    {
+        private IQueryable<RuleVersionResponse> SelectDto()
+        {
+            return from ruleVersion in ruleVersions
+                select new RuleVersionResponse(ruleVersion.Id, ruleVersion.Rule.Category);
         }
     }
 }
