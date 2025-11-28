@@ -102,6 +102,9 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
     public async Task<IQueryable<Group>> RemoveGroupMembers(Guid groupId, Guid userId, CancellationToken cancellationToken = default)
     {
+        var currentUser = await userService.GetCurrentUser();
+        if (userId == currentUser.Id)
+            throw new ArgumentException("Cannot remove current user from group");
         var groupQuery = (await GetGroupById(groupId, cancellationToken)).Include(g => g.Users);
         var group = await groupQuery.FirstOrDefaultAsync();
         if (group is null)

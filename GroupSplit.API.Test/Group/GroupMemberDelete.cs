@@ -40,4 +40,29 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.DoesNotContain(membersAfterDelete, m => m.Id == newMember.Id);
         Assert.Superset(membersAfterDelete.Select(m => m.Id).ToHashSet(), membersBeforeDelete.Select(m => m.Id).ToHashSet());
     }
+
+    [Fact]
+    public async Task DeleteGroupMember_CannotRemoveCurrentUser()
+    {
+        // Arrange
+        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
+
+        var currentUser = await userService.GetCurrentUser();
+        var group = await groupService.CreateGroup(new()
+        {
+            Name = "Test Group",
+        }, TestContext.Current.CancellationToken);
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+        {
+            await groupService.RemoveGroupMembers(
+                group.Id,
+                currentUser.Id,
+                TestContext.Current.CancellationToken);
+        });
+
+        Assert.Equal("Cannot remove current user from group", exception.Message);
+    }
 }
