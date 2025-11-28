@@ -80,7 +80,7 @@
                     <MudIconButton Icon="@Icons.Material.Outlined.Delete"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   OnClick="() => DeleteTransaction(context.Item)"/>
+                                   OnClick="@(async () => await OpenDeleteTransactionDialog(context.Item))"/>
                 </MudStack>
             </CellTemplate>
         </TemplateColumn>
@@ -143,9 +143,28 @@
         // TODO: Implement edit transaction
     }
 
-    private void DeleteTransaction(TransactionResponse transaction)
+    private async Task OpenDeleteTransactionDialog(TransactionResponse transaction)
     {
-        // TODO: Implement delete transaction
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText,
+                $"Are you sure you want to delete the transaction \"{transaction.Name}\"? This action cannot be undone." },
+            { x => x.ButtonText, "Delete Transaction" }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete", parameters, options);
+
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not true)
+            return;
+
+        await TransactionsClient.DeleteTransactionsAsync(transaction.Id);
+
+        UserTransactions.Remove(transaction);
+        StateHasChanged();
     }
 
 }
