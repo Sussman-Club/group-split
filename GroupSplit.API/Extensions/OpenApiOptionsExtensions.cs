@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -21,7 +22,7 @@ public static class OpenApiOptionsExtensions
                         var path = description.RelativePath ?? string.Empty;
                         return !path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
                     };
-
+                    
                     options.AddBearerTokenAuthentication();
                 });
 
@@ -33,6 +34,15 @@ public static class OpenApiOptionsExtensions
                         return path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
                     };
 
+                    options.AddDocumentTransformer(async (doc, ctx, ct) =>
+                    {
+                        var schema1 = await ctx.GetOrCreateSchemaAsync(
+                            typeof(ProblemDetails),
+                            cancellationToken: ct);
+                        
+                        doc.AddComponent("ProblemDetails", schema1);
+                    });
+                    
                     options.AddBearerTokenAuthentication();
                 });
             }
