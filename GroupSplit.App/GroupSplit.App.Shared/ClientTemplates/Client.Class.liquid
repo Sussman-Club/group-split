@@ -434,7 +434,7 @@
 
     {% template Client.Method.Documentation %}
     {% template Client.Method.Annotations %}
-    {{ operation.MethodAccessModifier }} virtual async System.Collections.Generic.IAsyncEnumerable<{{ _elementType }}> {{ operation.ActualOperationName }}AsAsyncEnumerable({% for parameter in operation.Parameters %}{{ parameter.Type }} {{ parameter.VariableName }}{% if GenerateOptionalParameters and parameter.IsOptional %} = null{% endif %}{% if parameter.IsLast == false %}, {% endif %}{% endfor %}{% assign _paramCount = operation.Parameters | size %}{% if _paramCount > 0 %}, {% endif %}[System.Runtime.CompilerServices.EnumeratorCancellation] System.Threading.CancellationToken cancellationToken{% if GenerateOptionalParameters %} = default(System.Threading.CancellationToken){% endif %})
+    {{ operation.MethodAccessModifier }} virtual async System.Collections.Generic.IAsyncEnumerable<{{ _elementType }}> {{ operation.ActualOperationName }}AsAsyncEnumerable({% for parameter in operation.Parameters %}{% if parameter.Schema.IsArray and parameter.Schema.Item.OneOf.size == 3 %}IJsonPatchDocument{% else %}{{ parameter.Type }}{% endif %} {{ parameter.VariableName }}{% if GenerateOptionalParameters and parameter.IsOptional %} = null{% endif %}, {% endfor %}[System.Runtime.CompilerServices.EnumeratorCancellation] System.Threading.CancellationToken cancellationToken{% if GenerateOptionalParameters %} = default(System.Threading.CancellationToken){% endif %})
     {
 {%         for parameter in operation.PathParameters -%}
 {%             if parameter.IsNullable == false and parameter.IsRequired -%}
