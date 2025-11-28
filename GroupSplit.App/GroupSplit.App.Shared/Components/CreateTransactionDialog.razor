@@ -36,7 +36,7 @@
                     For="@(() => model.Amount)"
                     Label="Amount"
                     Variant="Variant.Outlined"
-                    Adornment="Adornment.Start" 
+                    Adornment="Adornment.Start"
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
                     AdornmentColor="Color.Primary"
                     Immediate="true"
@@ -87,19 +87,22 @@
                     }
                 </MudSelect>
 
-                @* User Selection *@
-                <MudSelect T="Guid?"
-                           Label="Paid By"
-                           Variant="Variant.Outlined"
-                           @bind-Value="model.PaidByUserId"
-                           Disabled="@(!GroupUsers.Any())"
-                           Clearable="false"
-                           Placeholder="">
-                    @foreach (var u in GroupUsers)
-                    {
-                        <MudSelectItem T="Guid?" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
-                    }
-                </MudSelect>
+                @if (!DisablePayingUserSelection)
+                {
+                    @* Paying User Selection *@
+                    <MudSelect T="Guid?"
+                               Label="Paid By"
+                               Variant="Variant.Outlined"
+                               @bind-Value="model.PaidByUserId"
+                               Disabled="@(!GroupUsers.Any())"
+                               Clearable="false"
+                               Placeholder="">
+                        @foreach (var u in GroupUsers)
+                        {
+                            <MudSelectItem T="Guid?" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -115,6 +118,8 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public bool DisablePayingUserSelection { get; set; }
+    [Parameter] public Guid? SelectedGroupId { get; set; }
 
     MudForm form;
 
@@ -130,7 +135,6 @@
 
     // Group / categories / users state
     private ICollection<GroupResponse> UserGroups = [];
-    private Guid? SelectedGroupId;
     private ICollection<RuleVersionResponse> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
 
@@ -148,7 +152,7 @@
 
     private async Task LoadGroupDetails()
     {
-        if (SelectedGroupId is not {} groupId)
+        if (SelectedGroupId is not { } groupId)
         {
             GroupCategories = [];
             GroupUsers = [];

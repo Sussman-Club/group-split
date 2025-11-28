@@ -1,6 +1,7 @@
 @page "/groups"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
+@inject ITransactionsClient TransactionsClient
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -123,8 +124,7 @@
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
             <!-- Expenses List -->
             <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <TransactionsList Title="Recent Expenses"
-                                  Transactions="Transactions"/>
+                <TransactionsList Title="Recent Expenses" Transactions="Transactions"/>
             </MudPaper>
             <!-- My Groups -->
             <MudStack Spacing="4">
@@ -159,7 +159,7 @@
 
 @if (SelectedGroup is { IsArchive: false })
 {
-    <ExtendedFab Label="Expense" AlwaysExtended="true"/>
+    <ExtendedFab Label="Expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog"/>
 }
 
 @code {
@@ -246,6 +246,41 @@
 
         var group = await GroupsClient.CreateGroupAsync(request);
         UserGroups.Add(group);
+    }
+
+    private async Task OpenAddTransactionDialog()
+    {
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { x => x.SelectedGroupId, SelectedGroup?.Id }
+        };
+
+        var dialogReference = await DialogService.ShowAsync<CreateTransactionDialog>("Create an expense", parameters, options);
+
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+            return;
+
+        if (dialogResult.Data is not CreateTransactionRequest request)
+        {
+            Snackbar.Add("Dialog did not return a valid transaction. Please try again.", Severity.Error);
+            return;
+        }
+
+        await TransactionsClient.CreateTransactionAsync(request);
+
+        if (SelectedGroup is null) return;
+
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id, null, null);
+        Transactions = apiTransactions.OrderByDescending(t => t.Date).ToList();
+        StateHasChanged();
     }
 
     private class DebtInfo

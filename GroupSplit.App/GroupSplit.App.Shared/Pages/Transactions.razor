@@ -114,7 +114,12 @@
             FullWidth = true
         };
 
-        var dialogReference = await DialogService.ShowAsync<CreateTransactionDialog>("Create a transaction", options);
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { x => x.DisablePayingUserSelection, true }
+        };
+
+        var dialogReference = await DialogService.ShowAsync<CreateTransactionDialog>("Create a transaction", parameters, options);
 
         var dialogResult = await dialogReference.Result;
 
@@ -142,4 +147,5 @@
     {
         // TODO: Implement delete transaction
     }
+
 }
