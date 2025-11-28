@@ -110,6 +110,7 @@ public static class GroupApi
                     return Results.Ok(groupResponse);
                 })
                 .WithName("AddGroupMember")
+                .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -121,7 +122,7 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
             {
-                var group  = await groupService.RemoveGroupMembers(grouId, userId, ct);
+                var group  = await groupService.RemoveGroupMember(grouId, userId, ct);
                 var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
                 if (groupResponse is null) return Results.NotFound();
@@ -129,6 +130,7 @@ public static class GroupApi
                 return Results.Ok(groupResponse);
             })
                 .WithName("RemoveGroupMember")
+                .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }

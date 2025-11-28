@@ -32,7 +32,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Contains(membersBeforeDelete, m => m.Id == newMember.Id);
 
-        await groupService.RemoveGroupMembers(group.Id, newMember.Id, TestContext.Current.CancellationToken);
+        await groupService.RemoveGroupMember(group.Id, newMember.Id, TestContext.Current.CancellationToken);
 
         var membersAfterDelete = await (await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken))
             .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -57,7 +57,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
-            await groupService.RemoveGroupMembers(
+            await groupService.RemoveGroupMember(
                 group.Id,
                 currentUser.Id,
                 TestContext.Current.CancellationToken);

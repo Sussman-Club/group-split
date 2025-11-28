@@ -25,6 +25,7 @@
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
+                       Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Settings"
                        OnClick="ManageRules">
                 Manage Rules
@@ -33,18 +34,21 @@
             {
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
+                           Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.PersonAdd"
                            OnClick="AddMember">
                     Add Member
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Error"
+                           Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.PersonRemove"
                            OnClick="RemoveMember">
                     Remove Member
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Tertiary"
+                           Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Archive"
                            OnClick="ArchiveGroup">
                     Archive
@@ -304,8 +308,6 @@
 
     private async Task AddMember()
     {
-        // TODO: Implement add member dialog
-        // Allow user to add new members to the group
         await OpenAddMemberDialogAsync();
     }
 
@@ -341,6 +343,18 @@
         }
     }
 
+    private void UpdateGroupInList(GroupResponse updatedGroup)
+    {
+        // This method probably needs to be updated after transactions merge
+        var groupList = UserGroups.ToList();
+        var index = groupList.FindIndex(g => g.Id == updatedGroup.Id);
+        if (index >= 0)
+        {
+            groupList[index] = updatedGroup;
+            UserGroups = groupList;
+        }
+    }
+
     private async Task OpenCreateDialogAsync()
     {
         var options = new DialogOptions
@@ -351,19 +365,19 @@
 
         var dialogReference = await DialogService.ShowAsync<CreateGroupDialog>("Create a group", options);
 
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled)
-            return;
-
-        if (dialogResult.Data is not CreateGroupRequest request)
+        try
+        {
+            var dialogResult = await dialogReference.GetResult<CreateGroupRequest>();
+            if (dialogReference is not null)
+            {
+                var group = await GroupsClient.CreateGroupAsync(dialogResult);
+                UserGroups.Add(group);
+            }
+        } catch (InvalidCastException)
         {
             Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);
             return;
         }
-
-        var group = await GroupsClient.CreateGroupAsync(request);
-        UserGroups.Add(group);
     }
 
     private async Task OpenAddMemberDialogAsync()
@@ -376,17 +390,20 @@
 
         var dialogReference = await DialogService.ShowAsync<AddGroupMemberDialog>("Add new member", parameters, options);
 
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled)
-            return;
-        if (dialogResult.Data is not AddMemberRequest request)
+        try
         {
-            Snackbar.Add("Dialog did not return a valid member request. Please try again.", Severity.Error);
-            return;
+            var request = await dialogReference.GetResult<AddMemberRequest>();
+            if (request is not null)
+            {
+                var updatedGroup = await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
+                UpdateGroupInList(updatedGroup);
+                Snackbar.Add("Member added successfully.", Severity.Success);
+            }
         }
-
-        await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
+        catch (InvalidCastException)
+        {
+            Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
+        }
     }
 
     private async Task OpenRemoveMemberDialogAsync()
@@ -397,26 +414,23 @@
 
         var dialogReference = await DialogService.ShowAsync<RemoveMemberDialog>("Remove member", parameters, options);
 
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled)
-            return;
-
-        if (dialogResult.Data is not Guid userId)
+        UserInfo? removedUser;
+        try
+        {
+            removedUser = await dialogReference.GetResult<UserInfo>();
+        } catch (InvalidCastException)
         {
             Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
             return;
         }
-
-        try
+        if (removedUser is not null)
         {
-            await GroupsClient.RemoveGroupMemberAsync(_selectedGroupId, userId);
+            await GroupsClient.RemoveGroupMemberAsync(_selectedGroupId, removedUser.Id);
+            var updatedGroup = await GroupsClient.GetGroupAsync(_selectedGroupId);
+            UpdateGroupInList(updatedGroup);
             Snackbar.Add("Member removed successfully.", Severity.Success);
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to remove member: {ex.Message}", Severity.Error);
-        }
+
     }
 
     private class DebtInfo

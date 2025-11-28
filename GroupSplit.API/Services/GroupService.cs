@@ -38,7 +38,7 @@ public interface IGroupService
     /// <summary>
     /// Removes a member from a group by ID and user ID
     /// </summary>
-    Task<IQueryable<Group>> RemoveGroupMembers(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
+    Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
@@ -100,11 +100,12 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return groupQuery;
     }
 
-    public async Task<IQueryable<Group>> RemoveGroupMembers(Guid groupId, Guid userId, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default)
     {
         var currentUser = await userService.GetCurrentUser();
         if (userId == currentUser.Id)
             throw new ArgumentException("Cannot remove current user from group");
+
         var groupQuery = (await GetGroupById(groupId, cancellationToken)).Include(g => g.Users);
         var group = await groupQuery.FirstOrDefaultAsync();
         if (group is null)
