@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OpenApi;
@@ -7,6 +8,43 @@ namespace GroupSplit.API.Extensions;
 
 public static class OpenApiOptionsExtensions
 {
+    extension(IServiceCollection services)
+    {
+        public IServiceCollection AddOpenApiDocuments()
+        {
+            if (Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider")
+            {
+                services.AddOpenApi("api",options =>
+                {
+                    options.ShouldInclude = description =>
+                    {
+                        var path = description.RelativePath ?? string.Empty;
+                        return !path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
+                    };
+
+                    options.AddBearerTokenAuthentication();
+                });
+
+                services.AddOpenApi("identity",options =>
+                {
+                    options.ShouldInclude = description =>
+                    {
+                        var path = description.RelativePath ?? string.Empty;
+                        return path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
+                    };
+
+                    options.AddBearerTokenAuthentication();
+                });
+            }
+            else
+            {
+                services.AddOpenApi(options => options.AddBearerTokenAuthentication());
+            }
+
+            return services;
+        }
+    }
+    
     extension(OpenApiOptions options)
     {
         public OpenApiOptions AddBearerTokenAuthentication()
