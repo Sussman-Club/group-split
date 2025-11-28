@@ -38,6 +38,12 @@
                     Add Member
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
+                           Color="Color.Error"
+                           StartIcon="@Icons.Material.Outlined.PersonRemove"
+                           OnClick="RemoveMember">
+                    Remove Member
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
                            Color="Color.Tertiary"
                            StartIcon="@Icons.Material.Outlined.Archive"
                            OnClick="ArchiveGroup">
@@ -303,6 +309,11 @@
         await OpenAddMemberDialogAsync();
     }
 
+    private async Task RemoveMember()
+    {
+        await OpenRemoveMemberDialogAsync();
+    }
+
     private void ArchiveGroup()
     {
         if (_selectedGroupId == Guid.Empty || _isSelectedGroupArchived)
@@ -376,6 +387,36 @@
         }
 
         await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
+    }
+
+    private async Task OpenRemoveMemberDialogAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var members = await GroupsClient.GetGroupMembersAsync(_selectedGroupId);
+        var parameters = new DialogParameters<RemoveMemberDialog> { { x => x.Members, members } };
+
+        var dialogReference = await DialogService.ShowAsync<RemoveMemberDialog>("Remove member", parameters, options);
+
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+            return;
+
+        if (dialogResult.Data is not Guid userId)
+        {
+            Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            await GroupsClient.RemoveGroupMemberAsync(_selectedGroupId, userId);
+            Snackbar.Add("Member removed successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to remove member: {ex.Message}", Severity.Error);
+        }
     }
 
     private class DebtInfo
