@@ -8,8 +8,9 @@
 #nullable enable
 
 {%- endif %}
-using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch;
+using GroupSplit.Shared;
+using GroupSplit.App.Shared.Models;
 {% for usage in NamespaceUsages -%}
 using {{ usage }};
 {% endfor -%}

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.JsonPatch;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
-namespace GroupSplit.Shared;
+namespace GroupSplit.App.Shared.Models;
 
 public class GroupSplitSerializer
 {
