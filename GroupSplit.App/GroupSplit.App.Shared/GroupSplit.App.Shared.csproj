@@ -42,11 +42,5 @@
             <Options>/TemplateDirectory:.\ClientTemplates /GenerateClientInterfaces:true /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
         </OpenApiReference>
     </ItemGroup>
-    
-    <ItemGroup>
-        <Compile Include="obj\Generated\**\*.cs">
-            <Visible>false</Visible>
-        </Compile>
-    </ItemGroup>
 
 </Project>
