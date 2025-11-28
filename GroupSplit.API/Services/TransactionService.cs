@@ -51,7 +51,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
             throw new Exception("Paid by user must be the current user or a rule version must be specified");
 
         var groupQuery =
-            request.PaidByUserId is null
+            request.RuleVersionId is null
                 ? dbContext.Entry(currentUser).Reference(u => u.PersonalGroup).Query()
                 : dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 

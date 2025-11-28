@@ -142,6 +142,7 @@
     {
         UserGroups = await GroupsClient.GetGroupsAsync();
         await LoadGroupDetails();
+        StateHasChanged();
     }
 
     private async Task OnGroupChanged()
