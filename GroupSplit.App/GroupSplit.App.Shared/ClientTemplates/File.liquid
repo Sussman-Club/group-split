@@ -9,6 +9,7 @@
 
 {%- endif %}
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.JsonPatch;
 {% for usage in NamespaceUsages -%}
 using {{ usage }};
 {% endfor -%}
