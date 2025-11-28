@@ -1,17 +1,17 @@
+using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
+using GroupSplit.API.Identity;
+using GroupSplit.API.Services;
+using GroupSplit.Data;
 using GroupSplit.Identity;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using NSwag.Generation.Processors;
 using Scalar.AspNetCore;
-using GroupSplit.Data;
-using GroupSplit.API.Endpoints;
-using GroupSplit.API.Identity;
-using GroupSplit.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services to the container.
 builder.AddServiceDefaults();
 
 // Configure auth
@@ -36,33 +36,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 
-// Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi(options => options.AddBearerTokenAuthentication());
-
-// Add NSwag for build-time OpenAPI spec generation
-builder.Services.AddOpenApiDocument(options =>
-{
-    options.OperationProcessors.Add(new OperationProcessor(ctx =>
-        !ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
-    
-    options.OperationProcessors.Add(new OperationProcessor(ctx =>
-    {
-        if (ctx.OperationDescription.Operation.Tags.Count == 0)
-        {
-            ctx.OperationDescription.Operation.Tags.Add("api");
-            // We add a default tag so we do not get a weird IClient in the generated files.
-        }
-
-        return true;
-    }));
-});
-builder.Services.AddOpenApiDocument(options =>
-{
-    options.DocumentName = "identity";
-    options.OperationProcessors.Insert(0, new OperationProcessor(ctx =>
-        ctx.OperationDescription.Path.StartsWith("/identity", StringComparison.OrdinalIgnoreCase)));
-});
+builder.Services.AddOpenApiDocuments();
 
 builder.Services.AddValidation();
 

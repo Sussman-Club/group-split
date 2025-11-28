@@ -26,7 +26,7 @@ public static class IdentityApi
             group.MapPost("/register",
                 async (RegisterRequest request, IIdentityClient client) =>
                 {
-                    await client.PostIdentityRegisterAsync(request);
+                    await client.RegisterAsync(request);
                 });
             return group;
         }
@@ -38,10 +38,10 @@ public static class IdentityApi
                 IIdentityClient client
             ) =>
             {
-                var tokenResponse = await client.PostIdentityLoginAsync(
+                var tokenResponse = await client.LoginAsync(
+                    login,
                     useCookies: false,
-                    useSessionCookies: false,
-                    login
+                    useSessionCookies: false
                 );
 
                 var userInfo = new UserIdentityInfo(login.Email);
