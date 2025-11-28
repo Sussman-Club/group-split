@@ -67,34 +67,37 @@ public static class TransactionApi
         private RouteHandlerBuilder MapUpdate()
         {
             return group.MapPatch("{id:guid}", async (
-                Guid id,
-                JsonPatchDocument<UpdateTransactionRequest> patchDocument,
-                ITransactionService transactionService,
-                CancellationToken ct) =>
-            {
-                var transactions = await transactionService.Get(id, ct);
-                var transactionUpdateRequest = await (from t in transactions
-                    select new UpdateTransactionRequest
-                    {
-                        Amount = t.Amount,
-                        Description = t.Description,
-                        Name = t.Name,
-                        DateTime = t.DateTime,
-                        PaidByUserId = t.User.Id,
-                        RuleVersionId = t.RuleVersion.Id
-                    }).FirstOrDefaultAsync(ct);
+                    Guid id,
+                    JsonPatchDocument<UpdateTransactionRequest> patchDocument,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactions = await transactionService.Get(id, ct);
+                    var transactionUpdateRequest = await (from t in transactions
+                        select new UpdateTransactionRequest
+                        {
+                            Amount = t.Amount,
+                            Description = t.Description,
+                            Name = t.Name,
+                            DateTime = t.DateTime,
+                            PaidByUserId = t.User.Id,
+                            RuleVersionId = t.RuleVersion.Id
+                        }).FirstOrDefaultAsync(ct);
 
-                if (transactionUpdateRequest is null) return Results.NotFound();
+                    if (transactionUpdateRequest is null) return Results.NotFound();
 
-                patchDocument.ApplyTo(transactionUpdateRequest);
-                
-                // TODO: Change this when we support time zones
-                transactionUpdateRequest.DateTime = transactionUpdateRequest.DateTime.ToUniversalTime();
+                    patchDocument.ApplyTo(transactionUpdateRequest);
 
-                await transactionService.Update(id, transactionUpdateRequest, ct);
+                    // TODO: Change this when we support time zones
+                    transactionUpdateRequest.DateTime = transactionUpdateRequest.DateTime.ToUniversalTime();
 
-                return Results.Ok();
-            });
+                    await transactionService.Update(id, transactionUpdateRequest, ct);
+
+                    return Results.Ok();
+                })
+                .Accepts<JsonPatchDocument<UpdateTransactionRequest>>("application/json", "application/json-patch+json")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapDelete()
@@ -118,12 +121,15 @@ public static class TransactionApi
                 {
                     Id = transaction.Id,
                     Amount = transaction.Amount,
-                    Date = transaction.DateTime,
+                    DateTime = transaction.DateTime,
                     Name = transaction.Name,
                     Description = transaction.Description,
+                    GroupId = transaction.RuleVersion.Rule.Group.Id,
                     GroupName = transaction.RuleVersion.Rule.Group.Name,
-                    PaidByName = transaction.User.FirstName +
-                                 (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                    PaidByUserId = transaction.User.Id,
+                    PaidByUserName = transaction.User.FirstName +
+                                     (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                    RuleVersionId = transaction.RuleVersion.Id,
                     Category = transaction.RuleVersion.Rule.Category
                 };
         }

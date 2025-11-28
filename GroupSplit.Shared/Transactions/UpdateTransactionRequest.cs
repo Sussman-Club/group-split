@@ -1,4 +1,3 @@
-
 namespace GroupSplit.Shared;
 
 public class JsonPatchDocumentOfUpdateTransactionRequest;

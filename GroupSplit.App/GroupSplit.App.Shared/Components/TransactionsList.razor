@@ -14,15 +14,15 @@
                         <MudStack Spacing="0" Class="flex-grow-1">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                                 <MudAvatar Color="Color.Primary"
-                                           Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
+                                           Size="Size.Small">@transaction.PaidByUserName[0]</MudAvatar>
                                 <MudText Typo="Typo.body2"
                                          Class="font-weight-medium">@transaction.Name</MudText>
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                          Color="Color.Primary">@transaction.Category</MudChip>
                             </MudStack>
                             <MudText Typo="Typo.caption" Class="ml-10">
-                                Paid by <strong>@transaction.PaidByName</strong>
-                                on @transaction.Date.Date.ToShortDateString()
+                                Paid by <strong>@transaction.PaidByUserName</strong>
+                                on @transaction.DateTime.Date.ToShortDateString()
                             </MudText>
                         </MudStack>
                         <MudStack AlignItems="AlignItems.End" Spacing="0">

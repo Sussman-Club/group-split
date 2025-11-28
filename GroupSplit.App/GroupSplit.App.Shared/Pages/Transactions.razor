@@ -39,11 +39,11 @@
              Class="ma-6"
              Striped="true">
     <Columns>
-        <PropertyColumn Property="x => x.Date" Title="Date" Filterable="false">
+        <PropertyColumn Property="x => x.DateTime" Title="Date" Filterable="false">
             <CellTemplate>
                 <MudStack Spacing="0">
-                    <MudText Typo="Typo.body2">@context.Item.Date.DateTime.ToShortDateString()</MudText>
-                    <MudText Typo="Typo.caption">@context.Item.Date.DateTime.ToShortTimeString()</MudText>
+                    <MudText Typo="Typo.body2">@context.Item.DateTime.DateTime.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption">@context.Item.DateTime.DateTime.ToShortTimeString()</MudText>
                 </MudStack>
             </CellTemplate>
         </PropertyColumn>
@@ -138,17 +138,38 @@
         StateHasChanged();
     }
 
-    private void EditTransaction(TransactionResponse transaction)
+    private async Task EditTransaction(TransactionResponse transaction)
     {
-        // TODO: Implement edit transaction
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialogReference = await DialogService.ShowAsync<UpdateTransactionDialog>(
+            "Edit Transaction",
+            new DialogParameters { ["Original"] = transaction },
+            options);
+
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not JsonPatchDocumentOfUpdateTransactionRequest jsonPatch)
+            return;
+
+        await TransactionsClient.PatchTransactionsAsync(transaction.Id, jsonPatch);
+        
+        UserTransactions = await TransactionsClient.GetTransactionsAsync(null, null);
+        StateHasChanged();
     }
 
     private async Task OpenDeleteTransactionDialog(TransactionResponse transaction)
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText,
-                $"Are you sure you want to delete the transaction \"{transaction.Name}\"? This action cannot be undone." },
+            {
+                x => x.ContentText,
+                $"Are you sure you want to delete the transaction \"{transaction.Name}\"? This action cannot be undone."
+            },
             { x => x.ButtonText, "Delete Transaction" }
         };
 

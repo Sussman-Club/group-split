@@ -1,0 +1,144 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            Edit Transaction
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="form" Model="@editModel">
+            <MudStack Spacing="3" Direction="Column">
+
+                <MudTextField @bind-Value="editModel.Name"
+                              Label="Name"
+                              Variant="Variant.Outlined"
+                              Immediate="true"/>
+
+                <MudTextField @bind-Value="editModel.Description"
+                              Label="Description"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              Immediate="true"/>
+
+                <MudNumericField @bind-Value="editModel.Amount"
+                                 Label="Amount"
+                                 Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                 Immediate="true"
+                                 HideSpinButtons="true"/>
+
+                <MudStack Row="true" Spacing="4">
+                    <MudDatePicker @bind-Date="selectedDate"
+                                   Label="Transaction Date"
+                                   Variant="Variant.Outlined"/>
+
+                    <MudTimePicker @bind-Time="selectedTime"
+                                   Label="Transaction Time"
+                                   Variant="Variant.Outlined"
+                                   AmPm="true"/>
+                </MudStack>
+
+                
+                <MudSelect T="Guid" Label="Category"
+                           @bind-Value="editModel.RuleVersionId"
+                           Variant="Variant.Outlined">
+                    @foreach (var c in GroupCategories)
+                    {
+                        <MudSelectItem T="Guid" Value="@c.Id">@c.Category</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="Guid" Label="Paid By"
+                           Variant="Variant.Outlined"
+                           Disabled="@(!GroupUsers.Any())"
+                           @bind-Value="editModel.PaidByUserId">
+                    @foreach (var u in GroupUsers)
+                    {
+                        <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                    }
+                </MudSelect>
+
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    // incoming full transaction
+    [Parameter] public TransactionResponse Original { get; set; } = null!;
+
+    private bool loading = false;
+    private MudForm form;
+
+    // The editable model (your UpdateTransactionRequest)
+    private UpdateTransactionRequest editModel = new();
+
+    private DateTime? selectedDate;
+    private TimeSpan? selectedTime;
+
+    // Category & users come from the original transaction's GroupId
+    private ICollection<RuleVersionResponse> GroupCategories = [];
+    private ICollection<UserInfo> GroupUsers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize edit model from original
+        editModel = new UpdateTransactionRequest
+        {
+            Name = Original.Name,
+            Description = Original.Description,
+            Amount = Original.Amount,
+            DateTime = Original.DateTime,
+            RuleVersionId = Original.RuleVersionId,
+            PaidByUserId = Original.PaidByUserId
+        };
+
+        selectedDate = Original.DateTime.Date;
+        selectedTime = Original.DateTime.TimeOfDay;
+
+        // Load categories + users for the transaction's group
+        GroupCategories = await GroupsClient.GetGroupRulesAsync(Original.GroupId);
+        GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+        StateHasChanged();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (!form.IsValid)
+            return;
+
+        var date = selectedDate ?? DateTime.Today;
+        var time = selectedTime ?? TimeSpan.Zero;
+
+        editModel.DateTime = new DateTimeOffset(date + time,
+            TimeZoneInfo.Local.GetUtcOffset(date + time));
+
+        var x = editModel = new UpdateTransactionRequest
+        {
+            Name = Original.Name,
+            Description = Original.Description,
+            Amount = Original.Amount,
+            DateTime = Original.DateTime,
+            RuleVersionId = Original.RuleVersionId,
+            PaidByUserId = Original.PaidByUserId
+        };
+
+        // TODO: Create Json patch document here and return it
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

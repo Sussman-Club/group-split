@@ -195,7 +195,7 @@
 
         var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id, null, null);
 
-        Transactions = apiTransactions.OrderByDescending(t => t.Date).ToList();
+        Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
 
         // TODO: Replace with real balances once API provides endpoints
         // For now, keep placeholders minimal and neutral
@@ -279,7 +279,7 @@
         if (SelectedGroup is null) return;
 
         var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id, null, null);
-        Transactions = apiTransactions.OrderByDescending(t => t.Date).ToList();
+        Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
         StateHasChanged();
     }
 
