@@ -9,7 +9,6 @@
     </TitleContent>
 
     <DialogContent>
-
         <MudForm @ref="@form" Model="@model">
             <MudStack Row AlignItems="AlignItems.Center">
                 <MudTextField For="@(() => currentInput.Email)"
@@ -23,6 +22,12 @@
             </MudStack>
         </MudForm>
         <MudChipSet T="string" Style="padding-top: 5px;">
+            @foreach (var userIdentifier in CurrentUsers)
+            {
+                <MudChip T="UserIdentifier" Value=userIdentifier Variant="Variant.Filled" Color="Color.Primary">
+                    @userIdentifier.Email 
+                </MudChip>
+            }
             @foreach (var userIdentifier in model.UserIdentifiers)
             {
                 <MudChip T="UserIdentifier" Value=userIdentifier CloseIcon="@Icons.Material.Rounded.Close"
@@ -43,13 +48,15 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
-
     MudForm form;
+    [Parameter] public UserIdentifier[] CurrentUsers { get => field ?? []; set; }
     private UserIdentifier currentInput = new() { Email = string.Empty };
 
     private bool loading = false;
 
+
     private AddMemberRequest model = new([]);
+
 
     private async Task AddMemberToList()
     {

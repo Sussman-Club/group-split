@@ -358,7 +358,12 @@
     private async Task OpenAddMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var dialogReference = await DialogService.ShowAsync<AddGroupMemberDialog>("Add new member", options);
+        var users = from user in await GroupsClient.GetGroupMembersAsync(_selectedGroupId)
+                    where user.Email is not null
+                    select new UserIdentifier { Email = user.Email! };
+        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, users.ToArray() } };
+
+        var dialogReference = await DialogService.ShowAsync<AddGroupMemberDialog>("Add new member", parameters, options);
 
         var dialogResult = await dialogReference.Result;
 

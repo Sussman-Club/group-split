@@ -124,7 +124,7 @@ public static class GroupApi
         private IQueryable<UserInfo> SelectDto()
         {
             return from user in users
-                   select new UserInfo(user.Id, user.FirstName, user.LastName);
+                   select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
         }
     }
 }
