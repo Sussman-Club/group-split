@@ -103,7 +103,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        UserTransactions ??= await TransactionsClient.GetTransactionsAsync(null, null);
+        UserTransactions ??= await TransactionsClient.GetTransactionsAsync();
         await base.OnInitializedAsync();
     }
 

@@ -200,7 +200,7 @@
     {
         if (SelectedGroup is null) return;
 
-        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id, null, null);
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id);
 
         Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
 
@@ -278,6 +278,10 @@
         if (result.Data is JsonPatchDocument<CreateGroupRequest> patch)
         {
             await GroupsClient.UpdateGroupAsync(SelectedGroup.Id, patch);
+            
+            UserGroups = await GroupsClient.GetGroupsAsync();
+            SelectedGroup = UserGroups.FirstOrDefault(g => g.Id == SelectedGroup.Id);
+            StateHasChanged();
         }
     }
 
@@ -311,7 +315,7 @@
 
         if (SelectedGroup is null) return;
 
-        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id, null, null);
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id);
         Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
         StateHasChanged();
     }
