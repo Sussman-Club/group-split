@@ -17,7 +17,7 @@ if (builder.ExecutionContext.IsRunMode)
 {
     builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_Migrations_PostgreSQL>();
+    db.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_PostgreSQL_Migrations>("AppDbContext");
 
     identityDb.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>();
 }
@@ -45,7 +45,8 @@ var seeder = builder.AddProject<GroupSplit_Seeder>("seeder")
     .WithReference(db)
     .WaitFor(identityDb)
     .WithReference(identityDb)
-    .WithExplicitStart();
+    .WithExplicitStart()
+    .WithIconName("FoodGrains");
 
 var host = builder.Build();
 

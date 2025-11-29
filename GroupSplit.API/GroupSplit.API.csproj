@@ -10,7 +10,6 @@
         <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0"/>
         <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.0.0"/>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
         <PackageReference Include="Scalar.AspNetCore" Version="2.10.3"/>
         <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.0">
             <PrivateAssets>all</PrivateAssets>
@@ -19,7 +18,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\GroupSplit.Data\GroupSplit.Data.csproj"/>
+        <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
         <ProjectReference Include="..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj"/>
         <ProjectReference Include="..\GroupSplit.Identity\GroupSplit.Identity.csproj"/>
         <ProjectReference Include="..\GroupSplit.Shared\GroupSplit.Shared.csproj"/>

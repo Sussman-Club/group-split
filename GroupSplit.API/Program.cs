@@ -2,7 +2,7 @@ using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Identity;
 using GroupSplit.API.Services;
-using GroupSplit.Data;
+using GroupSplit.Data.PostgreSQL;
 using GroupSplit.Identity;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Identity;
@@ -28,10 +28,7 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("identity"));
 });
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    options.UseNpgsql(builder.Configuration.GetConnectionString("db"));
-});
+builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionString("db"));
 
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddScoped<IGroupService, GroupService>();

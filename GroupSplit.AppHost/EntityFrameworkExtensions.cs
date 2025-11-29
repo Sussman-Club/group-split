@@ -19,20 +19,20 @@ public static class EntityFrameworkExtensions
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbResourceBuilder)
         where TDatabaseResource : IResourceWithConnectionString, IResourceWithParent
     {
-        public IResourceBuilder<TDatabaseResource> WithMigrationOrchestration<TMigrationsProject>()
+        public IResourceBuilder<TDatabaseResource> WithMigrationOrchestration<TMigrationsProject>(string? dbContextTypeName = null)
             where TMigrationsProject : IProjectMetadata, new()
         {
             return dbResourceBuilder
-                .WithMigrationProject<TDatabaseResource, TMigrationsProject>()
+                .WithMigrationProject<TDatabaseResource, TMigrationsProject>(dbContextTypeName)
                 .WithResetDbCommand()
                 .WithMigrateCommand()
                 .AutoMigrateOnStartup();
         }
 
-        public IResourceBuilder<TDatabaseResource> WithMigrationProject<TMigrationsProject>()
+        public IResourceBuilder<TDatabaseResource> WithMigrationProject<TMigrationsProject>(string? dbContextTypeName = null)
             where TMigrationsProject : IProjectMetadata, new()
         {
-            return dbResourceBuilder.WithAnnotation(new MigrationProjectMetadataAnnotation<TMigrationsProject>());
+            return dbResourceBuilder.WithAnnotation(new MigrationProjectMetadataAnnotation<TMigrationsProject>(dbContextTypeName));
         }
 
         public IResourceBuilder<TDatabaseResource> WithResetDbCommand(string commandName = "reset")
@@ -208,34 +208,56 @@ public static class EntityFrameworkExtensions
     internal interface IMigrationCommand
     {
         string Name { get; }
-        List<string> BuildArguments(string projectPath);
+        List<string> BuildArguments(string projectPath, string? dbContextTypeName = null);
     }
 
     internal sealed class UpdateDatabaseCommand : IMigrationCommand
     {
         public string Name => "Update";
 
-        public List<string> BuildArguments(string projectPath) =>
-        [
-            "ef", "database", "update",
-            "--no-build",
-            "--project", projectPath,
-            "--startup-project", projectPath
-        ];
+        public List<string> BuildArguments(string projectPath, string? dbContextTypeName = null)
+        {
+            var args = new List<string>
+            {
+                "ef", "database", "update",
+                "--no-build",
+                "--project", projectPath,
+                "--startup-project", projectPath
+            };
+
+            if (dbContextTypeName is not null)
+            {
+                args.Add("--context");
+                args.Add(dbContextTypeName);
+            }
+
+            return args;
+        }
     }
 
     internal sealed class DropDatabaseCommand : IMigrationCommand
     {
         public string Name => "Drop";
 
-        public List<string> BuildArguments(string projectPath) =>
-        [
-            "ef", "database", "drop",
-            "--force",
-            "--no-build",
-            "--project", projectPath,
-            "--startup-project", projectPath
-        ];
+        public List<string> BuildArguments(string projectPath, string? dbContextTypeName = null)
+        {
+            var args = new List<string>
+            {
+                "ef", "database", "drop",
+                "--force",
+                "--no-build",
+                "--project", projectPath,
+                "--startup-project", projectPath
+            };
+            
+            if (dbContextTypeName is not null)
+            {
+                args.Add("--context");
+                args.Add(dbContextTypeName);
+            }
+            
+            return args;
+        }
     }
 
     internal class CommandMigrationRunner(
@@ -294,7 +316,7 @@ public static class EntityFrameworkExtensions
 
                 var result = await processCommandService.RunProcessAndLogOutputAsync(
                     "dotnet",
-                    arguments: command.BuildArguments(metadata.ProjectPath),
+                    arguments: command.BuildArguments(metadata.ProjectPath, metadata.DbContextTypeName),
                     environment: new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:DefaultConnection"] = connectionString
@@ -327,12 +349,13 @@ public static class EntityFrameworkExtensions
         }
     }
 
-    public class MigrationProjectMetadataAnnotation(string projectPath) : IResourceAnnotation
+    public class MigrationProjectMetadataAnnotation(string projectPath, string? dbContextTypeName) : IResourceAnnotation
     {
+        public string? DbContextTypeName => dbContextTypeName;
         public string ProjectPath => projectPath;
     }
 
-    public sealed class MigrationProjectMetadataAnnotation<TProjectMetadata>()
-        : MigrationProjectMetadataAnnotation(new TProjectMetadata().ProjectPath)
+    public sealed class MigrationProjectMetadataAnnotation<TProjectMetadata>(string? dbContextTypeName = null)
+        : MigrationProjectMetadataAnnotation(new TProjectMetadata().ProjectPath, dbContextTypeName)
         where TProjectMetadata : IProjectMetadata, new();
 }
