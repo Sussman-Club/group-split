@@ -12,6 +12,7 @@ public interface ITransactionService
     Task<IQueryable<Transaction>> Get(Guid id, CancellationToken cancellationToken = default);
 
     ValueTask<Transaction> Create(CreateTransactionRequest request, CancellationToken cancellationToken = default);
+    Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
 
     ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
         CancellationToken cancellationToken = default);
@@ -88,6 +89,23 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
 
         dbContext.Add(transaction);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        return transaction;
+    }
+
+    public async Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)
+    {
+        var transaction = await (await Get(id, ct))
+            .Select(t => new UpdateTransactionRequest
+            {
+                Amount = t.Amount,
+                Description = t.Description,
+                Name = t.Name,
+                DateTime = t.DateTime,
+                PaidByUserId = t.User.Id,
+                RuleVersionId = t.RuleVersion.Id
+            })
+            .FirstOrDefaultAsync(ct);
 
         return transaction;
     }

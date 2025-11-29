@@ -61,7 +61,8 @@ public static class TransactionApi
                     await transactionService.Create(request, ct);
                     return Results.Ok();
                 })
-                .WithName("CreateTransaction");
+                .WithName("CreateTransaction")
+                .Produces(StatusCodes.Status200OK);
         }
 
         private RouteHandlerBuilder MapUpdate()
@@ -72,17 +73,7 @@ public static class TransactionApi
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
-                    var transactions = await transactionService.Get(id, ct);
-                    var transactionUpdateRequest = await (from t in transactions
-                        select new UpdateTransactionRequest
-                        {
-                            Amount = t.Amount,
-                            Description = t.Description,
-                            Name = t.Name,
-                            DateTime = t.DateTime,
-                            PaidByUserId = t.User.Id,
-                            RuleVersionId = t.RuleVersion.Id
-                        }).FirstOrDefaultAsync(ct);
+                    var transactionUpdateRequest = await transactionService.GetUpdateModel(id, ct);
 
                     if (transactionUpdateRequest is null) return Results.NotFound();
 
@@ -103,13 +94,15 @@ public static class TransactionApi
         private RouteHandlerBuilder MapDelete()
         {
             return group.MapDelete("{id:guid}",
-                async (Guid id, ITransactionService transactionService, CancellationToken ct) =>
-                {
-                    await transactionService.Delete(id, ct);
-                    return Results.Ok();
-                }
-            )
-            .WithName("DeleteTransaction");
+                    async (Guid id, ITransactionService transactionService, CancellationToken ct) =>
+                    {
+                        await transactionService.Delete(id, ct);
+                        return Results.Ok();
+                    }
+                )
+                .WithName("DeleteTransaction")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound);
         }
     }
 
