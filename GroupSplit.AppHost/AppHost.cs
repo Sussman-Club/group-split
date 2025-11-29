@@ -18,13 +18,14 @@ if (builder.ExecutionContext.IsRunMode)
 {
     builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.WithMigrationOrchestration(
-        migrationsProjectPath: "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
-        dbContextName: "AppDbContext");
+    db.AddMigrationOrchestration(
+            "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
+            "AppDbContext")
+        .WithDefaultCommands();
 
-    identityDb.WithMigrationOrchestration(
-        migrationsProjectPath:
-        "../GroupSplit.Identity.Migrations.PostgreSQL/GroupSplit.Identity.Migrations.PostgreSQL.csproj");
+    identityDb.AddMigrationOrchestration(
+            "../GroupSplit.Identity.Migrations.PostgreSQL/GroupSplit.Identity.Migrations.PostgreSQL.csproj")
+        .WithDefaultCommands();
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")

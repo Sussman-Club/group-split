@@ -18,18 +18,15 @@ public static class EntityFrameworkExtensions
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbResourceBuilder)
         where TDatabaseResource : IResourceWithConnectionString, IResourceWithParent
     {
-        public IResourceBuilder<TDatabaseResource> WithMigrationOrchestration(
+        public MigrationOrchestrationBuilder<TDatabaseResource> AddMigrationOrchestration(
             string migrationsProjectPath,
             string? dbContextName = null)
         {
-            return dbResourceBuilder
-                .WithMigrationProject(migrationsProjectPath, dbContextName)
-                .WithResetDbCommand()
-                .WithMigrateCommand()
-                .AutoMigrateOnStartup();
+            dbResourceBuilder.WithMigrationProject(migrationsProjectPath, dbContextName);
+            return new MigrationOrchestrationBuilder<TDatabaseResource>(dbResourceBuilder);
         }
 
-        public IResourceBuilder<TDatabaseResource> WithMigrationProject(
+        private IResourceBuilder<TDatabaseResource> WithMigrationProject(
             string migrationsProjectPath,
             string? dbContextName = null)
         {
@@ -37,11 +34,51 @@ public static class EntityFrameworkExtensions
                 new MigrationProjectMetadataAnnotation(migrationsProjectPath, dbContextName));
         }
 
-        public IResourceBuilder<TDatabaseResource> WithResetDbCommand(string commandName = "reset")
+        private IResourceBuilder<TDatabaseResource> WithCommandMigratorHealth(string? name = null)
         {
+            name ??= $"cmd-migrator-{dbResourceBuilder.Resource.Name}";
+
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
-            return dbResourceBuilder.WithCommand(commandName, "Reset Database",
+            var healthCheckName = $"{name}-health-check";
+
+            dbResourceBuilder.ApplicationBuilder.Services.AddHealthChecks().AddCheck(healthCheckName, () =>
+            {
+                var state = dbResourceBuilder.ApplicationBuilder.ExecutionContext.ServiceProvider
+                    .GetRequiredService<CommandMigratorRegistry>()
+                    .Get(dbResourceBuilder.Resource.Name);
+
+                return state switch
+                {
+                    CommandMigrationState.Pending => HealthCheckResult.Unhealthy("Migrator pending"),
+                    CommandMigrationState.Running => HealthCheckResult.Unhealthy("Migrator running"),
+                    CommandMigrationState.Failed => HealthCheckResult.Unhealthy("Migrator failed"),
+                    _ => HealthCheckResult.Healthy()
+                };
+            });
+
+            return dbResourceBuilder.WithHealthCheck(healthCheckName);
+        }
+    }
+
+    extension<TDatabaseResource>(MigrationOrchestrationBuilder<TDatabaseResource> migrationOrchestrationBuilder)
+        where TDatabaseResource : IResourceWithConnectionString, IResourceWithParent
+    {
+        public MigrationOrchestrationBuilder<TDatabaseResource> WithDefaultCommands()
+        {
+            return migrationOrchestrationBuilder
+                .WithResetDbCommand()
+                .WithMigrateCommand()
+                .AutoMigrateOnStartup();
+        }
+
+        public MigrationOrchestrationBuilder<TDatabaseResource> WithResetDbCommand(string commandName = "reset")
+        {
+            var dbResourceBuilder = migrationOrchestrationBuilder.DbResourceBuilder;
+
+            dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
+
+            dbResourceBuilder.WithCommand(commandName, "Reset Database",
                 async context =>
                 {
                     var cancellationToken = context.CancellationToken;
@@ -59,13 +96,17 @@ public static class EntityFrameworkExtensions
                         "Are you sure you want to reset the database? This will drop and recreate the database.",
                     IconName = "BroomSparkle"
                 });
+
+            return migrationOrchestrationBuilder;
         }
 
-        public IResourceBuilder<TDatabaseResource> WithMigrateCommand(string commandName = "migrate")
+        public MigrationOrchestrationBuilder<TDatabaseResource> WithMigrateCommand(string commandName = "migrate")
         {
+            var dbResourceBuilder = migrationOrchestrationBuilder.DbResourceBuilder;
+
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
-            return dbResourceBuilder.WithCommand(commandName, "Run EF Core migrations", async context =>
+            dbResourceBuilder.WithCommand(commandName, "Run EF Core migrations", async context =>
             {
                 var cancellationToken = context.CancellationToken;
                 var logger = context.ServiceProvider.GetRequiredService<ResourceLoggerService>()
@@ -76,10 +117,14 @@ public static class EntityFrameworkExtensions
 
                 return new ExecuteCommandResult { Success = success };
             }, new CommandOptions { IconName = "Database" });
+
+            return migrationOrchestrationBuilder;
         }
 
-        public IResourceBuilder<TDatabaseResource> AutoMigrateOnStartup()
+        public MigrationOrchestrationBuilder<TDatabaseResource> AutoMigrateOnStartup()
         {
+            var dbResourceBuilder = migrationOrchestrationBuilder.DbResourceBuilder;
+
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
             var efInstaller = dbResourceBuilder.ApplicationBuilder.Resources.OfType<ExecutableResource>()
@@ -146,33 +191,7 @@ public static class EntityFrameworkExtensions
 
             dbResourceBuilder.WithCommandMigratorHealth();
 
-            return dbResourceBuilder;
-        }
-
-        private IResourceBuilder<TDatabaseResource> WithCommandMigratorHealth(string? name = null)
-        {
-            name ??= $"cmd-migrator-{dbResourceBuilder.Resource.Name}";
-
-            dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
-
-            var healthCheckName = $"{name}-health-check";
-
-            dbResourceBuilder.ApplicationBuilder.Services.AddHealthChecks().AddCheck(healthCheckName, () =>
-            {
-                var state = dbResourceBuilder.ApplicationBuilder.ExecutionContext.ServiceProvider
-                    .GetRequiredService<CommandMigratorRegistry>()
-                    .Get(dbResourceBuilder.Resource.Name);
-
-                return state switch
-                {
-                    CommandMigrationState.Pending => HealthCheckResult.Unhealthy("Migrator pending"),
-                    CommandMigrationState.Running => HealthCheckResult.Unhealthy("Migrator running"),
-                    CommandMigrationState.Failed => HealthCheckResult.Unhealthy("Migrator failed"),
-                    _ => HealthCheckResult.Healthy()
-                };
-            });
-
-            return dbResourceBuilder.WithHealthCheck(healthCheckName);
+            return migrationOrchestrationBuilder;
         }
     }
 
