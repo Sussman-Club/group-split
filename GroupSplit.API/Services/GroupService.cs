@@ -22,6 +22,8 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
 
+    Task UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets the members of a group by ID
     /// </summary>
@@ -70,6 +72,21 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
             select g;
     }
     
+
+    public async Task UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default)
+    {
+        var group = await GetGroupById(groupId, cancellationToken);
+        
+        var existingGroup = await group.FirstOrDefaultAsync(cancellationToken);
+        
+        if (existingGroup is null)
+            throw new Exception("Group was not found");
+        
+        existingGroup.Name = request.Name;
+        
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default)
     {
         return from gr in await GetGroupById(groupId, cancellationToken)
@@ -80,14 +97,14 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task AddGroupMembers(Guid groupId, AddMemberRequest request, CancellationToken cancellationToken = default)
     {
         var groupQuery = await GetGroupById(groupId, cancellationToken);
-        var group = await groupQuery.FirstOrDefaultAsync(cancellationToken: cancellationToken);
+        var group = await groupQuery.FirstOrDefaultAsync();
         if (group is null)
             throw new ArgumentException("Group was not found");
         var users = from user in context.Set<User>()
-            where request.Emails.Contains(user.Email)
-            select user;
+                    where request.Emails.Contains(user.Email)
+                    select user;
         await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
             group.Users.Add(user);
-        await context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync();
     }
 }

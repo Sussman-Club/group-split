@@ -1,6 +1,7 @@
 ﻿using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Endpoints;
@@ -20,6 +21,7 @@ public static class GroupApi
             group.MapCreate();
             group.MapGetAllGroups();
             group.MapGetGroup();
+            group.MapUpdateGroup();
             group.MapGetGroupTransactions();
             group.MapGetGroupRules();
             group.MapGetMembers();
@@ -78,6 +80,29 @@ public static class GroupApi
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
+        
+        private RouteHandlerBuilder MapUpdateGroup()
+        {
+            return group.MapPatch("{id:guid}", async (
+                Guid id,
+                JsonPatchDocument<CreateGroupRequest> patchDocument,
+                IGroupService groupService,
+                CancellationToken ct) =>
+            {
+                var groups = await groupService.GetGroupById(id, ct);
+                var groupUpdateRequest = await (from t in groups
+                    select new CreateGroupRequest
+                    {
+                        Name = t.Name
+                    }).FirstOrDefaultAsync(ct);
+                
+                patchDocument.ApplyTo(groupUpdateRequest);
+
+                await groupService.UpdateGroup(id, groupUpdateRequest, ct);
+
+                return Results.Ok();
+            }).WithName("UpdateGroup");
+        }
 
         private RouteHandlerBuilder MapGetGroupTransactions()
         {
@@ -123,9 +148,9 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                     {
-                        var members = (await groupService.GetGroupMembers(id, ct)).SelectDto();
+                        var members = (await groupService.GetGroupMembers(id)).SelectDto();
                         var userResponse = await members.ToListAsync(ct);
-                        return Results.Ok(userResponse);
+                        return userResponse is null ? Results.NotFound() : Results.Ok(userResponse);
                     })
                     .WithName("GetGroupMembers")
                     .Produces<UserInfo[]>()
@@ -141,7 +166,7 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     // Implementation for adding a member would go here
-                    await groupService.AddGroupMembers(id, request, ct);
+                    await groupService.AddGroupMembers(id, request);
                     return Results.Ok();
                 })
                 .WithName("AddGroupMember")
