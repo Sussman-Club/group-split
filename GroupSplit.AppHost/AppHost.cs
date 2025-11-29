@@ -1,4 +1,5 @@
 using GroupSplit.AppHost;
+using GroupSplit.AppHost.EntityFramework;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
