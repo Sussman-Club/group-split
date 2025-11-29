@@ -22,6 +22,8 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
 
+    Task UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets the members of a group by ID
     /// </summary>
@@ -68,6 +70,20 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return from g in await GetAllGroups(cancellationToken)
                where g.Id == groupId
                select g;
+    }
+
+    public async Task UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default)
+    {
+        var group = await GetGroupById(groupId, cancellationToken);
+        
+        var existingGroup = await group.FirstOrDefaultAsync(cancellationToken);
+        
+        if (existingGroup is null)
+            throw new Exception("Group was not found");
+        
+        existingGroup.Name = request.Name;
+        
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default)
