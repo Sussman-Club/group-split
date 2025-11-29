@@ -158,7 +158,7 @@
             return;
 
         await TransactionsClient.UpdateTransactionAsync(transaction.Id, jsonPatch);
-        
+
         UserTransactions = await TransactionsClient.GetTransactionsAsync();
         StateHasChanged();
     }
@@ -171,12 +171,18 @@
                 x => x.ContentText,
                 $"Are you sure you want to delete the transaction \"{transaction.Name}\"? This action cannot be undone."
             },
-            { x => x.ButtonText, "Delete Transaction" }
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
         };
 
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+        var options = new DialogOptions
+        {
+            CloseButton = true, 
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
 
-        var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete", parameters, options);
+        var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
 
         var dialogResult = await dialogReference.Result;
 
