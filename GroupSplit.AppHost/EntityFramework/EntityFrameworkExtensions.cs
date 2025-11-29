@@ -18,23 +18,23 @@ public static class EntityFrameworkExtensions
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbResourceBuilder)
         where TDatabaseResource : IResourceWithConnectionString, IResourceWithParent
     {
-        public IResourceBuilder<TDatabaseResource> WithMigrationOrchestration<TMigrationsProject>(
-            string? dbContextTypeName = null)
-            where TMigrationsProject : IProjectMetadata, new()
+        public IResourceBuilder<TDatabaseResource> WithMigrationOrchestration(
+            string migrationsProjectPath,
+            string? dbContextName = null)
         {
             return dbResourceBuilder
-                .WithMigrationProject<TDatabaseResource, TMigrationsProject>(dbContextTypeName)
+                .WithMigrationProject(migrationsProjectPath, dbContextName)
                 .WithResetDbCommand()
                 .WithMigrateCommand()
                 .AutoMigrateOnStartup();
         }
 
-        public IResourceBuilder<TDatabaseResource> WithMigrationProject<TMigrationsProject>(
-            string? dbContextTypeName = null)
-            where TMigrationsProject : IProjectMetadata, new()
+        public IResourceBuilder<TDatabaseResource> WithMigrationProject(
+            string migrationsProjectPath,
+            string? dbContextName = null)
         {
             return dbResourceBuilder.WithAnnotation(
-                new MigrationProjectMetadataAnnotation<TMigrationsProject>(dbContextTypeName));
+                new MigrationProjectMetadataAnnotation(migrationsProjectPath, dbContextName));
         }
 
         public IResourceBuilder<TDatabaseResource> WithResetDbCommand(string commandName = "reset")

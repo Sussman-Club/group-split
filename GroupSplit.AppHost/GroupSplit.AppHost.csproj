@@ -9,16 +9,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
-      <ProjectReference Include="..\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj" />
-      <ProjectReference Include="..\GroupSplit.Identity.Migrations.PostgreSQL\GroupSplit.Identity.Migrations.PostgreSQL.csproj" />
-        <ProjectReference Include="..\GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj" />
-        <ProjectReference Include="..\GroupSplit.Seeder\GroupSplit.Seeder.csproj" />
+        <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj"/>
+        <ProjectReference Include="..\GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj"/>
+        <ProjectReference Include="..\GroupSplit.Seeder\GroupSplit.Seeder.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Aspire.Hosting.Maui" Version="13.0.0-preview.1.25560.3" />
-      <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.0.0" />
+        <PackageReference Include="Aspire.Hosting.Maui" Version="13.0.0-preview.1.25560.3"/>
+        <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.0.0"/>
     </ItemGroup>
 
 </Project>
