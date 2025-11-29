@@ -1,6 +1,7 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch
 @inject ITransactionsClient TransactionsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -134,7 +135,7 @@
 
         await TransactionsClient.CreateTransactionAsync(request);
 
-        UserTransactions = await TransactionsClient.GetTransactionsAsync(null, null);
+        UserTransactions = await TransactionsClient.GetTransactionsAsync();
         StateHasChanged();
     }
 
@@ -153,12 +154,12 @@
 
         var dialogResult = await dialogReference.Result;
 
-        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not JsonPatchDocumentOfUpdateTransactionRequest jsonPatch)
+        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not JsonPatchDocument<UpdateTransactionRequest> jsonPatch)
             return;
 
-        await TransactionsClient.PatchTransactionsAsync(transaction.Id, jsonPatch);
+        await TransactionsClient.UpdateTransactionAsync(transaction.Id, jsonPatch);
         
-        UserTransactions = await TransactionsClient.GetTransactionsAsync(null, null);
+        UserTransactions = await TransactionsClient.GetTransactionsAsync();
         StateHasChanged();
     }
 
@@ -182,7 +183,7 @@
         if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not true)
             return;
 
-        await TransactionsClient.DeleteTransactionsAsync(transaction.Id);
+        await TransactionsClient.DeleteTransactionAsync(transaction.Id);
 
         UserTransactions.Remove(transaction);
         StateHasChanged();

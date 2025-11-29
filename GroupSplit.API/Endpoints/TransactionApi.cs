@@ -95,7 +95,7 @@ public static class TransactionApi
 
                     return Results.Ok();
                 })
-                .Accepts<JsonPatchDocument<UpdateTransactionRequest>>("application/json", "application/json-patch+json")
+                .WithName("UpdateTransaction")
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound);
         }
@@ -108,7 +108,8 @@ public static class TransactionApi
                     await transactionService.Delete(id, ct);
                     return Results.Ok();
                 }
-            );
+            )
+            .WithName("DeleteTransaction");
         }
     }
 

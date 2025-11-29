@@ -1,7 +1,5 @@
 namespace GroupSplit.Shared;
 
-public class JsonPatchDocumentOfUpdateTransactionRequest;
-
 public record UpdateTransactionRequest
 {
     public Guid PaidByUserId { get; set; }
