@@ -10,7 +10,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
-      <ProjectReference Include="..\GroupSplit.Data.Migrations.PostgreSQL\GroupSplit.Data.Migrations.PostgreSQL.csproj"/>
+      <ProjectReference Include="..\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj" />
       <ProjectReference Include="..\GroupSplit.Identity.Migrations.PostgreSQL\GroupSplit.Identity.Migrations.PostgreSQL.csproj" />
         <ProjectReference Include="..\GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj" />
         <ProjectReference Include="..\GroupSplit.Seeder\GroupSplit.Seeder.csproj" />

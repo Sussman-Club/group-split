@@ -1,12 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Maui.Hosting;
 using OpenTelemetry;
-using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -39,10 +36,6 @@ public static class Extensions
                 http.AddServiceDiscovery();
             });
 
-            builder.Services.TryAddEnumerable(
-                ServiceDescriptor.Transient<IMauiInitializeService, OpenTelemetryInitializer>(_ =>
-                    new OpenTelemetryInitializer()));
-
             // Uncomment the following to restrict the allowed schemes for service discovery.
             // builder.Services.Configure<ServiceDiscoveryOptions>(options =>
             // {
@@ -51,8 +44,6 @@ public static class Extensions
 
             return builder;
         }
-        
-        
 
         public TBuilder ConfigureOpenTelemetry()
         {
@@ -66,21 +57,23 @@ public static class Extensions
                 .WithMetrics(metrics =>
                 {
                     metrics.AddAspNetCoreInstrumentation()
+                        .AddMeter("Npgsql")
                         .AddHttpClientInstrumentation()
                         .AddRuntimeInstrumentation();
                 })
                 .WithTracing(tracing =>
                 {
                     tracing.AddSource(builder.Environment.ApplicationName)
-                        .AddAspNetCoreInstrumentation(tracing =>
+                        .AddAspNetCoreInstrumentation(options =>
                             // Exclude health check requests from tracing
-                            tracing.Filter = context =>
+                            options.Filter = context =>
                                 !context.Request.Path.StartsWithSegments(HealthEndpointPath)
                                 && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath)
                         )
                         // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                         //.AddGrpcClientInstrumentation()
-                        .AddHttpClientInstrumentation();
+                        .AddHttpClientInstrumentation()
+                        .AddEntityFrameworkCoreInstrumentation();
                 });
 
             builder.AddOpenTelemetryExporters();
@@ -114,16 +107,6 @@ public static class Extensions
                 .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
 
             return builder;
-        }
-    }
-
-    private class OpenTelemetryInitializer : IMauiInitializeService
-    {
-        public void Initialize(IServiceProvider services)
-        {
-            services.GetService<MeterProvider>();
-            services.GetService<TracerProvider>();
-            services.GetService<LoggerProvider>();
         }
     }
     
