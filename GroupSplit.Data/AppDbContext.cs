@@ -3,8 +3,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext : DbContext
 {
+    /// <summary>
+    /// Constructor for derived classes.
+    /// </summary>
+    /// <param name="options"></param>
+    protected AppDbContext(DbContextOptions options) : base(options)
+    {
+    }
+
+    public AppDbContext(DbContextOptions<AppDbContext> options) : this((DbContextOptions)options)
+    {
+    }
+    
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>

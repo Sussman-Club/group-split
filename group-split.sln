@@ -39,6 +39,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.API.Test", "Grou
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Seeder", "GroupSplit.Seeder\GroupSplit.Seeder.csproj", "{1F017D4A-7309-4BC8-9E72-7F1B1459295C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupSplit.Data.PostgreSQL", "GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj", "{E58F661E-C645-4E19-AB9B-B68A35401A48}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -105,6 +107,10 @@ Global
 		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1F017D4A-7309-4BC8-9E72-7F1B1459295C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E58F661E-C645-4E19-AB9B-B68A35401A48}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E58F661E-C645-4E19-AB9B-B68A35401A48}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E58F661E-C645-4E19-AB9B-B68A35401A48}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E58F661E-C645-4E19-AB9B-B68A35401A48}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -118,6 +124,7 @@ Global
 		{F2BFF19E-E0B3-3665-2F79-FF96420D29C9} = {0E39090E-3161-4E8D-9AE2-0329F1E96BD6}
 		{E4F208DA-1E7D-4F73-A875-CB3059E2C0CC} = {711D6BA9-2B9A-4539-88E2-A4E28F66CDF7}
 		{3028069A-1670-4211-B892-6DFBA3E2CFF2} = {711D6BA9-2B9A-4539-88E2-A4E28F66CDF7}
+		{E58F661E-C645-4E19-AB9B-B68A35401A48} = {F6F12F20-A153-4F18-8568-D7F7E04E80D4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {00EDADA1-745E-4B68-B938-B078A2D8417F}
