@@ -25,13 +25,16 @@
                               Lines="3"
                               Immediate="true"/>
 
-                <MudNumericField @bind-Value="editModel.Amount"
-                                 Label="Amount"
-                                 Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start"
-                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                 Immediate="true"
-                                 HideSpinButtons="true"/>
+                <MudNumericField
+                    @bind-Value="editModel.Amount"
+                    For="@(() => editModel.Amount)"
+                    Label="Amount"
+                    Variant="Variant.Outlined"
+                    Adornment="Adornment.Start"
+                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentColor="Color.Primary"
+                    Immediate="true"
+                    HideSpinButtons="true"/>
 
                 <MudStack Row="true" Spacing="4">
                     <MudDatePicker @bind-Date="selectedDate"
