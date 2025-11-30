@@ -27,7 +27,7 @@ public static class UserApi
                     IUserService userService) =>
                 {
                     var user = await userService.GetCurrentUser();
-                    var userInfo = new UserInfo(user.Id, user.FirstName, user?.LastName);
+                    var userInfo = new UserInfo(user.Id, user.FirstName, user?.LastName, user?.Email);
                     return Results.Ok(userInfo);
                 })
                 .WithName("GetCurrentUser")

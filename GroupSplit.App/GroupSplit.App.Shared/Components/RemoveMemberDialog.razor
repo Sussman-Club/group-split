@@ -1,0 +1,88 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            @MudDialog.Title
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Select a member to remove from the group:
+        </MudText>
+
+        @if (Members == null || !Members.Any())
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                No members available to remove.
+            </MudText>
+        }
+        else
+        {
+            <MudList Clickable="true" @bind-SelectedValue="selectedMember">
+                @foreach (var member in Members)
+                {
+                    <MudListItem Value="@member">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudAvatar Color="Color.Primary" Size="Size.Small">
+                                @(string.IsNullOrEmpty(member.FirstName) ? "?" : member.FirstName[0])
+                            </MudAvatar>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2">
+                                    @GetMemberName(member)
+                                </MudText>
+                                @if (!string.IsNullOrEmpty(member.Email))
+                                {
+                                    <MudText Typo="Typo.caption">
+                                        @member.Email
+                                    </MudText>
+                                }
+                            </MudStack>
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@Cancel" Variant="Variant.Outlined">Cancel</MudButton>
+        <MudButton Color="Color.Error"
+                   Disabled="@(selectedMember == null)"
+                   OnClick="@Submit"
+                   Variant="Variant.Outlined">
+            Remove Member
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ICollection<UserInfo> Members { get; set; } = [];
+
+    private UserInfo? selectedMember;
+
+    private string GetMemberName(UserInfo member)
+    {
+        if (!string.IsNullOrEmpty(member.FirstName) || !string.IsNullOrEmpty(member.LastName))
+        {
+            return $"{member.FirstName} {member.LastName}".Trim();
+        }
+        return member.Email ?? "Unknown User";
+    }
+
+    private void Submit()
+    {
+        if (selectedMember != null)
+        {
+            MudDialog.Close(DialogResult.Ok(selectedMember));
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

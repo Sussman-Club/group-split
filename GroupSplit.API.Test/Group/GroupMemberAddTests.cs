@@ -28,9 +28,9 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var exception = await Record.ExceptionAsync(async () =>
         {
-            // Act
-            await groupService.AddGroupMembers(group.Id, new(
-                [newUser.Email!]
+        // Act
+        await groupService.AddGroupMembers(group.Id, new(
+                [new() { Email = newUser.Email! }]
             ), TestContext.Current.CancellationToken);
         });
 
@@ -47,7 +47,7 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
             await groupService.AddGroupMembers(Guid.NewGuid(), new(
-                [newUser.Email!]
+                [new() { Email = newUser.Email! }]
             ), TestContext.Current.CancellationToken);
         });
     }
@@ -66,7 +66,7 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act
         await groupService.AddGroupMembers(group.Id, new(
-            ["wrong@test.com"]), TestContext.Current.CancellationToken);
+            [new() { Email = "wrong@test.com" }]), TestContext.Current.CancellationToken);
 
         var members = await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken);
         // Assert
