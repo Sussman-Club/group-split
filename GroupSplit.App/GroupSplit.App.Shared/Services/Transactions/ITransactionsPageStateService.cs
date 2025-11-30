@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.App.Shared.Services.Transactions;
 
-public interface ITransactionsService
+public interface ITransactionsPageStateService
 {
     ICollection<TransactionResponse>? Transactions { get; }
     event Action? OnTransactionsChanged;

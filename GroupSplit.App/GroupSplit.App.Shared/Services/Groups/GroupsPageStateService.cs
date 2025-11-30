@@ -4,7 +4,7 @@ using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Groups;
 
-public class GroupsService : IGroupsService
+public class GroupsPageStateService : IGroupsPageStateService
 {
     private readonly GroupsTracker _tracker;
     private readonly IGroupsClient _groupsClient;
@@ -14,7 +14,7 @@ public class GroupsService : IGroupsService
     public Task IsReadyTask { get; }
     private Task _transactionsLoad = Task.CompletedTask;
     
-    public GroupsService(GroupsTracker tracker, IGroupsClient groupsClient, ISnackbar snackbar,
+    public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient, ISnackbar snackbar,
         ITransactionsClient transactionsClient)
     {
         _tracker = tracker;

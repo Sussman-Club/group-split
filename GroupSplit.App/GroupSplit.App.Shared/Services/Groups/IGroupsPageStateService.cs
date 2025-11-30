@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.App.Shared.Services.Groups;
 
-public interface IGroupsService
+public interface IGroupsPageStateService
 {
     ICollection<GroupResponse> Groups { get; }
     

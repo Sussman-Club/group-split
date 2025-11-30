@@ -14,10 +14,10 @@ public static class ServiceExtensions
             services.AddMudTheme();
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
-            services.TryAddScoped<ITransactionsService, TransactionsService>();
+            services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();
 
             services.TryAdd<GroupsTracker>(sessionLifetime);
-            services.TryAddScoped<IGroupsService, GroupsService>();
+            services.TryAddScoped<IGroupsPageStateService, GroupsPageStateService>();
 
             return services;
         }
