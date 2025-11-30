@@ -13,7 +13,7 @@ public static class ServiceExtensions
         {
             services.AddMudTheme();
 
-            services.TryAdd<UserTransactionsTracker>(sessionLifetime);
+            services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsService, TransactionsService>();
 
             services.TryAdd<GroupsTracker>(sessionLifetime);

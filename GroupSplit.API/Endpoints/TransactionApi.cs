@@ -54,12 +54,15 @@ public static class TransactionApi
                     CreateTransactionRequest request,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
-                { 
-                    await transactionService.Create(request, ct);
-                    return Results.Ok();
+                {
+                    var transaction = await transactionService.Create(request, ct);
+                    var transactions = await transactionService.Get(transaction.Id, ct);
+                    var transactionResponse = await transactions.SelectDto().FirstOrDefaultAsync(ct);
+                    return Results.Ok(transactionResponse);
                 })
                 .WithName("CreateTransaction")
-                .Produces(StatusCodes.Status200OK);
+                .Produces<TransactionResponse>()
+                .Produces(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapUpdate()
@@ -78,10 +81,14 @@ public static class TransactionApi
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
-                    return Results.Ok();
+                    var transactions = await transactionService.Get(id, ct);
+
+                    var transactionResponse = await transactions.SelectDto().FirstOrDefaultAsync(ct);
+
+                    return Results.Ok(transactionResponse);
                 })
                 .WithName("UpdateTransaction")
-                .Produces(StatusCodes.Status200OK)
+                .Produces<TransactionResponse>()
                 .Produces(StatusCodes.Status404NotFound);
         }
 

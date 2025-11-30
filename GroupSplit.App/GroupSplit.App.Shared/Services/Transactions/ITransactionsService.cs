@@ -5,12 +5,13 @@ namespace GroupSplit.App.Shared.Services.Transactions;
 
 public interface ITransactionsService
 {
-    ICollection<TransactionResponse>? UserTransactions { get; }
-    Task LoadAsync(CancellationToken ct = default);
-    Task AddAsync(CreateTransactionRequest request);
-    Task EditAsync(Guid id, JsonPatchDocument<UpdateTransactionRequest> patch);
-    Task DeleteAsync(TransactionResponse transaction);
-    Task<CreateTransactionRequest?> ShowCreateTransactionDialogAsync();
-    Task<JsonPatchDocument<UpdateTransactionRequest>?> ShowEditTransactionDialogAsync(TransactionResponse transaction);
-    Task<bool> ShowConfirmDeleteDialogAsync(TransactionResponse transaction);
+    ICollection<TransactionResponse>? Transactions { get; }
+    event Action? OnTransactionsChanged;
+    Task IsReadyTask { get; }
+    Task CreateAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
+
+    Task UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(TransactionResponse transaction, CancellationToken cancellationToken = default);
 }

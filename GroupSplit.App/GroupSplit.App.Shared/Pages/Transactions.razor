@@ -2,9 +2,11 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject ITransactionsService TransactionsService
-@inject ISnackbar Snackbar
 @inject MudTheme Theme
+@inject IDialogService DialogService
+@implements IAsyncDisposable
 
 <PageTitle>Transactions</PageTitle>
 
@@ -29,7 +31,7 @@
               Class="flex-grow-1 pa-6"/>
 
 <MudDataGrid T="TransactionResponse"
-             Items="@TransactionsService.UserTransactions"
+             Items="@TransactionsService.Transactions"
              Filterable="true"
              FilterMode="DataGridFilterMode.Simple"
              Hover="true"
@@ -97,60 +99,100 @@
 @code {
     private string _searchString = "";
 
+    private CancellationTokenSource? _loadCts;
+    private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
+
+    private void ReRender()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnInitialized()
+    {
+        _loadCts = new CancellationTokenSource();
+        TransactionsService.OnTransactionsChanged += ReRender;
+    }
+
     protected override async Task OnInitializedAsync()
     {
-        if (TransactionsService.UserTransactions is null)
-        {
-            await TransactionsService.LoadAsync();
-            StateHasChanged();
-        }
+        await TransactionsService.IsReadyTask;
+
+        await base.OnInitializedAsync();
     }
 
     private async Task AddTransactionAsync()
     {
-        var request = await TransactionsService.ShowCreateTransactionDialogAsync();
-        if (request is null) return;
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { x => x.DisablePayingUserSelection, true }
+        };
 
-        try
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialogReference =
+            await DialogService.ShowAsync<CreateTransactionDialog>("Create a transaction", parameters, options);
+
+        var request = await dialogReference.GetReturnValueAsync<CreateTransactionRequest>();
+
+        if (request is not null)
         {
-            await TransactionsService.AddAsync(request);
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error adding transaction: {ex.Message}", Severity.Error);
+            await TransactionsService.CreateAsync(request, CancellationToken);
         }
     }
 
     private async Task EditTransactionAsync(TransactionResponse transaction)
     {
-        var request = await TransactionsService.ShowEditTransactionDialogAsync(transaction);
-        if (request is null) return;
+        var parameters = new DialogParameters<UpdateTransactionDialog>
+        {
+            { x => x.Original, transaction }
+        };
 
-        try
+        var options = new DialogOptions
         {
-            await TransactionsService.EditAsync(transaction.Id, request);
-            StateHasChanged();
-        }
-        catch (Exception ex)
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialogReference = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
+
+        var request = await dialogReference.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        if (request is not null)
         {
-            Snackbar.Add($"Error editing transaction: {ex.Message}", Severity.Error);
+            await TransactionsService.UpdateAsync(transaction, request, CancellationToken);
         }
     }
 
     private async Task DeleteTransactionAsync(TransactionResponse transaction)
     {
-        if (!await TransactionsService.ShowConfirmDeleteDialogAsync(transaction)) return;
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Are you sure you want to delete \"{transaction.Name}\"?" },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
 
-        try
+        var options = new DialogOptions
         {
-            await TransactionsService.DeleteAsync(transaction);
-            StateHasChanged();
-        }
-        catch (Exception ex)
+            CloseButton = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+
+        var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
+
+        var result = await dialogReference.GetReturnValueAsync<bool>();
+        
+        if (result)
         {
-            Snackbar.Add($"Error deleting transaction: {ex.Message}", Severity.Error);
+            await TransactionsService.DeleteAsync(transaction, CancellationToken);
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        TransactionsService.OnTransactionsChanged -= ReRender;
+        if (_loadCts is not null) await _loadCts.CancelAsync();
     }
 
 }

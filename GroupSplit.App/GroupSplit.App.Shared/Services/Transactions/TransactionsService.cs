@@ -1,97 +1,103 @@
-using GroupSplit.App.Shared.Components;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Transactions;
 
-public class TransactionsService(
-    ITransactionsClient client,
-    UserTransactionsTracker userTransactionsTracker,
-    IDialogService dialog,
-    ISnackbar snackbar)
-    : ITransactionsService
+public class TransactionsService : ITransactionsService
 {
-    public ICollection<TransactionResponse>? UserTransactions => userTransactionsTracker.UserTransactions;
+    private readonly ITransactionsClient _client;
+    private readonly TransactionsTracker _tracker;
+    private readonly ISnackbar _snackbar;
 
-    public async Task LoadAsync(CancellationToken ct = default)
+    public Task IsReadyTask { get; }
+
+    public TransactionsService(ITransactionsClient client,
+        TransactionsTracker tracker,
+        ISnackbar snackbar)
     {
-        userTransactionsTracker.UserTransactions =
-            (await client.GetTransactionsAsync(cancellationToken: ct))?.ToList() ?? [];
-    }
-
-    public async Task AddAsync(CreateTransactionRequest request)
-    {
-        await client.CreateTransactionAsync(request);
-        snackbar.Add("Transaction created successfully.", Severity.Success);
-        await LoadAsync(); // refresh list
-    }
-
-    public async Task EditAsync(Guid id, JsonPatchDocument<UpdateTransactionRequest> patch)
-    {
-        await client.UpdateTransactionAsync(id, patch);
-        snackbar.Add("Transaction updated successfully.", Severity.Success);
-        await LoadAsync(); // refresh list
-    }
-
-    public async Task DeleteAsync(TransactionResponse transaction)
-    {
-        await client.DeleteTransactionAsync(transaction.Id);
-        snackbar.Add("Transaction deleted successfully.", Severity.Success);
-        userTransactionsTracker.UserTransactions?.Remove(transaction); // remove locally
-    }
-
-    public async Task<CreateTransactionRequest?> ShowCreateTransactionDialogAsync()
-    {
-        var parameters = new DialogParameters<CreateTransactionDialog> { { x => x.DisablePayingUserSelection, true } };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialogReference =
-            await dialog.ShowAsync<CreateTransactionDialog>("Create a transaction", parameters, options);
-
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled)
-            return null;
-
-        if (dialogResult.Data is not CreateTransactionRequest request)
+        _client = client;
+        _tracker = tracker;
+        _snackbar = snackbar;
+        IsReadyTask = Task.Run(async () =>
         {
-            snackbar.Add("Invalid transaction.", Severity.Error);
-            return null;
+            if (tracker.Transactions is not null) return;
+            await LoadAsync();
+        });
+    }
+
+    public ICollection<TransactionResponse> Transactions
+    {
+        get => _tracker.Transactions ?? [];
+        private set
+        {
+            _tracker.Transactions = value;
+            OnTransactionsChanged?.Invoke();
         }
-
-        return request;
     }
 
-    public async Task<JsonPatchDocument<UpdateTransactionRequest>?> ShowEditTransactionDialogAsync(
-        TransactionResponse transaction)
+    public event Action? OnTransactionsChanged;
+
+    private async Task LoadAsync(CancellationToken ct = default)
     {
-        var parameters = new DialogParameters<UpdateTransactionDialog> { ["Original"] = transaction };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialogRef = await dialog.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
-        var result = await dialogRef.Result;
+        Transactions = await _client.GetTransactionsAsAsyncEnumerable(cancellationToken: ct)
+            .ToListAsync(cancellationToken: ct);
+    }
 
-        if (result?.Canceled != false) return null;
+    public async Task CreateAsync(CreateTransactionRequest request, CancellationToken ct = default)
+    {
+        var transaction = await _client.CreateTransactionAsync(request, ct);
+        AddTransaction(transaction);
+        _snackbar.Add("Transaction created successfully.", Severity.Success);
+        await LoadAsync(ct);
+    }
 
-        if (result.Data is not JsonPatchDocument<UpdateTransactionRequest> patch)
+    public async Task UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
+        CancellationToken ct = default)
+    {
+        var updated = await _client.UpdateTransactionAsync(transaction.Id, patch, ct);
+
+        if (updated.PaidByUserId != transaction.PaidByUserId)
         {
-            snackbar.Add("Invalid transaction.", Severity.Error);
-            return null;
+            RemoveTransaction(transaction);
         }
-
-        return patch;
+        else
+        {
+            UpdateTransaction(updated);
+        }
+        
+        _snackbar.Add("Transaction updated successfully.", Severity.Success);
     }
 
-    public async Task<bool> ShowConfirmDeleteDialogAsync(TransactionResponse transaction)
+    public async Task DeleteAsync(TransactionResponse transaction, CancellationToken ct = default)
     {
-        var parameters = new DialogParameters<ConfirmationDialog>
-        {
-            { x => x.ContentText, $"Are you sure you want to delete \"{transaction.Name}\"?" },
-            { x => x.ButtonText, "Delete" },
-            { x => x.Color, Color.Error }
-        };
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var dialogRef = await dialog.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
-        var result = await dialogRef.Result;
-        return result?.Data as bool? == true;
+        await _client.DeleteTransactionAsync(transaction.Id, ct);
+        RemoveTransaction(transaction);
+        _snackbar.Add("Transaction deleted successfully.", Severity.Success);
+    }
+
+    private void UpdateTransaction(TransactionResponse transaction)
+    {
+        var transactions = Transactions as List<TransactionResponse> ?? Transactions.ToList();
+        var index = transactions.FindIndex(g => g.Id == transaction.Id);
+
+        if (index < 0) return;
+
+        transactions[index] = transaction;
+        Transactions = transactions;
+    }
+
+    private void AddTransaction(TransactionResponse transaction)
+    {
+        var transactions = Transactions as List<TransactionResponse> ?? Transactions.ToList();
+        transactions.Add(transaction);
+        Transactions = transactions;
+    }
+
+    private void RemoveTransaction(TransactionResponse transaction)
+    {
+        var transactions = Transactions as List<TransactionResponse> ?? Transactions.ToList();
+        transactions.Remove(transaction);
+        Transactions = transactions;
     }
 }

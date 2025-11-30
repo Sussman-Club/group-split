@@ -30,7 +30,7 @@ RenderModeConfig.Initialize(renderModePreference);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .RegisterPersistentService<GroupsTracker>(RenderMode.InteractiveAuto)
-    .RegisterPersistentService<UserTransactionsTracker>(RenderMode.InteractiveAuto)
+    .RegisterPersistentService<TransactionsTracker>(RenderMode.InteractiveAuto)
     .AddRenderModeComponents();
 
 // Add device-specific services used by the GroupSplit.App.Shared project
