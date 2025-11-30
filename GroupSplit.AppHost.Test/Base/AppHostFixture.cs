@@ -1,7 +1,8 @@
-﻿using GroupSplit.AppHost.Test.Base;
-using Aspire.Hosting;
+﻿using Aspire.Hosting;
 using Aspire.Hosting.Testing;
+using GroupSplit.AppHost.Test.Base;
 using Microsoft.Extensions.DependencyInjection;
+using Projects;
 
 [assembly: AssemblyFixture(typeof(AppHostFixture))]
 
@@ -14,7 +15,7 @@ public class AppHostFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.GroupSplit_AppHost>();
+            .CreateAsync<GroupSplit_AppHost>();
 
         builder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {

@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GroupSplit.AppHost\GroupSplit.AppHost.csproj" />
+    <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
   </ItemGroup>
 
 </Project>
