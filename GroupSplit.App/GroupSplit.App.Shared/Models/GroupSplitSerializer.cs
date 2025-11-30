@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace GroupSplit.Shared;
+namespace GroupSplit.App.Shared.Models;
 
 public class GroupSplitSerializer
 {

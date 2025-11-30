@@ -125,7 +125,22 @@
     /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
     {% template Client.Method.Documentation %}
     {% template Client.Method.Annotations %}
-    {{ operation.MethodAccessModifier }} virtual async {{ operation.ResultType }} {{ operation.ActualOperationName }}Async({% for parameter in operation.Parameters %}{% if parameter.Schema.IsArray and parameter.Schema.Item.OneOf.size == 3 %}JsonPatchDocument{% else %}{{ parameter.Type }}{% endif %} {{ parameter.VariableName }}{% if GenerateOptionalParameters and parameter.IsOptional %} = null{% endif %}, {% endfor %}System.Threading.CancellationToken cancellationToken{% if GenerateOptionalParameters %} = default(System.Threading.CancellationToken){% endif %})
+    {{ operation.MethodAccessModifier }} virtual async {{ operation.ResultType }} {{ operation.ActualOperationName }}Async({% for parameter in operation.Parameters -%}
+{%- assign title = parameter.Schema.Title -%}
+    {%- if title startswith "JsonPatchDocumentOf" or title == "JsonPatchDocument" -%}
+        {%- if UseSystemTextJson -%}
+            {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument" -%}
+        {%- else -%}
+            {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.JsonPatchDocument" -%}
+        {%- endif -%}
+        {%- if title startswith "JsonPatchDocumentOf" -%}
+            {{- jsonPatchTypeName -}}<{{- title | remove_first: "JsonPatchDocumentOf" -}}{{- ">" -}}
+        {%- else -%}
+            {{- jsonPatchTypeName -}}
+        {%- endif -%}
+    {%- else -%}
+        {{- parameter.Type -}}
+    {%- endif %} {{ parameter.VariableName }}{% if GenerateOptionalParameters and parameter.IsOptional %} = null{% endif %}, {% endfor %}System.Threading.CancellationToken cancellationToken{% if GenerateOptionalParameters %} = default(System.Threading.CancellationToken){% endif %})
     {
 {%     for parameter in operation.PathParameters -%}
 {%         if parameter.IsNullable == false and parameter.IsRequired -%}
@@ -434,7 +449,22 @@
 
     {% template Client.Method.Documentation %}
     {% template Client.Method.Annotations %}
-    {{ operation.MethodAccessModifier }} virtual async System.Collections.Generic.IAsyncEnumerable<{{ _elementType }}> {{ operation.ActualOperationName }}AsAsyncEnumerable({% for parameter in operation.Parameters %}{{ parameter.Type }} {{ parameter.VariableName }}{% if GenerateOptionalParameters and parameter.IsOptional %} = null{% endif %}{% if parameter.IsLast == false %}, {% endif %}{% endfor %}{% assign _paramCount = operation.Parameters | size %}{% if _paramCount > 0 %}, {% endif %}[System.Runtime.CompilerServices.EnumeratorCancellation] System.Threading.CancellationToken cancellationToken{% if GenerateOptionalParameters %} = default(System.Threading.CancellationToken){% endif %})
+    {{ operation.MethodAccessModifier }} virtual async System.Collections.Generic.IAsyncEnumerable<{{ _elementType }}> {{ operation.ActualOperationName }}AsAsyncEnumerable({% for parameter in operation.Parameters -%}
+    {%- assign title = parameter.Schema.Title -%}
+    {%- if title startswith "JsonPatchDocumentOf" or title == "JsonPatchDocument" -%}
+        {%- if UseSystemTextJson -%}
+            {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument" -%}
+        {%- else -%}
+            {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.JsonPatchDocument" -%}
+        {%- endif -%}
+        {%- if title startswith "JsonPatchDocumentOf" -%}
+            {{- jsonPatchTypeName -}}<{{- title | remove_first: "JsonPatchDocumentOf" -}}{{- ">" -}}
+        {%- else -%}
+            {{- jsonPatchTypeName -}}
+        {%- endif -%}
+    {%- else -%}
+        {{- parameter.Type -}}
+    {%- endif %} {{ parameter.VariableName }}{% if GenerateOptionalParameters and parameter.IsOptional %} = null{% endif %}, {% endfor %}[System.Runtime.CompilerServices.EnumeratorCancellation] System.Threading.CancellationToken cancellationToken{% if GenerateOptionalParameters %} = default(System.Threading.CancellationToken){% endif %})
     {
 {%         for parameter in operation.PathParameters -%}
 {%             if parameter.IsNullable == false and parameter.IsRequired -%}

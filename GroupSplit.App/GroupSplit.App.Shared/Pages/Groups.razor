@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
 @using System.Threading.Tasks
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -25,10 +26,15 @@
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
-                       Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Settings"
                        OnClick="ManageRules">
                 Manage Rules
+            </MudButton>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Edit"
+                       OnClick="@OpenUpdateGroupDialog">
+                Edit Group
             </MudButton>
             @if (!_isSelectedGroupArchived)
             {
@@ -431,6 +437,30 @@
             Snackbar.Add("Member removed successfully.", Severity.Success);
         }
 
+    }
+    
+    private async Task OpenUpdateGroupDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Group", UserGroups.First(x => x.Id == _selectedGroupId) }
+        };
+
+        var dialog = await DialogService.ShowAsync<UpdateGroupDialog>(
+            "Edit Group",
+            parameters,
+            new DialogOptions { FullWidth = true }
+        );
+
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+            return;
+        
+        if (result.Data is JsonPatchDocument<CreateGroupRequest> patch)
+        {
+            await GroupsClient.UpdateGroupAsync(_selectedGroupId, patch);
+        }
     }
 
     private class DebtInfo

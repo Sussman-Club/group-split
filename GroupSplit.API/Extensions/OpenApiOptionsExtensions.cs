@@ -1,7 +1,10 @@
 using System.Reflection;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -15,34 +18,51 @@ public static class OpenApiOptionsExtensions
         {
             if (Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider")
             {
-                services.AddOpenApi("api",options =>
+                services.AddOpenApi("api", options =>
                 {
-                    options.ShouldInclude = description =>
+                    options.ShouldInclude = description => !IdentityPath(description);
+
+                    options.CreateSchemaReferenceId = typeInfo =>
                     {
-                        var path = description.RelativePath ?? string.Empty;
-                        return !path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
+                        if (typeInfo.Type is not { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
+                            type.GetGenericTypeDefinition() != typeof(JsonPatchDocument<>))
+                        {
+                            return OpenApiOptions.CreateDefaultSchemaReferenceId(typeInfo);
+                        }
+
+                        var modelTypeInfo = JsonTypeInfo.CreateJsonTypeInfo(modelType, typeInfo.Options);
+
+                        return $"JsonPatchDocumentOf{OpenApiOptions.CreateDefaultSchemaReferenceId(modelTypeInfo)}";
                     };
-                    
+
+                    options.AddSchemaTransformer((schema, context, _) =>
+                    {
+                        if (context.JsonTypeInfo.Type is not
+                                { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
+                            type.GetGenericTypeDefinition() != typeof(JsonPatchDocument<>)) return Task.CompletedTask;
+
+                        var modelTypeInfo = JsonTypeInfo.CreateJsonTypeInfo(modelType, context.JsonTypeInfo.Options);
+                        schema.Title = "JsonPatchDocumentOf" + OpenApiOptions.CreateDefaultSchemaReferenceId(modelTypeInfo);
+
+                        return Task.CompletedTask;
+                    });
+
                     options.AddBearerTokenAuthentication();
                 });
 
-                services.AddOpenApi("identity",options =>
+                services.AddOpenApi("identity", options =>
                 {
-                    options.ShouldInclude = description =>
-                    {
-                        var path = description.RelativePath ?? string.Empty;
-                        return path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
-                    };
+                    options.ShouldInclude = IdentityPath;
 
                     options.AddDocumentTransformer(async (doc, ctx, ct) =>
                     {
                         var schema1 = await ctx.GetOrCreateSchemaAsync(
                             typeof(ProblemDetails),
                             cancellationToken: ct);
-                        
+
                         doc.AddComponent("ProblemDetails", schema1);
                     });
-                    
+
                     options.AddBearerTokenAuthentication();
                 });
             }
@@ -52,9 +72,15 @@ public static class OpenApiOptionsExtensions
             }
 
             return services;
+
+            bool IdentityPath(ApiDescription description)
+            {
+                var path = description.RelativePath ?? string.Empty;
+                return path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
+            }
         }
     }
-    
+
     extension(OpenApiOptions options)
     {
         public OpenApiOptions AddBearerTokenAuthentication()

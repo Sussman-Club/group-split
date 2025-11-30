@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
-namespace GroupSplit.Data.Migrations.PostgreSQL;
+namespace GroupSplit.Data.PostgreSQL.Migrations;
 
 public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
@@ -16,12 +16,12 @@ public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppDbCont
         config.AddEnvironmentVariables();
         config.AddCommandLine(args);
         
-        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+        var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlAppDbContext>();
 
         var connectionString = config.GetConnectionString("DefaultConnection") ?? "Host=localhost;Port=5432;Database=my_db;Username=my_user;Password=my_password";
         
         optionsBuilder.UseNpgsql(connectionString, b => b.MigrationsAssembly(Assembly.GetAssembly(typeof(AppContextPostgreSqlFactory))!));
         
-        return new AppDbContext(optionsBuilder.Options);
+        return new PostgreSqlAppDbContext(optionsBuilder.Options);
     }
 }

@@ -1,0 +1,87 @@
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            @MudDialog.Title
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="@form" Model="@editModel">
+            <MudTextField
+                @bind-Value="editModel.Name"
+                For="@(() => editModel.Name)"
+                Label="Name"
+                Immediate="true"
+            />
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@Cancel">Cancel</MudButton>
+
+        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
+            Submit
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public GroupResponse Group { get; set; } = null!;
+
+    MudForm form;
+    private bool loading = false;
+
+    private CreateGroupRequest editModel = new();
+    private CreateGroupRequest originalModel = new();
+
+    protected override void OnInitialized()
+    {
+        // Map GroupResponse → CreateGroupRequest
+        originalModel = new CreateGroupRequest
+        {
+            Name = Group.Name
+        };
+
+        // Clone into editable form model
+        editModel = new CreateGroupRequest
+        {
+            Name = Group.Name
+        };
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (!form.IsValid)
+            return;
+
+        loading = true;
+
+        var patch = BuildPatch(originalModel, editModel);
+
+        MudDialog.Close(DialogResult.Ok(patch));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+
+    private JsonPatchDocument<CreateGroupRequest> BuildPatch(
+        CreateGroupRequest original,
+        CreateGroupRequest updated)
+    {
+        var patch = new JsonPatchDocument<CreateGroupRequest>();
+
+        if (original.Name != updated.Name)
+            patch.Replace(x => x.Name, updated.Name);
+
+        return patch;
+    }
+}

@@ -9,11 +9,10 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0"/>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\GroupSplit.Data\GroupSplit.Data.csproj"/>
+        <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
         <ProjectReference Include="..\GroupSplit.Identity\GroupSplit.Identity.csproj"/>
     </ItemGroup>
 </Project>
