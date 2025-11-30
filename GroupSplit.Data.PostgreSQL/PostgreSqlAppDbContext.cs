@@ -12,7 +12,11 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
         modelBuilder.Entity<Transaction>(entity =>
         {
             entity.Property(transaction => transaction.DateTime)
-                .HasColumnType("timestamp with time zone");
+                .HasColumnType("timestamp with time zone")
+                .HasConversion(
+                    appValue => appValue.ToUniversalTime(),
+                    dbValue => dbValue
+                );
         });
     }
 }
