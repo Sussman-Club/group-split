@@ -18,20 +18,21 @@ public static class EntityFrameworkExtensions
     extension<TDatabaseResource>(IResourceBuilder<TDatabaseResource> dbResourceBuilder)
         where TDatabaseResource : IResourceWithConnectionString, IResourceWithParent
     {
-        public MigrationOrchestrationBuilder<TDatabaseResource> AddMigrationOrchestration(
-            string migrationsProjectPath,
-            string? dbContextName = null)
+        public MigrationOrchestrationBuilder<TDatabaseResource> AddMigrationOrchestration<TMigrationsProject>(
+            string? dbContextTypeName = null)
+            where TMigrationsProject : IProjectMetadata, new()
         {
-            dbResourceBuilder.WithMigrationProject(migrationsProjectPath, dbContextName);
+            var migrationsProject = new TMigrationsProject();
+            dbResourceBuilder.WithMigrationProject(migrationsProject.ProjectPath, dbContextTypeName);
             return new MigrationOrchestrationBuilder<TDatabaseResource>(dbResourceBuilder);
         }
 
         private IResourceBuilder<TDatabaseResource> WithMigrationProject(
             string migrationsProjectPath,
-            string? dbContextName = null)
+            string? dbContextTypeName = null)
         {
             return dbResourceBuilder.WithAnnotation(
-                new MigrationProjectMetadataAnnotation(migrationsProjectPath, dbContextName));
+                new MigrationProjectMetadataAnnotation(migrationsProjectPath, dbContextTypeName));
         }
 
         private IResourceBuilder<TDatabaseResource> WithCommandMigratorHealth(string? name = null)

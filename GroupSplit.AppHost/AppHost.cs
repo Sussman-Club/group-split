@@ -18,13 +18,10 @@ if (builder.ExecutionContext.IsRunMode)
 {
     builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.AddMigrationOrchestration(
-            "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
-            "AppDbContext")
+    db.AddMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_PostgreSQL_Migrations>("AppDbContext")
         .WithDefaultCommands();
 
-    identityDb.AddMigrationOrchestration(
-            "../GroupSplit.Identity.Migrations.PostgreSQL/GroupSplit.Identity.Migrations.PostgreSQL.csproj")
+    identityDb.AddMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>()
         .WithDefaultCommands();
 }
 
