@@ -1,7 +1,7 @@
 @page "/groups"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
-@using System.Threading.Tasks
+@inject ITransactionsClient TransactionsClient
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
@@ -10,33 +10,35 @@
 
 <PageTitle>Groups</PageTitle>
 
-@if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
+@if (SelectedGroup != null)
 {
     <!-- Group Header -->
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
-                <MudText Typo="Typo.h4" Class="font-weight-bold">@_selectedGroupName</MudText>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">@SelectedGroup.Name</MudText>
             </MudStack>
             <MudText Typo="Typo.body2">
-                @_members.Count members · @_transactions.Count expenses
+                @SelectedGroup.MemberCount members · @Transactions.Count expenses
             </MudText>
         </MudStack>
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
+                       Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Settings"
                        OnClick="ManageRules">
                 Manage Rules
             </MudButton>
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
+                       Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Edit"
                        OnClick="@OpenUpdateGroupDialog">
                 Edit Group
             </MudButton>
-            @if (!_isSelectedGroupArchived)
+            @if (!SelectedGroup.IsArchive)
             {
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
@@ -65,7 +67,7 @@
 }
 
 <MudStack Spacing="4" Class="mb-10">
-    @if (_selectedGroupId != Guid.Empty && _selectedGroupName != null)
+    @if (SelectedGroup != null)
     {
         <!-- Balance Row -->
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
@@ -140,58 +142,23 @@
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
             <!-- Expenses List -->
             <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <MudStack Spacing="3">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Recent Expenses</MudText>
-
-                    <MudStack Spacing="2">
-                        @foreach (var transaction in _transactions)
-                        {
-                            <MudCard Elevation="0" Outlined="true" Class="hover-slide-right"
-                                     @onclick="() => ViewExpenseDetails(transaction)">
-                                <MudCardContent>
-                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                        <MudStack Spacing="0" Class="flex-grow-1">
-                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                                <MudAvatar Color="Color.Primary"
-                                                           Size="Size.Small">@transaction.PaidByName[0]</MudAvatar>
-                                                <MudText Typo="Typo.body2"
-                                                         Class="font-weight-medium">@transaction.Name</MudText>
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                                         Color="Color.Primary">@transaction.Category</MudChip>
-                                            </MudStack>
-                                            <MudText Typo="Typo.caption" Class="ml-10">
-                                                Paid by <strong>@transaction.PaidByName</strong>
-                                                on @transaction.Date.ToShortDateString()
-                                            </MudText>
-                                        </MudStack>
-                                        <MudStack AlignItems="AlignItems.End" Spacing="0">
-                                            <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
-                                                $@transaction.Amount.ToString("N2")
-                                            </MudText>
-                                            <MudText Typo="Typo.caption">@transaction.RuleName</MudText>
-                                        </MudStack>
-                                    </MudStack>
-                                </MudCardContent>
-                            </MudCard>
-                        }
-                    </MudStack>
-                </MudStack>
+                <TransactionsList Title="Recent Expenses" Transactions="Transactions"/>
             </MudPaper>
             <!-- My Groups -->
             <MudStack Spacing="4">
                 <GroupsList Title="My Groups"
                             Icon="@Icons.Material.Outlined.Groups"
                             Groups="UserGroups"
-                            SelectedGroupId="_selectedGroupId"
-                            OnGroupSelect="SelectGroup"
+                            @bind-SelectedGroup="SelectedGroup"
+                            @bind-SelectedGroup:after="@OnSelectedGroupChanged"
                             ShowCreateButton="true"
                             OnCreateClick="OpenCreateDialogAsync"/>
 
                 <GroupsList Title="Archived Groups"
                             Icon="@Icons.Material.Outlined.Archive"
                             Groups="_archivedGroups"
-                            SelectedGroupId="_selectedGroupId"
-                            OnGroupSelect="SelectGroup"
+                            @bind-SelectedGroup="SelectedGroup"
+                            @bind-SelectedGroup:after="@OnSelectedGroupChanged"
                             ShowCreateButton="false"/>
             </MudStack>
         </MudStack>
@@ -208,102 +175,52 @@
 </MudStack>
 
 
-@if (_selectedGroupId != Guid.Empty && !_isSelectedGroupArchived)
+@if (SelectedGroup is { IsArchive: false })
 {
-    <ExtendedFab Label="Expense" AlwaysExtended="true"/>
+    <ExtendedFab Label="Expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog"/>
 }
 
 @code {
-    private const string CurrentUserName = "John Doe";
-    private Guid _selectedGroupId = Guid.Empty;
-    private string? _selectedGroupName;
-    private bool _isSelectedGroupArchived;
-    private decimal _userBalance;
-
     [PersistentState] public ICollection<GroupResponse> UserGroups { get; set; } = null!;
+    [PersistentState] public GroupResponse? SelectedGroup { get; set; }
+    [PersistentState] public List<TransactionResponse> Transactions { get; set; } = null!;
 
     private readonly List<GroupResponse> _archivedGroups = [];
 
+    private decimal _userBalance;
     private List<DebtInfo> _owedToYou = new();
     private List<DebtInfo> _youOwe = new();
     private List<MemberBalance> _members = new();
-    private List<TransactionInfo> _transactions = new();
+
+    private CancellationTokenSource? _loadCts;
+
 
     protected override async Task OnInitializedAsync()
     {
         UserGroups ??= await GroupsClient.GetGroupsAsync();
-        if (UserGroups.Any())
+        if (SelectedGroup is null)
         {
-            SelectGroup(UserGroups.First().Id);
+            SelectedGroup = UserGroups.FirstOrDefault();
+            await OnSelectedGroupChanged();
         }
 
         await base.OnInitializedAsync();
     }
 
-    private void SelectGroup(Guid groupId)
+    private async Task OnSelectedGroupChanged()
     {
-        _selectedGroupId = groupId;
+        if (SelectedGroup is null) return;
 
-        // Check if it's in active groups
-        var group = UserGroups.FirstOrDefault(g => g.Id == groupId);
-        if (group != null)
-        {
-            _selectedGroupName = group.Name;
-            _isSelectedGroupArchived = false;
-        }
-        else
-        {
-            // Check if it's in archived groups
-            group = _archivedGroups.FirstOrDefault(g => g.Id == groupId);
-            if (group != null)
-            {
-                _selectedGroupName = group.Name;
-                _isSelectedGroupArchived = true;
-            }
-        }
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id);
 
-        LoadGroupData();
-    }
+        Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
 
-    private void LoadGroupData()
-    {
-        // TODO: Load from API - these are mock calculations
-        // In reality, you'd fetch transactions and calculate balances
-
-        // Mock: Calculate user's balance
-        _userBalance = 45.50m;
-
-        _owedToYou = new List<DebtInfo>
-        {
-            new() { Name = "Jane Smith", Amount = 25.00m },
-            new() { Name = "Bob Wilson", Amount = 20.50m }
-        };
-
+        // TODO: Replace with real balances once API provides endpoints
+        // For now, keep placeholders minimal and neutral
+        _userBalance = 0m;
+        _owedToYou = new List<DebtInfo>();
         _youOwe = new List<DebtInfo>();
-
-        // Mock: Group member balances
-        _members = new List<MemberBalance>
-        {
-            new() { Name = CurrentUserName, Balance = 45.50m },
-            new() { Name = "Jane Smith", Balance = -25.00m },
-            new() { Name = "Bob Wilson", Balance = -20.50m },
-            new() { Name = "Alice Johnson", Balance = 0.00m }
-        };
-
-        // Mock: Recent transactions
-        _transactions = new List<TransactionInfo>
-        {
-            new() { Id = Guid.NewGuid(), Name = "Dinner at Italian Restaurant", Amount = 120.00m, PaidByName = CurrentUserName, Category = "Food", Date = DateTime.Now.AddDays(-1), RuleName = "Split Equally" },
-            new() { Id = Guid.NewGuid(), Name = "Taxi to Airport", Amount = 45.50m, PaidByName = "Jane Smith", Category = "Transport", Date = DateTime.Now.AddDays(-2), RuleName = "Split Equally" },
-            new() { Id = Guid.NewGuid(), Name = "Hotel Booking", Amount = 320.00m, PaidByName = CurrentUserName, Category = "Accommodation", Date = DateTime.Now.AddDays(-5), RuleName = "Split by Percentage" },
-            new() { Id = Guid.NewGuid(), Name = "Concert Tickets", Amount = 85.20m, PaidByName = "Bob Wilson", Category = "Entertainment", Date = DateTime.Now.AddDays(-7), RuleName = "Split Equally" }
-        };
-    }
-
-    private void ViewExpenseDetails(TransactionInfo transaction)
-    {
-        // TODO: Implement expense details dialog/modal
-        // Show expense details: description, amount, who paid, date, how it was split, etc.
+        _members = new List<MemberBalance>();
     }
 
     private void ManageRules()
@@ -324,29 +241,8 @@
 
     private void ArchiveGroup()
     {
-        if (_selectedGroupId == Guid.Empty || _isSelectedGroupArchived)
-            return;
-
-        // Find the group in active groups
-        var group = UserGroups.FirstOrDefault(g => g.Id == _selectedGroupId);
-        if (group != null)
-        {
-            // Move to archived groups
-            UserGroups.Remove(group);
-            _archivedGroups.Add(group);
-
-            // Select first available group or clear selection
-            if (UserGroups.Any())
-            {
-                SelectGroup(UserGroups.First().Id);
-            }
-            else
-            {
-                _selectedGroupId = Guid.Empty;
-                _selectedGroupName = null;
-                _isSelectedGroupArchived = false;
-            }
-        }
+        // TODO: Implement archive group dialog
+        // Allow user to archive the selected group
     }
 
     private void UpdateGroupInList(GroupResponse updatedGroup)
@@ -371,15 +267,12 @@
 
         var dialogReference = await DialogService.ShowAsync<CreateGroupDialog>("Create a group", options);
 
-        try
-        {
-            var dialogResult = await dialogReference.GetResult<CreateGroupRequest>();
-            if (dialogReference is not null)
-            {
-                var group = await GroupsClient.CreateGroupAsync(dialogResult);
-                UserGroups.Add(group);
-            }
-        } catch (InvalidCastException)
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+            return;
+
+        if (dialogResult.Data is not CreateGroupRequest request)
         {
             Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);
             return;
@@ -389,7 +282,7 @@
     private async Task OpenAddMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var users = from user in await GroupsClient.GetGroupMembersAsync(_selectedGroupId)
+        var users = from user in await GroupsClient.GetGroupMembersAsync(SelectedGroup.Id)
                     where user.Email is not null
                     select new UserIdentifier { Email = user.Email! };
         var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, users.ToArray() } };
@@ -401,7 +294,7 @@
             var request = await dialogReference.GetResult<AddMemberRequest>();
             if (request is not null)
             {
-                var updatedGroup = await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
+                var updatedGroup = await GroupsClient.AddGroupMemberAsync(SelectedGroup.Id, request);
                 UpdateGroupInList(updatedGroup);
                 Snackbar.Add("Member added successfully.", Severity.Success);
             }
@@ -415,7 +308,7 @@
     private async Task OpenRemoveMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var members = await GroupsClient.GetGroupMembersAsync(_selectedGroupId);
+        var members = await GroupsClient.GetGroupMembersAsync(SelectedGroup.Id);
         var parameters = new DialogParameters<RemoveMemberDialog> { { x => x.Members, members } };
 
         var dialogReference = await DialogService.ShowAsync<RemoveMemberDialog>("Remove member", parameters, options);
@@ -431,8 +324,8 @@
         }
         if (removedUser is not null)
         {
-            await GroupsClient.RemoveGroupMemberAsync(_selectedGroupId, removedUser.Id);
-            var updatedGroup = await GroupsClient.GetGroupAsync(_selectedGroupId);
+            await GroupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, removedUser.Id);
+            var updatedGroup = await GroupsClient.GetGroupAsync(SelectedGroup.Id);
             UpdateGroupInList(updatedGroup);
             Snackbar.Add("Member removed successfully.", Severity.Success);
         }
@@ -441,11 +334,13 @@
     
     private async Task OpenUpdateGroupDialog()
     {
+        if (SelectedGroup is null) return;
+
         var parameters = new DialogParameters
         {
-            { "Group", UserGroups.First(x => x.Id == _selectedGroupId) }
+            { "Group", SelectedGroup }
         };
-
+        
         var dialog = await DialogService.ShowAsync<UpdateGroupDialog>(
             "Edit Group",
             parameters,
@@ -459,8 +354,47 @@
         
         if (result.Data is JsonPatchDocument<CreateGroupRequest> patch)
         {
-            await GroupsClient.UpdateGroupAsync(_selectedGroupId, patch);
+            await GroupsClient.UpdateGroupAsync(SelectedGroup.Id, patch);
+            
+            UserGroups = await GroupsClient.GetGroupsAsync();
+            SelectedGroup = UserGroups.FirstOrDefault(g => g.Id == SelectedGroup.Id);
+            StateHasChanged();
         }
+    }
+
+    private async Task OpenAddTransactionDialog()
+    {
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { x => x.SelectedGroupId, SelectedGroup?.Id }
+        };
+
+        var dialogReference = await DialogService.ShowAsync<CreateTransactionDialog>("Create an expense", parameters, options);
+
+        var dialogResult = await dialogReference.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+            return;
+
+        if (dialogResult.Data is not CreateTransactionRequest request)
+        {
+            Snackbar.Add("Dialog did not return a valid transaction. Please try again.", Severity.Error);
+            return;
+        }
+
+        await TransactionsClient.CreateTransactionAsync(request);
+
+        if (SelectedGroup is null) return;
+
+        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id);
+        Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
+        StateHasChanged();
     }
 
     private class DebtInfo
@@ -473,17 +407,6 @@
     {
         public string Name { get; set; } = "";
         public decimal Balance { get; set; }
-    }
-
-    private class TransactionInfo
-    {
-        public Guid Id { get; set; }
-        public string Name { get; set; } = "";
-        public decimal Amount { get; set; }
-        public string PaidByName { get; set; } = "";
-        public string Category { get; set; } = "";
-        public DateTime Date { get; set; }
-        public string RuleName { get; set; } = "";
     }
 
 }

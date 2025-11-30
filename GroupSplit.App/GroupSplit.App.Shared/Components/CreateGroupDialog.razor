@@ -20,9 +20,9 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="@Cancel">Cancel</MudButton>
 
-        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
             Submit
         </MudButton>
     </DialogActions>
@@ -51,5 +51,4 @@
     {
         MudDialog.Cancel();
     }
-
 }

@@ -2,6 +2,7 @@
 using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Npgsql;
 
 namespace GroupSplit.API.Services;
 
@@ -31,6 +32,7 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
 
         var user = await users
             .FirstOrDefaultAsync(user => user.Identity.IdentityId == claimUserId, cancellationToken);
+
         if (user is not null)
         {
             return user;
@@ -38,7 +40,21 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
 
         var personalGroup = new Group
         {
-            Name = "Personal"
+            Name = "Personal",
+            Rules =
+            {
+                new Rule
+                {
+                    Category = "Personal",
+                    Versions =
+                    {
+                        new PersonalRuleVersion
+                        {
+                            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                        }
+                    }
+                }
+            }
         };
 
         user = new User
@@ -53,7 +69,18 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
         };
 
         users.Add(user);
-        await context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            context.Entry(user).State = EntityState.Detached;
+
+            return await users
+                .FirstAsync(u => u.Identity.IdentityId == claimUserId, cancellationToken);
+        }
 
         return user;
     }

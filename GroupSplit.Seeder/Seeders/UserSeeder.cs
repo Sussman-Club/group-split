@@ -20,8 +20,26 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
             Email = dto.Email,
             Identity = new UserIdentity { IdentityId = dto.ExternalUserId },
         };
-        
-        var personalGroup = new Group { Name = "Me, myself and I" };
+
+        var personalGroup = new Group
+        {
+            Name = "Personal",
+            Rules =
+            {
+                new Rule
+                {
+                    Category = "Personal",
+                    Versions =
+                    {
+                        new PersonalRuleVersion
+                        {
+                            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                        }
+                    }
+                }
+            }
+        };
+
         user.PersonalGroup = personalGroup;
         user.Groups.Add(personalGroup);
 

@@ -1,0 +1,194 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            @MudDialog.Title
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="@form" Model="@model">
+            <MudStack Spacing="3" Direction="Column">
+
+                @* Name *@
+                <MudTextField
+                    @bind-Value="model.Name"
+                    For="@(() => model.Name)"
+                    Label="Name"
+                    Variant="Variant.Outlined"
+                    Immediate="true"/>
+
+                @* Description *@
+                <MudTextField
+                    @bind-Value="model.Description"
+                    For="@(() => model.Description)"
+                    Label="Description"
+                    Variant="Variant.Outlined"
+                    Immediate="true"
+                    Lines="3"/>
+
+                @* Amount *@
+                <MudNumericField
+                    @bind-Value="model.Amount"
+                    For="@(() => model.Amount)"
+                    Label="Amount"
+                    Variant="Variant.Outlined"
+                    Adornment="Adornment.Start"
+                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentColor="Color.Primary"
+                    Immediate="true"
+                    HideSpinButtons="true"/>
+
+                <MudStack Row="true" Spacing="4">
+
+                    @* Date *@
+                    <MudDatePicker
+                        @bind-Date="selectedDate"
+                        Label="Transaction Date"
+                        Variant="Variant.Outlined"/>
+
+                    @* Time *@
+                    <MudTimePicker
+                        @bind-Time="selectedTime"
+                        Label="Transaction Time"
+                        Variant="Variant.Outlined"
+                        AmPm="true"/>
+
+                </MudStack>
+
+                @* Group Selection *@
+                <MudSelect T="Guid?"
+                           Label="Group"
+                           Variant="Variant.Outlined"
+                           @bind-Value="SelectedGroupId"
+                           @bind-Value:after="OnGroupChanged"
+                           Clearable="false"
+                           Placeholder="">
+                    @foreach (var g in UserGroups)
+                    {
+                        <MudSelectItem T="Guid?" Value="@g.Id">@g.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @* Category Selection *@
+                <MudSelect T="Guid?"
+                           Label="Category"
+                           Variant="Variant.Outlined"
+                           @bind-Value="model.RuleVersionId"
+                           Disabled="@(!GroupCategories.Any())"
+                           Clearable="false"
+                           Placeholder="">
+                    @foreach (var c in GroupCategories)
+                    {
+                        <MudSelectItem T="Guid?" Value="@c.Id">@c.Category</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (!DisablePayingUserSelection)
+                {
+                    @* Paying User Selection *@
+                    <MudSelect T="Guid?"
+                               Label="Paid By"
+                               Variant="Variant.Outlined"
+                               @bind-Value="model.PaidByUserId"
+                               Disabled="@(!GroupUsers.Any())"
+                               Clearable="false"
+                               Placeholder="">
+                        @foreach (var u in GroupUsers)
+                        {
+                            <MudSelectItem T="Guid?" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@Cancel">Cancel</MudButton>
+
+        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
+            Submit
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public bool DisablePayingUserSelection { get; set; }
+    [Parameter] public Guid? SelectedGroupId { get; set; }
+
+    MudForm form;
+
+    private bool loading = false;
+
+    private CreateTransactionRequest model = new()
+    {
+        DateTime = DateTimeOffset.Now
+    };
+
+    private DateTime? selectedDate = DateTime.Today;
+    private TimeSpan? selectedTime = DateTime.Now.TimeOfDay;
+
+    // Group / categories / users state
+    private ICollection<GroupResponse> UserGroups = [];
+    private ICollection<RuleVersionResponse> GroupCategories = [];
+    private ICollection<UserInfo> GroupUsers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserGroups = await GroupsClient.GetGroupsAsync();
+        await LoadGroupDetails();
+        StateHasChanged();
+    }
+
+    private async Task OnGroupChanged()
+    {
+        await LoadGroupDetails();
+        StateHasChanged();
+    }
+
+    private async Task LoadGroupDetails()
+    {
+        if (SelectedGroupId is not { } groupId)
+        {
+            GroupCategories = [];
+            GroupUsers = [];
+            return;
+        }
+
+        GroupCategories = await GroupsClient.GetGroupRulesAsync(groupId);
+        GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (!form.IsValid)
+            return;
+
+        // Combine date + time into a local DateTime
+        var date = selectedDate ?? DateTime.Today;
+        var time = selectedTime ?? TimeSpan.Zero;
+
+        var localDateTime = date.Date + time;
+
+        // Convert to DateTimeOffset using local timezone offset
+        model.DateTime = new DateTimeOffset(
+            localDateTime,
+            TimeZoneInfo.Local.GetUtcOffset(localDateTime)
+        );
+
+        MudDialog.Close(DialogResult.Ok(model));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+}

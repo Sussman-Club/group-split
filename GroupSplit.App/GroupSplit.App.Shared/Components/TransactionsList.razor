@@ -1,0 +1,52 @@
+@using GroupSplit.Shared
+
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h6" Class="font-weight-bold">@Title</MudText>
+
+    <MudStack Spacing="2">
+        @foreach (var transaction in Transactions)
+        {
+            <MudCard Elevation="0" Outlined="true" Class="hover-slide-right"
+                     @onclick="() => ViewExpenseDetails(transaction)">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudStack Spacing="0" Class="flex-grow-1">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudAvatar Color="Color.Primary"
+                                           Size="Size.Small">@transaction.PaidByUserName[0]</MudAvatar>
+                                <MudText Typo="Typo.body2"
+                                         Class="font-weight-medium">@transaction.Name</MudText>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                         Color="Color.Primary">@transaction.Category</MudChip>
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Class="ml-10">
+                                Paid by <strong>@transaction.PaidByUserName</strong>
+                                on @transaction.DateTime.Date.ToShortDateString()
+                            </MudText>
+                        </MudStack>
+                        <MudStack AlignItems="AlignItems.End" Spacing="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
+                                $@transaction.Amount.ToString("N2")
+                            </MudText>
+                            <!-- TODO: Change this with the actual split percentage -->
+                            <MudText Typo="Typo.caption">equally</MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        }
+    </MudStack>
+</MudStack>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Transactions";
+    [Parameter] public ICollection<TransactionResponse> Transactions { get; set; } = null!;
+
+    private void ViewExpenseDetails(TransactionResponse transaction)
+    {
+        // TODO: Implement expense details dialog/modal
+        // Show expense details: description, amount, who paid, date, how it was split, etc.
+    }
+
+}

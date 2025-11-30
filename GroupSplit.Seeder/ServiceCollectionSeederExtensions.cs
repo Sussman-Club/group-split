@@ -17,6 +17,9 @@ public static class ServiceCollectionSeederExtensions
         {
             services.AddJsonSeedSource<GroupSeedDto>(opt => opt.Paths.Groups);
             services.AddJsonSeedSource<UserSeedDto>(opt => opt.Paths.Users);
+            services.AddJsonSeedSource<RuleSeedDto>(opt => opt.Paths.Rules);
+            services.AddJsonSeedSource<RuleVersionSeedDto>(opt => opt.Paths.RuleVersions);
+            services.AddJsonSeedSource<TransactionSeedDto>(opt => opt.Paths.Transactions);
             services.AddJsonSeedSource<IdentityUserSeedDto>(opt => opt.Paths.IdentityUsers);
             return services;
         }
@@ -30,6 +33,10 @@ public static class ServiceCollectionSeederExtensions
             // App seeders
             services.AddSeeder<GroupSeeder>();
             services.AddSeeder<UserSeeder>();
+            services.AddSeeder<RuleSeeder>();
+            services.AddSeeder<RuleVersionSeeder>();
+            services.AddSeeder<TransactionSeeder>();
+
             return services;
         }
 

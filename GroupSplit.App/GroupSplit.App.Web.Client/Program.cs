@@ -1,6 +1,6 @@
 using GroupSplit.App.Shared.Services;
-using GroupSplit.App.Web.Client.Services;
 using GroupSplit.Shared;
+using GroupSplit.App.Web.Client.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
@@ -14,7 +14,7 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddMudServices();
 
 // Add shared services
-builder.Services.AddSharedServices();
+builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
 // Add Auth client
 builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
@@ -44,6 +44,16 @@ builder.Services.AddHttpClient<IUsersClient, UsersClient>("UserClient", client =
 });
 
 builder.Services.AddHttpClient<IGroupsClient, GroupsClient>(client =>
+{
+    var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
+    {
+        Path = "api/"
+    };
+    
+    client.BaseAddress = uriBuilder.Uri;
+});
+
+builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =>
 {
     var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
     {

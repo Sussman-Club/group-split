@@ -3,6 +3,7 @@ using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.App;
 
@@ -19,7 +20,7 @@ public static class MauiProgram
             });
 
         // Add shared services
-        builder.Services.AddSharedServices();
+        builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
         // Add device-specific services used by the GroupSplit.App.Shared project
         builder.Services.AddSingleton<IFormFactor, FormFactor>();

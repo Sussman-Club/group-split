@@ -1,10 +1,12 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
-@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.Shared
+@inject ITransactionsService TransactionsService
+@inject ISnackbar Snackbar
 @inject MudTheme Theme
 
 <PageTitle>Transactions</PageTitle>
-
 
 <MudStack Row="true" AlignItems="AlignItems.Center">
     <MudStack Spacing="1">
@@ -26,8 +28,8 @@
               Variant="Variant.Outlined"
               Class="flex-grow-1 pa-6"/>
 
-<MudDataGrid T="TransactionViewModel"
-             Items="@FilteredTransactions"
+<MudDataGrid T="TransactionResponse"
+             Items="@TransactionsService.UserTransactions"
              Filterable="true"
              FilterMode="DataGridFilterMode.Simple"
              Hover="true"
@@ -36,13 +38,18 @@
              Class="ma-6"
              Striped="true">
     <Columns>
-        <PropertyColumn Property="x => x.Date" Title="Date" Filterable="false">
+        <PropertyColumn Property="x => x.DateTime" Title="Date" Filterable="false">
             <CellTemplate>
                 <MudStack Spacing="0">
-                    <MudText Typo="Typo.body2">@context.Item.Date.ToShortDateString()</MudText>
-                    <MudText Typo="Typo.caption"
-                             Color="Color.Secondary">@context.Item.Date.ToShortTimeString()</MudText>
+                    <MudText Typo="Typo.body2">@context.Item.DateTime.LocalDateTime.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</MudText>
                 </MudStack>
+            </CellTemplate>
+        </PropertyColumn>
+
+        <PropertyColumn Property="x => x.Name" Title="Name" Filterable="true">
+            <CellTemplate>
+                <MudText Typo="Typo.body2">@context.Item.Name</MudText>
             </CellTemplate>
         </PropertyColumn>
 
@@ -68,11 +75,11 @@
                     <MudIconButton Icon="@Icons.Material.Outlined.Edit"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   OnClick="() => EditTransaction(context.Item)"/>
+                                   OnClick="@(async () => await EditTransactionAsync(context.Item))"/>
                     <MudIconButton Icon="@Icons.Material.Outlined.Delete"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   OnClick="() => DeleteTransaction(context.Item)"/>
+                                   OnClick="@(async () => await DeleteTransactionAsync(context.Item))"/>
                 </MudStack>
             </CellTemplate>
         </TemplateColumn>
@@ -85,57 +92,65 @@
     </NoRecordsContent>
 </MudDataGrid>
 
-<ExtendedFab Label="Transaction"/>
+<ExtendedFab Label="Transaction" OnClick="@AddTransactionAsync"/>
 
 @code {
     private string _searchString = "";
-    private const string CurrentUserName = "John Doe"; // TODO: Get from authentication context
 
-    // All transactions from database (filtered by current user)
-    private readonly List<TransactionViewModel> _transactions = new()
+    protected override async Task OnInitializedAsync()
     {
-        // Only showing current user's (John Doe) transactions
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-1), GroupName = "Vacation 2024", UserName = CurrentUserName, Amount = 125.50m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-7), GroupName = "Weekend Trip", UserName = CurrentUserName, Amount = 89.25m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-10), GroupName = "Office Lunch", UserName = CurrentUserName, Amount = 32.75m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-14), GroupName = "Vacation 2024", UserName = CurrentUserName, Amount = 200.00m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-20), GroupName = "Roommates", UserName = CurrentUserName, Amount = 156.80m },
-        new TransactionViewModel { Id = Guid.NewGuid(), Date = DateTime.Now.AddDays(-25), GroupName = "Weekend Trip", UserName = CurrentUserName, Amount = 45.00m }
-    };
-
-    private IEnumerable<TransactionViewModel> FilteredTransactions =>
-        _transactions.Where(t =>
+        if (TransactionsService.UserTransactions is null)
         {
-            var matchesSearch = string.IsNullOrWhiteSpace(_searchString) ||
-                                t.GroupName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
-                                t.Amount.ToString().Contains(_searchString);
-
-            return matchesSearch;
-        }).OrderByDescending(t => t.Date);
-
-    private void OpenAddTransactionDialog()
-    {
-        // TODO: Implement add transaction dialog
+            await TransactionsService.LoadAsync();
+            StateHasChanged();
+        }
     }
 
-    private void EditTransaction(TransactionViewModel transaction)
+    private async Task AddTransactionAsync()
     {
-        // TODO: Implement edit transaction
+        var request = await TransactionsService.ShowCreateTransactionDialogAsync();
+        if (request is null) return;
+
+        try
+        {
+            await TransactionsService.AddAsync(request);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding transaction: {ex.Message}", Severity.Error);
+        }
     }
 
-    private void DeleteTransaction(TransactionViewModel transaction)
+    private async Task EditTransactionAsync(TransactionResponse transaction)
     {
-        // TODO: Implement delete transaction
+        var request = await TransactionsService.ShowEditTransactionDialogAsync(transaction);
+        if (request is null) return;
+
+        try
+        {
+            await TransactionsService.EditAsync(transaction.Id, request);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error editing transaction: {ex.Message}", Severity.Error);
+        }
     }
 
-
-    private class TransactionViewModel
+    private async Task DeleteTransactionAsync(TransactionResponse transaction)
     {
-        public Guid Id { get; set; }
-        public DateTime Date { get; set; }
-        public string GroupName { get; set; } = "";
-        public string UserName { get; set; } = "";
-        public decimal Amount { get; set; }
+        if (!await TransactionsService.ShowConfirmDeleteDialogAsync(transaction)) return;
+
+        try
+        {
+            await TransactionsService.DeleteAsync(transaction);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting transaction: {ex.Message}", Severity.Error);
+        }
     }
 
 }

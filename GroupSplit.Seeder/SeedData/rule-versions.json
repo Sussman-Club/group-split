@@ -1,0 +1,74 @@
+[
+  {
+    "Id": "B1B11111-1111-1111-1111-111111111111",
+    "RuleId": "A1A11111-1111-1111-1111-111111111111",
+    "StartDate": "2024-01-01",
+    "Type": "Percentage",
+    "Percentages": [
+      {
+        "UserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+        "Percentage": 30
+      },
+      {
+        "UserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+        "Percentage": 10
+      },
+      {
+        "UserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+        "Percentage": 30
+      },
+      {
+        "UserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+        "Percentage": 30
+      }
+    ]
+  },
+  {
+    "Id": "B2B22222-2222-2222-2222-222222222222",
+    "RuleId": "A2A22222-2222-2222-2222-222222222222",
+    "StartDate": "2024-06-01",
+    "Type": "Percentage",
+    "Percentages": [
+      {
+        "UserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+        "Percentage": 25
+      },
+      {
+        "UserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+        "Percentage": 25
+      },
+      {
+        "UserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+        "Percentage": 25
+      },
+      {
+        "UserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+        "Percentage": 25
+      }
+    ]
+  },
+  {
+    "Id": "B3B33333-3333-3333-3333-333333333333",
+    "RuleId": "A3A33333-3333-3333-3333-333333333333",
+    "StartDate": "2024-03-15",
+    "Type": "Percentage",
+    "Percentages": [
+      {
+        "UserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+        "Percentage": 30
+      },
+      {
+        "UserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+        "Percentage": 10
+      },
+      {
+        "UserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+        "Percentage": 30
+      },
+      {
+        "UserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+        "Percentage": 30
+      }
+    ]
+  }
+]

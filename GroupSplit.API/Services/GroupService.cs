@@ -76,9 +76,10 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
     {
         return from g in await GetAllGroups(cancellationToken)
-               where g.Id == groupId
-               select g;
+            where g.Id == groupId
+            select g;
     }
+    
 
     public async Task UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -97,8 +98,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default)
     {
         return from gr in await GetGroupById(groupId, cancellationToken)
-               from user in gr.Users
-               select user;
+            from user in gr.Users
+            select user;
     }
 
     public async Task<IQueryable<Group>> AddGroupMembers(Guid groupId, AddMemberRequest request, CancellationToken cancellationToken = default)

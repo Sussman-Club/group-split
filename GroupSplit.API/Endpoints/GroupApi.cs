@@ -22,6 +22,8 @@ public static class GroupApi
             group.MapGetAllGroups();
             group.MapGetGroup();
             group.MapUpdateGroup();
+            group.MapGetGroupTransactions();
+            group.MapGetGroupRules();
             group.MapGetMembers();
             group.MapAddMember();
             group.MapRemovedMember();
@@ -66,14 +68,14 @@ public static class GroupApi
                     Guid id,
                     IGroupService groupService,
                     CancellationToken ct) =>
-                    {
-                        var group = await groupService.GetGroupById(id, ct);
-                        var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                {
+                    var group = await groupService.GetGroupById(id, ct);
+                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
-                        if (groupResponse is null) return Results.NotFound();
+                    if (groupResponse is null) return Results.NotFound();
 
-                        return Results.Ok(groupResponse);
-                    })
+                    return Results.Ok(groupResponse);
+                })
                 .WithName("GetGroup")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
@@ -93,15 +95,50 @@ public static class GroupApi
                     {
                         Name = t.Name
                     }).FirstOrDefaultAsync(ct);
-
-                if (groupUpdateRequest is null) return Results.NotFound();
-
+                
                 patchDocument.ApplyTo(groupUpdateRequest);
 
                 await groupService.UpdateGroup(id, groupUpdateRequest, ct);
 
                 return Results.Ok();
             }).WithName("UpdateGroup");
+        }
+
+        private RouteHandlerBuilder MapGetGroupTransactions()
+        {
+            return group.MapGet("{id:guid}/transactions", async (
+                    Guid id,
+                    [AsParameters] TransactionFilter filter,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactions = await transactionService.List(ct);
+                    var transactionResponses = await transactions
+                        .Where(x => x.RuleVersion.Rule.Group.Id == id)
+                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
+                    return Results.Ok(transactionResponses);
+                })
+                .WithName("GetGroupTransactions")
+                .Produces<TransactionResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapGetGroupRules()
+        {
+            return group.MapGet("{id:guid}/rules", async (
+                    Guid id,
+                    IRulesService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var rules = await transactionService.List(ct);
+                    var ruleResponses = await rules
+                        .Where(x => x.Rule.Group.Id == id)
+                        .Include(x => x.Rule)
+                        .SelectDto()
+                        .ToListAsync(ct);
+                    return Results.Ok(ruleResponses);
+                })
+                .WithName("GetGroupRules")
+                .Produces<RuleVersionResponse[]>();
         }
 
         private RouteHandlerBuilder MapGetMembers()
@@ -177,6 +214,15 @@ public static class GroupApi
         {
             return from user in users
                    select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
+        }
+    }
+
+    extension(IQueryable<RuleVersion> ruleVersions)
+    {
+        private IQueryable<RuleVersionResponse> SelectDto()
+        {
+            return from ruleVersion in ruleVersions
+                select new RuleVersionResponse(ruleVersion.Id, ruleVersion.Rule.Category);
         }
     }
 }

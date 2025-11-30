@@ -1,0 +1,17 @@
+[
+  {
+    "Id": "A1A11111-1111-1111-1111-111111111111",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Groceries"
+  },
+  {
+    "Id": "A2A22222-2222-2222-2222-222222222222",
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "Category": "Lodging"
+  },
+  {
+    "Id": "A3A33333-3333-3333-3333-333333333333",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Utilities"
+  }
+]

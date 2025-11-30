@@ -1,0 +1,136 @@
+using GroupSplit.API.Services;
+using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
+using Microsoft.EntityFrameworkCore;
+
+namespace GroupSplit.API.Endpoints;
+
+public static class TransactionApi
+{
+    extension(IEndpointRouteBuilder routeBuilder)
+    {
+        public RouteGroupBuilder MapTransaction()
+        {
+            var group = routeBuilder
+                .MapGroup("/transactions")
+                .RequireAuthorization();
+
+            group.WithTags("Transactions");
+
+            group.MapGetAll();
+            group.MapCreate();
+            group.MapUpdate();
+            group.MapDelete();
+
+            return group;
+        }
+    }
+
+    extension(RouteGroupBuilder group)
+    {
+        private RouteHandlerBuilder MapGetAll()
+        {
+            return group.MapGet(string.Empty, async (
+                    [AsParameters] TransactionFilter filter,
+                    IUserService userService,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var user = await userService.GetCurrentUser();
+                    var transactions = await transactionService.List(ct);
+                    var transactionResponses = await transactions
+                        .Where(x => x.User.Id == user.Id)
+                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
+                    return Results.Ok(transactionResponses);
+                })
+                .WithName("GetTransactions")
+                .Produces<TransactionResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapCreate()
+        {
+            return group.MapPost(string.Empty, async (
+                    CreateTransactionRequest request,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                { 
+                    await transactionService.Create(request, ct);
+                    return Results.Ok();
+                })
+                .WithName("CreateTransaction")
+                .Produces(StatusCodes.Status200OK);
+        }
+
+        private RouteHandlerBuilder MapUpdate()
+        {
+            return group.MapPatch("{id:guid}", async (
+                    Guid id,
+                    JsonPatchDocument<UpdateTransactionRequest> patchDocument,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactionUpdateRequest = await transactionService.GetUpdateModel(id, ct);
+
+                    if (transactionUpdateRequest is null) return Results.NotFound();
+
+                    patchDocument.ApplyTo(transactionUpdateRequest);
+
+                    await transactionService.Update(id, transactionUpdateRequest, ct);
+
+                    return Results.Ok();
+                })
+                .WithName("UpdateTransaction")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapDelete()
+        {
+            return group.MapDelete("{id:guid}",
+                    async (Guid id, ITransactionService transactionService, CancellationToken ct) =>
+                    {
+                        await transactionService.Delete(id, ct);
+                        return Results.Ok();
+                    }
+                )
+                .WithName("DeleteTransaction")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound);
+        }
+    }
+
+    extension(IQueryable<Transaction> transactions)
+    {
+        internal IQueryable<TransactionResponse> SelectDto()
+        {
+            return from transaction in transactions
+                select new TransactionResponse
+                {
+                    Id = transaction.Id,
+                    Amount = transaction.Amount,
+                    DateTime = transaction.DateTime,
+                    Name = transaction.Name,
+                    Description = transaction.Description,
+                    GroupId = transaction.RuleVersion.Rule.Group.Id,
+                    GroupName = transaction.RuleVersion.Rule.Group.Name,
+                    PaidByUserId = transaction.User.Id,
+                    PaidByUserName = transaction.User.FirstName +
+                                     (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                    RuleVersionId = transaction.RuleVersion.Id,
+                    Category = transaction.RuleVersion.Rule.Category
+                };
+        }
+
+        internal IQueryable<Transaction> ApplyFilter(TransactionFilter? filter)
+        {
+            if (filter is null)
+                return transactions;
+
+            return from transaction in transactions
+                where (filter.From == null || transaction.DateTime >= filter.From) &&
+                      (filter.To == null || transaction.DateTime <= filter.To)
+                select transaction;
+        }
+    }
+}
