@@ -1,7 +1,6 @@
 using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
 using GroupSplit.App.Web.Client.Services;
-using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
@@ -15,7 +14,7 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddMudServices();
 
 // Add shared services
-builder.Services.AddSharedServices();
+builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
 // Add Auth client
 builder.Services.AddHttpClient<IAuthService, AuthService>(client =>

@@ -4,7 +4,7 @@ using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components.Web;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +27,7 @@ RenderModeConfig.Initialize(renderModePreference);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
+    .RegisterPersistentService<UserTransactionsTracker>(RenderMode.InteractiveAuto)
     .AddRenderModeComponents();
 
 // Add device-specific services used by the GroupSplit.App.Shared project

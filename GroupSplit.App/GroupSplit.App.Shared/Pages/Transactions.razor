@@ -1,14 +1,12 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
-@inject ITransactionsClient TransactionsClient
-@inject IDialogService DialogService
+@inject ITransactionsService TransactionsService
 @inject ISnackbar Snackbar
 @inject MudTheme Theme
 
 <PageTitle>Transactions</PageTitle>
-
 
 <MudStack Row="true" AlignItems="AlignItems.Center">
     <MudStack Spacing="1">
@@ -31,7 +29,7 @@
               Class="flex-grow-1 pa-6"/>
 
 <MudDataGrid T="TransactionResponse"
-             Items="@UserTransactions"
+             Items="@TransactionsService.UserTransactions"
              Filterable="true"
              FilterMode="DataGridFilterMode.Simple"
              Hover="true"
@@ -43,8 +41,8 @@
         <PropertyColumn Property="x => x.DateTime" Title="Date" Filterable="false">
             <CellTemplate>
                 <MudStack Spacing="0">
-                    <MudText Typo="Typo.body2">@context.Item.DateTime.DateTime.ToShortDateString()</MudText>
-                    <MudText Typo="Typo.caption">@context.Item.DateTime.DateTime.ToShortTimeString()</MudText>
+                    <MudText Typo="Typo.body2">@context.Item.DateTime.LocalDateTime.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</MudText>
                 </MudStack>
             </CellTemplate>
         </PropertyColumn>
@@ -77,11 +75,11 @@
                     <MudIconButton Icon="@Icons.Material.Outlined.Edit"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   OnClick="() => EditTransaction(context.Item)"/>
+                                   OnClick="@(async () => await EditTransactionAsync(context.Item))"/>
                     <MudIconButton Icon="@Icons.Material.Outlined.Delete"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   OnClick="@(async () => await OpenDeleteTransactionDialog(context.Item))"/>
+                                   OnClick="@(async () => await DeleteTransactionAsync(context.Item))"/>
                 </MudStack>
             </CellTemplate>
         </TemplateColumn>
@@ -94,105 +92,65 @@
     </NoRecordsContent>
 </MudDataGrid>
 
-<ExtendedFab Label="Transaction" OnClick="@OpenAddTransactionDialog"/>
+<ExtendedFab Label="Transaction" OnClick="@AddTransactionAsync"/>
 
 @code {
     private string _searchString = "";
 
-    [PersistentState] public ICollection<TransactionResponse> UserTransactions { get; set; } = null!;
-
     protected override async Task OnInitializedAsync()
     {
-        UserTransactions ??= await TransactionsClient.GetTransactionsAsync();
-        await base.OnInitializedAsync();
-    }
-
-    private async Task OpenAddTransactionDialog()
-    {
-        var options = new DialogOptions
+        if (TransactionsService.UserTransactions is null)
         {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
-
-        var parameters = new DialogParameters<CreateTransactionDialog>
-        {
-            { x => x.DisablePayingUserSelection, true }
-        };
-
-        var dialogReference = await DialogService.ShowAsync<CreateTransactionDialog>("Create a transaction", parameters, options);
-
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled)
-            return;
-
-        if (dialogResult.Data is not CreateTransactionRequest request)
-        {
-            Snackbar.Add("Dialog did not return a valid transaction. Please try again.", Severity.Error);
-            return;
+            await TransactionsService.LoadAsync();
+            StateHasChanged();
         }
-
-        await TransactionsClient.CreateTransactionAsync(request);
-
-        UserTransactions = await TransactionsClient.GetTransactionsAsync();
-        StateHasChanged();
     }
 
-    private async Task EditTransaction(TransactionResponse transaction)
+    private async Task AddTransactionAsync()
     {
-        var options = new DialogOptions
+        var request = await TransactionsService.ShowCreateTransactionDialogAsync();
+        if (request is null) return;
+
+        try
         {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
-
-        var dialogReference = await DialogService.ShowAsync<UpdateTransactionDialog>(
-            "Edit Transaction",
-            new DialogParameters { ["Original"] = transaction },
-            options);
-
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not JsonPatchDocument<UpdateTransactionRequest> jsonPatch)
-            return;
-
-        await TransactionsClient.UpdateTransactionAsync(transaction.Id, jsonPatch);
-
-        UserTransactions = await TransactionsClient.GetTransactionsAsync();
-        StateHasChanged();
+            await TransactionsService.AddAsync(request);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding transaction: {ex.Message}", Severity.Error);
+        }
     }
 
-    private async Task OpenDeleteTransactionDialog(TransactionResponse transaction)
+    private async Task EditTransactionAsync(TransactionResponse transaction)
     {
-        var parameters = new DialogParameters<ConfirmationDialog>
+        var request = await TransactionsService.ShowEditTransactionDialogAsync(transaction);
+        if (request is null) return;
+
+        try
         {
-            {
-                x => x.ContentText,
-                $"Are you sure you want to delete the transaction \"{transaction.Name}\"? This action cannot be undone."
-            },
-            { x => x.ButtonText, "Delete" },
-            { x => x.Color, Color.Error }
-        };
-
-        var options = new DialogOptions
+            await TransactionsService.EditAsync(transaction.Id, request);
+            StateHasChanged();
+        }
+        catch (Exception ex)
         {
-            CloseButton = true, 
-            MaxWidth = MaxWidth.ExtraSmall,
-            FullWidth = true
-        };
+            Snackbar.Add($"Error editing transaction: {ex.Message}", Severity.Error);
+        }
+    }
 
-        var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
+    private async Task DeleteTransactionAsync(TransactionResponse transaction)
+    {
+        if (!await TransactionsService.ShowConfirmDeleteDialogAsync(transaction)) return;
 
-        var dialogResult = await dialogReference.Result;
-
-        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data is not true)
-            return;
-
-        await TransactionsClient.DeleteTransactionAsync(transaction.Id);
-
-        UserTransactions.Remove(transaction);
-        StateHasChanged();
+        try
+        {
+            await TransactionsService.DeleteAsync(transaction);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting transaction: {ex.Message}", Severity.Error);
+        }
     }
 
 }
