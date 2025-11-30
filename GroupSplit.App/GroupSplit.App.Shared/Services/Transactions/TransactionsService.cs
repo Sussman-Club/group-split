@@ -1,27 +1,9 @@
 using GroupSplit.App.Shared.Components;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
-namespace GroupSplit.App.Shared.Services;
-
-public interface ITransactionsService
-{
-    ICollection<TransactionResponse>? UserTransactions { get; }
-    Task LoadAsync(CancellationToken ct = default);
-    Task AddAsync(CreateTransactionRequest request);
-    Task EditAsync(Guid id, JsonPatchDocument<UpdateTransactionRequest> patch);
-    Task DeleteAsync(TransactionResponse transaction);
-    Task<CreateTransactionRequest?> ShowCreateTransactionDialogAsync();
-    Task<JsonPatchDocument<UpdateTransactionRequest>?> ShowEditTransactionDialogAsync(TransactionResponse transaction);
-    Task<bool> ShowConfirmDeleteDialogAsync(TransactionResponse transaction);
-}
-
-public class UserTransactionsTracker
-{
-    [PersistentState] public ICollection<TransactionResponse>? UserTransactions { get; set; }
-}
+namespace GroupSplit.App.Shared.Services.Transactions;
 
 public class TransactionsService(
     ITransactionsClient client,

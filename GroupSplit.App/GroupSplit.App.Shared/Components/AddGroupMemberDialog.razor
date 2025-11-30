@@ -9,29 +9,29 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="@form" Model="@model">
+        <MudForm @ref="@_form" Model="@_model">
             <MudStack Row AlignItems="AlignItems.Center">
-                <MudTextField For="@(() => currentInput.Email)"
-                              @bind-Value="currentInput.Email"
+                <MudTextField For="@(() => _currentInput.Email)"
+                              @bind-Value="_currentInput.Email"
                               Label="User Email"
                               Variant="Variant.Outlined"
-                              OnKeyDown="HandleKeyDown"
+                              OnKeyDown="@HandleKeyDown"
                               Immediate
-                              Placeholder="Type an email..." />
-                <MudIconButton Icon="@Icons.Material.Rounded.Add" OnClick="AddMemberToList" Color="Color.Primary"/>
+                              Placeholder="Type an email..."/>
+                <MudIconButton Icon="@Icons.Material.Rounded.Add" OnClick="@AddMemberToList" Color="Color.Primary"/>
             </MudStack>
         </MudForm>
         <MudChipSet T="string" Style="padding-top: 5px;">
             @foreach (var userIdentifier in CurrentUsers)
             {
-                <MudChip T="UserIdentifier" Value=userIdentifier Variant="Variant.Filled" Color="Color.Primary">
-                    @userIdentifier.Email 
+                <MudChip T="UserInfo" Value=userIdentifier Variant="Variant.Filled" Color="Color.Primary">
+                    @userIdentifier.Email
                 </MudChip>
             }
-            @foreach (var userIdentifier in model.UserIdentifiers)
+            @foreach (var userIdentifier in _model.UserIdentifiers)
             {
                 <MudChip T="UserIdentifier" Value=userIdentifier CloseIcon="@Icons.Material.Rounded.Close"
-                         OnClose="CloseChip" Variant="Variant.Outlined" Color="Color.Primary">
+                         OnClose="@CloseChip" Variant="Variant.Outlined" Color="Color.Primary">
                     @userIdentifier.Email
                 </MudChip>
             }
@@ -40,7 +40,7 @@
 
     <DialogActions>
         <MudButton OnClick="@Cancel" Variant="Variant.Outlined">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit" Variant="Variant.Outlined">
+        <MudButton Color="Color.Primary" OnClick="@Submit" Variant="Variant.Outlined">
             Submit
         </MudButton>
     </DialogActions>
@@ -48,50 +48,53 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
-    MudForm form;
-    [Parameter] public UserIdentifier[] CurrentUsers { get => field ?? []; set; }
-    private UserIdentifier currentInput = new() { Email = string.Empty };
+    private MudForm _form = null!;
 
-    private bool loading = false;
+    [Parameter]
+    public UserInfo[] CurrentUsers
+    {
+        get => field ?? [];
+        set;
+    }
 
+    private UserIdentifier _currentInput = new() { Email = string.Empty };
 
-    private AddMemberRequest model = new([]);
-
+    private readonly AddMemberRequest _model = new([]);
 
     private async Task AddMemberToList()
     {
-        await form.Validate();
-        if (!form.IsValid) return;
+        await _form.Validate();
+        if (!_form.IsValid) return;
 
-        var email = currentInput.Email.Trim();
+        var email = _currentInput.Email.Trim();
 
         // Avoid duplicates (record equality already helps, but be explicit for case-insensitive)
-        if (model.UserIdentifiers.Any(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)))
+        if (_model.UserIdentifiers.Any(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        model.UserIdentifiers.Add(new UserIdentifier { Email = email });
+        _model.UserIdentifiers.Add(new UserIdentifier { Email = email });
 
         // Reset input (new instance so DataAnnotations re-run cleanly)
-        currentInput = new UserIdentifier { Email = string.Empty };
+        _currentInput = new UserIdentifier { Email = string.Empty };
         StateHasChanged();
     }
 
-    private async void HandleKeyDown(KeyboardEventArgs e)
+    private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
             await AddMemberToList();
     }
 
-    private async Task Submit()
+    private Task Submit()
     {
-
-        MudDialog.Close(DialogResult.Ok(model));
+        MudDialog.Close(DialogResult.Ok(_model));
+        return Task.CompletedTask;
     }
 
     private void CloseChip(MudChip<UserIdentifier> chip)
     {
         if (chip.Value is not null)
-            model.UserIdentifiers.Remove(chip.Value);
+            _model.UserIdentifiers.Remove(chip.Value);
     }
 
     private void Cancel()

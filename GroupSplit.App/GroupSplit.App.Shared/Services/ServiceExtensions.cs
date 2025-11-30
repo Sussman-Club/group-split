@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using GroupSplit.App.Shared.Services.Groups;
+using GroupSplit.App.Shared.Services.Transactions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.App.Shared.Services;
@@ -13,6 +15,9 @@ public static class ServiceExtensions
 
             services.TryAdd<UserTransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsService, TransactionsService>();
+
+            services.TryAdd<GroupsTracker>(sessionLifetime);
+            services.TryAddScoped<IGroupsService, GroupsService>();
 
             return services;
         }
