@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
 @inject ITransactionsClient TransactionsClient
+@using System.Threading.Tasks
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
@@ -26,12 +27,14 @@
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
+                       Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Settings"
                        OnClick="ManageRules">
                 Manage Rules
             </MudButton>
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
+                       Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Edit"
                        OnClick="@OpenUpdateGroupDialog">
                 Edit Group
@@ -40,12 +43,21 @@
             {
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
+                           Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.PersonAdd"
                            OnClick="AddMember">
                     Add Member
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
+                           Color="Color.Error"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.PersonRemove"
+                           OnClick="RemoveMember">
+                    Remove Member
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
                            Color="Color.Tertiary"
+                           Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Archive"
                            OnClick="ArchiveGroup">
                     Archive
@@ -218,16 +230,32 @@
         // Allow user to create, edit, and delete splitting rules
     }
 
-    private void AddMember()
+    private async Task AddMember()
     {
-        // TODO: Implement add member dialog
-        // Allow user to add new members to the group
+        await OpenAddMemberDialogAsync();
+    }
+
+    private async Task RemoveMember()
+    {
+        await OpenRemoveMemberDialogAsync();
     }
 
     private void ArchiveGroup()
     {
         // TODO: Implement archive group dialog
         // Allow user to archive the selected group
+    }
+
+    private void UpdateGroupInList(GroupResponse updatedGroup)
+    {
+        // This method probably needs to be updated after transactions merge
+        var groupList = UserGroups.ToList();
+        var index = groupList.FindIndex(g => g.Id == updatedGroup.Id);
+        if (index >= 0)
+        {
+            groupList[index] = updatedGroup;
+            UserGroups = groupList;
+        }
     }
 
     private async Task OpenCreateDialogAsync()
@@ -250,9 +278,59 @@
             Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);
             return;
         }
+    }
 
-        var group = await GroupsClient.CreateGroupAsync(request);
-        UserGroups.Add(group);
+    private async Task OpenAddMemberDialogAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var users = from user in await GroupsClient.GetGroupMembersAsync(_selectedGroupId)
+                    where user.Email is not null
+                    select new UserIdentifier { Email = user.Email! };
+        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, users.ToArray() } };
+
+        var dialogReference = await DialogService.ShowAsync<AddGroupMemberDialog>("Add new member", parameters, options);
+
+        try
+        {
+            var request = await dialogReference.GetResult<AddMemberRequest>();
+            if (request is not null)
+            {
+                var updatedGroup = await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
+                UpdateGroupInList(updatedGroup);
+                Snackbar.Add("Member added successfully.", Severity.Success);
+            }
+        }
+        catch (InvalidCastException)
+        {
+            Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
+        }
+    }
+
+    private async Task OpenRemoveMemberDialogAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var members = await GroupsClient.GetGroupMembersAsync(_selectedGroupId);
+        var parameters = new DialogParameters<RemoveMemberDialog> { { x => x.Members, members } };
+
+        var dialogReference = await DialogService.ShowAsync<RemoveMemberDialog>("Remove member", parameters, options);
+
+        UserInfo? removedUser;
+        try
+        {
+            removedUser = await dialogReference.GetResult<UserInfo>();
+        } catch (InvalidCastException)
+        {
+            Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
+            return;
+        }
+        if (removedUser is not null)
+        {
+            await GroupsClient.RemoveGroupMemberAsync(_selectedGroupId, removedUser.Id);
+            var updatedGroup = await GroupsClient.GetGroupAsync(_selectedGroupId);
+            UpdateGroupInList(updatedGroup);
+            Snackbar.Add("Member removed successfully.", Severity.Success);
+        }
+
     }
     
     private async Task OpenUpdateGroupDialog()
