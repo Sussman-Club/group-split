@@ -2,10 +2,6 @@
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Maui.ApplicationModel.Communication;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace GroupSplit.API.Test.Group;
 
