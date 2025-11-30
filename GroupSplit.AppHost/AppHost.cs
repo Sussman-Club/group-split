@@ -1,4 +1,5 @@
 using GroupSplit.AppHost;
+using GroupSplit.AppHost.EntityFramework;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -17,9 +18,11 @@ if (builder.ExecutionContext.IsRunMode)
 {
     builder.AddEfInstaller("dotnet-ef-installer");
 
-    db.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_PostgreSQL_Migrations>("AppDbContext");
+    db.AddMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_PostgreSQL_Migrations>("AppDbContext")
+        .WithDefaultCommands();
 
-    identityDb.WithMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>();
+    identityDb.AddMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Identity_Migrations_PostgreSQL>()
+        .WithDefaultCommands();
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
