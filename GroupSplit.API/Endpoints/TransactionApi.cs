@@ -54,10 +54,7 @@ public static class TransactionApi
                     CreateTransactionRequest request,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
-                {
-                    // TODO: Change this when we support time zones
-                    request.DateTime = request.DateTime.ToUniversalTime();
-
+                { 
                     await transactionService.Create(request, ct);
                     return Results.Ok();
                 })
@@ -78,9 +75,6 @@ public static class TransactionApi
                     if (transactionUpdateRequest is null) return Results.NotFound();
 
                     patchDocument.ApplyTo(transactionUpdateRequest);
-
-                    // TODO: Change this when we support time zones
-                    transactionUpdateRequest.DateTime = transactionUpdateRequest.DateTime.ToUniversalTime();
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
