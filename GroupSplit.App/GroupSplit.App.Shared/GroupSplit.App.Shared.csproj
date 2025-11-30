@@ -14,10 +14,10 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.0"/>
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0"/>
-        <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.2.0"/>
+        <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.1" />
         <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.0-preview.7.25380.108" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0"/>
-        <PackageReference Include="MudBlazor" Version="8.14.0"/>
+        <PackageReference Include="MudBlazor" Version="8.15.0" />
         <PackageReference Include="NSwag.ApiDescription.Client" Version="14.6.3">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
