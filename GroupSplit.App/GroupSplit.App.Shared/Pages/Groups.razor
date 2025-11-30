@@ -2,7 +2,6 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
 @inject ITransactionsClient TransactionsClient
-@using System.Threading.Tasks
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
@@ -283,7 +282,7 @@
     private async Task OpenAddMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var users = from user in await GroupsClient.GetGroupMembersAsync(_selectedGroupId)
+        var users = from user in await GroupsClient.GetGroupMembersAsync(SelectedGroup.Id)
                     where user.Email is not null
                     select new UserIdentifier { Email = user.Email! };
         var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, users.ToArray() } };
@@ -295,7 +294,7 @@
             var request = await dialogReference.GetResult<AddMemberRequest>();
             if (request is not null)
             {
-                var updatedGroup = await GroupsClient.AddGroupMemberAsync(_selectedGroupId, request);
+                var updatedGroup = await GroupsClient.AddGroupMemberAsync(SelectedGroup.Id, request);
                 UpdateGroupInList(updatedGroup);
                 Snackbar.Add("Member added successfully.", Severity.Success);
             }
@@ -309,7 +308,7 @@
     private async Task OpenRemoveMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var members = await GroupsClient.GetGroupMembersAsync(_selectedGroupId);
+        var members = await GroupsClient.GetGroupMembersAsync(SelectedGroup.Id);
         var parameters = new DialogParameters<RemoveMemberDialog> { { x => x.Members, members } };
 
         var dialogReference = await DialogService.ShowAsync<RemoveMemberDialog>("Remove member", parameters, options);
@@ -325,8 +324,8 @@
         }
         if (removedUser is not null)
         {
-            await GroupsClient.RemoveGroupMemberAsync(_selectedGroupId, removedUser.Id);
-            var updatedGroup = await GroupsClient.GetGroupAsync(_selectedGroupId);
+            await GroupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, removedUser.Id);
+            var updatedGroup = await GroupsClient.GetGroupAsync(SelectedGroup.Id);
             UpdateGroupInList(updatedGroup);
             Snackbar.Add("Member removed successfully.", Severity.Success);
         }
