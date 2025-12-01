@@ -1,26 +1,25 @@
 @page "/groups"
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.Shared
-@inject ITransactionsClient TransactionsClient
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
-@inject IGroupsClient GroupsClient
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
-@inject MudTheme Theme
+@inject IGroupsPageStateService GroupsService
+@implements IAsyncDisposable
 
 <PageTitle>Groups</PageTitle>
 
-@if (SelectedGroup != null)
+@if (GroupsService.SelectedGroup != null)
 {
     <!-- Group Header -->
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
-                <MudText Typo="Typo.h4" Class="font-weight-bold">@SelectedGroup.Name</MudText>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">@GroupsService.SelectedGroup.Name</MudText>
             </MudStack>
             <MudText Typo="Typo.body2">
-                @SelectedGroup.MemberCount members · @Transactions.Count expenses
+                @GroupsService.SelectedGroup.MemberCount members · @GroupsService.Transactions.Count expenses
             </MudText>
         </MudStack>
         <MudStack Row="true" Spacing="2">
@@ -28,7 +27,7 @@
                        Color="Color.Primary"
                        Size="Size.Small"
                        StartIcon="@Icons.Material.Outlined.Settings"
-                       OnClick="ManageRules">
+                       OnClick="@ManageRules">
                 Manage Rules
             </MudButton>
             <MudButton Variant="Variant.Outlined"
@@ -38,27 +37,27 @@
                        OnClick="@OpenUpdateGroupDialog">
                 Edit Group
             </MudButton>
-            @if (!SelectedGroup.IsArchive)
+            @if (!GroupsService.SelectedGroup.IsArchive)
             {
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
                            Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.PersonAdd"
-                           OnClick="AddMember">
+                           OnClick="@OpenAddMemberDialogAsync">
                     Add Member
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Error"
                            Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.PersonRemove"
-                           OnClick="RemoveMember">
+                           OnClick="@OpenRemoveMemberDialogAsync">
                     Remove Member
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Tertiary"
                            Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Archive"
-                           OnClick="ArchiveGroup">
+                           OnClick="@ArchiveGroup">
                     Archive
                 </MudButton>
             }
@@ -67,7 +66,7 @@
 }
 
 <MudStack Spacing="4" Class="mb-10">
-    @if (SelectedGroup != null)
+    @if (GroupsService.SelectedGroup != null)
     {
         <!-- Balance Row -->
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
@@ -142,23 +141,21 @@
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
             <!-- Expenses List -->
             <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <TransactionsList Title="Recent Expenses" Transactions="Transactions"/>
+                <TransactionsList Title="Recent Expenses" Transactions="GroupsService.Transactions"/>
             </MudPaper>
             <!-- My Groups -->
             <MudStack Spacing="4">
                 <GroupsList Title="My Groups"
                             Icon="@Icons.Material.Outlined.Groups"
-                            Groups="UserGroups"
-                            @bind-SelectedGroup="SelectedGroup"
-                            @bind-SelectedGroup:after="@OnSelectedGroupChanged"
+                            Groups="GroupsService.Groups"
+                            @bind-SelectedGroup="GroupsService.SelectedGroup"
                             ShowCreateButton="true"
                             OnCreateClick="OpenCreateDialogAsync"/>
 
                 <GroupsList Title="Archived Groups"
                             Icon="@Icons.Material.Outlined.Archive"
                             Groups="_archivedGroups"
-                            @bind-SelectedGroup="SelectedGroup"
-                            @bind-SelectedGroup:after="@OnSelectedGroupChanged"
+                            @bind-SelectedGroup="GroupsService.SelectedGroup"
                             ShowCreateButton="false"/>
             </MudStack>
         </MudStack>
@@ -175,52 +172,40 @@
 </MudStack>
 
 
-@if (SelectedGroup is { IsArchive: false })
+@if (GroupsService.SelectedGroup is { IsArchive: false })
 {
     <ExtendedFab Label="Expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog"/>
 }
 
 @code {
-    [PersistentState] public ICollection<GroupResponse> UserGroups { get; set; } = null!;
-    [PersistentState] public GroupResponse? SelectedGroup { get; set; }
-    [PersistentState] public List<TransactionResponse> Transactions { get; set; } = null!;
-
     private readonly List<GroupResponse> _archivedGroups = [];
 
     private decimal _userBalance;
-    private List<DebtInfo> _owedToYou = new();
-    private List<DebtInfo> _youOwe = new();
-    private List<MemberBalance> _members = new();
+    private List<DebtInfo> _owedToYou = [];
+    private List<DebtInfo> _youOwe = [];
+    private List<MemberBalance> _members = [];
 
     private CancellationTokenSource? _loadCts;
+    private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
+    private void ReRender()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnInitialized()
+    {
+        _loadCts = new CancellationTokenSource();
+        GroupsService.OnGroupsChanged += ReRender;
+        GroupsService.OnTransactionsChanged += ReRender;
+        GroupsService.OnGroupSelected += ReRender;
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        UserGroups ??= await GroupsClient.GetGroupsAsync();
-        if (SelectedGroup is null)
-        {
-            SelectedGroup = UserGroups.FirstOrDefault();
-            await OnSelectedGroupChanged();
-        }
+        await GroupsService.IsReadyTask;
 
         await base.OnInitializedAsync();
-    }
-
-    private async Task OnSelectedGroupChanged()
-    {
-        if (SelectedGroup is null) return;
-
-        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id);
-
-        Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
-
-        // TODO: Replace with real balances once API provides endpoints
-        // For now, keep placeholders minimal and neutral
-        _userBalance = 0m;
-        _owedToYou = new List<DebtInfo>();
-        _youOwe = new List<DebtInfo>();
-        _members = new List<MemberBalance>();
     }
 
     private void ManageRules()
@@ -229,32 +214,10 @@
         // Allow user to create, edit, and delete splitting rules
     }
 
-    private async Task AddMember()
-    {
-        await OpenAddMemberDialogAsync();
-    }
-
-    private async Task RemoveMember()
-    {
-        await OpenRemoveMemberDialogAsync();
-    }
-
     private void ArchiveGroup()
     {
         // TODO: Implement archive group dialog
         // Allow user to archive the selected group
-    }
-
-    private void UpdateGroupInList(GroupResponse updatedGroup)
-    {
-        // This method probably needs to be updated after transactions merge
-        var groupList = UserGroups.ToList();
-        var index = groupList.FindIndex(g => g.Id == updatedGroup.Id);
-        if (index >= 0)
-        {
-            groupList[index] = updatedGroup;
-            UserGroups = groupList;
-        }
     }
 
     private async Task OpenCreateDialogAsync()
@@ -267,98 +230,67 @@
 
         var dialogReference = await DialogService.ShowAsync<CreateGroupDialog>("Create a group", options);
 
-        var dialogResult = await dialogReference.Result;
+        var dialogResult = await dialogReference.GetReturnValueAsync<CreateGroupRequest>();
 
-        if (dialogResult is null || dialogResult.Canceled)
+        if (dialogResult is null)
             return;
 
-        if (dialogResult.Data is not CreateGroupRequest request)
-        {
-            Snackbar.Add("Dialog did not return a valid group. Please try again.", Severity.Error);
-            return;
-        }
+        await GroupsService.CreateGroupAsync(dialogResult, CancellationToken);
     }
 
     private async Task OpenAddMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var users = from user in await GroupsClient.GetGroupMembersAsync(SelectedGroup.Id)
-                    where user.Email is not null
-                    select new UserIdentifier { Email = user.Email! };
-        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, users.ToArray() } };
+        var members = await GroupsService.GetGroupMembersAsync(CancellationToken).ToArrayAsync(CancellationToken);
+
+        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, members } };
 
         var dialogReference = await DialogService.ShowAsync<AddGroupMemberDialog>("Add new member", parameters, options);
 
-        try
+        var request = await dialogReference.GetReturnValueAsync<AddMemberRequest>();
+        if (request is not null)
         {
-            var request = await dialogReference.GetResult<AddMemberRequest>();
-            if (request is not null)
-            {
-                var updatedGroup = await GroupsClient.AddGroupMemberAsync(SelectedGroup.Id, request);
-                UpdateGroupInList(updatedGroup);
-                Snackbar.Add("Member added successfully.", Severity.Success);
-            }
-        }
-        catch (InvalidCastException)
-        {
-            Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
+            await GroupsService.AddGroupMemberAsync(request, CancellationToken);
         }
     }
 
     private async Task OpenRemoveMemberDialogAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var members = await GroupsClient.GetGroupMembersAsync(SelectedGroup.Id);
+        var members = await GroupsService.GetGroupMembersAsync(CancellationToken).ToArrayAsync(CancellationToken);
+
         var parameters = new DialogParameters<RemoveMemberDialog> { { x => x.Members, members } };
 
         var dialogReference = await DialogService.ShowAsync<RemoveMemberDialog>("Remove member", parameters, options);
 
-        UserInfo? removedUser;
-        try
-        {
-            removedUser = await dialogReference.GetResult<UserInfo>();
-        } catch (InvalidCastException)
-        {
-            Snackbar.Add("Dialog did not return a valid user ID. Please try again.", Severity.Error);
-            return;
-        }
+        var removedUser = await dialogReference.GetReturnValueAsync<UserInfo>();
+
         if (removedUser is not null)
         {
-            await GroupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, removedUser.Id);
-            var updatedGroup = await GroupsClient.GetGroupAsync(SelectedGroup.Id);
-            UpdateGroupInList(updatedGroup);
-            Snackbar.Add("Member removed successfully.", Severity.Success);
+            await GroupsService.RemoveGroupMemberAsync(removedUser.Id, CancellationToken);
         }
-
     }
-    
+
     private async Task OpenUpdateGroupDialog()
     {
-        if (SelectedGroup is null) return;
+        if (GroupsService.SelectedGroup is null) return;
 
         var parameters = new DialogParameters
         {
-            { "Group", SelectedGroup }
+            { "Group", GroupsService.SelectedGroup }
         };
-        
+
         var dialog = await DialogService.ShowAsync<UpdateGroupDialog>(
             "Edit Group",
             parameters,
             new DialogOptions { FullWidth = true }
         );
 
-        var result = await dialog.Result;
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<CreateGroupRequest>>();
 
-        if (result is null || result.Canceled)
-            return;
-        
-        if (result.Data is JsonPatchDocument<CreateGroupRequest> patch)
+        if (request is not null)
         {
-            await GroupsClient.UpdateGroupAsync(SelectedGroup.Id, patch);
-            
-            UserGroups = await GroupsClient.GetGroupsAsync();
-            SelectedGroup = UserGroups.FirstOrDefault(g => g.Id == SelectedGroup.Id);
-            StateHasChanged();
+            await GroupsService.UpdateGroupAsync(request, CancellationToken);
         }
     }
 
@@ -372,29 +304,17 @@
 
         var parameters = new DialogParameters<CreateTransactionDialog>
         {
-            { x => x.SelectedGroupId, SelectedGroup?.Id }
+            { x => x.SelectedGroupId, GroupsService.SelectedGroup?.Id }
         };
 
         var dialogReference = await DialogService.ShowAsync<CreateTransactionDialog>("Create an expense", parameters, options);
 
-        var dialogResult = await dialogReference.Result;
+        var request = await dialogReference.GetReturnValueAsync<CreateTransactionRequest>();
 
-        if (dialogResult is null || dialogResult.Canceled)
-            return;
-
-        if (dialogResult.Data is not CreateTransactionRequest request)
+        if (request is not null)
         {
-            Snackbar.Add("Dialog did not return a valid transaction. Please try again.", Severity.Error);
-            return;
+            await GroupsService.CreateTransactionAsync(request, CancellationToken);
         }
-
-        await TransactionsClient.CreateTransactionAsync(request);
-
-        if (SelectedGroup is null) return;
-
-        var apiTransactions = await GroupsClient.GetGroupTransactionsAsync(SelectedGroup.Id);
-        Transactions = apiTransactions.OrderByDescending(t => t.DateTime).ToList();
-        StateHasChanged();
     }
 
     private class DebtInfo
@@ -407,6 +327,14 @@
     {
         public string Name { get; set; } = "";
         public decimal Balance { get; set; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        GroupsService.OnGroupsChanged -= ReRender;
+        GroupsService.OnTransactionsChanged -= ReRender;
+        GroupsService.OnGroupSelected -= ReRender;
+        if (_loadCts is not null) await _loadCts.CancelAsync();
     }
 
 }
