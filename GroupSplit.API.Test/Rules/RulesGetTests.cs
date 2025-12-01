@@ -37,7 +37,7 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var query = await rulesService.Get(version.Id, TestContext.Current.CancellationToken);
+        var query = await rulesService.Get(rule.Id, TestContext.Current.CancellationToken);
         var result = await query.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -145,11 +145,11 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act
         var resultVisible =
-            await (await rulesService.Get(v1.Id, TestContext.Current.CancellationToken)).SingleOrDefaultAsync(
+            await (await rulesService.Get(rule1.Id, TestContext.Current.CancellationToken)).SingleOrDefaultAsync(
                 cancellationToken: TestContext.Current.CancellationToken);
         
         var resultHidden =
-            await (await rulesService.Get(v2.Id, TestContext.Current.CancellationToken)).SingleOrDefaultAsync(
+            await (await rulesService.Get(rule2.Id, TestContext.Current.CancellationToken)).SingleOrDefaultAsync(
                 cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert

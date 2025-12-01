@@ -1,0 +1,195 @@
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+@inject IRulesClient RulesClient
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Edit Rule</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="form" Model="Model">
+            <MudStack Spacing="3">
+
+                <MudTextField @bind-Value="Model.Category"
+                              Label="Category"
+                              Variant="Variant.Outlined"
+                              Immediate="true"/>
+
+                <MudSelect T="string" Label="Rule Type" @bind-Value="ruleType" Variant="Variant.Outlined">
+                    <MudSelectItem Value='@("personal")'>Personal (payer owes full amount)</MudSelectItem>
+                    <MudSelectItem Value='@("percent")'>Percent split</MudSelectItem>
+                </MudSelect>
+
+                @if (ruleType == "percent")
+                {
+                    <MudPaper Class="pa-4" Elevation="0">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                            <MudText Typo="Typo.body2">Enter percentage for each member (must total 100).</MudText>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="EqualSplit">Equal
+                                    split
+                                </MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Normalize">Normalize
+                                </MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ClearAll">Clear
+                                </MudButton>
+                            </MudStack>
+                        </MudStack>
+                        <MudGrid>
+                            @foreach (var u in Members)
+                            {
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudNumericField T="decimal"
+                                                     @bind-Value="memberPercentages[u.Id]"
+                                                     Label="@($"{u.FirstName} {u.LastName}")"
+                                                     Variant="Variant.Outlined"
+                                                     Adornment="Adornment.End"
+                                                     AdornmentText="%"
+                                                     Min="0" Max="100" Immediate="true"/>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                        <MudText Typo="Typo.caption" Color="@(IsPercentTotalValid ? Color.Success : Color.Error)">
+                            Total: @PercentTotal%
+                        </MudText>
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Disabled="@(!CanSave)" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public UpdateRuleRequest Model { get; set; } = null!;
+    [Parameter] public Guid GroupId { get; set; }
+    [Parameter] public Guid RuleId {get; set; }
+
+    private MudForm form;
+    private string ruleType = "personal"; // personal | percent
+
+    private ICollection<UserInfo> Members = new List<UserInfo>();
+    private Dictionary<Guid, decimal> memberPercentages = new();
+    private UpdateRuleRequest originalModel; // keep original values
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Keep a deep copy of the original model
+        originalModel = new UpdateRuleRequest
+        {
+            Category = Model.Category,
+            Version = Model.Version
+        };
+
+        ruleType = Model.Version switch
+        {
+            PersonalRuleVersionDto => "personal",
+            PercentRuleVersionDto => "percent",
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        Members = await GroupsClient.GetGroupMembersAsync(GroupId);
+        EnsurePercentagesDictionary();
+
+        // Initialize percentages if editing a percent rule
+        if (Model.Version is PercentRuleVersionDto percentVersion)
+        {
+            foreach (var kv in percentVersion.Percentages.Where(kv => memberPercentages.ContainsKey(kv.Key)))
+            {
+                memberPercentages[kv.Key] = kv.Value;
+            }
+        }
+    }
+
+    private void EnsurePercentagesDictionary()
+    {
+        foreach (var m in Members)
+            memberPercentages.TryAdd(m.Id, 0m);
+
+        // Remove old members no longer in the group
+        foreach (var k in memberPercentages.Keys.ToList().Where(k => Members.All(x => x.Id != k)))
+            memberPercentages.Remove(k);
+    }
+
+    private int PercentTotal => 100;
+    private bool IsPercentTotalValid => PercentTotal == 100;
+    private bool CanSave => true;
+
+    private void EqualSplit()
+    {
+        if (!Members.Any()) return;
+        var per = Math.Round(100m / Members.Count, 2);
+        var remainder = 100m - (per * (Members.Count - 1));
+        var i = 0;
+        foreach (var m in Members)
+        {
+            memberPercentages[m.Id] = i == Members.Count - 1 ? remainder : per;
+            i++;
+        }
+    }
+
+    private void Normalize()
+    {
+        var sum = memberPercentages.Values.Sum();
+        if (sum <= 0) return;
+        foreach (var key in memberPercentages.Keys.ToList())
+        {
+            memberPercentages[key] = Math.Round(memberPercentages[key] * 100m / sum, 2);
+        }
+    }
+
+    private void ClearAll()
+    {
+        foreach (var key in memberPercentages.Keys.ToList())
+            memberPercentages[key] = 0m;
+    }
+
+    private async Task Save()
+    {
+        var patch = new JsonPatchDocument<UpdateRuleRequest>();
+
+        // Track category changes
+        if (!string.Equals(Model.Category, originalModel.Category, StringComparison.Ordinal))
+        {
+            patch.Replace(x => x.Category, Model.Category);
+        }
+
+        // Track version changes
+        if (ruleType == "personal" && !(originalModel.Version is PersonalRuleVersionDto))
+        {
+            patch.Replace(x => x.Version, new PersonalRuleVersionDto());
+        }
+        else if (ruleType == "percent")
+        {
+            var originalPercentages = (originalModel.Version as PercentRuleVersionDto)?.Percentages ?? new Dictionary<Guid, decimal>();
+            if (!memberPercentages.SequenceEqual(originalPercentages))
+            {
+                patch.Replace(x => x.Version, new PercentRuleVersionDto
+                {
+                    Percentages = new Dictionary<Guid, decimal>(memberPercentages)
+                });
+            }
+        }
+
+        if (!patch.Operations.Any())
+        {
+            MudDialog.Close(DialogResult.Ok(false));
+            return;
+        }
+
+        await RulesClient.UpdateRuleAsync(RuleId, patch);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
+

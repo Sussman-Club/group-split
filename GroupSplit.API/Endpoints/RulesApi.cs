@@ -17,6 +17,7 @@ public static class RulesApi
 
             group.WithTags("Rules");
 
+            group.MapGetRule();
             group.MapCreateRule();
             group.MapUpdateRule();
             group.MapDeleteRule();
@@ -27,20 +28,35 @@ public static class RulesApi
 
     extension(RouteGroupBuilder group)
     {
+        private RouteHandlerBuilder MapGetRule()
+        {
+            return group.MapGet("/{ruleId:guid}", async (
+                    Guid ruleId,
+                    IRuleService ruleService,
+                    CancellationToken ct) =>
+                {
+                    var updateModel = await ruleService.GetUpdateModel(ruleId, ct);
+                    return updateModel is null ? Results.NotFound() : Results.Ok(updateModel);
+                })
+                .WithName("GetRule")
+                .Produces<UpdateRuleRequest>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
         private RouteHandlerBuilder MapCreateRule()
         {
             return group.MapPost(string.Empty, async (
                     CreateRuleRequest request,
                     IRuleService ruleService,
                     CancellationToken ct) =>
-                {
-                    var version = await ruleService.Create(request, ct);
-                    var query = await ruleService.Get(version.Id, ct);
-                    var response = await query.SelectDto().FirstOrDefaultAsync(ct);
-                    return Results.Ok(response);
-                })
-                .WithName("CreateRule")
-                .Produces<RuleVersionResponse>();
+            {
+                var version = await ruleService.Create(request, ct);
+                var query = await ruleService.Get(version.Rule.Id, ct);
+                var response = await query.SelectDto().FirstOrDefaultAsync(ct);
+                return Results.Ok(response);
+            })
+            .WithName("CreateRule")
+            .Produces<RuleVersionResponse>();
         }
 
         private RouteHandlerBuilder MapUpdateRule()
