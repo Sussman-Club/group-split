@@ -58,6 +58,11 @@ builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =
     client.BaseAddress = new Uri("https+http://api");
 }).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
 
+builder.Services.AddHttpClient<IRulesClient, RulesClient>(client =>
+{
+    client.BaseAddress = new Uri("https+http://api");
+}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
+
 builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
 {
     client.BaseAddress = new Uri("https+http://api");
