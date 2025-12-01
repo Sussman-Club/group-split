@@ -25,7 +25,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var version = new PersonalRuleVersion
         {
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         };
 
         var rule = new Rule
@@ -71,7 +71,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var version = new PersonalRuleVersion
         {
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         };
 
         var rule = new Rule
@@ -129,7 +129,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var oldVersion = new PercentRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            StartDateTime = DateTime.UtcNow,
             RuleUsers =
             {
                 new PercentRuleUser { User = user, Percentage = 50 },
@@ -208,7 +208,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Id = Guid.NewGuid(),
             Category = "A",
             Group = group,
-            Versions = { new PersonalRuleVersion { StartDate = DateOnly.FromDateTime(DateTime.UtcNow) } }
+            Versions = { new PersonalRuleVersion { StartDateTime = DateTime.UtcNow } }
         };
 
         var ruleB = new Rule
@@ -216,7 +216,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Id = Guid.NewGuid(),
             Category = "B",
             Group = group,
-            Versions = { new PersonalRuleVersion { StartDate = DateOnly.FromDateTime(DateTime.UtcNow) } }
+            Versions = { new PersonalRuleVersion { StartDateTime = DateTime.UtcNow } }
         };
 
         DbContext.AddRange(ruleA, ruleB);
@@ -249,7 +249,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var initialVersion = new PercentRuleVersion
         {
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            StartDateTime = DateTime.UtcNow,
             RuleUsers =
             {
                 new PercentRuleUser { User = user, Percentage = 100 }

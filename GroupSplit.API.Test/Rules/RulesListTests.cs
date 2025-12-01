@@ -31,7 +31,7 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         rule1.Versions.Add(new PersonalRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         });
 
         var rule2 = new Rule
@@ -43,7 +43,7 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         rule2.Versions.Add(new PercentRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         });
 
         DbContext.AddRange(g1, g2, rule1, rule2);
@@ -103,7 +103,7 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 new PersonalRuleVersion
                 {
                     Id = Guid.NewGuid(),
-                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+                    StartDateTime = DateTime.UtcNow
                 }
             }
         };
@@ -119,7 +119,7 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 new PercentRuleVersion
                 {
                     Id = Guid.NewGuid(),
-                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+                    StartDateTime = DateTime.UtcNow
                 }
             }
         };

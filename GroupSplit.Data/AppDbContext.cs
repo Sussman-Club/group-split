@@ -58,7 +58,9 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<RuleVersion>(entity =>
         {
-            entity.Property(ruleVersion => ruleVersion.StartDate).IsRequired();
+            entity.Property(ruleVersion => ruleVersion.StartDateTime).IsRequired();
+            
+            entity.Property(ruleVersion => ruleVersion.EndDateTime);
 
             entity.HasDiscriminator<string>("RuleType")
                 .HasValue<PersonalRuleVersion>("personal")

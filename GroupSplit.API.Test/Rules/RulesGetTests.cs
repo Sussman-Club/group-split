@@ -22,7 +22,7 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var version = new PersonalRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         };
 
         var rule = new Rule
@@ -75,7 +75,7 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var forbiddenVersion = new PercentRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         };
 
         var forbiddenRule = new Rule
@@ -114,7 +114,7 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var v1 = new PersonalRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         };
 
         var rule1 = new Rule
@@ -129,7 +129,7 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var v2 = new PercentRuleVersion
         {
             Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDateTime = DateTime.UtcNow
         };
 
         var rule2 = new Rule

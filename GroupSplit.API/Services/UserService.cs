@@ -50,7 +50,7 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
                     {
                         new PersonalRuleVersion
                         {
-                            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                            StartDateTime = DateTime.UtcNow,
                         }
                     }
                 }

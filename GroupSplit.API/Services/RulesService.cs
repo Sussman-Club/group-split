@@ -12,6 +12,7 @@ public interface IRuleService
     Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default);
     Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct);
     Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
+    Task Delete(Guid ruleId, CancellationToken ct = default);
 }
 
 public class RuleService(IUserService userService, AppDbContext dbContext) : IRuleService
@@ -70,65 +71,12 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         return version;
     }
 
-    private async Task<RuleVersion> MapVersionAsync(RuleVersionDto dto, CancellationToken ct)
-    {
-        return dto switch
-        {
-            PersonalRuleVersionDto personal => MapPersonalVersion(personal),
-            PercentRuleVersionDto percent => await MapPercentVersion(percent, ct),
-            _ => throw new InvalidOperationException("Unknown rule version type.")
-        };
-    }
-
-    private RuleVersion MapPersonalVersion(PersonalRuleVersionDto dto)
-    {
-        return new PersonalRuleVersion
-        {
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
-        };
-    }
-
-    private async Task<RuleVersion> MapPercentVersion(PercentRuleVersionDto dto, CancellationToken ct)
-    {
-        var total = dto.Percentages.Values.Sum();
-
-        const decimal epsilon = 10e-3M;
-        if (total + epsilon < 100 || total - epsilon > 100)
-            throw new InvalidOperationException("Percentages must sum to 100%.");
-
-        var userIds = dto.Percentages.Keys.ToList();
-
-        var users = await dbContext.Set<User>()
-            .Where(u => userIds.Contains(u.Id))
-            .ToListAsync(ct);
-
-        if (users.Count != dto.Percentages.Count)
-            throw new InvalidOperationException("Some users in the percentage rule do not exist.");
-
-        var version = new PercentRuleVersion
-        {
-            Id = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
-        };
-
-        foreach (var (userId, percent) in dto.Percentages)
-        {
-            version.RuleUsers.Add(new PercentRuleUser
-            {
-                User = users.Single(u => u.Id == userId),
-                Percentage = (double)percent
-            });
-        }
-
-        return version;
-    }
-
     public async Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct)
     {
         var ruleVersion =
             await (from rv in dbContext.Set<RuleVersion>()
                     where rv.Rule.Id == ruleId
-                    orderby rv.StartDate descending
+                    orderby rv.StartDateTime descending
                     select rv)
                 .Include(rv => rv.Rule)
                 .FirstOrDefaultAsync(ct);
@@ -179,7 +127,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
                     select new
                     {
                         Rule = rule,
-                        LatestVersion = rule.Versions.OrderByDescending(v => v.StartDate).FirstOrDefault(),
+                        LatestVersion = rule.Versions.OrderByDescending(v => v.StartDateTime).FirstOrDefault(),
                         CategoryConflict = @group.Rules.Any(r => r.Id != ruleId && r.Category == request.Category)
                     })
                 .FirstOrDefaultAsync(ct);
@@ -206,6 +154,64 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         await dbContext.SaveChangesAsync(ct);
 
         return newVersion ?? latestVersion;
+    }
+
+    public async Task Delete(Guid ruleId, CancellationToken ct = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    private async Task<RuleVersion> MapVersionAsync(RuleVersionDto dto, CancellationToken ct)
+    {
+        return dto switch
+        {
+            PersonalRuleVersionDto personal => MapPersonalVersion(personal),
+            PercentRuleVersionDto percent => await MapPercentVersion(percent, ct),
+            _ => throw new InvalidOperationException("Unknown rule version type.")
+        };
+    }
+
+    private RuleVersion MapPersonalVersion(PersonalRuleVersionDto dto)
+    {
+        return new PersonalRuleVersion
+        {
+            StartDateTime = DateTime.UtcNow
+        };
+    }
+
+    private async Task<RuleVersion> MapPercentVersion(PercentRuleVersionDto dto, CancellationToken ct)
+    {
+        var total = dto.Percentages.Values.Sum();
+
+        const decimal epsilon = 10e-3M;
+        if (total + epsilon < 100 || total - epsilon > 100)
+            throw new InvalidOperationException("Percentages must sum to 100%.");
+
+        var userIds = dto.Percentages.Keys.ToList();
+
+        var users = await dbContext.Set<User>()
+            .Where(u => userIds.Contains(u.Id))
+            .ToListAsync(ct);
+
+        if (users.Count != dto.Percentages.Count)
+            throw new InvalidOperationException("Some users in the percentage rule do not exist.");
+
+        var version = new PercentRuleVersion
+        {
+            Id = Guid.NewGuid(),
+            StartDateTime = DateTime.UtcNow
+        };
+
+        foreach (var (userId, percent) in dto.Percentages)
+        {
+            version.RuleUsers.Add(new PercentRuleUser
+            {
+                User = users.Single(u => u.Id == userId),
+                Percentage = (double)percent
+            });
+        }
+
+        return version;
     }
 
     private bool VersionEquals(RuleVersion current, RuleVersionDto incoming)

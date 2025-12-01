@@ -9,7 +9,7 @@ public class RuleVersionSeedDto
 {
     public required Guid Id { get; init; }
     public required Guid RuleId { get; init; }
-    public required DateOnly StartDate { get; init; }
+    public required DateTimeOffset StartDate { get; init; } = DateTimeOffset.UtcNow;
 }
 
 public class PersonalRuleVersionSeedDto : RuleVersionSeedDto;

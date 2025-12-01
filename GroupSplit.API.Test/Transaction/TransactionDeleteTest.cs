@@ -88,7 +88,7 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
                         {
                             new PersonalRuleVersion
                             {
-                                StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2))
+                                StartDateTime = DateTime.UtcNow.AddDays(-2)
                             }
                         }
                     }

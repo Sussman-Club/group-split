@@ -36,7 +36,7 @@ public class RuleVersionSeeder(
         return new PersonalRuleVersion
         {
             Id = dto.Id,
-            StartDate = dto.StartDate,
+            StartDateTime = dto.StartDate,
             Rule = rule
         };
     }
@@ -85,7 +85,7 @@ public class RuleVersionSeeder(
         var ruleVersion = new PercentRuleVersion
         {
             Id = dto.Id,
-            StartDate = dto.StartDate,
+            StartDateTime = dto.StartDate,
             Rule = rule,
         };
 

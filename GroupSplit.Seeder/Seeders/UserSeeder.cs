@@ -33,7 +33,7 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
                     {
                         new PersonalRuleVersion
                         {
-                            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                            StartDateTime = DateTimeOffset.UtcNow
                         }
                     }
                 }
