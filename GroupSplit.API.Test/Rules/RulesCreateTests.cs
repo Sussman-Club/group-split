@@ -185,7 +185,7 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         DbContext.Add(group);
-        await DbContext.SaveChangesAsync();
+        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var request = new CreateRuleRequest
         {

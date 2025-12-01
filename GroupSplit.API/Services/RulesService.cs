@@ -10,9 +10,10 @@ public interface IRuleService
     Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default);
     Task<IQueryable<RuleVersion>> Get(Guid id, CancellationToken cancellationToken = default);
     Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default);
+    Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
 }
 
-public class RuleService(IUserService userService, IGroupService groupService, AppDbContext dbContext) : IRuleService
+public class RuleService(IUserService userService, AppDbContext dbContext) : IRuleService
 {
     public async Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default)
     {
@@ -35,14 +36,14 @@ public class RuleService(IUserService userService, IGroupService groupService, A
 
     public async Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default)
     {
-        var groupsQuery = await groupService.GetGroupById(request.GroupId, ct);
+        var currentUser = await userService.GetCurrentUser();
 
         var groupResult =
-            await (from g in groupsQuery
+            await (from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
                     select new
                     {
-                        Group = g,
-                        AlreadyHasRule = g.Rules.Any(r => r.Category == request.Category)
+                        Group = @group,
+                        AlreadyHasRule = @group.Rules.Any(r => r.Category == request.Category)
                     })
                 .FirstOrDefaultAsync(ct);
 
@@ -119,5 +120,77 @@ public class RuleService(IUserService userService, IGroupService groupService, A
         }
 
         return version;
+    }
+
+    public async Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
+    {
+        var currentUser = await userService.GetCurrentUser();
+
+        var ruleResult =
+            await (from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
+                    from rule in @group.Rules
+                    where rule.Id == ruleId
+                    select new
+                    {
+                        Rule = rule,
+                        LatestVersion = rule.Versions.OrderByDescending(v => v.StartDate).FirstOrDefault(),
+                        CategoryConflict = @group.Rules.Any(r => r.Id != ruleId && r.Category == request.Category)
+                    })
+                .FirstOrDefaultAsync(ct);
+
+        if (ruleResult is not { Rule: not null })
+            throw new InvalidOperationException("Rule does not exist.");
+
+        if (ruleResult.CategoryConflict)
+            throw new InvalidOperationException("Group already has a rule with this category.");
+
+        var existingRule = ruleResult.Rule;
+        var latestVersion = ruleResult.LatestVersion;
+
+        existingRule.Category = request.Category;
+
+        RuleVersion? newVersion = null;
+        if (!VersionEquals(latestVersion, request.Version))
+        {
+            newVersion = await MapVersionAsync(request.Version, ct);
+            dbContext.Add(newVersion);
+            existingRule.Versions.Add(newVersion);
+        }
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return newVersion ?? latestVersion;
+    }
+
+    private bool VersionEquals(RuleVersion current, RuleVersionDto incoming)
+    {
+        return current switch
+        {
+            PercentRuleVersion percentCurrent
+                when incoming is PercentRuleVersionDto percentIncoming
+                => PercentVersionsEqual(percentCurrent, percentIncoming),
+
+            PersonalRuleVersion when incoming is PersonalRuleVersionDto
+                => true, // Nothing can change
+
+            _ => false // Different types = changed
+        };
+    }
+
+    private bool PercentVersionsEqual(PercentRuleVersion current, PercentRuleVersionDto incoming)
+    {
+        if (current.RuleUsers.Count != incoming.Percentages.Count)
+            return false;
+
+        foreach (var ru in current.RuleUsers)
+        {
+            if (!incoming.Percentages.TryGetValue(ru.User.Id, out var percent))
+                return false;
+
+            if (Math.Abs(ru.Percentage - (double)percent) > 0.001)
+                return false;
+        }
+
+        return true;
     }
 }
