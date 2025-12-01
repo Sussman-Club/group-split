@@ -10,6 +10,7 @@ public interface IRuleService
     Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default);
     Task<IQueryable<RuleVersion>> Get(Guid id, CancellationToken cancellationToken = default);
     Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default);
+    Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct);
     Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
 }
 
@@ -120,6 +121,51 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         }
 
         return version;
+    }
+
+    public async Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct)
+    {
+        var ruleVersion =
+            await (from rv in dbContext.Set<RuleVersion>()
+                    where rv.Rule.Id == ruleId
+                    orderby rv.StartDate descending
+                    select rv)
+                .Include(rv => rv.Rule)
+                .FirstOrDefaultAsync(ct);
+
+        if (ruleVersion is PercentRuleVersion percentRuleVersion)
+        {
+            await dbContext.Entry(percentRuleVersion)
+                .Collection(p => p.RuleUsers)
+                .Query()
+                .Include(ru => ru.User)
+                .LoadAsync(ct);
+        }
+
+        if (ruleVersion is null)
+            return null;
+
+        return ruleVersion switch
+        {
+            PercentRuleVersion percent => new UpdateRuleRequest
+            {
+                Category = ruleVersion.Rule.Category,
+                Version = new PercentRuleVersionDto
+                {
+                    Percentages = percent.RuleUsers
+                        .ToDictionary(
+                            ru => ru.User.Id,
+                            ru => (decimal)ru.Percentage
+                        )
+                }
+            },
+            PersonalRuleVersion => new UpdateRuleRequest
+            {
+                Category = ruleVersion.Rule.Category,
+                Version = new PersonalRuleVersionDto()
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(ruleVersion))
+        };
     }
 
     public async Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
