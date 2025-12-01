@@ -33,7 +33,7 @@ builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionSt
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
-builder.Services.AddScoped<IRulesService, RulesService>();
+builder.Services.AddScoped<IRuleService, RuleService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();
@@ -79,5 +79,6 @@ app.MapGet("/weatherforecast", () =>
 app.MapGroupApi();
 app.MapUserApi();
 app.MapTransaction();
+app.MapRulesApi();
 
 app.Run();

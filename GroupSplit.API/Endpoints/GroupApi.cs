@@ -126,7 +126,7 @@ public static class GroupApi
         {
             return group.MapGet("{id:guid}/rules", async (
                     Guid id,
-                    IRulesService transactionService,
+                    IRuleService transactionService,
                     CancellationToken ct) =>
                 {
                     var rules = await transactionService.List(ct);
@@ -214,15 +214,6 @@ public static class GroupApi
         {
             return from user in users
                    select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
-        }
-    }
-
-    extension(IQueryable<RuleVersion> ruleVersions)
-    {
-        private IQueryable<RuleVersionResponse> SelectDto()
-        {
-            return from ruleVersion in ruleVersions
-                select new RuleVersionResponse(ruleVersion.Id, ruleVersion.Rule.Category);
         }
     }
 }

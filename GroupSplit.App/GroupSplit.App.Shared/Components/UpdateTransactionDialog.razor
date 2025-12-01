@@ -53,7 +53,7 @@
                            Variant="Variant.Outlined">
                     @foreach (var c in GroupCategories)
                     {
-                        <MudSelectItem T="Guid" Value="@c.Id">@c.Category</MudSelectItem>
+                        <MudSelectItem T="Guid" Value="@c.RuleVersionId">@c.Category</MudSelectItem>
                     }
                 </MudSelect>
 
