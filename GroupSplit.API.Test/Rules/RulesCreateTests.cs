@@ -12,19 +12,10 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
-
-        var group = new Data.Entities.Group
-        {
-            Id = Guid.NewGuid(),
-            Name = "Group A"
-        };
-
-        DbContext.Add(group);
-        user.Groups.Add(group);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var createGroupRequest = new CreateGroupRequest { Name = "Group A" };
+        var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
         var request = new CreateRuleRequest
         {
@@ -50,14 +41,12 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var rulesService = GetService<IRuleService>();
         var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
         var user = await userService.GetCurrentUser();
 
-        var group = new Data.Entities.Group
-        {
-            Id = Guid.NewGuid(),
-            Name = "Group B"
-        };
+        var createGroupRequest = new CreateGroupRequest { Name = "Group B" };
+        var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
         var otherUser = new Data.Entities.User
         {
@@ -69,10 +58,8 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
             }
         };
 
-        DbContext.Add(otherUser);
-        DbContext.Add(group);
-        user.Groups.Add(group);
         otherUser.Groups.Add(group);
+        DbContext.Add(otherUser);
 
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -125,23 +112,15 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var rulesService = GetService<IRuleService>();
         var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var currentUser = await userService.GetCurrentUser();
+        var user = await userService.GetCurrentUser();
 
-        // Create a valid group the current user belongs to
-        var group = new GroupSplit.Data.Entities.Group
-        {
-            Id = Guid.NewGuid(),
-            Name = "Group With Missing User Test"
-        };
-
-        currentUser.Groups.Add(group);
-        DbContext.Add(group);
-
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var createGroupRequest = new CreateGroupRequest { Name = "Group X" };
+        var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
         // One real user (current user)
-        var realUserId = currentUser.Id;
+        var realUserId = user.Id;
 
         // One fake user ID that does NOT exist
         var missingUserId = Guid.NewGuid();
@@ -180,7 +159,6 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var group = new Data.Entities.Group
         {
-            Id = Guid.NewGuid(),
             Name = "Forbidden"
         };
 
@@ -205,37 +183,75 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var createGroupRequest = new CreateGroupRequest { Name = "Group C" };
+        var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
-        var group = new Data.Entities.Group
-        {
-            Id = Guid.NewGuid(),
-            Name = "Group C"
-        };
-
-        user.Groups.Add(group);
-
-        var existing = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Group = group,
-            Category = "Personal"
-        };
-
-        DbContext.AddRange(group, existing);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        var request = new CreateRuleRequest
+        var createRuleRequest1 = new CreateRuleRequest
         {
             GroupId = group.Id,
-            Category = "Personal", // duplicate
+            Category = "Personal rule",
+            Version = new PersonalRuleVersionDto()
+        };
+
+        await rulesService.Create(createRuleRequest1, TestContext.Current.CancellationToken);
+
+        var createRuleRequest2 = new CreateRuleRequest
+        {
+            GroupId = group.Id,
+            Category = "Personal rule", // duplicate
             Version = new PersonalRuleVersionDto()
         };
 
         // Act + Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            rulesService.Create(request, TestContext.Current.CancellationToken));
+            rulesService.Create(createRuleRequest2, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Create_ReactivatesExpiredRuleByAddingNewVersion()
+    {
+        // Arrange
+        var rulesService = GetService<IRuleService>();
+        var groupService = GetService<IGroupService>();
+
+        var createGroupRequest = new CreateGroupRequest { Name = "Group D" };
+        var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
+
+        // Create rule with expired version
+        var existingRule = new Rule
+        {
+            Group = group,
+            Category = "Personal rule",
+            Versions =
+            {
+                new PersonalRuleVersion
+                {
+                    EndDateTime = DateTime.UtcNow.AddDays(-1),
+                    StartDateTime = DateTime.UtcNow.AddDays(-2)
+                }
+            }
+        };
+
+        DbContext.Add(existingRule);
+        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var request = new CreateRuleRequest
+        {
+            GroupId = group.Id,
+            Category = "Personal rule",
+            Version = new PersonalRuleVersionDto()
+        };
+
+        // Act
+        var newVersion = await rulesService.Create(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.NotNull(newVersion);
+        Assert.Equal("Personal rule", newVersion.Rule.Category);
+        Assert.Equal(2, newVersion.Rule.Versions.Count); // existing + new
+        Assert.Contains(newVersion, newVersion.Rule.Versions);
+        Assert.All(newVersion.Rule.Versions, v => Assert.IsType<PersonalRuleVersion>(v));
     }
 }

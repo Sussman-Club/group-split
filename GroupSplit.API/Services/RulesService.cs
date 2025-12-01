@@ -24,6 +24,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         var query = from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
             from rule in @group.Rules
             from version in rule.Versions
+            where version.EndDateTime != null
             select version;
 
         return query;
@@ -42,30 +43,44 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
 
         var groupResult =
             await (from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
+                    where @group.Id == request.GroupId
                     select new
                     {
                         Group = @group,
-                        AlreadyHasRule = @group.Rules.Any(r => r.Category == request.Category)
+                        Rule = @group.Rules.FirstOrDefault(r => r.Category == request.Category)
                     })
                 .FirstOrDefaultAsync(ct);
 
         if (groupResult is not { Group: not null })
             throw new InvalidOperationException("Group does not exist.");
 
-        if (groupResult.AlreadyHasRule)
-            throw new InvalidOperationException("Group already has a rule with this category.");
+        if (groupResult.Rule is not null &&
+            await dbContext.Entry(groupResult.Rule).Collection(r => r.Versions).Query()
+                .AnyAsync(x => x.EndDateTime == null, ct))
+            throw new InvalidOperationException("Group already has a rule with the same category.");
 
+        var existingRule = groupResult.Rule;
         var version = await MapVersionAsync(request.Version, ct);
 
-        var rule = new Rule
+        if (existingRule is not null)
         {
-            Id = Guid.NewGuid(),
-            Group = groupResult.Group,
-            Category = request.Category,
-            Versions = { version }
-        };
+            // Reactivate expired rule by adding a new version
+            dbContext.Add(version);
+            existingRule.Versions.Add(version);
+        }
+        else
+        {
+            var rule = new Rule
+            {
+                Id = Guid.NewGuid(),
+                Group = groupResult.Group,
+                Category = request.Category,
+                Versions = { version }
+            };
 
-        dbContext.Add(rule);
+            dbContext.Add(rule);
+        }
+
         await dbContext.SaveChangesAsync(ct);
 
         return version;
@@ -146,6 +161,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         RuleVersion? newVersion = null;
         if (!VersionEquals(latestVersion, request.Version))
         {
+            latestVersion.EndDateTime = DateTime.UtcNow;
             newVersion = await MapVersionAsync(request.Version, ct);
             dbContext.Add(newVersion);
             existingRule.Versions.Add(newVersion);
