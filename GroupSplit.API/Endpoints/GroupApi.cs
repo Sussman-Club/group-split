@@ -80,28 +80,31 @@ public static class GroupApi
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
-        
+
         private RouteHandlerBuilder MapUpdateGroup()
         {
             return group.MapPatch("{id:guid}", async (
-                Guid id,
-                JsonPatchDocument<CreateGroupRequest> patchDocument,
-                IGroupService groupService,
-                CancellationToken ct) =>
-            {
-                var groups = await groupService.GetGroupById(id, ct);
-                var groupUpdateRequest = await (from t in groups
-                    select new CreateGroupRequest
-                    {
-                        Name = t.Name
-                    }).FirstOrDefaultAsync(ct);
-                
-                patchDocument.ApplyTo(groupUpdateRequest);
+                    Guid id,
+                    JsonPatchDocument<CreateGroupRequest> patchDocument,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    var groupUpdateRequest = await groupService.GetUpdateModel(id, ct);
+                    
+                    if (groupUpdateRequest is null) return Results.NotFound();
 
-                await groupService.UpdateGroup(id, groupUpdateRequest, ct);
+                    patchDocument.ApplyTo(groupUpdateRequest);
 
-                return Results.Ok();
-            }).WithName("UpdateGroup");
+                    await groupService.UpdateGroup(id, groupUpdateRequest, ct);
+                    
+                    var group = await groupService.GetGroupById(id, ct);
+                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+
+                    return Results.Ok(groupResponse);
+                })
+                .WithName("UpdateGroup")
+                .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapGetGroupTransactions()
@@ -147,14 +150,14 @@ public static class GroupApi
                     Guid id,
                     IGroupService groupService,
                     CancellationToken ct) =>
-                    {
-                        var members = (await groupService.GetGroupMembers(id, ct)).SelectDto();
-                        var userResponse = await members.ToListAsync(ct);
-                        return userResponse is null ? Results.NotFound() : Results.Ok(userResponse);
-                    })
-                    .WithName("GetGroupMembers")
-                    .Produces<UserInfo[]>()
-                    .ProducesProblem(StatusCodes.Status404NotFound);
+                {
+                    var members = (await groupService.GetGroupMembers(id, ct)).SelectDto();
+                    var userResponse = await members.ToListAsync(ct);
+                    return userResponse is null ? Results.NotFound() : Results.Ok(userResponse);
+                })
+                .WithName("GetGroupMembers")
+                .Produces<UserInfo[]>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapAddMember()
@@ -185,14 +188,14 @@ public static class GroupApi
                     Guid userId,
                     IGroupService groupService,
                     CancellationToken ct) =>
-            {
-                var group  = await groupService.RemoveGroupMember(grouId, userId, ct);
-                var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                {
+                    var group = await groupService.RemoveGroupMember(grouId, userId, ct);
+                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
-                if (groupResponse is null) return Results.NotFound();
+                    if (groupResponse is null) return Results.NotFound();
 
-                return Results.Ok(groupResponse);
-            })
+                    return Results.Ok(groupResponse);
+                })
                 .WithName("RemoveGroupMember")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
@@ -204,7 +207,7 @@ public static class GroupApi
         private IQueryable<GroupResponse> SelectDto()
         {
             return from @group in groups
-                   select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
+                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
         }
     }
 
@@ -213,7 +216,7 @@ public static class GroupApi
         private IQueryable<UserInfo> SelectDto()
         {
             return from user in users
-                   select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
+                select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
         }
     }
 
