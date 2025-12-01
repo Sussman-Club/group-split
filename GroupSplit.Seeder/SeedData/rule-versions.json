@@ -1,9 +1,9 @@
 [
   {
+    "Type": "Percentage",
     "Id": "B1B11111-1111-1111-1111-111111111111",
     "RuleId": "A1A11111-1111-1111-1111-111111111111",
     "StartDate": "2024-01-01",
-    "Type": "Percentage",
     "Percentages": [
       {
         "UserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
@@ -24,10 +24,10 @@
     ]
   },
   {
+    "Type": "Percentage",
     "Id": "B2B22222-2222-2222-2222-222222222222",
     "RuleId": "A2A22222-2222-2222-2222-222222222222",
     "StartDate": "2024-06-01",
-    "Type": "Percentage",
     "Percentages": [
       {
         "UserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
@@ -48,10 +48,10 @@
     ]
   },
   {
+    "Type": "Percentage",
     "Id": "B3B33333-3333-3333-3333-333333333333",
     "RuleId": "A3A33333-3333-3333-3333-333333333333",
     "StartDate": "2024-03-15",
-    "Type": "Percentage",
     "Percentages": [
       {
         "UserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",

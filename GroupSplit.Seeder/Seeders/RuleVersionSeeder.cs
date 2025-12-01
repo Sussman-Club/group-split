@@ -1,4 +1,3 @@
-using System.Text.Json;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
@@ -18,15 +17,15 @@ public class RuleVersionSeeder(
 {
     protected override async Task<RuleVersion?> MapAsync(RuleVersionSeedDto dto, CancellationToken ct = default)
     {
-        return dto.Type switch
+        return dto switch
         {
-            RuleVersionType.Personal => await MapPersonalVersionRuleAsync(dto, ct),
-            RuleVersionType.Percentage => await MapPercentageVersionRuleAsync(dto, ct),
+            PersonalRuleVersionSeedDto personal => await MapRuleVersionAsync(personal, ct),
+            PercentRuleVersionSeedDto percent => await MapRuleVersionAsync(percent, ct),
             _ => null
         };
     }
 
-    private async Task<PersonalRuleVersion?> MapPersonalVersionRuleAsync(RuleVersionSeedDto dto,
+    private async Task<PersonalRuleVersion?> MapRuleVersionAsync(PersonalRuleVersionSeedDto dto,
         CancellationToken ct = default)
     {
         var rule = await DbContext.Set<Rule>().FindAsync([dto.RuleId], ct);
@@ -42,24 +41,10 @@ public class RuleVersionSeeder(
         };
     }
 
-    private async Task<PercentRuleVersion?> MapPercentageVersionRuleAsync(RuleVersionSeedDto dto,
+    private async Task<PercentRuleVersion?> MapRuleVersionAsync(PercentRuleVersionSeedDto dto,
         CancellationToken ct = default)
     {
-        // Prefer strongly-typed percentages if available (via custom JSON converter),
-        // otherwise fall back to ExtensionData for backward compatibility.
-        PercentRuleUserSeedDto[]? percentages = null;
-
-        if (dto is PercentRuleVersionSeedDto typed)
-        {
-            percentages = typed.Percentages;
-        }
-        else if (dto.ExtensionData.TryGetValue("Percentages", out var jsonElement))
-        {
-            percentages = jsonElement.Deserialize<PercentRuleUserSeedDto[]>();
-        }
-
-        if (percentages is null)
-            return null;
+        var percentages = dto.Percentages;
 
         var sum = percentages.Sum(x => x.Percentage);
 
