@@ -29,7 +29,7 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var request = new CreateRuleRequest
         {
             GroupId = group.Id,
-            Category = "Personal",
+            Category = "Personal rule",
             Version = new PersonalRuleVersionDto()
         };
 
@@ -38,7 +38,7 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Assert
         Assert.NotNull(created);
-        Assert.Equal("Personal", created.Rule.Category);
+        Assert.Equal("Personal rule", created.Rule.Category);
         Assert.Single(created.Rule.Versions);
 
         Assert.IsType<PersonalRuleVersion>(created);

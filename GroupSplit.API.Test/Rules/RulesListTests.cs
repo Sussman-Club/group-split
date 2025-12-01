@@ -54,7 +54,7 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var list = await listQuery.ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(2, list.Count);
+        Assert.Equal(3, list.Count); // Including the personal rule version from the user's personal group
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var list = await listQuery.ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Single(list); // Only the allowed rule should appear
-        Assert.Equal(allowedRule.Versions.First().Id, list.Single().Id);
+        Assert.Contains(list, x => x.Id == allowedRule.Versions.First().Id);
+        Assert.DoesNotContain(list, x => x.Id == forbiddenRule.Versions.First().Id);
     }
 }
