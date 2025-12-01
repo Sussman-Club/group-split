@@ -19,6 +19,7 @@ public static class RulesApi
 
             group.MapCreateRule();
             group.MapUpdateRule();
+            group.MapDeleteRule();
 
             return group;
         }
@@ -65,6 +66,20 @@ public static class RulesApi
                 .WithName("UpdateRule")
                 .Produces<RuleVersionResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapDeleteRule()
+        {
+            return group.MapDelete("/{ruleId:guid}", async (
+                    Guid ruleId,
+                    IRuleService ruleService,
+                    CancellationToken ct) =>
+                {
+                    await ruleService.Delete(ruleId, ct);
+                    return Results.Ok();
+                })
+                .WithName("DeleteRule")
+                .Produces(StatusCodes.Status404NotFound);
         }
     }
 

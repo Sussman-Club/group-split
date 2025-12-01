@@ -24,7 +24,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         var query = from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
             from rule in @group.Rules
             from version in rule.Versions
-            where version.EndDateTime != null
+            where version.EndDateTime == null
             select version;
 
         return query;
@@ -174,7 +174,18 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
 
     public async Task Delete(Guid ruleId, CancellationToken ct = default)
     {
-        throw new NotImplementedException();
+        var version = await (
+                from ruleVersion in await List(ct)
+                where ruleVersion.Rule.Id == ruleId
+                select ruleVersion)
+            .FirstOrDefaultAsync(ct);
+
+        if (version is null)
+            throw new InvalidOperationException("Rule does not exist.");
+
+        version.EndDateTime = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(ct);
     }
 
     private async Task<RuleVersion> MapVersionAsync(RuleVersionDto dto, CancellationToken ct)
