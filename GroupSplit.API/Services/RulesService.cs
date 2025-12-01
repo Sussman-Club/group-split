@@ -8,7 +8,7 @@ namespace GroupSplit.API.Services;
 public interface IRuleService
 {
     Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default);
-    Task<IQueryable<RuleVersion>> Get(Guid id, CancellationToken cancellationToken = default);
+    Task<IQueryable<RuleVersion>> Get(Guid ruleVersionId, CancellationToken cancellationToken = default);
     Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default);
     Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct);
     Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
@@ -28,10 +28,10 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         return query;
     }
 
-    public async Task<IQueryable<RuleVersion>> Get(Guid id, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<RuleVersion>> Get(Guid ruleVersionId, CancellationToken cancellationToken = default)
     {
         return from g in await List(cancellationToken)
-            where g.Id == id
+            where g.Id == ruleVersionId
             select g;
     }
 
