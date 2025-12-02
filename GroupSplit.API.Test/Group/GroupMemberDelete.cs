@@ -11,7 +11,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task DeleteGroupMember_DeleteValidMember()
     {
         var groupService = GetService<IGroupService>();
-        var group = await groupService.CreateGroup(new ()
+        var group = await groupService.CreateGroup(new CreateGroupRequest
         {
             Name = "Test Group",
         }, TestContext.Current.CancellationToken);
@@ -20,21 +20,24 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await groupService.AddGroupMembers(group.Id, new AddMemberRequest
         (
-            [ new UserIdentifier() { Email = newMember.Email! } ]
+            [new UserIdentifier { Email = newMember.Email! }]
         ), TestContext.Current.CancellationToken);
 
-        var membersBeforeDelete = await (await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken))
-            .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var membersBeforeDelete =
+            await (await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken))
+                .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(membersBeforeDelete, m => m.Id == newMember.Id);
 
         await groupService.RemoveGroupMember(group.Id, newMember.Id, TestContext.Current.CancellationToken);
 
-        var membersAfterDelete = await (await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken))
-            .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var membersAfterDelete =
+            await (await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken))
+                .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(membersAfterDelete, m => m.Id == newMember.Id);
-        Assert.Superset(membersAfterDelete.Select(m => m.Id).ToHashSet(), membersBeforeDelete.Select(m => m.Id).ToHashSet());
+        Assert.Superset(membersAfterDelete.Select(m => m.Id).ToHashSet(),
+            membersBeforeDelete.Select(m => m.Id).ToHashSet());
     }
 
     [Fact]
@@ -45,7 +48,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var groupService = GetService<IGroupService>();
 
         var currentUser = await userService.GetCurrentUser();
-        var group = await groupService.CreateGroup(new()
+        var group = await groupService.CreateGroup(new CreateGroupRequest
         {
             Name = "Test Group",
         }, TestContext.Current.CancellationToken);
