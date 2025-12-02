@@ -4,178 +4,101 @@
 @inject IGroupsClient GroupsClient
 @inject IRulesClient RulesClient
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">Manage Rules</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold mb-2">
+            Manage rules
+        </MudText>
     </TitleContent>
 
     <DialogContent>
         <MudStack Spacing="4">
-            <MudTable Items="Rules" Dense="true" Hover="true" Bordered="true">
+            <MudTable Items="Rules">
                 <HeaderContent>
                     <MudTh>Category</MudTh>
                     <MudTh class="text-right">Actions</MudTh>
                 </HeaderContent>
+
                 <RowTemplate>
                     <MudTd>@context.Category</MudTd>
                     <MudTd Class="text-right">
-                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Outlined.Edit"
-                                   OnClick="() => OpenEditRuleDialog(context)">Edit
-                        </MudButton>
-                        <MudButton Size="Size.Small" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Delete"
-                                   OnClick="() => DeleteRule(context)">Delete
-                        </MudButton>
+                        <MudStack Row="true" Spacing="1">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                           Size="Size.Small"
+                                           OnClick="@(async () => await OpenEditRuleDialog(context))"/>
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(async () => await OpenDeleteRuleDialog(context))"/>
+                        </MudStack>
+
                     </MudTd>
                 </RowTemplate>
+
                 <NoRecordsContent>
-                    <MudText Typo="Typo.body2" Class="pa-4">No rules defined for this group yet.</MudText>
+                    <MudText Typo="Typo.body2" Class="pa-4">
+                        No rules defined for this group yet.
+                    </MudText>
                 </NoRecordsContent>
             </MudTable>
 
-            <MudDivider/>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Add"
+                       Class="align-self-end"
+                       OnClick="@OpenCreateRuleDialog">
+                Create Rule
+            </MudButton>
 
-            <MudText Typo="Typo.subtitle1">Create a new rule</MudText>
-            <MudForm @ref="createForm" Model="createModel">
-                <MudStack Spacing="3">
-                    <MudTextField @bind-Value="newCategory"
-                                  Label="Category"
-                                  Variant="Variant.Outlined"
-                                  Immediate="true"/>
-
-                    <MudSelect T="string" Label="Rule Type" @bind-Value="selectedRuleType" Variant="Variant.Outlined">
-                        <MudSelectItem Value='@("personal")'>Personal (payer owes full amount)</MudSelectItem>
-                        <MudSelectItem Value='@("percent")'>Percent split</MudSelectItem>
-                    </MudSelect>
-
-                    @if (selectedRuleType == "percent")
-                    {
-                        <MudPaper Class="pa-4" Elevation="0">
-                            <MudText Typo="Typo.body2" Class="mb-2">Enter percentage for each member (must total 100).
-                            </MudText>
-                            <MudGrid>
-                                @foreach (var u in Members)
-                                {
-                                    <MudItem xs="12" sm="6" md="4">
-                                        <MudNumericField T="decimal"
-                                                         @bind-Value="memberPercentages[u.Id]"
-                                                         Label="@($"{u.FirstName} {u.LastName}")"
-                                                         Variant="Variant.Outlined"
-                                                         Adornment="Adornment.End"
-                                                         AdornmentText="%"
-                                                         Min="0" Max="100" Immediate="true"/>
-                                    </MudItem>
-                                }
-                            </MudGrid>
-                            <MudText Typo="Typo.caption" Color="@(percentTotal == 100 ? Color.Success : Color.Error)">
-                                Total: @percentTotal%
-                            </MudText>
-                        </MudPaper>
-                    }
-
-                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
-                        <MudButton Variant="Variant.Outlined" OnClick="Cancel">Close</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(creating || !CanCreate)"
-                                   OnClick="Create">Create
-                        </MudButton>
-                    </MudStack>
-                </MudStack>
-            </MudForm>
         </MudStack>
     </DialogContent>
 </MudDialog>
+
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public Guid GroupId { get; set; }
 
-    private MudForm createForm;
-    private bool loading = false;
-    private bool creating = false;
-
     private ICollection<RuleVersionResponse> Rules = [];
-    private ICollection<UserInfo> Members = [];
-
-    private string selectedRuleType = "personal";
-    private CreateRuleRequest createModel = new() { Version = new PersonalRuleVersionDto() };
-    private string newCategory = string.Empty;
-    private Dictionary<Guid, decimal> memberPercentages = new();
-
-    private Guid? editingRuleId;
-    private string editedCategory;
 
     protected override async Task OnInitializedAsync()
     {
-        loading = true;
-        await LoadData();
-        loading = false;
-    }
-
-    private async Task LoadData()
-    {
         Rules = await GroupsClient.GetGroupRulesAsync(GroupId);
-        Members = await GroupsClient.GetGroupMembersAsync(GroupId);
-        EnsurePercentagesDictionary();
         StateHasChanged();
     }
 
-    private void EnsurePercentagesDictionary()
+    private async Task OpenCreateRuleDialog()
     {
-        // initialize percentages for all members if not present
-        foreach (var m in Members)
+        var parameters = new DialogParameters<CreateRuleDialog>
         {
-            if (!memberPercentages.ContainsKey(m.Id))
-                memberPercentages[m.Id] = 0m;
-        }
+            { x => x.GroupId, GroupId }
+        };
 
-        // remove any for non-members
-        var keys = memberPercentages.Keys.ToList();
-        foreach (var k in keys)
+        var options = new DialogOptions
         {
-            if (!Members.Any(x => x.Id == k))
-                memberPercentages.Remove(k);
-        }
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("Create Rule", parameters, options);
+        var request = await dialog.GetReturnValueAsync<CreateRuleRequest>();
+
+        if (request is not null)
+            await CreateRule(request);
     }
 
-    private int percentTotal => (int)Math.Round(memberPercentages.Values.Sum());
-
-    private bool CanCreate => !string.IsNullOrWhiteSpace(newCategory) &&
-                              (selectedRuleType == "personal" || percentTotal == 100);
-
-    private async Task Create()
+    private async Task CreateRule(CreateRuleRequest request)
     {
-        await createForm.Validate();
-        if (!createForm.IsValid)
-            return;
+        var response = await RulesClient.CreateRuleAsync(request);
 
-        creating = true;
+        Snackbar.Add("Rule created successfully.", Severity.Success);
 
-        var request = selectedRuleType == "personal"
-            ? new CreateRuleRequest
-            {
-                GroupId = GroupId,
-                Category = newCategory,
-                Version = new PersonalRuleVersionDto()
-            }
-            : new CreateRuleRequest
-            {
-                GroupId = GroupId,
-                Category = newCategory,
-                Version = new PercentRuleVersionDto { Percentages = new Dictionary<Guid, decimal>(memberPercentages) }
-            };
-
-        var created = await RulesClient.CreateRuleAsync(request);
-        // refresh list and reset form
-        await LoadData();
-        createModel = new CreateRuleRequest { Version = new PersonalRuleVersionDto() };
-        newCategory = string.Empty;
-        selectedRuleType = "personal";
-        foreach (var key in memberPercentages.Keys.ToList()) memberPercentages[key] = 0m;
-        creating = false;
+        Rules.Add(response);
+        StateHasChanged();
     }
-
-    private void Cancel() => MudDialog.Cancel();
 
     private async Task OpenEditRuleDialog(RuleVersionResponse rule)
     {
@@ -194,14 +117,30 @@
         };
 
         var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit Rule", parameters, options);
-        var success = await dialog.GetReturnValueAsync<bool>();
-        if (success)
-        {
-            await LoadData();
-        }
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateRuleRequest>>();
+
+        if (request is not null)
+            await UpdateRule(rule, request);
     }
 
-    private async Task DeleteRule(RuleVersionResponse rule)
+    private async Task UpdateRule(RuleVersionResponse rule, JsonPatchDocument<UpdateRuleRequest> patch)
+    {
+        var updated = await RulesClient.UpdateRuleAsync(rule.RuleId, patch);
+        Snackbar.Add("Rule updated successfully.", Severity.Success);
+
+        var list = Rules.ToList();
+
+        var index = list.FindIndex(x => x.RuleId == rule.RuleId);
+        if (index != -1)
+        {
+            list[index] = updated;
+            Rules = list;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OpenDeleteRuleDialog(RuleVersionResponse rule)
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
@@ -214,9 +153,17 @@
         var confirmed = await dialog.GetReturnValueAsync<bool>();
         if (confirmed)
         {
-            await RulesClient.DeleteRuleAsync(rule.RuleId);
-            await LoadData();
+            await DeleteRule(rule);
         }
+    }
+
+    private async Task DeleteRule(RuleVersionResponse rule)
+    {
+        await RulesClient.DeleteRuleAsync(rule.RuleId);
+        Snackbar.Add("Rule deleted successfully.", Severity.Success);
+
+        Rules.Remove(rule);
+        StateHasChanged();
     }
 
 }

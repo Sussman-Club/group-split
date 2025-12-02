@@ -219,8 +219,9 @@
 
         var options = new DialogOptions
         {
-            MaxWidth = MaxWidth.Medium,
-            FullWidth = true
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true,
+            CloseButton = true
         };
 
         await DialogService.ShowAsync<ManageRulesDialog>("Manage Rules", parameters, options);
