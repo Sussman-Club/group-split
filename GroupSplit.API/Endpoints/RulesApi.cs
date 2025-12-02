@@ -35,11 +35,11 @@ public static class RulesApi
                     IRuleService ruleService,
                     CancellationToken ct) =>
                 {
-                    var updateModel = await ruleService.GetUpdateModel(ruleId, ct);
-                    return updateModel is null ? Results.NotFound() : Results.Ok(updateModel);
+                    var updateModel = await ruleService.GetRuleDetails(ruleId, ct);
+                    return Results.Ok(updateModel);
                 })
                 .WithName("GetRule")
-                .Produces<UpdateRuleRequest>()
+                .Produces<RuleDetailsResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -49,14 +49,14 @@ public static class RulesApi
                     CreateRuleRequest request,
                     IRuleService ruleService,
                     CancellationToken ct) =>
-            {
-                var version = await ruleService.Create(request, ct);
-                var query = await ruleService.Get(version.Rule.Id, ct);
-                var response = await query.SelectDto().FirstOrDefaultAsync(ct);
-                return Results.Ok(response);
-            })
-            .WithName("CreateRule")
-            .Produces<RuleVersionResponse>();
+                {
+                    var version = await ruleService.Create(request, ct);
+                    var query = await ruleService.Get(version.Rule.Id, ct);
+                    var response = await query.SelectDto().FirstOrDefaultAsync(ct);
+                    return Results.Ok(response);
+                })
+                .WithName("CreateRule")
+                .Produces<RuleVersionResponse>();
         }
 
         private RouteHandlerBuilder MapUpdateRule()
@@ -67,10 +67,12 @@ public static class RulesApi
                     IRuleService ruleService,
                     CancellationToken ct) =>
                 {
-                    var updateModel = await ruleService.GetUpdateModel(ruleId, ct);
-                    if (updateModel is null)
-                        return Results.NotFound();
-
+                    var ruleDetails = await ruleService.GetRuleDetails(ruleId, ct);
+                    var updateModel = new UpdateRuleRequest
+                    {
+                        Category = ruleDetails.Category,
+                        Version = ruleDetails.Version
+                    };
                     patchDocument.ApplyTo(updateModel);
                     await ruleService.Update(ruleId, updateModel, ct);
 

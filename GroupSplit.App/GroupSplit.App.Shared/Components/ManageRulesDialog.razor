@@ -102,7 +102,13 @@
 
     private async Task OpenEditRuleDialog(RuleVersionResponse rule)
     {
-        var ruleToUpdate = await RulesClient.GetRuleAsync(rule.RuleId);
+        var ruleDetails = await RulesClient.GetRuleAsync(rule.RuleId);
+        var ruleToUpdate = new UpdateRuleRequest
+        {
+            Category = ruleDetails.Category,
+            Version = ruleDetails.Version
+        };
+
         var parameters = new DialogParameters<EditRuleDialog>
         {
             { x => x.GroupId, GroupId },

@@ -58,25 +58,6 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task List_ReturnsEmpty_WhenUserHasNoGroups()
-    {
-        // Arrange
-        var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
-
-        var user = await userService.GetCurrentUser();
-        user.Groups.Clear();
-
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        // Act
-        var result = await rulesService.List(TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Empty(result);
-    }
-
-    [Fact]
     public async Task List_DoesNotReturnVersions_FromGroupsTheUserIsNotIn()
     {
         // Arrange

@@ -10,7 +10,7 @@ public interface IRuleService
     Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default);
     Task<IQueryable<RuleVersion>> Get(Guid ruleId, CancellationToken cancellationToken = default);
     Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default);
-    Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct);
+    Task<RuleDetailsResponse> GetRuleDetails(Guid ruleId, CancellationToken ct);
     Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
     Task Delete(Guid ruleId, CancellationToken ct = default);
 }
@@ -86,7 +86,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         return version;
     }
 
-    public async Task<UpdateRuleRequest?> GetUpdateModel(Guid ruleId, CancellationToken ct)
+    public async Task<RuleDetailsResponse> GetRuleDetails(Guid ruleId, CancellationToken ct)
     {
         var ruleVersion =
             await (from rv in dbContext.Set<RuleVersion>()
@@ -106,12 +106,14 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         }
 
         if (ruleVersion is null)
-            return null;
+            throw new InvalidOperationException("Rule does not exist.");
 
         return ruleVersion switch
         {
-            PercentRuleVersion percent => new UpdateRuleRequest
+            PercentRuleVersion percent => new RuleDetailsResponse
             {
+                RuleId = ruleVersion.Rule.Id,
+                RuleVersionId = ruleVersion.Id,
                 Category = ruleVersion.Rule.Category,
                 Version = new PercentRuleVersionDto
                 {
@@ -122,8 +124,10 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
                         )
                 }
             },
-            PersonalRuleVersion => new UpdateRuleRequest
+            PersonalRuleVersion => new RuleDetailsResponse
             {
+                RuleId = ruleVersion.Rule.Id,
+                RuleVersionId = ruleVersion.Id,
                 Category = ruleVersion.Rule.Category,
                 Version = new PersonalRuleVersionDto()
             },

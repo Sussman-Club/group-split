@@ -5,19 +5,19 @@ using GroupSplit.Shared;
 
 namespace GroupSplit.API.Test.Rules;
 
-public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
+public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     [Fact]
-    public async Task GetUpdateModel_ReturnsNull_WhenRuleDoesNotExist()
+    public async Task GetUpdateModel_ThrowsException_WhenRuleDoesNotExist()
     {
         // Arrange
         var ruleService = GetService<IRuleService>();
 
-        // Act
-        var result = await ruleService.GetUpdateModel(Guid.NewGuid(), TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Null(result);
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await ruleService.GetRuleDetails(Guid.NewGuid(), TestContext.Current.CancellationToken);
+        });
     }
 
     [Fact]
@@ -26,7 +26,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         // Arrange
         var ruleService = GetService<IRuleService>();
         var groupService = GetService<IGroupService>();
-        
+
         var createGroupRequest = new CreateGroupRequest { Name = "Test Group" };
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
@@ -41,7 +41,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
 
         // Act
         var updateModel =
-            await ruleService.GetUpdateModel(createdVersion.Rule.Id, TestContext.Current.CancellationToken);
+            await ruleService.GetRuleDetails(createdVersion.Rule.Id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(updateModel);
@@ -56,7 +56,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         var userService = GetService<IUserService>();
         var ruleService = GetService<IRuleService>();
         var groupService = GetService<IGroupService>();
-        
+
         var currentUser = await userService.GetCurrentUser();
         var createGroupRequest = new CreateGroupRequest { Name = "Test Group" };
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
@@ -67,7 +67,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
             Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
             PersonalGroup = new Data.Entities.Group { Name = "Personal" }
         };
-        
+
         otherUser.Groups.Add(group);
         DbContext.Add(otherUser);
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -92,7 +92,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
 
         // Act
         var updateModel =
-            await ruleService.GetUpdateModel(createdVersion.Rule.Id, TestContext.Current.CancellationToken);
+            await ruleService.GetRuleDetails(createdVersion.Rule.Id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(updateModel);
@@ -132,7 +132,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         };
 
         var v1 = await ruleService.Create(create1, TestContext.Current.CancellationToken);
-        
+
         var update = new UpdateRuleRequest
         {
             Version = new PercentRuleVersionDto
@@ -147,7 +147,7 @@ public class RulesGetUpdateModelTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         var v2 = await ruleService.Update(v1.Rule.Id, update, TestContext.Current.CancellationToken);
 
         // Act
-        var updateModel = await ruleService.GetUpdateModel(v1.Rule.Id, TestContext.Current.CancellationToken);
+        var updateModel = await ruleService.GetRuleDetails(v1.Rule.Id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(updateModel);

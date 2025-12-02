@@ -21,7 +21,7 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
             entity.Property(rv => rv.EndDateTime)
                 .HasColumnType("timestamp with time zone")
                 .HasConversion(
-                    appValue => appValue.HasValue ? appValue.Value.ToUniversalTime() : appValue,
+                    appValue => appValue != null ? appValue.Value.ToUniversalTime() : appValue,
                     dbValue => dbValue
                 );
         });
