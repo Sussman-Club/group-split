@@ -231,6 +231,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
 
         foreach (var (userId, percent) in dto.Percentages)
         {
+            if (percent is 0) continue;
             version.RuleUsers.Add(new PercentRuleUser
             {
                 User = users.Single(u => u.Id == userId),
