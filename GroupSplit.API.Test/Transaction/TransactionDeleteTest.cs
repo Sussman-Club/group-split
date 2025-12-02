@@ -1,10 +1,6 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
-using UserEntity = GroupSplit.Data.Entities.User;
-using TransactionEntity = GroupSplit.Data.Entities.Transaction;
-using GroupEntity = GroupSplit.Data.Entities.Group;
 
 namespace GroupSplit.API.Test.Transaction;
 
@@ -71,44 +67,7 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
 
         await userService.GetCurrentUser();
 
-        // Create "other" user
-        var otherUser = new UserEntity
-        {
-            FirstName = "Other",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new GroupEntity
-            {
-                Name = "Personal",
-                Rules =
-                {
-                    new Rule
-                    {
-                        Category = "Personal",
-                        Versions =
-                        {
-                            new PersonalRuleVersion
-                            {
-                                StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2))
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        var otherTransaction = new TransactionEntity
-        {
-            Name = "Other User Tx",
-            Amount = 10.00m,
-            DateTime = DateTimeOffset.UtcNow,
-            User = otherUser,
-            RuleVersion = otherUser.PersonalGroup.Rules.First().Versions.First()
-        };
-
-        DbContext.Set<UserEntity>().Add(otherUser);
-        DbContext.Set<TransactionEntity>().Add(otherTransaction);
-        
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var otherTransaction = await TestDataUtils.CreateTransactionForNewUserAsync(ServiceProvider);
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
@@ -118,7 +77,7 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         Assert.NotNull(exception);
 
         // Assert — transaction must still exist
-        var stillExists = DbContext.Set<TransactionEntity>().Where(x => x.Id == otherTransaction.Id).ToList();
+        var stillExists = DbContext.Set<Data.Entities.Transaction>().Where(x => x.Id == otherTransaction.Id).ToList();
         Assert.NotEmpty(stillExists);
     }
 }

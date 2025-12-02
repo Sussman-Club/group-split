@@ -1,9 +1,6 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
-using UserEntity = GroupSplit.Data.Entities.User;
-using GroupEntity = GroupSplit.Data.Entities.Group;
 
 namespace GroupSplit.API.Test.Transaction;
 
@@ -111,16 +108,6 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
 
         var currentUser = await userService.GetCurrentUser();
 
-        // Create other user not in current user's group
-        var otherUser = new UserEntity
-        {
-            FirstName = "Other",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new GroupEntity { Name = "Other Personal" }
-        };
-        DbContext.Set<UserEntity>().Add(otherUser);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
         var transaction = await transactionService.Create(new CreateTransactionRequest
         {
             Name = "Old Tx",
@@ -129,9 +116,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             PaidByUserId = currentUser.Id
         }, TestContext.Current.CancellationToken);
 
-        // Use a valid rule version (could be from current user's group)
-        var group = currentUser.Groups.First();
-        var ruleVersion = group.Rules.First().Versions.First();
+        var otherUser = await CreateNewUser();
 
         var request = new UpdateTransactionRequest
         {
@@ -139,7 +124,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = 50,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = otherUser.Id, // not in current user's group
-            RuleVersionId = ruleVersion.Id
+            RuleVersionId = transaction.RuleVersion.Id
         };
 
         // Act & Assert
