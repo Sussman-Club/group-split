@@ -1,9 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
-using UserEntity = GroupSplit.Data.Entities.User;
 
 namespace GroupSplit.API.Test.Group;
 
@@ -62,33 +60,11 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Ensure current user exists and has at least personal group
         await userService.GetCurrentUser();
 
-        // Create a different user and a group that only that user belongs to
-        var otherUser = new UserEntity
-        {
-            Identity = new UserIdentity
-            {
-                IdentityId = Guid.NewGuid()
-                    .ToString()
-            },
-            PersonalGroup = new GroupSplit.Data.Entities.Group()
-            {
-                Name = "Personal"
-            },
-            FirstName = "Random"
-        };
-
-        var otherUserGroup = new GroupSplit.Data.Entities.Group
-        {
-            Name = "Other Group",
-            Users = { otherUser }
-        };
-
-        DbContext.Set<UserEntity>().Add(otherUser);
-        DbContext.Set<GroupSplit.Data.Entities.Group>().Add(otherUserGroup);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        // Create a new user with its own personal group
+        var otherUser = await CreateNewUser();
 
         // Act
-        var result = await groupService.GetGroupById(otherUserGroup.Id, TestContext.Current.CancellationToken);
+        var result = await groupService.GetGroupById(otherUser.PersonalGroup.Id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(result);

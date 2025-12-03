@@ -1,8 +1,6 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
-using UserEntity = GroupSplit.Data.Entities.User;
 
 namespace GroupSplit.API.Test.Group;
 
@@ -60,30 +58,10 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
-
-        var currentUser = await userService.GetCurrentUser();
         await groupService.CreateGroup(new CreateGroupRequest { Name = "My Group" },
             TestContext.Current.CancellationToken);
 
-        // Create a group for another user (simulate another user's group)
-        var otherUser = new UserEntity
-        {
-            FirstName = "Other",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new GroupSplit.Data.Entities.Group()
-            {
-                Name = "Personal"
-            }
-        };
-        var otherUserGroup = new GroupSplit.Data.Entities.Group
-        {
-            Name = "Other Group",
-            Users = { otherUser }
-        };
-        DbContext.Set<UserEntity>().Add(otherUser);
-        DbContext.Set<GroupSplit.Data.Entities.Group>().Add(otherUserGroup);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var otherUser = await CreateNewUser();
 
         // Act
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
@@ -91,6 +69,6 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Assert
         // Should only return current user's groups (1 personal + 1 created = 2)
         Assert.Equal(2, groups.Count);
-        Assert.DoesNotContain(groups, g => g.Id == otherUserGroup.Id);
+        Assert.DoesNotContain(groups, g => g.Id == otherUser.PersonalGroup.Id);
     }
 }

@@ -1,8 +1,6 @@
 ﻿using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using GroupSplit.Shared;
 
 namespace GroupSplit.API.Test.Group;
 
@@ -15,11 +13,9 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task AddGroupMembers_AddsMembersToGroup()
     {
         // Arrange
-        var userService = GetService<IUserService>();
         var groupService = GetService<IGroupService>();
 
-        var currentUser = await userService.GetCurrentUser();
-        var group = await groupService.CreateGroup(new()
+        var group = await groupService.CreateGroup(new CreateGroupRequest
         {
             Name = "Test Group",
         }, TestContext.Current.CancellationToken);
@@ -28,9 +24,9 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var exception = await Record.ExceptionAsync(async () =>
         {
-        // Act
-        await groupService.AddGroupMembers(group.Id, new(
-                [new() { Email = newUser.Email! }]
+            // Act
+            await groupService.AddGroupMembers(group.Id, new AddMemberRequest(
+                [new UserIdentifier { Email = newUser.Email! }]
             ), TestContext.Current.CancellationToken);
         });
 
@@ -46,8 +42,8 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
-            await groupService.AddGroupMembers(Guid.NewGuid(), new(
-                [new() { Email = newUser.Email! }]
+            await groupService.AddGroupMembers(Guid.NewGuid(), new AddMemberRequest(
+                [new UserIdentifier { Email = newUser.Email! }]
             ), TestContext.Current.CancellationToken);
         });
     }
@@ -56,17 +52,15 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task AddGroupMembers_EmailsNotFound_NoUsersAdded()
     {
         // Arrange
-        var userService = GetService<IUserService>();
         var groupService = GetService<IGroupService>();
-        var currentUser = await userService.GetCurrentUser();
-        var group = await groupService.CreateGroup(new()
+        var group = await groupService.CreateGroup(new CreateGroupRequest
         {
             Name = "Test Group",
         }, TestContext.Current.CancellationToken);
 
         // Act
-        await groupService.AddGroupMembers(group.Id, new(
-            [new() { Email = "wrong@test.com" }]), TestContext.Current.CancellationToken);
+        await groupService.AddGroupMembers(group.Id, new AddMemberRequest(
+            [new UserIdentifier { Email = "wrong@test.com" }]), TestContext.Current.CancellationToken);
 
         var members = await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken);
         // Assert
