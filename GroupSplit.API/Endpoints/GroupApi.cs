@@ -3,6 +3,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -26,7 +27,8 @@ public static class GroupApi
             group.MapGetGroupRules();
             group.MapGetMembers();
             group.MapAddMember();
-            group.MapRemovedMember();
+            group.MapRemoveMember();
+            group.MapGetGroupBalance();
             return group;
         }
     }
@@ -181,7 +183,7 @@ public static class GroupApi
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
-        private RouteHandlerBuilder MapRemovedMember()
+        private RouteHandlerBuilder MapRemoveMember()
         {
             return group.MapDelete("{grouId:guid}/members/{userId}", async (
                     Guid grouId,
@@ -198,6 +200,25 @@ public static class GroupApi
                 })
                 .WithName("RemoveGroupMember")
                 .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapGetGroupBalance()
+        {
+            return group.MapGet("{grouId:guid}/balances", async (
+                    Guid grouId,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+            {
+                var balances = await groupService.GetGroupBalance(grouId, ct);
+                var balanceResponse =  await balances.ToArrayAsync(ct);
+
+                if (balanceResponse is null) return Results.NotFound();
+
+                return Results.Ok(balanceResponse);
+            })
+                .WithName("GetGroupBalance")
+                .Produces<GroupBalance[]>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }
