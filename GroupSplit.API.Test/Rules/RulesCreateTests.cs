@@ -48,20 +48,11 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var createGroupRequest = new CreateGroupRequest { Name = "Group B" };
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
-        var otherUser = new Data.Entities.User
-        {
-            FirstName = "Other",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new GroupSplit.Data.Entities.Group
-            {
-                Name = "Personal"
-            }
-        };
+        var otherUser = await CreateNewUser();
 
-        otherUser.Groups.Add(group);
-        DbContext.Add(otherUser);
-
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await groupService.AddGroupMembers(group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = otherUser.Email }]),
+            TestContext.Current.CancellationToken);
 
         var userA = user.Id;
         var userB = otherUser.Id;
@@ -219,23 +210,14 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var createGroupRequest = new CreateGroupRequest { Name = "Group D" };
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
-        // Create rule with expired version
-        var existingRule = new Rule
+        var existingRule = await rulesService.Create(new CreateRuleRequest
         {
-            Group = group,
+            GroupId = group.Id,
             Category = "Personal rule",
-            Versions =
-            {
-                new PersonalRuleVersion
-                {
-                    EndDateTime = DateTime.UtcNow.AddDays(-1),
-                    StartDateTime = DateTime.UtcNow.AddDays(-2)
-                }
-            }
-        };
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
-        DbContext.Add(existingRule);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await rulesService.Delete(existingRule.Rule.Id, TestContext.Current.CancellationToken);
 
         var request = new CreateRuleRequest
         {

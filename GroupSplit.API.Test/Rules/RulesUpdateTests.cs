@@ -12,32 +12,17 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
+            TestContext.Current.CancellationToken);
 
-        var group = new Data.Entities.Group
+        var ruleVersion = await rulesService.Create(new CreateRuleRequest
         {
-            Id = Guid.NewGuid(),
-            Name = "A"
-        };
-        user.Groups.Add(group);
-
-        var version = new PersonalRuleVersion
-        {
-            StartDateTime = DateTime.UtcNow
-        };
-
-        var rule = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Group = group,
-            Category = "OldCat",
-            Versions = { version }
-        };
-
-        DbContext.Add(rule);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            GroupId = group.Id,
+            Category = "Personal",
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
         var request = new UpdateRuleRequest
         {
@@ -46,11 +31,11 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var updated = await rulesService.Update(rule.Id, request, TestContext.Current.CancellationToken);
+        var updated = await rulesService.Update(ruleVersion.Rule.Id, request, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal("NewCat", rule.Category);
-        Assert.Equal(version.Id, updated.Id); // same version, no new version created
+        Assert.Equal("NewCat", ruleVersion.Rule.Category);
+        Assert.Equal(ruleVersion.Id, updated.Id); // same version, no new version created
     }
 
     [Fact]
@@ -58,32 +43,17 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
+            TestContext.Current.CancellationToken);
 
-        var group = new Data.Entities.Group
+        var ruleVersion = await rulesService.Create(new CreateRuleRequest
         {
-            Id = Guid.NewGuid(),
-            Name = "SameVer"
-        };
-        user.Groups.Add(group);
-
-        var version = new PersonalRuleVersion
-        {
-            StartDateTime = DateTime.UtcNow
-        };
-
-        var rule = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Group = group,
+            GroupId = group.Id,
             Category = "Personal",
-            Versions = { version }
-        };
-
-        DbContext.Add(rule);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
         var request = new UpdateRuleRequest
         {
@@ -92,11 +62,11 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var updated = await rulesService.Update(rule.Id, request, TestContext.Current.CancellationToken);
+        var updated = await rulesService.Update(ruleVersion.Rule.Id, request, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Single(rule.Versions);
-        Assert.Equal(version.Id, updated.Id);
+        Assert.Single(ruleVersion.Rule.Versions);
+        Assert.Equal(ruleVersion.Id, updated.Id);
     }
 
     [Fact]
@@ -105,48 +75,35 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var rulesService = GetService<IRuleService>();
         var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
         var user = await userService.GetCurrentUser();
 
-        var otherUser = new Data.Entities.User
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group" },
+            TestContext.Current.CancellationToken);
+
+        // Add another user
+        var otherUser = await CreateNewUser();
+        await groupService.AddGroupMembers(group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = otherUser.Email }]),
+            TestContext.Current.CancellationToken);
+
+        // Create percent rule
+        var createRuleRequest = new CreateRuleRequest
         {
-            FirstName = "Other",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new Data.Entities.Group { Name = "Pg" }
-        };
-
-        DbContext.Add(otherUser);
-
-        var group = new Data.Entities.Group
-        {
-            Id = Guid.NewGuid(),
-            Name = "Group A"
-        };
-
-        user.Groups.Add(group);
-        otherUser.Groups.Add(group);
-
-        var oldVersion = new PercentRuleVersion
-        {
-            Id = Guid.NewGuid(),
-            StartDateTime = DateTime.UtcNow,
-            RuleUsers =
+            GroupId = group.Id,
+            Category = "Percent",
+            Version = new PercentRuleVersionDto
             {
-                new PercentRuleUser { User = user, Percentage = 50 },
-                new PercentRuleUser { User = otherUser, Percentage = 50 }
+                Percentages = new Dictionary<Guid, decimal>
+                {
+                    [user.Id] = 50,
+                    [otherUser.Id] = 50
+                }
             }
         };
 
-        var rule = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Category = "Percent",
-            Group = group,
-            Versions = { oldVersion }
-        };
-
-        DbContext.Add(rule);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var createdVersion = await rulesService.Create(createRuleRequest, TestContext.Current.CancellationToken);
 
         var request = new UpdateRuleRequest
         {
@@ -162,13 +119,13 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var updated = await rulesService.Update(rule.Id, request, TestContext.Current.CancellationToken);
+        var updated = await rulesService.Update(createdVersion.Rule.Id, request, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(2, rule.Versions.Count); // new version created
+        Assert.Equal(2, createdVersion.Rule.Versions.Count); // new version created
 
         var newVersion = Assert.IsType<PercentRuleVersion>(updated);
-        Assert.NotEqual(oldVersion.Id, newVersion.Id); // new version generated
+        Assert.NotEqual(createdVersion.Id, newVersion.Id); // new version generated
 
         Assert.Equal(60, newVersion.RuleUsers.Single(u => u.User.Id == user.Id).Percentage);
         Assert.Equal(40, newVersion.RuleUsers.Single(u => u.User.Id == otherUser.Id).Percentage);
@@ -196,31 +153,24 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
+            TestContext.Current.CancellationToken);
 
-        var group = new Data.Entities.Group { Name = "Group B" };
-        user.Groups.Add(group);
-
-        var ruleA = new Rule
+        await rulesService.Create(new CreateRuleRequest
         {
-            Id = Guid.NewGuid(),
+            GroupId = group.Id,
             Category = "A",
-            Group = group,
-            Versions = { new PersonalRuleVersion { StartDateTime = DateTime.UtcNow } }
-        };
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
-        var ruleB = new Rule
+        var ruleB = await rulesService.Create(new CreateRuleRequest
         {
-            Id = Guid.NewGuid(),
+            GroupId = group.Id,
             Category = "B",
-            Group = group,
-            Versions = { new PersonalRuleVersion { StartDateTime = DateTime.UtcNow } }
-        };
-
-        DbContext.AddRange(ruleA, ruleB);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
         var request = new UpdateRuleRequest
         {
@@ -230,7 +180,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act + Assert
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            rulesService.Update(ruleB.Id, request, TestContext.Current.CancellationToken));
+            rulesService.Update(ruleB.Rule.Id, request, TestContext.Current.CancellationToken));
 
         Assert.Equal("Group already has a rule with this category.", ex.Message);
     }
@@ -240,35 +190,23 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
+        var groupService = GetService<IGroupService>();
         var userService = GetService<IUserService>();
 
-        var user = await userService.GetCurrentUser();
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
+            TestContext.Current.CancellationToken);
 
-        var group = new Data.Entities.Group { Name = "Group C" };
-        user.Groups.Add(group);
-
-        var initialVersion = new PercentRuleVersion
+        var rule = await rulesService.Create(new CreateRuleRequest
         {
-            StartDateTime = DateTime.UtcNow,
-            RuleUsers =
-            {
-                new PercentRuleUser { User = user, Percentage = 100 }
-            }
-        };
-
-        var rule = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Category = "Percent",
-            Group = group,
-            Versions = { initialVersion }
-        };
-
-        DbContext.Add(rule);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            GroupId = group.Id,
+            Category = "A",
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
         var missingUser = Guid.NewGuid();
 
+        var user = await userService.GetCurrentUser();
+        
         var request = new UpdateRuleRequest
         {
             Category = "Percent",
@@ -284,6 +222,6 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act + Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            rulesService.Update(rule.Id, request, TestContext.Current.CancellationToken));
+            rulesService.Update(rule.Rule.Id, request, TestContext.Current.CancellationToken));
     }
 }

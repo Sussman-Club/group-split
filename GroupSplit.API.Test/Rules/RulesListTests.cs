@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Rules;
@@ -13,41 +14,34 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var rulesService = GetService<IRuleService>();
         var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
         var user = await userService.GetCurrentUser();
 
-        var g1 = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "A" };
-        var g2 = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "B" };
+        var g1 = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
+            TestContext.Current.CancellationToken);
+        var g2 = await groupService.CreateGroup(new CreateGroupRequest { Name = "B" },
+            TestContext.Current.CancellationToken);
 
-        user.Groups.Add(g1);
-        user.Groups.Add(g2);
+        await rulesService.Create(new CreateRuleRequest
+        {
+            GroupId = g1.Id,
+            Category = "Personal",
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
-        var rule1 = new Rule
+        await rulesService.Create(new CreateRuleRequest
         {
-            Id = Guid.NewGuid(),
-            Group = g1,
-            Category = "Personal"
-        };
-        rule1.Versions.Add(new PersonalRuleVersion
-        {
-            Id = Guid.NewGuid(),
-            StartDateTime = DateTime.UtcNow
-        });
-
-        var rule2 = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Group = g2,
-            Category = "Work"
-        };
-        rule2.Versions.Add(new PercentRuleVersion
-        {
-            Id = Guid.NewGuid(),
-            StartDateTime = DateTime.UtcNow
-        });
-
-        DbContext.AddRange(g1, g2, rule1, rule2);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            GroupId = g2.Id,
+            Category = "Work",
+            Version = new PercentRuleVersionDto
+            {
+                Percentages =
+                {
+                    [user.Id] = 100
+                }
+            }
+        }, TestContext.Current.CancellationToken);
 
         // Act
         var listQuery = await rulesService.List(TestContext.Current.CancellationToken);

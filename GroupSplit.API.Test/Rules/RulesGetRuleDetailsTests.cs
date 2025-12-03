@@ -61,22 +61,10 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         var createGroupRequest = new CreateGroupRequest { Name = "Test Group" };
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
-        var otherUser = new Data.Entities.User
-        {
-            FirstName = "OtherUser",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new Data.Entities.Group { Name = "Personal" }
-        };
-
-        otherUser.Groups.Add(group);
-        DbContext.Add(otherUser);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        var percentages = new Dictionary<Guid, decimal>
-        {
-            [currentUser.Id] = 75,
-            [otherUser.Id] = 25
-        };
+        var otherUser = await CreateNewUser();
+        await groupService.AddGroupMembers(group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = otherUser.Email }]),
+            TestContext.Current.CancellationToken);
 
         var createRequest = new CreateRuleRequest
         {
@@ -84,7 +72,11 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
             Category = "Percent",
             Version = new PercentRuleVersionDto
             {
-                Percentages = percentages
+                Percentages =
+                {
+                    [currentUser.Id] = 75,
+                    [otherUser.Id] = 25
+                }
             }
         };
 
@@ -111,27 +103,19 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         // Arrange
         var ruleService = GetService<IRuleService>();
         var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
         var user = await userService.GetCurrentUser();
 
-        var group = new Data.Entities.Group
-        {
-            Id = Guid.NewGuid(),
-            Name = "Group Multi"
-        };
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group Multi" },
+            TestContext.Current.CancellationToken);
 
-        user.Groups.Add(group);
-        DbContext.Add(group);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        var create1 = new CreateRuleRequest
+        var v1 = await ruleService.Create(new CreateRuleRequest
         {
             GroupId = group.Id,
             Category = "Shared",
             Version = new PersonalRuleVersionDto()
-        };
-
-        var v1 = await ruleService.Create(create1, TestContext.Current.CancellationToken);
+        }, TestContext.Current.CancellationToken);
 
         var update = new UpdateRuleRequest
         {

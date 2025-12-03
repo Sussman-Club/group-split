@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Rules;
@@ -12,32 +13,20 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group1" },
+            TestContext.Current.CancellationToken);
 
-        var group = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "Group1" };
-        user.Groups.Add(group);
-
-        var version = new PersonalRuleVersion
+        var version = await rulesService.Create(new CreateRuleRequest
         {
-            Id = Guid.NewGuid(),
-            StartDateTime = DateTime.UtcNow
-        };
-
-        var rule = new Rule
-        {
-            Id = Guid.NewGuid(),
-            Group = group,
-            Category = "Personal",
-            Versions = { version }
-        };
-
-        DbContext.Add(rule);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            GroupId = group.Id,
+            Category = "Percent",
+            Version = new PersonalRuleVersionDto()
+        }, TestContext.Current.CancellationToken);
 
         // Act
-        var query = await rulesService.Get(rule.Id, TestContext.Current.CancellationToken);
+        var query = await rulesService.Get(version.Rule.Id, TestContext.Current.CancellationToken);
         var result = await query.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -61,36 +50,29 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
-
-        var user = await userService.GetCurrentUser();
-
-        // User group
-        var userGroup = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "UserGroup" };
-        user.Groups.Add(userGroup);
 
         // Foreign group (user NOT in this one)
         var foreignGroup = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "ForeignGroup" };
-
-        var forbiddenVersion = new PercentRuleVersion
-        {
-            Id = Guid.NewGuid(),
-            StartDateTime = DateTime.UtcNow
-        };
-
         var forbiddenRule = new Rule
         {
             Id = Guid.NewGuid(),
             Group = foreignGroup,
             Category = "Work",
-            Versions = { forbiddenVersion }
+            Versions =
+            {
+                new PercentRuleVersion
+                {
+                    Id = Guid.NewGuid(),
+                    StartDateTime = DateTime.UtcNow
+                }
+            }
         };
 
-        DbContext.AddRange(userGroup, foreignGroup, forbiddenRule);
+        DbContext.AddRange(foreignGroup, forbiddenRule);
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var query = await rulesService.Get(forbiddenVersion.Id, TestContext.Current.CancellationToken);
+        var query = await rulesService.Get(forbiddenRule.Id, TestContext.Current.CancellationToken);
         var result = await query.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -147,7 +129,7 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var resultVisible =
             await (await rulesService.Get(rule1.Id, TestContext.Current.CancellationToken)).SingleOrDefaultAsync(
                 cancellationToken: TestContext.Current.CancellationToken);
-        
+
         var resultHidden =
             await (await rulesService.Get(rule2.Id, TestContext.Current.CancellationToken)).SingleOrDefaultAsync(
                 cancellationToken: TestContext.Current.CancellationToken);

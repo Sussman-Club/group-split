@@ -56,15 +56,10 @@ public class RulesDeleteTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
         // Add another user
-        var otherUser = new Data.Entities.User
-        {
-            FirstName = "Other",
-            Identity = new UserIdentity { IdentityId = Guid.NewGuid().ToString() },
-            PersonalGroup = new Data.Entities.Group { Name = "Personal" }
-        };
-        otherUser.Groups.Add(group);
-        DbContext.Add(otherUser);
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var otherUser = await CreateNewUser();
+        await groupService.AddGroupMembers(group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = otherUser.Email }]),
+            TestContext.Current.CancellationToken);
 
         var userA = user.Id;
         var userB = otherUser.Id;
