@@ -2,7 +2,6 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
-using TransactionEntity = GroupSplit.Data.Entities.Transaction;
 
 namespace GroupSplit.API.Test.Transaction;
 
@@ -37,7 +36,7 @@ public class TransactionCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         Assert.NotEqual(Guid.Empty, result.Id);
 
         // Verify saved in DB
-        var txnInDb = await DbContext.Set<TransactionEntity>()
+        var txnInDb = await DbContext.Set<Data.Entities.Transaction>()
             .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.Id == result.Id, TestContext.Current.CancellationToken);
 
@@ -86,7 +85,7 @@ public class TransactionCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         Assert.NotEqual(txn1.Id, txn2.Id);
 
         // Verify both exist in DB
-        var txnCount = await DbContext.Set<TransactionEntity>()
+        var txnCount = await DbContext.Set<Data.Entities.Transaction>()
             .CountAsync(t => t.Id == txn1.Id || t.Id == txn2.Id, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, txnCount);
