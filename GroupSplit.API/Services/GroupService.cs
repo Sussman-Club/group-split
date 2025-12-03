@@ -47,7 +47,7 @@ public interface IGroupService
     /// <summary>
     /// Gets the balance of a group per user
     /// </summary>
-    Task<IQueryable<GroupBalance>> GetGroupBalance(Guid groupId, CancellationToken cancellationToken = default);
+    Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
@@ -157,15 +157,14 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return groupQuery;
     }
 
-    public async Task<IQueryable<GroupBalance>> GetGroupBalance(Guid groupId, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default)
     {
         var groupQuery = await GetGroupById(groupId, cancellationToken);
-
 
         var groupBalance =
                     from @group in groupQuery
                     from user in @group.Users
-                    select new GroupBalance
+                    select new GroupNetBalance
                     {
                         UserId = user.Id,
                         UserName = user.FirstName + " " + user.LastName,
@@ -184,7 +183,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                       select transaction.Amount * (decimal)percentUser.Percentage / 100
                                     ).Sum()
                     } into balance
-                    select new GroupBalance
+                    select new GroupNetBalance
                     {
                         UserId = balance.UserId,
                         UserName = balance.UserName,

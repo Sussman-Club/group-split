@@ -210,15 +210,15 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
             {
-                var balances = await groupService.GetGroupBalance(grouId, ct);
+                var balances = await groupService.GetGroupNetBalance(grouId, ct);
                 var balanceResponse =  await balances.ToArrayAsync(ct);
 
                 if (balanceResponse is null) return Results.NotFound();
-
-                return Results.Ok(balanceResponse);
+                
+                return Results.Ok(new GroupBalance { NetBalances = balanceResponse });
             })
                 .WithName("GetGroupBalance")
-                .Produces<GroupBalance[]>()
+                .Produces<GroupBalance>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }

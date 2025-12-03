@@ -22,7 +22,7 @@ public class GroupBalanceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         foreach(var group in groups) {
 
-            var balances = await (await groupService.GetGroupBalance()).ToListAsync();
+            var balances = await (await groupService.GetGroupNetBalance(group.Id)).ToListAsync();
         }
     }
 }

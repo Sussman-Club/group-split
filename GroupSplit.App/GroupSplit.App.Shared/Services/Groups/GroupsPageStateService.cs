@@ -66,12 +66,12 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
     }
 
-    public ICollection<GroupBalance> Balances
+    public GroupBalance? Balance
     {
-        get => _tracker.Balances;
+        get => _tracker.Balance;
         private set
         {
-            _tracker.Balances = value;
+            _tracker.Balance = value;
             OnTransactionsChanged?.Invoke();
         }
     }
@@ -109,13 +109,11 @@ public class GroupsPageStateService : IGroupsPageStateService
     {   
         if (SelectedGroup is null)
         {
-            Balances = [];
+            Balance = null;
         }
         else
         {
-            Balances = await _groupsClient
-                .GetGroupBalanceAsAsyncEnumerable(SelectedGroup.Id, cancellationToken: cancellationToken)
-                .ToListAsync(cancellationToken);
+            Balance = await _groupsClient.GetGroupBalanceAsync(SelectedGroup.Id, cancellationToken: cancellationToken);
         }
     }
 

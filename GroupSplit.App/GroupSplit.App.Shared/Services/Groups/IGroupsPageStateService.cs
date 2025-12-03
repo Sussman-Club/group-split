@@ -11,7 +11,7 @@ public interface IGroupsPageStateService
     
     ICollection<TransactionResponse> Transactions { get; }
 
-    ICollection<GroupBalance> Balances { get; }
+    GroupBalance? Balance { get; }
 
 
     event Action? OnGroupSelected;
