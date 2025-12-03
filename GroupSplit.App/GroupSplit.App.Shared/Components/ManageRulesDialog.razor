@@ -1,0 +1,175 @@
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+@inject IRulesClient RulesClient
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold mb-2">
+            Manage rules
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="4">
+            <MudTable Items="Rules">
+                <HeaderContent>
+                    <MudTh>Category</MudTh>
+                    <MudTh class="text-right">Actions</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd>@context.Category</MudTd>
+                    <MudTd Class="text-right">
+                        <MudStack Row="true" Spacing="1">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                           Size="Size.Small"
+                                           OnClick="@(async () => await OpenEditRuleDialog(context))"/>
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(async () => await OpenDeleteRuleDialog(context))"/>
+                        </MudStack>
+
+                    </MudTd>
+                </RowTemplate>
+
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="pa-4">
+                        No rules defined for this group yet.
+                    </MudText>
+                </NoRecordsContent>
+            </MudTable>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Add"
+                       Class="align-self-end"
+                       OnClick="@OpenCreateRuleDialog">
+                Create Rule
+            </MudButton>
+
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid GroupId { get; set; }
+
+    private ICollection<RuleVersionResponse> Rules = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Rules = await GroupsClient.GetGroupRulesAsync(GroupId);
+        StateHasChanged();
+    }
+
+    private async Task OpenCreateRuleDialog()
+    {
+        var parameters = new DialogParameters<CreateRuleDialog>
+        {
+            { x => x.GroupId, GroupId }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("Create Rule", parameters, options);
+        var request = await dialog.GetReturnValueAsync<CreateRuleRequest>();
+
+        if (request is not null)
+            await CreateRule(request);
+    }
+
+    private async Task CreateRule(CreateRuleRequest request)
+    {
+        var response = await RulesClient.CreateRuleAsync(request);
+
+        Snackbar.Add("Rule created successfully.", Severity.Success);
+
+        Rules.Add(response);
+        StateHasChanged();
+    }
+
+    private async Task OpenEditRuleDialog(RuleVersionResponse rule)
+    {
+        var ruleDetails = await RulesClient.GetRuleAsync(rule.RuleId);
+        var ruleToUpdate = new UpdateRuleRequest
+        {
+            Category = ruleDetails.Category,
+            Version = ruleDetails.Version
+        };
+
+        var parameters = new DialogParameters<EditRuleDialog>
+        {
+            { x => x.GroupId, GroupId },
+            { x => x.Model, ruleToUpdate },
+            { x => x.RuleId, rule.RuleId }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit Rule", parameters, options);
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateRuleRequest>>();
+
+        if (request is not null)
+            await UpdateRule(rule, request);
+    }
+
+    private async Task UpdateRule(RuleVersionResponse rule, JsonPatchDocument<UpdateRuleRequest> patch)
+    {
+        var updated = await RulesClient.UpdateRuleAsync(rule.RuleId, patch);
+        Snackbar.Add("Rule updated successfully.", Severity.Success);
+
+        var list = Rules.ToList();
+
+        var index = list.FindIndex(x => x.RuleId == rule.RuleId);
+        if (index != -1)
+        {
+            list[index] = updated;
+            Rules = list;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OpenDeleteRuleDialog(RuleVersionResponse rule)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Are you sure you want to delete rule '{rule.Category}'?" },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Rule", parameters);
+        var confirmed = await dialog.GetReturnValueAsync<bool>();
+        if (confirmed)
+        {
+            await DeleteRule(rule);
+        }
+    }
+
+    private async Task DeleteRule(RuleVersionResponse rule)
+    {
+        await RulesClient.DeleteRuleAsync(rule.RuleId);
+        Snackbar.Add("Rule deleted successfully.", Severity.Success);
+
+        Rules.Remove(rule);
+        StateHasChanged();
+    }
+
+}

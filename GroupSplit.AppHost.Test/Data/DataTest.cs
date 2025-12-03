@@ -45,7 +45,7 @@ public class DataTest(AppHostFixture appHost) : IAsyncLifetime
                     Category = "Test",
                     Group = queryResult.personalGroup
                 },
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+                StartDateTime = DateTime.UtcNow
             }
         };
 

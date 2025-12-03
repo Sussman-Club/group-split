@@ -1,0 +1,194 @@
+@using GroupSplit.App.Shared.Models
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Edit Rule</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="Model">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_category"
+                              Label="Category"
+                              Variant="Variant.Outlined"
+                              Immediate="true"/>
+
+                <MudSelect T="RuleType" Label="Rule Type" @bind-Value="_ruleType" Variant="Variant.Outlined">
+                    <MudSelectItem T="RuleType" Value="RuleType.Personal">
+                        Personal (payer owes full amount)
+                    </MudSelectItem>
+
+                    <MudSelectItem T="RuleType" Value="RuleType.Percent">
+                        Percent split
+                    </MudSelectItem>
+                </MudSelect>
+
+                @if (_ruleType is RuleType.Percent)
+                {
+                    <MudPaper Class="pa-4" Elevation="0">
+                        <MudText Typo="Typo.body2" Class="mb-2">
+                            Enter percentages per member (must total 100)
+                        </MudText>
+
+                        <MudGrid>
+                            @foreach (var m in _members)
+                            {
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudNumericField T="decimal"
+                                                     @bind-Value="@_percentages[m.Id]"
+                                                     Label="@($"{m.FirstName} {m.LastName}")"
+                                                     Variant="Variant.Outlined"
+                                                     Adornment="Adornment.End"
+                                                     AdornmentText="%"
+                                                     HideSpinButtons="true"
+                                                     Min="0" Max="100" Immediate="true"
+                                                     Class="small-num-field no-spinners"/>
+                                </MudItem>
+                            }
+                        </MudGrid>
+
+                        <MudText Typo="Typo.caption"
+                                 Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
+                            Total: @PercentTotal%
+                        </MudText>
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Disabled="@(!CanSubmit)"
+                   OnClick="@Submit">
+            Edit
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public UpdateRuleRequest Model { get; set; } = null!;
+    [Parameter] public Guid GroupId { get; set; }
+    [Parameter] public Guid RuleId { get; set; }
+
+    private MudForm _form;
+    private string _category = string.Empty;
+    private RuleType _ruleType = RuleType.Personal;
+
+    private ICollection<UserInfo> _members = [];
+    private readonly Dictionary<Guid, decimal> _percentages = new();
+
+
+    private UpdateRuleRequest _originalModel; // keep original values
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Keep a deep copy of the original model
+        _originalModel = Model with { };
+
+        _category = Model.Category;
+        _ruleType = Model.Version switch
+        {
+            PersonalRuleVersionDto => RuleType.Personal,
+            PercentRuleVersionDto => RuleType.Percent,
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        _members = await GroupsClient.GetGroupMembersAsync(GroupId);
+        EnsurePercentagesDictionary();
+
+        // Initialize percentages if editing a percent rule
+        if (Model.Version is PercentRuleVersionDto percentVersion)
+        {
+            foreach (var kv in percentVersion.Percentages.Where(kv => _percentages.ContainsKey(kv.Key)))
+            {
+                _percentages[kv.Key] = kv.Value;
+            }
+        }
+    }
+
+    private int PercentTotal => (int)Math.Round(_percentages.Values.Sum());
+
+    private bool CanSubmit =>
+        !string.IsNullOrWhiteSpace(_category) &&
+        (_ruleType is RuleType.Personal || (_ruleType is RuleType.Percent && PercentTotal == 100));
+
+    private void EnsurePercentagesDictionary()
+    {
+        foreach (var m in _members)
+            _percentages.TryAdd(m.Id, 0m);
+
+        // Remove old members no longer in the group
+        var removedKeys = _percentages.Keys
+            .Where(k => _members.All(x => x.Id != k))
+            .ToList();
+
+        foreach (var key in removedKeys)
+            _percentages.Remove(key);
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+            return;
+
+        var patch = new JsonPatchDocument<UpdateRuleRequest>();
+
+        // Track category changes
+        if (!string.Equals(Model.Category, _originalModel.Category, StringComparison.Ordinal))
+        {
+            patch.Replace(x => x.Category, Model.Category);
+        }
+
+        // Track version changes
+        if (_ruleType is RuleType.Personal && _originalModel.Version is not PersonalRuleVersionDto)
+        {
+            patch.Replace(x => x.Version, new PersonalRuleVersionDto());
+        }
+
+        if (_ruleType is RuleType.Percent && (_originalModel.Version is not PercentRuleVersionDto percentRuleVersionDto ||
+                                              DictionariesAreDifferent(_percentages, percentRuleVersionDto.Percentages)))
+        {
+            patch.Replace(x => x.Version,
+                new PercentRuleVersionDto
+                {
+                    Percentages = new Dictionary<Guid, decimal>(_percentages)
+                });
+        }
+
+
+        MudDialog.Close(DialogResult.Ok(patch));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static bool DictionariesAreDifferent(
+        IDictionary<Guid, decimal> current,
+        IDictionary<Guid, decimal> original)
+    {
+        if (current.Count != original.Count)
+            return true;
+
+        foreach (var kv in current)
+        {
+            if (!original.TryGetValue(kv.Key, out var originalValue))
+                return true;
+
+            if (kv.Value != originalValue)
+                return true;
+        }
+
+        return false;
+    }
+
+}
+

@@ -45,8 +45,6 @@ public class ApiTestFixture : IAsyncLifetime
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IGroupService, GroupService>();
         services.AddScoped<ITransactionService, TransactionService>();
-            
-        // Add more services as your API grows
-        // services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<IRuleService, RuleService>();
     }
 }

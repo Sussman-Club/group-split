@@ -1,23 +1,15 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace GroupSplit.Seeder.Seeders.DTOs;
 
-public enum RuleVersionType
-{
-    Personal,
-    Percentage,
-}
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "Type")]
+[JsonDerivedType(typeof(PersonalRuleVersionSeedDto), typeDiscriminator: "Personal")]
+[JsonDerivedType(typeof(PercentRuleVersionSeedDto), typeDiscriminator: "Percentage")]
 public class RuleVersionSeedDto
 {
     public required Guid Id { get; init; }
     public required Guid RuleId { get; init; }
-    public required DateOnly StartDate { get; init; }
-
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public required RuleVersionType Type { get; init; }
-
-    [JsonExtensionData] public Dictionary<string, JsonElement> ExtensionData { get; init; } = [];
+    public required DateTimeOffset StartDate { get; init; } = DateTimeOffset.UtcNow;
 }
 
 public class PersonalRuleVersionSeedDto : RuleVersionSeedDto;
