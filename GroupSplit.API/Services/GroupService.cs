@@ -212,14 +212,14 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         settlementRuleVersion ??= new SettlementRuleVersion
         {
             OtherUser = user,
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            StartDateTime = DateTime.UtcNow,
             Rule = settlementRule
         };
 
         currentUserSettlementRuleVersion ??= new SettlementRuleVersion
         {
             OtherUser = currentUser,
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            StartDateTime = DateTime.UtcNow,
             Rule = settlementRule
         };
 

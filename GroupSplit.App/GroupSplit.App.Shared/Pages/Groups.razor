@@ -208,10 +208,23 @@
         await base.OnInitializedAsync();
     }
 
-    private void ManageRules()
+    private async Task ManageRules()
     {
-        // TODO: Implement manage rules dialog/page
-        // Allow user to create, edit, and delete splitting rules
+        if (GroupsService.SelectedGroup is null) return;
+
+        var parameters = new DialogParameters<ManageRulesDialog>
+        {
+            { x => x.GroupId, GroupsService.SelectedGroup.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        await DialogService.ShowAsync<ManageRulesDialog>("Manage Rules", parameters, options);
     }
 
     private void ArchiveGroup()

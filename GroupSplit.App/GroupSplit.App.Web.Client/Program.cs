@@ -63,6 +63,16 @@ builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =
     client.BaseAddress = uriBuilder.Uri;
 });
 
+builder.Services.AddHttpClient<IRulesClient, RulesClient>(client =>
+{
+    var uriBuilder = new UriBuilder(builder.HostEnvironment.BaseAddress)
+    {
+        Path = "api/"
+    };
+    
+    client.BaseAddress = uriBuilder.Uri;
+});
+
 // Add authorization services
 builder.Services.AddAuthorizationCore();
 builder.Services.AddSingleton<UserClientAuthenticationStateProvider>();

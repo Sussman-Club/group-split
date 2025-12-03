@@ -8,7 +8,7 @@ public class Rule : Entity
 
     internal Guid GroupId { get; set; }
     
-    public required string Category { get; init; }
+    public required string Category { get; set; }
     
     public virtual ICollection<RuleVersion> Versions { get; } = [];
 }

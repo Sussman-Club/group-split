@@ -3,6 +3,7 @@ using System;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    partial class PostgreSqlAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251201175333_AddingEndDateTimeToRuleVersion")]
+    partial class AddingEndDateTimeToRuleVersion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -81,10 +84,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Category");
-
-                    b.HasIndex("GroupId", "Category")
-                        .IsUnique();
+                    b.HasIndex("GroupId");
 
                     b.ToTable("Rule");
                 });
@@ -247,18 +247,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasDiscriminator().HasValue("personal");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRuleVersion", b =>
-                {
-                    b.HasBaseType("GroupSplit.Data.Entities.RuleVersion");
-
-                    b.Property<Guid>("OtherUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasIndex("OtherUserId");
-
-                    b.HasDiscriminator().HasValue("settlement");
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleUser", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.PercentRuleVersion", "RuleVersion")
@@ -354,17 +342,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("UsersId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRuleVersion", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.User", "OtherUser")
-                        .WithMany()
-                        .HasForeignKey("OtherUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OtherUser");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>

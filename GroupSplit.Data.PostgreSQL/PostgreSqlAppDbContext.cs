@@ -9,6 +9,23 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<RuleVersion>(entity =>
+        {
+            entity.Property(ruleVersion => ruleVersion.StartDateTime)
+                .HasColumnType("timestamp with time zone")
+                .HasConversion(
+                    appValue => appValue.ToUniversalTime(),
+                    dbValue => dbValue
+                );
+
+            entity.Property(rv => rv.EndDateTime)
+                .HasColumnType("timestamp with time zone")
+                .HasConversion(
+                    appValue => appValue != null ? appValue.Value.ToUniversalTime() : appValue,
+                    dbValue => dbValue
+                );
+        });
+
         modelBuilder.Entity<Transaction>(entity =>
         {
             entity.Property(transaction => transaction.DateTime)
