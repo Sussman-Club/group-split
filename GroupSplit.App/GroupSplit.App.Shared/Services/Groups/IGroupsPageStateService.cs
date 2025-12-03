@@ -10,7 +10,10 @@ public interface IGroupsPageStateService
     GroupResponse? SelectedGroup { get; set; }
     
     ICollection<TransactionResponse> Transactions { get; }
-    
+
+    ICollection<GroupBalance> Balances { get; }
+
+
     event Action? OnGroupSelected;
     event Action? OnTransactionsChanged;
     event Action? OnGroupsChanged;
@@ -23,4 +26,4 @@ public interface IGroupsPageStateService
     Task RemoveGroupMemberAsync(Guid memberUserId, CancellationToken cancellationToken = default);
     Task UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest, CancellationToken cancellationToken = default);
     Task CreateTransactionAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
-}
+ }

@@ -119,12 +119,12 @@
                 <MudStack Spacing="3">
                     <MudText Typo="Typo.h6" Class="font-weight-bold">Group Balances</MudText>
                     <MudStack Spacing="2">
-                        @foreach (var member in _members)
+                        @foreach (var member in GroupsService.Balances)
                         {
                             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
                                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@member.Name[0]</MudAvatar>
-                                    <MudText Typo="Typo.body2">@member.Name</MudText>
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@member.UserName[0]</MudAvatar>
+                                    <MudText Typo="Typo.body2">@member.UserName</MudText>
                                 </MudStack>
                                 <MudText Typo="Typo.body2" Class="font-weight-medium"
                                          Color="@(member.Balance > 0 ? Color.Success : member.Balance < 0 ? Color.Error : Color.Default)">
@@ -183,8 +183,6 @@
     private decimal _userBalance;
     private List<DebtInfo> _owedToYou = [];
     private List<DebtInfo> _youOwe = [];
-    private List<MemberBalance> _members = [];
-
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
@@ -204,7 +202,6 @@
     protected override async Task OnInitializedAsync()
     {
         await GroupsService.IsReadyTask;
-
         await base.OnInitializedAsync();
     }
 
@@ -321,12 +318,6 @@
     {
         public string Name { get; set; } = "";
         public decimal Amount { get; set; }
-    }
-
-    private class MemberBalance
-    {
-        public string Name { get; set; } = "";
-        public decimal Balance { get; set; }
     }
 
     public async ValueTask DisposeAsync()
