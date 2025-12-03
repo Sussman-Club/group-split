@@ -27,6 +27,8 @@ public static class GroupApi
             group.MapGetMembers();
             group.MapAddMember();
             group.MapRemovedMember();
+            group.MapSettle();
+            
             return group;
         }
     }
@@ -199,6 +201,21 @@ public static class GroupApi
                 .WithName("RemoveGroupMember")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapSettle()
+        {
+            return group.MapPost("{groupId:guid}/settle", async (
+                Guid groupId,
+                SettleRequest request,
+                IGroupService groupService,
+                CancellationToken ct) =>
+            {
+                await groupService.Settle(groupId, request, ct);
+                return Results.NoContent();
+            })
+            .WithName("SettleGroup")
+            .Produces(StatusCodes.Status204NoContent);
         }
     }
 

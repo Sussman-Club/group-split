@@ -23,7 +23,9 @@ public interface IGroupService
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
 
     Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
-    ValueTask<Group> UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default);
+
+    ValueTask<Group> UpdateGroup(Guid groupId, CreateGroupRequest request,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the members of a group by ID
@@ -42,6 +44,9 @@ public interface IGroupService
     /// Removes a member from a group by ID and user ID
     /// </summary>
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
+
+    Task<IQueryable<Transaction>> Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
@@ -104,7 +109,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         existingGroup.Name = request.Name;
 
         await context.SaveChangesAsync(cancellationToken);
-        
+
         return existingGroup;
     }
 
@@ -119,7 +124,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         CancellationToken cancellationToken = default)
     {
         var groupQuery = await GetGroupById(groupId, cancellationToken);
-        var group = await groupQuery.FirstOrDefaultAsync();
+        var group = await groupQuery.FirstOrDefaultAsync(cancellationToken: cancellationToken);
         if (group is null)
             throw new ArgumentException("Group was not found");
         var users = from user in context.Set<User>()
@@ -127,7 +132,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
             select user;
         await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
             group.Users.Add(user);
-        await context.SaveChangesAsync();
+
+        await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
     }
 
@@ -139,15 +145,109 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
             throw new ArgumentException("Cannot remove current user from group");
 
         var groupQuery = (await GetGroupById(groupId, cancellationToken)).Include(g => g.Users);
-        var group = await groupQuery.FirstOrDefaultAsync();
+        var group = await groupQuery.FirstOrDefaultAsync(cancellationToken);
         if (group is null)
             throw new ArgumentException("Group was not found");
         var user = await context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-        ;
+
         if (user is null)
             throw new ArgumentException("User was not found");
+
         group.Users.Remove(user);
+
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
+    }
+
+    public async Task<IQueryable<Transaction>> Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await userService.GetCurrentUser();
+
+        var groupQuery = from @group in await GetGroupById(groupId, cancellationToken)
+            from groupUser in (from groupUser in @group.Users
+                where groupUser.Id == request.UserId
+                select groupUser).DefaultIfEmpty()
+            from rule in (from rule in @group.Rules
+                where rule.Category == Rule.Settlement
+                select rule).DefaultIfEmpty()
+            from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                where version.Rule == rule && version.OtherUser == groupUser
+                select version).Take(1).DefaultIfEmpty()
+            from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                where version.Rule == rule && version.OtherUser == currentUser
+                select version).Take(1).DefaultIfEmpty()
+            select new
+            {
+                Group = @group,
+                User = groupUser,
+                SettlementRule = rule,
+                SettlementRuleVersion = otherRuleVersion,
+                CurrentUserRuleVersion = currentUserRuleVersion
+            };
+
+        var result = await groupQuery.FirstOrDefaultAsync(cancellationToken);
+
+        if (result is not
+            {
+                Group: { } resultGroup, User: var user, SettlementRule: var settlementRule,
+                SettlementRuleVersion: var settlementRuleVersion,
+                CurrentUserRuleVersion: var currentUserSettlementRuleVersion
+            })
+        {
+            throw new ArgumentException("Group was not found");
+        }
+
+        if (user is null)
+        {
+            throw new ArgumentException("User was not found");
+        }
+
+        settlementRule ??= new Rule
+        {
+            Category = Rule.Settlement,
+            Group = resultGroup
+        };
+
+        settlementRuleVersion ??= new SettlementRuleVersion
+        {
+            OtherUser = user,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Rule = settlementRule
+        };
+
+        currentUserSettlementRuleVersion ??= new SettlementRuleVersion
+        {
+            OtherUser = currentUser,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Rule = settlementRule
+        };
+
+        var dateTime = DateTime.Now;
+
+        var transactionFromOther = new Transaction
+        {
+            Amount = request.Amount,
+            User = user,
+            RuleVersion = settlementRuleVersion,
+            DateTime = dateTime,
+            Name = "Settlement"
+        };
+
+        var transactionToOther = new Transaction
+        {
+            Amount = -request.Amount,
+            User = currentUser,
+            RuleVersion = currentUserSettlementRuleVersion,
+            DateTime = dateTime,
+            Name = "Settlement"
+        };
+
+        context.Set<Transaction>().AddRange(transactionFromOther, transactionToOther);
+        await context.SaveChangesAsync(cancellationToken);
+
+        return from transaction in context.Set<Transaction>()
+            where transaction == transactionFromOther || transaction == transactionToOther
+            select transaction;
     }
 }
