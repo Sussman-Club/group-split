@@ -1,8 +1,10 @@
-﻿@using System.Text.Json
-@using GroupSplit.App.Shared.Services
+﻿@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Users
+@using GroupSplit.Shared
 @inject IAuthService AuthService
 @inject NavigationManager Nav
 @inject MudTheme Theme
+@inject IUserLogin UserLogin
 
 <MudAppBar Elevation="1" Dense>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
@@ -18,14 +20,14 @@
     </MudStack>
     <MudSpacer />
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-        @if (AuthenticationState?.User?.Identity?.IsAuthenticated ?? false)
+        @if (UserInfo is not null)
         {
             <MudMenu Dense AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <ActivatorContent>
                     <MudStack Style="height: var(--mud-appbar-height)" Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <MudText Typo="Typo.body2" Class="font-weight-medium">@Username</MudText>
+                        <MudText Typo="Typo.body2" Class="font-weight-medium">@UserInfo.FullName</MudText>
                         <MudAvatar Style="@Theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
-                            @(string.Join("", Username.Split(", ").Reverse().Select(s => s[0])))
+                            @(string.Join("", UserInfo.FullName.Split(" ").Select(s => s[0])))
                         </MudAvatar>
                     </MudStack>
                 </ActivatorContent>
@@ -46,14 +48,13 @@
 @code {
     [Parameter] public EventCallback ToggleDrawer { get; set; }
 
-    [CascadingParameter] public Task<AuthenticationState> AuthenticationStateTask { get; set; }
+    [CascadingParameter] public Task<UserInfo?> AuthenticationStateTask { get; set; } = null!;
 
-    private AuthenticationState? AuthenticationState { get; set; }
-    private string? Username => AuthenticationState?.User.Claims.First().Value;
+    private UserInfo? UserInfo { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
-        AuthenticationState = await AuthenticationStateTask;
+        UserInfo = await AuthenticationStateTask;
         await base.OnParametersSetAsync();
     }
 

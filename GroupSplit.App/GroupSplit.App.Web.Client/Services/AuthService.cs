@@ -1,10 +1,11 @@
-﻿using GroupSplit.App.Shared.Services;
+﻿using System.Net.Http.Json;
+using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
-using System.Net.Http.Json;
 
 namespace GroupSplit.App.Web.Client.Services;
 
-public class AuthService(HttpClient client, UserClientAuthenticationStateProvider authStateProvider) : IAuthService
+public class AuthService(HttpClient client, IUserLogin userLogin) : IAuthService
 {
     public async Task Register(RegisterRequest request, CancellationToken ct)
     {
@@ -16,13 +17,13 @@ public class AuthService(HttpClient client, UserClientAuthenticationStateProvide
     {
         var response = await client.PostAsJsonAsync("auth/login", request, ct);
         response.EnsureSuccessStatusCode();
-        await authStateProvider.NotifyLoggedInAsync();
+        await userLogin.RefreshLoginAsync();
     }
 
     public async Task Logout()
     {
         var response = await client.PostAsync("auth/logout", null);
         response.EnsureSuccessStatusCode();
-        await authStateProvider.NotifyLoggedOutAsync();
+        await userLogin.ClearLogin();
     }
 }

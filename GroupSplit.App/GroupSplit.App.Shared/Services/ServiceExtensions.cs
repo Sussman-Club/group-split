@@ -1,5 +1,7 @@
 ﻿using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
+using GroupSplit.App.Shared.Services.Users;
+using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -18,6 +20,33 @@ public static class ServiceExtensions
 
             services.TryAdd<GroupsTracker>(sessionLifetime);
             services.TryAddScoped<IGroupsPageStateService, GroupsPageStateService>();
+            
+            services.TryAdd<UserTracker>(sessionLifetime);
+            services.TryAdd<IUserLogin, UserLogin>(sessionLifetime);
+            services.TryAddCascadingValue<Task<UserInfo?>>(sp =>
+            {
+                var userLogin = sp.GetRequiredService<IUserLogin>();
+                
+                var cascadingValueSource = new DisposingCascadingValueSource<Task<UserInfo?>>(async () =>
+                {
+                    if (userLogin.User == null)
+                    {
+                        await userLogin.RefreshLoginAsync();
+                    }
+                    
+                    return userLogin.User;
+                }, false);
+
+                AuthenticationStateChangedHandler onLogin = task =>
+                {
+                    cascadingValueSource.NotifyChangedAsync(task);
+                };
+                
+                userLogin.OnLoginChanged += onLogin;
+                cascadingValueSource.OnDisposing += () => userLogin.OnLoginChanged -= onLogin;
+                
+                return cascadingValueSource;
+            });
 
             return services;
         }
