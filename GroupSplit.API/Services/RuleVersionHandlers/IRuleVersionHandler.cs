@@ -3,9 +3,24 @@ using GroupSplit.Shared;
 
 namespace GroupSplit.API.Services.RuleVersionHandlers;
 
-public interface IRuleVersionHandler
+public interface IRuleVersionCreateHandler<in TRuleVersionDto> where TRuleVersionDto : RuleVersionDto
 {
-    Task<RuleDetailsResponse> GetRuleDetails(RuleVersion version, CancellationToken ct);
-    Task<RuleVersion> CreateEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct);
-    bool Equals(RuleVersion existing, RuleVersionDto incoming);
+    Task<RuleVersion> CreateEntity(Guid groupId, TRuleVersionDto dto, CancellationToken ct);
 }
+
+public interface IRuleVersionEqualsHandler<in TRuleVersionDto>
+    where TRuleVersionDto : RuleVersionDto
+{
+    bool Equals(RuleVersion existing, TRuleVersionDto incoming);
+}
+
+public interface IRuleVersionDetailsHandler<in TRuleVersion> where TRuleVersion : RuleVersion
+{
+    Task<RuleDetailsResponse> GetRuleDetails(TRuleVersion version, CancellationToken ct);
+}
+
+public interface IRuleVersionHandler<in TRuleVersionEntity, in TRuleVersionDto> :
+    IRuleVersionDetailsHandler<TRuleVersionEntity>, IRuleVersionCreateHandler<TRuleVersionDto>,
+    IRuleVersionEqualsHandler<TRuleVersionDto>
+    where TRuleVersionEntity : RuleVersion
+    where TRuleVersionDto : RuleVersionDto;

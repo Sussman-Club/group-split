@@ -19,7 +19,7 @@ public interface IRuleService
 public class RuleService(
     IUserService userService,
     AppDbContext dbContext,
-    IRuleVersionHandlerFactory ruleVersionHandlerFactory) : IRuleService
+    IRuleVersionHandler<RuleVersion, RuleVersionDto> ruleVersionHandler) : IRuleService
 {
     public async Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default)
     {
@@ -65,9 +65,7 @@ public class RuleService(
 
         var existingRule = groupResult.Rule;
 
-        var version = await ruleVersionHandlerFactory
-            .GetHandler(request.Version)
-            .CreateEntity(request.GroupId, request.Version, ct);
+        var version = await ruleVersionHandler.CreateEntity(request.GroupId, request.Version, ct);
 
         if (existingRule is not null)
         {
@@ -104,7 +102,7 @@ public class RuleService(
         if (ruleVersion is null)
             throw new InvalidOperationException("Rule does not exist.");
 
-        return await ruleVersionHandlerFactory.GetHandler(ruleVersion).GetRuleDetails(ruleVersion, ct);
+        return await ruleVersionHandler.GetRuleDetails(ruleVersion, ct);
     }
 
     public async Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
@@ -134,16 +132,11 @@ public class RuleService(
 
         existingRule.Category = request.Category;
 
-        var versionEquals = ruleVersionHandlerFactory.GetHandler(request.Version)
-            .Equals(latestVersion, request.Version);
-
         RuleVersion? newVersion = null;
-        if (!versionEquals)
+        if (!ruleVersionHandler.Equals(latestVersion, request.Version))
         {
             latestVersion.EndDateTime = DateTime.UtcNow;
-            newVersion = await ruleVersionHandlerFactory
-                .GetHandler(request.Version)
-                .CreateEntity(existingRule.Group.Id, request.Version, ct);
+            newVersion = await ruleVersionHandler.CreateEntity(existingRule.Group.Id, request.Version, ct);
             dbContext.Add(newVersion);
             existingRule.Versions.Add(newVersion);
         }
