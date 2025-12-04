@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.RuleVersionHandlers;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -15,7 +16,10 @@ public interface IRuleService
     Task Delete(Guid ruleId, CancellationToken ct = default);
 }
 
-public class RuleService(IUserService userService, AppDbContext dbContext) : IRuleService
+public class RuleService(
+    IUserService userService,
+    AppDbContext dbContext,
+    IRuleVersionHandlerFactory ruleVersionHandlerFactory) : IRuleService
 {
     public async Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default)
     {
@@ -60,19 +64,21 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
             throw new InvalidOperationException("Group already has a rule with the same category.");
 
         var existingRule = groupResult.Rule;
-        var version = await MapVersionAsync(request.Version, ct);
+
+        var version = await ruleVersionHandlerFactory
+            .GetHandler(request.Version)
+            .CreateEntity(request.GroupId, request.Version, ct);
 
         if (existingRule is not null)
         {
-            // Reactivate expired rule by adding a new version
+            // Reactivate the expired rule by adding a new version
+            version.Rule = existingRule;
             dbContext.Add(version);
-            existingRule.Versions.Add(version);
         }
         else
         {
             var rule = new Rule
             {
-                Id = Guid.NewGuid(),
                 Group = groupResult.Group,
                 Category = request.Category,
                 Versions = { version }
@@ -91,48 +97,14 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         var ruleVersion =
             await (from rv in dbContext.Set<RuleVersion>()
                     where rv.Rule.Id == ruleId
-                    orderby rv.StartDateTime descending
                     select rv)
                 .Include(rv => rv.Rule)
                 .FirstOrDefaultAsync(ct);
 
-        if (ruleVersion is PercentRuleVersion percentRuleVersion)
-        {
-            await dbContext.Entry(percentRuleVersion)
-                .Collection(p => p.RuleUsers)
-                .Query()
-                .Include(ru => ru.User)
-                .LoadAsync(ct);
-        }
-
         if (ruleVersion is null)
             throw new InvalidOperationException("Rule does not exist.");
 
-        return ruleVersion switch
-        {
-            PercentRuleVersion percent => new RuleDetailsResponse
-            {
-                RuleId = ruleVersion.Rule.Id,
-                RuleVersionId = ruleVersion.Id,
-                Category = ruleVersion.Rule.Category,
-                Version = new PercentRuleVersionDto
-                {
-                    Percentages = percent.RuleUsers
-                        .ToDictionary(
-                            ru => ru.User.Id,
-                            ru => (decimal)ru.Percentage
-                        )
-                }
-            },
-            PersonalRuleVersion => new RuleDetailsResponse
-            {
-                RuleId = ruleVersion.Rule.Id,
-                RuleVersionId = ruleVersion.Id,
-                Category = ruleVersion.Rule.Category,
-                Version = new PersonalRuleVersionDto()
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(ruleVersion))
-        };
+        return await ruleVersionHandlerFactory.GetHandler(ruleVersion).GetRuleDetails(ruleVersion, ct);
     }
 
     public async Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
@@ -162,11 +134,16 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
 
         existingRule.Category = request.Category;
 
+        var versionEquals = ruleVersionHandlerFactory.GetHandler(request.Version)
+            .Equals(latestVersion, request.Version);
+
         RuleVersion? newVersion = null;
-        if (!VersionEquals(latestVersion, request.Version))
+        if (!versionEquals)
         {
             latestVersion.EndDateTime = DateTime.UtcNow;
-            newVersion = await MapVersionAsync(request.Version, ct);
+            newVersion = await ruleVersionHandlerFactory
+                .GetHandler(request.Version)
+                .CreateEntity(existingRule.Group.Id, request.Version, ct);
             dbContext.Add(newVersion);
             existingRule.Versions.Add(newVersion);
         }
@@ -179,8 +156,7 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
     public async Task Delete(Guid ruleId, CancellationToken ct = default)
     {
         var version = await (
-                from ruleVersion in await List(ct)
-                where ruleVersion.Rule.Id == ruleId
+                from ruleVersion in await Get(ruleId, ct)
                 select ruleVersion)
             .FirstOrDefaultAsync(ct);
 
@@ -190,91 +166,5 @@ public class RuleService(IUserService userService, AppDbContext dbContext) : IRu
         version.EndDateTime = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync(ct);
-    }
-
-    private async Task<RuleVersion> MapVersionAsync(RuleVersionDto dto, CancellationToken ct)
-    {
-        return dto switch
-        {
-            PersonalRuleVersionDto personal => MapPersonalVersion(personal),
-            PercentRuleVersionDto percent => await MapPercentVersion(percent, ct),
-            _ => throw new InvalidOperationException("Unknown rule version type.")
-        };
-    }
-
-    private RuleVersion MapPersonalVersion(PersonalRuleVersionDto dto)
-    {
-        return new PersonalRuleVersion
-        {
-            StartDateTime = DateTime.UtcNow
-        };
-    }
-
-    private async Task<RuleVersion> MapPercentVersion(PercentRuleVersionDto dto, CancellationToken ct)
-    {
-        var total = dto.Percentages.Values.Sum();
-
-        const decimal epsilon = 10e-3M;
-        if (total + epsilon < 100 || total - epsilon > 100)
-            throw new InvalidOperationException("Percentages must sum to 100%.");
-
-        var userIds = dto.Percentages.Keys.ToList();
-
-        var users = await dbContext.Set<User>()
-            .Where(u => userIds.Contains(u.Id))
-            .ToListAsync(ct);
-
-        if (users.Count != dto.Percentages.Count)
-            throw new InvalidOperationException("Some users in the percentage rule do not exist.");
-
-        var version = new PercentRuleVersion
-        {
-            Id = Guid.NewGuid(),
-            StartDateTime = DateTime.UtcNow
-        };
-
-        foreach (var (userId, percent) in dto.Percentages)
-        {
-            if (percent is 0) continue;
-            version.RuleUsers.Add(new PercentRuleUser
-            {
-                User = users.Single(u => u.Id == userId),
-                Percentage = (double)percent
-            });
-        }
-
-        return version;
-    }
-
-    private bool VersionEquals(RuleVersion current, RuleVersionDto incoming)
-    {
-        return current switch
-        {
-            PercentRuleVersion percentCurrent
-                when incoming is PercentRuleVersionDto percentIncoming
-                => PercentVersionsEqual(percentCurrent, percentIncoming),
-
-            PersonalRuleVersion when incoming is PersonalRuleVersionDto
-                => true, // Nothing can change
-
-            _ => false // Different types = changed
-        };
-    }
-
-    private bool PercentVersionsEqual(PercentRuleVersion current, PercentRuleVersionDto incoming)
-    {
-        if (current.RuleUsers.Count != incoming.Percentages.Count)
-            return false;
-
-        foreach (var ru in current.RuleUsers)
-        {
-            if (!incoming.Percentages.TryGetValue(ru.User.Id, out var percent))
-                return false;
-
-            if (Math.Abs(ru.Percentage - (double)percent) > 0.001)
-                return false;
-        }
-
-        return true;
     }
 }
