@@ -29,8 +29,8 @@ builder.Services.AddDbContext<AppIdentityContext>(options =>
 });
 
 builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionString("db"));
-
 builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddSingleton<IDebtSettlementService, DebtSettlementService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IRulesService, RulesService>();

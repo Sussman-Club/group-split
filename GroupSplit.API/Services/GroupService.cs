@@ -170,6 +170,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                         UserName = user.FirstName + " " + user.LastName,
                         AmountPaid = (from rule in @group.Rules
                                       from ruleVersion in rule.Versions
+                                      where !(ruleVersion is PersonalRuleVersion)
                                       from transaction in ruleVersion.Transactions
                                       where transaction.User == user
                                       select transaction.Amount

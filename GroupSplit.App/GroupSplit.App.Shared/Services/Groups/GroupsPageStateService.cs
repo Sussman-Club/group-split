@@ -66,7 +66,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
     }
 
-    public GroupBalance? Balance
+    public UserGroupBalanceResponse? Balance
     {
         get => _tracker.Balance;
         private set
@@ -113,7 +113,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
         else
         {
-            Balance = await _groupsClient.GetGroupBalanceAsync(SelectedGroup.Id, cancellationToken: cancellationToken);
+            Balance = await _groupsClient.GetGroupUserBalanceAsync(SelectedGroup.Id, cancellationToken: cancellationToken);
         }
     }
 
