@@ -13,7 +13,8 @@ public class GroupsPageStateService : IGroupsPageStateService
 
     public Task IsReadyTask { get; }
     private Task _transactionsLoad = Task.CompletedTask;
-    
+    private Task _balancesLoad = Task.CompletedTask;
+
     public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient, ISnackbar snackbar,
         ITransactionsClient transactionsClient)
     {
@@ -26,6 +27,7 @@ public class GroupsPageStateService : IGroupsPageStateService
             if (tracker.Groups is not null) return;
             await LoadGroupsAsync();
             await _transactionsLoad;
+            await _balancesLoad;
         });
     }
     
@@ -50,6 +52,7 @@ public class GroupsPageStateService : IGroupsPageStateService
             _tracker.SelectedGroup = value;
             OnGroupSelected?.Invoke();
             _transactionsLoad = LoadTransactionsAsync();
+            _balancesLoad = LoadGroupBalancesAsync();
         }
     }
 
@@ -59,6 +62,16 @@ public class GroupsPageStateService : IGroupsPageStateService
         private set
         {
             _tracker.Transactions = value;
+            OnTransactionsChanged?.Invoke();
+        }
+    }
+
+    public UserGroupBalanceResponse? Balance
+    {
+        get => _tracker.Balance;
+        private set
+        {
+            _tracker.Balance = value;
             OnTransactionsChanged?.Invoke();
         }
     }
@@ -90,6 +103,18 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         SelectedGroup = Groups.FirstOrDefault(g => g.Id == SelectedGroup?.Id) ??
                         Groups.FirstOrDefault();
+    }
+
+    public async Task LoadGroupBalancesAsync(CancellationToken cancellationToken = default)
+    {   
+        if (SelectedGroup is null)
+        {
+            Balance = null;
+        }
+        else
+        {
+            Balance = await _groupsClient.GetGroupUserBalanceAsync(SelectedGroup.Id, cancellationToken: cancellationToken);
+        }
     }
 
     public async Task CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default)
@@ -153,8 +178,10 @@ public class GroupsPageStateService : IGroupsPageStateService
         await _transactionsClient.CreateTransactionAsync(request, cancellationToken);
 
         await LoadTransactionsAsync(cancellationToken);
+        await LoadGroupBalancesAsync(cancellationToken);
         _snackbar.Add("Transaction created successfully.", Severity.Success);
     }
+
 
     private void UpdateSelectedGroup(GroupResponse group)
     {

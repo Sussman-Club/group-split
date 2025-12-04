@@ -15,7 +15,7 @@
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
         <MudStack Spacing="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large"/>
+                <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large" />
                 <MudText Typo="Typo.h4" Class="font-weight-bold">@GroupsService.SelectedGroup.Name</MudText>
             </MudStack>
             <MudText Typo="Typo.body2">
@@ -69,79 +69,82 @@
     @if (GroupsService.SelectedGroup != null)
     {
         <!-- Balance Row -->
-        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
-            <!-- Your Balance -->
-            <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <MudStack Spacing="3">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Your Balance</MudText>
+        @if (GroupsService.Balance is { } balance)
+        {
+            <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
+                <!-- Your Balance -->
+                <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">Your Balance</MudText>
 
-                    @if (_userBalance > 0)
-                    {
+
                         <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="py-4">
                             <MudStack Spacing="2">
-                                <MudText Typo="Typo.h5" Class="font-weight-bold">You are owed
-                                    $@_userBalance.ToString("N2")</MudText>
-                                <MudText Typo="Typo.body2">
-                                    @foreach (var debt in _owedToYou)
-                                    {
-                                        <div>@debt.Name owes you <strong>$@debt.Amount.ToString("N2")</strong></div>
-                                    }
-                                </MudText>
+                                @if (UserBalance > 0)
+                                {
+                                    <MudText Typo="Typo.h5" Class="font-weight-bold">
+                                        You are owed
+                                        $@UserBalance.ToString("N2")
+                                    </MudText>
+                                    <MudText Typo="Typo.body2">
+                                        @foreach (var debt in balance.OwedToYou)
+                                        {
+                                            <div>@debt.UserName owes you <strong>$@debt.Amount.ToString("N2")</strong></div>
+                                        }
+                                    </MudText>
+                                }
+                                else if (UserBalance < 0)
+                                {
+                                    <MudText Typo="Typo.h5" Class="font-weight-bold">
+                                        You owe
+                                        $@(Math.Abs(UserBalance).ToString("N2"))
+                                    </MudText>
+                                    <MudText Typo="Typo.body2">
+                                        @foreach (var debt in balance.YouOwed)
+                                        {
+                                            <div>You owe @debt.UserName <strong>$@debt.Amount.ToString("N2")</strong></div>
+                                        }
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.h5" Class="font-weight-bold">You're all settled up! 🎉</MudText>
+                                }
                             </MudStack>
                         </MudAlert>
-                    }
-                    else if (_userBalance < 0)
-                    {
-                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="py-4">
-                            <MudStack Spacing="2">
-                                <MudText Typo="Typo.h5" Class="font-weight-bold">You owe
-                                    $@(Math.Abs(_userBalance).ToString("N2"))</MudText>
-                                <MudText Typo="Typo.body2">
-                                    @foreach (var debt in _youOwe)
-                                    {
-                                        <div>You owe @debt.Name <strong>$@debt.Amount.ToString("N2")</strong></div>
-                                    }
-                                </MudText>
-                            </MudStack>
-                        </MudAlert>
-                    }
-                    else
-                    {
-                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                            <MudText Typo="Typo.body1">You're all settled up! 🎉</MudText>
-                        </MudAlert>
-                    }
-                </MudStack>
-            </MudPaper>
 
-            <!-- Group Balances -->
-            <MudPaper Elevation="2" Class="pa-6" Style="min-width: 280px; max-width: 320px;">
-                <MudStack Spacing="3">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Group Balances</MudText>
-                    <MudStack Spacing="2">
-                        @foreach (var member in _members)
-                        {
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@member.Name[0]</MudAvatar>
-                                    <MudText Typo="Typo.body2">@member.Name</MudText>
-                                </MudStack>
-                                <MudText Typo="Typo.body2" Class="font-weight-medium"
-                                         Color="@(member.Balance > 0 ? Color.Success : member.Balance < 0 ? Color.Error : Color.Default)">
-                                    @(member.Balance >= 0 ? "+" : "")$@member.Balance.ToString("N2")
-                                </MudText>
-                            </MudStack>
-                        }
                     </MudStack>
-                </MudStack>
-            </MudPaper>
-        </MudStack>
+                </MudPaper>
+
+                <!-- Group Balances -->
+                <MudPaper Elevation="2" Class="pa-6" Style="min-width: 280px; max-width: 320px;">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">Group Balances</MudText>
+                        <MudStack Spacing="2">
+                            @foreach (var member in balance.NetBalances)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudAvatar Color="Color.Primary" Size="Size.Small">@member.UserName[0]</MudAvatar>
+                                        <MudText Typo="Typo.body2">@member.UserName</MudText>
+                                    </MudStack>
+                                    <MudText Typo="Typo.body2" Class="font-weight-medium"
+                                             Color="@(member.Balance > 0 ? Color.Success : member.Balance < 0 ? Color.Error : Color.Default)">
+                                        @(member.Balance >= 0 ? "+" : "")$@member.Balance.ToString("N2")
+                                    </MudText>
+                                </MudStack>
+                            }
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+            </MudStack>
+        }
 
         <!-- Expenses Row -->
         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
             <!-- Expenses List -->
             <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <TransactionsList Title="Recent Expenses" Transactions="GroupsService.Transactions"/>
+                <TransactionsList Title="Recent Expenses" Transactions="GroupsService.Transactions" />
             </MudPaper>
             <!-- My Groups -->
             <MudStack Spacing="4">
@@ -150,13 +153,13 @@
                             Groups="GroupsService.Groups"
                             @bind-SelectedGroup="GroupsService.SelectedGroup"
                             ShowCreateButton="true"
-                            OnCreateClick="OpenCreateDialogAsync"/>
+                            OnCreateClick="OpenCreateDialogAsync" />
 
                 <GroupsList Title="Archived Groups"
                             Icon="@Icons.Material.Outlined.Archive"
                             Groups="_archivedGroups"
                             @bind-SelectedGroup="GroupsService.SelectedGroup"
-                            ShowCreateButton="false"/>
+                            ShowCreateButton="false" />
             </MudStack>
         </MudStack>
     }
@@ -164,7 +167,7 @@
     {
         <MudPaper Elevation="0" Class="pa-10">
             <MudStack AlignItems="AlignItems.Center" Spacing="3">
-                <MudIcon Icon="@Icons.Material.Outlined.Groups" Size="Size.Large"/>
+                <MudIcon Icon="@Icons.Material.Outlined.Groups" Size="Size.Large" />
                 <MudText Typo="Typo.h6">Select a group to view details</MudText>
             </MudStack>
         </MudPaper>
@@ -174,17 +177,16 @@
 
 @if (GroupsService.SelectedGroup is { IsArchive: false })
 {
-    <ExtendedFab Label="Expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog"/>
+    <ExtendedFab Label="Expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog" />
 }
 
 @code {
     private readonly List<GroupResponse> _archivedGroups = [];
 
-    private decimal _userBalance;
-    private List<DebtInfo> _owedToYou = [];
-    private List<DebtInfo> _youOwe = [];
-    private List<MemberBalance> _members = [];
-
+    // public decimal UserBalance => GroupsService.Balance?.NetBalances.FirstOrDefault()?.Balance ?? 0m;
+    public decimal UserBalance =>
+      (GroupsService.Balance?.OwedToYou.Sum(d => d.Amount) ?? 0m) -
+      (GroupsService.Balance?.YouOwed.Sum(d => d.Amount) ?? 0m);
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
@@ -204,7 +206,6 @@
     protected override async Task OnInitializedAsync()
     {
         await GroupsService.IsReadyTask;
-
         await base.OnInitializedAsync();
     }
 
@@ -334,12 +335,6 @@
     {
         public string Name { get; set; } = "";
         public decimal Amount { get; set; }
-    }
-
-    private class MemberBalance
-    {
-        public string Name { get; set; } = "";
-        public decimal Balance { get; set; }
     }
 
     public async ValueTask DisposeAsync()
