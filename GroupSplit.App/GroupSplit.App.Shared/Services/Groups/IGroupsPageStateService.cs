@@ -10,7 +10,10 @@ public interface IGroupsPageStateService
     GroupResponse? SelectedGroup { get; set; }
     
     ICollection<TransactionResponse> Transactions { get; }
-    
+
+    UserGroupBalanceResponse? Balance { get; }
+
+
     event Action? OnGroupSelected;
     event Action? OnTransactionsChanged;
     event Action? OnGroupsChanged;

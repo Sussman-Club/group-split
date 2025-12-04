@@ -45,6 +45,11 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Gets the balance of a group per user
+    /// </summary>
+    Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
+
     Task<IQueryable<Transaction>> Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
 }
@@ -82,17 +87,17 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
     {
         return from g in await GetAllGroups(cancellationToken)
-            where g.Id == groupId
-            select g;
+               where g.Id == groupId
+               select g;
     }
 
     public async Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)
     {
         return await (from t in await GetGroupById(id, ct)
-            select new CreateGroupRequest
-            {
-                Name = t.Name
-            }).FirstOrDefaultAsync(ct);
+                      select new CreateGroupRequest
+                      {
+                          Name = t.Name
+                      }).FirstOrDefaultAsync(ct);
     }
 
 
@@ -116,8 +121,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default)
     {
         return from gr in await GetGroupById(groupId, cancellationToken)
-            from user in gr.Users
-            select user;
+               from user in gr.Users
+               select user;
     }
 
     public async Task<IQueryable<Group>> AddGroupMembers(Guid groupId, AddMemberRequest request,
@@ -128,8 +133,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         if (group is null)
             throw new ArgumentException("Group was not found");
         var users = from user in context.Set<User>()
-            where request.UserIdentifiers.Select(ui => ui.Email).Contains(user.Email)
-            select user;
+                    where request.UserIdentifiers.Select(ui => ui.Email).Contains(user.Email)
+                    select user;
         await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
             group.Users.Add(user);
 
@@ -157,6 +162,45 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
+    }
+
+    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        var groupQuery = await GetGroupById(groupId, cancellationToken);
+
+        var groupBalance =
+                    from @group in groupQuery
+                    from user in @group.Users
+                    select new GroupNetBalance
+                    {
+                        UserId = user.Id,
+                        UserName = user.FirstName + " " + user.LastName,
+                        AmountPaid = (from rule in @group.Rules
+                                      from ruleVersion in rule.Versions
+                                      where !(ruleVersion is PersonalRuleVersion)
+                                      from transaction in ruleVersion.Transactions
+                                      where transaction.User == user
+                                      select transaction.Amount
+                                    ).Sum(),
+                        AmountOwed = (from rule in @group.Rules
+                                      from ruleVersion in rule.Versions
+                                      join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
+                                      from percentUser in percentageRuleVersion.RuleUsers
+                                      where percentUser.User == user
+                                      from transaction in ruleVersion.Transactions
+                                      select transaction.Amount * (decimal)percentUser.Percentage / 100
+                                    ).Sum()
+                    } into balance
+                    select new GroupNetBalance
+                    {
+                        UserId = balance.UserId,
+                        UserName = balance.UserName,
+                        AmountOwed = balance.AmountOwed,
+                        AmountPaid = balance.AmountPaid,
+                        Balance = balance.AmountPaid - balance.AmountOwed
+                    };
+
+        return groupBalance;
     }
 
     public async Task<IQueryable<Transaction>> Settle(Guid groupId, SettleRequest request,

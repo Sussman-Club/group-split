@@ -26,9 +26,10 @@ public static class GroupApi
             group.MapGetGroupRules();
             group.MapGetMembers();
             group.MapAddMember();
-            group.MapRemovedMember();
+            group.MapRemoveMember();
+            group.MapGetGroupUserBalance();
             group.MapSettle();
-            
+
             return group;
         }
     }
@@ -183,15 +184,15 @@ public static class GroupApi
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
-        private RouteHandlerBuilder MapRemovedMember()
+        private RouteHandlerBuilder MapRemoveMember()
         {
-            return group.MapDelete("{grouId:guid}/members/{userId}", async (
-                    Guid grouId,
+            return group.MapDelete("{groupId:guid}/members/{userId}", async (
+                    Guid groupId,
                     Guid userId,
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var group = await groupService.RemoveGroupMember(grouId, userId, ct);
+                    var group = await groupService.RemoveGroupMember(groupId, userId, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null) return Results.NotFound();
@@ -200,6 +201,27 @@ public static class GroupApi
                 })
                 .WithName("RemoveGroupMember")
                 .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapGetGroupUserBalance()
+        {
+            return group.MapGet("{groupId:guid}/balances", async (
+                    Guid groupId,
+                    IGroupService groupService,
+                    IDebtCalculationService debtCalculator,
+                    CancellationToken ct) =>
+            {
+                var balances = await groupService.GetGroupNetBalance(groupId, ct);
+                var balanceResponse =  await balances.ToArrayAsync(ct);
+
+                if (balanceResponse is null) return Results.NotFound();
+                var groupUserBalance = await debtCalculator.GetUserBalance(balanceResponse);
+
+                return Results.Ok(groupUserBalance);
+            })
+                .WithName("GetGroupUserBalance")
+                .Produces<UserGroupBalanceResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 

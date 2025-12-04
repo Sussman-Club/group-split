@@ -1,6 +1,7 @@
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.App.Web;
 using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
@@ -20,6 +21,8 @@ builder.Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
 
+builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
+
 // Add shared services
 builder.Services.AddSharedServices();
 
@@ -31,6 +34,7 @@ RenderModeConfig.Initialize(renderModePreference);
 builder.Services.AddRazorComponents()
     .RegisterPersistentService<GroupsTracker>(RenderMode.InteractiveAuto)
     .RegisterPersistentService<TransactionsTracker>(RenderMode.InteractiveAuto)
+    .RegisterPersistentService<UserTracker>(RenderMode.InteractiveAuto)
     .AddRenderModeComponents();
 
 // Add device-specific services used by the GroupSplit.App.Shared project
@@ -41,27 +45,6 @@ builder.Services.AddMudServices();
 
 // Add the forwarder to make sending requests to the backend easier
 builder.Services.AddHttpForwarderWithServiceDiscovery();
-
-// Add HTTP client for API (server-side)
-builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
-builder.Services.AddHttpClient<IGroupsClient, GroupsClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
-builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
-builder.Services.AddHttpClient<IRulesClient, RulesClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
 
 builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
 {

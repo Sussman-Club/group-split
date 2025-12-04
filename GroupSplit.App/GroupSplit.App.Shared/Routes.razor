@@ -1,8 +1,9 @@
-<CascadingAuthenticationState>
-    <Router AppAssembly="typeof(Layout.MainLayout).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+@using GroupSplit.App.Shared.Pages
+<CascadingUserLogin>
+    <Router AppAssembly="typeof(MainLayout).Assembly" NotFoundPage="typeof(NotFound)">
         <Found Context="routeData">
-            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+            <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
     </Router>
-</CascadingAuthenticationState>
+</CascadingUserLogin>
