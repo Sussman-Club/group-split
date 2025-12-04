@@ -20,6 +20,8 @@ builder.Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
 
+builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
+
 // Add shared services
 builder.Services.AddSharedServices();
 
@@ -41,27 +43,6 @@ builder.Services.AddMudServices();
 
 // Add the forwarder to make sending requests to the backend easier
 builder.Services.AddHttpForwarderWithServiceDiscovery();
-
-// Add HTTP client for API (server-side)
-builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
-builder.Services.AddHttpClient<IGroupsClient, GroupsClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
-builder.Services.AddHttpClient<ITransactionsClient, TransactionsClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
-builder.Services.AddHttpClient<IRulesClient, RulesClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-}).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
 
 builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
 {
