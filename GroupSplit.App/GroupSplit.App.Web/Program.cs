@@ -1,6 +1,7 @@
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.App.Web;
 using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
@@ -33,6 +34,7 @@ RenderModeConfig.Initialize(renderModePreference);
 builder.Services.AddRazorComponents()
     .RegisterPersistentService<GroupsTracker>(RenderMode.InteractiveAuto)
     .RegisterPersistentService<TransactionsTracker>(RenderMode.InteractiveAuto)
+    .RegisterPersistentService<UserTracker>(RenderMode.InteractiveAuto)
     .AddRenderModeComponents();
 
 // Add device-specific services used by the GroupSplit.App.Shared project

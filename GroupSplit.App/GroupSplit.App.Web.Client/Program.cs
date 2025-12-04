@@ -1,6 +1,5 @@
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Web.Client.Services;
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
 
@@ -25,7 +24,5 @@ builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
 
 // Add authorization services
 builder.Services.AddAuthorizationCore();
-builder.Services.AddSingleton<UserClientAuthenticationStateProvider>();
-builder.Services.AddSingleton<AuthenticationStateProvider>(ActivatorUtilities.GetServiceOrCreateInstance<UserClientAuthenticationStateProvider>);
 
 await builder.Build().RunAsync();

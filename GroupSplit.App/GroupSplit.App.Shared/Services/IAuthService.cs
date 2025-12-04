@@ -1,7 +1,4 @@
 ﻿using GroupSplit.Shared;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace GroupSplit.App.Shared.Services;
 
