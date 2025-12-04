@@ -19,27 +19,41 @@ public class DebtCalculationService(IUserService userService) : IDebtCalculation
         return balance;
     }
 
-    private static List<GroupNetBalance> FilterAndSort(IEnumerable<GroupNetBalance> nets, Func<GroupNetBalance, bool> predicate)
+    private static List<GroupNetBalance> FilterAndSort(
+        IEnumerable<GroupNetBalance> nets,
+        Func<GroupNetBalance, bool> predicate,
+        bool descending)
     {
         return [..from nb in nets
                 where predicate(nb)
-                orderby nb.Balance descending, nb.UserId
+                orderby @descending ? -nb.Balance: nb.Balance, nb.UserId
                 select nb with { }];
     }
 
     private static Dictionary<Guid, UserGroupBalanceResponse> MinimizeTransactions(
      IEnumerable<GroupNetBalance> netBalances)
     {
-        var creditors = FilterAndSort(netBalances, nb => nb.Balance > 0);
-        var debtors = FilterAndSort(netBalances, nb => nb.Balance < 0);
+        var balances = netBalances.ToList();
+        
+        var creditors = FilterAndSort(
+            balances,
+            nb => nb.Balance > 0,
+            descending: true
+        );
+
+        var debtors = FilterAndSort(
+            balances,
+            nb => nb.Balance < 0,
+            descending: false
+        );
 
         int i = 0, j = 0;
 
-        var result = netBalances.ToDictionary(
+        var result = balances.ToDictionary(
             nb => nb.UserId,
             nb => new UserGroupBalanceResponse
             {
-                NetBalances = netBalances.ToArray(),
+                NetBalances = balances,
                 OwedToYou = [],
                 YouOwed = []
             }
@@ -70,7 +84,7 @@ public class DebtCalculationService(IUserService userService) : IDebtCalculation
                 });
 
             // Update amounts
-            debtor.Balance -= payment;
+            debtor.Balance += payment;
             creditor.Balance -= payment;
 
             if (creditor.Balance == 0) i++;
