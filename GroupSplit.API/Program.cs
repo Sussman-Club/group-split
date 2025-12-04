@@ -33,6 +33,7 @@ builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionSt
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddRuleVersionServices();
 builder.Services.AddScoped<IRuleService, RuleService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

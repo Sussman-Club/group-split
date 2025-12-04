@@ -1,3 +1,4 @@
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +46,7 @@ public class ApiTestFixture : IAsyncLifetime
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IGroupService, GroupService>();
         services.AddScoped<ITransactionService, TransactionService>();
+        services.AddRuleVersionServices();
         services.AddScoped<IRuleService, RuleService>();
     }
 }
