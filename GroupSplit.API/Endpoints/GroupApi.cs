@@ -214,7 +214,7 @@ public static class GroupApi
                 await groupService.Settle(groupId, request, ct);
                 return Results.NoContent();
             })
-            .WithName("SettleGroup")
+            .WithName("SettleGroupDebts")
             .Produces(StatusCodes.Status204NoContent);
         }
     }
