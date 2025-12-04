@@ -1,9 +1,9 @@
 ﻿@page "/login"
+@using System.Web
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IAuthService AuthService
 @inject NavigationManager Nav
-@inject IFormFactor FormFactor
 @layout FullScreenLayout
 @attribute [AllowAnonymous]
 
@@ -19,7 +19,7 @@
             <MudText Typo="Typo.h5">
                 Sign In
             </MudText>
-            <MudForm @ref="LoginForm" @bind-IsValid="success">
+            <MudForm @ref="LoginForm" @bind-IsValid="Success">
                 <MudStack Spacing="5">
                     <MudTextField @bind-Value="Username"
                                   Placeholder="Email"
@@ -40,7 +40,7 @@
                     </MudLink>
                     <MudStack Row>
                         <MudSpacer />
-                        <MudButton Color="Color.Primary" Class="rounded-0" Variant="Variant.Filled" Disabled="!success" OnClick="TryLogin">
+                        <MudButton Color="Color.Primary" Class="rounded-0" Variant="Variant.Filled" Disabled="!Success" OnClick="TryLogin">
                             Sign In
                         </MudButton>
                     </MudStack>
@@ -54,38 +54,33 @@
 @code {
     [PersistentState] public string? Username { get; set; }
     [PersistentState] public string? Password { get; set; }
-    private bool success { get; set; } = false;
+    private bool Success { get; set; } = false;
 
     MudForm? LoginForm { get; set; }
-
-    protected override Task OnInitializedAsync()
-    {
-        return base.OnInitializedAsync();
-    }
 
     public async Task TryLogin()
     {
         if (LoginForm is null)
             return;
         await LoginForm.Validate();
-        if (!success)
+        if (!Success)
             return;
 
-        await AuthService.Login(new LoginRequest() { Email = Username!, Password = Password! }, CancellationToken.None);
+        await AuthService.Login(new LoginRequest { Email = Username!, Password = Password! }, CancellationToken.None);
         await NavigateToReturnUrl();
     }
 
-    private async Task NavigateToReturnUrl()
+    private Task NavigateToReturnUrl()
     {
         // If a returnUrl exists, navigate to it (relative to base), otherwise go to home
         var uri = new Uri(Nav.Uri);
-        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var query = HttpUtility.ParseQueryString(uri.Query);
         var returnUrlRaw = query.Get("returnUrl");
 
         if (string.IsNullOrWhiteSpace(returnUrlRaw))
         {
             Nav.NavigateTo("/");
-            return;
+            return Task.CompletedTask;
         }
 
         // Normalize to a relative path against BaseUri
@@ -100,6 +95,8 @@
         else
         {
             Nav.NavigateTo("/", forceLoad: false);
-        } 
+        }
+
+        return Task.CompletedTask;
     }
 }
