@@ -65,7 +65,7 @@ public class RuleService(
 
         var existingRule = groupResult.Rule;
 
-        var version = await ruleVersionHandler.CreateEntity(request.GroupId, request.Version, ct);
+        var version = await ruleVersionHandler.ToEntity(request.GroupId, request.Version, ct);
 
         if (existingRule is not null)
         {
@@ -144,7 +144,7 @@ public class RuleService(
         if (!ruleVersionHandler.Equals(latestVersion, request.Version))
         {
             latestVersion.EndDateTime = DateTime.UtcNow;
-            newVersion = await ruleVersionHandler.CreateEntity(existingRule.Group.Id, request.Version, ct);
+            newVersion = await ruleVersionHandler.ToEntity(existingRule.Group.Id, request.Version, ct);
             dbContext.Add(newVersion);
             existingRule.Versions.Add(newVersion);
         }

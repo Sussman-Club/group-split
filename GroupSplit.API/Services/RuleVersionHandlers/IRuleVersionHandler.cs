@@ -3,22 +3,22 @@ using GroupSplit.Shared;
 
 namespace GroupSplit.API.Services.RuleVersionHandlers;
 
-public interface IRuleVersionCreateHandler
+public interface IRuleVersionToEntityHandler
 {
-    Task<RuleVersion> CreateEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct);
+    Task<RuleVersion> ToEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct);
 }
 
-public interface IRuleVersionCreateHandler<in TRuleVersionDto> : IRuleVersionCreateHandler
+public interface IRuleVersionToEntityHandler<in TRuleVersionDto> : IRuleVersionToEntityHandler
     where TRuleVersionDto : RuleVersionDto
 {
-    Task<RuleVersion> IRuleVersionCreateHandler.CreateEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct)
+    Task<RuleVersion> IRuleVersionToEntityHandler.ToEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct)
     {
         return dto is not TRuleVersionDto typedDto
             ? throw new InvalidOperationException($"Expected {typeof(TRuleVersionDto).Name}, got {dto.GetType().Name}.")
-            : CreateEntity(groupId, typedDto, ct);
+            : ToEntity(groupId, typedDto, ct);
     }
 
-    Task<RuleVersion> CreateEntity(Guid groupId, TRuleVersionDto dto, CancellationToken ct);
+    Task<RuleVersion> ToEntity(Guid groupId, TRuleVersionDto dto, CancellationToken ct);
 }
 
 public interface IRuleVersionEqualsHandler
@@ -61,11 +61,11 @@ public interface IRuleVersionToDtoHandler<in TRuleVersion> : IRuleVersionToDtoHa
     }
 }
 
-public interface IRuleVersionHandler : IRuleVersionToDtoHandler, IRuleVersionCreateHandler, IRuleVersionEqualsHandler;
+public interface IRuleVersionHandler : IRuleVersionToDtoHandler, IRuleVersionToEntityHandler, IRuleVersionEqualsHandler;
 
 public interface IRuleVersionHandler<in TRuleVersionEntity, in TRuleVersionDto> :
     IRuleVersionHandler,
-    IRuleVersionToDtoHandler<TRuleVersionEntity>, IRuleVersionCreateHandler<TRuleVersionDto>,
+    IRuleVersionToDtoHandler<TRuleVersionEntity>, IRuleVersionToEntityHandler<TRuleVersionDto>,
     IRuleVersionEqualsHandler<TRuleVersionEntity, TRuleVersionDto>
     where TRuleVersionEntity : RuleVersion
     where TRuleVersionDto : RuleVersionDto;

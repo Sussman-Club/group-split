@@ -13,12 +13,12 @@ public class RuleVersionHandler(IServiceProvider provider) : IRuleVersionHandler
         return service.ToDto(version, ct);
     }
 
-    public Task<RuleVersion> CreateEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct)
+    public Task<RuleVersion> ToEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct)
     {
         var entityType = dto.GetType();
-        var handlerType = typeof(IRuleVersionCreateHandler<>).MakeGenericType(entityType);
-        var service = (IRuleVersionCreateHandler)provider.GetRequiredService(handlerType);
-        return service.CreateEntity(groupId, dto, ct);
+        var handlerType = typeof(IRuleVersionToEntityHandler<>).MakeGenericType(entityType);
+        var service = (IRuleVersionToEntityHandler)provider.GetRequiredService(handlerType);
+        return service.ToEntity(groupId, dto, ct);
     }
 
     public bool Equals(RuleVersion existing, RuleVersionDto incoming)

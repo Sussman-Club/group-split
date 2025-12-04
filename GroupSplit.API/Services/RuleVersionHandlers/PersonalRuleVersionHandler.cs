@@ -10,7 +10,7 @@ public class PersonalRuleVersionHandler : IRuleVersionHandler<PersonalRuleVersio
         return Task.FromResult<RuleVersionDto>(new PersonalRuleVersionDto());
     }
 
-    public Task<RuleVersion> CreateEntity(Guid groupId, PersonalRuleVersionDto dto, CancellationToken ct) =>
+    public Task<RuleVersion> ToEntity(Guid groupId, PersonalRuleVersionDto dto, CancellationToken ct) =>
         Task.FromResult<RuleVersion>(new PersonalRuleVersion { StartDateTime = DateTime.UtcNow });
 
     public bool Equals(PersonalRuleVersion existing, PersonalRuleVersionDto incoming) => true;

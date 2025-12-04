@@ -24,7 +24,7 @@ public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService gro
         };
     }
 
-    public async Task<RuleVersion> CreateEntity(Guid groupId, PercentRuleVersionDto dto, CancellationToken ct)
+    public async Task<RuleVersion> ToEntity(Guid groupId, PercentRuleVersionDto dto, CancellationToken ct)
     {
         var total = dto.Percentages.Values.Sum();
 
