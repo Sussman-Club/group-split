@@ -2,14 +2,14 @@
 
 namespace GroupSplit.API.Services;
 
-public interface IDebtSettlementService
+public interface IDebtCalculationService
 {
-    Task<UserGroupBalanceResponse> GetUserSettlement(IEnumerable<GroupNetBalance> netBalance);
+    Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance);
 }
 
-public class DebtSettlementService(IUserService userService) : IDebtSettlementService
+public class DebtCalculationService(IUserService userService) : IDebtCalculationService
 {
-    public async Task<UserGroupBalanceResponse> GetUserSettlement(IEnumerable<GroupNetBalance> netBalance)
+    public async Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance)
     {
         var settlements = MinimizeTransactions(netBalance);
         var user = await userService.GetCurrentUser();

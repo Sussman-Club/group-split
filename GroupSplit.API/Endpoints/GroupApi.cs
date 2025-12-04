@@ -208,16 +208,16 @@ public static class GroupApi
             return group.MapGet("{groupId:guid}/balances", async (
                     Guid groupId,
                     IGroupService groupService,
-                    IDebtSettlementService debtSettler,
+                    IDebtCalculationService debtCalculator,
                     CancellationToken ct) =>
             {
                 var balances = await groupService.GetGroupNetBalance(groupId, ct);
                 var balanceResponse =  await balances.ToArrayAsync(ct);
 
                 if (balanceResponse is null) return Results.NotFound();
-                var userSettlement = await debtSettler.GetUserSettlement(balanceResponse);
+                var groupUserBalance = await debtCalculator.GetUserBalance(balanceResponse);
 
-                return Results.Ok(userSettlement);
+                return Results.Ok(groupUserBalance);
             })
                 .WithName("GetGroupUserBalance")
                 .Produces<UserGroupBalanceResponse>()
