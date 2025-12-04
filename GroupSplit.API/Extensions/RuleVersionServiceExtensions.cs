@@ -11,15 +11,38 @@ public static class RuleVersionServiceExtensions
     {
         public IServiceCollection AddRuleVersionServices()
         {
+            // Register all rule-version handlers
             services.AddRuleVersionHandler<PercentRuleVersion, PercentRuleVersionDto, PercentRuleVersionHandler>();
             services.AddRuleVersionHandler<PersonalRuleVersion, PersonalRuleVersionDto, PersonalRuleVersionHandler>(
                 ServiceLifetime.Singleton);
 
+            // Register the high-level dispatcher responsible for dynamically resolving
+            // the correct rule-version handler at runtime based on the concrete DTO / entity types.
             services.AddScoped<IRuleVersionHandler, RuleVersionHandler>();
 
             return services;
         }
 
+        /// <summary>
+        /// Registers a rule-version handler and automatically maps the handler to all associated interfaces:
+        /// - <see cref="IRuleVersionCreateHandler{TRuleVersionDto}"/>
+        /// - <see cref="IRuleVersionDetailsHandler{TRuleVersion}"/>
+        /// - <see cref="IRuleVersionEqualsHandler{TRuleVersionDto}"/>
+        /// </summary>
+        /// <typeparam name="TRuleVersion">
+        /// The concrete rule version entity type.
+        /// Must inherit from <see cref="RuleVersion"/>.
+        /// </typeparam>
+        ///
+        /// <typeparam name="TRuleVersionDto">
+        /// The DTO type that represents the inbound request data for the rule version.
+        /// Must inherit from <see cref="RuleVersionDto"/>.
+        /// </typeparam>
+        ///
+        /// <typeparam name="THandler">
+        /// The concrete handler class.
+        /// Must implement <see cref="IRuleVersionHandler{TRuleVersion, TRuleVersionDto}"/>.
+        /// </typeparam>
         private IServiceCollection AddRuleVersionHandler<TRuleVersion, TRuleVersionDto, THandler>(
             ServiceLifetime lifetime = ServiceLifetime.Scoped)
             where TRuleVersion : RuleVersion
