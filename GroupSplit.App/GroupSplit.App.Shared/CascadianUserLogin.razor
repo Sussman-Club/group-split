@@ -1,0 +1,31 @@
+@inject IUserLogin UserLogin
+@using GroupSplit.App.Shared.Services.Users
+@using GroupSplit.Shared
+@implements IDisposable
+
+<CascadingValue Value="@User" TValue="UserInfo">
+    @ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter, EditorRequired] public RenderFragment? ChildContent  { get; set; }
+    private UserInfo? User { get; set; }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserLogin.LoginAttempted)
+        {
+            await UserLogin.RefreshLoginAsync();
+        }
+
+        User = UserLogin.User;
+        UserLogin.OnLoginChanged += OnUserChanged;
+    }
+
+    public void Dispose()
+    {
+        UserLogin.OnLoginChanged -= OnUserChanged;
+    }
+
+    private void OnUserChanged(UserInfo? userInfo) => User = userInfo;
+}

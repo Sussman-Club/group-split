@@ -7,4 +7,7 @@ public class UserTracker
 {
     [PersistentState]
     public UserInfo? User { get; set; }
+    
+    [PersistentState]
+    public bool LoginAttempted { get; set; }
 }

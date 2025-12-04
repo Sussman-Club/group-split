@@ -48,15 +48,7 @@
 @code {
     [Parameter] public EventCallback ToggleDrawer { get; set; }
 
-    [CascadingParameter] public Task<UserInfo?> AuthenticationStateTask { get; set; } = null!;
-
-    private UserInfo? UserInfo { get; set; }
-
-    protected override async Task OnParametersSetAsync()
-    {
-        UserInfo = await AuthenticationStateTask;
-        await base.OnParametersSetAsync();
-    }
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
     private async Task TryLogout(MouseEventArgs args)
     {

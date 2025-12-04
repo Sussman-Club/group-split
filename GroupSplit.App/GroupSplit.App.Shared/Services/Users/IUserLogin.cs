@@ -4,6 +4,7 @@ namespace GroupSplit.App.Shared.Services.Users;
 
 public interface IUserLogin
 {
+    bool LoginAttempted { get; }
     UserInfo? User { get; }
     
     event AuthenticationStateChangedHandler? OnLoginChanged;
@@ -12,4 +13,4 @@ public interface IUserLogin
     Task ClearLogin();
 }
 
-public delegate void AuthenticationStateChangedHandler(Task<UserInfo?> task);
+public delegate void AuthenticationStateChangedHandler(UserInfo? task);

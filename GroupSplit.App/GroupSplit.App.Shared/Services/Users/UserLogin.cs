@@ -10,37 +10,33 @@ public class UserLogin(UserTracker tracker, IUsersClient usersClient) : IUserLog
         private set => tracker.User = value;
     }
 
+    public bool LoginAttempted
+    {
+        get => tracker.LoginAttempted;
+        private set => tracker.LoginAttempted = value;
+    }
+
     public event AuthenticationStateChangedHandler? OnLoginChanged;
 
     public Task ClearLogin()
     {
         User = null;
-        OnLoginChanged?.Invoke(Task.FromResult(User));
+        OnLoginChanged?.Invoke(User);
         return Task.CompletedTask;
     }
 
     public async Task RefreshLoginAsync()
     {
-        var task = GetUserInfoAsync();
-        OnLoginChanged?.Invoke(task);
-        await task;
-        return;
-
-        async Task<UserInfo?> GetUserInfoAsync()
+        try
         {
-            try
-            {
-                User = await usersClient.GetCurrentUserAsync();
-            }
-            catch
-            {
-                User = null;
-            }
-            
-            return User;
+            User = await usersClient.GetCurrentUserAsync();
         }
+        catch
+        {
+            User = null;
+        }
+
+        LoginAttempted = true;
+        OnLoginChanged?.Invoke(User);
     }
 }
-
-
-
