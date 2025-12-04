@@ -1,0 +1,78 @@
+@using GroupSplit.Shared
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5">
+            Settle with @User.FirstName
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudStack Spacing="3">
+
+                <MudText Typo="Typo.subtitle2">
+                    @User.FirstName owes you @TotalDebt.ToString("C")
+                </MudText>
+
+                <MudNumericField
+                    T="decimal"
+                    Label="Amount Paid"
+                    Variant="Variant.Outlined"
+                    @bind-Value="_model.Amount"
+                    For="@(() => _model.Amount)"
+                    Adornment="Adornment.Start"
+                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentColor="Color.Primary"
+                    HideSpinButtons="true"
+                    Immediate="true"
+                    Min="0"
+                    Max="TotalDebt"/>
+
+                <MudText Typo="Typo.caption">
+                    Remaining balance: @((TotalDebt - _model.Amount).ToString("C"))
+                </MudText>
+
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@Submit">
+            Confirm
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public UserInfo User { get; set; } = null!;
+    [Parameter] public decimal TotalDebt { get; set; }
+
+    private MudForm _form;
+
+    private SettleRequest _model = new();
+
+    protected override void OnInitialized()
+    {
+        _model = new SettleRequest
+        {
+            UserId = User.Id,
+            Amount = TotalDebt
+        };
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        MudDialog.Close(DialogResult.Ok(_model));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

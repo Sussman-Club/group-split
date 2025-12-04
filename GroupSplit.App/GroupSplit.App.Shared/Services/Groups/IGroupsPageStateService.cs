@@ -23,4 +23,5 @@ public interface IGroupsPageStateService
     Task RemoveGroupMemberAsync(Guid memberUserId, CancellationToken cancellationToken = default);
     Task UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest, CancellationToken cancellationToken = default);
     Task CreateTransactionAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
+    Task SettleAsync(SettleRequest request, CancellationToken cancellationToken = default);
 }
