@@ -1,20 +1,13 @@
-using GroupSplit.Data.Entities;
+using  GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 
 namespace GroupSplit.API.Services.RuleVersionHandlers;
 
 public class PersonalRuleVersionHandler : IRuleVersionHandler<PersonalRuleVersion, PersonalRuleVersionDto>
 {
-    public Task<RuleDetailsResponse> GetRuleDetails(PersonalRuleVersion version, CancellationToken ct)
+    public Task<RuleVersionDto> ToDto(PersonalRuleVersion version, CancellationToken ct)
     {
-        return Task.FromResult(
-            new RuleDetailsResponse
-            {
-                RuleId = version.Rule.Id,
-                RuleVersionId = version.Id,
-                Category = version.Rule.Category,
-                Version = new PersonalRuleVersionDto()
-            });
+        return Task.FromResult<RuleVersionDto>(new PersonalRuleVersionDto());
     }
 
     public Task<RuleVersion> CreateEntity(Guid groupId, PersonalRuleVersionDto dto, CancellationToken ct) =>

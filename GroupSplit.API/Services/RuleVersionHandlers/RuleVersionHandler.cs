@@ -5,12 +5,12 @@ namespace GroupSplit.API.Services.RuleVersionHandlers;
 
 public class RuleVersionHandler(IServiceProvider provider) : IRuleVersionHandler
 {
-    public Task<RuleDetailsResponse> GetRuleDetails(RuleVersion version, CancellationToken ct)
+    public Task<RuleVersionDto> ToDto(RuleVersion version, CancellationToken ct)
     {
         var entityType = version.GetType();
-        var handlerType = typeof(IRuleVersionDetailsHandler<>).MakeGenericType(entityType);
-        var service = (IRuleVersionDetailsHandler)provider.GetRequiredService(handlerType);
-        return service.GetRuleDetails(version, ct);
+        var handlerType = typeof(IRuleVersionToDtoHandler<>).MakeGenericType(entityType);
+        var service = (IRuleVersionToDtoHandler)provider.GetRequiredService(handlerType);
+        return service.ToDto(version, ct);
     }
 
     public Task<RuleVersion> CreateEntity(Guid groupId, RuleVersionDto dto, CancellationToken ct)

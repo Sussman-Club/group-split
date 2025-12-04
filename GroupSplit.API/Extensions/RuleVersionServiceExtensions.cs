@@ -26,7 +26,7 @@ public static class RuleVersionServiceExtensions
         /// <summary>
         /// Registers a rule-version handler and automatically maps the handler to all associated interfaces:
         /// - <see cref="IRuleVersionCreateHandler{TRuleVersionDto}"/>
-        /// - <see cref="IRuleVersionDetailsHandler{TRuleVersion}"/>
+        /// - <see cref="IRuleVersionToDtoHandler{TRuleVersion}"/>
         /// - <see cref="IRuleVersionEqualsHandler{TRuleVersion, TRuleVersionDto}"/>
         /// </summary>
         /// <typeparam name="TRuleVersion">
@@ -57,7 +57,7 @@ public static class RuleVersionServiceExtensions
                 lifetime));
 
             services.TryAdd(ServiceDescriptor.Describe(
-                typeof(IRuleVersionDetailsHandler<TRuleVersion>),
+                typeof(IRuleVersionToDtoHandler<TRuleVersion>),
                 sp => sp.GetRequiredService<THandler>(),
                 lifetime));
 

@@ -102,7 +102,15 @@ public class RuleService(
         if (ruleVersion is null)
             throw new InvalidOperationException("Rule does not exist.");
 
-        return await ruleVersionHandler.GetRuleDetails(ruleVersion, ct);
+        var version = await ruleVersionHandler.ToDto(ruleVersion, ct);
+
+        return new RuleDetailsResponse
+        {
+            RuleId = ruleVersion.Rule.Id,
+            RuleVersionId = ruleVersion.Id,
+            Category = ruleVersion.Rule.Category,
+            Version = version
+        };
     }
 
     public async Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)

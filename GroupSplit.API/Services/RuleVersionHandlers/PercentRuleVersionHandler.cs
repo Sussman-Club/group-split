@@ -8,27 +8,19 @@ namespace GroupSplit.API.Services.RuleVersionHandlers;
 public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService groupService)
     : IRuleVersionHandler<PercentRuleVersion, PercentRuleVersionDto>
 {
-    public async Task<RuleDetailsResponse> GetRuleDetails(PercentRuleVersion version, CancellationToken ct)
+    public async Task<RuleVersionDto> ToDto(PercentRuleVersion version, CancellationToken ct)
     {
-        await dbContext.Entry(version)
-            .Collection(p => p.RuleUsers)
-            .Query()
-            .Include(ru => ru.User)
-            .LoadAsync(ct);
+        var userPercentages = await (
+                from ruleUser in dbContext.Entry(version).Collection(p => p.RuleUsers).Query()
+                select new
+                {
+                    UserId = ruleUser.User.Id, ruleUser.Percentage
+                })
+            .ToDictionaryAsync(ru => ru.UserId, ru => (decimal)ru.Percentage, cancellationToken: ct);
 
-        return new RuleDetailsResponse
+        return new PercentRuleVersionDto
         {
-            RuleId = version.Rule.Id,
-            RuleVersionId = version.Id,
-            Category = version.Rule.Category,
-            Version = new PercentRuleVersionDto
-            {
-                Percentages = version.RuleUsers
-                    .ToDictionary(
-                        ru => ru.User.Id,
-                        ru => (decimal)ru.Percentage
-                    )
-            }
+            Percentages = userPercentages
         };
     }
 
@@ -40,11 +32,9 @@ public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService gro
         if (total + epsilon < 100 || total - epsilon > 100)
             throw new InvalidOperationException("Percentages must sum to 100%.");
 
-        var userIds = dto.Percentages.Keys.ToList();
-
         var users = await (from @group in await groupService.GetGroupById(groupId, ct)
             from user in @group.Users
-            where userIds.Contains(user.Id)
+            where dto.Percentages.Keys.Contains(user.Id)
             select user).ToListAsync(ct);
 
         if (users.Count != dto.Percentages.Count)

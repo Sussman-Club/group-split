@@ -42,30 +42,30 @@ public interface IRuleVersionEqualsHandler<in TRuleVersion, in TRuleVersionDto> 
     }
 }
 
-public interface IRuleVersionDetailsHandler
+public interface IRuleVersionToDtoHandler
 {
-    Task<RuleDetailsResponse> GetRuleDetails(RuleVersion version, CancellationToken ct);
+    Task<RuleVersionDto> ToDto(RuleVersion version, CancellationToken ct);
 }
 
-public interface IRuleVersionDetailsHandler<in TRuleVersion> : IRuleVersionDetailsHandler
+public interface IRuleVersionToDtoHandler<in TRuleVersion> : IRuleVersionToDtoHandler
     where TRuleVersion : RuleVersion
 {
-    Task<RuleDetailsResponse> GetRuleDetails(TRuleVersion version, CancellationToken ct);
+    Task<RuleVersionDto> ToDto(TRuleVersion version, CancellationToken ct);
 
-    Task<RuleDetailsResponse> IRuleVersionDetailsHandler.GetRuleDetails(RuleVersion version, CancellationToken ct)
+    async Task<RuleVersionDto> IRuleVersionToDtoHandler.ToDto(RuleVersion version, CancellationToken ct)
     {
         return version is not TRuleVersion typedVersion
             ? throw new InvalidOperationException(
                 $"Expected {typeof(TRuleVersion).Name}, got {version.GetType().Name}.")
-            : GetRuleDetails(typedVersion, ct);
+            : await ToDto(typedVersion, ct);
     }
 }
 
-public interface IRuleVersionHandler : IRuleVersionDetailsHandler, IRuleVersionCreateHandler, IRuleVersionEqualsHandler;
+public interface IRuleVersionHandler : IRuleVersionToDtoHandler, IRuleVersionCreateHandler, IRuleVersionEqualsHandler;
 
 public interface IRuleVersionHandler<in TRuleVersionEntity, in TRuleVersionDto> :
     IRuleVersionHandler,
-    IRuleVersionDetailsHandler<TRuleVersionEntity>, IRuleVersionCreateHandler<TRuleVersionDto>,
+    IRuleVersionToDtoHandler<TRuleVersionEntity>, IRuleVersionCreateHandler<TRuleVersionDto>,
     IRuleVersionEqualsHandler<TRuleVersionEntity, TRuleVersionDto>
     where TRuleVersionEntity : RuleVersion
     where TRuleVersionDto : RuleVersionDto;
