@@ -69,15 +69,12 @@ public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService gro
         return version;
     }
 
-    public bool Equals(RuleVersion existing, PercentRuleVersionDto incoming)
+    public bool Equals(PercentRuleVersion existing, PercentRuleVersionDto incoming)
     {
-        if (existing is not PercentRuleVersion percentRuleVersion)
+        if (existing.RuleUsers.Count != incoming.Percentages.Count)
             return false;
 
-        if (percentRuleVersion.RuleUsers.Count != incoming.Percentages.Count)
-            return false;
-
-        foreach (var ru in percentRuleVersion.RuleUsers)
+        foreach (var ru in existing.RuleUsers)
         {
             if (!incoming.Percentages.TryGetValue(ru.User.Id, out var percent))
                 return false;

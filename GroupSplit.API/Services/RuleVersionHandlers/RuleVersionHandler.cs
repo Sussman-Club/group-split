@@ -24,8 +24,10 @@ public class RuleVersionHandler(IServiceProvider provider) : IRuleVersionHandler
     public bool Equals(RuleVersion existing, RuleVersionDto incoming)
     {
         var dtoType = incoming.GetType();
-        var handlerType = typeof(IRuleVersionEqualsHandler<>).MakeGenericType(dtoType);
-        var service = (IRuleVersionEqualsHandler)provider.GetRequiredService(handlerType);
-        return service.Equals(existing, incoming);
+        var entityType = existing.GetType();
+        var handlerType = typeof(IRuleVersionEqualsHandler<,>).MakeGenericType(entityType, dtoType);
+        var service = provider.GetService(handlerType);
+        return service is IRuleVersionEqualsHandler ruleVersionEqualsHandler
+               && ruleVersionEqualsHandler.Equals(existing, incoming);
     }
 }

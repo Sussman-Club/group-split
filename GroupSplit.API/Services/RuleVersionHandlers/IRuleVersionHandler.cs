@@ -26,17 +26,19 @@ public interface IRuleVersionEqualsHandler
     bool Equals(RuleVersion existing, RuleVersionDto incoming);
 }
 
-public interface IRuleVersionEqualsHandler<in TRuleVersionDto> : IRuleVersionEqualsHandler
+public interface IRuleVersionEqualsHandler<in TRuleVersion, in TRuleVersionDto> : IRuleVersionEqualsHandler
+    where TRuleVersion : RuleVersion
     where TRuleVersionDto : RuleVersionDto
 {
-    bool Equals(RuleVersion existing, TRuleVersionDto incoming);
+    bool Equals(TRuleVersion existing, TRuleVersionDto incoming);
 
     bool IRuleVersionEqualsHandler.Equals(RuleVersion existing, RuleVersionDto incoming)
     {
-        return incoming is not TRuleVersionDto typedDto
+        return incoming is not TRuleVersionDto typedDto ||
+               existing is not TRuleVersion typedExisting
             ? throw new InvalidOperationException(
                 $"Expected {typeof(TRuleVersionDto).Name}, got {incoming.GetType().Name}.")
-            : Equals(existing, typedDto);
+            : Equals(typedExisting, typedDto);
     }
 }
 
@@ -64,6 +66,6 @@ public interface IRuleVersionHandler : IRuleVersionDetailsHandler, IRuleVersionC
 public interface IRuleVersionHandler<in TRuleVersionEntity, in TRuleVersionDto> :
     IRuleVersionHandler,
     IRuleVersionDetailsHandler<TRuleVersionEntity>, IRuleVersionCreateHandler<TRuleVersionDto>,
-    IRuleVersionEqualsHandler<TRuleVersionDto>
+    IRuleVersionEqualsHandler<TRuleVersionEntity, TRuleVersionDto>
     where TRuleVersionEntity : RuleVersion
     where TRuleVersionDto : RuleVersionDto;
