@@ -19,7 +19,7 @@ public interface IRuleService
 public class RuleService(
     IUserService userService,
     AppDbContext dbContext,
-    IRuleVersionHandler<RuleVersion, RuleVersionDto> ruleVersionHandler) : IRuleService
+    IRuleVersionHandler ruleVersionHandler) : IRuleService
 {
     public async Task<IQueryable<RuleVersion>> List(CancellationToken cancellationToken = default)
     {

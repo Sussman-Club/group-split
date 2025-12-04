@@ -15,7 +15,7 @@ public static class RuleVersionServiceExtensions
             services.AddRuleVersionHandler<PersonalRuleVersion, PersonalRuleVersionDto, PersonalRuleVersionHandler>(
                 ServiceLifetime.Singleton);
 
-            services.AddScoped<IRuleVersionHandler<RuleVersion, RuleVersionDto>, RuleVersionHandler>();
+            services.AddScoped<IRuleVersionHandler, RuleVersionHandler>();
 
             return services;
         }
