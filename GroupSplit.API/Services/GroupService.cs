@@ -195,9 +195,9 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                     {
                         UserId = balance.UserId,
                         UserName = balance.UserName,
-                        AmountOwed = balance.AmountOwed,
-                        AmountPaid = balance.AmountPaid,
-                        Balance = balance.AmountPaid - balance.AmountOwed
+                        AmountPaid = Math.Round(balance.AmountPaid, 2),
+                        AmountOwed = Math.Round(balance.AmountOwed, 2),
+                        Balance = Math.Round(balance.AmountPaid - balance.AmountOwed, 2)
                     };
 
         return groupBalance;
@@ -268,10 +268,11 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         };
 
         var dateTime = DateTime.Now;
+        var amount = Math.Round(request.Amount, 2);
 
         var transactionFromOther = new Transaction
         {
-            Amount = request.Amount,
+            Amount = amount,
             User = user,
             RuleVersion = settlementRuleVersion,
             DateTime = dateTime,
@@ -280,7 +281,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
         var transactionToOther = new Transaction
         {
-            Amount = -request.Amount,
+            Amount = -amount,
             User = currentUser,
             RuleVersion = currentUserSettlementRuleVersion,
             DateTime = dateTime,
