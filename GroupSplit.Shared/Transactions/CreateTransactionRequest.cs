@@ -16,8 +16,7 @@ public record CreateTransactionRequest
     public string? Description { get; set; }
 
     [Required(ErrorMessage = "Amount is required.")]
-    [DecimalPrecision(18, 2,
-        ErrorMessage = "Amount must be a number with up to 18 digits in total and no more than 2 decimal places.")]
+    [DecimalScale(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
     public decimal Amount { get; set; }
 
     [Required(ErrorMessage = "Date is required.")]
