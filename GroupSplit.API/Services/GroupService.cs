@@ -268,11 +268,10 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         };
 
         var dateTime = DateTime.Now;
-        var amount = Math.Round(request.Amount, 2);
 
         var transactionFromOther = new Transaction
         {
-            Amount = amount,
+            Amount = request.Amount,
             User = user,
             RuleVersion = settlementRuleVersion,
             DateTime = dateTime,
@@ -281,7 +280,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
         var transactionToOther = new Transaction
         {
-            Amount = -amount,
+            Amount = -request.Amount,
             User = currentUser,
             RuleVersion = currentUserSettlementRuleVersion,
             DateTime = dateTime,
