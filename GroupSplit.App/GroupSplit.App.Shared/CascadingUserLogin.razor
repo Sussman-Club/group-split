@@ -27,5 +27,9 @@
         UserLogin.OnLoginChanged -= OnUserChanged;
     }
 
-    private void OnUserChanged(UserInfo? userInfo) => User = userInfo;
+    private void OnUserChanged(UserInfo? userInfo)
+    {
+        User = userInfo;
+        InvokeAsync(StateHasChanged);
+    }
 }
