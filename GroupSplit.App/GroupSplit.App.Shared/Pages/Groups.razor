@@ -89,7 +89,19 @@
                                     <MudText Typo="Typo.body2">
                                         @foreach (var debt in balance.OwedToYou)
                                         {
-                                            <div>@debt.UserName owes you <strong>$@debt.Amount.ToString("N2")</strong></div>
+                                            <MudStack Spacing="4" Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                <MudText Typo="Typo.body2">
+                                                    @debt.UserName owes you <strong>$@debt.Amount.ToString("N2")</strong>
+                                                </MudText>
+
+                                                <MudButton 
+                                                    Color="Color.Primary"
+                                                    Size="Size.Small"
+                                                    Variant="Variant.Outlined"
+                                                    OnClick="@(async() => await OpenSettleDialogAsync(debt))">
+                                                    Settle
+                                                </MudButton>
+                                            </MudStack>
                                         }
                                     </MudText>
                                 }
@@ -181,12 +193,11 @@
 }
 
 @code {
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
     private readonly List<GroupResponse> _archivedGroups = [];
 
-    // public decimal UserBalance => GroupsService.Balance?.NetBalances.FirstOrDefault()?.Balance ?? 0m;
-    public decimal UserBalance =>
-      (GroupsService.Balance?.OwedToYou.Sum(d => d.Amount) ?? 0m) -
-      (GroupsService.Balance?.YouOwed.Sum(d => d.Amount) ?? 0m);
+    private decimal UserBalance => GroupsService.Balance?.NetBalances.FirstOrDefault(x => x.UserId == UserInfo?.Id)?.Balance ?? 0m;
+
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
@@ -331,10 +342,34 @@
         }
     }
 
-    private class DebtInfo
+    private async Task OpenSettleDialogAsync(DebtInfo debtInfo)
     {
-        public string Name { get; set; } = "";
-        public decimal Amount { get; set; }
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        var parameters = new DialogParameters<SettleDialog>
+        {
+            { x => x.UserId, debtInfo.UserId },
+            { x => x.Username, debtInfo.UserName },
+            { x => x.TotalDebt, debtInfo.Amount }
+        };
+
+        var dialog = await DialogService.ShowAsync<SettleDialog>(
+            $"Settle with {debtInfo.UserName}",
+            parameters,
+            options
+        );
+
+        var request = await dialog.GetReturnValueAsync<SettleRequest>();
+
+        if (request is not null)
+        {
+            await GroupsService.SettleAsync(request, CancellationToken);
+        }
     }
 
     public async ValueTask DisposeAsync()
