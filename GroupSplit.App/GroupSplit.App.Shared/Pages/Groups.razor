@@ -84,14 +84,14 @@
                                 {
                                     <MudText Typo="Typo.h5" Class="font-weight-bold">
                                         You are owed
-                                        $@UserBalance.ToString("N2")
+                                        @UserBalance.ToString("C")
                                     </MudText>
                                     <MudStack Spacing="3">
                                         @foreach (var debt in balance.OwedToYou)
                                         {
                                             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                 <MudText Typo="Typo.body2">
-                                                    @debt.UserName owes you <strong>$@debt.Amount.ToString("N2")</strong>
+                                                    @debt.UserName owes you <strong>@debt.Amount.ToString("C")</strong>
                                                 </MudText>
 
                                                 <MudButton 
@@ -109,12 +109,12 @@
                                 {
                                     <MudText Typo="Typo.h5" Class="font-weight-bold">
                                         You owe
-                                        $@(Math.Abs(UserBalance).ToString("N2"))
+                                        @(Math.Abs(UserBalance).ToString("C"))
                                     </MudText>
                                     <MudText Typo="Typo.body2">
                                         @foreach (var debt in balance.YouOwed)
                                         {
-                                            <div>You owe @debt.UserName <strong>$@debt.Amount.ToString("N2")</strong></div>
+                                            <div>You owe @debt.UserName <strong>@debt.Amount.ToString("C")</strong></div>
                                         }
                                     </MudText>
                                 }
@@ -142,7 +142,7 @@
                                     </MudStack>
                                     <MudText Typo="Typo.body2" Class="font-weight-medium"
                                              Color="@(member.Balance > 0 ? Color.Success : member.Balance < 0 ? Color.Error : Color.Default)">
-                                        @(member.Balance >= 0 ? "+" : "")$@member.Balance.ToString("N2")
+                                        @(member.Balance >= 0 ? "+" : "")@member.Balance.ToString("C")
                                     </MudText>
                                 </MudStack>
                             }
