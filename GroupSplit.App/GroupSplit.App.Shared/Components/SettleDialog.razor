@@ -14,21 +14,19 @@
                 <MudText Typo="Typo.subtitle2">
                     @Username owes you @TotalDebt.ToString("C")
                 </MudText>
-
+                
                 <MudNumericField
-                    T="decimal"
-                    Label="Amount Paid"
-                    Variant="Variant.Outlined"
                     @bind-Value="_model.Amount"
                     For="@(() => _model.Amount)"
+                    Label="Amount Paid"
+                    Variant="Variant.Outlined"
                     Adornment="Adornment.Start"
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
                     AdornmentColor="Color.Primary"
-                    HideSpinButtons="true"
                     Immediate="true"
-                    Min="0"
-                    Max="TotalDebt"
-                    Format="0.00"/>
+                    HideSpinButtons="true"
+                    Format="N2"
+                    Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
 
                 <MudText Typo="Typo.caption">
                     Remaining balance: @((TotalDebt - _model.Amount).ToString("C"))
@@ -65,6 +63,13 @@
             Amount = TotalDebt
         };
     }
+    
+    IEnumerable<string> ValidateAmount(decimal amount)
+    {
+       if (amount > TotalDebt)
+            yield return $"Amount cannot exceed the total debt ({TotalDebt:C})";
+    }
+
 
     private async Task Submit()
     {
