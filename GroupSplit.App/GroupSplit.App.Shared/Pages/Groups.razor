@@ -86,10 +86,10 @@
                                         You are owed
                                         $@UserBalance.ToString("N2")
                                     </MudText>
-                                    <MudText Typo="Typo.body2">
+                                    <MudStack Spacing="3">
                                         @foreach (var debt in balance.OwedToYou)
                                         {
-                                            <MudStack Spacing="4" Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                 <MudText Typo="Typo.body2">
                                                     @debt.UserName owes you <strong>$@debt.Amount.ToString("N2")</strong>
                                                 </MudText>
@@ -103,7 +103,7 @@
                                                 </MudButton>
                                             </MudStack>
                                         }
-                                    </MudText>
+                                    </MudStack>
                                 }
                                 else if (UserBalance < 0)
                                 {
