@@ -188,6 +188,9 @@ public class GroupsPageStateService : IGroupsPageStateService
             throw new InvalidOperationException("No group is selected.");
         
         await _groupsClient.SettleGroupDebtsAsync(SelectedGroup.Id, request, cancellationToken);
+        
+        await LoadTransactionsAsync(cancellationToken);
+        await LoadGroupBalancesAsync(cancellationToken);
         _snackbar.Add("Group debts settled successfully.", Severity.Success);
     }
 
