@@ -65,10 +65,7 @@ public class AppDbContext : DbContext
             
             entity.Property(ruleVersion => ruleVersion.EndDateTime);
 
-            entity.HasDiscriminator<string>("RuleType")
-                .HasValue<PersonalRuleVersion>("personal")
-                .HasValue<PercentRuleVersion>("percent")
-                .HasValue<SettlementRuleVersion>("settlement");
+            entity.UseTptMappingStrategy();
         });
 
         modelBuilder.Entity<PersonalRuleVersion>();
