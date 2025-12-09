@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GroupSplit.Shared.CustomValidationAttributes;
 
 namespace GroupSplit.Shared;
 
@@ -15,6 +16,7 @@ public record CreateTransactionRequest
     public string? Description { get; set; }
 
     [Required(ErrorMessage = "Amount is required.")]
+    [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
     public decimal Amount { get; set; }
 
     [Required(ErrorMessage = "Date is required.")]

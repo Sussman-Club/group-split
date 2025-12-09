@@ -71,6 +71,7 @@ public class DebtCalculationService(IUserService userService) : IDebtCalculation
             result[creditor.UserId].OwedToYou = result[creditor.UserId].OwedToYou
                 .Append(new DebtInfo
                 {
+                    UserId = debtor.UserId,
                     UserName = debtor.UserName,
                     Amount = payment
                 });
@@ -79,6 +80,7 @@ public class DebtCalculationService(IUserService userService) : IDebtCalculation
             result[debtor.UserId].YouOwed = result[debtor.UserId].YouOwed
                 .Append(new DebtInfo
                 {
+                    UserId = creditor.UserId,
                     UserName = creditor.UserName,
                     Amount = payment
                 });

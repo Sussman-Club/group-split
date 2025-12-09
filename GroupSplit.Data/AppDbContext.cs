@@ -54,6 +54,9 @@ public class AppDbContext : DbContext
             entity.HasMany(rule => rule.Versions)
                 .WithOne(version => version.Rule)
                 .IsRequired();
+            
+            entity.HasIndex(rule => rule.Category);
+            entity.HasIndex(rule => new { rule.GroupId, rule.Category }).IsUnique();
         });
 
         modelBuilder.Entity<RuleVersion>(entity =>
@@ -62,15 +65,21 @@ public class AppDbContext : DbContext
             
             entity.Property(ruleVersion => ruleVersion.EndDateTime);
 
-            entity.HasDiscriminator<string>("RuleType")
-                .HasValue<PersonalRuleVersion>("personal")
-                .HasValue<PercentRuleVersion>("percent");
+            entity.UseTptMappingStrategy();
         });
 
         modelBuilder.Entity<PersonalRuleVersion>();
 
         modelBuilder.Entity<PercentRuleVersion>();
 
+        modelBuilder.Entity<SettlementRuleVersion>(entity =>
+        {
+            entity.HasOne(settlement => settlement.OtherUser)
+                .WithMany();
+
+            entity.HasIndex(settlement => settlement.OtherUserId);
+        });
+        
         modelBuilder.Entity<PercentRuleUser>(entity =>
         {
             entity.Property(ruleUser => ruleUser.Percentage).IsRequired();

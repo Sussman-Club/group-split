@@ -23,7 +23,9 @@ public interface IGroupService
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
 
     Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
-    ValueTask<Group> UpdateGroup(Guid groupId, CreateGroupRequest request, CancellationToken cancellationToken = default);
+
+    ValueTask<Group> UpdateGroup(Guid groupId, CreateGroupRequest request,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the members of a group by ID
@@ -43,11 +45,13 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 
-
     /// <summary>
     /// Gets the balance of a group per user
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
+
+    Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public class GroupService(IUserService userService, AppDbContext context) : IGroupService
@@ -125,7 +129,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         CancellationToken cancellationToken = default)
     {
         var groupQuery = await GetGroupById(groupId, cancellationToken);
-        var group = await groupQuery.FirstOrDefaultAsync();
+        var group = await groupQuery.FirstOrDefaultAsync(cancellationToken: cancellationToken);
         if (group is null)
             throw new ArgumentException("Group was not found");
         var users = from user in context.Set<User>()
@@ -133,7 +137,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                     select user;
         await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
             group.Users.Add(user);
-        await context.SaveChangesAsync();
+
+        await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
     }
 
@@ -145,14 +150,16 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
             throw new ArgumentException("Cannot remove current user from group");
 
         var groupQuery = (await GetGroupById(groupId, cancellationToken)).Include(g => g.Users);
-        var group = await groupQuery.FirstOrDefaultAsync();
+        var group = await groupQuery.FirstOrDefaultAsync(cancellationToken);
         if (group is null)
             throw new ArgumentException("Group was not found");
         var user = await context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-        ;
+
         if (user is null)
             throw new ArgumentException("User was not found");
+
         group.Users.Remove(user);
+
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
     }
@@ -181,18 +188,114 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                       from percentUser in percentageRuleVersion.RuleUsers
                                       where percentUser.User == user
                                       from transaction in ruleVersion.Transactions
-                                      select transaction.Amount * (decimal)percentUser.Percentage / 100
+                                      select 
+                                           percentUser.User == transaction.User
+                                                  ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
+                                                      where otherUser != percentUser
+                                                      select Math.Floor(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
+                                                  : (transaction.Amount > 0 
+                                                      ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
+                                                      : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
+                                                    / 100
                                     ).Sum()
                     } into balance
                     select new GroupNetBalance
                     {
                         UserId = balance.UserId,
                         UserName = balance.UserName,
-                        AmountOwed = balance.AmountOwed,
-                        AmountPaid = balance.AmountPaid,
-                        Balance = balance.AmountPaid - balance.AmountOwed
+                        AmountPaid = Math.Round(balance.AmountPaid, 2),
+                        AmountOwed = Math.Round(balance.AmountOwed, 2),
+                        Balance = Math.Round(balance.AmountPaid - balance.AmountOwed, 2)
                     };
 
         return groupBalance;
+    }
+
+    public async Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await userService.GetCurrentUser();
+
+        var groupQuery = from @group in await GetGroupById(groupId, cancellationToken)
+            from groupUser in (from groupUser in @group.Users
+                where groupUser.Id == request.UserId
+                select groupUser).DefaultIfEmpty()
+            from rule in (from rule in @group.Rules
+                where rule.Category == Rule.Settlement
+                select rule).DefaultIfEmpty()
+            from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                where version.Rule == rule && version.OtherUser == groupUser
+                select version).Take(1).DefaultIfEmpty()
+            from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                where version.Rule == rule && version.OtherUser == currentUser
+                select version).Take(1).DefaultIfEmpty()
+            select new
+            {
+                Group = @group,
+                User = groupUser,
+                SettlementRule = rule,
+                SettlementRuleVersion = otherRuleVersion,
+                CurrentUserRuleVersion = currentUserRuleVersion
+            };
+
+        var result = await groupQuery.FirstOrDefaultAsync(cancellationToken);
+
+        if (result is not
+            {
+                Group: { } resultGroup, User: var user, SettlementRule: var settlementRule,
+                SettlementRuleVersion: var settlementRuleVersion,
+                CurrentUserRuleVersion: var currentUserSettlementRuleVersion
+            })
+        {
+            throw new ArgumentException("Group was not found");
+        }
+
+        if (user is null)
+        {
+            throw new ArgumentException("User was not found");
+        }
+
+        settlementRule ??= new Rule
+        {
+            Category = Rule.Settlement,
+            Group = resultGroup
+        };
+
+        settlementRuleVersion ??= new SettlementRuleVersion
+        {
+            OtherUser = user,
+            StartDateTime = DateTime.UtcNow,
+            Rule = settlementRule
+        };
+
+        currentUserSettlementRuleVersion ??= new SettlementRuleVersion
+        {
+            OtherUser = currentUser,
+            StartDateTime = DateTime.UtcNow,
+            Rule = settlementRule
+        };
+
+        var dateTime = DateTime.Now;
+
+        var transactionFromOther = new Transaction
+        {
+            Amount = request.Amount,
+            User = user,
+            RuleVersion = settlementRuleVersion,
+            DateTime = dateTime,
+            Name = "Settlement"
+        };
+
+        var transactionToOther = new Transaction
+        {
+            Amount = -request.Amount,
+            User = currentUser,
+            RuleVersion = currentUserSettlementRuleVersion,
+            DateTime = dateTime,
+            Name = "Settlement"
+        };
+
+        context.Set<Transaction>().AddRange(transactionFromOther, transactionToOther);
+        await context.SaveChangesAsync(cancellationToken);
     }
 }

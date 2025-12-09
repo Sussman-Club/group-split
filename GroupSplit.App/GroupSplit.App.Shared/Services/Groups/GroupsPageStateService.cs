@@ -182,6 +182,17 @@ public class GroupsPageStateService : IGroupsPageStateService
         _snackbar.Add("Transaction created successfully.", Severity.Success);
     }
 
+    public async Task SettleAsync(SettleRequest request, CancellationToken cancellationToken = default)
+    {
+        if (SelectedGroup is null)
+            throw new InvalidOperationException("No group is selected.");
+        
+        await _groupsClient.SettleGroupDebtsAsync(SelectedGroup.Id, request, cancellationToken);
+        
+        await LoadTransactionsAsync(cancellationToken);
+        await LoadGroupBalancesAsync(cancellationToken);
+        _snackbar.Add("Group debts settled successfully.", Severity.Success);
+    }
 
     private void UpdateSelectedGroup(GroupResponse group)
     {

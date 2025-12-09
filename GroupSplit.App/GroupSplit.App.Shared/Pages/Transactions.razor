@@ -66,7 +66,7 @@
         <PropertyColumn Property="x => x.Amount" Title="Amount" Filterable="false">
             <CellTemplate>
                 <MudText Typo="Typo.body1" Class="font-weight-bold" Color="Color.Success">
-                    $@context.Item.Amount.ToString("N2")
+                    @context.Item.Amount.ToString("C")
                 </MudText>
             </CellTemplate>
         </PropertyColumn>

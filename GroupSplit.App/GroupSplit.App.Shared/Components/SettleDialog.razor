@@ -1,0 +1,84 @@
+@using GroupSplit.Shared
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5">
+            Settle with @Username
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudStack Spacing="3">
+
+                <MudText Typo="Typo.subtitle2">
+                    @Username owes you @TotalDebt.ToString("C")
+                </MudText>
+                
+                <MudNumericField
+                    @bind-Value="_model.Amount"
+                    For="@(() => _model.Amount)"
+                    Label="Amount Paid"
+                    Variant="Variant.Outlined"
+                    Adornment="Adornment.Start"
+                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentColor="Color.Primary"
+                    HideSpinButtons="true"
+                    Format="N2"
+                    Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
+
+                <MudText Typo="Typo.caption">
+                    Remaining balance: @((TotalDebt - _model.Amount).ToString("C"))
+                </MudText>
+
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@Submit">
+            Confirm
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string Username { get; set; } = null!;
+    [Parameter] public Guid UserId { get; set; }
+    [Parameter] public decimal TotalDebt { get; set; }
+
+    private MudForm _form;
+
+    private SettleRequest _model = new();
+
+    protected override void OnInitialized()
+    {
+        _model = new SettleRequest
+        {
+            UserId = UserId,
+            Amount = TotalDebt
+        };
+    }
+    
+    IEnumerable<string> ValidateAmount(decimal amount)
+    {
+       if (amount > TotalDebt)
+            yield return $"Amount cannot exceed the total debt ({TotalDebt:C})";
+    }
+
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        MudDialog.Close(DialogResult.Ok(_model));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
