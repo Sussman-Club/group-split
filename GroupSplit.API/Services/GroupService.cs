@@ -50,7 +50,7 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
 
-    Task<IQueryable<Transaction>> Settle(Guid groupId, SettleRequest request,
+    Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
 }
 
@@ -209,7 +209,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return groupBalance;
     }
 
-    public async Task<IQueryable<Transaction>> Settle(Guid groupId, SettleRequest request,
+    public async Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default)
     {
         var currentUser = await userService.GetCurrentUser();
@@ -295,9 +295,5 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
         context.Set<Transaction>().AddRange(transactionFromOther, transactionToOther);
         await context.SaveChangesAsync(cancellationToken);
-
-        return from transaction in context.Set<Transaction>()
-            where transaction == transactionFromOther || transaction == transactionToOther
-            select transaction;
     }
 }
