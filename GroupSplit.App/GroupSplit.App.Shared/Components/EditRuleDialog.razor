@@ -25,6 +25,10 @@
                     <MudSelectItem T="RuleType" Value="RuleType.Percent">
                         Percent split
                     </MudSelectItem>
+
+                    <MudSelectItem T="RuleType" Value="RuleType.Shares">
+                        Shares split
+                    </MudSelectItem>
                 </MudSelect>
 
                 @if (_ruleType is RuleType.Percent)
@@ -57,6 +61,33 @@
                         </MudText>
                     </MudPaper>
                 }
+                else if (_ruleType is RuleType.Shares)
+                {
+                    <MudPaper Class="pa-4" Elevation="0">
+                        <MudText Typo="Typo.body2" Class="mb-2">
+                            Enter share units per member (non-negative)
+                        </MudText>
+
+                        <MudGrid>
+                            @foreach (var m in _members)
+                            {
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudNumericField T="int"
+                                                     @bind-Value="@_shares[m.Id]"
+                                                     Label="@($"{m.FirstName} {m.LastName}")"
+                                                     Variant="Variant.Outlined"
+                                                     HideSpinButtons="true"
+                                                     Min="0" Immediate="true"
+                                                     Class="small-num-field no-spinners"/>
+                                </MudItem>
+                            }
+                        </MudGrid>
+
+                        <MudText Typo="Typo.caption" Color="@(SharesTotal > 0 ? Color.Success : Color.Error)">
+                            Total shares: @SharesTotal
+                        </MudText>
+                    </MudPaper>
+                }
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -85,6 +116,7 @@
 
     private ICollection<UserInfo> _members = [];
     private readonly Dictionary<Guid, decimal> _percentages = new();
+    private readonly Dictionary<Guid, int> _shares = new();
 
 
     private UpdateRuleRequest _originalModel; // keep original values
@@ -99,11 +131,13 @@
         {
             PersonalRuleVersionDto => RuleType.Personal,
             PercentRuleVersionDto => RuleType.Percent,
+            SharesRuleVersionDto => RuleType.Shares,
             _ => throw new ArgumentOutOfRangeException()
         };
 
         _members = await GroupsClient.GetGroupMembersAsync(GroupId);
         EnsurePercentagesDictionary();
+        EnsureSharesDictionary();
 
         // Initialize percentages if editing a percent rule
         if (Model.Version is PercentRuleVersionDto percentVersion)
@@ -113,13 +147,25 @@
                 _percentages[kv.Key] = kv.Value;
             }
         }
+
+        // Initialize shares if editing a shares rule
+        if (Model.Version is SharesRuleVersionDto sharesVersion)
+        {
+            foreach (var kv in sharesVersion.Shares.Where(kv => _shares.ContainsKey(kv.Key)))
+            {
+                _shares[kv.Key] = kv.Value;
+            }
+        }
     }
 
     private int PercentTotal => (int)Math.Round(_percentages.Values.Sum());
+    private int SharesTotal => _shares.Values.Sum();
 
     private bool CanSubmit =>
         !string.IsNullOrWhiteSpace(_category) &&
-        (_ruleType is RuleType.Personal || (_ruleType is RuleType.Percent && PercentTotal == 100));
+        (_ruleType is RuleType.Personal ||
+         (_ruleType is RuleType.Percent && PercentTotal == 100) ||
+         (_ruleType is RuleType.Shares && SharesTotal > 0));
 
     private void EnsurePercentagesDictionary()
     {
@@ -133,6 +179,19 @@
 
         foreach (var key in removedKeys)
             _percentages.Remove(key);
+    }
+
+    private void EnsureSharesDictionary()
+    {
+        foreach (var m in _members)
+            _shares.TryAdd(m.Id, 0);
+
+        var removedKeys = _shares.Keys
+            .Where(k => _members.All(x => x.Id != k))
+            .ToList();
+
+        foreach (var key in removedKeys)
+            _shares.Remove(key);
     }
 
     private async Task Submit()
@@ -165,15 +224,25 @@
                 });
         }
 
+        if (_ruleType is RuleType.Shares && (_originalModel.Version is not SharesRuleVersionDto sharesRuleVersionDto ||
+                                             DictionariesAreDifferent(_shares, sharesRuleVersionDto.Shares)))
+        {
+            patch.Replace(x => x.Version,
+                new SharesRuleVersionDto
+                {
+                    Shares = new Dictionary<Guid, int>(_shares)
+                });
+        }
+
 
         MudDialog.Close(DialogResult.Ok(patch));
     }
 
     private void Cancel() => MudDialog.Cancel();
 
-    private static bool DictionariesAreDifferent(
-        IDictionary<Guid, decimal> current,
-        IDictionary<Guid, decimal> original)
+    private static bool DictionariesAreDifferent<T>(
+        IDictionary<Guid, T> current,
+        IDictionary<Guid, T> original)
     {
         if (current.Count != original.Count)
             return true;
@@ -183,7 +252,7 @@
             if (!original.TryGetValue(kv.Key, out var originalValue))
                 return true;
 
-            if (kv.Value != originalValue)
+            if (!EqualityComparer<T>.Default.Equals(kv.Value, originalValue))
                 return true;
         }
 

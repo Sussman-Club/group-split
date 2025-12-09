@@ -71,6 +71,8 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<PersonalRuleVersion>();
 
         modelBuilder.Entity<PercentRuleVersion>();
+        
+        modelBuilder.Entity<SharesRuleVersion>();
 
         modelBuilder.Entity<SettlementRuleVersion>(entity =>
         {
@@ -83,6 +85,23 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<PercentRuleUser>(entity =>
         {
             entity.Property(ruleUser => ruleUser.Percentage).IsRequired();
+
+            entity.HasOne(ruleUser => ruleUser.User)
+                .WithMany()
+                .HasForeignKey(ruleUser => ruleUser.UserId)
+                .IsRequired();
+
+            entity.HasOne(ruleUser => ruleUser.RuleVersion)
+                .WithMany(version => version.RuleUsers)
+                .HasForeignKey(ruleUser => ruleUser.RuleVersionId)
+                .IsRequired();
+
+            entity.HasIndex(ruleUser => new { ruleUser.UserId, ruleUser.RuleVersionId }).IsUnique();
+        });
+        
+        modelBuilder.Entity<SharesRuleUser>(entity =>
+        {
+            entity.Property(ruleUser => ruleUser.Shares).IsRequired();
 
             entity.HasOne(ruleUser => ruleUser.User)
                 .WithMany()
