@@ -39,12 +39,15 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var result = await groupService.Settle(
+        await groupService.Settle(
             group.Id,
             request,
             TestContext.Current.CancellationToken);
 
-        var transactions = await result.ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var transactions = await DbContext.Set<SettlementRuleVersion>()
+            .SelectMany(x => x.Transactions)
+            .Where(x => x.User == currentUser || x.User == otherUser)
+            .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, transactions.Count);
