@@ -22,6 +22,7 @@ public record GroupNetBalance
 
 public record DebtInfo
 {
+    public Guid UserId { get; set; }
     public string UserName { get; set; } = "";
     public decimal Amount { get; set; }
 }

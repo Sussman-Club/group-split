@@ -3,6 +3,7 @@ using System;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    partial class PostgreSqlAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251203052511_AddSettlementIndexes")]
+    partial class AddSettlementIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -95,14 +98,16 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("EndDateTime")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid>("RuleId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("StartDateTime")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("RuleType")
+                        .IsRequired()
+                        .HasMaxLength(13)
+                        .HasColumnType("character varying(13)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
@@ -110,7 +115,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.ToTable("RuleVersion");
 
-                    b.UseTptMappingStrategy();
+                    b.HasDiscriminator<string>("RuleType").HasValue("RuleVersion");
+
+                    b.UseTphMappingStrategy();
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Transaction", b =>
@@ -230,14 +237,14 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 {
                     b.HasBaseType("GroupSplit.Data.Entities.RuleVersion");
 
-                    b.ToTable("PercentRuleVersion");
+                    b.HasDiscriminator().HasValue("percent");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.PersonalRuleVersion", b =>
                 {
                     b.HasBaseType("GroupSplit.Data.Entities.RuleVersion");
 
-                    b.ToTable("PersonalRuleVersion");
+                    b.HasDiscriminator().HasValue("personal");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRuleVersion", b =>
@@ -249,7 +256,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("OtherUserId");
 
-                    b.ToTable("SettlementRuleVersion");
+                    b.HasDiscriminator().HasValue("settlement");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleUser", b =>
@@ -349,32 +356,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleVersion", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.RuleVersion", null)
-                        .WithOne()
-                        .HasForeignKey("GroupSplit.Data.Entities.PercentRuleVersion", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.PersonalRuleVersion", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.RuleVersion", null)
-                        .WithOne()
-                        .HasForeignKey("GroupSplit.Data.Entities.PersonalRuleVersion", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRuleVersion", b =>
                 {
-                    b.HasOne("GroupSplit.Data.Entities.RuleVersion", null)
-                        .WithOne()
-                        .HasForeignKey("GroupSplit.Data.Entities.SettlementRuleVersion", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("GroupSplit.Data.Entities.User", "OtherUser")
                         .WithMany()
                         .HasForeignKey("OtherUserId")
