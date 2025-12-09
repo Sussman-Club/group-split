@@ -188,13 +188,15 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                       from percentUser in percentageRuleVersion.RuleUsers
                                       where percentUser.User == user
                                       from transaction in ruleVersion.Transactions
-                                      let raw = transaction.Amount * (decimal)percentUser.Percentage
                                       select 
                                            percentUser.User == transaction.User
                                                   ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
                                                       where otherUser != percentUser
                                                       select Math.Floor(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                                  : (transaction.Amount > 0 ? Math.Floor(raw) : Math.Ceiling(raw)) / 100
+                                                  : (transaction.Amount > 0 
+                                                      ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
+                                                      : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
+                                                    / 100
                                     ).Sum()
                     } into balance
                     select new GroupNetBalance
