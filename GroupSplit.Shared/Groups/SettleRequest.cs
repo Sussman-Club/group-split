@@ -9,6 +9,6 @@ public record SettleRequest
 
     [Required(ErrorMessage = "Amount is required.")]
     [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
-    [GreaterThan(0, ErrorMessage = "Amount must be greater than or equal to 0.")]
+    [GreaterThan(0, ErrorMessage = "Amount must be greater than 0.")]
     public decimal Amount { get; set; }
 }
