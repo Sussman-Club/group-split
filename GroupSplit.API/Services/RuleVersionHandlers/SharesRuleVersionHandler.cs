@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services.RuleVersionHandlers;
 
-public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService groupService)
+public class SharesRuleVersionHandler(AppDbContext dbContext)
     : IRuleVersionHandler<SharesRuleVersion, SharesRuleVersionDto>
 {
     public async Task<RuleVersionDto> ToDto(SharesRuleVersion version, CancellationToken ct)
@@ -27,7 +27,8 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
     public async Task<RuleVersion> ToEntity(Guid groupId, SharesRuleVersionDto dto, CancellationToken ct)
     {
         var users = await (
-            from @group in await groupService.GetGroupById(groupId, ct)
+            from @group in dbContext.Set<Group>()
+            where @group.Id == groupId
             from user in @group.Users
             where dto.Shares.Keys.Contains(user.Id)
             select user

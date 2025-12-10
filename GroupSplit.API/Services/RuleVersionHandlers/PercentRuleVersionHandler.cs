@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services.RuleVersionHandlers;
 
-public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService groupService)
+public class PercentRuleVersionHandler(AppDbContext dbContext)
     : IRuleVersionHandler<PercentRuleVersion, PercentRuleVersionDto>
 {
     public async Task<RuleVersionDto> ToDto(PercentRuleVersion version, CancellationToken ct)
@@ -32,7 +32,8 @@ public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService gro
         if (total + epsilon < 100 || total - epsilon > 100)
             throw new InvalidOperationException("Percentages must sum to 100%.");
 
-        var users = await (from @group in await groupService.GetGroupById(groupId, ct)
+        var users = await (from @group in dbContext.Set<Group>()
+            where @group.Id == groupId
             from user in @group.Users
             where dto.Percentages.Keys.Contains(user.Id)
             select user).ToListAsync(ct);
