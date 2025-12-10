@@ -164,62 +164,71 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return groupQuery;
     }
 
-    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
+        CancellationToken cancellationToken = default)
     {
         var groupQuery = await GetGroupById(groupId, cancellationToken);
 
         var groupBalance =
-                    from @group in groupQuery
-                    from user in @group.Users
-                    let amountOwedPercentage = (from rule in @group.Rules
-                            from ruleVersion in rule.Versions
-                            join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
-                            from percentUser in percentageRuleVersion.RuleUsers
-                            where percentUser.User == user
-                            from transaction in ruleVersion.Transactions
-                            select 
-                                percentUser.User == transaction.User
-                                    ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
-                                        where otherUser != percentUser
-                                        select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                    : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
-                        ).Sum()
-                    let amountOwedShares = (from rule in @group.Rules
-                            from ruleVersion in rule.Versions
-                            join sharesRuleVersion in context.Set<SharesRuleVersion>() on ruleVersion.Id equals sharesRuleVersion.Id
-                            from sharesUser in sharesRuleVersion.RuleUsers
-                            where sharesUser.User == user
-                            from transaction in ruleVersion.Transactions
-                            let totalShares = sharesRuleVersion.RuleUsers.Sum(ru => ru.Shares)
-                            select 
-                                user == transaction.User
-                                    ? transaction.Amount - (from otherUser in sharesRuleVersion.RuleUsers 
-                                        where otherUser != sharesUser
-                                        select Math.Truncate(transaction.Amount * otherUser.Shares / totalShares * 100) / 100).Sum()
-                                    : Math.Truncate(transaction.Amount * sharesUser.Shares / totalShares * 100) / 100
-                        ).Sum()
-                    let amountOwed = amountOwedPercentage + amountOwedShares
-                    select new GroupNetBalance
-                    {
-                        UserId = user.Id,
-                        UserName = user.FirstName + " " + user.LastName,
-                        AmountPaid = (from rule in @group.Rules
-                                from ruleVersion in rule.Versions
-                                where !(ruleVersion is PersonalRuleVersion)
-                                from transaction in ruleVersion.Transactions
-                                where transaction.User == user
-                                select transaction.Amount
-                            ).Sum(),
-                        AmountOwed = amountOwed
-                    } into balance
-                    select new GroupNetBalance
-                    {
-                        UserId = balance.UserId,
-                        UserName = balance.UserName,
-                        AmountPaid = balance.AmountPaid,
-                        AmountOwed = balance.AmountOwed,
-                        Balance = balance.AmountPaid - balance.AmountOwed
-                    };
+            from @group in groupQuery
+            from user in @group.Users
+            let amountOwedPercentage = (from rule in @group.Rules
+                                        from ruleVersion in rule.Versions
+                                        join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion
+                                            .Id equals percentageRuleVersion.Id
+                                        from percentUser in percentageRuleVersion.RuleUsers
+                                        where percentUser.User == user
+                                        from transaction in ruleVersion.Transactions
+                                        select
+                                            percentUser.User == transaction.User
+                                                ? transaction.Amount -
+                                                  (from otherUser in percentageRuleVersion.RuleUsers
+                                                   where otherUser != percentUser
+                                                   select Math.Truncate(transaction.Amount *
+                                                                        (decimal)otherUser.Percentage) / 100).Sum()
+                                                : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) /
+                                                  100
+                ).Sum()
+            let amountOwedShares = (from rule in @group.Rules
+                                    from ruleVersion in rule.Versions
+                                    join sharesRuleVersion in context.Set<SharesRuleVersion>() on ruleVersion.Id equals
+                                        sharesRuleVersion.Id
+                                    from sharesUser in sharesRuleVersion.RuleUsers
+                                    where sharesUser.User == user
+                                    from transaction in ruleVersion.Transactions
+                                    let totalShares = sharesRuleVersion.RuleUsers.Sum(ru => ru.Shares)
+                                    select
+                                        user == transaction.User
+                                            ? transaction.Amount - (from otherUser in sharesRuleVersion.RuleUsers
+                                                                    where otherUser != sharesUser
+                                                                    select Math.Truncate(transaction.Amount *
+                                                                        otherUser.Shares / totalShares * 100) / 100)
+                                            .Sum()
+                                            : Math.Truncate(transaction.Amount * sharesUser.Shares / totalShares *
+                                                            100) / 100
+                ).Sum()
+            let amountOwed = amountOwedPercentage + amountOwedShares
+            select new GroupNetBalance
+            {
+                UserId = user.Id,
+                UserName = user.FirstName + " " + user.LastName,
+                AmountPaid = (from rule in @group.Rules
+                              from ruleVersion in rule.Versions
+                              where !(ruleVersion is PersonalRuleVersion)
+                              from transaction in ruleVersion.Transactions
+                              where transaction.User == user
+                              select transaction.Amount
+                    ).Sum(),
+                AmountOwed = amountOwed
+            } into balance
+            select new GroupNetBalance
+            {
+                UserId = balance.UserId,
+                UserName = balance.UserName,
+                AmountPaid = balance.AmountPaid,
+                AmountOwed = balance.AmountOwed,
+                Balance = balance.AmountPaid - balance.AmountOwed
+            };
 
         return groupBalance;
     }
@@ -230,26 +239,26 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         var currentUser = await userService.GetCurrentUser();
 
         var groupQuery = from @group in await GetGroupById(groupId, cancellationToken)
-            from groupUser in (from groupUser in @group.Users
-                where groupUser.Id == request.UserId
-                select groupUser).DefaultIfEmpty()
-            from rule in (from rule in @group.Rules
-                where rule.Category == Rule.Settlement
-                select rule).DefaultIfEmpty()
-            from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
-                where version.Rule == rule && version.OtherUser == groupUser
-                select version).Take(1).DefaultIfEmpty()
-            from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
-                where version.Rule == rule && version.OtherUser == currentUser
-                select version).Take(1).DefaultIfEmpty()
-            select new
-            {
-                Group = @group,
-                User = groupUser,
-                SettlementRule = rule,
-                SettlementRuleVersion = otherRuleVersion,
-                CurrentUserRuleVersion = currentUserRuleVersion
-            };
+                         from groupUser in (from groupUser in @group.Users
+                                            where groupUser.Id == request.UserId
+                                            select groupUser).DefaultIfEmpty()
+                         from rule in (from rule in @group.Rules
+                                       where rule.Category == Rule.Settlement
+                                       select rule).DefaultIfEmpty()
+                         from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                                                   where version.Rule == rule && version.OtherUser == groupUser
+                                                   select version).Take(1).DefaultIfEmpty()
+                         from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                                                         where version.Rule == rule && version.OtherUser == currentUser
+                                                         select version).Take(1).DefaultIfEmpty()
+                         select new
+                         {
+                             Group = @group,
+                             User = groupUser,
+                             SettlementRule = rule,
+                             SettlementRuleVersion = otherRuleVersion,
+                             CurrentUserRuleVersion = currentUserRuleVersion
+                         };
 
         var result = await groupQuery.FirstOrDefaultAsync(cancellationToken);
 
