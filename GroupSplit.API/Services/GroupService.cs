@@ -193,11 +193,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                            percentUser.User == transaction.User
                                                   ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
                                                       where otherUser != percentUser
-                                                      select Math.Floor(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                                  : (transaction.Amount > 0 
-                                                      ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
-                                                      : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
-                                                    / 100
+                                                      select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
+                                                  : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
                                     ).Sum()
                     } into balance
                     select new GroupNetBalance
