@@ -61,6 +61,12 @@ public class PercentRuleVersionHandler(AppDbContext dbContext, IGroupService gro
 
     public bool Equals(PercentRuleVersion existing, PercentRuleVersionDto incoming)
     {
+        dbContext.Entry(existing)
+            .Collection(r => r.RuleUsers)
+            .Query()
+            .Include(ru => ru.User)
+            .Load();
+
         if (existing.RuleUsers.Count != incoming.Percentages.Count)
             return false;
 

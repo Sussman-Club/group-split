@@ -2,6 +2,7 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Rules;
 
@@ -31,11 +32,10 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var updated = await rulesService.Update(ruleVersion.Rule.Id, request, TestContext.Current.CancellationToken);
+        await rulesService.Update(ruleVersion.Rule.Id, request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("NewCat", ruleVersion.Rule.Category);
-        Assert.Equal(ruleVersion.Id, updated.Id); // same version, no new version created
     }
 
     [Fact]
@@ -62,11 +62,10 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var updated = await rulesService.Update(ruleVersion.Rule.Id, request, TestContext.Current.CancellationToken);
+        await rulesService.Update(ruleVersion.Rule.Id, request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Single(ruleVersion.Rule.Versions);
-        Assert.Equal(ruleVersion.Id, updated.Id);
     }
 
     [Fact]
@@ -119,11 +118,14 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        var updated = await rulesService.Update(createdVersion.Rule.Id, request, TestContext.Current.CancellationToken);
+        await rulesService.Update(createdVersion.Rule.Id, request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, createdVersion.Rule.Versions.Count); // new version created
 
+        var updated =
+            await (await rulesService.Get(createdVersion.Rule.Id, TestContext.Current.CancellationToken))
+                .FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
         var newVersion = Assert.IsType<PercentRuleVersion>(updated);
         Assert.NotEqual(createdVersion.Id, newVersion.Id); // new version generated
 
@@ -206,7 +208,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var missingUser = Guid.NewGuid();
 
         var user = await userService.GetCurrentUser();
-        
+
         var request = new UpdateRuleRequest
         {
             Category = "Percent",

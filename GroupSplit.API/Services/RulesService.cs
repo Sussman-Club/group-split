@@ -12,7 +12,7 @@ public interface IRuleService
     Task<IQueryable<RuleVersion>> Get(Guid ruleId, CancellationToken cancellationToken = default);
     Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default);
     Task<RuleDetailsResponse> GetRuleDetails(Guid ruleId, CancellationToken ct);
-    Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
+    Task Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default);
     Task Delete(Guid ruleId, CancellationToken ct = default);
 }
 
@@ -95,6 +95,7 @@ public class RuleService(
         var ruleVersion =
             await (from rv in dbContext.Set<RuleVersion>()
                     where rv.Rule.Id == ruleId
+                    where rv.EndDateTime == null
                     select rv)
                 .Include(rv => rv.Rule)
                 .FirstOrDefaultAsync(ct);
@@ -113,45 +114,44 @@ public class RuleService(
         };
     }
 
-    public async Task<RuleVersion> Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
+    public async Task Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
     {
         var currentUser = await userService.GetCurrentUser();
 
-        var ruleResult =
+        var result =
             await (from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
                     from rule in @group.Rules
                     where rule.Id == ruleId
+                    from version in rule.Versions
+                    where version.EndDateTime == null
                     select new
                     {
+                        GroupId = @group.Id,
                         Rule = rule,
-                        LatestVersion = rule.Versions.OrderByDescending(v => v.StartDateTime).FirstOrDefault(),
+                        LatestVersion = version,
                         CategoryConflict = @group.Rules.Any(r => r.Id != ruleId && r.Category == request.Category)
                     })
                 .FirstOrDefaultAsync(ct);
 
-        if (ruleResult is not { Rule: not null })
+        if (result is not { Rule: { } existingRule, LatestVersion: { } latestVersion })
             throw new InvalidOperationException("Rule does not exist.");
 
-        if (ruleResult.CategoryConflict)
+        if (result.CategoryConflict)
             throw new InvalidOperationException("Group already has a rule with this category.");
-
-        var existingRule = ruleResult.Rule;
-        var latestVersion = ruleResult.LatestVersion;
 
         existingRule.Category = request.Category;
 
-        RuleVersion? newVersion = null;
         if (!ruleVersionHandler.Equals(latestVersion, request.Version))
         {
             latestVersion.EndDateTime = DateTime.UtcNow;
-            newVersion = await ruleVersionHandler.ToEntity(existingRule.Group.Id, request.Version, ct);
+
+            var newVersion = await ruleVersionHandler.ToEntity(result.GroupId, request.Version, ct);
+
             dbContext.Add(newVersion);
             existingRule.Versions.Add(newVersion);
         }
 
         await dbContext.SaveChangesAsync(ct);
-
-        return newVersion ?? latestVersion;
     }
 
     public async Task Delete(Guid ruleId, CancellationToken ct = default)

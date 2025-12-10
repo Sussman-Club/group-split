@@ -32,7 +32,7 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
             select user).ToListAsync(ct);
 
         if (users.Count != dto.Shares.Count)
-            throw new InvalidOperationException("Some users in the percentage rule do not exist.");
+            throw new InvalidOperationException("Some users in the shares rule do not exist.");
 
         var version = new SharesRuleVersion
         {
@@ -56,6 +56,12 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
 
     public bool Equals(SharesRuleVersion existing, SharesRuleVersionDto incoming)
     {
+        dbContext.Entry(existing)
+            .Collection(r => r.RuleUsers)
+            .Query()
+            .Include(ru => ru.User)
+            .Load();
+
         if (existing.RuleUsers.Count != incoming.Shares.Count)
             return false;
 
@@ -64,7 +70,7 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
             if (!incoming.Shares.TryGetValue(ru.User.Id, out var shares))
                 return false;
 
-            return ru.Shares == shares;
+            if (ru.Shares != shares) return false;
         }
 
         return true;
