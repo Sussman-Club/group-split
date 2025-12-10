@@ -37,11 +37,6 @@ public class SharesRuleVersionHandler(AppDbContext dbContext)
         if (users.Count != dto.Shares.Count)
             throw new InvalidOperationException("Some users in the shares rule do not exist.");
 
-        var version = new SharesRuleVersion
-        {
-            StartDateTime = DateTime.UtcNow
-        };
-
         var totalShares = dto.Shares.Values.Sum();
 
         var calculated = new List<(Guid UserId, int Shares, double Percentage)>();
@@ -55,6 +50,9 @@ public class SharesRuleVersionHandler(AppDbContext dbContext)
             calculated.Add((userId, shares, pct));
         }
 
+        if (calculated.Count == 0)
+            throw new InvalidOperationException("No users have shares.");
+
         // Fix rounding drift so total = 100
         var diff = 100 - calculated.Sum(x => x.Percentage);
 
@@ -62,10 +60,14 @@ public class SharesRuleVersionHandler(AppDbContext dbContext)
         {
             // Apply the difference to the last user to fix floating point rounding
             var last = calculated[^1];
-            calculated[^1] = (last.UserId, last.Shares, Math.Round(last.Percentage + diff, 2));
+            calculated[^1] = (last.UserId, last.Shares, last.Percentage + diff);
         }
+        
+        var version = new SharesRuleVersion
+        {
+            StartDateTime = DateTime.UtcNow
+        };
 
-        // Create entities
         foreach (var c in calculated)
         {
             var user = users.Single(u => u.Id == c.UserId);
