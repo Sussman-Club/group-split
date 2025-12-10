@@ -197,6 +197,20 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                                       ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
                                                       : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
                                                     / 100
+                                    ).Sum() +
+                                    (from rule in @group.Rules
+                                        from ruleVersion in rule.Versions
+                                        join sharesRuleVersion in context.Set<SharesRuleVersion>() on ruleVersion.Id equals sharesRuleVersion.Id
+                                        from sharesUser in sharesRuleVersion.RuleUsers
+                                        where sharesUser.User == user
+                                        from transaction in ruleVersion.Transactions
+                                        let totalShares = sharesRuleVersion.RuleUsers.Sum(ru => ru.Shares)
+                                        select 
+                                            user == transaction.User
+                                                ? transaction.Amount - (from otherUser in sharesRuleVersion.RuleUsers 
+                                                    where otherUser != sharesUser
+                                                    select (decimal)otherUser.Shares / totalShares * transaction.Amount).Sum()
+                                                : (decimal)sharesUser.Shares / totalShares * transaction.Amount
                                     ).Sum()
                     } into balance
                     select new GroupNetBalance
