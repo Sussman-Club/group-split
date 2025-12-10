@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.Seeder.Orchestration;
 
-public class DatabaseSeederBuilder(IServiceCollection services)
+public class SeederRunnerBuilder(IServiceCollection services)
 {
     private readonly List<Type> _seeders = [];
 
@@ -17,12 +17,12 @@ public class DatabaseSeederBuilder(IServiceCollection services)
         _seeders.Add(typeof(TDatabaseSeeder));
     }
 
-    public DatabaseSeederRunner Build(IServiceProvider serviceProvider)
+    public SeederRunner Build(IServiceProvider serviceProvider)
     {
-        var logger = serviceProvider.GetRequiredService<ILogger<DatabaseSeederRunner>>();
+        var logger = serviceProvider.GetRequiredService<ILogger<SeederRunner>>();
         var appLifetime = serviceProvider.GetRequiredService<IHostApplicationLifetime>();
         var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
-        return new DatabaseSeederRunner(logger, appLifetime, scopeFactory, _seeders);
+        return new SeederRunner(logger, appLifetime, scopeFactory, _seeders);
     }
 }

@@ -2,14 +2,14 @@ using GroupSplit.Seeder.Abstractions;
 
 namespace GroupSplit.Seeder.Orchestration;
 
-public class DatabaseSeederRunner : BackgroundService, IAsyncDisposable
+public class SeederRunner : BackgroundService, IAsyncDisposable
 {
-    private readonly ILogger<DatabaseSeederRunner> _logger;
+    private readonly ILogger<SeederRunner> _logger;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly IList<IAsyncDisposable> _scopes = [];
     private readonly IList<ISeeder> _seeders = [];
 
-    public DatabaseSeederRunner(ILogger<DatabaseSeederRunner> logger,
+    public SeederRunner(ILogger<SeederRunner> logger,
         IHostApplicationLifetime applicationLifetime,
         IServiceScopeFactory scopeFactory,
         IEnumerable<Type> seederTypes)

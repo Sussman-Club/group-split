@@ -13,19 +13,19 @@ public static class Extensions
 {
     extension(IServiceCollection services)
     {
-        public DatabaseSeederBuilder AddSeederRunner()
+        public SeederRunnerBuilder AddSeederRunner()
         {
-            var seederBuilder = new DatabaseSeederBuilder(services);
+            var seederBuilder = new SeederRunnerBuilder(services);
 
-            services.AddHostedService<DatabaseSeederRunner>(sp => seederBuilder.Build(sp));
+            services.AddHostedService<SeederRunner>(sp => seederBuilder.Build(sp));
 
             return seederBuilder;
         }
     }
 
-    extension(DatabaseSeederBuilder builder)
+    extension(SeederRunnerBuilder builder)
     {
-        public DatabaseSeederBuilder AddSeeders()
+        public SeederRunnerBuilder AddSeeders()
         {
             // Data sources
             builder.Services.AddSeedDataSources();
