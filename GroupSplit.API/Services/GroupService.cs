@@ -171,52 +171,54 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         var groupBalance =
                     from @group in groupQuery
                     from user in @group.Users
+                    let amountOwedPercentage = (from rule in @group.Rules
+                            from ruleVersion in rule.Versions
+                            join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
+                            from percentUser in percentageRuleVersion.RuleUsers
+                            where percentUser.User == user
+                            from transaction in ruleVersion.Transactions
+                            select 
+                                percentUser.User == transaction.User
+                                    ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
+                                        where otherUser != percentUser
+                                        select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
+                                    : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
+                        ).Sum()
+                    let amountOwedShares = (from rule in @group.Rules
+                            from ruleVersion in rule.Versions
+                            join sharesRuleVersion in context.Set<SharesRuleVersion>() on ruleVersion.Id equals sharesRuleVersion.Id
+                            from sharesUser in sharesRuleVersion.RuleUsers
+                            where sharesUser.User == user
+                            from transaction in ruleVersion.Transactions
+                            let totalShares = sharesRuleVersion.RuleUsers.Sum(ru => ru.Shares)
+                            select 
+                                user == transaction.User
+                                    ? transaction.Amount - (from otherUser in sharesRuleVersion.RuleUsers 
+                                        where otherUser != sharesUser
+                                        select Math.Truncate(transaction.Amount * otherUser.Shares / totalShares * 100) / 100).Sum()
+                                    : Math.Truncate(transaction.Amount * sharesUser.Shares / totalShares * 100) / 100
+                        ).Sum()
+                    let amountOwed = amountOwedPercentage + amountOwedShares
                     select new GroupNetBalance
                     {
                         UserId = user.Id,
                         UserName = user.FirstName + " " + user.LastName,
                         AmountPaid = (from rule in @group.Rules
-                                      from ruleVersion in rule.Versions
-                                      where !(ruleVersion is PersonalRuleVersion)
-                                      from transaction in ruleVersion.Transactions
-                                      where transaction.User == user
-                                      select transaction.Amount
-                                    ).Sum(),
-                        AmountOwed = (from rule in @group.Rules
-                                      from ruleVersion in rule.Versions
-                                      join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
-                                      from percentUser in percentageRuleVersion.RuleUsers
-                                      where percentUser.User == user
-                                      from transaction in ruleVersion.Transactions
-                                      select 
-                                           percentUser.User == transaction.User
-                                                  ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
-                                                      where otherUser != percentUser
-                                                      select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                                  : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
-                                    ).Sum() +
-                                    (from rule in @group.Rules
-                                        from ruleVersion in rule.Versions
-                                        join sharesRuleVersion in context.Set<SharesRuleVersion>() on ruleVersion.Id equals sharesRuleVersion.Id
-                                        from sharesUser in sharesRuleVersion.RuleUsers
-                                        where sharesUser.User == user
-                                        from transaction in ruleVersion.Transactions
-                                        let totalShares = sharesRuleVersion.RuleUsers.Sum(ru => ru.Shares)
-                                        select 
-                                            user == transaction.User
-                                                ? transaction.Amount - (from otherUser in sharesRuleVersion.RuleUsers 
-                                                    where otherUser != sharesUser
-                                                    select Math.Truncate(transaction.Amount * otherUser.Shares / totalShares * 100) / 100).Sum()
-                                                : Math.Truncate(transaction.Amount * sharesUser.Shares / totalShares * 100) / 100
-                                    ).Sum()
+                                from ruleVersion in rule.Versions
+                                where !(ruleVersion is PersonalRuleVersion)
+                                from transaction in ruleVersion.Transactions
+                                where transaction.User == user
+                                select transaction.Amount
+                            ).Sum(),
+                        AmountOwed = amountOwed
                     } into balance
                     select new GroupNetBalance
                     {
                         UserId = balance.UserId,
                         UserName = balance.UserName,
-                        AmountPaid = Math.Round(balance.AmountPaid, 2),
-                        AmountOwed = Math.Round(balance.AmountOwed, 2),
-                        Balance = Math.Round(balance.AmountPaid - balance.AmountOwed, 2)
+                        AmountPaid = balance.AmountPaid,
+                        AmountOwed = balance.AmountOwed,
+                        Balance = balance.AmountPaid - balance.AmountOwed
                     };
 
         return groupBalance;
