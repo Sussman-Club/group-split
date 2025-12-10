@@ -170,45 +170,44 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         var groupQuery = await GetGroupById(groupId, cancellationToken);
 
         var groupBalance =
-            from @group in groupQuery
-            from user in @group.Users
-            select new GroupNetBalance
-            {
-                UserId = user.Id,
-                UserName = user.FirstName + " " + user.LastName,
-                AmountPaid = (from rule in @group.Rules
-                              from ruleVersion in rule.Versions
-                              where !(ruleVersion is PersonalRuleVersion)
-                              from transaction in ruleVersion.Transactions
-                              where transaction.User == user
-                              select transaction.Amount
-                    ).Sum(),
-                AmountOwed = (from rule in @group.Rules
-                              from ruleVersion in rule.Versions
-                              join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion
-                                  .Id equals percentageRuleVersion.Id
-                              from percentUser in percentageRuleVersion.RuleUsers
-                              where percentUser.User == user
-                              from transaction in ruleVersion.Transactions
-                              select
-                                  percentUser.User == transaction.User
-                                      ? transaction.Amount -
-                                        (from otherUser in percentageRuleVersion.RuleUsers
-                                         where otherUser != percentUser
-                                         select Math.Truncate(transaction.Amount *
-                                                              (decimal)otherUser.Percentage) / 100).Sum()
-                                      : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) /
-                                        100
-                    ).Sum()
-            } into balance
-            select new GroupNetBalance
-            {
-                UserId = balance.UserId,
-                UserName = balance.UserName,
-                AmountPaid = balance.AmountPaid,
-                AmountOwed = balance.AmountOwed,
-                Balance = balance.AmountPaid - balance.AmountOwed
-            };
+                    from @group in groupQuery
+                    from user in @group.Users
+                    select new GroupNetBalance
+                    {
+                        UserId = user.Id,
+                        UserName = user.FirstName + " " + user.LastName,
+                        AmountPaid = (from rule in @group.Rules
+                                      from ruleVersion in rule.Versions
+                                      where !(ruleVersion is PersonalRuleVersion)
+                                      from transaction in ruleVersion.Transactions
+                                      where transaction.User == user
+                                      select transaction.Amount
+                                    ).Sum(),
+                        AmountOwed = (from rule in @group.Rules
+                                      from ruleVersion in rule.Versions
+                                      join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
+                                      from percentUser in percentageRuleVersion.RuleUsers
+                                      where percentUser.User == user
+                                      from transaction in ruleVersion.Transactions
+                                      select 
+                                           percentUser.User == transaction.User
+                                                  ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
+                                                      where otherUser != percentUser
+                                                      select Math.Floor(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
+                                                  : (transaction.Amount > 0 
+                                                      ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
+                                                      : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
+                                                    / 100
+                                    ).Sum()
+                    } into balance
+                    select new GroupNetBalance
+                    {
+                        UserId = balance.UserId,
+                        UserName = balance.UserName,
+                        AmountPaid = balance.AmountPaid,
+                        AmountOwed = balance.AmountOwed,
+                        Balance = balance.AmountPaid - balance.AmountOwed
+                    };
 
         return groupBalance;
     }
