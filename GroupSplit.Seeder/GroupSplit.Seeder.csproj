@@ -12,6 +12,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
         <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
         <ProjectReference Include="..\GroupSplit.Identity\GroupSplit.Identity.csproj"/>
     </ItemGroup>

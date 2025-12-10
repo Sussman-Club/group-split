@@ -2,26 +2,41 @@ using GroupSplit.Seeder.Abstractions;
 
 namespace GroupSplit.Seeder.Orchestration;
 
-public class DatabaseSeederRunner(
-    ILogger<DatabaseSeederRunner> logger,
-    IHostApplicationLifetime applicationLifetime,
-    IServiceScopeFactory scopeFactory) : BackgroundService
+public class DatabaseSeederRunner : BackgroundService, IAsyncDisposable
 {
+    private readonly ILogger<DatabaseSeederRunner> _logger;
+    private readonly IHostApplicationLifetime _applicationLifetime;
+    private readonly IList<IAsyncDisposable> _scopes = [];
+    private readonly IList<ISeeder> _seeders = [];
+
+    public DatabaseSeederRunner(ILogger<DatabaseSeederRunner> logger,
+        IHostApplicationLifetime applicationLifetime,
+        IServiceScopeFactory scopeFactory,
+        IEnumerable<Type> seederTypes)
+    {
+        _logger = logger;
+        _applicationLifetime = applicationLifetime;
+        foreach (var seederType in seederTypes)
+        {
+            var scope = scopeFactory.CreateAsyncScope();
+            _scopes.Add(scope);
+            if (scope.ServiceProvider.GetRequiredService(seederType) is ISeeder seeder)
+                _seeders.Add(seeder);
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        _logger.LogInformation("Discovered {Count} seeders: {SeederList}",
+            _seeders.Count,
+            string.Join(", ", _seeders.Select(s => s.GetType().Name)));
 
-        var seeders = scope.ServiceProvider.GetServices<ISeeder>().ToList();
-        logger.LogInformation("Discovered {Count} seeders: {SeederList}",
-            seeders.Count,
-            string.Join(", ", seeders.Select(s => s.GetType().Name)));
-
-        var layers = seeders.TopologicallySort();
-        logger.LogInformation("Topological order determined with {LayerCount} layers.", layers.Count);
+        var layers = _seeders.TopologicallySort();
+        _logger.LogInformation("Topological order determined with {LayerCount} layers.", layers.Count);
 
         foreach (var (group, depth) in layers.Select((x, i) => (x, i)))
         {
-            logger.LogInformation(
+            _logger.LogInformation(
                 "Starting batch #{Order} with {Count} seeders: {Seeders}",
                 depth + 1,
                 group.Count,
@@ -34,25 +49,40 @@ public class DatabaseSeederRunner(
                 try
                 {
                     await seeder.SeedAsync(stoppingToken);
-                    logger.LogInformation("Seeder {Seeder} completed", name);
+                    _logger.LogInformation("Seeder {Seeder} completed", name);
                 }
                 catch (OperationCanceledException)
                 {
-                    logger.LogWarning("Seeder {Seeder} cancelled", name);
+                    _logger.LogWarning("Seeder {Seeder} cancelled", name);
                     throw;
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Seeder {Seeder} failed", name);
+                    _logger.LogError(ex, "Seeder {Seeder} failed", name);
                     throw;
                 }
             });
 
             await Task.WhenAll(tasks);
-            logger.LogInformation("Batch #{Order} completed.", depth + 1);
+            _logger.LogInformation("Batch #{Order} completed.", depth + 1);
         }
 
-        logger.LogInformation("All database seeding completed.");
-        applicationLifetime.StopApplication();
+        _logger.LogInformation("All database seeding completed.");
+
+        _applicationLifetime.StopApplication();
+    }
+
+    protected virtual async ValueTask DisposeAsyncCore()
+    {
+        foreach (var asyncDisposable in _scopes)
+        {
+            await using var scope = asyncDisposable;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeAsyncCore();
+        GC.SuppressFinalize(this);
     }
 }

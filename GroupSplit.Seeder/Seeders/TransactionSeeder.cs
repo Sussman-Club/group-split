@@ -3,10 +3,11 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Seeder.Seeders;
 
-[DependsOn(typeof(RuleVersionSeeder))]
+[DependsOn(typeof(RuleSeeder))]
 [DependsOn(typeof(UserSeeder))]
 public class TransactionSeeder(
     AppDbContext db,
@@ -18,7 +19,8 @@ public class TransactionSeeder(
     {
         var payer = await DbContext.Set<User>().FindAsync([dto.PayerId], ct);
 
-        var ruleVersion = await DbContext.Set<RuleVersion>().FindAsync([dto.RuleVersionId], ct);
+        var ruleVersion = await DbContext.Set<RuleVersion>()
+            .FirstOrDefaultAsync(x => x.Rule.Id == dto.RuleId, ct);
 
         if (payer is null || ruleVersion is null)
             return null;
