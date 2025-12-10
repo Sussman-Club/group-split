@@ -192,11 +192,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                            percentUser.User == transaction.User
                                                   ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
                                                       where otherUser != percentUser
-                                                      select Math.Floor(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                                  : (transaction.Amount > 0 
-                                                      ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
-                                                      : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
-                                                    / 100
+                                                      select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
+                                                  : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
                                     ).Sum() +
                                     (from rule in @group.Rules
                                         from ruleVersion in rule.Versions
@@ -209,8 +206,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                             user == transaction.User
                                                 ? transaction.Amount - (from otherUser in sharesRuleVersion.RuleUsers 
                                                     where otherUser != sharesUser
-                                                    select (decimal)otherUser.Shares / totalShares * transaction.Amount).Sum()
-                                                : (decimal)sharesUser.Shares / totalShares * transaction.Amount
+                                                    select Math.Truncate(transaction.Amount * otherUser.Shares / totalShares * 100) / 100).Sum()
+                                                : Math.Truncate(transaction.Amount * sharesUser.Shares / totalShares * 100) / 100
                                     ).Sum()
                     } into balance
                     select new GroupNetBalance
