@@ -11,7 +11,7 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
     public async Task<RuleVersionDto> ToDto(SharesRuleVersion version, CancellationToken ct)
     {
         var userShares = await (
-                from ruleUser in dbContext.Entry(version).Collection(p => p.RuleUsers).Query()
+                from ruleUser in dbContext.Entry(version).Collection(p => p.SharedRuleUsers).Query()
                 select new
                 {
                     UserId = ruleUser.User.Id, ruleUser.Shares
@@ -26,28 +26,59 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
 
     public async Task<RuleVersion> ToEntity(Guid groupId, SharesRuleVersionDto dto, CancellationToken ct)
     {
-        var users = await (from @group in await groupService.GetGroupById(groupId, ct)
+        var users = await (
+            from @group in await groupService.GetGroupById(groupId, ct)
             from user in @group.Users
             where dto.Shares.Keys.Contains(user.Id)
-            select user).ToListAsync(ct);
+            select user
+        ).ToListAsync(ct);
 
         if (users.Count != dto.Shares.Count)
             throw new InvalidOperationException("Some users in the shares rule do not exist.");
 
         var version = new SharesRuleVersion
         {
-            Id = Guid.NewGuid(),
             StartDateTime = DateTime.UtcNow
         };
 
+        var totalShares = dto.Shares.Values.Sum();
+
+        var calculated = new List<(Guid UserId, int Shares, double Percentage)>();
+
+        // Compute raw and rounded percentages
         foreach (var (userId, shares) in dto.Shares)
         {
-            if (shares is 0) continue;
+            if (shares == 0) continue;
 
-            version.RuleUsers.Add(new SharesRuleUser
+            var pct = Math.Round((double)shares / totalShares * 100, 2);
+            calculated.Add((userId, shares, pct));
+        }
+
+        // Fix rounding drift so total = 100
+        var diff = 100 - calculated.Sum(x => x.Percentage);
+
+        if (Math.Abs(diff) >= 0.01)
+        {
+            // Apply the difference to the last user to fix floating point rounding
+            var last = calculated[^1];
+            calculated[^1] = (last.UserId, last.Shares, Math.Round(last.Percentage + diff, 2));
+        }
+
+        // Create entities
+        foreach (var c in calculated)
+        {
+            var user = users.Single(u => u.Id == c.UserId);
+
+            version.SharedRuleUsers.Add(new SharesRuleUser
             {
-                User = users.Single(u => u.Id == userId),
-                Shares = shares
+                User = user,
+                Shares = c.Shares
+            });
+
+            version.RuleUsers.Add(new PercentRuleUser
+            {
+                User = user,
+                Percentage = c.Percentage
             });
         }
 
@@ -57,15 +88,15 @@ public class SharesRuleVersionHandler(AppDbContext dbContext, IGroupService grou
     public bool Equals(SharesRuleVersion existing, SharesRuleVersionDto incoming)
     {
         dbContext.Entry(existing)
-            .Collection(r => r.RuleUsers)
+            .Collection(r => r.SharedRuleUsers)
             .Query()
             .Include(ru => ru.User)
             .Load();
 
-        if (existing.RuleUsers.Count != incoming.Shares.Count)
+        if (existing.SharedRuleUsers.Count != incoming.Shares.Count)
             return false;
 
-        foreach (var ru in existing.RuleUsers)
+        foreach (var ru in existing.SharedRuleUsers)
         {
             if (!incoming.Shares.TryGetValue(ru.User.Id, out var shares))
                 return false;

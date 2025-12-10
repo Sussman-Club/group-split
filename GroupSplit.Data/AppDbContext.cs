@@ -109,7 +109,7 @@ public class AppDbContext : DbContext
                 .IsRequired();
 
             entity.HasOne(ruleUser => ruleUser.RuleVersion)
-                .WithMany(version => version.RuleUsers)
+                .WithMany(version => version.SharedRuleUsers)
                 .HasForeignKey(ruleUser => ruleUser.RuleVersionId)
                 .IsRequired();
 
