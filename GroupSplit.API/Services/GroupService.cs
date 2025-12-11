@@ -256,6 +256,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         settlementRule ??= new Rule
         {
             Category = Rule.Settlement,
+            Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable | RuleFlags.NoUserTransactions,
             Group = resultGroup
         };
 

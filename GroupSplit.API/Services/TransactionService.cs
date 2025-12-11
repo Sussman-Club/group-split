@@ -56,13 +56,14 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                 ? dbContext.Entry(currentUser).Reference(u => u.PersonalGroup).Query()
                 : dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
-        var ruleVersion = await (from @group in groupQuery
+        var result = await (from @group in groupQuery
                 from rule in @group.Rules
                 from version in rule.Versions
                 where request.RuleVersionId == null || request.RuleVersionId == version.Id
                 select new
                 {
                     Version = version,
+                    Rule = rule,
                     User = currentUser.Id == paidByUserId
                         ? currentUser
                         : (from groupUser in @group.Users
@@ -71,11 +72,14 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                 })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (ruleVersion is null)
+        if (result is null)
             throw new Exception("Rule version not found");
 
-        if (ruleVersion.User is null)
+        if (result.User is null)
             throw new Exception("User is not in the group");
+        
+        if (!result.Rule.AllowsUserTransactions)
+            throw new Exception("Rule does not allow user transactions");
 
         var transaction = new Transaction
         {
@@ -83,8 +87,8 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
             DateTime = request.DateTime,
             Name = request.Name,
             Description = request.Description,
-            RuleVersion = ruleVersion.Version,
-            User = ruleVersion.User
+            RuleVersion = result.Version,
+            User = result.User
         };
 
         dbContext.Add(transaction);

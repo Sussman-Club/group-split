@@ -10,5 +10,7 @@ public class Rule : Entity
     
     public required string Category { get; set; }
     
+    public RuleFlags Flags { get; init; }
+    
     public virtual ICollection<RuleVersion> Versions { get; } = [];
 }

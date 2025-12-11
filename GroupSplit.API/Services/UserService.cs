@@ -45,7 +45,8 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
             {
                 new Rule
                 {
-                    Category = "Personal",
+                    Category = "Default",
+                    Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable,
                     Versions =
                     {
                         new PersonalRuleVersion
