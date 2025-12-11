@@ -128,7 +128,7 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
             }
         };
 
-        var v2 = await ruleService.Update(v1.Rule.Id, update, TestContext.Current.CancellationToken);
+        await ruleService.Update(v1.Rule.Id, update, TestContext.Current.CancellationToken);
 
         // Act
         var updateModel = await ruleService.GetRuleDetails(v1.Rule.Id, TestContext.Current.CancellationToken);

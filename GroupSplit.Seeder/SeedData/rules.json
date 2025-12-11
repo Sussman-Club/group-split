@@ -2,16 +2,43 @@
   {
     "Id": "A1A11111-1111-1111-1111-111111111111",
     "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
-    "Category": "Groceries"
+    "Category": "Groceries",
+    "SplitRule": {
+      "$type": "shares",
+      "Shares": {
+        "94F67FC0-F549-46ED-AD81-D6DF79225396": 100000,
+        "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 15000,
+        "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 100000,
+        "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 100000
+      }
+    }
   },
   {
     "Id": "A2A22222-2222-2222-2222-222222222222",
     "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
-    "Category": "Lodging"
+    "Category": "Lodging",
+    "SplitRule": {
+      "$type": "percent",
+      "Percentages": {
+        "94F67FC0-F549-46ED-AD81-D6DF79225396": 25,
+        "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 25,
+        "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 25,
+        "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 25
+      }
+    }
   },
   {
     "Id": "A3A33333-3333-3333-3333-333333333333",
     "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
-    "Category": "Utilities"
+    "Category": "Utilities",
+    "SplitRule": {
+      "$type": "shares",
+      "Shares": {
+        "94F67FC0-F549-46ED-AD81-D6DF79225396": 100000,
+        "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 15000,
+        "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 100000,
+        "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 100000
+      }
+    }
   }
 ]

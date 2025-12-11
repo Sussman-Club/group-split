@@ -13,5 +13,5 @@ public class PersonalRuleVersionHandler : IRuleVersionHandler<PersonalRuleVersio
     public Task<RuleVersion> ToEntity(Guid groupId, PersonalRuleVersionDto dto, CancellationToken ct) =>
         Task.FromResult<RuleVersion>(new PersonalRuleVersion { StartDateTime = DateTime.UtcNow });
 
-    public bool Equals(PersonalRuleVersion existing, PersonalRuleVersionDto incoming) => true;
+    public Task<bool> Equals(PersonalRuleVersion existing, PersonalRuleVersionDto incoming, CancellationToken ct) => Task.FromResult(true);
 }

@@ -112,7 +112,7 @@
         var parameters = new DialogParameters<EditRuleDialog>
         {
             { x => x.GroupId, GroupId },
-            { x => x.Model, ruleToUpdate },
+            { x => x.OriginalModel, ruleToUpdate },
             { x => x.RuleId, rule.RuleId }
         };
 

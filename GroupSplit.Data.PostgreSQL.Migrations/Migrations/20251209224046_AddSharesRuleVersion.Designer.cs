@@ -3,6 +3,7 @@ using System;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    partial class PostgreSqlAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251209224046_AddSharesRuleVersion")]
+    partial class AddSharesRuleVersion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -279,7 +282,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SharesRuleVersion", b =>
                 {
-                    b.HasBaseType("GroupSplit.Data.Entities.PercentRuleVersion");
+                    b.HasBaseType("GroupSplit.Data.Entities.RuleVersion");
 
                     b.ToTable("SharesRuleVersion");
                 });
@@ -328,7 +331,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.SharesRuleUser", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.SharesRuleVersion", "RuleVersion")
-                        .WithMany("SharedRuleUsers")
+                        .WithMany("RuleUsers")
                         .HasForeignKey("RuleVersionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -437,7 +440,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SharesRuleVersion", b =>
                 {
-                    b.HasOne("GroupSplit.Data.Entities.PercentRuleVersion", null)
+                    b.HasOne("GroupSplit.Data.Entities.RuleVersion", null)
                         .WithOne()
                         .HasForeignKey("GroupSplit.Data.Entities.SharesRuleVersion", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -474,7 +477,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SharesRuleVersion", b =>
                 {
-                    b.Navigation("SharedRuleUsers");
+                    b.Navigation("RuleUsers");
                 });
 #pragma warning restore 612, 618
         }

@@ -12,6 +12,7 @@ public static class RuleVersionServiceExtensions
         public IServiceCollection AddRuleVersionServices()
         {
             // Register all rule-version handlers
+            services.AddRuleVersionHandler<SharesRuleVersion, SharesRuleVersionDto, SharesRuleVersionHandler>();
             services.AddRuleVersionHandler<PercentRuleVersion, PercentRuleVersionDto, PercentRuleVersionHandler>();
             services.AddRuleVersionHandler<PersonalRuleVersion, PersonalRuleVersionDto, PersonalRuleVersionHandler>(
                 ServiceLifetime.Singleton);

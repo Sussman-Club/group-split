@@ -164,7 +164,8 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         return groupQuery;
     }
 
-    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
+        CancellationToken cancellationToken = default)
     {
         var groupQuery = await GetGroupById(groupId, cancellationToken);
 
@@ -191,21 +192,18 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                                       select 
                                            percentUser.User == transaction.User
                                                   ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
-                                                      where otherUser != percentUser
-                                                      select Math.Floor(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                                  : (transaction.Amount > 0 
-                                                      ? Math.Floor(transaction.Amount * (decimal)percentUser.Percentage) 
-                                                      : Math.Ceiling(transaction.Amount * (decimal)percentUser.Percentage)) 
-                                                    / 100
+                                                                          where otherUser != percentUser 
+                                                                          select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
+                                                  : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
                                     ).Sum()
                     } into balance
                     select new GroupNetBalance
                     {
                         UserId = balance.UserId,
                         UserName = balance.UserName,
-                        AmountPaid = Math.Round(balance.AmountPaid, 2),
-                        AmountOwed = Math.Round(balance.AmountOwed, 2),
-                        Balance = Math.Round(balance.AmountPaid - balance.AmountOwed, 2)
+                        AmountPaid = balance.AmountPaid,
+                        AmountOwed = balance.AmountOwed,
+                        Balance = balance.AmountPaid - balance.AmountOwed
                     };
 
         return groupBalance;
@@ -217,26 +215,26 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         var currentUser = await userService.GetCurrentUser();
 
         var groupQuery = from @group in await GetGroupById(groupId, cancellationToken)
-            from groupUser in (from groupUser in @group.Users
-                where groupUser.Id == request.UserId
-                select groupUser).DefaultIfEmpty()
-            from rule in (from rule in @group.Rules
-                where rule.Category == Rule.Settlement
-                select rule).DefaultIfEmpty()
-            from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
-                where version.Rule == rule && version.OtherUser == groupUser
-                select version).Take(1).DefaultIfEmpty()
-            from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
-                where version.Rule == rule && version.OtherUser == currentUser
-                select version).Take(1).DefaultIfEmpty()
-            select new
-            {
-                Group = @group,
-                User = groupUser,
-                SettlementRule = rule,
-                SettlementRuleVersion = otherRuleVersion,
-                CurrentUserRuleVersion = currentUserRuleVersion
-            };
+                         from groupUser in (from groupUser in @group.Users
+                                            where groupUser.Id == request.UserId
+                                            select groupUser).DefaultIfEmpty()
+                         from rule in (from rule in @group.Rules
+                                       where rule.Category == Rule.Settlement
+                                       select rule).DefaultIfEmpty()
+                         from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                                                   where version.Rule == rule && version.OtherUser == groupUser
+                                                   select version).Take(1).DefaultIfEmpty()
+                         from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
+                                                         where version.Rule == rule && version.OtherUser == currentUser
+                                                         select version).Take(1).DefaultIfEmpty()
+                         select new
+                         {
+                             Group = @group,
+                             User = groupUser,
+                             SettlementRule = rule,
+                             SettlementRuleVersion = otherRuleVersion,
+                             CurrentUserRuleVersion = currentUserRuleVersion
+                         };
 
         var result = await groupQuery.FirstOrDefaultAsync(cancellationToken);
 

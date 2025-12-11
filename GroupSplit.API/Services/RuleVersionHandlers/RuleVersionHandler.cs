@@ -21,13 +21,13 @@ public class RuleVersionHandler(IServiceProvider provider) : IRuleVersionHandler
         return service.ToEntity(groupId, dto, ct);
     }
 
-    public bool Equals(RuleVersion existing, RuleVersionDto incoming)
+    public async Task<bool> Equals(RuleVersion existing, RuleVersionDto incoming, CancellationToken ct)
     {
         var dtoType = incoming.GetType();
         var entityType = existing.GetType();
         var handlerType = typeof(IRuleVersionEqualsHandler<,>).MakeGenericType(entityType, dtoType);
         var service = provider.GetService(handlerType);
         return service is IRuleVersionEqualsHandler ruleVersionEqualsHandler
-               && ruleVersionEqualsHandler.Equals(existing, incoming);
+               && await ruleVersionEqualsHandler.Equals(existing, incoming, ct);
     }
 }

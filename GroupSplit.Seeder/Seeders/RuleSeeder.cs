@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.RuleVersionHandlers;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
@@ -7,7 +8,12 @@ using GroupSplit.Seeder.Seeders.DTOs;
 namespace GroupSplit.Seeder.Seeders;
 
 [DependsOn(typeof(GroupSeeder))]
-public class RuleSeeder(AppDbContext db, ILogger<RuleSeeder> logger, ISeedDataSource<RuleSeedDto> source)
+[DependsOn(typeof(UserSeeder))]
+public class RuleSeeder(
+    AppDbContext db,
+    ILogger<RuleSeeder> logger,
+    IRuleVersionHandler ruleVersionHandler,
+    ISeedDataSource<RuleSeedDto> source)
     : AppDbContextSeeder<Rule, RuleSeedDto>(db, source, logger)
 {
     protected override async Task<Rule?> MapAsync(RuleSeedDto dto, CancellationToken ct = default)
@@ -17,11 +23,14 @@ public class RuleSeeder(AppDbContext db, ILogger<RuleSeeder> logger, ISeedDataSo
         if (group is null)
             return null;
 
+        var version = await ruleVersionHandler.ToEntity(dto.GroupId, dto.SplitRule, ct);
+
         return new Rule
         {
             Id = dto.Id,
             Category = dto.Category,
             Group = group,
+            Versions = { version }
         };
     }
 }
