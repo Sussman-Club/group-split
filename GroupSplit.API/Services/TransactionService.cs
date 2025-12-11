@@ -63,7 +63,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                 select new
                 {
                     Version = version,
-                    Rule = rule,
+                    RuleAllowsUserTransactions = (rule.Flags & RuleFlags.NoUserTransactions) == 0,
                     User = currentUser.Id == paidByUserId
                         ? currentUser
                         : (from groupUser in @group.Users
@@ -75,11 +75,11 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         if (result is null)
             throw new Exception("Rule version not found");
 
+        if (!result.RuleAllowsUserTransactions)
+            throw new Exception("Rule does not allow user transactions");
+
         if (result.User is null)
             throw new Exception("User is not in the group");
-        
-        if (!result.Rule.AllowsUserTransactions)
-            throw new Exception("Rule does not allow user transactions");
 
         var transaction = new Transaction
         {
@@ -143,12 +143,15 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                                            .Any(),
                 Transaction = transaction,
                 PayingUser = payingUser,
-                RuleVersion = ruleVersion
+                RuleVersion = ruleVersion,
+                RuleAllowsUserTransactions = (ruleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0
             };
 
         var result = await query.FirstOrDefaultAsync(cancellationToken);
 
         if (result is null) throw new Exception("Transaction not found");
+        
+        if (!result.RuleAllowsUserTransactions) throw new Exception("Rule does not allow user transactions");
 
         if (result.RuleVersion is null) throw new Exception("Rule version not found");
 
