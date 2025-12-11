@@ -160,7 +160,7 @@
             return;
         }
 
-        GroupCategories = await GroupsClient.GetGroupRulesAsync(groupId);
+        GroupCategories = await GroupsClient.GetGroupRulesAsync(groupId, allowUserTransactions: true);
         GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
     }
 

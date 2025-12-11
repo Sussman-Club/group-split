@@ -11,7 +11,5 @@ public static class RuleExtensions
         public bool IsDeletable => (rule.Flags & RuleFlags.NonDeletable) == 0;
 
         public bool AllowsUserTransactions => (rule.Flags & RuleFlags.NoUserTransactions) == 0;
-
-        public bool IsSystem => rule is { IsEditable: true, IsDeletable: true };
     }
 }

@@ -113,7 +113,7 @@
         selectedTime = Original.DateTime.TimeOfDay;
 
         // Load categories + users for the transaction's group
-        GroupCategories = await GroupsClient.GetGroupRulesAsync(Original.GroupId);
+        GroupCategories = await GroupsClient.GetGroupRulesAsync(Original.GroupId, allowUserTransactions: true);
         GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
         StateHasChanged();
     }
