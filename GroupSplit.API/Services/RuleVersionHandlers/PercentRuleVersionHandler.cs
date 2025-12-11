@@ -60,13 +60,13 @@ public class PercentRuleVersionHandler(AppDbContext dbContext)
         return version;
     }
 
-    public bool Equals(PercentRuleVersion existing, PercentRuleVersionDto incoming)
+    public async Task<bool> Equals(PercentRuleVersion existing, PercentRuleVersionDto incoming, CancellationToken ct)
     {
-        dbContext.Entry(existing)
+        await dbContext.Entry(existing)
             .Collection(r => r.RuleUsers)
             .Query()
             .Include(ru => ru.User)
-            .Load();
+            .LoadAsync(ct);
 
         if (existing.RuleUsers.Count != incoming.Percentages.Count)
             return false;

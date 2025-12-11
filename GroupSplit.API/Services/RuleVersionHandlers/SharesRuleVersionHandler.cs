@@ -88,13 +88,13 @@ public class SharesRuleVersionHandler(AppDbContext dbContext)
         return version;
     }
 
-    public bool Equals(SharesRuleVersion existing, SharesRuleVersionDto incoming)
+    public async Task<bool> Equals(SharesRuleVersion existing, SharesRuleVersionDto incoming, CancellationToken ct)
     {
-        dbContext.Entry(existing)
+        await dbContext.Entry(existing)
             .Collection(r => r.SharedRuleUsers)
             .Query()
             .Include(ru => ru.User)
-            .Load();
+            .LoadAsync(ct);
 
         if (existing.SharedRuleUsers.Count != incoming.Shares.Count)
             return false;

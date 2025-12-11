@@ -23,22 +23,22 @@ public interface IRuleVersionToEntityHandler<in TRuleVersionDto> : IRuleVersionT
 
 public interface IRuleVersionEqualsHandler
 {
-    bool Equals(RuleVersion existing, RuleVersionDto incoming);
+    Task<bool> Equals(RuleVersion existing, RuleVersionDto incoming, CancellationToken ct);
 }
 
 public interface IRuleVersionEqualsHandler<in TRuleVersion, in TRuleVersionDto> : IRuleVersionEqualsHandler
     where TRuleVersion : RuleVersion
     where TRuleVersionDto : RuleVersionDto
 {
-    bool Equals(TRuleVersion existing, TRuleVersionDto incoming);
+    Task<bool> Equals(TRuleVersion existing, TRuleVersionDto incoming, CancellationToken ct);
 
-    bool IRuleVersionEqualsHandler.Equals(RuleVersion existing, RuleVersionDto incoming)
+    Task<bool> IRuleVersionEqualsHandler.Equals(RuleVersion existing, RuleVersionDto incoming, CancellationToken ct)
     {
         return incoming is not TRuleVersionDto typedDto ||
                existing is not TRuleVersion typedExisting
             ? throw new InvalidOperationException(
                 $"Expected {typeof(TRuleVersionDto).Name}, got {incoming.GetType().Name}.")
-            : Equals(typedExisting, typedDto);
+            : Equals(typedExisting, typedDto, ct);
     }
 }
 

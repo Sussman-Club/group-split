@@ -141,7 +141,7 @@ public class RuleService(
 
         existingRule.Category = request.Category;
 
-        if (!ruleVersionHandler.Equals(latestVersion, request.Version))
+        if (!await ruleVersionHandler.Equals(latestVersion, request.Version, ct))
         {
             latestVersion.EndDateTime = DateTime.UtcNow;
 
