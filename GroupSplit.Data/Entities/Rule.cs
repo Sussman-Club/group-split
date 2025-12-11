@@ -2,6 +2,7 @@ namespace GroupSplit.Data.Entities;
 
 public class Rule : Entity
 {
+    public const string PersonalDefault = "Default";
     public const string Settlement = "Settlement";
     
     public virtual Group Group { get; set; } = null!;

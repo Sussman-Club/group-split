@@ -28,7 +28,7 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
             {
                 new Rule
                 {
-                    Category = "Default",
+                    Category = Rule.PersonalDefault,
                     Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable,
                     Versions =
                     {

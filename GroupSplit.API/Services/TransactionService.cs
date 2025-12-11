@@ -59,7 +59,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         var result = await (from @group in groupQuery
                 from rule in @group.Rules
                 from version in rule.Versions
-                where request.RuleVersionId == null || request.RuleVersionId == version.Id
+                where (request.RuleVersionId == null && rule.Category == Rule.PersonalDefault) || request.RuleVersionId == version.Id
                 select new
                 {
                     Version = version,
