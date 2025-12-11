@@ -3,6 +3,8 @@
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject IRulesClient RulesClient
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
@@ -10,6 +12,9 @@
     </TitleContent>
 
     <DialogContent>
+        <MudText Typo="Typo.caption">
+            Configure how this category should be split in the group.
+        </MudText>
         <MudForm @ref="_form">
             <MudStack Spacing="3">
                 <MudTextField @bind-Value="_category"
@@ -17,7 +22,8 @@
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
-                <MudSelect T="RuleType" Label="Rule Type" @bind-Value="_ruleType" Variant="Variant.Outlined">
+                <MudSelect T="RuleType" Label="Rule Type" @bind-Value="_ruleType" @bind-Value:after="@OnRuleTypeChanged"
+                           Variant="Variant.Outlined">
                     <MudSelectItem T="RuleType" Value="RuleType.Personal">
                         Personal (payer owes full amount)
                     </MudSelectItem>
@@ -29,6 +35,22 @@
                     <MudSelectItem T="RuleType" Value="RuleType.Shares">
                         Shares split
                     </MudSelectItem>
+                </MudSelect>
+
+                <MudSelect T="Guid?"
+                           Label="Apply Settings From Another Rule"
+                           Variant="Variant.Outlined"
+                           @bind-Value="_applySourceRuleId"
+                           @bind-Value:after="@OnCopySourceSelected"
+                           Clearable="true"
+                           Immediate="true">
+                    @if (_groupRules.Any())
+                    {
+                        @foreach (var r in _groupRules)
+                        {
+                            <MudSelectItem T="Guid?" Value="@r.RuleId">@r.Category</MudSelectItem>
+                        }
+                    }
                 </MudSelect>
 
                 @if (_ruleType is RuleType.Percent)
@@ -113,10 +135,13 @@
     private MudForm _form;
     private string _category = string.Empty;
     private RuleType _ruleType = RuleType.Personal;
+    private RuleType _previousRuleType = RuleType.Personal;
 
     private ICollection<UserInfo> _members = [];
     private readonly Dictionary<Guid, decimal> _percentages = new();
     private readonly Dictionary<Guid, int> _shares = new();
+    private ICollection<RuleVersionResponse> _groupRules = [];
+    private Guid? _applySourceRuleId;
 
 
     protected override async Task OnInitializedAsync()
@@ -131,8 +156,12 @@
         };
 
         _members = await GroupsClient.GetGroupMembersAsync(GroupId);
+        _groupRules = (await GroupsClient.GetGroupRulesAsync(GroupId))
+            .Where(r => r.RuleId != RuleId)
+            .ToList();
         EnsurePercentagesDictionary();
         EnsureSharesDictionary();
+        _previousRuleType = _ruleType;
 
         // Initialize percentages if editing a percent rule
         if (OriginalModel.Version is PercentRuleVersionDto percentVersion)
@@ -234,6 +263,137 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private async Task OnRuleTypeChanged()
+    {
+        // Convert shares to percent when switching from Shares to Percent
+        if (_previousRuleType is RuleType.Shares && _ruleType is RuleType.Percent)
+        {
+            ConvertSharesToPercentages();
+        }
+
+        _previousRuleType = _ruleType;
+
+        await _form.Validate();
+        StateHasChanged();
+    }
+
+    private void ConvertSharesToPercentages()
+    {
+        EnsureSharesDictionary();
+        EnsurePercentagesDictionary();
+
+        var totalShares = _shares.Values.Sum();
+        var memberIds = _members.Select(m => m.Id).ToList();
+        if (memberIds.Count == 0)
+            return;
+
+        var basePercents = new Dictionary<Guid, int>();
+        var remainders = new List<(Guid id, double remainder)>();
+
+        if (totalShares > 0)
+        {
+            foreach (var id in memberIds)
+            {
+                var share = _shares.GetValueOrDefault(id, 0);
+                var raw = share * 100.0 / totalShares;
+                var floor = (int)Math.Floor(raw);
+                basePercents[id] = floor;
+                remainders.Add((id, raw - floor));
+            }
+        }
+        else
+        {
+            var equal = 100 / memberIds.Count;
+            foreach (var id in memberIds)
+            {
+                basePercents[id] = equal;
+                remainders.Add((id, 0));
+            }
+        }
+
+        var currentTotal = basePercents.Values.Sum();
+        var remaining = 100 - currentTotal;
+
+        if (remaining > 0)
+        {
+            foreach (var (id, _) in remainders.OrderByDescending(r => r.remainder).ThenBy(r => memberIds.IndexOf(r.id)))
+            {
+                if (remaining == 0) break;
+                basePercents[id] += 1;
+                remaining--;
+            }
+        }
+        else if (remaining < 0)
+        {
+            remaining = -remaining;
+            foreach (var (id, _) in remainders.OrderBy(r => r.remainder).ThenBy(r => memberIds.IndexOf(r.id)))
+            {
+                if (remaining == 0) break;
+                if (basePercents[id] > 0)
+                {
+                    basePercents[id] -= 1;
+                    remaining--;
+                }
+            }
+        }
+
+        foreach (var id in memberIds)
+        {
+            _percentages[id] = basePercents.GetValueOrDefault(id, 0);
+        }
+    }
+
+    private async Task OnCopySourceSelected()
+    {
+        if (_applySourceRuleId is null)
+            return;
+
+        try
+        {
+            var details = await RulesClient.GetRuleAsync(_applySourceRuleId.Value);
+
+            switch (details.Version)
+            {
+                case PercentRuleVersionDto percent:
+                    _ruleType = RuleType.Percent;
+                    foreach (var key in _percentages.Keys.ToList())
+                        _percentages[key] = 0m;
+                    foreach (var (key, value) in percent.Percentages.Where(kv => _percentages.ContainsKey(kv.Key)))
+                    {
+                        _percentages[key] = value;
+                    }
+
+                    break;
+
+                case SharesRuleVersionDto shares:
+                    _ruleType = RuleType.Shares;
+                    foreach (var key in _shares.Keys.ToList())
+                        _shares[key] = 0;
+                    foreach (var (key, value) in shares.Shares.Where(kv => _shares.ContainsKey(kv.Key)))
+                    {
+                        _shares[key] = value;
+                    }
+
+                    break;
+
+                case PersonalRuleVersionDto:
+                    _ruleType = RuleType.Personal;
+                    break;
+
+                default:
+                    Snackbar.Add("Selected rule has an unsupported type for copying.", Severity.Warning);
+                    break;
+            }
+
+            await _form.Validate();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to apply settings: {ex.Message}", Severity.Error);
+        }
+    }
 
     private static bool DictionariesAreDifferent<T>(
         IDictionary<Guid, T> current,
