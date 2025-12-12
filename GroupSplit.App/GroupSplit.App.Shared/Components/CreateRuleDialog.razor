@@ -12,8 +12,7 @@
         <RuleEditorForm
             @ref="_form"
             GroupId="GroupId"
-            @bind-Category="_category"
-            @bind-RuleVersion="_ruleVersionDto"
+            Model="_model"
         />
     </DialogContent>
 
@@ -27,42 +26,21 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid GroupId { get; set; }
 
+    private readonly RuleEditorForm.RuleEditorModel _model = new();
     private RuleEditorForm _form = null!;
-    private string _category = string.Empty;
-    private RuleVersionDto _ruleVersionDto = new PersonalRuleVersionDto();
 
     private async Task Submit()
     {
-        if (!await _form.Validate())
+        await _form.Validate();
+
+        if (!_form.IsValid)
             return;
 
-        var request = _ruleVersionDto switch
+        var request = new CreateRuleRequest
         {
-            PersonalRuleVersionDto => new CreateRuleRequest
-            {
-                GroupId = GroupId,
-                Category = _category,
-                Version = new PersonalRuleVersionDto()
-            },
-            PercentRuleVersionDto percentRule => new CreateRuleRequest
-            {
-                GroupId = GroupId,
-                Category = _category,
-                Version = new PercentRuleVersionDto
-                {
-                    Percentages = new Dictionary<Guid, decimal>(percentRule.Percentages)
-                }
-            },
-            SharesRuleVersionDto sharesRule => new CreateRuleRequest
-            {
-                GroupId = GroupId,
-                Category = _category,
-                Version = new SharesRuleVersionDto
-                {
-                    Shares = new Dictionary<Guid, int>(sharesRule.Shares)
-                }
-            },
-            _ => throw new ArgumentOutOfRangeException()
+            GroupId = GroupId,
+            Category = _model.Category,
+            Version = _model.Version
         };
 
         MudDialog.Close(request);

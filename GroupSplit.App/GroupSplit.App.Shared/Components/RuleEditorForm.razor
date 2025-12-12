@@ -1,13 +1,13 @@
-﻿@using GroupSplit.App.Shared.Models
+﻿@using System.ComponentModel.DataAnnotations
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.Shared
 @inject IRulesClient RulesClient
-@inject ISnackbar Snackbar
 @inject IGroupsClient GroupsClient
 
-<MudForm @ref="_form">
+<MudForm @ref="_form" Model="@Model">
     <MudStack Spacing="3">
-        <MudTextField Value="Category"
-                      ValueChanged="@CategoryChanged"
+        <MudTextField @bind-Value="Model.Category"
+                      For="@(() => Model.Category)"
                       Label="Category"
                       Variant="Variant.Outlined"
                       Immediate="true"/>
@@ -43,7 +43,7 @@
             }
         </MudSelect>
 
-        @if (_ruleType is RuleType.Percent)
+        @if (Model.Version is PercentRuleVersionDto percent)
         {
             <MudPaper Class="pa-4" Elevation="0">
                 <MudGrid>
@@ -51,7 +51,7 @@
                     {
                         <MudItem xs="12" sm="6" md="4">
                             <MudNumericField T="decimal"
-                                             @bind-Value="@_percentages[m.Id]"
+                                             @bind-Value="@percent.Percentages[m.Id]"
                                              Label="@($"{m.FirstName} {m.LastName}")"
                                              Variant="Variant.Outlined"
                                              Adornment="Adornment.End"
@@ -63,13 +63,12 @@
                     }
                 </MudGrid>
 
-                <MudText Typo="Typo.caption"
-                         Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
+                <MudText Typo="Typo.caption" Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
                     Total: @PercentTotal%
                 </MudText>
             </MudPaper>
         }
-        else if (_ruleType is RuleType.Shares)
+        else if (Model.Version is SharesRuleVersionDto shares)
         {
             <MudPaper Class="pa-4" Elevation="0">
                 <MudGrid>
@@ -77,7 +76,7 @@
                     {
                         <MudItem xs="12" sm="6" md="4">
                             <MudNumericField T="int"
-                                             @bind-Value="@_shares[m.Id]"
+                                             @bind-Value="@shares.Shares[m.Id]"
                                              Label="@($"{m.FirstName} {m.LastName}")"
                                              Variant="Variant.Outlined"
                                              HideSpinButtons="true"
@@ -87,8 +86,8 @@
                     }
                 </MudGrid>
 
-                <MudText Typo="Typo.caption" Color="@(SharesTotal > 0 ? Color.Success : Color.Error)">
-                    Total shares: @SharesTotal
+                <MudText Color="@(SharesTotal > 0 ? Color.Success : Color.Error)" Typo="Typo.caption">
+                    @(SharesTotal > 0 ? $"Total shares: {SharesTotal}" : "At least one member must have shares")
                 </MudText>
             </MudPaper>
         }
@@ -98,22 +97,12 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid GroupId { get; set; }
-
-    [Parameter] public string Category { get; set; }
-    [Parameter] public EventCallback<string> CategoryChanged { get; set; }
-
-    [Parameter] public RuleVersionDto RuleVersion { get; set; } = null!;
-    [Parameter] public EventCallback<RuleVersionDto> RuleVersionChanged { get; set; }
+    [Parameter] public RuleEditorModel Model { get; set; } = null!;
 
     private MudForm _form;
 
-    // private string _category = string.Empty;
     private RuleType _ruleType = RuleType.Personal;
-    private RuleType _previousRuleType = RuleType.Personal;
-
     private ICollection<UserInfo> _members = [];
-    private readonly Dictionary<Guid, decimal> _percentages = new();
-    private readonly Dictionary<Guid, int> _shares = new();
     private ICollection<RuleVersionResponse> _groupRules = [];
     private Guid? _copySourceRuleId;
 
@@ -121,216 +110,89 @@
     {
         _members = await GroupsClient.GetGroupMembersAsync(GroupId);
         _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId);
-
-        foreach (var m in _members)
-            _percentages[m.Id] = 0m;
-
-        foreach (var m in _members)
-            _shares[m.Id] = 0;
-
-        switch (RuleVersion)
-        {
-            case PercentRuleVersionDto p:
-                _ruleType = RuleType.Percent;
-                foreach (var m in _members)
-                    _percentages[m.Id] = p.Percentages.GetValueOrDefault(m.Id, 0m);
-                break;
-
-            case SharesRuleVersionDto s:
-                _ruleType = RuleType.Shares;
-                foreach (var m in _members)
-                    _shares[m.Id] = s.Shares.GetValueOrDefault(m.Id, 0);
-                break;
-
-            case PersonalRuleVersionDto:
-                _ruleType = RuleType.Personal;
-                break;
-        }
-
-        _previousRuleType = _ruleType;
+        OnModelVersionChange();
     }
 
-    private RuleVersionDto BuildDto()
+    private void OnModelVersionChange()
     {
-        return _ruleType switch
+        _ruleType = Model.Version switch
         {
-            RuleType.Percent => new PercentRuleVersionDto
-            {
-                Percentages = _percentages
-                    .Where(x => x.Value > 0)
-                    .ToDictionary(x => x.Key, x => x.Value)
-            },
-
-            RuleType.Shares => new SharesRuleVersionDto
-            {
-                Shares = _shares
-                    .Where(x => x.Value > 0)
-                    .ToDictionary(x => x.Key, x => x.Value)
-            },
-
-            RuleType.Personal => new PersonalRuleVersionDto(),
-
-            _ => throw new ArgumentOutOfRangeException()
+            PercentRuleVersionDto => RuleType.Percent,
+            SharesRuleVersionDto => RuleType.Shares,
+            PersonalRuleVersionDto => RuleType.Personal,
+            _ => _ruleType
         };
+
+        StateHasChanged();
     }
 
+    private decimal PercentTotal => Model.Version is PercentRuleVersionDto percentRuleVersionDto ? Math.Round(percentRuleVersionDto.Percentages.Values.Sum(), 2) : 0;
+    private int SharesTotal => Model.Version is SharesRuleVersionDto sharesRuleVersionDto ? sharesRuleVersionDto.Shares.Values.Sum() : 0;
 
-    private int PercentTotal => (int)Math.Round(_percentages.Values.Sum());
-    private int SharesTotal => _shares.Values.Sum();
+    public bool IsValid
+    {
+        get
+        {
+            if (!_form.IsValid)
+                return false;
 
-    public async Task<bool> Validate()
+            // Rule-specific constraints
+            if (_ruleType is RuleType.Percent && PercentTotal != 100)
+                return false;
+
+            if (_ruleType is RuleType.Shares && SharesTotal <= 0)
+                return false;
+
+            return true;
+        }
+    }
+
+    public async Task Validate()
     {
         await _form.Validate();
-        return _form.IsValid &&
-               !string.IsNullOrWhiteSpace(Category) &&
-               (_ruleType is RuleType.Personal ||
-                (_ruleType is RuleType.Percent && PercentTotal == 100) ||
-                (_ruleType is RuleType.Shares && SharesTotal > 0));
     }
 
     private async Task OnCopySourceSelected()
     {
-        if (_copySourceRuleId is null)
+        if (_copySourceRuleId is not { } sourceRuleId)
             return;
 
-        try
-        {
-            var details = await RulesClient.GetRuleAsync(_copySourceRuleId.Value);
+        var details = await RulesClient.GetRuleAsync(sourceRuleId);
 
-            switch (details.Version)
-            {
-                case PercentRuleVersionDto percent:
-                    _ruleType = RuleType.Percent;
-                    foreach (var key in _percentages.Keys.ToList())
-                        _percentages[key] = 0m;
-                    foreach (var (key, value) in percent.Percentages.Where(kv => _percentages.ContainsKey(kv.Key)))
-                    {
-                        _percentages[key] = value;
-                    }
+        Model.Version = details.Version;
 
-                    break;
-
-                case SharesRuleVersionDto shares:
-                    _ruleType = RuleType.Shares;
-                    foreach (var key in _shares.Keys.ToList())
-                        _shares[key] = 0;
-                    foreach (var (key, value) in shares.Shares.Where(kv => _shares.ContainsKey(kv.Key)))
-                    {
-                        _shares[key] = value;
-                    }
-
-                    break;
-
-                case PersonalRuleVersionDto:
-                    _ruleType = RuleType.Personal;
-                    break;
-
-                default:
-                    Snackbar.Add("Selected rule has an unsupported type for copying.", Severity.Warning);
-                    break;
-            }
-
-            _previousRuleType = _ruleType;
-
-            // Revalidate after copy
-            await _form.Validate();
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to copy from rule: {ex.Message}", Severity.Error);
-        }
+        OnModelVersionChange();
     }
 
-    private async Task OnRuleTypeChanged()
+    private void OnRuleTypeChanged()
     {
-        // Convert shares to percent when switching from Shares to Percent
-        if (_previousRuleType is RuleType.Shares && _ruleType is RuleType.Percent)
+        Model.Version = _ruleType switch
         {
-            ConvertSharesToPercentages();
-        }
+            RuleType.Personal => new PersonalRuleVersionDto(),
 
-        _previousRuleType = _ruleType;
+            RuleType.Percent => new PercentRuleVersionDto
+            {
+                Percentages = _members.ToDictionary(m => m.Id, _ => 0m)
+            },
 
-        RuleVersion = BuildDto();
-        await RuleVersionChanged.InvokeAsync(RuleVersion);
+            RuleType.Shares => new SharesRuleVersionDto
+            {
+                Shares = _members.ToDictionary(m => m.Id, _ => 0)
+            },
 
-        await _form.Validate();
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
         StateHasChanged();
     }
 
-    private void ConvertSharesToPercentages()
+    public record RuleEditorModel
     {
-        // Ensure all members exist in dictionaries
-        foreach (var m in _members)
-        {
-            _shares.TryAdd(m.Id, 0);
-            _percentages.TryAdd(m.Id, 0m);
-        }
+        [Required(ErrorMessage = "Category is required")]
+        [StringLength(64, ErrorMessage = "Category must be less than 64 characters.")]
+        public string Category { get; set; } = string.Empty;
 
-        var totalShares = _shares.Values.Sum();
-        var memberIds = _members.Select(m => m.Id).ToList();
-
-        if (memberIds.Count == 0)
-            return;
-
-        // Work with integer percentage points to guarantee exact 100 sum
-        var basePercents = new Dictionary<Guid, int>();
-        var remainders = new List<(Guid id, double remainder)>();
-
-        if (totalShares > 0)
-        {
-            foreach (var id in memberIds)
-            {
-                var share = _shares.GetValueOrDefault(id, 0);
-                var raw = share * 100.0 / totalShares;
-                var floor = (int)Math.Floor(raw);
-                basePercents[id] = floor;
-                remainders.Add((id, raw - floor));
-            }
-        }
-        else
-        {
-            // Equal split if no shares entered
-            var equal = 100 / memberIds.Count;
-            foreach (var id in memberIds)
-            {
-                basePercents[id] = equal;
-                remainders.Add((id, 0));
-            }
-        }
-
-        var currentTotal = basePercents.Values.Sum();
-        var remaining = 100 - currentTotal;
-
-        // Distribute remaining percentage points by largest remainders, then by stable order
-        if (remaining > 0)
-        {
-            foreach (var (id, _) in remainders.OrderByDescending(r => r.remainder).ThenBy(r => memberIds.IndexOf(r.id)))
-            {
-                if (remaining == 0) break;
-                basePercents[id] += 1;
-                remaining--;
-            }
-        }
-        else if (remaining < 0)
-        {
-            // In rare case of over-allocation, subtract by smallest remainders
-            remaining = -remaining;
-            foreach (var (id, _) in remainders.OrderBy(r => r.remainder).ThenBy(r => memberIds.IndexOf(r.id)))
-            {
-                if (remaining == 0) break;
-                if (basePercents[id] <= 0) continue;
-                basePercents[id] -= 1;
-                remaining--;
-            }
-        }
-
-        // Write back as decimals
-        foreach (var id in memberIds)
-        {
-            _percentages[id] = basePercents.GetValueOrDefault(id, 0);
-        }
+        [Required] public RuleVersionDto Version { get; set; } = null!;
     }
 
 }
