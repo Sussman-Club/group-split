@@ -28,7 +28,7 @@
         </MudSelect>
 
         <MudSelect T="Guid?"
-                   Label="Apply Settings From Another Rule"
+                   Label="Apply Settings From Rule"
                    Variant="Variant.Outlined"
                    @bind-Value="_copySourceRuleId"
                    @bind-Value:after="@OnCopySourceSelected"
@@ -66,6 +66,16 @@
                 <MudText Typo="Typo.caption" Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
                     Total: @PercentTotal%
                 </MudText>
+
+                <MudStack Direction="Row" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="@SplitPercentEvenly">
+                        Split Evenly
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
+                        Clear All Percentages
+                    </MudButton>
+                </MudStack>
             </MudPaper>
         }
         else if (Model.Version is SharesRuleVersionDto shares)
@@ -89,6 +99,12 @@
                 <MudText Color="@(SharesTotal > 0 ? Color.Success : Color.Error)" Typo="Typo.caption">
                     @(SharesTotal > 0 ? $"Total shares: {SharesTotal}" : "At least one member must have shares")
                 </MudText>
+
+                <MudStack Direction="Row" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
+                        Clear All Shares
+                    </MudButton>
+                </MudStack>
             </MudPaper>
         }
     </MudStack>
@@ -168,6 +184,11 @@
         {
             RuleType.Personal => new PersonalRuleVersionDto(),
 
+            RuleType.Percent when Model.Version is SharesRuleVersionDto shares => new PercentRuleVersionDto
+            {
+                Percentages = ConvertSharesToPercentages(shares)
+            },
+
             RuleType.Percent => new PercentRuleVersionDto
             {
                 Percentages = _members.ToDictionary(m => m.Id, _ => 0m)
@@ -182,6 +203,87 @@
         };
 
         StateHasChanged();
+    }
+
+    private void SplitPercentEvenly()
+    {
+        if (Model.Version is not PercentRuleVersionDto percent)
+            return;
+
+        if (_members.Count == 0) throw new InvalidOperationException();
+
+        var basePercentage = Math.Floor(10000m / _members.Count) / 100m;
+
+        foreach (var memberId in _members.Select(x => x.Id))
+        {
+            percent.Percentages[memberId] = Math.Floor(10000m / _members.Count) / 100m;
+        }
+
+        var remainder = 100m - (basePercentage * (_members.Count - 1));
+
+        var random = new Random();
+        var randomMemberId = _members.ElementAt(random.Next(_members.Count)).Id;
+        percent.Percentages[randomMemberId] = remainder;
+
+        StateHasChanged();
+    }
+
+    private void ClearValues()
+    {
+        switch (Model.Version)
+        {
+            case PercentRuleVersionDto percent:
+                foreach (var memberId in _members.Select(x => x.Id))
+                {
+                    percent.Percentages[memberId] = 0m;
+                }
+
+                break;
+
+            case SharesRuleVersionDto shares:
+                foreach (var memberId in _members.Select(x => x.Id))
+                {
+                    shares.Shares[memberId] = 0;
+                }
+
+                break;
+
+            default:
+                throw new InvalidOperationException("ClearAllValues is only supported for Percent or Shares rules.");
+        }
+
+        StateHasChanged();
+    }
+
+    private Dictionary<Guid, decimal> ConvertSharesToPercentages(SharesRuleVersionDto shares)
+    {
+        if (_members.Count is 0)
+            throw new InvalidOperationException();
+
+        var percentages = _members.ToDictionary(m => m.Id, _ => 0m);
+
+        var totalShares = shares.Shares.Values.Sum();
+
+        if (totalShares is 0) return percentages;
+
+        foreach (var member in _members)
+        {
+            var share = shares.Shares.GetValueOrDefault(member.Id, 0);
+            percentages[member.Id] = Math.Round(share * 100m / totalShares, 2);
+        }
+
+        // Adjust rounding error
+        var totalPercent = percentages.Values.Sum();
+        var diff = 100m - totalPercent;
+
+        if (Math.Abs(diff) <= 0.001m)
+            return percentages;
+
+        var random = new Random();
+        var randomMemberId = _members.ElementAt(random.Next(_members.Count)).Id;
+        percentages[randomMemberId] += diff;
+
+        return percentages;
     }
 
     public record RuleEditorModel
