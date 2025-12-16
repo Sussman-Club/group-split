@@ -78,33 +78,31 @@
         }
 
         // Track version changes
-        switch (_model.Version)
+        if (VersionHasChanged(_model.Version, OriginalModel.Version))
         {
-            case PersonalRuleVersionDto when OriginalModel.Version is not PersonalRuleVersionDto:
-                patch.Replace(x => x.Version, new PersonalRuleVersionDto());
-                break;
-            case PercentRuleVersionDto percentRule when OriginalModel.Version is not PercentRuleVersionDto percentRuleVersionDto ||
-                                                        DictionariesAreDifferent(percentRule.Percentages, percentRuleVersionDto.Percentages):
-                patch.Replace(x => x.Version,
-                    new PercentRuleVersionDto
-                    {
-                        Percentages = new Dictionary<Guid, decimal>(percentRule.Percentages)
-                    });
-                break;
-            case SharesRuleVersionDto sharesRule when OriginalModel.Version is not SharesRuleVersionDto sharesRuleVersionDto ||
-                                                      DictionariesAreDifferent(sharesRule.Shares, sharesRuleVersionDto.Shares):
-                patch.Replace(x => x.Version,
-                    new SharesRuleVersionDto
-                    {
-                        Shares = new Dictionary<Guid, int>(sharesRule.Shares)
-                    });
-                break;
+            patch.Replace(x => x.Version, _model.Version);
         }
 
         MudDialog.Close(DialogResult.Ok(patch));
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private static bool VersionHasChanged(
+        RuleVersionDto current,
+        RuleVersionDto original)
+    {
+        return current switch
+        {
+            PercentRuleVersionDto c when original is PercentRuleVersionDto o
+                => DictionariesAreDifferent(c.Percentages, o.Percentages),
+
+            SharesRuleVersionDto c when original is SharesRuleVersionDto o
+                => DictionariesAreDifferent(c.Shares, o.Shares),
+
+            _ => false
+        };
+    }
 
     private static bool DictionariesAreDifferent<T>(
         IDictionary<Guid, T> current,
