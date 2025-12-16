@@ -125,7 +125,7 @@
     protected override async Task OnInitializedAsync()
     {
         _members = await GroupsClient.GetGroupMembersAsync(GroupId);
-        _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId);
+        _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false);
         OnModelVersionChange();
     }
 
