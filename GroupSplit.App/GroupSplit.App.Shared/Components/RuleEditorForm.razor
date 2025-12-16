@@ -1,0 +1,298 @@
+﻿@using System.ComponentModel.DataAnnotations
+@using GroupSplit.App.Shared.Models
+@using GroupSplit.Shared
+@inject IRulesClient RulesClient
+@inject IGroupsClient GroupsClient
+
+<MudForm @ref="_form" Model="@Model">
+    <MudStack Spacing="3">
+        <MudTextField @bind-Value="Model.Category"
+                      For="@(() => Model.Category)"
+                      Label="Category"
+                      Variant="Variant.Outlined"
+                      Immediate="true"/>
+
+        <MudSelect T="RuleType" Label="Rule Type" @bind-Value="_ruleType" @bind-Value:after="@OnRuleTypeChanged"
+                   Variant="Variant.Outlined">
+            <MudSelectItem T="RuleType" Value="RuleType.Personal">
+                Personal (payer owes full amount)
+            </MudSelectItem>
+
+            <MudSelectItem T="RuleType" Value="RuleType.Percent">
+                Percent split
+            </MudSelectItem>
+
+            <MudSelectItem T="RuleType" Value="RuleType.Shares">
+                Shares split
+            </MudSelectItem>
+        </MudSelect>
+
+        <MudSelect T="Guid?"
+                   Label="Apply Settings From Rule"
+                   Variant="Variant.Outlined"
+                   @bind-Value="_copySourceRuleId"
+                   @bind-Value:after="@OnCopySourceSelected"
+                   Clearable="true"
+                   Immediate="true">
+            @if (_groupRules.Any())
+            {
+                @foreach (var r in _groupRules)
+                {
+                    <MudSelectItem T="Guid?" Value="@r.RuleId">@r.Category</MudSelectItem>
+                }
+            }
+        </MudSelect>
+
+        @if (Model.Version is PercentRuleVersionDto percent)
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudGrid>
+                    @foreach (var m in _members)
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="@percent.Percentages[m.Id]"
+                                             Label="@($"{m.FirstName} {m.LastName}")"
+                                             Variant="Variant.Outlined"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="%"
+                                             HideSpinButtons="true"
+                                             Min="0" Max="100" Immediate="true"
+                                             Class="small-num-field no-spinners"/>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                <MudText Typo="Typo.caption" Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
+                    Total: @PercentTotal%
+                </MudText>
+
+                <MudStack Direction="Row" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="@SplitPercentEvenly">
+                        Split Evenly
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
+                        Clear All Percentages
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+        else if (Model.Version is SharesRuleVersionDto shares)
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudGrid>
+                    @foreach (var m in _members)
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="int"
+                                             @bind-Value="@shares.Shares[m.Id]"
+                                             Label="@($"{m.FirstName} {m.LastName}")"
+                                             Variant="Variant.Outlined"
+                                             HideSpinButtons="true"
+                                             Min="0" Immediate="true"
+                                             Class="small-num-field no-spinners"/>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                <MudText Color="@(SharesTotal > 0 ? Color.Success : Color.Error)" Typo="Typo.caption">
+                    @(SharesTotal > 0 ? $"Total shares: {SharesTotal}" : "At least one member must have shares")
+                </MudText>
+
+                <MudStack Direction="Row" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
+                        Clear All Shares
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+    </MudStack>
+</MudForm>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid GroupId { get; set; }
+    [Parameter] public RuleEditorModel Model { get; set; } = null!;
+
+    private MudForm _form;
+
+    private RuleType _ruleType = RuleType.Personal;
+    private ICollection<UserInfo> _members = [];
+    private ICollection<RuleVersionResponse> _groupRules = [];
+    private Guid? _copySourceRuleId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _members = await GroupsClient.GetGroupMembersAsync(GroupId);
+        _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId);
+        OnModelVersionChange();
+    }
+
+    private void OnModelVersionChange()
+    {
+        _ruleType = Model.Version switch
+        {
+            PercentRuleVersionDto => RuleType.Percent,
+            SharesRuleVersionDto => RuleType.Shares,
+            PersonalRuleVersionDto => RuleType.Personal,
+            _ => _ruleType
+        };
+
+        StateHasChanged();
+    }
+
+    private decimal PercentTotal => Model.Version is PercentRuleVersionDto percentRuleVersionDto ? Math.Round(percentRuleVersionDto.Percentages.Values.Sum(), 2) : 0;
+    private int SharesTotal => Model.Version is SharesRuleVersionDto sharesRuleVersionDto ? sharesRuleVersionDto.Shares.Values.Sum() : 0;
+
+    public bool IsValid
+    {
+        get
+        {
+            if (!_form.IsValid)
+                return false;
+
+            // Rule-specific constraints
+            if (_ruleType is RuleType.Percent && PercentTotal != 100)
+                return false;
+
+            if (_ruleType is RuleType.Shares && SharesTotal <= 0)
+                return false;
+
+            return true;
+        }
+    }
+
+    public async Task Validate()
+    {
+        await _form.Validate();
+    }
+
+    private async Task OnCopySourceSelected()
+    {
+        if (_copySourceRuleId is not { } sourceRuleId)
+            return;
+
+        var details = await RulesClient.GetRuleAsync(sourceRuleId);
+        Model.Version = details.Version;
+        OnModelVersionChange();
+    }
+
+    private void OnRuleTypeChanged()
+    {
+        Model.Version = _ruleType switch
+        {
+            RuleType.Personal => new PersonalRuleVersionDto(),
+
+            RuleType.Percent when Model.Version is SharesRuleVersionDto shares => new PercentRuleVersionDto
+            {
+                Percentages = ConvertSharesToPercentages(shares)
+            },
+
+            RuleType.Percent => new PercentRuleVersionDto
+            {
+                Percentages = _members.ToDictionary(m => m.Id, _ => 0m)
+            },
+
+            RuleType.Shares => new SharesRuleVersionDto
+            {
+                Shares = _members.ToDictionary(m => m.Id, _ => 0)
+            },
+
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        StateHasChanged();
+    }
+
+    private void SplitPercentEvenly()
+    {
+        if (Model.Version is not PercentRuleVersionDto percent)
+            return;
+
+        if (_members.Count == 0) throw new InvalidOperationException();
+
+        var basePercentage = Math.Floor(10000m / _members.Count) / 100m;
+
+        foreach (var memberId in _members.Select(x => x.Id))
+        {
+            percent.Percentages[memberId] = Math.Floor(10000m / _members.Count) / 100m;
+        }
+
+        var remainder = 100m - (basePercentage * (_members.Count - 1));
+
+        var random = new Random();
+        var randomMemberId = _members.ElementAt(random.Next(_members.Count)).Id;
+        percent.Percentages[randomMemberId] = remainder;
+
+        StateHasChanged();
+    }
+
+    private void ClearValues()
+    {
+        switch (Model.Version)
+        {
+            case PercentRuleVersionDto percent:
+                foreach (var memberId in _members.Select(x => x.Id))
+                {
+                    percent.Percentages[memberId] = 0m;
+                }
+
+                break;
+
+            case SharesRuleVersionDto shares:
+                foreach (var memberId in _members.Select(x => x.Id))
+                {
+                    shares.Shares[memberId] = 0;
+                }
+
+                break;
+
+            default:
+                throw new InvalidOperationException("ClearAllValues is only supported for Percent or Shares rules.");
+        }
+
+        StateHasChanged();
+    }
+
+    private Dictionary<Guid, decimal> ConvertSharesToPercentages(SharesRuleVersionDto shares)
+    {
+        if (_members.Count is 0)
+            throw new InvalidOperationException();
+
+        var percentages = _members.ToDictionary(m => m.Id, _ => 0m);
+
+        var totalShares = shares.Shares.Values.Sum();
+
+        if (totalShares is 0) return percentages;
+
+        foreach (var member in _members)
+        {
+            var share = shares.Shares.GetValueOrDefault(member.Id, 0);
+            percentages[member.Id] = Math.Round(share * 100m / totalShares, 2);
+        }
+
+        // Adjust rounding error
+        var totalPercent = percentages.Values.Sum();
+        var diff = 100m - totalPercent;
+
+        if (Math.Abs(diff) <= 0.001m)
+            return percentages;
+
+        var random = new Random();
+        var randomMemberId = _members.ElementAt(random.Next(_members.Count)).Id;
+        percentages[randomMemberId] += diff;
+
+        return percentages;
+    }
+
+    public record RuleEditorModel
+    {
+        [Required(ErrorMessage = "Category is required")]
+        [StringLength(64, ErrorMessage = "Category must be less than 64 characters.")]
+        public string Category { get; set; } = string.Empty;
+
+        [Required] public RuleVersionDto Version { get; set; } = null!;
+    }
+
+}

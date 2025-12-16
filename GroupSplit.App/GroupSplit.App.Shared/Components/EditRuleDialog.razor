@@ -1,8 +1,6 @@
-@using GroupSplit.App.Shared.Models
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
-@inject IGroupsClient GroupsClient
 
 <MudDialog>
     <TitleContent>
@@ -10,230 +8,101 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="_form">
-            <MudStack Spacing="3">
-                <MudTextField @bind-Value="_category"
-                              Label="Category"
-                              Variant="Variant.Outlined"
-                              Immediate="true"/>
-
-                <MudSelect T="RuleType" Label="Rule Type" @bind-Value="_ruleType" Variant="Variant.Outlined">
-                    <MudSelectItem T="RuleType" Value="RuleType.Personal">
-                        Personal (payer owes full amount)
-                    </MudSelectItem>
-
-                    <MudSelectItem T="RuleType" Value="RuleType.Percent">
-                        Percent split
-                    </MudSelectItem>
-
-                    <MudSelectItem T="RuleType" Value="RuleType.Shares">
-                        Shares split
-                    </MudSelectItem>
-                </MudSelect>
-
-                @if (_ruleType is RuleType.Percent)
-                {
-                    <MudPaper Class="pa-4" Elevation="0">
-                        <MudText Typo="Typo.body2" Class="mb-2">
-                            Enter percentages per member (must total 100)
-                        </MudText>
-
-                        <MudGrid>
-                            @foreach (var m in _members)
-                            {
-                                <MudItem xs="12" sm="6" md="4">
-                                    <MudNumericField T="decimal"
-                                                     @bind-Value="@_percentages[m.Id]"
-                                                     Label="@($"{m.FirstName} {m.LastName}")"
-                                                     Variant="Variant.Outlined"
-                                                     Adornment="Adornment.End"
-                                                     AdornmentText="%"
-                                                     HideSpinButtons="true"
-                                                     Min="0" Max="100" Immediate="true"
-                                                     Class="small-num-field no-spinners"/>
-                                </MudItem>
-                            }
-                        </MudGrid>
-
-                        <MudText Typo="Typo.caption"
-                                 Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
-                            Total: @PercentTotal%
-                        </MudText>
-                    </MudPaper>
-                }
-                else if (_ruleType is RuleType.Shares)
-                {
-                    <MudPaper Class="pa-4" Elevation="0">
-                        <MudText Typo="Typo.body2" Class="mb-2">
-                            Enter share units per member (non-negative)
-                        </MudText>
-
-                        <MudGrid>
-                            @foreach (var m in _members)
-                            {
-                                <MudItem xs="12" sm="6" md="4">
-                                    <MudNumericField T="int"
-                                                     @bind-Value="@_shares[m.Id]"
-                                                     Label="@($"{m.FirstName} {m.LastName}")"
-                                                     Variant="Variant.Outlined"
-                                                     HideSpinButtons="true"
-                                                     Min="0" Immediate="true"
-                                                     Class="small-num-field no-spinners"/>
-                                </MudItem>
-                            }
-                        </MudGrid>
-
-                        <MudText Typo="Typo.caption" Color="@(SharesTotal > 0 ? Color.Success : Color.Error)">
-                            Total shares: @SharesTotal
-                        </MudText>
-                    </MudPaper>
-                }
-            </MudStack>
-        </MudForm>
+        <MudText Typo="Typo.body2" Class="mb-4">
+            Configure how this category should be split in the group.
+        </MudText>
+        <RuleEditorForm
+            @ref="_form"
+            GroupId="GroupId"
+            Model="_model"
+        />
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Outlined" OnClick="@Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Outlined"
-                   Color="Color.Primary"
-                   Disabled="@(!CanSubmit)"
-                   OnClick="@Submit">
-            Edit
-        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@Submit">Edit</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
-    [Parameter] public UpdateRuleRequest OriginalModel { get; set; } = null!;
     [Parameter] public Guid GroupId { get; set; }
-    [Parameter] public Guid RuleId { get; set; }
+    [Parameter] public UpdateRuleRequest OriginalModel { get; set; } = null!;
 
-    private MudForm _form;
-    private string _category = string.Empty;
-    private RuleType _ruleType = RuleType.Personal;
+    private RuleEditorForm.RuleEditorModel _model = new();
+    private RuleEditorForm _form = null!;
 
-    private ICollection<UserInfo> _members = [];
-    private readonly Dictionary<Guid, decimal> _percentages = new();
-    private readonly Dictionary<Guid, int> _shares = new();
-
-
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        _category = OriginalModel.Category;
-        _ruleType = OriginalModel.Version switch
+        _model = new RuleEditorForm.RuleEditorModel
         {
-            PersonalRuleVersionDto => RuleType.Personal,
-            PercentRuleVersionDto => RuleType.Percent,
-            SharesRuleVersionDto => RuleType.Shares,
-            _ => throw new ArgumentOutOfRangeException()
+            Category = OriginalModel.Category,
+            Version = CloneVersion(OriginalModel.Version)
         };
-
-        _members = await GroupsClient.GetGroupMembersAsync(GroupId);
-        EnsurePercentagesDictionary();
-        EnsureSharesDictionary();
-
-        // Initialize percentages if editing a percent rule
-        if (OriginalModel.Version is PercentRuleVersionDto percentVersion)
-        {
-            foreach (var kv in percentVersion.Percentages.Where(kv => _percentages.ContainsKey(kv.Key)))
-            {
-                _percentages[kv.Key] = kv.Value;
-            }
-        }
-
-        // Initialize shares if editing a shares rule
-        if (OriginalModel.Version is SharesRuleVersionDto sharesVersion)
-        {
-            foreach (var kv in sharesVersion.Shares.Where(kv => _shares.ContainsKey(kv.Key)))
-            {
-                _shares[kv.Key] = kv.Value;
-            }
-        }
     }
 
-    private int PercentTotal => (int)Math.Round(_percentages.Values.Sum());
-    private int SharesTotal => _shares.Values.Sum();
-
-    private bool CanSubmit =>
-        !string.IsNullOrWhiteSpace(_category) &&
-        (_ruleType is RuleType.Personal ||
-         (_ruleType is RuleType.Percent && PercentTotal == 100) ||
-         (_ruleType is RuleType.Shares && SharesTotal > 0));
-
-    private void EnsurePercentagesDictionary()
+    private static RuleVersionDto CloneVersion(RuleVersionDto source)
     {
-        foreach (var m in _members)
-            _percentages.TryAdd(m.Id, 0m);
+        return source switch
+        {
+            PercentRuleVersionDto p => new PercentRuleVersionDto
+            {
+                Percentages = p.Percentages.ToDictionary(x => x.Key, x => x.Value)
+            },
 
-        // Remove old members no longer in the group
-        var removedKeys = _percentages.Keys
-            .Where(k => _members.All(x => x.Id != k))
-            .ToList();
+            SharesRuleVersionDto s => new SharesRuleVersionDto
+            {
+                Shares = s.Shares.ToDictionary(x => x.Key, x => x.Value)
+            },
 
-        foreach (var key in removedKeys)
-            _percentages.Remove(key);
-    }
+            PersonalRuleVersionDto => new PersonalRuleVersionDto(),
 
-    private void EnsureSharesDictionary()
-    {
-        foreach (var m in _members)
-            _shares.TryAdd(m.Id, 0);
-
-        var removedKeys = _shares.Keys
-            .Where(k => _members.All(x => x.Id != k))
-            .ToList();
-
-        foreach (var key in removedKeys)
-            _shares.Remove(key);
+            _ => throw new NotSupportedException("Unsupported rule version type")
+        };
     }
 
     private async Task Submit()
     {
         await _form.Validate();
+
         if (!_form.IsValid)
             return;
 
         var patch = new JsonPatchDocument<UpdateRuleRequest>();
 
         // Track category changes
-        if (!string.Equals(_category, OriginalModel.Category, StringComparison.Ordinal))
+        if (!string.Equals(_model.Category, OriginalModel.Category, StringComparison.Ordinal))
         {
-            patch.Replace(x => x.Category, _category);
+            patch.Replace(x => x.Category, _model.Category);
         }
 
         // Track version changes
-        if (_ruleType is RuleType.Personal && OriginalModel.Version is not PersonalRuleVersionDto)
+        if (VersionHasChanged(_model.Version, OriginalModel.Version))
         {
-            patch.Replace(x => x.Version, new PersonalRuleVersionDto());
+            patch.Replace(x => x.Version, _model.Version);
         }
-
-        if (_ruleType is RuleType.Percent && (OriginalModel.Version is not PercentRuleVersionDto percentRuleVersionDto ||
-                                              DictionariesAreDifferent(_percentages, percentRuleVersionDto.Percentages)))
-        {
-            patch.Replace(x => x.Version,
-                new PercentRuleVersionDto
-                {
-                    Percentages = new Dictionary<Guid, decimal>(_percentages)
-                });
-        }
-
-        if (_ruleType is RuleType.Shares && (OriginalModel.Version is not SharesRuleVersionDto sharesRuleVersionDto ||
-                                             DictionariesAreDifferent(_shares, sharesRuleVersionDto.Shares)))
-        {
-            patch.Replace(x => x.Version,
-                new SharesRuleVersionDto
-                {
-                    Shares = new Dictionary<Guid, int>(_shares)
-                });
-        }
-
 
         MudDialog.Close(DialogResult.Ok(patch));
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private static bool VersionHasChanged(
+        RuleVersionDto current,
+        RuleVersionDto original)
+    {
+        return current switch
+        {
+            PercentRuleVersionDto c when original is PercentRuleVersionDto o
+                => DictionariesAreDifferent(c.Percentages, o.Percentages),
+
+            SharesRuleVersionDto c when original is SharesRuleVersionDto o
+                => DictionariesAreDifferent(c.Shares, o.Shares),
+
+            _ => false
+        };
+    }
 
     private static bool DictionariesAreDifferent<T>(
         IDictionary<Guid, T> current,
@@ -255,4 +124,3 @@
     }
 
 }
-
