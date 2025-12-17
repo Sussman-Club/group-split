@@ -54,7 +54,7 @@ public interface IGroupService
         CancellationToken cancellationToken = default);
 }
 
-public class GroupService(IUserService userService, AppDbContext context) : IGroupService
+public class GroupService(IUserService userService, IRuleService ruleService, AppDbContext context) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -158,7 +158,36 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         if (user is null)
             throw new ArgumentException("User was not found");
 
+        var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
+        var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (userBalance is { Balance: not 0 })
+            throw new ArgumentException("User must settle before leaving the group");
+
         group.Users.Remove(user);
+
+        var rulesVersions = await (
+                from ruleVersion in await ruleService.List(cancellationToken)
+                where ruleVersion.Rule.Group == @group
+                select ruleVersion
+            )
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.Now;
+        foreach (var ruleVersion in rulesVersions)
+        {
+            if (ruleVersion is not PercentRuleVersion existing) continue;
+            
+            var containsUser = await context.Entry(existing)
+                .Collection(r => r.RuleUsers)
+                .Query()
+                .AnyAsync(ru => ru.User == user, cancellationToken);
+            
+            if (!containsUser) continue;
+            
+            ruleVersion.EndDateTime = now;
+        }
 
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;

@@ -120,7 +120,8 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         var currentUser = await userService.GetCurrentUser();
         var userGroups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
-        var query = from transaction in await Get(id, cancellationToken)
+        var query = 
+            from transaction in await Get(id, cancellationToken)
             from ruleVersion in (from userGroup in userGroups
                 from rule in userGroup.Rules
                 from ruleVersion in rule.Versions
@@ -144,7 +145,8 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                 Transaction = transaction,
                 PayingUser = payingUser,
                 RuleVersion = ruleVersion,
-                RuleAllowsUserTransactions = (ruleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0
+                RuleAllowsUserTransactions = (transaction.RuleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0 &&
+                                             (ruleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0
             };
 
         var result = await query.FirstOrDefaultAsync(cancellationToken);
