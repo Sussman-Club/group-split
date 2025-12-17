@@ -160,6 +160,9 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         if (result.PayingUser is null) throw new Exception("Paid by user not found");
 
         if (!result.PayingUserBelongsToGroup) throw new Exception("Paid by user is not in the group");
+        
+        if (await RuleVersionReferencesRemovedMember(result.RuleVersion, cancellationToken))
+            throw new Exception("Rule version references a member that was removed from the group");
 
         var updatedTransaction = result.Transaction;
 
@@ -175,13 +178,34 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         return updatedTransaction;
     }
 
+    private async Task<bool> RuleVersionReferencesRemovedMember(
+        RuleVersion ruleVersion,
+        CancellationToken cancellationToken)
+    {
+        if (ruleVersion is not PercentRuleVersion) 
+            return false;
+        
+        return await dbContext.Set<PercentRuleUser>() 
+            .AnyAsync(ru =>
+                    ru.RuleVersion.Id == ruleVersion.Id &&
+                    ru.RuleVersion.Rule.Group.Users.All(gu => gu.Id != ru.User.Id),
+                cancellationToken);
+    }
+
     public async Task Delete(Guid id, CancellationToken cancellationToken = default)
     {
         var query = await Get(id, cancellationToken);
-        var transaction = await query.FirstOrDefaultAsync(cancellationToken);
+        
+        var transaction = await query.Include(x => x.RuleVersion).FirstOrDefaultAsync(cancellationToken);
+        
         if (transaction is null)
             throw new Exception("Transaction not found");
+        
+        if (await RuleVersionReferencesRemovedMember(transaction.RuleVersion, cancellationToken))
+            throw new Exception("Rule version references a member that was removed from the group");
+
         dbContext.Remove(transaction);
+        
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

@@ -177,20 +177,28 @@ public class GroupService(IUserService userService, IRuleService ruleService, Ap
         var now = DateTime.Now;
         foreach (var ruleVersion in rulesVersions)
         {
-            if (ruleVersion is not PercentRuleVersion existing) continue;
-            
-            var containsUser = await context.Entry(existing)
-                .Collection(r => r.RuleUsers)
-                .Query()
-                .AnyAsync(ru => ru.User == user, cancellationToken);
-            
-            if (!containsUser) continue;
-            
+            if (!await RuleVersionReferencesUser(ruleVersion, user, cancellationToken)) 
+                continue;
+
             ruleVersion.EndDateTime = now;
         }
 
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
+    }
+    
+    private async Task<bool> RuleVersionReferencesUser(
+        RuleVersion ruleVersion,
+        User user,
+        CancellationToken cancellationToken)
+    {
+        if (ruleVersion is not PercentRuleVersion percentage) 
+            return false;
+
+        return await context.Entry(percentage)
+            .Collection(r => r.RuleUsers)
+            .Query()
+            .AnyAsync(ru => ru.User == user, cancellationToken);
     }
 
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
