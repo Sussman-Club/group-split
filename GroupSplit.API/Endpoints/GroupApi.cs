@@ -132,6 +132,7 @@ public static class GroupApi
         {
             return group.MapGet("{id:guid}/rules", async (
                     Guid id,
+                    [AsParameters] RuleFilter filter,
                     IRuleService transactionService,
                     CancellationToken ct) =>
                 {
@@ -139,6 +140,7 @@ public static class GroupApi
                     var ruleResponses = await rules
                         .Where(x => x.Rule.Group.Id == id)
                         .Include(x => x.Rule)
+                        .ApplyFilter(filter)
                         .SelectDto()
                         .ToListAsync(ct);
                     return Results.Ok(ruleResponses);

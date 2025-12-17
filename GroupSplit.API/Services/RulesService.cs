@@ -138,6 +138,9 @@ public class RuleService(
 
         if (result.CategoryConflict)
             throw new InvalidOperationException("Group already has a rule with this category.");
+        
+        if (!existingRule.IsEditable)
+            throw new InvalidOperationException("Rule is not editable.");
 
         existingRule.Category = request.Category;
 
@@ -159,10 +162,14 @@ public class RuleService(
         var version = await (
                 from ruleVersion in await Get(ruleId, ct)
                 select ruleVersion)
+            .Include(x => x.Rule)
             .FirstOrDefaultAsync(ct);
 
         if (version is null)
             throw new InvalidOperationException("Rule does not exist.");
+        
+        if (!version.Rule.IsDeletable)
+            throw new InvalidOperationException("Rule is not deletable.");
 
         version.EndDateTime = DateTime.UtcNow;
 

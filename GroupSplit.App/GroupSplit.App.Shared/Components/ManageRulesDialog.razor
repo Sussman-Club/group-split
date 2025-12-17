@@ -15,7 +15,7 @@
 
     <DialogContent>
         <MudStack Spacing="4">
-            <MudTable Items="Rules">
+            <MudTable Items="_rules">
                 <HeaderContent>
                     <MudTh>Category</MudTh>
                     <MudTh class="text-right">Actions</MudTh>
@@ -62,11 +62,11 @@
 
     [Parameter] public Guid GroupId { get; set; }
 
-    private ICollection<RuleVersionResponse> Rules = [];
+    private ICollection<RuleVersionResponse> _rules = [];
 
     protected override async Task OnInitializedAsync()
     {
-        Rules = await GroupsClient.GetGroupRulesAsync(GroupId);
+        _rules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false);
         StateHasChanged();
     }
 
@@ -96,7 +96,7 @@
 
         Snackbar.Add("Rule created successfully.", Severity.Success);
 
-        Rules.Add(response);
+        _rules.Add(response);
         StateHasChanged();
     }
 
@@ -133,13 +133,13 @@
         var updated = await RulesClient.UpdateRuleAsync(rule.RuleId, patch);
         Snackbar.Add("Rule updated successfully.", Severity.Success);
 
-        var list = Rules.ToList();
+        var list = _rules.ToList();
 
         var index = list.FindIndex(x => x.RuleId == rule.RuleId);
         if (index != -1)
         {
             list[index] = updated;
-            Rules = list;
+            _rules = list;
         }
 
         StateHasChanged();
@@ -167,7 +167,7 @@
         await RulesClient.DeleteRuleAsync(rule.RuleId);
         Snackbar.Add("Rule deleted successfully.", Severity.Success);
 
-        Rules.Remove(rule);
+        _rules.Remove(rule);
         StateHasChanged();
     }
 

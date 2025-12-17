@@ -93,7 +93,7 @@
     private TimeSpan? selectedTime;
 
     // Category & users come from the original transaction's GroupId
-    private ICollection<RuleVersionResponse> GroupCategories = [];
+    private ICollection<RuleVersionInfo> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
 
     protected override async Task OnInitializedAsync()
@@ -113,8 +113,13 @@
         selectedTime = Original.DateTime.TimeOfDay;
 
         // Load categories + users for the transaction's group
-        GroupCategories = await GroupsClient.GetGroupRulesAsync(Original.GroupId);
+        GroupCategories = await GroupsClient.GetGroupRulesAsAsyncEnumerable(Original.GroupId, allowUserTransactions: true).Select(x => new RuleVersionInfo(x.RuleVersionId, x.Category)).ToListAsync();
+
+        if (GroupCategories.All(x => x.RuleVersionId != Original.RuleVersionId))
+            GroupCategories.Add(new RuleVersionInfo(Original.RuleVersionId, Original.Category));
+
         GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+
         StateHasChanged();
     }
 
@@ -172,5 +177,7 @@
 
         return patch;
     }
+
+    internal record RuleVersionInfo(Guid RuleVersionId, string Category);
 
 }

@@ -106,10 +106,31 @@ public static class RulesApi
         internal IQueryable<RuleVersionResponse> SelectDto()
         {
             return from ruleVersion in ruleVersions
-                select new RuleVersionResponse(
-                    ruleVersion.Rule.Id,
-                    ruleVersion.Id,
-                    ruleVersion.Rule.Category);
+                   select new RuleVersionResponse(
+                       ruleVersion.Rule.Id,
+                       ruleVersion.Id,
+                       ruleVersion.Rule.Category);
+        }
+
+        internal IQueryable<RuleVersion> ApplyFilter(RuleFilter filter)
+        {
+            return from version in ruleVersions
+                   where (
+                             filter.IsSystem == null ||
+                             filter.IsSystem ==
+                             (
+                                 (version.Rule.Flags & (RuleFlags.NonEditable | RuleFlags.NonDeletable))
+                                 == (RuleFlags.NonEditable | RuleFlags.NonDeletable)
+                             )
+                         ) &&
+                         (
+                             filter.AllowUserTransactions == null ||
+                             filter.AllowUserTransactions ==
+                             (
+                                 (version.Rule.Flags & RuleFlags.NoUserTransactions) == 0
+                             )
+                         )
+                   select version;
         }
     }
 }
