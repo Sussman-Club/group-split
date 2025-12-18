@@ -12,17 +12,22 @@
                       Variant="Variant.Outlined"
                       Immediate="true"/>
 
-        <MudSelect T="RuleType" Label="Rule Type" @bind-Value="_ruleType" @bind-Value:after="@OnRuleTypeChanged"
-                   Variant="Variant.Outlined">
-            <MudSelectItem T="RuleType" Value="RuleType.Personal">
+        <MudSelect
+            T="RuleType?"
+            Label="Rule Type"
+            @bind-Value="_ruleType"
+            @bind-Value:after="@OnRuleTypeChanged"
+            Variant="Variant.Outlined"
+        >
+            <MudSelectItem T="RuleType?" Value="RuleType.Personal">
                 Personal (payer owes full amount)
             </MudSelectItem>
 
-            <MudSelectItem T="RuleType" Value="RuleType.Percent">
+            <MudSelectItem T="RuleType?" Value="RuleType.Percent">
                 Percent split
             </MudSelectItem>
 
-            <MudSelectItem T="RuleType" Value="RuleType.Shares">
+            <MudSelectItem T="RuleType?" Value="RuleType.Shares">
                 Shares split
             </MudSelectItem>
         </MudSelect>
@@ -117,7 +122,7 @@
 
     private MudForm _form;
 
-    private RuleType _ruleType = RuleType.Personal;
+    private RuleType? _ruleType;
     private ICollection<UserInfo> _members = [];
     private ICollection<RuleVersionResponse> _groupRules = [];
     private Guid? _copySourceRuleId;
@@ -152,14 +157,13 @@
             if (!_form.IsValid)
                 return false;
 
-            // Rule-specific constraints
-            if (_ruleType is RuleType.Percent && PercentTotal != 100)
-                return false;
-
-            if (_ruleType is RuleType.Shares && SharesTotal <= 0)
-                return false;
-
-            return true;
+            return _ruleType switch
+            {
+                null => false,
+                RuleType.Percent when PercentTotal != 100 => false,
+                RuleType.Shares when SharesTotal <= 0 => false,
+                _ => true
+            };
         }
     }
 
