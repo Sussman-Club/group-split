@@ -204,8 +204,8 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
 
         return await dbContext.Set<PercentRuleUser>()
             .AnyAsync(ru =>
-                    ru.RuleVersion.Id == ruleVersion.Id &&
-                    ru.RuleVersion.Rule.Group.Users.All(gu => gu.Id != ru.User.Id),
+                    ru.RuleVersion == ruleVersion &&
+                    ru.RuleVersion.Rule.Group.Users.All(gu => gu != ru.User),
                 cancellationToken);
     }
 }

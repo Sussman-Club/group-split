@@ -192,13 +192,11 @@ public class GroupService(IUserService userService, IRuleService ruleService, Ap
         User user,
         CancellationToken cancellationToken)
     {
-        if (ruleVersion is not PercentRuleVersion percentage) 
+        if (ruleVersion is not PercentRuleVersion) 
             return false;
-
-        return await context.Entry(percentage)
-            .Collection(r => r.RuleUsers)
-            .Query()
-            .AnyAsync(ru => ru.User == user, cancellationToken);
+        
+        return await context.Set<PercentRuleUser>()
+            .AnyAsync(ru => ru.RuleVersion == ruleVersion && ru.User == user, cancellationToken);
     }
 
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
