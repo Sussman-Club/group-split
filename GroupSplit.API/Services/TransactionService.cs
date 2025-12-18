@@ -80,6 +80,9 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
 
         if (result.User is null)
             throw new Exception("User is not in the group");
+        
+        if (await RuleVersionReferencesRemovedMember(result.Version, cancellationToken))
+            throw new Exception("Rule version references a member that was removed from the group");
 
         var transaction = new Transaction
         {
@@ -178,20 +181,6 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         return updatedTransaction;
     }
 
-    private async Task<bool> RuleVersionReferencesRemovedMember(
-        RuleVersion ruleVersion,
-        CancellationToken cancellationToken)
-    {
-        if (ruleVersion is not PercentRuleVersion) 
-            return false;
-        
-        return await dbContext.Set<PercentRuleUser>() 
-            .AnyAsync(ru =>
-                    ru.RuleVersion.Id == ruleVersion.Id &&
-                    ru.RuleVersion.Rule.Group.Users.All(gu => gu.Id != ru.User.Id),
-                cancellationToken);
-    }
-
     public async Task Delete(Guid id, CancellationToken cancellationToken = default)
     {
         var query = await Get(id, cancellationToken);
@@ -207,5 +196,19 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         dbContext.Remove(transaction);
         
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    
+    private async Task<bool> RuleVersionReferencesRemovedMember(
+        RuleVersion ruleVersion,
+        CancellationToken cancellationToken)
+    {
+        if (ruleVersion is not PercentRuleVersion) 
+            return false;
+        
+        return await dbContext.Set<PercentRuleUser>() 
+            .AnyAsync(ru =>
+                    ru.RuleVersion.Id == ruleVersion.Id &&
+                    ru.RuleVersion.Rule.Group.Users.All(gu => gu.Id != ru.User.Id),
+                cancellationToken);
     }
 }
