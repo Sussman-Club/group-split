@@ -7,22 +7,17 @@ namespace GroupSplit.API.Services;
 
 public interface ITransactionService
 {
-    Task<IQueryable<Transaction>> List(CancellationToken cancellationToken = default);
-
-    Task<IQueryable<Transaction>> Get(Guid id, CancellationToken cancellationToken = default);
-
-    ValueTask<Transaction> Create(CreateTransactionRequest request, CancellationToken cancellationToken = default);
+    Task<IQueryable<Transaction>> List(CancellationToken ct = default);
+    Task<IQueryable<Transaction>> Get(Guid id, CancellationToken ct = default);
+    ValueTask<Transaction> Create(CreateTransactionRequest request, CancellationToken ct = default);
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
-
-    ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task Delete(Guid id, CancellationToken cancellationToken = default);
+    ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
+    Task Delete(Guid id, CancellationToken ct = default);
 }
 
 public class TransactionService(IUserService userService, AppDbContext dbContext) : ITransactionService
 {
-    public async Task<IQueryable<Transaction>> List(CancellationToken cancellationToken = default)
+    public async Task<IQueryable<Transaction>> List(CancellationToken ct = default)
     {
         var currentUser = await userService.GetCurrentUser();
 
@@ -35,15 +30,15 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         return query;
     }
 
-    public async Task<IQueryable<Transaction>> Get(Guid id, CancellationToken cancellationToken = default)
+    public async Task<IQueryable<Transaction>> Get(Guid id, CancellationToken ct = default)
     {
-        var transactions = await List(cancellationToken);
+        var transactions = await List(ct);
 
         return transactions.Where(t => t.Id == id);
     }
 
     public async ValueTask<Transaction> Create(CreateTransactionRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         var currentUser = await userService.GetCurrentUser();
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
@@ -70,7 +65,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                             where groupUser.Id == paidByUserId
                             select groupUser).FirstOrDefault()
                 })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(ct);
 
         if (result is null)
             throw new Exception("Rule version not found");
@@ -81,7 +76,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         if (result.User is null)
             throw new Exception("User is not in the group");
         
-        if (await RuleVersionReferencesRemovedMember(result.Version, cancellationToken))
+        if (await RuleVersionReferencesRemovedMember(result.Version, ct))
             throw new Exception("Rule version references a member that was removed from the group");
 
         var transaction = new Transaction
@@ -95,7 +90,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         };
 
         dbContext.Add(transaction);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(ct);
 
         return transaction;
     }
@@ -118,13 +113,13 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
     }
 
     public async ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         var currentUser = await userService.GetCurrentUser();
         var userGroups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
         var query = 
-            from transaction in await Get(id, cancellationToken)
+            from transaction in await Get(id, ct)
             from ruleVersion in (from userGroup in userGroups
                 from rule in userGroup.Rules
                 from ruleVersion in rule.Versions
@@ -152,7 +147,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                                              (ruleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0
             };
 
-        var result = await query.FirstOrDefaultAsync(cancellationToken);
+        var result = await query.FirstOrDefaultAsync(ct);
 
         if (result is null) throw new Exception("Transaction not found");
         
@@ -164,7 +159,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
 
         if (!result.PayingUserBelongsToGroup) throw new Exception("Paid by user is not in the group");
         
-        if (await RuleVersionReferencesRemovedMember(result.RuleVersion, cancellationToken))
+        if (await RuleVersionReferencesRemovedMember(result.RuleVersion, ct))
             throw new Exception("Rule version references a member that was removed from the group");
 
         var updatedTransaction = result.Transaction;
@@ -176,26 +171,26 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         updatedTransaction.RuleVersion = result.RuleVersion;
         updatedTransaction.User = result.PayingUser;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(ct);
 
         return updatedTransaction;
     }
 
-    public async Task Delete(Guid id, CancellationToken cancellationToken = default)
+    public async Task Delete(Guid id, CancellationToken ct = default)
     {
-        var query = await Get(id, cancellationToken);
+        var query = await Get(id, ct);
         
-        var transaction = await query.Include(x => x.RuleVersion).FirstOrDefaultAsync(cancellationToken);
+        var transaction = await query.Include(x => x.RuleVersion).FirstOrDefaultAsync(ct);
         
         if (transaction is null)
             throw new Exception("Transaction not found");
         
-        if (await RuleVersionReferencesRemovedMember(transaction.RuleVersion, cancellationToken))
+        if (await RuleVersionReferencesRemovedMember(transaction.RuleVersion, ct))
             throw new Exception("Rule version references a member that was removed from the group");
 
         dbContext.Remove(transaction);
         
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(ct);
     }
     
     private async Task<bool> RuleVersionReferencesRemovedMember(
