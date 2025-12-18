@@ -160,43 +160,31 @@ public class GroupService(IUserService userService, IRuleService ruleService, Ap
 
         var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
         var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
+            .Select(x => x.Balance)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (userBalance is { Balance: not 0 })
+        if (userBalance is not 0)
             throw new ArgumentException("User must settle before leaving the group");
 
         group.Users.Remove(user);
 
-        var rulesVersions = await (
-                from ruleVersion in await ruleService.List(cancellationToken)
-                where ruleVersion.Rule.Group == @group
+        var ruleVersionsReferencingUser = await (
+                from ruleVersion in context.Set<PercentRuleVersion>()
+                where ruleVersion.Rule.Group == @group &&
+                      ruleVersion.EndDateTime == null &&
+                      ruleVersion.RuleUsers.Any(ru => ru.User == user)
                 select ruleVersion
             )
             .ToListAsync(cancellationToken);
 
         var now = DateTime.Now;
-        foreach (var ruleVersion in rulesVersions)
+        foreach (var ruleVersion in ruleVersionsReferencingUser)
         {
-            if (!await RuleVersionReferencesUser(ruleVersion, user, cancellationToken)) 
-                continue;
-
             ruleVersion.EndDateTime = now;
         }
 
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
-    }
-    
-    private async Task<bool> RuleVersionReferencesUser(
-        RuleVersion ruleVersion,
-        User user,
-        CancellationToken cancellationToken)
-    {
-        if (ruleVersion is not PercentRuleVersion) 
-            return false;
-        
-        return await context.Set<PercentRuleUser>()
-            .AnyAsync(ru => ru.RuleVersion == ruleVersion && ru.User == user, cancellationToken);
     }
 
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
