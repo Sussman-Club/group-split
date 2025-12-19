@@ -1,4 +1,5 @@
 using GroupSplit.AppHost;
+using GroupSplit.AppHost.Docker;
 using GroupSplit.AppHost.EntityFramework;
 using GroupSplit.AppHost.Seeder;
 using Projects;
