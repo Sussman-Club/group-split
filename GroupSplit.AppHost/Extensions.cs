@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -48,6 +49,33 @@ public static class Extensions
                     Url = "/scalar/v1",
                     DisplayLocation = UrlDisplayLocation.SummaryAndDetails
                 });
+        }
+    }
+
+    extension<TProjectResource>(IResourceBuilder<TProjectResource> resourceBuilder)
+        where TProjectResource : ProjectResource
+    {
+        public IResourceBuilder<TProjectResource> WithDatabase(
+            IResourceBuilder<IResourceWithConnectionString> dbResourceBuilder)
+        {
+            return resourceBuilder
+                .WaitFor(dbResourceBuilder)
+                .WithReference(dbResourceBuilder);
+        }
+
+        public IResourceBuilder<TProjectResource> WithProjectDefaults(ProjectResourceOptions options)
+        {
+            var containingType = typeof(ProjectResourceBuilderExtensions);
+
+            var method = containingType.GetMethod(
+                "WithProjectDefaults",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+
+            var genericMethod = method!.MakeGenericMethod(resourceBuilder.GetType().GenericTypeArguments[0]);
+
+            var result = genericMethod.Invoke(null, [resourceBuilder, options]);
+            return (IResourceBuilder<TProjectResource>)result!;
         }
     }
 }

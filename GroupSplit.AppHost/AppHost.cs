@@ -1,5 +1,6 @@
 using GroupSplit.AppHost;
 using GroupSplit.AppHost.EntityFramework;
+using GroupSplit.AppHost.Seeder;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -26,10 +27,8 @@ if (builder.ExecutionContext.IsRunMode)
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
-    .WaitFor(db)
-    .WithReference(db)
-    .WaitFor(identityDb)
-    .WithReference(identityDb)
+    .WithDatabase(db)
+    .WithDatabase(identityDb)
     .WithScalarUrl()
     .WithHttpHealthCheck("/health");
 
@@ -40,16 +39,13 @@ var frontend = builder.AddProject<GroupSplit_App_Web>("web")
 
 var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
 
-mauiapp.AddWindowsDevice()
-    .WithReference(backend);
+mauiapp.AddWindowsDevice().WithReference(backend);
 
-var seeder = builder.AddProject<GroupSplit_Seeder>("seeder")
-    .WaitFor(db)
-    .WithReference(db)
-    .WaitFor(identityDb)
-    .WithReference(identityDb)
-    .WithExplicitStart()
-    .WithIconName("FoodGrains");
+var seeder = builder
+    .AddSeeder<GroupSplit_Seeder>("seeder")
+    .WithDatabase(db)
+    .WithDatabase(identityDb)
+    .WithResetAndSeedCommand();
 
 var host = builder.Build();
 
