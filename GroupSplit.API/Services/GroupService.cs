@@ -54,7 +54,7 @@ public interface IGroupService
         CancellationToken cancellationToken = default);
 }
 
-public class GroupService(IUserService userService, IRuleService ruleService, AppDbContext context) : IGroupService
+public class GroupService(IUserService userService, AppDbContext context) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
