@@ -158,7 +158,30 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
         if (user is null)
             throw new ArgumentException("User was not found");
 
+        var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
+        var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
+            .Select(x => x.Balance)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (userBalance is not 0)
+            throw new ArgumentException("User must settle before leaving the group");
+
         group.Users.Remove(user);
+
+        var ruleVersionsReferencingUser = await (
+                from ruleVersion in context.Set<PercentRuleVersion>()
+                where ruleVersion.Rule.Group == @group &&
+                      ruleVersion.EndDateTime == null &&
+                      ruleVersion.RuleUsers.Any(ru => ru.User == user)
+                select ruleVersion
+            )
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.Now;
+        foreach (var ruleVersion in ruleVersionsReferencingUser)
+        {
+            ruleVersion.EndDateTime = now;
+        }
 
         await context.SaveChangesAsync(cancellationToken);
         return groupQuery;
