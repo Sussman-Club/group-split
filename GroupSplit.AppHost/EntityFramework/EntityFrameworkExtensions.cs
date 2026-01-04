@@ -5,6 +5,12 @@ using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.AppHost.EntityFramework;
 
+public static class DatabaseCommandNames
+{
+    public const string Reset = "reset";
+    public const string Migrate = "migrate";
+}
+
 public static class EntityFrameworkExtensions
 {
     extension(IDistributedApplicationBuilder builder)
@@ -73,13 +79,13 @@ public static class EntityFrameworkExtensions
                 .AutoMigrateOnStartup();
         }
 
-        public MigrationOrchestrationBuilder<TDatabaseResource> WithResetDbCommand(string commandName = "reset")
+        public MigrationOrchestrationBuilder<TDatabaseResource> WithResetDbCommand()
         {
             var dbResourceBuilder = migrationOrchestrationBuilder.DbResourceBuilder;
 
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
-            dbResourceBuilder.WithCommand(commandName, "Reset Database",
+            dbResourceBuilder.WithCommand(DatabaseCommandNames.Reset, "Reset Database",
                 async context =>
                 {
                     var cancellationToken = context.CancellationToken;
@@ -87,7 +93,7 @@ public static class EntityFrameworkExtensions
                         .GetLogger(dbResourceBuilder.Resource);
                     var migrationRunner = context.ServiceProvider.GetRequiredService<CommandMigrationRunner>();
 
-                    var success = await migrationRunner.RunDropAsync(dbResourceBuilder, logger, cancellationToken) &&
+                    var success = await migrationRunner.RunDropAsync(dbResourceBuilder, logger, cancellationToken) && 
                                   await migrationRunner.RunUpdateAsync(dbResourceBuilder, logger, cancellationToken);
 
                     return new ExecuteCommandResult { Success = success };
@@ -101,13 +107,13 @@ public static class EntityFrameworkExtensions
             return migrationOrchestrationBuilder;
         }
 
-        public MigrationOrchestrationBuilder<TDatabaseResource> WithMigrateCommand(string commandName = "migrate")
+        public MigrationOrchestrationBuilder<TDatabaseResource> WithMigrateCommand()
         {
             var dbResourceBuilder = migrationOrchestrationBuilder.DbResourceBuilder;
 
             dbResourceBuilder.ApplicationBuilder.Services.AddCommandMigratorsServices();
 
-            dbResourceBuilder.WithCommand(commandName, "Run EF Core migrations", async context =>
+            dbResourceBuilder.WithCommand(DatabaseCommandNames.Migrate, "Run EF Core migrations", async context =>
             {
                 var cancellationToken = context.CancellationToken;
                 var logger = context.ServiceProvider.GetRequiredService<ResourceLoggerService>()

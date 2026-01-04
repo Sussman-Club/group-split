@@ -14,6 +14,7 @@ public class IdentityUserSeeder(
 {
     public async Task SeedAsync(CancellationToken ct = default)
     {
+        var count = 0;
         await foreach (var dto in source.ReadAsync(ct))
         {
             if (await userManager.FindByIdAsync(dto.Id) is not null)
@@ -36,7 +37,7 @@ public class IdentityUserSeeder(
             {
                 logger.LogError("Failed to create user {User}: {Errors}", dto.UserName,
                     string.Join("; ", result.Errors.Select(e => e.Description)));
-                return;
+                continue;
             }
 
             // Uncomment to seed roles
@@ -50,6 +51,10 @@ public class IdentityUserSeeder(
             //         await userManager.AddToRoleAsync(user, role);
             //     }
             // }
+
+            count++;
         }
+
+        logger.LogInformation("Seeded {Count} {Entity}", count, nameof(IdentityUserSeedDto));
     }
 }
