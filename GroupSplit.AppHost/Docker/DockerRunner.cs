@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace GroupSplit.AppHost;
+namespace GroupSplit.AppHost.Docker;
 
 public class DockerRunner(IProcessCommandService processCommandService, ILogger<DockerRunner> logger)
 {
