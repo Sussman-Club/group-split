@@ -144,9 +144,10 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                 Transaction = transaction,
                 PayingUser = payingUser,
                 RuleVersion = ruleVersion,
-                RuleAllowsUserTransactions = ruleVersion != null &&
-                                             (ruleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0 &&
-                                             (transaction.RuleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0
+                RuleAllowsUserTransactions = ruleVersion == transaction.RuleVersion || 
+                                             (ruleVersion != null &&
+                                              (ruleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0 && 
+                                              (transaction.RuleVersion.Rule.Flags & RuleFlags.NoUserTransactions) == 0)
             };
 
         var result = await query.FirstOrDefaultAsync(ct);
