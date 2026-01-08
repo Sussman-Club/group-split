@@ -19,6 +19,7 @@ public static class TransactionApi
             group.WithTags("Transactions");
 
             group.MapGetAll();
+            group.MapGetById();
             group.MapCreate();
             group.MapUpdate();
             group.MapDelete();
@@ -46,6 +47,21 @@ public static class TransactionApi
                 })
                 .WithName("GetTransactions")
                 .Produces<TransactionResponse[]>();
+        }
+        
+        private RouteHandlerBuilder MapGetById()
+        {
+            return group.MapGet("{id:guid}", async (
+                    Guid id,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var details = await transactionService.GetDetails(id, ct);
+                    return details is not null ? Results.Ok(details) : Results.NotFound();
+                })
+                .WithName("GetTransaction")
+                .Produces<TransactionDetailsResponse>()
+                .Produces(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapCreate()
