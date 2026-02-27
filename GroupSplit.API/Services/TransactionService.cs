@@ -11,6 +11,7 @@ public interface ITransactionService
     Task<IQueryable<Transaction>> Get(Guid id, CancellationToken ct = default);
     ValueTask<Transaction> Create(CreateTransactionRequest request, CancellationToken ct = default);
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
+    Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default);
     ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
     Task Delete(Guid id, CancellationToken ct = default);
 }
@@ -94,6 +95,75 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
         await dbContext.SaveChangesAsync(ct);
 
         return transaction;
+    }
+
+    private async IAsyncEnumerable<TransactionSplitResponse> GetTransactionSplits(Transaction transaction, CancellationToken ct = default)
+    {
+        var ruleVersion = transaction.RuleVersion;
+
+        switch (ruleVersion)
+        {
+            case PercentRuleVersion percentRuleVersion:
+            {
+                var ruleUsers = await dbContext.Entry(percentRuleVersion)
+                    .Collection(rv => rv.RuleUsers)
+                    .Query()
+                    .Include(ru => ru.User)
+                    .ToListAsync(ct);
+
+                foreach (var ru in ruleUsers)
+                {
+                    yield return new TransactionSplitResponse(
+                        $"{ru.User.FirstName} {ru.User.LastName}",
+                        ru.User == transaction.User 
+                            ? transaction.Amount - (from otherUser in ruleUsers where otherUser != ru select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum() 
+                            : Math.Truncate(transaction.Amount * (decimal)ru.Percentage) / 100
+                    );
+                }
+                
+                break;
+            }
+            default:
+                yield return new TransactionSplitResponse(
+                    $"{transaction.User.FirstName} {transaction.User.LastName}",
+                    transaction.Amount
+                );
+                
+                break;
+        }
+    }
+
+    public async Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default)
+    {
+        var transaction = await (from t in dbContext.Set<Transaction>()
+                where t.Id == id
+                select t)
+            .Include(t => t.User)
+            .Include(t => t.RuleVersion)
+            .ThenInclude(rv => rv.Rule)
+            .ThenInclude(r => r.Group)
+            .FirstOrDefaultAsync(ct);
+
+        if (transaction is null)
+            return null;
+
+        var splits = await GetTransactionSplits(transaction, ct).ToListAsync(ct);
+
+        return new TransactionDetailsResponse
+        {
+            Id = transaction.Id,
+            Name = transaction.Name,
+            Description = transaction.Description,
+            Amount = transaction.Amount,
+            DateTime = transaction.DateTime,
+            GroupId = transaction.RuleVersion.Rule.Group.Id,
+            GroupName = transaction.RuleVersion.Rule.Group.Name,
+            PaidByUserId = transaction.User.Id,
+            PaidByUserName = $"{transaction.User.FirstName} {transaction.User.LastName}",
+            RuleVersionId = transaction.RuleVersion.Id,
+            Category = transaction.RuleVersion.Rule.Category,
+            Splits = splits
+        };
     }
 
     public async Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)

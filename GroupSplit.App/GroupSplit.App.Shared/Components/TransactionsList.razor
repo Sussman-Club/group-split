@@ -1,5 +1,5 @@
 @using GroupSplit.Shared
-
+@inject IDialogService DialogService
 
 <MudStack Spacing="3">
     <MudText Typo="Typo.h6" Class="font-weight-bold">@Title</MudText>
@@ -41,10 +41,15 @@
     [Parameter] public string Title { get; set; } = "Transactions";
     [Parameter] public ICollection<TransactionResponse> Transactions { get; set; } = null!;
 
-    private void ViewExpenseDetails(TransactionResponse transaction)
+    private async Task ViewExpenseDetails(TransactionResponse transaction)
     {
-        // TODO: Implement expense details dialog/modal
-        // Show expense details: description, amount, who paid, date, how it was split, etc.
+        var parameters = new DialogParameters<TransactionDetailsDialog>
+        {
+            { x => x.TransactionId, transaction.Id }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
     }
 
 }
