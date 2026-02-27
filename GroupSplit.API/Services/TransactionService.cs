@@ -114,7 +114,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
                 foreach (var ru in ruleUsers)
                 {
                     yield return new TransactionSplitResponse(
-                        $"{transaction.User.FirstName} {transaction.User.LastName}",
+                        $"{ru.User.FirstName} {ru.User.LastName}",
                         ru.User == transaction.User 
                             ? transaction.Amount - (from otherUser in ruleUsers where otherUser != ru select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum() 
                             : Math.Truncate(transaction.Amount * (decimal)ru.Percentage) / 100
