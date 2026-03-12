@@ -26,23 +26,6 @@ public static class Extensions
                 .WithReference(dbResourceBuilder);
         }
 
-        public IResourceBuilder<TProjectResource> WithScalarUrl()
-        {
-            return resourceBuilder
-                .WithUrls(ctx =>
-                {
-                    foreach (var url in ctx.Urls.Where(x => x.Endpoint?.EndpointName is "http" or "https"))
-                    {
-                        url.DisplayLocation = UrlDisplayLocation.DetailsOnly;
-                    }
-                })
-                .WithUrlForEndpoint("http", _ => new ResourceUrlAnnotation
-                {
-                    Url = "/scalar/v1",
-                    DisplayLocation = UrlDisplayLocation.SummaryAndDetails
-                });
-        }
-
         public IResourceBuilder<TProjectResource> WithProjectDefaults(ProjectResourceOptions options)
         {
             var containingType = typeof(ProjectResourceBuilderExtensions);

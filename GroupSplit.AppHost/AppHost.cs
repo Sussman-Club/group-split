@@ -3,6 +3,7 @@ using GroupSplit.AppHost.Docker;
 using GroupSplit.AppHost.EntityFramework;
 using GroupSplit.AppHost.Seeder;
 using Projects;
+using Scalar.Aspire;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -30,7 +31,6 @@ if (builder.ExecutionContext.IsRunMode)
 var backend = builder.AddProject<GroupSplit_API>("api")
     .WithDatabase(db)
     .WithDatabase(identityDb)
-    .WithScalarUrl()
     .WithHttpHealthCheck("/health");
 
 var frontend = builder.AddProject<GroupSplit_App_Web>("web")
@@ -47,6 +47,10 @@ var seeder = builder
     .WithDatabase(db)
     .WithDatabase(identityDb)
     .WithResetAndSeedCommand();
+
+var scalar = builder.AddScalarApiReference();
+
+scalar.WithApiReference(backend);
 
 var host = builder.Build();
 
