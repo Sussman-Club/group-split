@@ -5,18 +5,41 @@ using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.App.Web;
 using GroupSplit.App.Web.Components;
 using GroupSplit.App.Web.Services;
-using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.Services
-    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options => options.ConfigureOptions());
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+    })
+    .AddCookie()
+    .AddKeycloakOpenIdConnect(
+        serviceName: "keycloak",
+        realm: "group-split",
+        options =>
+        {
+            options.ClientId = "web-app";
+            options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            options.ResponseType = OpenIdConnectResponseType.Code;
+            
+            options.SaveTokens = true;
+            options.UsePkce = true;
+            
+            // For development only - disable HTTPS metadata validation
+            // In production, use explicit Authority configuration instead
+            if (builder.Environment.IsDevelopment())
+            {
+                options.RequireHttpsMetadata = false;
+            }
+        });
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorizationBuilder();
@@ -46,10 +69,6 @@ builder.Services.AddMudServices();
 // Add the forwarder to make sending requests to the backend easier
 builder.Services.AddHttpForwarderWithServiceDiscovery();
 
-builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://api");
-});
 
 // NOTE: The BFF invokes AuthService from the client-side only.
 // This registration exists only to satisfy DI requirements.

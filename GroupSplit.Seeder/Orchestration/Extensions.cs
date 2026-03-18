@@ -1,5 +1,4 @@
 ﻿using GroupSplit.API.Extensions;
-using GroupSplit.Identity;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.DataSources;
 using GroupSplit.Seeder.Options;
@@ -29,10 +28,6 @@ public static class Extensions
         {
             // Data sources
             builder.Services.AddSeedDataSources();
-
-            // Identity seeders
-            builder.Services.AddIdentityCore<User>().AddEntityFrameworkStores<AppIdentityContext>();
-            builder.AddSeeder<IdentityUserSeeder>();
 
             // App seeders
             builder.AddSeeder<GroupSeeder>();

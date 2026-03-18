@@ -1,9 +1,3 @@
-using System.Security.Claims;
-using GroupSplit.App.Web.Authentication;
-using GroupSplit.Shared;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-
 namespace GroupSplit.App.Web;
 
 public static class IdentityApi
@@ -19,64 +13,27 @@ public static class IdentityApi
         return group;
     }
 
-    extension(RouteGroupBuilder group)
+    private static void MapRegister(this RouteGroupBuilder group)
     {
-        private RouteGroupBuilder MapRegister()
+        group.MapGet("/register", (HttpContext httpContext) =>
         {
-            group.MapPost("/register",
-                async (RegisterRequest request, IIdentityClient client) =>
-                {
-                    await client.RegisterAsync(request);
-                });
-            return group;
-        }
-
-        private RouteGroupBuilder MapLogin()
-        {
-            group.MapPost("/login", async (
-                LoginRequest login,
-                IIdentityClient client
-            ) =>
-            {
-                var tokenResponse = await client.LoginAsync(
-                    login,
-                    useCookies: false,
-                    useSessionCookies: false
-                );
-
-                var userInfo = new UserIdentityInfo(login.Email);
-                return SignIn(userInfo, tokenResponse.AccessToken);
-            });
-            return group;
-        }
-
-        private RouteGroupBuilder MapLogout()
-        {
-            group.MapPost("logout",
-                    async context => { await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme); })
-                .RequireAuthorization();
-            return group;
-        }
+            throw new NotImplementedException("Registration is not supported on server-side. Please invoke registration from the client-side.");
+        });
     }
 
-    private static IResult SignIn(UserIdentityInfo userInfo, string token)
+    private static void MapLogin(this RouteGroupBuilder group)
     {
-        return SignIn(userInfo.Email, token);
+        group.MapGet("/login", (HttpContext httpContext) =>
+        {
+            throw new NotImplementedException("Login is not supported on server-side. Please invoke login from the client-side.");
+        });
     }
 
-    private static IResult SignIn(string userName, string token)
+    private static void MapLogout(this RouteGroupBuilder group)
     {
-        var identity = new ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme);
-        identity.AddClaim(new Claim(ClaimTypes.Name, userName));
-
-        var properties = new AuthenticationProperties();
-
-        properties.StoreTokens([
-            new AuthenticationToken { Name = TokenNames.AccessToken, Value = token }
-        ]);
-
-        return Results.SignIn(new ClaimsPrincipal(identity),
-            properties: properties,
-            authenticationScheme: CookieAuthenticationDefaults.AuthenticationScheme);
+        group.MapGet("/logout", (HttpContext httpContext) =>
+        {
+            throw new NotImplementedException("Logout is not supported on server-side. Please invoke logout from the client-side.");
+        });
     }
 }

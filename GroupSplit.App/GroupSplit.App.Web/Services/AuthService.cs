@@ -7,17 +7,17 @@ namespace GroupSplit.App.Web.Services;
 // This implementation exists only to satisfy DI requirements.
 public class AuthService : IAuthService
 {
-    public Task Login(LoginRequest request, CancellationToken ct)
+    public Task Login(CancellationToken ct)
     {
         throw new InvalidOperationException("Auth operations are not supported on server-side.");
     }
 
-    public Task Register(RegisterRequest request, CancellationToken ct)
+    public Task Register(CancellationToken ct)
     {
         throw new InvalidOperationException("Auth operations are not supported on server-side.");
     }
 
-    public Task Logout()
+    public Task Logout(CancellationToken ct)
     {
         throw new InvalidOperationException("Auth operations are not supported on server-side.");
     }

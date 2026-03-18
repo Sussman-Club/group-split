@@ -89,7 +89,7 @@
         await SignUpForm.Validate();
         if (!valid)
             return;
-        await AuthService.Register(new RegisterRequest() { Email = Email!, Password = Password! }, CancellationToken.None);
+        await AuthService.Register(CancellationToken.None);
         Nav.NavigateTo("/login");
     }
 }
