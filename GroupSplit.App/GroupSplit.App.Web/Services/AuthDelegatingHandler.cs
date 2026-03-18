@@ -1,9 +1,8 @@
-using GroupSplit.App.Web.Authentication;
-using Microsoft.AspNetCore.Authentication;
-
 namespace GroupSplit.App.Web.Services;
 
-internal class AuthDelegatingHandler(IHttpContextAccessor httpContextAccessor) : DelegatingHandler
+internal class AuthDelegatingHandler(
+    IHttpContextAccessor httpContextAccessor,
+    TokenRefreshService tokenRefreshService) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -15,7 +14,7 @@ internal class AuthDelegatingHandler(IHttpContextAccessor httpContextAccessor) :
             };
         }
         
-        var token = await httpContextAccessor.HttpContext.GetTokenAsync(TokenNames.AccessToken);
+        var token = await tokenRefreshService.GetValidAccessTokenAsync(httpContextAccessor.HttpContext, cancellationToken);
 
         if (token is null)
         {

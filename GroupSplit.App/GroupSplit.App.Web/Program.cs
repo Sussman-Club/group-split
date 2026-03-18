@@ -42,6 +42,7 @@ builder.Services.AddAuthentication(options =>
         });
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 builder.Services.AddAuthorizationBuilder();
 
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
@@ -68,6 +69,7 @@ builder.Services.AddMudServices();
 
 // Add the forwarder to make sending requests to the backend easier
 builder.Services.AddHttpForwarderWithServiceDiscovery();
+builder.Services.AddScoped<TokenRefreshService>();
 
 
 // NOTE: The BFF invokes AuthService from the client-side only.
