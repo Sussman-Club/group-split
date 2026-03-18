@@ -25,6 +25,7 @@ if (builder.ExecutionContext.IsRunMode)
 }
 
 var keycloak = builder.AddKeycloak("keycloak", 8080)
+    .WithRealmImport("./realms.json")
     .WithDataVolume()
     .WithOtlpExporter();
 
