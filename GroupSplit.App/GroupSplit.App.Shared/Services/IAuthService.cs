@@ -1,10 +1,8 @@
-﻿using GroupSplit.Shared;
-
-namespace GroupSplit.App.Shared.Services;
+﻿namespace GroupSplit.App.Shared.Services;
 
 public interface IAuthService
 {
-    Task Register(RegisterRequest request, CancellationToken ct);
-    Task Login(LoginRequest request, CancellationToken ct);
-    Task Logout();
+    Task Register(CancellationToken ct = default);
+    Task Login(CancellationToken ct = default);
+    Task Logout(CancellationToken ct = default);
 }

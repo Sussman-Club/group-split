@@ -1,8 +1,7 @@
-using System.Security.Claims;
-using GroupSplit.App.Web.Authentication;
-using GroupSplit.Shared;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GroupSplit.App.Web;
 
@@ -19,64 +18,36 @@ public static class IdentityApi
         return group;
     }
 
-    extension(RouteGroupBuilder group)
+    private static void MapRegister(this RouteGroupBuilder group)
     {
-        private RouteGroupBuilder MapRegister()
+        group.MapGet("/register", () =>
         {
-            group.MapPost("/register",
-                async (RegisterRequest request, IIdentityClient client) =>
-                {
-                    await client.RegisterAsync(request);
-                });
-            return group;
-        }
-
-        private RouteGroupBuilder MapLogin()
-        {
-            group.MapPost("/login", async (
-                LoginRequest login,
-                IIdentityClient client
-            ) =>
+            var properties = new AuthenticationProperties
             {
-                var tokenResponse = await client.LoginAsync(
-                    login,
-                    useCookies: false,
-                    useSessionCookies: false
-                );
+                RedirectUri = "/",
+                Items =
+                {
+                    ["prompt"] = "register"
+                }
+            };
+            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
+        });
+    }
 
-                var userInfo = new UserIdentityInfo(login.Email);
-                return SignIn(userInfo, tokenResponse.AccessToken);
-            });
-            return group;
-        }
-
-        private RouteGroupBuilder MapLogout()
+    private static void MapLogin(this RouteGroupBuilder group)
+    {
+        group.MapGet("/login", ([FromQuery] string? returnUrl) =>
         {
-            group.MapPost("logout",
-                    async context => { await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme); })
-                .RequireAuthorization();
-            return group;
-        }
+            var properties = new AuthenticationProperties { RedirectUri = returnUrl ?? "/" };
+            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
+        });
     }
 
-    private static IResult SignIn(UserIdentityInfo userInfo, string token)
+    private static void MapLogout(this RouteGroupBuilder group)
     {
-        return SignIn(userInfo.Email, token);
-    }
-
-    private static IResult SignIn(string userName, string token)
-    {
-        var identity = new ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme);
-        identity.AddClaim(new Claim(ClaimTypes.Name, userName));
-
-        var properties = new AuthenticationProperties();
-
-        properties.StoreTokens([
-            new AuthenticationToken { Name = TokenNames.AccessToken, Value = token }
-        ]);
-
-        return Results.SignIn(new ClaimsPrincipal(identity),
-            properties: properties,
-            authenticationScheme: CookieAuthenticationDefaults.AuthenticationScheme);
+        group.MapGet("/logout", () => Results.SignOut(
+            properties: new AuthenticationProperties { RedirectUri = "/" },
+            authenticationSchemes:
+            [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
     }
 }

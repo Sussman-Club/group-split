@@ -1,26 +1,21 @@
 ﻿using GroupSplit.App.Shared.Services;
-using GroupSplit.Shared;
 
 namespace GroupSplit.App.Services;
 
-public class AuthService(IIdentityClient identityClient) : IAuthService
+public class AuthService : IAuthService
 {
-    public AccessTokenResponse? AccessTokenResponse { get; set; }
-
-    public async Task Login(LoginRequest request, CancellationToken ct)
-    {
-        //AccessTokenResponse = await identityClient.PostIdentityLoginAsync(false, false, request, ct);
-        AccessTokenResponse = await identityClient.LoginAsync(request, false, false, ct);
-    }
-
-    public Task Logout()
+    public Task Register(CancellationToken ct = default)
     {
         throw new NotImplementedException();
     }
 
-    public async Task Register(RegisterRequest request, CancellationToken ct)
+    public Task Login(CancellationToken ct = default)
     {
-        //await identityClient.PostIdentityRegisterAsync(request, ct);
-        await identityClient.RegisterAsync(request, ct);
+        throw new NotImplementedException();
+    }
+
+    public Task Logout(CancellationToken ct = default)
+    {
+        throw new NotImplementedException();
     }
 }

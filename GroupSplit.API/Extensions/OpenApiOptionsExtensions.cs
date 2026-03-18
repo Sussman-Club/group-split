@@ -3,8 +3,6 @@ using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -20,8 +18,6 @@ public static class OpenApiOptionsExtensions
             {
                 services.AddOpenApi("api", options =>
                 {
-                    options.ShouldInclude = description => !IdentityPath(description);
-
                     options.CreateSchemaReferenceId = typeInfo =>
                     {
                         if (typeInfo.Type is not { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
@@ -49,22 +45,6 @@ public static class OpenApiOptionsExtensions
 
                     options.AddBearerTokenAuthentication();
                 });
-
-                services.AddOpenApi("identity", options =>
-                {
-                    options.ShouldInclude = IdentityPath;
-
-                    options.AddDocumentTransformer(async (doc, ctx, ct) =>
-                    {
-                        var schema1 = await ctx.GetOrCreateSchemaAsync(
-                            typeof(ProblemDetails),
-                            cancellationToken: ct);
-
-                        doc.AddComponent("ProblemDetails", schema1);
-                    });
-
-                    options.AddBearerTokenAuthentication();
-                });
             }
             else
             {
@@ -72,12 +52,6 @@ public static class OpenApiOptionsExtensions
             }
 
             return services;
-
-            bool IdentityPath(ApiDescription description)
-            {
-                var path = description.RelativePath ?? string.Empty;
-                return path.StartsWith("identity", StringComparison.OrdinalIgnoreCase);
-            }
         }
     }
 

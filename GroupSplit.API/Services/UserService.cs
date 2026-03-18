@@ -60,8 +60,10 @@ public class UserService(IHttpContextAccessor httpContextAccessor) : IUserServic
 
         user = new User
         {
-            Identity = new UserIdentity { IdentityId = claimUserId },
+            FirstName = claimsPrincipal.FindFirstValue(ClaimTypes.GivenName),
+            LastName = claimsPrincipal.FindFirstValue(ClaimTypes.Surname),
             Email = claimsPrincipal.FindFirstValue(ClaimTypes.Email),
+            Identity = new UserIdentity { IdentityId = claimUserId },
             PersonalGroup = personalGroup, 
             Groups =
             {

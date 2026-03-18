@@ -1,12 +1,8 @@
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
-using GroupSplit.API.Identity;
 using GroupSplit.API.Services;
 using GroupSplit.Data.PostgreSQL;
-using GroupSplit.Identity;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,18 +10,25 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 // Configure auth
-builder.Services.AddAuthentication().AddBearerToken(IdentityConstants.BearerScheme);
+builder.Services.AddAuthentication()
+    .AddKeycloakJwtBearer(
+        serviceName: "keycloak",
+        realm: "group-split",
+        options =>
+        {
+            options.Audience = "api";
+            
+            // For development only - disable HTTPS metadata validation
+            // In production, use explicit Authority configuration instead
+            if (builder.Environment.IsDevelopment())
+            {
+                options.RequireHttpsMetadata = false;
+            }
+        });
+
 builder.Services.AddAuthorizationBuilder();
 
-// Configure identity
-builder.Services.AddIdentityCore<User>()
-    .AddEntityFrameworkStores<AppIdentityContext>()
-    .AddApiEndpoints();
-
-builder.Services.AddDbContext<AppIdentityContext>(options =>
-{
-    options.UseNpgsql(builder.Configuration.GetConnectionString("identity"));
-});
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionString("db"));
 builder.Services.AddSingleton<IUserService, UserService>();
@@ -51,8 +54,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-app.MapIdentity();
 
 var summaries = new[]
 {
