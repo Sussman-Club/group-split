@@ -17,10 +17,7 @@ builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
 // Add Auth client
-builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
-{
-    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
-});
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Add authorization services
 builder.Services.AddAuthorizationCore();

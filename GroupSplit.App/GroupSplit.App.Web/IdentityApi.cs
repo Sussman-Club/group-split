@@ -1,3 +1,8 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Mvc;
+
 namespace GroupSplit.App.Web;
 
 public static class IdentityApi
@@ -15,25 +20,34 @@ public static class IdentityApi
 
     private static void MapRegister(this RouteGroupBuilder group)
     {
-        group.MapGet("/register", (HttpContext httpContext) =>
+        group.MapGet("/register", () =>
         {
-            throw new NotImplementedException("Registration is not supported on server-side. Please invoke registration from the client-side.");
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = "/",
+                Items =
+                {
+                    ["prompt"] = "register"
+                }
+            };
+            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
         });
     }
 
     private static void MapLogin(this RouteGroupBuilder group)
     {
-        group.MapGet("/login", (HttpContext httpContext) =>
+        group.MapGet("/login", ([FromQuery] string? returnUrl) =>
         {
-            throw new NotImplementedException("Login is not supported on server-side. Please invoke login from the client-side.");
+            var properties = new AuthenticationProperties { RedirectUri = returnUrl ?? "/" };
+            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
         });
     }
 
     private static void MapLogout(this RouteGroupBuilder group)
     {
-        group.MapGet("/logout", (HttpContext httpContext) =>
-        {
-            throw new NotImplementedException("Logout is not supported on server-side. Please invoke logout from the client-side.");
-        });
+        group.MapGet("/logout", () => Results.SignOut(
+            properties: new AuthenticationProperties { RedirectUri = "/" },
+            authenticationSchemes:
+            [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
     }
 }

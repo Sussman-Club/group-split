@@ -74,7 +74,7 @@ builder.Services.AddScoped<TokenRefreshService>();
 
 // NOTE: The BFF invokes AuthService from the client-side only.
 // This registration exists only to satisfy DI requirements.
-builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 var app = builder.Build();
 

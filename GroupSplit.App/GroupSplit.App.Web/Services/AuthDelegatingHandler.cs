@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+
 namespace GroupSplit.App.Web.Services;
 
 internal class AuthDelegatingHandler(
@@ -18,6 +21,8 @@ internal class AuthDelegatingHandler(
 
         if (token is null)
         {
+            await httpContextAccessor.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
             return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
             {
                 RequestMessage = request

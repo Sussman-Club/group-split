@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.Transforms;
 
@@ -32,7 +33,7 @@ public static class WebAppExtensions
 
                     if (string.IsNullOrWhiteSpace(accessToken))
                     {
-                        await requestTransformContext.HttpContext.SignOutAsync();
+                        await requestTransformContext.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                         return;
                     }
 

@@ -1,22 +1,25 @@
 ﻿using GroupSplit.App.Shared.Services;
-using GroupSplit.App.Shared.Services.Users;
+using Microsoft.AspNetCore.Components;
 
 namespace GroupSplit.App.Web.Client.Services;
 
-public class AuthService(HttpClient client, IUserLogin userLogin) : IAuthService
+public class AuthService(NavigationManager nav) : IAuthService
 {
-    public async Task Register(CancellationToken ct)
+    public Task Register(CancellationToken ct)
     {
-        throw new NotImplementedException();
+        nav.NavigateTo("/auth/register", forceLoad: true);
+        return Task.CompletedTask;
     }
     
-    public async Task Login(CancellationToken ct)
+    public Task Login(CancellationToken ct)
     {
-        throw new NotImplementedException();
+        nav.NavigateTo("/auth/login", forceLoad: true);
+        return Task.CompletedTask;
     }
 
-    public async Task Logout(CancellationToken ct)
+    public Task Logout(CancellationToken ct)
     {
-        throw new NotImplementedException();
+        nav.NavigateTo("/auth/logout", forceLoad: true);
+        return Task.CompletedTask;
     }
 }
