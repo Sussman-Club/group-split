@@ -21,7 +21,7 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak")
 
 var mailpit = builder.AddMailPit("mailpit");
 
-var keycloak = builder.AddKeycloak("keycloak", 8080)
+var keycloak = builder.AddKeycloak("keycloak")
     .WithRealmImport("./realms.json")
     .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
