@@ -30,7 +30,6 @@ public static class ServiceExtensions
             services.AddApiClient<IGroupsClient, GroupsClient>();
             services.AddApiClient<ITransactionsClient, TransactionsClient>();
             services.AddApiClient<IRulesClient, RulesClient>();
-            services.AddApiClient<IWeatherClient, WeatherClient>();
             
             return services;
         }
