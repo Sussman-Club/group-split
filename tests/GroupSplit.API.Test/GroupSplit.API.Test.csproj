@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
+    <ProjectReference Include="..\..\src\GroupSplit.API\GroupSplit.API.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "GroupSplit.AppHost/GroupSplit.AppHost.csproj"
+    "path": "src/GroupSplit.AppHost/GroupSplit.AppHost.csproj"
   }
 }

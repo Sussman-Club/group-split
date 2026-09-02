@@ -15,25 +15,25 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 
 | Component | Purpose |
 | --- | --- |
-| `GroupSplit.API` | ASP.NET Core API for groups, transactions, rules, and users |
-| `GroupSplit.App/GroupSplit.App.Web` | Blazor web client |
-| `GroupSplit.App` | .NET MAUI client |
-| `GroupSplit.Data` + `GroupSplit.Data.PostgreSQL*` | Domain models, data access, and PostgreSQL integration |
-| `GroupSplit.Identity` | Authentication and identity data context |
-| `GroupSplit.AppHost` | .NET Aspire orchestration for local development |
-| `GroupSplit.API.Test` / `GroupSplit.AppHost.Test` | API and orchestration tests |
+| `src/GroupSplit.API` | ASP.NET Core API for groups, transactions, rules, and users |
+| `src/GroupSplit.App/GroupSplit.App.Web` | Blazor web client |
+| `src/GroupSplit.App/GroupSplit.App` | .NET MAUI client |
+| `src/GroupSplit.Data` + `src/GroupSplit.Data.PostgreSQL*` | Domain models, data access, and PostgreSQL integration |
+| `src/GroupSplit.AppHost` | .NET Aspire orchestration for local development |
+| `src/GroupSplit.ServiceDefaults` | Shared telemetry, health check, and service discovery defaults |
+| `tests/GroupSplit.API.Test` / `tests/GroupSplit.AppHost.Test` | API and orchestration tests |
 
 ## Run locally
 
 ```bash
-dotnet run --project GroupSplit.AppHost
+dotnet run --project src/GroupSplit.AppHost
 ```
 
 ## Test
 
 ```bash
-dotnet test GroupSplit.API.Test
-dotnet test GroupSplit.AppHost.Test
+dotnet test tests/GroupSplit.API.Test
+dotnet test tests/GroupSplit.AppHost.Test
 ```
 
 ## Tech stack
