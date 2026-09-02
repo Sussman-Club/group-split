@@ -51,7 +51,10 @@ var seeder = builder
 if (builder.ExecutionContext.IsRunMode)
 {
     var migrations = db
-        .AddEFMigrations("migrations", "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj", dbContextTypeName: "AppDbContext", connectionName: "DefaultConnection")
+        .AddEFMigrations("migrations",
+            "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
+            dbContextTypeName: "AppDbContext",
+            connectionName: "DefaultConnection")
         .RunDatabaseUpdateOnStart();
 
     // Nothing should touch the schema until migrations have been applied.
