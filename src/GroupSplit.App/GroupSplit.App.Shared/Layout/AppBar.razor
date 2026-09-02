@@ -1,4 +1,5 @@
-﻿@using GroupSplit.App.Shared.Services
+﻿@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.Shared
 @inject IAuthService AuthService
@@ -19,6 +20,7 @@
     </MudStack>
     <MudSpacer />
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <ThemeModeMenu />
         @if (UserInfo is not null)
         {
             <MudMenu Dense AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">

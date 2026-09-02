@@ -16,6 +16,7 @@ public static class ServiceExtensions
         public IServiceCollection AddSharedServices(ServiceLifetime sessionLifetime = ServiceLifetime.Scoped)
         {
             services.AddMudTheme();
+            services.TryAdd<ThemePreference>(sessionLifetime);
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();

@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IAuthService AuthService
+@inject NavigationManager Nav
 
 <PageTitle>Account - Group Split</PageTitle>
 
@@ -54,7 +55,7 @@
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.ManageAccounts"
-                               Href="/auth/account">
+                               OnClick="OpenAccountConsole">
                         Manage account
                     </MudButton>
                     <MudButton Variant="Variant.Outlined"
@@ -79,6 +80,10 @@
             .Select(part => part[0]));
 
     private Task LogoutAsync() => AuthService.Logout();
+
+    // A BFF endpoint, not a Blazor route: the router would otherwise intercept
+    // the navigation and fail to match it.
+    private void OpenAccountConsole() => Nav.NavigateTo("/auth/account", forceLoad: true);
 
     private RenderFragment Field(string label, string? value) =>
         @<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="4">

@@ -60,16 +60,29 @@ public static class IdentityApi
             [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
     }
 
-    /// <summary>Resolved server-side so the authority is never sent to the client.</summary>
+    /// <summary>Redirects to Keycloak's account console.</summary>
     private static void MapAccountConsole(this RouteGroupBuilder group)
     {
-        group.MapGet("/account", (IOptionsMonitor<OpenIdConnectOptions> options) =>
+        group.MapGet("/account", async (
+            IOptionsMonitor<OpenIdConnectOptions> optionsMonitor,
+            CancellationToken cancellationToken) =>
         {
-            var authority = options.Get(OpenIdConnectDefaults.AuthenticationScheme).Authority;
+            var options = optionsMonitor.Get(OpenIdConnectDefaults.AuthenticationScheme);
 
-            return string.IsNullOrWhiteSpace(authority)
+            if (options.ConfigurationManager is null)
+            {
+                return Results.NotFound();
+            }
+
+            // Authority is Aspire's "https+http://keycloak/realms/..." service
+            // discovery address, which only an HttpClient can resolve. The issuer
+            // from the discovery document is the URL a browser can actually reach.
+            var configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
+            var issuer = configuration.Issuer;
+
+            return string.IsNullOrWhiteSpace(issuer)
                 ? Results.NotFound()
-                : Results.Redirect($"{authority.TrimEnd('/')}/account");
+                : Results.Redirect($"{issuer.TrimEnd('/')}/account");
         })
         .RequireAuthorization();
     }
