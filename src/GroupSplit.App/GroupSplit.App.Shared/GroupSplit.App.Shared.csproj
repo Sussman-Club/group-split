@@ -37,11 +37,6 @@
             <Namespace>GroupSplit.Shared</Namespace>
             <Options>/TemplateDirectory:.\ClientTemplates /GenerateClientInterfaces:true /GenerateDtoTypes:false /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
         </OpenApiReference>
-        <OpenApiReference Include="..\..\GroupSplit.API\obj\Generated\GroupSplit.API_identity.json">
-            <ClassName>{controller}Client</ClassName>
-            <Namespace>GroupSplit.Shared</Namespace>
-            <Options>/TemplateDirectory:.\ClientTemplates /GenerateClientInterfaces:true /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
-        </OpenApiReference>
     </ItemGroup>
 
 </Project>

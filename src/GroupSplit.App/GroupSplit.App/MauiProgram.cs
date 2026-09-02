@@ -27,12 +27,6 @@ public static class MauiProgram
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<IAuthService>(ActivatorUtilities.GetServiceOrCreateInstance<AuthService>);
 
-        // Add Auth client
-        builder.Services.AddHttpClient<IIdentityClient, IdentityClient>(client =>
-        {
-            client.BaseAddress = new Uri("https+http://api");
-        });
-
         // Add HttpClient for API calls
         builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
         {
