@@ -4,7 +4,6 @@
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject ITransactionsPageStateService TransactionsService
-@inject MudTheme Theme
 @inject IDialogService DialogService
 @implements IAsyncDisposable
 
@@ -26,7 +25,7 @@
               AdornmentIcon="@Icons.Material.Outlined.Search"
               IconSize="Size.Medium"
               Immediate="true"
-              Style="@Theme.PaletteLight.Surface.BackgroundColorStyle"
+              Style="background-color: var(--mud-palette-surface);"
               Variant="Variant.Outlined"
               Class="flex-grow-1 pa-6"/>
 
