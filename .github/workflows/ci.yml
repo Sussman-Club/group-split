@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+# A new push to a PR supersedes the run already in flight.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test:
+    name: Build & unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # GroupSplit.App (the MAUI head) targets android/ios/maccatalyst and is
+      # deliberately excluded -- those need workloads, and ios/maccatalyst need
+      # macOS. The AppHost reaches the MAUI and migrations projects by path
+      # rather than ProjectReference, so neither is pulled in transitively:
+      # migrations is listed explicitly, MAUI is left to a future macOS job.
+      - name: Restore
+        run: |
+          dotnet restore tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
+          dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
+          dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
+
+      - name: Build
+        run: |
+          dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
+          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+
+      # GroupSplit.AppHost.Test is built but not run: it needs Docker, Playwright
+      # browsers and DCP from the Aspire CLI. Worth its own job later.
+      - name: Test
+        run: >
+          dotnet test tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
+          -c Release --no-build
+          --logger "trx;LogFileName=api-tests.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/
+          if-no-files-found: ignore
