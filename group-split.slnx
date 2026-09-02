@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
+    <Project Path="src/GroupSplit.Seeder/GroupSplit.Seeder.csproj" />
+    <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/App/">
+    <Project Path="src/GroupSplit.App/GroupSplit.App.Shared/GroupSplit.App.Shared.csproj" />
+    <Project Path="src/GroupSplit.App/GroupSplit.App.Web.Client/GroupSplit.App.Web.Client.csproj" />
+    <Project Path="src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj" />
+    <Project Path="src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj" />
+  </Folder>
+  <Folder Name="/src/Data/">
+    <Project Path="src/GroupSplit.Data/GroupSplit.Data.csproj" />
+  </Folder>
+  <Folder Name="/src/Data/PostgreSQL/">
+    <Project Path="src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj" />
+    <Project Path="src/GroupSplit.Data.PostgreSQL/GroupSplit.Data.PostgreSQL.csproj" />
+  </Folder>
+  <Folder Name="/src/Hosting/">
+    <Project Path="src/GroupSplit.AppHost/GroupSplit.AppHost.csproj" />
+    <Project Path="src/GroupSplit.ServiceDefaults/GroupSplit.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
+    <Project Path="tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj" />
+  </Folder>
+</Solution>
