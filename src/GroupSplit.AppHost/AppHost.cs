@@ -13,14 +13,22 @@ var dbServer = builder
     .WithPgWeb()
     .WithTerminal();
 
-var db = dbServer.AddDatabase("db")
+var db = dbServer.AddDatabase("db", "groupsplit")
     .WithPostgresMcp();
+
+var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak")
+    .WithPostgresMcp();
+
+var mailpit = builder.AddMailPit("mailpit");
 
 var keycloak = builder.AddKeycloak("keycloak", 8080)
     .WithRealmImport("./realms.json")
+    .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
+    .WithPostgres(keycloakDb)
     .WithOtlpExporter()
-    .WithTerminal();
+    .WithTerminal()
+    .WaitFor(mailpit);
 
 var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
