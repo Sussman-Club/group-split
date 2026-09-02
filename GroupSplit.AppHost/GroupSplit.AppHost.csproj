@@ -6,6 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <UserSecretsId>031551fd-13d2-4a55-a125-47bb17c6ec44</UserSecretsId>
+        <AspireUseCliBundle>true</AspireUseCliBundle>
     </PropertyGroup>
 
     <ItemGroup>
