@@ -1,4 +1,3 @@
-using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -24,21 +23,6 @@ public static class Extensions
             return resourceBuilder
                 .WaitFor(dbResourceBuilder)
                 .WithReference(dbResourceBuilder);
-        }
-
-        public IResourceBuilder<TProjectResource> WithProjectDefaults(ProjectResourceOptions options)
-        {
-            var containingType = typeof(ProjectResourceBuilderExtensions);
-
-            var method = containingType.GetMethod(
-                "WithProjectDefaults",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
-
-            var genericMethod = method!.MakeGenericMethod(resourceBuilder.GetType().GenericTypeArguments[0]);
-
-            var result = genericMethod.Invoke(null, [resourceBuilder, options]);
-            return (IResourceBuilder<TProjectResource>)result!;
         }
     }
 }

@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/App/">
+    <Project Path="GroupSplit.App/GroupSplit.App.Shared/GroupSplit.App.Shared.csproj" />
+    <Project Path="GroupSplit.App/GroupSplit.App.Web.Client/GroupSplit.App.Web.Client.csproj" />
+    <Project Path="GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj" />
+    <Project Path="GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj" />
+  </Folder>
+  <Folder Name="/Data/">
+    <Project Path="GroupSplit.Data/GroupSplit.Data.csproj" />
+  </Folder>
+  <Folder Name="/Data/PostgreSQL/">
+    <Project Path="GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj" />
+    <Project Path="GroupSplit.Data.PostgreSQL/GroupSplit.Data.PostgreSQL.csproj" />
+  </Folder>
+  <Folder Name="/Seeder/">
+    <Project Path="GroupSplit.Seeder/GroupSplit.Seeder.csproj" />
+  </Folder>
+  <Project Path="GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
+  <Project Path="GroupSplit.API/GroupSplit.API.csproj" />
+  <Project Path="GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj" />
+  <Project Path="GroupSplit.AppHost/GroupSplit.AppHost.csproj" />
+  <Project Path="GroupSplit.ServiceDefaults/GroupSplit.ServiceDefaults.csproj" />
+  <Project Path="GroupSplit.Shared/GroupSplit.Shared.csproj" />
+</Solution>

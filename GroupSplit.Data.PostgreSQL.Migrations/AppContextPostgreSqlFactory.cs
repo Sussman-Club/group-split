@@ -17,8 +17,9 @@ public class AppContextPostgreSqlFactory : IDesignTimeDbContextFactory<AppDbCont
         config.AddCommandLine(args);
         
         var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlAppDbContext>();
-
-        var connectionString = config.GetConnectionString("DefaultConnection") ?? "Host=localhost;Port=5432;Database=my_db;Username=my_user;Password=my_password";
+        
+        var connectionString = config.GetConnectionString("DefaultConnection") 
+                               ?? "Host=localhost;Port=5432;Database=my_db;Username=my_user;Password=my_password";
         
         optionsBuilder.UseNpgsql(connectionString, b => b.MigrationsAssembly(Assembly.GetAssembly(typeof(AppContextPostgreSqlFactory))!));
         

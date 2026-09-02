@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
+<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -16,10 +16,11 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Aspire.Hosting.Keycloak" Version="13.1.2-preview.1.26125.13" />
-      <PackageReference Include="Aspire.Hosting.Maui" Version="13.1.2-preview.1.26125.13" />
-      <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.1.2" />
-      <PackageReference Include="Scalar.Aspire" Version="0.9.6" />
+      <PackageReference Include="Aspire.Hosting.EntityFrameworkCore" Version="13.5.0-preview.1.26417.10" />
+      <PackageReference Include="Aspire.Hosting.Keycloak" Version="13.5.0-preview.1.26417.10" />
+      <PackageReference Include="Aspire.Hosting.Maui" Version="13.5.0-preview.1.26417.10" />
+      <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.5.0" />
+      <PackageReference Include="Scalar.Aspire" Version="0.11.15" />
     </ItemGroup>
 
     <PropertyGroup>

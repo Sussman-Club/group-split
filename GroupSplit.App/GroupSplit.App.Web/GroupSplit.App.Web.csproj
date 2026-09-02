@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.1.2-preview.1.26125.13" />
+    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.5.0-preview.1.26417.10" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="10.0.0" />
     <ProjectReference Include="..\..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />

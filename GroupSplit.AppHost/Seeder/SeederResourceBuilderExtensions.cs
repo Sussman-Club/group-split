@@ -1,11 +1,19 @@
-﻿using GroupSplit.AppHost.EntityFramework;
+using Aspire.Hosting.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.AppHost.Seeder;
 
+#pragma warning disable ASPIREPROJECTS001
+
 public static class SeederCommandNames
 {
     public const string ResetAndSeed = "reset-and-seed";
+}
+
+internal static class EfCommandNames
+{
+    /// <summary>Drops the database and re-applies all migrations. Registered by AddEFMigrations.</summary>
+    public const string DatabaseReset = "ef-database-reset";
 }
 
 public static class SeederResourceBuilderExtensions
@@ -34,13 +42,6 @@ public static class SeederResourceBuilderExtensions
 
     extension(IResourceBuilder<SeederResource> resourceBuilder)
     {
-        public IResourceBuilder<SeederResource> WithDatabase(
-            IResourceBuilder<IResourceWithConnectionString> dbResourceBuilder)
-        {
-            resourceBuilder.WithAnnotation(new DatabaseAnnotation(dbResourceBuilder.Resource));
-            return Extensions.WithDatabase(resourceBuilder, dbResourceBuilder);
-        }
-
         public IResourceBuilder<SeederResource> WithResetAndSeedCommand()
         {
             return resourceBuilder.WithCommand(
@@ -48,14 +49,13 @@ public static class SeederResourceBuilderExtensions
                 displayName: "Reset databases and seed",
                 executeCommand: async context =>
                 {
-                    var rcs = context.ServiceProvider.GetRequiredService<ResourceCommandService>();
+                    var rcs = context.Services.GetRequiredService<ResourceCommandService>();
+                    var model = context.Services.GetRequiredService<DistributedApplicationModel>();
 
-                    var dbResources = resourceBuilder.Resource.Annotations
-                        .OfType<DatabaseAnnotation>()
-                        .Select(x => x.Resource);
+                    var migrations = model.Resources.OfType<EFMigrationResource>();
 
-                    var tasks = dbResources.Select(resource =>
-                        rcs.ExecuteCommandAsync(resource, DatabaseCommandNames.Reset, context.CancellationToken));
+                    var tasks = migrations.Select(resource =>
+                        rcs.ExecuteCommandAsync(resource, EfCommandNames.DatabaseReset, context.CancellationToken));
 
                     foreach (var result in await Task.WhenAll(tasks))
                     {

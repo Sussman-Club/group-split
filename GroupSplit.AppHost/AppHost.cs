@@ -1,6 +1,6 @@
 using GroupSplit.AppHost;
 using GroupSplit.AppHost.Docker;
-using GroupSplit.AppHost.EntityFramework;
+using GroupSplit.AppHost.Migrations;
 using GroupSplit.AppHost.Seeder;
 using Projects;
 using Scalar.Aspire;
@@ -15,14 +15,6 @@ var dbServer = builder
     .WithPgWeb();
 
 var db = dbServer.AddDatabase("db");
-
-if (builder.ExecutionContext.IsRunMode)
-{
-    builder.AddEfInstaller("dotnet-ef-installer");
-
-    db.AddMigrationOrchestration<PostgresDatabaseResource, GroupSplit_Data_PostgreSQL_Migrations>("AppDbContext")
-        .WithDefaultCommands();
-}
 
 var keycloak = builder.AddKeycloak("keycloak", 8080)
     .WithRealmImport("./realms.json")
@@ -49,6 +41,17 @@ var seeder = builder
     .AddSeeder<GroupSplit_Seeder>("seeder")
     .WithDatabase(db)
     .WithResetAndSeedCommand();
+
+if (builder.ExecutionContext.IsRunMode)
+{
+    var migrations = db
+        .AddEFMigrations("migrations", new GroupSplit_Data_PostgreSQL_Migrations().ProjectPath, dbContextTypeName: "AppDbContext", connectionName: "DefaultConnection")
+        .RunDatabaseUpdateOnStart();
+
+    // Nothing should touch the schema until migrations have been applied.
+    backend.WaitFor(migrations);
+    seeder.WaitFor(migrations);
+}
 
 var scalar = builder.AddScalarApiReference();
 
