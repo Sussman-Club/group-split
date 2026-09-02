@@ -1,32 +1,56 @@
-﻿@page "/"
-@using GroupSplit.App.Shared.Services
-@using Microsoft.AspNetCore.Authorization
-@inject IFormFactor FormFactor
+@page "/"
+@using GroupSplit.Shared
+@attribute [AllowAnonymous]
 
-<PageTitle>Home</PageTitle>
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-    <MudPaper Elevation="4" Class="pa-6">
-        <MudStack Spacing="2">
-            <MudStack AlignItems="AlignItems.Center" Spacing="1">
-                <MudIcon Color="Color.Primary" Icon="@Icons.Material.Filled.Home" Size="Size.Large"/>
-                <MudText Typo="Typo.h4" Class="fw-bold">Welcome</MudText>
+<PageTitle>Group Split</PageTitle>
+
+<MudStack Spacing="6">
+    <MudStack Spacing="1">
+        <MudText Typo="Typo.h4" Class="font-weight-bold">
+            @(UserInfo is null ? "Welcome to Group Split" : $"Welcome back, {UserInfo.FirstName}")
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            Track what your group spends, split it by the rules you choose, and settle up.
+        </MudText>
+    </MudStack>
+
+    @if (UserInfo is null)
+    {
+        <MudPaper Elevation="0" Class="gs-surface-card pa-6">
+            <MudStack Spacing="4" AlignItems="AlignItems.Start">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Sign in to see your groups and balances.
+                </MudText>
+                <MudStack Row Spacing="3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">Sign in</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/signup">Create an account</MudButton>
+                </MudStack>
             </MudStack>
-            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">Your cross-platform GroupSplit experience</MudText>
-            <MudDivider/>
-            <MudStack Spacing="2">
-                <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled"
-                         Icon="@Icons.Material.Filled.Devices">Form Factor: @factor</MudChip>
-                <MudChip T="string" Color="Color.Info" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Apps">
-                    Platform: @platform</MudChip>
-            </MudStack>
-            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">
-                This application leverages .NET MAUI + Blazor with MudBlazor components.
-            </MudAlert>
-        </MudStack>
-    </MudPaper>
-</MudContainer>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="4">
+            @Shortcut("Groups", "Everyone you split with", Icons.Material.Filled.Groups, "/groups")
+            @Shortcut("Transactions", "What has been spent", Icons.Material.Filled.Receipt, "/transactions")
+            @Shortcut("Account", "Your profile and security", Icons.Material.Filled.AccountCircle, "/account")
+        </MudGrid>
+    }
+</MudStack>
 
 @code {
-    private string factor => FormFactor.GetFormFactor();
-    private string platform => FormFactor.GetPlatform();
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    private RenderFragment Shortcut(string title, string description, string icon, string href) =>
+        @<MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="0" Class="gs-surface-card gs-shortcut pa-5" Style="height: 100%">
+                <MudLink Href="@href" Underline="Underline.None">
+                    <MudStack Spacing="2">
+                        <MudIcon Icon="@icon" Color="Color.Primary" Size="Size.Large" />
+                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@title</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@description</MudText>
+                    </MudStack>
+                </MudLink>
+            </MudPaper>
+        </MudItem>;
 }

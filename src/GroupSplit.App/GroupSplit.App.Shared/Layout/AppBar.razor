@@ -2,7 +2,6 @@
 @using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.Shared
 @inject IAuthService AuthService
-@inject NavigationManager Nav
 @inject MudTheme Theme
 @inject IUserLogin UserLogin
 
@@ -25,22 +24,23 @@
             <MudMenu Dense AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <ActivatorContent>
                     <MudStack Style="height: var(--mud-appbar-height)" Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <MudText Typo="Typo.body2" Class="font-weight-medium">@UserInfo.FullName</MudText>
+                        <MudText Typo="Typo.body2" Class="font-weight-medium d-none d-sm-flex">@UserInfo.FullName</MudText>
                         <MudAvatar Style="@Theme.PaletteLight.PrimaryContrastText.BackgroundColorStyle" Size="Size.Small">
-                            @(string.Join("", UserInfo.FullName.Split(" ").Select(s => s[0])))
+                            @Initials
                         </MudAvatar>
                     </MudStack>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Label="Account"></MudMenuItem>
-                    <MudDivider></MudDivider>
-                    <MudMenuItem Label="Log Out" OnClick="TryLogout"></MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.AccountCircle" Label="Account" Href="/account" />
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" Label="Sign out" OnClick="TryLogout" />
                 </ChildContent>
             </MudMenu>
         }
         else
         {
-            <MudButton OnClick="@(() => Nav.NavigateTo("/login"))">Log In</MudButton>  
+            <MudButton Color="Color.Inherit" Href="/login">Sign in</MudButton>
+            <MudButton Color="Color.Inherit" Variant="Variant.Outlined" Href="/signup">Create account</MudButton>
         }
     </MudStack>
 </MudAppBar>
@@ -50,9 +50,13 @@
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
-    private async Task TryLogout(MouseEventArgs args)
-    {
-        await AuthService.Logout();
-        Nav.NavigateTo("/login");
-    }
+    private string Initials => string.Concat(
+        (UserInfo?.FullName ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(part => part[0]));
+
+    // Logout is a full-page navigation to the BFF, which ends the Keycloak
+    // session and lands back on "/".
+    private Task TryLogout(MouseEventArgs args) => AuthService.Logout();
 }
