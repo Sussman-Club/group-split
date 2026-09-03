@@ -17,9 +17,6 @@ var dbServer = builder
 var db = dbServer.AddDatabase("db", "groupsplit")
     .WithPostgresMcp();
 
-var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak")
-    .WithPostgresMcp();
-
 var mailpit = builder.AddMailPit("mailpit");
 
 var keycloak = builder.AddKeycloak("keycloak")
@@ -27,8 +24,6 @@ var keycloak = builder.AddKeycloak("keycloak")
     .WithRealmImport("./realms.json")
     .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
-    .WithPostgres(keycloakDb)
-    .WaitFor(keycloakDb)
     .WithOtlpExporter()
     .WithTerminal()
     .WaitFor(mailpit);
