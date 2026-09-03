@@ -103,18 +103,28 @@ jobs:
       - name: Build and prepare Compose artifacts
         run: aspire do prepare-compose --environment production --non-interactive
 
-      # There is no aggregate push step in Aspire 13.5, so each image is pushed by
-      # name. Adding a compute resource means adding it here.
+      # Aspire 13.5 has no aggregate push step, so each image is pushed by name. The names
+      # are discovered rather than hardcoded: they follow resource names, and only resources
+      # whose images we build get one, so a hardcoded list goes stale the moment a resource
+      # is renamed, added, or switched to a stock upstream image.
       - name: Push images
         shell: bash
         run: |
           set -euo pipefail
-          for step in push-api push-web push-keycloak push-db-server push-migrations-efmigrations-tool; do
+
+          steps=$(aspire deploy --list-steps --non-interactive | grep -v "Tags:" | grep -oE "push-[a-z0-9-]+" | sort -u | grep -v "^push-prereq$" || true)
+
+          if [ -z "$steps" ]; then
+            echo "No push steps found. Is a container registry configured?" >&2
+            exit 1
+          fi
+
+          echo "Pushing:" $steps
+          for step in $steps; do
             echo "::group::$step"
             aspire do "$step" --environment production --non-interactive
             echo "::endgroup::"
           done
-
       # Hand the generated compose file and env to Komodo, then deploy the stack.
       # The stack must already exist in Komodo in `file_contents` mode.
       - name: Deploy to Komodo
