@@ -24,6 +24,7 @@ jobs:
 
     env:
       SECRETS_JSON: ${{ toJSON(secrets) }}
+      VARS_JSON: ${{ toJSON(vars) }}
 
     steps:
       - name: Validate required secrets
@@ -31,41 +32,45 @@ jobs:
         run: |
           set -euo pipefail
 
-          required=(
-            KOMODO_URL
-            KOMODO_API_KEY
-            KOMODO_API_SECRET
-            KEYCLOAK_HOSTNAME
-            KEYCLOAK_PASSWORD
-            DB_SERVER_PASSWORD
-          )
-
           missing=0
-          for name in "${required[@]}"; do
+
+          # Credentials.
+          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET KEYCLOAK_PASSWORD DB_SERVER_PASSWORD; do
             if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")" ]; then
               echo "Missing required GitHub secret: ${name}" >&2
               missing=1
             fi
           done
+
+          # Non-sensitive deployment config, kept as variables so it stays readable.
+          for name in KEYCLOAK_HOSTNAME; do
+            if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")" ]; then
+              echo "Missing required GitHub variable: ${name}" >&2
+              missing=1
+            fi
+          done
+
           [ "$missing" -eq 0 ] || exit 1
 
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # Aspire reads deployment parameters from Parameters__<name>. Secret names are
-      # SCREAMING_SNAKE, parameter names are kebab-case, so export both spellings and
-      # let the ones that match a parameter win. Komodo and GitHub's own secrets are
-      # excluded: they configure this workflow, not the app.
-      - name: Export secrets as Aspire parameters
+      # Aspire reads deployment parameters from Parameters__<name>. Secret and variable
+      # names are SCREAMING_SNAKE, parameter names are kebab-case, so export both
+      # spellings and let the ones that match a parameter win. Komodo, registry and
+      # GitHub's own entries are excluded: they configure this workflow, not the app.
+      - name: Export secrets and variables as Aspire parameters
         shell: bash
         run: |
           set -euo pipefail
-          jq -r '
-            to_entries[]
-            | select(.key | test("^KOMODO_|^GITHUB_|^REGISTRY_") | not)
-            | "\(.key)=\(.value)",
-              "Parameters__\(.key | ascii_downcase | gsub("_";"-"))=\(.value)"
-          ' <<<"$SECRETS_JSON" >> "$GITHUB_ENV"
+          for payload in "$SECRETS_JSON" "$VARS_JSON"; do
+            jq -r '
+              to_entries[]
+              | select(.key | test("^KOMODO_|^GITHUB_|^REGISTRY_") | not)
+              | "\(.key)=\(.value)",
+                "Parameters__\(.key | ascii_downcase | gsub("_";"-"))=\(.value)"
+            ' <<<"$payload" >> "$GITHUB_ENV"
+          done
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
