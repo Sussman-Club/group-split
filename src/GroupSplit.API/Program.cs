@@ -29,10 +29,12 @@ builder.Services.AddAuthentication()
                     ?? throw new InvalidOperationException(
                         "Keycloak:Authority must be configured outside of development.");
 
-                // Tokens carry the issuer the browser saw, so the authority has to match it
-                // rather than the internal address. An http:// one is an explicit opt-in.
-                options.RequireHttpsMetadata = builder.Configuration
-                    .GetValue("Keycloak:RequireHttpsMetadata", true);
+                // Defaults to the strictest setting the authority can support: an https
+                // authority gets metadata validation, an http one cannot have it. So putting
+                // TLS in front of Keycloak turns this on by itself.
+                options.RequireHttpsMetadata =
+                    builder.Configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata")
+                    ?? options.Authority.StartsWith(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
             }
         });
 

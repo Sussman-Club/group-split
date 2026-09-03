@@ -81,10 +81,12 @@ public static class AuthenticationExtensions
                                 ?? throw new InvalidOperationException(
                                     "Keycloak:Authority must be configured outside of development.");
 
-                            // An http:// authority is only defensible on a trusted network, so it
-                            // stays an explicit opt-in rather than being inferred from the scheme.
-                            options.RequireHttpsMetadata = builder.Configuration
-                                .GetValue("Keycloak:RequireHttpsMetadata", true);
+                            // Defaults to the strictest setting the authority can support: an
+                            // https authority gets metadata validation, an http one cannot have
+                            // it. So putting TLS in front of Keycloak turns this on by itself.
+                            options.RequireHttpsMetadata =
+                                builder.Configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata")
+                                ?? options.Authority.StartsWith(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
                         }
                     });
 
