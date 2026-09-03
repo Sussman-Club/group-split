@@ -1,11 +1,12 @@
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
+using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using GroupSplit.AppHost.Keycloak;
 using GroupSplit.AppHost.Migrations;
 using GroupSplit.AppHost.Seeder;
 using Projects;
 using Scalar.Aspire;
 
-#pragma warning disable ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -31,6 +32,9 @@ var keycloak = builder.AddKeycloak("keycloak")
     .WithTerminal()
     .WithExternalHttpEndpoints();
 
+ReferenceExpression? keycloakAuthority = null;
+var requireHttpsMetadata = true;
+
 // Developer tooling: an unrestricted SQL endpoint and a mail catcher have no place in a deployment.
 if (builder.ExecutionContext.IsRunMode)
 {
@@ -49,7 +53,33 @@ if (builder.ExecutionContext.IsRunMode)
 }
 else
 {
-    keycloak.AsDeployedKeycloak(builder.Configuration);
+    // The browser and the back channel reach Keycloak by different names, so the issuer has to be
+    // pinned to the address users actually hit rather than the compose service name.
+    var keycloakHostname = builder.AddParameter(
+        "keycloak-hostname",
+        () => builder.Configuration["Keycloak:Hostname"] ?? string.Empty);
+
+    keycloak.AsDeployedKeycloak(keycloakHostname);
+
+    // Applied once the web resource exists, further down.
+    keycloakAuthority = ReferenceExpression.Create($"{keycloakHostname}/realms/group-split");
+
+    // This deployment terminates no TLS, so the OIDC authority is plain http and metadata
+    // validation has to be told to accept it. Revisit the moment HTTPS is in front of Keycloak.
+    requireHttpsMetadata = false;
+
+    // Aspire creates AddDatabase() databases through the orchestrator, which does not run in a
+    // deployment, so bake an init script the Postgres entrypoint picks up on first start.
+    var postgresImage = dbServer.Resource.Annotations.OfType<ContainerImageAnnotation>().Last();
+
+    dbServer.WithDockerfileBuilder(".", context =>
+    {
+        context.Builder
+            .From(postgresImage.Registry is null
+                ? $"{postgresImage.Image}:{postgresImage.Tag}"
+                : $"{postgresImage.Registry}/{postgresImage.Image}:{postgresImage.Tag}")
+            .Copy("postgres-init/create-databases.sql", "/docker-entrypoint-initdb.d/10-create-databases.sql");
+    });
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
@@ -68,6 +98,15 @@ var frontend = builder.AddProject<GroupSplit_App_Web>("web")
     .WithHttpProbe(ProbeType.Readiness, "/health")
     .WithExternalHttpEndpoints()
     .WithBrowserLogs();
+
+// Outside development the web app refuses to start without an explicit authority, because service
+// discovery hands it an https+http:// address that metadata validation rejects.
+if (keycloakAuthority is not null)
+{
+    frontend
+        .WithEnvironment("Keycloak__Authority", keycloakAuthority)
+        .WithEnvironment("Keycloak__RequireHttpsMetadata", requireHttpsMetadata ? "true" : "false");
+}
 
 // The MAUI client is a locally launched device app, not a deployable container workload.
 if (builder.ExecutionContext.IsRunMode)
@@ -113,6 +152,27 @@ compose.ConfigureComposeFile(file =>
     foreach (var service in file.Services.Values)
     {
         service.Restart ??= "unless-stopped";
+    }
+
+    // depends_on defaults to service_started, so consumers race Postgres while it is still
+    // running its first-time init. Gate them on a real readiness probe instead.
+    var database = file.Services["db-server"];
+
+    database.Healthcheck = new Healthcheck
+    {
+        Test = ["CMD-SHELL", "pg_isready -U postgres -d postgres"],
+        Interval = "5s",
+        Timeout = "5s",
+        Retries = 12,
+        StartPeriod = "10s"
+    };
+
+    foreach (var service in file.Services.Values)
+    {
+        if (service.DependsOn.TryGetValue("db-server", out var onDatabase))
+        {
+            onDatabase.Condition = "service_healthy";
+        }
     }
 
     // Published ports otherwise land on a random host port, which makes the

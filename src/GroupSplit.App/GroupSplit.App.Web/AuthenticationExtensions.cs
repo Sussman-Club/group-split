@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -80,6 +80,11 @@ public static class AuthenticationExtensions
                             options.Authority = builder.Configuration["Keycloak:Authority"]
                                 ?? throw new InvalidOperationException(
                                     "Keycloak:Authority must be configured outside of development.");
+
+                            // An http:// authority is only defensible on a trusted network, so it
+                            // stays an explicit opt-in rather than being inferred from the scheme.
+                            options.RequireHttpsMetadata = builder.Configuration
+                                .GetValue("Keycloak:RequireHttpsMetadata", true);
                         }
                     });
 

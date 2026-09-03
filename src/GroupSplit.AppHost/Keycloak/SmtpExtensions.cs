@@ -32,7 +32,9 @@ public static class SmtpExtensions
         {
             var hostValue = configuration[HostConfigurationKey] ?? string.Empty;
             var portValue = configuration[PortConfigurationKey] ?? string.Empty;
-            var fromValue = configuration[FromConfigurationKey] ?? string.Empty;
+            // Keycloak refuses to import a realm whose smtpServer has an empty sender, so this
+            // needs a usable default even when no relay is configured.
+            var fromValue = configuration[FromConfigurationKey] ?? "no-reply@groupsplit.local";
             var usernameValue = configuration[UsernameConfigurationKey] ?? string.Empty;
             var passwordValue = configuration[PasswordConfigurationKey] ?? string.Empty;
 

@@ -1,13 +1,9 @@
-using Microsoft.Extensions.Configuration;
-
 namespace GroupSplit.AppHost.Keycloak;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 
 public static class KeycloakDeploymentExtensions
 {
-    private const string HostnameConfigurationKey = "Keycloak:Hostname";
-
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
@@ -21,7 +17,8 @@ public static class KeycloakDeploymentExtensions
         /// hosting integration already selected.
         /// </para>
         /// </summary>
-        public IResourceBuilder<KeycloakResource> AsDeployedKeycloak(IConfiguration configuration)
+        public IResourceBuilder<KeycloakResource> AsDeployedKeycloak(
+            IResourceBuilder<ParameterResource> hostname)
         {
             var image = keycloak.Resource.Annotations
                 .OfType<ContainerImageAnnotation>()
@@ -30,13 +27,6 @@ public static class KeycloakDeploymentExtensions
             var baseImage = image.Registry is null
                 ? $"{image.Image}:{image.Tag}"
                 : $"{image.Registry}/{image.Image}:{image.Tag}";
-
-            // The browser and the back channel reach Keycloak by different names, so the
-            // issuer has to be pinned to the address users actually hit. Left empty,
-            // Keycloak falls back to the request's Host header.
-            var hostname = keycloak.ApplicationBuilder.AddParameter(
-                "keycloak-hostname",
-                () => configuration[HostnameConfigurationKey] ?? string.Empty);
 
             return keycloak
                 .WithDockerfileBuilder(".", context =>
