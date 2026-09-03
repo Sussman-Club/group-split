@@ -1,0 +1,351 @@
+/*
+ * Group Split login theme.
+ *
+ * Layered on top of keycloak.v2 (PatternFly 5). The approach is to restate the
+ * brand as a small set of tokens, map PatternFly's global tokens onto them, and
+ * only then reach for element selectors. That keeps the amount of markup we
+ * depend on small, which matters because the markup belongs to Keycloak and
+ * changes between releases.
+ *
+ * Palette is kept in sync with GroupSplit.App.Shared/Services/ThemeService.cs so
+ * the hosted login pages and the app read as one product.
+ */
+
+:root {
+    --gs-teal: #22817a;
+    --gs-teal-deep: #1a655f;
+    --gs-teal-soft: #e6f0ef;
+    --gs-clay: #cb6e3a;
+    --gs-cream: #f5f0e6;
+    --gs-surface: #faf7f0;
+    --gs-charcoal: #2a2a2a;
+    --gs-muted: #6b6459;
+    --gs-divider: #e0d5cb;
+
+    --gs-radius: 14px;
+    --gs-radius-sm: 10px;
+    --gs-shadow: 0 1px 2px rgb(42 42 42 / 6%), 0 12px 32px -12px rgb(42 42 42 / 18%);
+    --gs-font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+
+    /* Map PatternFly's globals onto the brand. */
+    --pf-v5-global--primary-color--100: var(--gs-teal);
+    --pf-v5-global--primary-color--200: var(--gs-teal-deep);
+    --pf-v5-global--link--Color: var(--gs-teal);
+    --pf-v5-global--link--Color--hover: var(--gs-teal-deep);
+    --pf-v5-global--Color--100: var(--gs-charcoal);
+    --pf-v5-global--Color--200: var(--gs-muted);
+    --pf-v5-global--BorderColor--100: var(--gs-divider);
+    --pf-v5-global--danger-color--100: #b3402f;
+    --pf-v5-global--success-color--100: var(--gs-teal);
+    --pf-v5-global--FontFamily--text: var(--gs-font);
+    --pf-v5-global--FontFamily--heading: var(--gs-font);
+    --pf-v5-global--FontFamily--redhatfont--sans-serif: var(--gs-font);
+}
+
+/* ---------------------------------------------------------------- page ---- */
+
+body,
+.pf-v5-c-background-image,
+.pf-v5-c-login {
+    background: var(--gs-cream);
+    font-family: var(--gs-font);
+    color: var(--gs-charcoal);
+}
+
+/* keycloak.v2 ships a stock photographic background; replace it with a quiet
+   brand wash so the card stays the only thing competing for attention. */
+.pf-v5-c-background-image {
+    background-image:
+        radial-gradient(circle at 12% 18%, rgb(34 129 122 / 12%), transparent 45%),
+        radial-gradient(circle at 88% 82%, rgb(203 110 58 / 10%), transparent 45%);
+    background-color: var(--gs-cream);
+}
+
+.pf-v5-c-background-image::before {
+    content: none;
+}
+
+.pf-v5-c-login {
+    padding-block: clamp(1.5rem, 6vh, 4rem);
+}
+
+.pf-v5-c-login__container {
+    max-width: 27rem;
+    gap: 1.5rem;
+}
+
+/* -------------------------------------------------------------- header ---- */
+
+.pf-v5-c-login__header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Brand mark. Sits above the realm name that Keycloak renders from the realm's
+   displayNameHtml. */
+.pf-v5-c-login__header::before {
+    content: "";
+    display: block;
+    width: 52px;
+    height: 52px;
+    background-image: url("../img/logo.svg");
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+}
+
+#kc-header-wrapper,
+.gs-realm-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gs-teal);
+    text-align: center;
+}
+
+/* ---------------------------------------------------------------- card ---- */
+
+.pf-v5-c-login__main {
+    position: relative;
+    overflow: hidden;
+    background: var(--gs-surface);
+    border: 1px solid var(--gs-divider);
+    border-radius: var(--gs-radius);
+    box-shadow: var(--gs-shadow);
+}
+
+/* Slim accent rule across the top of the card. */
+.pf-v5-c-login__main::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gs-teal), var(--gs-clay));
+}
+
+.pf-v5-c-login__main-header,
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-footer {
+    padding-inline: 2rem;
+}
+
+.pf-v5-c-login__main-header {
+    padding-block-start: 2rem;
+}
+
+.pf-v5-c-login__main-body {
+    padding-block: 1.5rem;
+}
+
+.pf-v5-c-login__main-footer {
+    padding-block-end: 2rem;
+}
+
+#kc-page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--gs-charcoal);
+}
+
+/* -------------------------------------------------------------- fields ---- */
+
+.pf-v5-c-form__label-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gs-charcoal);
+}
+
+.pf-v5-c-form-control {
+    --pf-v5-c-form-control--BorderRadius: var(--gs-radius-sm);
+    --pf-v5-c-form-control--BorderBottomColor: var(--gs-divider);
+    --pf-v5-c-form-control--focus--BorderBottomColor: var(--gs-teal);
+
+    background: #fff;
+    border: 1px solid var(--gs-divider);
+    border-radius: var(--gs-radius-sm);
+    padding-block: 0.6rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pf-v5-c-form-control:hover {
+    border-color: #cbbfb2;
+}
+
+.pf-v5-c-form-control:focus-within,
+.pf-v5-c-form-control:focus {
+    border-color: var(--gs-teal);
+    box-shadow: 0 0 0 3px rgb(34 129 122 / 18%);
+    outline: none;
+}
+
+/* PatternFly renders the password field as a wrapper with a reveal button. */
+.pf-v5-c-input-group,
+.pf-v5-c-input-group__item {
+    background: transparent;
+}
+
+/* ------------------------------------------------------------- buttons ---- */
+
+.pf-v5-c-button {
+    border-radius: var(--gs-radius-sm);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.pf-v5-c-button.pf-m-primary {
+    background: var(--gs-teal);
+    color: #fff;
+    padding-block: 0.7rem;
+    box-shadow: 0 1px 2px rgb(26 101 95 / 30%);
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:focus {
+    background: var(--gs-teal-deep);
+}
+
+.pf-v5-c-button.pf-m-primary:active {
+    transform: translateY(1px);
+}
+
+.pf-v5-c-button.pf-m-primary:focus-visible {
+    outline: 3px solid rgb(34 129 122 / 35%);
+    outline-offset: 2px;
+}
+
+/* Social / identity-provider buttons, if any get wired up later. */
+.pf-v5-c-button.pf-m-control,
+#kc-social-providers .pf-v5-c-button {
+    background: #fff;
+    border: 1px solid var(--gs-divider);
+    color: var(--gs-charcoal);
+}
+
+#kc-social-providers .pf-v5-c-button:hover {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+}
+
+/* --------------------------------------------------------------- links ---- */
+
+a,
+.pf-v5-c-login__main-footer a,
+#kc-registration a,
+#kc-info a {
+    color: var(--gs-teal);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--gs-teal-deep);
+    text-decoration: underline;
+}
+
+/* "New user? Register" / "Back to Login" footer band.
+   Keycloak nests #kc-info inside another element carrying the same footer-band
+   class, and #kc-registration inside #kc-registration-container. A rule on each
+   stacks up as several parallel lines, so only the outermost band draws one. */
+#kc-registration,
+#kc-registration-container,
+#kc-info-message {
+    margin-block-start: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
+    font-size: 0.9rem;
+    color: var(--gs-muted);
+    text-align: center;
+}
+
+.pf-v5-c-login__main-footer-band {
+    margin-block-start: 1.25rem;
+    padding-block-start: 1.25rem;
+    border-block-start: 1px solid var(--gs-divider);
+}
+
+.pf-v5-c-login__main-footer-band .pf-v5-c-login__main-footer-band {
+    margin-block-start: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
+}
+
+/* Keep "Forgot password?" and "Remember me" on one comfortable row. */
+#kc-form-options,
+.pf-v5-c-login__main-body .pf-v5-l-flex {
+    align-items: center;
+}
+
+/* ------------------------------------------------------------- alerts ----- */
+
+.pf-v5-c-alert {
+    border-radius: var(--gs-radius-sm);
+    border: 1px solid var(--gs-divider);
+    background: #fff;
+}
+
+.pf-v5-c-alert.pf-m-danger {
+    border-color: rgb(179 64 47 / 35%);
+    background: #fdf3f1;
+}
+
+.pf-v5-c-alert.pf-m-success {
+    border-color: rgb(34 129 122 / 35%);
+    background: var(--gs-teal-soft);
+}
+
+/* Password-policy hints under the field. */
+.pf-v5-c-helper-text__item-text,
+#kc-content .pf-v5-c-form__helper-text {
+    color: var(--gs-muted);
+    font-size: 0.8125rem;
+}
+
+/* ----------------------------------------------------------- dark mode ---- */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --gs-cream: #1a1a1a;
+        --gs-surface: #232323;
+        --gs-charcoal: #f5f0e6;
+        --gs-muted: #a89f92;
+        --gs-divider: #3a3a3a;
+        --gs-teal-soft: #17322f;
+
+        --pf-v5-global--Color--100: #f5f0e6;
+        --pf-v5-global--Color--200: #a89f92;
+        --pf-v5-global--BackgroundColor--100: #232323;
+        --pf-v5-global--BorderColor--100: #3a3a3a;
+    }
+
+    .pf-v5-c-form-control {
+        background: #2a2a2a;
+        color: var(--gs-charcoal);
+    }
+
+    .pf-v5-c-alert,
+    #kc-social-providers .pf-v5-c-button,
+    .pf-v5-c-button.pf-m-control {
+        background: #2a2a2a;
+        color: var(--gs-charcoal);
+    }
+
+    .pf-v5-c-alert.pf-m-danger {
+        background: #33201c;
+    }
+}
+
+/* ---------------------------------------------------------- small screens - */
+
+@media (max-width: 480px) {
+    .pf-v5-c-login__main-header,
+    .pf-v5-c-login__main-body,
+    .pf-v5-c-login__main-footer {
+        padding-inline: 1.25rem;
+    }
+}

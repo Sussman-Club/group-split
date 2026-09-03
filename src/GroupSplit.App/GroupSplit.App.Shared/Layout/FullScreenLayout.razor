@@ -1,14 +1,14 @@
+@using GroupSplit.App.Shared.Components
 @inherits LayoutComponentBase
-@inject MudTheme Theme
 
 @* Minimal layout for standalone pages like Login. Includes Mud providers so Mud components work without MainLayout. *@
-<MudThemeProvider Theme="Theme" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
+<AppThemeProvider />
 
-<MudLayout Class="d-flex" Style="min-height: 100dvh">
-    <MudContainer MaxWidth="MaxWidth.Medium" Class="d-flex flex-column flex-1" Style="min-height: 100%">
+<MudLayout Class="gs-auth-backdrop">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex flex-column flex-1 py-8" Style="min-height: 100dvh">
+        <MudStack Row Justify="Justify.FlexEnd">
+            <ThemeModeMenu />
+        </MudStack>
         @Body
     </MudContainer>
 </MudLayout>

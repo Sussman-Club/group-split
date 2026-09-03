@@ -1,16 +1,8 @@
-﻿@using GroupSplit.App.Shared.Extensions
+﻿@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
 @inherits LayoutComponentBase
-@inject MudTheme Theme
 
-@* Required *@
-<MudThemeProvider Theme="Theme" />
-<MudPopoverProvider />
-
-@* Needed for dialogs *@
-<MudDialogProvider />
-
-@* Needed for snackbars *@
-<MudSnackbarProvider />
+<AppThemeProvider />
 
 <MudLayout>
     <AppBar ToggleDrawer="ToggleDrawer" />

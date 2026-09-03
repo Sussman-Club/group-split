@@ -17,12 +17,17 @@ builder.Services.AddAuthentication()
         options =>
         {
             options.Audience = "api";
-            
-            // For development only - disable HTTPS metadata validation
-            // In production, use explicit Authority configuration instead
+
             if (builder.Environment.IsDevelopment())
             {
                 options.RequireHttpsMetadata = false;
+            }
+            else
+            {
+                // Service discovery cannot satisfy RequireHttpsMetadata.
+                options.Authority = builder.Configuration["Keycloak:Authority"]
+                    ?? throw new InvalidOperationException(
+                        "Keycloak:Authority must be configured outside of development.");
             }
         });
 
@@ -54,27 +59,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-    {
-        var forecast = Enumerable.Range(1, 5).Select(index =>
-                new WeatherForecast
-                (
-                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                    Random.Shared.Next(-20, 55),
-                    summaries[Random.Shared.Next(summaries.Length)]
-                ))
-            .ToArray();
-        return forecast;
-    })
-    .WithName("GetWeatherForecast")
-    .WithTags("weather")
-    .RequireAuthorization();
 
 app.MapGroupApi();
 app.MapUserApi();

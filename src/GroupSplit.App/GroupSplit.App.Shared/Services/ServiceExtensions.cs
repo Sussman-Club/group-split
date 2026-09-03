@@ -16,6 +16,7 @@ public static class ServiceExtensions
         public IServiceCollection AddSharedServices(ServiceLifetime sessionLifetime = ServiceLifetime.Scoped)
         {
             services.AddMudTheme();
+            services.TryAdd<ThemePreference>(sessionLifetime);
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();
@@ -30,7 +31,6 @@ public static class ServiceExtensions
             services.AddApiClient<IGroupsClient, GroupsClient>();
             services.AddApiClient<ITransactionsClient, TransactionsClient>();
             services.AddApiClient<IRulesClient, RulesClient>();
-            services.AddApiClient<IWeatherClient, WeatherClient>();
             
             return services;
         }

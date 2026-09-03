@@ -1,102 +1,14 @@
-﻿@page "/login"
-@using System.Web
-@using GroupSplit.App.Shared.Services
-@using GroupSplit.Shared
-@inject IAuthService AuthService
-@inject NavigationManager Nav
+@page "/login"
+@using GroupSplit.App.Shared.Components
 @layout FullScreenLayout
 @attribute [AllowAnonymous]
 
+<PageTitle>Sign in - Group Split</PageTitle>
 
-<MudStack Row Class="flex-1"
-          AlignItems="AlignItems.Center"
-          Justify="Justify.SpaceAround">
-    <MudPaper Square MaxWidth="440px" MinWidth="440px">
-        <MudStack Class="pa-8" Spacing="5">
-            <MudText Typo="Typo.subtitle2">
-                Group Split
-            </MudText>
-            <MudText Typo="Typo.h5">
-                Sign In
-            </MudText>
-            <MudForm @ref="LoginForm" @bind-IsValid="Success">
-                <MudStack Spacing="5">
-                    <MudTextField @bind-Value="Username"
-                                  Placeholder="Email"
-                                  Immediate
-                                  OnlyValidateIfDirty>
-                    </MudTextField>
-                    <MudTextField @bind-Value="Password"
-                                  InputType="InputType.Password"
-                                  Placeholder="Password"
-                                  Immediate
-                                  OnlyValidateIfDirty>
-                    </MudTextField>
-                    <MudText Typo="Typo.subtitle2">
-                        No account? <MudLink Typo="Typo.subtitle2" Href="/signup">Create One!</MudLink>
-                    </MudText>
-                    <MudLink Typo="Typo.subtitle2">
-                        Can't access your account?
-                    </MudLink>
-                    <MudStack Row>
-                        <MudSpacer />
-                        <MudButton Color="Color.Primary" Class="rounded-0" Variant="Variant.Filled" Disabled="!Success" OnClick="TryLogin">
-                            Sign In
-                        </MudButton>
-                    </MudStack>
-                </MudStack>
-            </MudForm>
-        </MudStack>
-    </MudPaper>
-</MudStack>
-
-
-@code {
-    [PersistentState] public string? Username { get; set; }
-    [PersistentState] public string? Password { get; set; }
-    private bool Success { get; set; } = false;
-
-    MudForm? LoginForm { get; set; }
-
-    public async Task TryLogin()
-    {
-        if (LoginForm is null)
-            return;
-        await LoginForm.Validate();
-        if (!Success)
-            return;
-
-        await AuthService.Login(CancellationToken.None);
-        await NavigateToReturnUrl();
-    }
-
-    private Task NavigateToReturnUrl()
-    {
-        // If a returnUrl exists, navigate to it (relative to base), otherwise go to home
-        var uri = new Uri(Nav.Uri);
-        var query = HttpUtility.ParseQueryString(uri.Query);
-        var returnUrlRaw = query.Get("returnUrl");
-
-        if (string.IsNullOrWhiteSpace(returnUrlRaw))
-        {
-            Nav.NavigateTo("/");
-            return Task.CompletedTask;
-        }
-
-        // Normalize to a relative path against BaseUri
-        var baseUri = new Uri(Nav.BaseUri, UriKind.Absolute);
-        // If returnUrlRaw is already relative, combine; if absolute on same host, make relative
-        if (Uri.TryCreate(returnUrlRaw, UriKind.Relative, out var relativeTarget))
-        {
-            var target = new Uri(baseUri, relativeTarget);
-            var relFinal = baseUri.MakeRelativeUri(target).ToString();
-            Nav.NavigateTo(relFinal);
-        }
-        else
-        {
-            Nav.NavigateTo("/", forceLoad: false);
-        }
-
-        return Task.CompletedTask;
-    }
-}
+<AuthHandoff Flow="AuthHandoff.AuthFlow.Login"
+             Title="Welcome back"
+             Subtitle="Sign in to pick up your groups, expenses and balances."
+             ActionLabel="Continue to sign in"
+             AlternatePrompt="New to Group Split?"
+             AlternateLabel="Create an account"
+             AlternateHref="/signup" />

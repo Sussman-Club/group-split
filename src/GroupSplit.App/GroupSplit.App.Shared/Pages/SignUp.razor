@@ -1,95 +1,14 @@
 @page "/signup"
-@using System.Text.RegularExpressions
-@using GroupSplit.App.Shared.Services
-@using GroupSplit.Shared
-@inject IAuthService AuthService
-@inject NavigationManager Nav
+@using GroupSplit.App.Shared.Components
 @layout FullScreenLayout
 @attribute [AllowAnonymous]
 
-<MudStack Row Class="flex-1"
-          AlignItems="AlignItems.Center"
-          Justify="Justify.SpaceAround">
-    <MudPaper Square MaxWidth="440px" MinWidth="440px">
-        <MudStack Class="pa-8" Spacing="5">
-            <MudText Typo="Typo.subtitle2">
-                Group Split
-            </MudText>
-            <MudText Typo="Typo.h5">
-                Create Account
-            </MudText>
-            <MudForm @ref="SignUpForm" @bind-IsValid="valid">
-                <MudStack Spacing="5">
-                    <MudTextField @bind-Value="Email"
-                                  Placeholder="Email"
-                                  Required="true"
-                                  For="() => Email"
-                                  Immediate="true"
-                                  Validation="@(new Func<string?, IEnumerable<string>>(ValidateEmail))"
-                                  OnlyValidateIfDirty />
-                    <MudTextField @bind-Value="Password"
-                                  InputType="InputType.Password"
-                                  Placeholder="Password"
-                                  Required="true"
-                                  For="() => Password"
-                                  Immediate="true"
-                                  Validation="@(new Func<string?, IEnumerable<string>>(ValidatePassword))"
-                                  OnlyValidateIfDirty />
-                    <MudTextField @bind-Value="ConfirmPassword"
-                                  InputType="InputType.Password"
-                                  Placeholder="Confirm Password"
-                                  Required="true"
-                                  For="() => ConfirmPassword"
-                                  Immediate="true"
-                                  Validation="@(new Func<string?, IEnumerable<string>>(ValidateConfirmPassword))"
-                                  OnlyValidateIfDirty />
-                    <MudText Typo="Typo.subtitle2">
-                        Already have an account? <MudLink Typo="Typo.subtitle2" Href="/login">Sign In</MudLink>
-                    </MudText>
-                    <MudStack Row>
-                        <MudSpacer />
-                        <MudButton Color="Color.Primary" Class="rounded-0" Variant="Variant.Filled" Disabled="!valid" OnClick="RegisterAsync">
-                            Create Account
-                        </MudButton>
-                    </MudStack>
-                </MudStack>
-            </MudForm>
-        </MudStack>
-    </MudPaper>
-</MudStack>
+<PageTitle>Create an account - Group Split</PageTitle>
 
-@code {
-    private string? Email { get; set; }
-    private string? Password { get; set; }
-    private string? ConfirmPassword { get; set; }
-    private bool valid { get; set; } = false;
-
-    MudForm? SignUpForm { get; set; }
-
-    // Email pattern excluding newlines and rudimentary validation
-    private static readonly Regex _emailRegex = new("^[^@\\r\\n]+@[^@\\r\\n]+\\.[^@\\r\\n]+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    IEnumerable<string> ValidateEmail(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) yield return "Email is required"; else if (!_emailRegex.IsMatch(value)) yield return "Invalid email format";        
-    }
-    IEnumerable<string> ValidatePassword(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) yield return "Password is required"; else if (value.Length < 6) yield return "Minimum 6 characters";        
-    }
-    IEnumerable<string> ValidateConfirmPassword(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) yield return "Confirmation is required"; else if (!string.Equals(value, Password)) yield return "Passwords do not match";        
-    }
-
-    private async Task RegisterAsync()
-    {
-        if (SignUpForm is null)
-            return;
-        await SignUpForm.Validate();
-        if (!valid)
-            return;
-        await AuthService.Register(CancellationToken.None);
-        Nav.NavigateTo("/login");
-    }
-}
+<AuthHandoff Flow="AuthHandoff.AuthFlow.Register"
+             Title="Create your account"
+             Subtitle="Split costs with friends, housemates and anyone else you share expenses with."
+             ActionLabel="Continue to sign up"
+             AlternatePrompt="Already have an account?"
+             AlternateLabel="Sign in"
+             AlternateHref="/login" />

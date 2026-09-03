@@ -19,7 +19,7 @@ public static class ThemeService
                 Tertiary = "#CB6E3A", // Warm clay accent
                 Success = "#22817a", // Green for success states
                 TextPrimary = "#2A2A2A", // Deep Charcoal
-                TextSecondary = "#2A2A2A", // Deep Charcoal
+                TextSecondary = "#6B6459", // Warm grey, 5.4:1 on Surface
                 Surface = "#FAF7F0", // Neutral surface
                 Background = "#F5F0E6", // Light optimistic background
                 BackgroundGray = "#E0D5CB", // Soft neutral
@@ -35,6 +35,7 @@ public static class ThemeService
                 Tertiary = "#CB6E3A", // Warm clay accent
                 Success = "#22817a", // Green for success states
                 TextPrimary = "#F5F0E6", // Neutral for dark mode text
+                TextSecondary = "#A89F92", // Warm grey, 5.5:1 on Surface
                 Surface = "#2A2A2A", // Deep Charcoal for surfaces
                 Background = "#1A1A1A", // Very dark background
                 BackgroundGray = "#3A3A3A", // Lighter charcoal

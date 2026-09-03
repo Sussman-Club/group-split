@@ -27,12 +27,6 @@ public static class MauiProgram
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<IAuthService>(ActivatorUtilities.GetServiceOrCreateInstance<AuthService>);
 
-        // Add HttpClient for API calls
-        builder.Services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
-        {
-            client.BaseAddress = new Uri("https+http://api");
-        }).AddHttpMessageHandler(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>);
-
         builder.Services.AddMauiBlazorWebView();
 
         // Add MudBlazor services
