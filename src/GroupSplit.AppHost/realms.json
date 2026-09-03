@@ -26,18 +26,6 @@
   "ssoSessionMaxLifespan": 36000,
   "accessCodeLifespan": 60,
   "actionTokenGeneratedByUserLifespan": 300,
-  "smtpServer": {
-    "host": "${GS_SMTP_HOST}",
-    "port": "${GS_SMTP_PORT}",
-    "from": "${GS_SMTP_FROM}",
-    "fromDisplayName": "Group Split",
-    "replyTo": "${GS_SMTP_FROM}",
-    "auth": "${GS_SMTP_AUTH}",
-    "user": "${GS_SMTP_USER}",
-    "password": "${GS_SMTP_PASSWORD}",
-    "ssl": "false",
-    "starttls": "${GS_SMTP_STARTTLS}"
-  },
   "clients": [
     {
       "clientId": "api",

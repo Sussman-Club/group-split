@@ -25,7 +25,6 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn(builder.Configuration)
-    .WithSmtp(builder.Configuration)
     .WithPostgres(keycloakDb)
     .WaitFor(keycloakDb)
     .WithOtlpExporter()
