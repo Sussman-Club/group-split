@@ -484,3 +484,6 @@ GroupSplit.App/GroupSplit.App.Shared/ApiClient/ApiClient.g.cs
 
 # Aspire publish/deploy artifacts (generated)
 aspire-output/
+
+# Local copy of deploy secrets (never commit)
+.deploy-secrets.local

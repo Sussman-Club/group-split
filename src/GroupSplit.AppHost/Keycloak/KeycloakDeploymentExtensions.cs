@@ -36,8 +36,11 @@ public static class KeycloakDeploymentExtensions
                         .Copy("realms.json", "/opt/keycloak/data/import/realms.json")
                         .Copy("keycloak-themes/group-split", "/opt/keycloak/themes/group-split");
                 })
-                // Production mode serves HTTPS only unless plain HTTP is opted into.
+                // Production mode serves HTTPS only unless plain HTTP is opted into. TLS is
+                // terminated upstream, so Keycloak speaks plain HTTP and learns the original
+                // scheme and host from the forwarded headers the proxy sets.
                 .WithEnvironment("KC_HTTP_ENABLED", "true")
+                .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
                 .WithEnvironment("KC_HOSTNAME_STRICT", "false")
                 .WithEnvironment("KC_HOSTNAME", hostname);
         }
