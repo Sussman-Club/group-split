@@ -1,5 +1,4 @@
 using GroupSplit.AppHost.Test.Base;
-using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,18 +6,15 @@ namespace GroupSplit.AppHost.Test.Data;
 
 public class DataTest(AppHostFixture appHost) : IAsyncLifetime
 {
-    protected IDbContextFactory<AppDbContext> ContextFactory { get; private set; } = null!;
-
     public async ValueTask InitializeAsync()
     {
         await appHost.SeedAsync();
-        ContextFactory = await appHost.GetDbContextFactory();
     }
 
     [Fact]
     public async Task TestDateTimeWithOffset()
     {
-        await using var context = await ContextFactory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        await using var context = await appHost.GetDbContextAsync();
 
         // This will roll-back the changes so the test does not change anything.
         await using var dbTransaction =

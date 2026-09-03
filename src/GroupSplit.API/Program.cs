@@ -30,7 +30,7 @@ builder.Services.AddAuthorizationBuilder();
 
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionString("db"));
+builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddSingleton<IDebtCalculationService, DebtCalculationService>();
 builder.Services.AddScoped<IGroupService, GroupService>();

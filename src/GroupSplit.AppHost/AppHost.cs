@@ -58,8 +58,8 @@ if (builder.ExecutionContext.IsRunMode)
         .RunDatabaseUpdateOnStart();
 
     // Nothing should touch the schema until migrations have been applied.
-    backend.WaitFor(migrations);
-    seeder.WaitFor(migrations);
+    backend.WaitForCompletion(migrations);
+    seeder.WaitForCompletion(migrations);
 }
 
 var scalar = builder.AddScalarApiReference();
