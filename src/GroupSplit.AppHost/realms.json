@@ -4,6 +4,7 @@
   "displayNameHtml": "<span class=\"gs-realm-name\">Group Split</span>",
   "enabled": true,
   "loginTheme": "group-split",
+  "accountTheme": "group-split",
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,

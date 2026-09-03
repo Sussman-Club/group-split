@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Endpoints;
+using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.PostgreSQL;

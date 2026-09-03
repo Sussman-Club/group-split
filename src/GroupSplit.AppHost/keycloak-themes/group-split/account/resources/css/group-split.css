@@ -1,0 +1,550 @@
+/*
+ * Group Split account console theme.
+ *
+ * Layered on top of keycloak.v3 (React + PatternFly 5). Same approach as the
+ * login theme: restate the brand as a small set of tokens, map PatternFly's
+ * tokens onto them, and only then reach for element selectors. Here that is not
+ * just tidiness -- the console is code-split, and a route's stylesheet is
+ * injected at runtime, i.e. *after* this file. Element rules in those chunks
+ * would therefore win any equal-specificity tie, while tokens keep working
+ * because PatternFly's own rules are the ones reading them.
+ *
+ * Dark mode needs one specific trick. The console flips theme by putting
+ * `pf-v5-theme-dark` on <html> (see kcDarkModeClass), and PatternFly's dark
+ * values live under `:where(.pf-v5-theme-dark)` -- which `:where()` renders
+ * specificity-zero. A plain `:root` block here would therefore outrank them and
+ * pin the console to light. Everything below routes through the --gs-* tokens
+ * instead, and only those are re-declared under `:root.pf-v5-theme-dark`
+ * (0,2,0). Globals we never touch keep flipping on their own.
+ *
+ * Palette is kept in sync with GroupSplit.App.Shared/Services/ThemeService.cs
+ * and the login theme so all three read as one product.
+ */
+
+:root {
+    --gs-teal: #22817a;
+    --gs-teal-deep: #1a655f;
+    --gs-teal-soft: #e6f0ef;
+    --gs-clay: #cb6e3a;
+    --gs-cream: #f5f0e6;
+    --gs-surface: #faf7f0;
+    --gs-charcoal: #2a2a2a;
+    --gs-muted: #6b6459;
+    --gs-divider: #e0d5cb;
+    --gs-danger: #b3402f;
+    --gs-danger-soft: #fdf3f1;
+
+    /* Chrome. Mirrors the app's teal AppBar over a neutral drawer. */
+    --gs-masthead: #22817a;
+    --gs-masthead-text: #fff;
+    --gs-nav-text: #2a2a2a;
+
+    --gs-radius: 14px;
+    --gs-radius-sm: 10px;
+    --gs-focus-ring: 0 0 0 3px rgb(34 129 122 / 18%);
+    --gs-font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+
+    /* --- PatternFly globals, mapped onto the brand ------------------------ */
+    --pf-v5-global--primary-color--100: var(--gs-teal);
+    --pf-v5-global--primary-color--200: var(--gs-teal-deep);
+    --pf-v5-global--active-color--100: var(--gs-teal);
+    --pf-v5-global--link--Color: var(--gs-teal);
+    --pf-v5-global--link--Color--hover: var(--gs-teal-deep);
+    --pf-v5-global--Color--100: var(--gs-charcoal);
+    --pf-v5-global--Color--200: var(--gs-muted);
+    --pf-v5-global--BorderColor--100: var(--gs-divider);
+    --pf-v5-global--BorderColor--200: var(--gs-divider);
+    --pf-v5-global--BackgroundColor--100: var(--gs-surface);
+    --pf-v5-global--BackgroundColor--150: var(--gs-surface);
+    --pf-v5-global--BackgroundColor--200: var(--gs-cream);
+    --pf-v5-global--danger-color--100: var(--gs-danger);
+    --pf-v5-global--success-color--100: var(--gs-teal);
+    --pf-v5-global--FontFamily--text: var(--gs-font);
+    --pf-v5-global--FontFamily--heading: var(--gs-font);
+    --pf-v5-global--FontFamily--redhatfont--sans-serif: var(--gs-font);
+
+    /* --- PatternFly components -------------------------------------------- */
+
+    /* Only the component tokens PatternFly declares on `:root` belong here.
+       The rest are declared on the component's own selector, where a value
+       set on the element beats anything inherited from `:root` no matter how
+       late our sheet loads -- those are grouped with their components below. */
+    --pf-v5-c-page__sidebar--BackgroundColor: var(--gs-surface);
+    --pf-v5-c-page__main-section--BackgroundColor: var(--gs-cream);
+}
+
+/* ---------------------------------------------------------------- page ---- */
+
+body {
+    font-family: var(--gs-font);
+    color: var(--gs-charcoal);
+    background: var(--gs-cream);
+}
+
+/* A quiet brand wash, matching the login pages. Painted on the content column
+   rather than the body so it does not sit under the chrome. */
+.pf-v5-c-page__main {
+    background:
+        radial-gradient(circle at 12% 18%, rgb(34 129 122 / 8%), transparent 45%),
+        radial-gradient(circle at 88% 82%, rgb(203 110 58 / 7%), transparent 45%),
+        var(--gs-cream);
+}
+
+/* ------------------------------------------------------------ masthead ---- */
+
+/* PatternFly declares this token on `.pf-v5-c-masthead` itself and defaults it
+   to its dark chrome, so it has to be restated here rather than on `:root`. */
+.pf-v5-c-masthead {
+    --pf-v5-c-masthead--BackgroundColor: var(--gs-masthead);
+
+    border-block-end: 1px solid rgb(0 0 0 / 12%);
+    box-shadow: 0 1px 2px rgb(42 42 42 / 8%);
+}
+
+/* The teal bar carries white content, which PatternFly does not assume. */
+.pf-v5-c-masthead,
+.pf-v5-c-masthead a,
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-plain,
+.pf-v5-c-masthead .pf-v5-c-menu-toggle {
+    color: var(--gs-masthead-text);
+}
+
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-plain:hover,
+.pf-v5-c-masthead .pf-v5-c-menu-toggle:hover {
+    color: var(--gs-masthead-text);
+    background-color: rgb(255 255 255 / 12%);
+}
+
+/* The masthead is one solid teal band, so nothing nested inside it may paint
+   its own background. PatternFly does exactly that in dark mode -- see
+   `:where(.pf-v5-theme-dark) .pf-v5-c-masthead .pf-v5-c-toolbar`, which sets
+   the toolbar to near-black at (0,2,0) and would otherwise cover the band
+   everywhere except the brand strip. */
+.pf-v5-c-masthead .pf-v5-c-toolbar,
+.pf-v5-c-masthead .pf-v5-c-toolbar__content,
+.pf-v5-c-masthead .pf-v5-c-toolbar__content-section,
+.pf-v5-c-masthead .pf-v5-c-toolbar__item,
+.pf-v5-c-masthead__toggle,
+.pf-v5-c-masthead__main,
+.pf-v5-c-masthead__content {
+    --pf-v5-c-toolbar--BackgroundColor: transparent;
+
+    background: transparent;
+}
+
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-plain {
+    background: transparent;
+}
+
+.pf-v5-c-masthead__brand img,
+.pf-v5-c-masthead .pf-v5-c-brand {
+    height: 34px;
+    width: auto;
+    /* The mark is teal-on-transparent, so it would sink into the teal bar. A
+       white disc keeps it legible without shipping a second asset. */
+    padding: 4px;
+    background: #fff;
+    border-radius: 50%;
+    box-sizing: content-box;
+}
+
+/* ------------------------------------------------------------- sidebar ---- */
+
+.pf-v5-c-page__sidebar {
+    border-inline-end: 1px solid var(--gs-divider);
+}
+
+/* The nav link tokens are all declared on `.pf-v5-c-nav`, and they assume the
+   dark sidebar PatternFly ships. The sidebar is light here, so left alone the
+   links render white-on-cream -- i.e. invisible. */
+.pf-v5-c-nav {
+    --pf-v5-c-nav__link--Color: var(--gs-nav-text);
+    --pf-v5-c-nav__link--hover--Color: var(--gs-teal);
+    --pf-v5-c-nav__link--focus--Color: var(--gs-teal);
+    --pf-v5-c-nav__link--active--Color: var(--gs-teal);
+    --pf-v5-c-nav__link--m-current--Color: var(--gs-teal);
+    --pf-v5-c-nav__link--hover--BackgroundColor: var(--gs-teal-soft);
+    --pf-v5-c-nav__link--focus--BackgroundColor: var(--gs-teal-soft);
+    --pf-v5-c-nav__link--active--BackgroundColor: var(--gs-teal-soft);
+    --pf-v5-c-nav__link--m-current--BackgroundColor: var(--gs-teal-soft);
+    --pf-v5-c-nav__link--after--BorderColor: var(--gs-teal);
+    --pf-v5-c-nav__link--FontWeight: 500;
+    --pf-v5-c-nav__section-title--Color: var(--gs-muted);
+}
+
+.pf-v5-c-nav__link {
+    border-radius: var(--gs-radius-sm);
+    margin-inline: 0.5rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* PatternFly marks the current item with a left rule; the app highlights the
+   label instead, so weight carries it here too. */
+.pf-v5-c-nav__link.pf-m-current {
+    font-weight: 600;
+}
+
+.pf-v5-c-nav__section-title {
+    color: var(--gs-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------- cards ---- */
+
+.pf-v5-c-card {
+    /* Declared on `.pf-v5-c-card`, so it is set here for the same reason as
+       the masthead token. */
+    --pf-v5-c-card--BackgroundColor: var(--gs-surface);
+
+    border: 1px solid var(--gs-divider);
+    border-radius: var(--gs-radius);
+    box-shadow: none;
+}
+
+/* Slim accent rule across the top of the leading card, echoing the login card.
+   Restricted to the first: on every card it reads as noise, not emphasis. */
+.pf-v5-c-page__main-section .pf-v5-c-card:first-of-type {
+    position: relative;
+    overflow: hidden;
+}
+
+.pf-v5-c-page__main-section .pf-v5-c-card:first-of-type::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gs-teal), var(--gs-clay));
+}
+
+.pf-v5-c-card__title,
+.pf-v5-c-card__title-text {
+    color: var(--gs-charcoal);
+    font-weight: 600;
+}
+
+/* -------------------------------------------------------------- titles ---- */
+
+.pf-v5-c-title {
+    color: var(--gs-charcoal);
+    font-family: var(--gs-font);
+    letter-spacing: -0.01em;
+}
+
+.pf-v5-c-title.pf-m-2xl,
+.pf-v5-c-title.pf-m-xl {
+    font-weight: 600;
+}
+
+/* -------------------------------------------------------------- fields ---- */
+
+.pf-v5-c-form__label-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gs-charcoal);
+}
+
+/* Outlined rather than filled: the app reaches for Variant.Outlined on all but
+   three of its fields, and a white fill on the warm cream surface reads as a
+   different, cooler material sitting on top of the card. Transparent keeps the
+   whole page in one temperature and lets the border carry the affordance. */
+.pf-v5-c-form-control {
+    --pf-v5-c-form-control--BackgroundColor: transparent;
+
+    background: transparent;
+    border: 1px solid var(--gs-divider);
+    border-radius: var(--gs-radius-sm);
+    color: var(--gs-charcoal);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pf-v5-c-form-control:hover {
+    border-color: #cbbfb2;
+}
+
+.pf-v5-c-form-control:focus-within,
+.pf-v5-c-form-control:focus {
+    border-color: var(--gs-teal);
+    box-shadow: var(--gs-focus-ring);
+    outline: none;
+}
+
+.pf-v5-c-helper-text__item-text,
+.pf-v5-c-form__helper-text {
+    color: var(--gs-muted);
+    font-size: 0.8125rem;
+}
+
+/* PatternFly renders password fields as a wrapper plus a reveal button. */
+.pf-v5-c-input-group,
+.pf-v5-c-input-group__item {
+    background: transparent;
+}
+
+/* ------------------------------------------------------------- buttons ---- */
+
+.pf-v5-c-button {
+    border-radius: var(--gs-radius-sm);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.pf-v5-c-button.pf-m-primary {
+    background: var(--gs-teal);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(26 101 95 / 30%);
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:focus {
+    background: var(--gs-teal-deep);
+}
+
+.pf-v5-c-button.pf-m-primary:active {
+    transform: translateY(1px);
+}
+
+.pf-v5-c-button.pf-m-secondary {
+    background: transparent;
+    border: 1px solid var(--gs-teal);
+    color: var(--gs-teal);
+}
+
+.pf-v5-c-button.pf-m-secondary:hover {
+    background: var(--gs-teal-soft);
+    border-color: var(--gs-teal-deep);
+    color: var(--gs-teal-deep);
+}
+
+.pf-v5-c-button.pf-m-tertiary,
+.pf-v5-c-button.pf-m-control {
+    background: transparent;
+    border: 1px solid var(--gs-divider);
+    color: var(--gs-charcoal);
+}
+
+.pf-v5-c-button.pf-m-tertiary:hover,
+.pf-v5-c-button.pf-m-control:hover {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+}
+
+.pf-v5-c-button.pf-m-danger {
+    background: var(--gs-danger);
+    color: #fff;
+}
+
+/* Focus is the one affordance that must never be tinted away. */
+.pf-v5-c-button:focus-visible,
+.pf-v5-c-nav__link:focus-visible,
+a:focus-visible {
+    outline: 3px solid rgb(34 129 122 / 35%);
+    outline-offset: 2px;
+}
+
+/* Against the teal masthead a teal ring is invisible. */
+.pf-v5-c-masthead :focus-visible {
+    outline-color: rgb(255 255 255 / 70%);
+}
+
+/* --------------------------------------------------------------- links ---- */
+
+a {
+    color: var(--gs-teal);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--gs-teal-deep);
+    text-decoration: underline;
+}
+
+/* -------------------------------------------------------------- alerts ---- */
+
+/* Neutral alerts stay on the card rather than introducing a white panel; only
+   the severity variants below earn a tint. */
+.pf-v5-c-alert {
+    border-radius: var(--gs-radius-sm);
+    border: 1px solid var(--gs-divider);
+    background: transparent;
+}
+
+.pf-v5-c-alert.pf-m-danger {
+    border-color: rgb(179 64 47 / 35%);
+    background: var(--gs-danger-soft);
+}
+
+.pf-v5-c-alert.pf-m-success {
+    border-color: rgb(34 129 122 / 35%);
+    background: var(--gs-teal-soft);
+}
+
+/* --------------------------------------------------- lists and labels ----- */
+
+/* These components live in route chunks whose CSS is injected after this file,
+   so each rule is anchored on an ancestor to clear the specificity tie. */
+
+.pf-v5-c-card .pf-v5-c-data-list,
+.pf-v5-c-page__main .pf-v5-c-data-list {
+    border-block-start: 0;
+}
+
+.pf-v5-c-card .pf-v5-c-data-list__item,
+.pf-v5-c-page__main .pf-v5-c-data-list__item {
+    border-block-end: 1px solid var(--gs-divider);
+    background: transparent;
+}
+
+.pf-v5-c-card .pf-v5-c-data-list__item:last-child,
+.pf-v5-c-page__main .pf-v5-c-data-list__item:last-child {
+    border-block-end: 0;
+}
+
+.pf-v5-c-page__main .pf-v5-c-description-list__term,
+.pf-v5-c-page__main .pf-v5-c-description-list__text {
+    color: var(--gs-muted);
+    font-size: 0.875rem;
+}
+
+.pf-v5-c-page__main .pf-v5-c-description-list__description .pf-v5-c-description-list__text {
+    color: var(--gs-charcoal);
+    font-weight: 500;
+}
+
+.pf-v5-c-page__main .pf-v5-c-label {
+    border-radius: 999px;
+    font-weight: 500;
+}
+
+/* `.pf-m-green` re-derives --pf-v5-c-label--BackgroundColor from the m-green
+   token, so the m-green token is the one worth setting. */
+.pf-v5-c-page__main .pf-v5-c-label.pf-m-green {
+    --pf-v5-c-label--m-green--BackgroundColor: var(--gs-teal-soft);
+    --pf-v5-c-label--m-green__content--Color: var(--gs-teal-deep);
+    --pf-v5-c-label--m-green__content--before--BorderColor: rgb(34 129 122 / 35%);
+}
+
+/* ---------------------------------------------------------------- tabs ---- */
+
+.pf-v5-c-page__main .pf-v5-c-tabs__link {
+    font-weight: 500;
+}
+
+.pf-v5-c-page__main .pf-v5-c-tabs__item.pf-m-current .pf-v5-c-tabs__link {
+    color: var(--gs-teal);
+    font-weight: 600;
+}
+
+/* -------------------------------------------------------- empty states ---- */
+
+.pf-v5-c-empty-state__title-text {
+    color: var(--gs-charcoal);
+    font-weight: 600;
+}
+
+.pf-v5-c-empty-state__body {
+    color: var(--gs-muted);
+}
+
+.pf-v5-c-spinner {
+    --pf-v5-c-spinner--Color: var(--gs-teal);
+}
+
+/* index.ftl hard-codes the pre-hydration splash to white, inline. Repainting it
+   costs one rule and removes a white flash before the app mounts. */
+.keycloak__loading-container {
+    background-color: var(--gs-cream) !important;
+    color: var(--gs-charcoal) !important;
+}
+
+/* ----------------------------------------------------------- dark mode ---- */
+
+/*
+ * Keyed on the class the console itself sets rather than `prefers-color-scheme`:
+ * the class is what PatternFly's own dark values respond to, so staying on it
+ * keeps the two in step. `:root.pf-v5-theme-dark` (0,2,0) is deliberately
+ * stronger than the `:root` block above (0,1,0), which is what makes this win.
+ */
+:root.pf-v5-theme-dark {
+    --gs-teal-soft: #1e2e2b;
+    --gs-cream: #1a1a1a;
+    --gs-surface: #2a2a2a;
+    --gs-charcoal: #f5f0e6;
+    --gs-muted: #a89f92;
+    --gs-divider: #3a3a3a;
+    --gs-danger: #fe5142;
+    --gs-danger-soft: #33201c;
+
+    /* Brand teal is only 3.7:1 on #1a1a1a, so text and links move to a
+       lightened tint that clears 4.5:1 on both the page and the cards. The
+       masthead keeps full-strength teal -- it carries white, not teal. */
+    --gs-teal: #4fa8a0;
+    --gs-teal-deep: #6fbfb7;
+    --gs-clay: #e08a55;
+    --gs-nav-text: #f5f0e6;
+
+    --gs-focus-ring: 0 0 0 3px rgb(79 168 160 / 30%);
+}
+
+/* Primary buttons keep white text, so they need full-strength teal rather than
+   the lightened text tint. */
+:root.pf-v5-theme-dark .pf-v5-c-button.pf-m-primary {
+    background: #22817a;
+    box-shadow: none;
+}
+
+:root.pf-v5-theme-dark .pf-v5-c-button.pf-m-primary:hover,
+:root.pf-v5-theme-dark .pf-v5-c-button.pf-m-primary:focus {
+    background: #2f9e95;
+}
+
+/*
+ * The masthead keeps its teal band in dark mode. Both rules below exist to
+ * out-specify PatternFly's dark defaults rather than to restate a colour:
+ *   - `:where(.pf-v5-theme-dark) .pf-v5-c-masthead`               (0,1,0)
+ *   - `:where(.pf-v5-theme-dark) .pf-v5-c-masthead .pf-v5-c-toolbar` (0,2,0)
+ * Leading with `:root` adds one class-equivalent to each, so ours win on
+ * specificity and not on the accident of stylesheet order.
+ */
+:root.pf-v5-theme-dark .pf-v5-c-masthead {
+    --pf-v5-c-masthead--BackgroundColor: var(--gs-masthead);
+
+    border-block-end: 1px solid #3a3a3a;
+    box-shadow: none;
+}
+
+:root.pf-v5-theme-dark .pf-v5-c-masthead .pf-v5-c-toolbar,
+:root.pf-v5-theme-dark .pf-v5-c-masthead .pf-v5-c-toolbar__content,
+:root.pf-v5-theme-dark .pf-v5-c-masthead .pf-v5-c-toolbar__content-section {
+    --pf-v5-c-toolbar--BackgroundColor: transparent;
+
+    background: transparent;
+}
+
+:root.pf-v5-theme-dark .pf-v5-c-page__main {
+    background:
+        radial-gradient(circle at 12% 18%, rgb(34 129 122 / 14%), transparent 45%),
+        radial-gradient(circle at 88% 82%, rgb(203 110 58 / 10%), transparent 45%),
+        var(--gs-cream);
+}
+
+:root.pf-v5-theme-dark .pf-v5-c-form-control:hover {
+    border-color: #4a4a4a;
+}
+
+/* -------------------------------------------------------- small screens ---- */
+
+@media (max-width: 768px) {
+    .pf-v5-c-page__main-section {
+        padding-inline: 1rem;
+    }
+
+    .pf-v5-c-card {
+        border-radius: var(--gs-radius-sm);
+    }
+}

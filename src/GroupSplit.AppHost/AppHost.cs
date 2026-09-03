@@ -1,4 +1,6 @@
+using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using GroupSplit.AppHost.Deployment;
+using GroupSplit.AppHost.Health;
 using GroupSplit.AppHost.Keycloak;
 using GroupSplit.AppHost.Migrations;
 using GroupSplit.AppHost.Seeder;
@@ -10,7 +12,25 @@ using Scalar.Aspire;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var compose = builder.AddDockerComposeEnvironment("compose")
-    .WithDashboard(dashboard => dashboard.WithHostPort(18888));
+    .WithDashboard(dashboard =>
+    {
+        dashboard.WithHostPort(18888)
+            // Behind TLS terminated upstream, the dashboard has to learn the original
+            // scheme and host the way Keycloak does, or its redirects point back at
+            // plain HTTP.
+            .WithForwardedHeaders(enabled: true);
+
+        var dashboardToken = builder.Configuration["Parameters:dashboard-token"];
+
+        if (string.IsNullOrWhiteSpace(dashboardToken))
+            return;
+
+        var token = builder.AddParameter(
+            "dashboard-token", () => dashboardToken, secret: true);
+
+        dashboard.WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
+            .WithEnvironment("Dashboard__Frontend__BrowserToken", token);
+    });
 
 var dbServer = builder
     .AddPostgres("db-server")
@@ -43,15 +63,13 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WithReference(keycloak)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)
-    .WithHttpProbe(ProbeType.Liveness, "/alive")
-    .WithHttpProbe(ProbeType.Readiness, "/health");
+    .WithHealthEndpoints();
 
 var frontend = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)
     .WaitFor(backend)
     .WithReference(backend)
-    .WithHttpProbe(ProbeType.Liveness, "/alive")
-    .WithHttpProbe(ProbeType.Readiness, "/health")
+    .WithHealthEndpoints()
     .WithBrowserLogs();
 
 if (builder.ExecutionContext.IsRunMode)
@@ -59,10 +77,9 @@ if (builder.ExecutionContext.IsRunMode)
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
 
-    // Mounted from disk so realm and theme edits only need a restart, not a rebuild.
     keycloak
         .WithRealmImport("./realms.json")
-        .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
+        .WithContainerFiles("/opt/keycloak/themes/group-split", "./keycloak-themes/group-split")
         .WithDataVolume();
 
     builder
@@ -108,25 +125,43 @@ else
 
     // Shipped as Compose configs rather than baked into derived images: the base layers
     // would then have to travel through the registry on every deploy.
-    compose
-        .WithFiles(dbServer.Resource.Name,
+    dbServer
+        .WithFiles(
             "postgres-init/create-databases.sql",
             "/docker-entrypoint-initdb.d/10-create-databases.sql")
-        .WithFiles(keycloak.Resource.Name,
-            "realms.json",
-            "/opt/keycloak/data/import/realms.json")
-        .WithFiles(keycloak.Resource.Name,
-            "keycloak-themes/group-split",
-            "/opt/keycloak/themes/group-split")
-        .WithComposeDefaults(databaseService: dbServer.Resource.Name);
+        .WithComposeHealthcheck(new Healthcheck
+        {
+            Test = ["CMD-SHELL", "pg_isready -U postgres -d postgres"],
+            Interval = "5s",
+            Timeout = "5s",
+            Retries = 12,
+            StartPeriod = "10s"
+        });
+
+    keycloak
+        .WithFiles("realms.json", "/opt/keycloak/data/import/realms.json")
+        .WithFiles("keycloak-themes/group-split", "/opt/keycloak/themes/group-split");
+
+    backend.WithComposeHealthcheck(new Healthcheck
+    {
+        Test =
+        [
+            "CMD", "bash", "-c",
+            @"{ printf 'HEAD /health HTTP/1.0\r\n\r\n' >&0; grep -q '^HTTP/1\.[01] 200'; } 0<>/dev/tcp/localhost/$$HealthChecks__Port"
+        ],
+        Interval = "5s",
+        Timeout = "5s",
+        Retries = 12,
+        StartPeriod = "30s"
+    });
+
+    compose.WithComposeDefaults();
 
     // A barrier so the pushes and the Compose generation share one pipeline execution.
     // Run as separate `aspire do` invocations they each get their own deploy-prereq,
     // and that stamps a fresh timestamp tag every time: the generated compose file then
     // points at a tag nothing was ever pushed under, and the pull fails with
-    // "manifest unknown". Deliberately not `docker-compose-up-compose`, the built-in
-    // step that already aggregates these: it also runs `docker compose up`, which would
-    // start the stack on the runner instead of the server.
+    // "manifest unknown".
     builder.Pipeline.AddStep(
         "push-and-prepare-compose",
         _ => Task.CompletedTask,
@@ -135,8 +170,6 @@ else
             "prepare-compose",
             $"push-{backend.Resource.Name}",
             $"push-{frontend.Resource.Name}",
-            // Already "migrations-internal": PublishAsMigrationBundle(publishContainer: true)
-            // hands back the separate bundle container, not the original resource.
             $"push-{migrations.Resource.Name}",
         });
 }
