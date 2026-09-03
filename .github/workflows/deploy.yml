@@ -1,0 +1,149 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+# One deploy at a time: two concurrent runs would push different image tags into
+# the same Komodo stack and race each other.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+
+    env:
+      SECRETS_JSON: ${{ toJSON(secrets) }}
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required=(
+            KOMODO_URL
+            KOMODO_API_KEY
+            KOMODO_API_SECRET
+            KEYCLOAK_HOSTNAME
+            KEYCLOAK_PASSWORD
+            DB_SERVER_PASSWORD
+          )
+
+          missing=0
+          for name in "${required[@]}"; do
+            if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")" ]; then
+              echo "Missing required GitHub secret: ${name}" >&2
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Aspire reads deployment parameters from Parameters__<name>. Secret names are
+      # SCREAMING_SNAKE, parameter names are kebab-case, so export both spellings and
+      # let the ones that match a parameter win. Komodo and GitHub's own secrets are
+      # excluded: they configure this workflow, not the app.
+      - name: Export secrets as Aspire parameters
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '
+            to_entries[]
+            | select(.key | test("^KOMODO_|^GITHUB_|^REGISTRY_") | not)
+            | "\(.key)=\(.value)",
+              "Parameters__\(.key | ascii_downcase | gsub("_";"-"))=\(.value)"
+          ' <<<"$SECRETS_JSON" >> "$GITHUB_ENV"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install Aspire CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL https://aspire.dev/install.sh | bash
+          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+
+      - name: Show Aspire CLI version
+        run: aspire --version
+
+      # Only needed if the registry requires authentication to push. Skipped when the
+      # credentials are absent so the workflow works either way.
+      - name: Log in to the container registry
+        if: ${{ secrets.REGISTRY_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: registry.sussman.win
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      # Builds images and writes aspire-output/docker-compose.yaml plus
+      # .env.production with resolved values. Deliberately not `aspire deploy`:
+      # that would run `docker compose up` on the runner instead of the server.
+      - name: Build and prepare Compose artifacts
+        run: aspire do prepare-compose --environment production --non-interactive
+
+      # There is no aggregate push step in Aspire 13.5, so each image is pushed by
+      # name. Adding a compute resource means adding it here.
+      - name: Push images
+        shell: bash
+        run: |
+          set -euo pipefail
+          for step in push-api push-web push-keycloak push-db-server push-migrations-efmigrations-tool; do
+            echo "::group::$step"
+            aspire do "$step" --environment production --non-interactive
+            echo "::endgroup::"
+          done
+
+      # Hand the generated compose file and env to Komodo, then deploy the stack.
+      # The stack must already exist in Komodo in `file_contents` mode.
+      - name: Deploy to Komodo
+        env:
+          KOMODO_URL: ${{ secrets.KOMODO_URL }}
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          STACK: group-split
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/GroupSplit.AppHost/aspire-output
+
+          auth=(-H "X-Api-Key: $KOMODO_API_KEY" -H "X-Api-Secret: $KOMODO_API_SECRET" -H 'Content-Type: application/json')
+
+          # jq rather than string interpolation: the YAML is full of quotes and newlines.
+          jq -n --arg stack "$STACK" \
+                --rawfile yaml docker-compose.yaml \
+                --rawfile env .env.production '{
+            type: "UpdateStack",
+            params: { id: $stack,
+                      config: { file_contents: $yaml, environment: $env } }
+          }' > payload.json
+          curl -sf -X POST "$KOMODO_URL/write" "${auth[@]}" --data @payload.json > /dev/null
+
+          # /execute is async: 2xx means accepted, not deployed. Poll the update and
+          # fail the job if the deploy itself failed.
+          update_id=$(curl -sf -X POST "$KOMODO_URL/execute" "${auth[@]}" \
+            -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}" \
+            | jq -r '._id."$oid"')
+
+          for _ in $(seq 1 60); do
+            sleep 5
+            status=$(curl -sf -X POST "$KOMODO_URL/read" "${auth[@]}" \
+              -d "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}")
+            [ "$(jq -r .status <<<"$status")" = "Complete" ] && break
+          done
+
+          jq -e '.status == "Complete" and .success == true' <<<"$status" > /dev/null \
+            || { echo "Komodo deploy failed:"; jq . <<<"$status"; exit 1; }

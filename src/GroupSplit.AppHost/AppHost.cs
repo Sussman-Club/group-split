@@ -5,7 +5,7 @@ using GroupSplit.AppHost.Seeder;
 using Projects;
 using Scalar.Aspire;
 
-#pragma warning disable ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001
+#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -84,7 +84,7 @@ else
 {
     // Has to resolve to the same address from a browser and from inside the Compose network.
     // "localhost" cannot: a container resolves it to itself.
-    var keycloakHostname = builder.AddParameterFromConfiguration("keycloak-hostname", "Keycloak:Hostname");
+    var keycloakHostname = builder.AddParameter("keycloak-hostname");
 
     var authority = ReferenceExpression.Create($"{keycloakHostname}/realms/group-split");
 
@@ -99,6 +99,12 @@ else
     // The API stays internal: the web app forwards to it and the WASM client uses its own origin.
     // It still validates browser-issued tokens, so it needs the same public issuer.
     backend.WithKeycloakAuthority(authority);
+
+    // A remote host can only pull images it can reach, so publish tags into the shared
+    // registry rather than leaving them tagged on whatever machine ran the deploy.
+    var registry = builder.AddContainerRegistry("registry", "registry.sussman.win", "group-split");
+
+    compose.WithContainerRegistry(registry);
 
     dbServer.WithBakedInitScript("postgres-init/create-databases.sql");
 
