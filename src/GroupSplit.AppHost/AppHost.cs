@@ -34,15 +34,11 @@ var keycloak = builder.AddKeycloak("keycloak")
 ReferenceExpression? keycloakAuthority = null;
 var requireHttpsMetadata = true;
 
-// Developer tooling: an unrestricted SQL endpoint and a mail catcher have no place in a deployment.
+// Developer tooling: an unrestricted SQL endpoint has no place in a deployment.
 if (builder.ExecutionContext.IsRunMode)
 {
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
-
-    var mailpit = builder.AddMailPit("mailpit");
-
-    keycloak.WaitFor(mailpit);
 
     // Mounted from disk so realm and theme edits only need a restart, not a rebuild.
     keycloak
