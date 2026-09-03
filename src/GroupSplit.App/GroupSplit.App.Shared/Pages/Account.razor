@@ -1,8 +1,11 @@
 @page "/account"
+@using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IAuthService AuthService
 @inject NavigationManager Nav
+@inject IUsersClient Users
+@inject IDialogService DialogService
 
 <PageTitle>Account - Group Split</PageTitle>
 
@@ -67,6 +70,51 @@
                 </MudStack>
             </MudStack>
         </MudPaper>
+
+        <MudPaper Elevation="0" Class="gs-surface-card pa-6">
+            <MudStack Spacing="4">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">Delete account</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Removes your name and email address, and unlinks your sign-in. Expenses you
+                        recorded stay in their groups, because they are what everyone else's share
+                        was worked out from. You have to settle up in every group first.
+                    </MudText>
+                </MudStack>
+
+                @if (_blocking is { Count: > 0 })
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.body2" Class="font-weight-medium">
+                                Settle up in these groups first:
+                            </MudText>
+                            @foreach (var group in _blocking)
+                            {
+                                <MudText Typo="Typo.body2">
+                                    @group.GroupName &mdash; @group.Balance.ToString("C")
+                                </MudText>
+                            }
+                        </MudStack>
+                    </MudAlert>
+                }
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+                }
+
+                <MudStack Row Spacing="3" Class="flex-wrap">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.DeleteForever"
+                               Disabled="@_deleting"
+                               OnClick="ConfirmDeleteAsync">
+                        Delete my account
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
     }
 </MudStack>
 
@@ -79,7 +127,60 @@
             .Take(2)
             .Select(part => part[0]));
 
+    private IReadOnlyList<OutstandingBalance>? _blocking;
+
+    private string? _error;
+
+    private bool _deleting;
+
     private Task LogoutAsync() => AuthService.Logout();
+
+    private async Task ConfirmDeleteAsync()
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, "Delete your account? Your name and email address are removed and your sign-in is unlinked. This cannot be undone." },
+            { x => x.ButtonText, "Delete account" },
+            { x => x.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete account", parameters);
+
+        if (await dialog.GetReturnValueAsync<bool>())
+        {
+            await DeleteAsync();
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _deleting = true;
+        _blocking = null;
+        _error = null;
+
+        try
+        {
+            await Users.DeleteCurrentUserAsync();
+
+            // The account no longer exists, so the session points at nothing. Signing out
+            // is what clears it -- and without it the next request would provision a
+            // fresh, empty account under the same sign-in.
+            await AuthService.Logout();
+        }
+        catch (ApiException<ICollection<OutstandingBalance>> conflict)
+        {
+            // The groups come back named so the reason is actionable rather than a refusal.
+            _blocking = conflict.Result.ToList();
+        }
+        catch (ApiException)
+        {
+            _error = "We could not delete your account. Please try again in a moment.";
+        }
+        finally
+        {
+            _deleting = false;
+        }
+    }
 
     // A BFF endpoint, not a Blazor route: the router would otherwise intercept
     // the navigation and fail to match it.

@@ -43,6 +43,7 @@ builder.Services.AddAuthorizationBuilder();
 builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddCurrentUser();
 builder.Services.AddScoped<IDebtCalculationService, DebtCalculationService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddRuleVersionServices();

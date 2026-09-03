@@ -14,6 +14,7 @@ public static class UserApi
             group.WithTags("Users");
 
             group.MapGetCurrentUser();
+            group.MapDeleteCurrentUser();
 
             return group;
         }
@@ -32,6 +33,26 @@ public static class UserApi
                 })
                 .WithName("GetCurrentUser")
                 .Produces<UserInfo>();
+        }
+
+        private RouteHandlerBuilder MapDeleteCurrentUser()
+        {
+            return group.MapDelete("/me", async (
+                    IAccountService accounts,
+                    CancellationToken ct) =>
+                {
+                    var outstanding = await accounts.DeleteCurrentAccount(ct);
+
+                    // Settling up first is the rule that already governs leaving a single
+                    // group, so a refusal names the groups that are in the way instead of
+                    // leaving someone to work out which of them it meant.
+                    return outstanding.Count > 0
+                        ? Results.Conflict(outstanding)
+                        : Results.NoContent();
+                })
+                .WithName("DeleteCurrentUser")
+                .Produces(StatusCodes.Status204NoContent)
+                .Produces<IReadOnlyList<OutstandingBalance>>(StatusCodes.Status409Conflict);
         }
     }
 }

@@ -46,6 +46,20 @@ public interface IGroupService
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Drops <paramref name="user"/> from <paramref name="group"/> and closes the rule
+    /// versions that still include them, so later transactions stop splitting with
+    /// somebody who has left.
+    /// <para>
+    /// Deliberately does not save. Callers batch it with their own changes, which is what
+    /// lets an account leaving several groups at once apply as one unit instead of
+    /// stopping half way through. It also does not check the balance: whether leaving is
+    /// allowed at all is the caller's question, and the caller deleting an account has to
+    /// ask it of every group up front.
+    /// </para>
+    /// </summary>
+    Task DetachMember(Group group, User user, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the balance of a group per user
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
@@ -166,25 +180,47 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         if (userBalance is not 0)
             throw new ArgumentException("User must settle before leaving the group");
 
+        await DetachMember(group, user, cancellationToken);
+
+        await context.SaveChangesAsync(cancellationToken);
+        return groupQuery;
+    }
+
+    public async Task DetachMember(Group group, User user, CancellationToken cancellationToken = default)
+    {
         group.Users.Remove(user);
 
-        var ruleVersionsReferencingUser = await (
+        var percentVersions = await (
                 from ruleVersion in context.Set<PercentRuleVersion>()
                 where ruleVersion.Rule.Group == @group &&
                       ruleVersion.EndDateTime == null &&
-                      ruleVersion.RuleUsers.Any(ru => ru.User == user)
+                      ruleVersion.RuleUsers.Any(ruleUser => ruleUser.User == user)
+                select ruleVersion
+            )
+            .ToListAsync(cancellationToken);
+
+        // Needed as a second query, not a wider one. Set<PercentRuleVersion>() already
+        // returns shares versions, since SharesRuleVersion derives from it, but a shares
+        // version records its members in SharedRuleUsers rather than RuleUsers, so the
+        // query above never sees them. Until this was here, a member removed from a
+        // shares rule stayed in it and every later transaction kept splitting them a
+        // share -- which for a deleted account would go on distorting what everyone
+        // still in the group owes.
+        var sharesVersions = await (
+                from ruleVersion in context.Set<SharesRuleVersion>()
+                where ruleVersion.Rule.Group == @group &&
+                      ruleVersion.EndDateTime == null &&
+                      ruleVersion.SharedRuleUsers.Any(ruleUser => ruleUser.User == user)
                 select ruleVersion
             )
             .ToListAsync(cancellationToken);
 
         var now = DateTime.Now;
-        foreach (var ruleVersion in ruleVersionsReferencingUser)
+
+        foreach (var ruleVersion in percentVersions.Concat<RuleVersion>(sharesVersions))
         {
             ruleVersion.EndDateTime = now;
         }
-
-        await context.SaveChangesAsync(cancellationToken);
-        return groupQuery;
     }
 
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
