@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Endpoints;
+using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.PostgreSQL;
@@ -57,9 +57,7 @@ builder.Services.AddValidation();
 
 var app = builder.Build();
 
-// Safe to expose here in a way it would not be on the web app: the API is never published
-// outside the deployment network, and the deployed readiness probe needs the endpoint to exist.
-app.MapDefaultEndpoints(exposeOutsideDevelopment: true);
+app.MapDefaultEndpoints();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

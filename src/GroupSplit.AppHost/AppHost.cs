@@ -1,5 +1,6 @@
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using GroupSplit.AppHost.Deployment;
+using GroupSplit.AppHost.Health;
 using GroupSplit.AppHost.Keycloak;
 using GroupSplit.AppHost.Migrations;
 using GroupSplit.AppHost.Seeder;
@@ -10,35 +11,25 @@ using Scalar.Aspire;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Left unset, the dashboard mints a fresh login token on every container start and writes it
-// only to its own logs, so the URL from the last deploy stops working and the token has to be
-// dug back out of `docker logs`. Setting one keeps a single stable login URL. Optional rather
-// than required: a required parameter fails the whole deploy whenever the secret is absent,
-// which is not a trade worth making for a convenience. The deploy workflow already exports a
-// DASHBOARD_TOKEN secret into this key along with every other one, so nothing there changes.
-var dashboardToken = builder.Configuration["Parameters:dashboard-token"];
-
 var compose = builder.AddDockerComposeEnvironment("compose")
     .WithDashboard(dashboard =>
     {
         dashboard.WithHostPort(18888)
-                 // Behind TLS terminated upstream, the dashboard has to learn the original
-                 // scheme and host the way Keycloak does, or its redirects point back at
-                 // plain HTTP.
-                 .WithForwardedHeaders(enabled: true);
+            // Behind TLS terminated upstream, the dashboard has to learn the original
+            // scheme and host the way Keycloak does, or its redirects point back at
+            // plain HTTP.
+            .WithForwardedHeaders(enabled: true);
+
+        var dashboardToken = builder.Configuration["Parameters:dashboard-token"];
 
         if (string.IsNullOrWhiteSpace(dashboardToken))
-        {
             return;
-        }
 
-        // A parameter rather than the raw string, so the value is masked in the dashboard and
-        // travels as an env placeholder instead of being inlined into the Compose file.
         var token = builder.AddParameter(
             "dashboard-token", () => dashboardToken, secret: true);
 
         dashboard.WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
-                 .WithEnvironment("Dashboard__Frontend__BrowserToken", token);
+            .WithEnvironment("Dashboard__Frontend__BrowserToken", token);
     });
 
 var dbServer = builder
@@ -72,15 +63,13 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WithReference(keycloak)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)
-    .WithHttpProbe(ProbeType.Liveness, "/alive")
-    .WithHttpProbe(ProbeType.Readiness, "/health");
+    .WithHealthEndpoints();
 
 var frontend = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)
     .WaitFor(backend)
     .WithReference(backend)
-    .WithHttpProbe(ProbeType.Liveness, "/alive")
-    .WithHttpProbe(ProbeType.Readiness, "/health")
+    .WithHealthEndpoints()
     .WithBrowserLogs();
 
 if (builder.ExecutionContext.IsRunMode)
@@ -153,18 +142,12 @@ else
         .WithFiles("realms.json", "/opt/keycloak/data/import/realms.json")
         .WithFiles("keycloak-themes/group-split", "/opt/keycloak/themes/group-split");
 
-    // Gives web's WaitFor(api) something to wait on: WithComposeDefaults upgrades that edge
-    // once this service reports healthy. Same probe shape as Keycloak, for the same reason --
-    // no CLI HTTP client in the image -- against the readiness endpoint the API maps outside
-    // development. Explicitly bash, not CMD-SHELL: /bin/sh here is dash, which has no
-    // /dev/tcp. The "$$" is how a Compose file escapes a literal "$", leaving HTTP_PORTS for
-    // the container's own shell rather than Compose's interpolation.
     backend.WithComposeHealthcheck(new Healthcheck
     {
         Test =
         [
             "CMD", "bash", "-c",
-            @"{ printf 'HEAD /health HTTP/1.0\r\n\r\n' >&0; grep -q '^HTTP/1\.[01] 200'; } 0<>/dev/tcp/localhost/$$HTTP_PORTS"
+            @"{ printf 'HEAD /health HTTP/1.0\r\n\r\n' >&0; grep -q '^HTTP/1\.[01] 200'; } 0<>/dev/tcp/localhost/$$HealthChecks__Port"
         ],
         Interval = "5s",
         Timeout = "5s",

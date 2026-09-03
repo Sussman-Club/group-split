@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,12 @@ public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
+
+    /// <summary>
+    /// Port the health endpoints answer on. Set by the AppHost from the resource's unpublished
+    /// management endpoint; see <c>WithHealthEndpoints</c>.
+    /// </summary>
+    private const string ManagementPortConfigurationKey = "HealthChecks:Port";
 
     extension<TBuilder>(TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -113,33 +120,64 @@ public static class Extensions
     extension(WebApplication app)
     {
         /// <summary>
-        /// Maps the health check endpoints.
-        /// </summary>
-        /// <param name="exposeOutsideDevelopment">
-        /// Maps the endpoints in every environment rather than development only.
+        /// Maps the health check endpoints on the management port.
         /// <para>
-        /// Opt in only for a service that is not published outside the deployment network. A
-        /// reachable /health answers with the status of every registered check, which tells an
-        /// anonymous caller which dependencies exist and which of them are currently down. The
-        /// deployed probes need the endpoints to exist, so a service that is published has to
-        /// leave this alone and be probed some other way.
+        /// A health endpoint answers with the status of every registered check, which tells
+        /// its caller which dependencies exist and which of them are currently down. Rather
+        /// than each service deciding whether publishing that is safe, the endpoints answer
+        /// only on a management port that is never published -- the shape Keycloak uses for
+        /// its own /health/ready on port 9000.
+        /// </para>
+        /// <para>
+        /// The port is checked against the connection's local port, deliberately not with
+        /// <c>RequireHost("*:port")</c>: that matches the Host header, which the caller sends
+        /// and can therefore forge, so it lets a request on the published port reach these
+        /// endpoints by claiming the management port. The local port is a property of the
+        /// socket and cannot be spoofed.
+        /// </para>
+        /// <para>
+        /// With no management port configured, which is what running one of these projects
+        /// directly rather than through the AppHost looks like, this falls back to the
+        /// framework template's rule and maps nothing outside development, rather than
+        /// assuming an unknown port is safe to answer on.
         /// </para>
         /// </summary>
-        public WebApplication MapDefaultEndpoints(bool exposeOutsideDevelopment = false)
+        public WebApplication MapDefaultEndpoints()
         {
-            // Adding health checks endpoints to applications in non-development environments has security implications.
-            // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
-            if (app.Environment.IsDevelopment() || exposeOutsideDevelopment)
-            {
-                // All health checks must pass for app to be considered ready to accept traffic after starting
-                app.MapHealthChecks(HealthEndpointPath);
+            var managementPort = app.Configuration[ManagementPortConfigurationKey];
+            var hasManagementPort = !string.IsNullOrWhiteSpace(managementPort);
 
-                // Only health checks tagged with the "live" tag must pass for app to be considered alive
-                app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
+            if (!hasManagementPort && !app.Environment.IsDevelopment())
+            {
+                return app;
+            }
+
+            if (hasManagementPort && int.TryParse(managementPort, out var port))
+            {
+                app.Use(async (context, next) =>
                 {
-                    Predicate = r => r.Tags.Contains("live")
+                    var isHealthRequest =
+                        context.Request.Path.StartsWithSegments(HealthEndpointPath)
+                        || context.Request.Path.StartsWithSegments(AlivenessEndpointPath);
+
+                    if (isHealthRequest && context.Connection.LocalPort != port)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await next();
                 });
             }
+
+            // All health checks must pass for app to be considered ready to accept traffic after starting
+            app.MapHealthChecks(HealthEndpointPath);
+
+            // Only health checks tagged with the "live" tag must pass for app to be considered alive
+            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
+            {
+                Predicate = r => r.Tags.Contains("live")
+            });
 
             return app;
         }
