@@ -102,9 +102,14 @@ var frontend = builder.AddProject<GroupSplit_App_Web>("web")
 // discovery hands it an https+http:// address that metadata validation rejects.
 if (keycloakAuthority is not null)
 {
-    frontend
-        .WithEnvironment("Keycloak__Authority", keycloakAuthority)
-        .WithEnvironment("Keycloak__RequireHttpsMetadata", requireHttpsMetadata ? "true" : "false");
+    // The API validates bearer tokens issued to the browser, so it needs the same public
+    // issuer as the web app; the internal address would never match the token's iss claim.
+    foreach (var resource in new[] { frontend, backend })
+    {
+        resource
+            .WithEnvironment("Keycloak__Authority", keycloakAuthority)
+            .WithEnvironment("Keycloak__RequireHttpsMetadata", requireHttpsMetadata ? "true" : "false");
+    }
 }
 
 // The MAUI client is a locally launched device app, not a deployable container workload.

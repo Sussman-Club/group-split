@@ -1,4 +1,4 @@
-using GroupSplit.API.Endpoints;
+﻿using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.PostgreSQL;
@@ -28,6 +28,11 @@ builder.Services.AddAuthentication()
                 options.Authority = builder.Configuration["Keycloak:Authority"]
                     ?? throw new InvalidOperationException(
                         "Keycloak:Authority must be configured outside of development.");
+
+                // Tokens carry the issuer the browser saw, so the authority has to match it
+                // rather than the internal address. An http:// one is an explicit opt-in.
+                options.RequireHttpsMetadata = builder.Configuration
+                    .GetValue("Keycloak:RequireHttpsMetadata", true);
             }
         });
 
