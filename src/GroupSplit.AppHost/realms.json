@@ -5,6 +5,7 @@
   "enabled": true,
   "loginTheme": "group-split",
   "accountTheme": "group-split",
+  "emailTheme": "group-split",
   "registrationAllowed": false,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
@@ -12,7 +13,7 @@
   "resetPasswordAllowed": true,
   "rememberMe": true,
   "editUsernameAllowed": false,
-  "verifyEmail": false,
+  "verifyEmail": "${VERIFY_EMAIL}",
   "passwordPolicy": "length(8) and notUsername and notEmail and passwordHistory(3)",
   "bruteForceProtected": true,
   "permanentLockout": false,
@@ -26,7 +27,18 @@
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "accessCodeLifespan": 60,
-  "actionTokenGeneratedByUserLifespan": 300,
+  "actionTokenGeneratedByUserLifespan": 900,
+  "smtpServer": {
+    "host": "${SMTP_HOST}",
+    "port": "${SMTP_PORT}",
+    "from": "${SMTP_FROM}",
+    "fromDisplayName": "Group Split",
+    "ssl": "false",
+    "starttls": "${SMTP_STARTTLS}",
+    "auth": "${SMTP_AUTH}",
+    "user": "${SMTP_USER}",
+    "password": "${SMTP_PASSWORD}"
+  },
   "clients": [
     {
       "clientId": "api",

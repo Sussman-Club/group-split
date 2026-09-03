@@ -77,9 +77,12 @@ if (builder.ExecutionContext.IsRunMode)
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
 
+    var mailpit = builder.AddMailPit("mailpit");
+
     keycloak
         .WithRealmImport("./realms.json")
         .WithContainerFiles("/opt/keycloak/themes/group-split", "./keycloak-themes/group-split")
+        .WithSmtp(mailpit)
         .WithDataVolume();
 
     builder
@@ -109,7 +112,9 @@ else
 
     // Unpublished, like the API: the web app's forwarder carries it, so the browser reaches
     // it on the web origin under its relative path. Keycloak's port stays off the host.
-    keycloak.AsDeployedKeycloak(hostname);
+    keycloak
+        .AsDeployedKeycloak(hostname)
+        .WithSmtp(builder.Configuration);
 
     frontend
         .WithKeycloakAuthority(authority)
