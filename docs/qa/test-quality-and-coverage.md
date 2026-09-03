@@ -24,9 +24,9 @@ does not run.
 
 | | |
 |---|---|
-| Test methods | 75 (66 API, 7 web sign-in, 2 Aspire integration) |
-| Test cases executed | 74 — the one `[Theory]` contributes two |
-| Executed in CI before this branch | 74; the 2 integration tests were built and skipped |
+| Test methods | 76 (66 API, 7 web sign-in, 3 Aspire integration) |
+| Test cases executed | 77 — the one `[Theory]` contributes two |
+| Executed in CI before this branch | 74; the integration tests were built and skipped |
 | Line coverage (hand-written code) | **45.1%** |
 | Branch coverage | **32.6%** |
 | Infrastructure code under test | ~0% |
@@ -39,9 +39,14 @@ does not run.
 2. **CI reports and gates on it.** The unit-test job merges the per-project
    Cobertura files, writes the summary onto the run page, and fails if line or
    branch coverage falls below a recorded floor (`tests/coverage-gate.py`).
-3. **The integration tests run.** `GroupSplit.AppHost.Test` was built by CI and then
-   never executed. It now has its own job with Docker and Playwright. It is
-   `continue-on-error` for now — see [Open question](#open-question-the-integration-job).
+3. **The integration tests run, and pass.** `GroupSplit.AppHost.Test` was built by CI
+   and never executed. Turning it on surfaced a real bug in the app, described in
+   [The reason they never finished](#the-reason-they-never-finished); with that fixed
+   the whole suite runs in about 40 seconds against warm images. It now has its own
+   blocking CI job with Docker and Playwright.
+4. **Nothing waits forever.** The fixture bounds start-up and every `WaitFor…`, each
+   test carries a `Timeout`, and both CI jobs have `timeout-minutes`. A stall now
+   fails with the last state of every resource instead of hanging.
 
 The filters in `tests/coverage.config` matter for reading any of these numbers. An
 unfiltered run reports **32.0%**, but that denominator includes ~1,800 lines of
@@ -105,7 +110,9 @@ pinning:
 1,477 lines across `GroupSplit.AppHost`, `GroupSplit.ServiceDefaults` and
 `GroupSplit.Seeder`. `GroupSplit.AppHost.Test` was the only thing that touched any of
 it, and CI built it without running it, so in practice a deploy was the first place a
-break in this code could show up.
+break in this code could show up. That is no longer hypothetical: turning those tests
+on immediately found a health-probe bug in `ServiceDefaults` that had been breaking
+every local run — see [The reason they never finished](#the-reason-they-never-finished).
 
 Highest-value target: `SeederOrderingExtensions.TopologicallySort`. It is 82 lines of
 Kahn's algorithm with explicit cycle detection and an "unregistered dependency" error
@@ -130,18 +137,16 @@ implementation whose body was deleted would pass it. The sibling test three meth
 down (`AddGroupMembers_EmailsNotFound_NoUsersAdded`) already shows the fix: call
 `GetGroupMembers` and assert on the result.
 
-### 2. An integration test with no assertions
+### 2. Fixed: an integration test with no assertions
 
 `tests/GroupSplit.AppHost.Test/Data/DataTest.cs`
 
-`TestDateTimeWithOffset` builds a `Transaction` with a `-08:00` offset, saves it, and
-stops. It fails only if `SaveChangesAsync` throws. The interesting question — whether
-the offset survives the Postgres round-trip — is exactly what is not asked. Reading
-the row back and asserting on `DateTime` would turn it into the test its name claims.
-
-The comment says the transaction "will roll-back the changes"; it does, but only via
-`DisposeAsync`, which is worth an explicit `RollbackAsync` or a note, because the
-current form silently depends on nothing later committing.
+`TestDateTimeWithOffset` built a `Transaction` with a `-08:00` offset, saved it, and
+stopped. It failed only if `SaveChangesAsync` threw. The interesting question —
+whether the offset survives the Postgres round-trip — was exactly what it did not ask.
+It now reads the value back through a fresh `AsNoTracking` query, rather than off the
+tracked entity, which would hand back what was already in memory without touching the
+column at all.
 
 ### 3. The in-memory provider is not the database we ship
 
@@ -201,7 +206,7 @@ have failed before running a test. Added on this branch.
 
 In value order. The first three are small.
 
-1. **Fix the two tests that cannot fail** (findings 1 and 2). Under an hour.
+1. **Fix the test that cannot fail** (finding 1). Under an hour.
 2. **Test `SeederOrderingExtensions.TopologicallySort`** — layering, the cycle error,
    the unregistered-dependency error. Pure function, no host, ~25 lines of test.
 3. **Test the two validation attributes**, including `null` and non-decimal input.
@@ -211,30 +216,79 @@ In value order. The first three are small.
    `ArgumentException` when the current user is absent from the balances.
 5. **Add endpoint tests** for at least the authorization boundaries — a member of no
    group asking for another group's transactions should be a test, not a hope.
-6. **Get the integration job reliably green**, then delete its `continue-on-error`.
-7. **Raise the coverage floor** in `.github/workflows/ci.yml` as each of the above
+6. **Raise the coverage floor** in `.github/workflows/ci.yml` as each of the above
    lands. The floor is a ratchet; it is only useful if someone turns it.
 
-## Open question: the integration job
+## The reason they never finished
 
-The Aspire integration tests were run locally against Docker during this review, on a
-machine with Playwright's browsers already installed. After 13 minutes they had
-produced no output and were stopped. The containers came up within seconds
-(`db-server`, `keycloak`, `keycloak-db`, `pgweb`, `scalar`, the network tunnel proxy)
-and a `GroupSplit.API` process started a minute later, but **no web-app process and no
-seeder process ever appeared** — which is precisely what both tests block on:
-`WebPageTest` awaits `WaitForResourceHealthyAsync("web")`, and `DataTest` awaits the
-seeder reaching `Finished`.
+Turning the Aspire tests on found a real bug, and it is worth writing down because the
+symptom pointed nowhere near the cause.
 
-So this is not slow-but-progressing; two project resources are not starting. Worth
-someone reproducing before the job is made blocking.
+Run locally, the tests produced no output in 13 minutes. The containers came up in
+seconds and a `GroupSplit.API` process started, but no web-app process and no seeder
+process ever appeared — which is exactly what the tests block on. Two independent
+faults, one in the app and one in the test helper.
 
-That is why the CI job carries `continue-on-error`. Two things would help regardless
-of the cause:
+### The app: health probes redirected into a 404
 
-- **Give `GroupSplit.AppHost.Test` an explicit timeout.** A hang currently consumes a
-  runner for the whole job timeout and reports nothing useful. xUnit v3 takes a
-  per-test `Timeout`, and the `WaitFor…` calls should take a bounded
-  `CancellationToken` rather than `TestContext.Current.CancellationToken` alone.
-- **Capture the AppHost resource logs on failure** so the CI artifact says which
-  resource never started, instead of just showing a cancelled run.
+The API and web app both call `MapDefaultEndpoints`, which serves `/health` and
+`/alive` on an unpublished management port and 404s those paths on any other port, so
+they cannot be reached from outside. Both then call `UseHttpsRedirection`.
+
+The redirect middleware runs before routing, so it caught the probe first:
+
+```
+GET  http://localhost:53233/health      (management port, plain HTTP)
+307  https://localhost:52621/health     (the public HTTPS port)
+404                                     (right path, wrong port — the guard rejects it)
+```
+
+The readiness probe could therefore never pass. `api` never went healthy, so `web`
+— which has `.WaitFor(backend)` — never started at all, and everything waiting on
+`web` waited forever. The same trap sat in the web app for its own probe.
+
+Only run mode shows it. Deployed, nothing gives these apps an HTTPS port, so
+`UseHttpsRedirection` logs a warning and passes everything through; the AppHost hands
+out an HTTPS endpoint, which switches it on. That is why the deployed stack is fine
+and the local one was not, and why the bug survived unnoticed.
+
+The fix is `UseDefaultHttpsRedirection()` in `GroupSplit.ServiceDefaults`, which
+applies the redirect to everything except the health paths. Exempting by path costs
+nothing: a health request on any other port is still answered with a 404 by the port
+guard, whichever scheme it arrived on.
+
+### The test helper: a command name that does not exist
+
+`DataTest` starts the explicitly-started seeder with
+
+```csharp
+ExecuteCommandAsync("seeder", "start", …)
+```
+
+but the command Aspire registers is `resource-start`
+(`KnownResourceCommands.StartCommand`) — the AppHost's own reset-and-seed command
+already uses that name. An unrecognised name comes back as a **failed result rather
+than an exception**, and the helper discarded the result and then waited for a
+resource nothing had started. It now uses the constant and asserts on the result.
+
+### And nothing was bounded
+
+No `[Fact(Timeout)]`, no timeout in `xunit.runner.json` (xUnit v3 has no such key —
+per-test attributes are the only lever), no `--timeout` on the runner, and no
+`timeout-minutes` on either CI job, so both inherited GitHub's six-hour default. Every
+`WaitFor…` was passed `TestContext.Current.CancellationToken`, which looks like
+cancellation is handled but is only signalled when the whole run is cancelled.
+
+`AppHostFixture` now bounds start-up (8 minutes, sized for cold image pulls on a
+hosted runner) and every wait (3 minutes), each test carries a `Timeout`, and both CI
+jobs have `timeout-minutes`. The fixture also keeps the last reported state of every
+resource and prints it with any timeout, so the next stall names the resource that did
+not start rather than the one that was waiting.
+
+### What the tests found once they ran
+
+Both of the existing assertions were stale, which is what happens to a test nobody
+runs. `HomeTest` expected the page title to match `Home`; it has been `Group Split`
+since `Home.razor` set it. And `DataTest` asserted nothing at all. The suite is now
+three tests — the offset round-trip, the home page title, and an anonymous visitor
+being offered a sign-in — and takes about 40 seconds with images cached.

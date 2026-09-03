@@ -20,6 +20,7 @@ jobs:
   build-test:
     name: Build & unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     env:
       # The share of hand-written lines and branches the unit tests must keep
@@ -132,11 +133,12 @@ jobs:
     # page, so without them nothing tells us the infrastructure still works until a
     # deploy does.
     #
-    # Not required to pass yet: they had never run in CI, so their reliability on a
-    # hosted runner is unmeasured, and a job that is red for environmental reasons
-    # teaches people to ignore it. Watch a few weeks of results, then delete this
-    # line and make the job blocking.
-    continue-on-error: true
+    # A backstop only. The suite bounds its own waits (see AppHostFixture), so a stall
+    # should fail with the resource states rather than run out the clock; this is here
+    # so that a hang somewhere those timeouts do not reach cannot hold a runner for the
+    # six-hour default. Locally the whole run takes about 40 seconds once images are
+    # cached, so the budget is almost entirely image pulls on a cold runner.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v5

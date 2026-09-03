@@ -156,11 +156,7 @@ public static class Extensions
             {
                 app.Use(async (context, next) =>
                 {
-                    var isHealthRequest =
-                        context.Request.Path.StartsWithSegments(HealthEndpointPath)
-                        || context.Request.Path.StartsWithSegments(AlivenessEndpointPath);
-
-                    if (isHealthRequest && context.Connection.LocalPort != port)
+                    if (IsHealthRequest(context) && context.Connection.LocalPort != port)
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;
@@ -181,5 +177,44 @@ public static class Extensions
 
             return app;
         }
+
+        /// <summary>
+        /// Redirects to HTTPS, except on the health endpoints.
+        /// <para>
+        /// Those answer on the management port, which is plain HTTP and has no TLS
+        /// certificate, so redirecting them sends the prober to the public HTTPS port
+        /// instead -- where <see cref="MapDefaultEndpoints"/>'s port guard correctly
+        /// rejects it as a health request on the wrong port. The probe then sees a 404
+        /// and the resource never reports healthy, which is not a symptom anything
+        /// spells out: locally it looks like the app simply hangs on start-up, because
+        /// everything downstream is still waiting for it.
+        /// </para>
+        /// <para>
+        /// Only run mode shows this. Deployed, nothing gives these apps an HTTPS port,
+        /// so <c>UseHttpsRedirection</c> logs a warning and passes every request
+        /// through; the AppHost hands out an HTTPS endpoint, which switches it on.
+        /// </para>
+        /// <para>
+        /// Exempting by path rather than by port costs nothing: a health request on any
+        /// other port is already answered with a 404 by the guard, whichever scheme it
+        /// arrived on.
+        /// </para>
+        /// </summary>
+        public WebApplication UseDefaultHttpsRedirection()
+        {
+            app.UseWhen(
+                context => !IsHealthRequest(context),
+                branch => branch.UseHttpsRedirection());
+
+            return app;
+        }
     }
+
+    /// <summary>
+    /// Whether the request is for one of the health endpoints, by path alone. The
+    /// port it arrived on is a separate question, answered in <c>MapDefaultEndpoints</c>.
+    /// </summary>
+    private static bool IsHealthRequest(HttpContext context) =>
+        context.Request.Path.StartsWithSegments(HealthEndpointPath)
+        || context.Request.Path.StartsWithSegments(AlivenessEndpointPath);
 }

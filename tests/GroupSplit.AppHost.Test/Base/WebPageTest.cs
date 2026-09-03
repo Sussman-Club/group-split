@@ -6,7 +6,11 @@ namespace GroupSplit.AppHost.Test.Base
     {
         public override async ValueTask InitializeAsync()
         {
-            await appHost.Application.ResourceNotifications.WaitForResourceHealthyAsync("web");
+            await appHost.WaitForAsync(
+                "web",
+                (notifications, token) => notifications.WaitForResourceHealthyAsync("web", token),
+                "become healthy");
+
             await base.InitializeAsync();
         }
     }

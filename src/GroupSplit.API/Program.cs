@@ -63,7 +63,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+app.UseDefaultHttpsRedirection();
 
 app.UseAuthentication();
 app.UseMiddleware<CurrentUserMiddleware>();

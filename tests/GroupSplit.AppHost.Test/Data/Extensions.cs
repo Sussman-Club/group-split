@@ -42,28 +42,45 @@ public static class Extensions
         public Task SeedAsync()
             => appHost.GetOrCreate(static async appHost =>
             {
-                var finishedTask = appHost.Application.ResourceNotifications.WaitForResourceAsync("seeder",
+                var finished = appHost.Application.ResourceNotifications.WaitForResourceAsync("seeder",
                     KnownResourceStates.Finished,
                     TestContext.Current.CancellationToken);
 
                 // If seeder is already finished there is no point in trying to start it.
                 // WaitFor... normally returns immediately if the resource is in the desired state.
-                if (finishedTask.IsCompletedSuccessfully)
+                if (finished.IsCompletedSuccessfully)
                 {
-                    await finishedTask;
+                    await finished;
                     return;
                 }
 
-                await appHost.Application.ResourceCommands.ExecuteCommandAsync("seeder", "start",
+                // The seeder is registered WithExplicitStart, so it has to be told to run.
+                // The command name has to be the one Aspire registers: an unknown name comes
+                // back as a failed result rather than an exception, and the wait below then
+                // sits on a resource nothing ever started.
+                var start = await appHost.Application.ResourceCommands.ExecuteCommandAsync(
+                    "seeder",
+                    KnownResourceCommands.StartCommand,
                     TestContext.Current.CancellationToken);
 
-                await finishedTask;
+                Assert.True(
+                    start.Success,
+                    $"Starting the seeder failed: {start.Message ?? "no error message"}."
+                        + Environment.NewLine + appHost.DescribeResources());
+
+                await appHost.WaitForAsync(
+                    "seeder",
+                    (notifications, token) => notifications.WaitForResourceAsync(
+                        "seeder", KnownResourceStates.Finished, token),
+                    $"reach '{KnownResourceStates.Finished}'");
             });
 
         public async Task<AppDbContext> GetDbContextAsync()
         {
-            await appHost.Application.ResourceNotifications.WaitForResourceHealthyAsync("db",
-                TestContext.Current.CancellationToken);
+            await appHost.WaitForAsync(
+                "db",
+                (notifications, token) => notifications.WaitForResourceHealthyAsync("db", token),
+                "become healthy");
 
             var connectionString = await appHost.Application.GetConnectionStringAsync("db",
                 TestContext.Current.CancellationToken);

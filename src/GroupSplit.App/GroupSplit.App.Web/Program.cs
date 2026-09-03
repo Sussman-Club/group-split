@@ -70,7 +70,7 @@ else
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+app.UseDefaultHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
