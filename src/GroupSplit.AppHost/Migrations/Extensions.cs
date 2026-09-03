@@ -37,7 +37,7 @@ public static class Extensions
             Action<IResourceBuilder<DotnetToolResource>>? configureToolResource = null,
             Action<IResourceBuilder<ProjectResource>>? configureProjectResource = null)
         {
-            var internalResourceName = name + "-efmigrations-tool";
+            var internalResourceName = name + "-internal";
 
             // This project only exists to give EF Core a startup project to run migration commands
             // against - it is never launched, and the EF resource built from it is what the dashboard

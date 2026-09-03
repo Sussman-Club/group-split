@@ -4,8 +4,7 @@ using GroupSplit.Seeder.Orchestration;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddPostgreSqlAppDbContext(builder.Configuration.GetConnectionString("db"));
-
+builder.AddPostgreSqlAppDbContext("db");
 builder.Services.Configure<SeederOptions>(builder.Configuration.GetSection("Seeder"));
 
 var seederBuilder = builder.Services.AddSeederRunner();

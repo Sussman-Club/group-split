@@ -6,7 +6,6 @@ using GroupSplit.AppHost.Test.Base;
 using GroupSplit.Data;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.AppHost.Test.Data;
 
@@ -55,26 +54,25 @@ public static class Extensions
                     return;
                 }
 
-                await appHost.Application.ResourceCommands.ExecuteCommandAsync("seeder", "resource-start",
+                await appHost.Application.ResourceCommands.ExecuteCommandAsync("seeder", "start",
                     TestContext.Current.CancellationToken);
 
                 await finishedTask;
             });
 
-        public Task<IDbContextFactory<AppDbContext>> GetDbContextFactory()
-            => appHost.GetOrCreate(static async appHost =>
-            {
-                var connectionString =
-                    await appHost.Application.GetConnectionStringAsync("db",
-                        TestContext.Current.CancellationToken);
+        public async Task<AppDbContext> GetDbContextAsync()
+        {
+            await appHost.Application.ResourceNotifications.WaitForResourceHealthyAsync("db",
+                TestContext.Current.CancellationToken);
 
-                var serviceCollection = new ServiceCollection();
-
-                serviceCollection.AddPostgreSqlAppDbContextFactory(connectionString);
-
-                var serviceProvider = serviceCollection.BuildServiceProvider();
-
-                return serviceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
-            });
+            var connectionString = await appHost.Application.GetConnectionStringAsync("db",
+                TestContext.Current.CancellationToken);
+            
+            var options = new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
+                .UseNpgsql(connectionString)
+                .Options;
+            
+            return new PostgreSqlAppDbContext(options);
+        }
     }
 }
