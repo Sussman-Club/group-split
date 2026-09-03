@@ -43,23 +43,29 @@ jobs:
       - name: Restore
         run: |
           dotnet restore tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
+          dotnet restore tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj
           dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
       - name: Build
         run: |
           dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
       # GroupSplit.AppHost.Test is built but not run: it needs Docker, Playwright
       # browsers and DCP from the Aspire CLI. Worth its own job later.
       - name: Test
-        run: >
-          dotnet test tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
-          -c Release --no-build
-          --logger "trx;LogFileName=api-tests.trx"
-          --results-directory TestResults
+        run: |
+          dotnet test tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj \
+            -c Release --no-build \
+            --logger "trx;LogFileName=api-tests.trx" \
+            --results-directory TestResults
+          dotnet test tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj \
+            -c Release --no-build \
+            --logger "trx;LogFileName=app-web-tests.trx" \
+            --results-directory TestResults
 
       - name: Upload test results
         if: always()
