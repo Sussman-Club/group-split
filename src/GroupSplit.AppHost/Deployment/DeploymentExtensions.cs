@@ -1,9 +1,8 @@
 using Aspire.Hosting.Docker;
+using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 
 namespace GroupSplit.AppHost.Deployment;
-
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 
 /// <summary>
 /// Publish-time wiring for the Docker Compose target. Everything here is deployment shaped and
@@ -11,19 +10,6 @@ namespace GroupSplit.AppHost.Deployment;
 /// </summary>
 public static class DeploymentExtensions
 {
-    /// <summary>
-    /// Resolves the image the hosting integration selected, so a derived image builds
-    /// <c>FROM</c> the same tag instead of one pinned here and left to drift.
-    /// </summary>
-    private static string BaseImageOf(IResource resource)
-    {
-        var image = resource.Annotations.OfType<ContainerImageAnnotation>().Last();
-
-        return image.Registry is null
-            ? $"{image.Image}:{image.Tag}"
-            : $"{image.Registry}/{image.Image}:{image.Tag}";
-    }
-
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEndpoints
     {
         /// <summary>
@@ -42,28 +28,60 @@ public static class DeploymentExtensions
             });
     }
 
-    extension<T>(IResourceBuilder<T> container) where T : ContainerResource
-    {
-        /// <summary>
-        /// Bakes SQL into the image for the Postgres entrypoint to run on first start.
-        /// <para>
-        /// Databases added with <c>AddDatabase</c> are created by the AppHost orchestrator,
-        /// which does not run in a deployment, so they have to be created by the container
-        /// itself. The documented form of this uses a bind mount, which does not survive
-        /// <c>aspire publish</c>: the host path does not exist on the target machine.
-        /// </para>
-        /// </summary>
-        public IResourceBuilder<T> WithBakedInitScript(string scriptPath)
-            => container.WithDockerfileBuilder(".", context =>
-            {
-                context.Builder
-                    .From(BaseImageOf(context.Resource))
-                    .Copy(scriptPath, $"/docker-entrypoint-initdb.d/{Path.GetFileName(scriptPath)}");
-            });
-    }
-
     extension(IResourceBuilder<DockerComposeEnvironmentResource> compose)
     {
+        /// <summary>
+        /// Ships local files into a service as Compose configs, inlining their contents into
+        /// the generated Compose file.
+        /// <para>
+        /// Both obvious alternatives fail here. A bind mount points at a host path that does
+        /// not exist on the target machine. A derived image drags the entire base image back
+        /// through the registry, and the 342 MB Postgres and 266 MB Keycloak layers are
+        /// rejected with 413 Payload Too Large, so only the app images can be pushed.
+        /// </para>
+        /// <para>
+        /// Text files only: content is inlined as text, so binaries would be mangled.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithFiles(
+            string serviceName,
+            string sourcePath,
+            string targetPath)
+        {
+            var source = Path.Combine(compose.ApplicationBuilder.AppHostDirectory, sourcePath);
+            var isDirectory = Directory.Exists(source);
+
+            var files = isDirectory
+                ? Directory.GetFiles(source, "*", SearchOption.AllDirectories)
+                : [source];
+
+            return compose.ConfigureComposeFile(file =>
+            {
+                if (!file.Services.TryGetValue(serviceName, out var service))
+                {
+                    return;
+                }
+
+                foreach (var path in files)
+                {
+                    var relative = isDirectory
+                        ? Path.GetRelativePath(source, path).Replace('\\', '/')
+                        : Path.GetFileName(path);
+
+                    var name = $"{serviceName}-{relative}".ToLowerInvariant();
+                    name = string.Concat(name.Select(c => char.IsLetterOrDigit(c) ? c : '-'));
+
+                    file.Configs[name] = new Config { Name = name, Content = File.ReadAllText(path) };
+
+                    service.Configs.Add(new ConfigReference
+                    {
+                        Source = name,
+                        Target = isDirectory ? $"{targetPath}/{relative}" : targetPath
+                    });
+                }
+            });
+        }
+
         /// <summary>
         /// Applies the Compose defaults Aspire leaves to the operator.
         /// <para>

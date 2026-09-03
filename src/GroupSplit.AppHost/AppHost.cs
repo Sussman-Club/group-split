@@ -106,9 +106,19 @@ else
 
     compose.WithContainerRegistry(registry);
 
-    dbServer.WithBakedInitScript("postgres-init/create-databases.sql");
-
-    compose.WithComposeDefaults(databaseService: dbServer.Resource.Name);
+    // Shipped as Compose configs rather than baked into derived images: the base layers
+    // would then have to travel through the registry on every deploy.
+    compose
+        .WithFiles(dbServer.Resource.Name,
+            "postgres-init/create-databases.sql",
+            "/docker-entrypoint-initdb.d/10-create-databases.sql")
+        .WithFiles(keycloak.Resource.Name,
+            "realms.json",
+            "/opt/keycloak/data/import/realms.json")
+        .WithFiles(keycloak.Resource.Name,
+            "keycloak-themes/group-split",
+            "/opt/keycloak/themes/group-split")
+        .WithComposeDefaults(databaseService: dbServer.Resource.Name);
 }
 
 var host = builder.Build();
