@@ -156,6 +156,39 @@ public static class DeploymentExtensions
         /// </summary>
         public IResourceBuilder<T> WithComposeHealthcheck(Healthcheck healthcheck)
             => resource.PublishAsDockerComposeService((_, service) => service.Healthcheck = healthcheck);
+
+        /// <summary>
+        /// Joins the published service to a network managed outside this Compose file, under a
+        /// fixed container name.
+        /// <para>
+        /// The host publishes every stack the same way: the service that should be reachable
+        /// joins the shared <c>internal</c> network, and the Caddy reverse proxy (itself on
+        /// that network, fronted by the Cloudflare tunnel) routes a hostname to it. Everything
+        /// else stays on the stack's own network, invisible to the proxy.
+        /// </para>
+        /// <para>
+        /// The container name is what Caddy dials. Compose would otherwise name the container
+        /// <c>group-split-web-1</c> and alias it by its bare service name -- and short names
+        /// like <c>web</c> are exactly the ones a shared network ends up disputing.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<T> WithExternalNetwork(
+            IResourceBuilder<DockerComposeEnvironmentResource> compose,
+            string networkName,
+            string containerName)
+        {
+            compose.ConfigureComposeFile(file => file.AddNetwork(new Network
+            {
+                Name = networkName,
+                External = true
+            }));
+
+            return resource.PublishAsDockerComposeService((_, service) =>
+            {
+                service.ContainerName = containerName;
+                service.Networks.Add(networkName);
+            });
+        }
     }
 
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
