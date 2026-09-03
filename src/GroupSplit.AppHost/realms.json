@@ -6,7 +6,7 @@
   "loginTheme": "group-split",
   "accountTheme": "group-split",
   "emailTheme": "group-split",
-  "registrationAllowed": true,
+  "registrationAllowed": false,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,

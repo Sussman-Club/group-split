@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -8,14 +8,6 @@ namespace GroupSplit.App.Web;
 
 public static class AuthenticationExtensions
 {
-    /// <summary>
-    /// Keycloak serves registration from a sibling of the authorization endpoint
-    /// rather than a request parameter, so sign-up rewrites the target.
-    /// </summary>
-    private const string AuthorizePath = "/protocol/openid-connect/auth";
-
-    private const string RegistrationsPath = "/protocol/openid-connect/registrations";
-
     extension(WebApplicationBuilder builder)
     {
         public IHostApplicationBuilder AddGroupSplitAuthentication()
@@ -136,15 +128,6 @@ public static class AuthenticationExtensions
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.HandleResponse();
-
-            return Task.CompletedTask;
-        }
-
-        if (context.Properties.Items.TryGetValue(IdentityApi.FlowProperty, out var flow)
-            && flow == IdentityApi.RegisterFlow)
-        {
-            context.ProtocolMessage.IssuerAddress = context.ProtocolMessage.IssuerAddress
-                .Replace(AuthorizePath, RegistrationsPath, StringComparison.Ordinal);
         }
 
         return Task.CompletedTask;

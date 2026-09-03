@@ -5,6 +5,24 @@ namespace GroupSplit.AppHost.Keycloak;
 
 public static class KeycloakDeploymentExtensions
 {
+    /// <summary>
+    /// Path Keycloak is served under once deployed.
+    /// <para>
+    /// Nothing publishes Keycloak's own port: the web app forwards this prefix to it,
+    /// so the stack exposes one origin. Keycloak has to serve at the prefix rather
+    /// than have the forwarder strip it, because it scopes its session cookies to
+    /// the paths it generates -- stripping would mint <c>Path=/realms/...</c> cookies
+    /// that a browser never sends back to <c>/idp/realms/...</c>, and sign-in would
+    /// loop with no error.
+    /// </para>
+    /// <para>
+    /// Deliberately not <c>/auth</c>: the web app's own <c>MapIdentity</c> group owns
+    /// that prefix for the endpoints that start and end a session. Route precedence
+    /// would keep both working, but the two would be indistinguishable by path.
+    /// </para>
+    /// </summary>
+    public const string RelativePath = "/idp";
+
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
@@ -17,6 +35,9 @@ public static class KeycloakDeploymentExtensions
         /// which keeps the stock upstream image and avoids pushing a derived one.
         /// </para>
         /// </summary>
+        /// <param name="hostname">
+        /// The web app's public origin. Keycloak shares it, under <see cref="RelativePath"/>.
+        /// </param>
         public IResourceBuilder<KeycloakResource> AsDeployedKeycloak(
             IResourceBuilder<ParameterResource> hostname)
         {
@@ -26,7 +47,12 @@ public static class KeycloakDeploymentExtensions
                 // scheme and host from the forwarded headers the proxy sets.
                 .WithEnvironment("KC_HTTP_ENABLED", "true")
                 .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
-                .WithEnvironment("KC_HOSTNAME", hostname)
+                .WithEnvironment("KC_HOSTNAME", ReferenceExpression.Create($"{hostname}{RelativePath}"))
+                .WithEnvironment("KC_HTTP_RELATIVE_PATH", RelativePath)
+                // The management interface inherits KC_HTTP_RELATIVE_PATH when left unset,
+                // which would move the readiness probe below to /auth/health/ready. Pinned so
+                // the two can move independently.
+                .WithEnvironment("KC_HTTP_MANAGEMENT_RELATIVE_PATH", "/")
                 // Restates, for Compose, the readiness check AddKeycloak already declares in
                 // the model: the publisher does not translate WithHttpHealthCheck, so without
                 // this the consumers Aspire wires up only ever wait for the container to have

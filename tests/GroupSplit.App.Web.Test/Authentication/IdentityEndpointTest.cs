@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace GroupSplit.App.Web.Test.Authentication;
 
 /// <summary>Covers what the <c>/auth</c> endpoints put on the wire.</summary>
@@ -6,17 +8,13 @@ public class IdentityEndpointTest
     private const string Authority = "http://keycloak.test/realms/group-split";
 
     [Fact]
-    public async Task Register_sends_the_browser_to_keycloaks_registration_page()
+    public async Task Register_is_not_routed_now_that_only_an_admin_creates_users()
     {
         await using var host = await SignInHost.StartAsync(Authority);
 
         var response = await host.Client.GetAsync("/auth/register", TestContext.Current.CancellationToken);
 
-        var location = Assert.IsType<Uri>(response.Headers.Location).ToString();
-
-        // Keycloak has no request parameter for sign-up; it is a sibling endpoint.
-        Assert.Contains("/protocol/openid-connect/registrations", location, StringComparison.Ordinal);
-        Assert.DoesNotContain("/protocol/openid-connect/auth", location, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

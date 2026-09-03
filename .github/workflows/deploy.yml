@@ -47,7 +47,8 @@ jobs:
           done
 
           # Non-sensitive deployment config, kept as variables so it stays readable.
-          for name in KEYCLOAK_HOSTNAME; do
+          # WEB_HOSTNAME is the stack's single public origin; Keycloak shares it under /auth.
+          for name in WEB_HOSTNAME; do
             if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")" ]; then
               echo "Missing required GitHub variable: ${name}" >&2
               missing=1

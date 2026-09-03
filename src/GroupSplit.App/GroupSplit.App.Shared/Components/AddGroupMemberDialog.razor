@@ -1,4 +1,4 @@
-﻿@using GroupSplit.Shared
+@using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 
 <MudDialog>
@@ -63,7 +63,7 @@
 
     private async Task AddMemberToList()
     {
-        await _form.Validate();
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
         var email = _currentInput.Email.Trim();

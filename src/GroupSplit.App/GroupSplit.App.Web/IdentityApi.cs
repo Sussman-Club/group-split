@@ -8,38 +8,15 @@ namespace GroupSplit.App.Web;
 
 public static class IdentityApi
 {
-    /// <summary>Asks the OIDC handler for Keycloak's registration flow.</summary>
-    public const string FlowProperty = "gs_flow";
-
-    public const string RegisterFlow = "register";
-
     public static RouteGroupBuilder MapIdentity(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/auth");
 
         group.MapLogin();
-        group.MapRegister();
         group.MapLogout();
         group.MapAccountConsole();
 
         return group;
-    }
-
-    private static void MapRegister(this RouteGroupBuilder group)
-    {
-        group.MapGet("/register", ([FromQuery] string? returnUrl) =>
-        {
-            var properties = new AuthenticationProperties
-            {
-                RedirectUri = ResolveReturnUrl(returnUrl),
-                Items =
-                {
-                    [FlowProperty] = RegisterFlow
-                }
-            };
-
-            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
-        });
     }
 
     private static void MapLogin(this RouteGroupBuilder group)

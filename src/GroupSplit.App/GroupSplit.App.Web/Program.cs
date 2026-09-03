@@ -55,6 +55,8 @@ app.MapDefaultEndpoints();
 
 app.MapApiForwarder();
 
+app.MapKeycloakForwarder();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

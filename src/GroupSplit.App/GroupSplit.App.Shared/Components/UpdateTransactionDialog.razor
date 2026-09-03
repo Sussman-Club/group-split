@@ -12,7 +12,7 @@
 
     <DialogContent>
         <MudForm @ref="form" Model="@editModel">
-            <MudStack Spacing="3" Direction="Column">
+            <MudStack Spacing="3">
 
                 <MudTextField @bind-Value="editModel.Name"
                               Label="Name"
@@ -125,7 +125,7 @@
 
     private async Task Submit()
     {
-        await form.Validate();
+        await form.ValidateAsync();
         if (!form.IsValid)
             return;
 

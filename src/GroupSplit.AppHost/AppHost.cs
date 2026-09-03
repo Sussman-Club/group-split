@@ -102,16 +102,19 @@ if (builder.ExecutionContext.IsRunMode)
 }
 else
 {
-    // Has to resolve to the same address from a browser and from inside the Compose network.
-    // "localhost" cannot: a container resolves it to itself.
-    var keycloakHostname = builder.AddParameter("keycloak-hostname");
+    // The stack's single public origin. Has to resolve to the same address from a browser
+    // and from inside the Compose network -- "localhost" cannot: a container resolves it to
+    // itself, and the two services below fetch OIDC metadata from this address at runtime.
+    var hostname = builder.AddParameter("web-hostname");
 
-    var authority = ReferenceExpression.Create($"{keycloakHostname}/realms/group-split");
+    var authority = ReferenceExpression.Create(
+        $"{hostname}{KeycloakDeploymentExtensions.RelativePath}/realms/group-split");
 
+    // Unpublished, like the API: the web app's forwarder carries it, so the browser reaches
+    // it on the web origin under its relative path. Keycloak's port stays off the host.
     keycloak
-        .AsDeployedKeycloak(keycloakHostname)
-        .WithSmtp(builder.Configuration)
-        .PublishOnHostPort(8081);
+        .AsDeployedKeycloak(hostname)
+        .WithSmtp(builder.Configuration);
 
     frontend
         .WithKeycloakAuthority(authority)

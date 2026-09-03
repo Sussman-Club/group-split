@@ -21,7 +21,7 @@
         }
         else
         {
-            <MudList Clickable="true" @bind-SelectedValue="selectedMember">
+            <MudList @bind-SelectedValue="selectedMember">
                 @foreach (var member in Members)
                 {
                     <MudListItem Value="@member">
