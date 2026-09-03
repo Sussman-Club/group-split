@@ -248,16 +248,31 @@ a:hover {
     text-decoration: underline;
 }
 
-/* "New user? Register" / "Back to Login" footer band. */
+/* "New user? Register" / "Back to Login" footer band.
+   Keycloak nests #kc-info inside another element carrying the same footer-band
+   class, and #kc-registration inside #kc-registration-container. A rule on each
+   stacks up as several parallel lines, so only the outermost band draws one. */
 #kc-registration,
 #kc-registration-container,
 #kc-info-message {
-    margin-block-start: 1.25rem;
-    padding-block-start: 1.25rem;
-    border-block-start: 1px solid var(--gs-divider);
+    margin-block-start: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
     font-size: 0.9rem;
     color: var(--gs-muted);
     text-align: center;
+}
+
+.pf-v5-c-login__main-footer-band {
+    margin-block-start: 1.25rem;
+    padding-block-start: 1.25rem;
+    border-block-start: 1px solid var(--gs-divider);
+}
+
+.pf-v5-c-login__main-footer-band .pf-v5-c-login__main-footer-band {
+    margin-block-start: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
 }
 
 /* Keep "Forgot password?" and "Remember me" on one comfortable row. */
