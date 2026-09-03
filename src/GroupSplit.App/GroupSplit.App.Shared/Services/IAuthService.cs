@@ -6,9 +6,6 @@ namespace GroupSplit.App.Shared.Services;
 public interface IAuthService
 {
     /// <param name="returnUrl">Local path to land on afterwards.</param>
-    Task Register(string? returnUrl = null, CancellationToken ct = default);
-
-    /// <inheritdoc cref="Register"/>
     Task Login(string? returnUrl = null, CancellationToken ct = default);
 
     Task Logout(CancellationToken ct = default);

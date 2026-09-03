@@ -54,18 +54,31 @@ jobs:
           dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
+      # Everything above is Release, but `aspire do` builds Debug, so the deploy
+      # workflow was the only thing exercising that configuration -- and some of it
+      # is Debug-only. Hot-reload assets are the case that got through: they are
+      # absent from a Release build, so a duplicate one in the WASM boot config
+      # manifest failed GenerateWasmBootJson at deploy time and nowhere earlier.
+      #
+      # The web app pulls the WASM client, which is where that generation happens.
+      # Build rather than publish: it covers the same targets in seconds, and the
+      # deploy exercises publish itself.
+      - name: Build the deploy configuration
+        run: dotnet build src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj -c Debug --no-restore
+
       # GroupSplit.AppHost.Test is built but not run: it needs Docker, Playwright
       # browsers and DCP from the Aspire CLI. Worth its own job later.
       - name: Test
         run: |
-          dotnet test tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj \
-            -c Release --no-build \
-            --logger "trx;LogFileName=api-tests.trx" \
-            --results-directory TestResults
-          dotnet test tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj \
-            -c Release --no-build \
-            --logger "trx;LogFileName=app-web-tests.trx" \
-            --results-directory TestResults
+          # --results-directory stays ahead of the `--`: past it the CLI resolves the
+          # value against the filesystem and rejects it as a positional path once the
+          # directory exists, so the second invocation would fail where the first passed.
+          dotnet test --project tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --report-trx --report-trx-filename api-tests.trx
+          dotnet test --project tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --report-trx --report-trx-filename app-web-tests.trx
 
       - name: Upload test results
         if: always()

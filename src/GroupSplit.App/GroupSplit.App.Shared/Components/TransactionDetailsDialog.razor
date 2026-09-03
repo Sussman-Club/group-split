@@ -1,4 +1,4 @@
-﻿@using GroupSplit.Shared
+@using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
@@ -125,7 +125,7 @@
 
     private async Task DeleteTransaction()
     {
-        var boolResult = await DialogService.ShowMessageBox(
+        var boolResult = await DialogService.ShowMessageBoxAsync(
             "Delete Transaction",
             "Are you sure you want to delete this transaction?",
             yesText: "Delete", cancelText: "Cancel");

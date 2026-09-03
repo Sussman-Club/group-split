@@ -11,12 +11,6 @@ public class AuthService(NavigationManager nav) : IAuthService
         return Task.CompletedTask;
     }
 
-    public Task Register(string? returnUrl, CancellationToken ct)
-    {
-        nav.NavigateTo(AuthRoutes.Register(returnUrl), forceLoad: true);
-        return Task.CompletedTask;
-    }
-
     public Task Logout(CancellationToken ct)
     {
         nav.NavigateTo(AuthRoutes.Logout, forceLoad: true);
