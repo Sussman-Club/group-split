@@ -1,0 +1,93 @@
+@page "/account"
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.Shared
+@inject IAuthService AuthService
+@inject NavigationManager Nav
+
+<PageTitle>Account - Group Split</PageTitle>
+
+<MudStack Spacing="6">
+    <MudStack Spacing="1">
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Account</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Your profile details, as held by the Group Split identity provider.
+        </MudText>
+    </MudStack>
+
+    @if (UserInfo is null)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+            You are not signed in. <MudLink Href="/login">Sign in</MudLink> to see your account.
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="gs-surface-card pa-6">
+            <MudStack Spacing="5">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="4">
+                    <MudAvatar Color="Color.Primary" Size="Size.Large">@Initials</MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">@UserInfo.FullName</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@UserInfo.Email</MudText>
+                    </MudStack>
+                </MudStack>
+
+                <MudDivider />
+
+                <MudStack Spacing="3">
+                    @Field("First name", UserInfo.FirstName)
+                    @Field("Last name", UserInfo.LastName)
+                    @Field("Email", UserInfo.Email)
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Class="gs-surface-card pa-6">
+            <MudStack Spacing="4">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">Security</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Passwords, two-factor authentication and active sessions are managed by the
+                        identity provider.
+                    </MudText>
+                </MudStack>
+                <MudStack Row Spacing="3" Class="flex-wrap">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.ManageAccounts"
+                               OnClick="OpenAccountConsole">
+                        Manage account
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.Logout"
+                               OnClick="LogoutAsync">
+                        Sign out
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    private string Initials => string.Concat(
+        (UserInfo?.FullName ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(part => part[0]));
+
+    private Task LogoutAsync() => AuthService.Logout();
+
+    // A BFF endpoint, not a Blazor route: the router would otherwise intercept
+    // the navigation and fail to match it.
+    private void OpenAccountConsole() => Nav.NavigateTo("/auth/account", forceLoad: true);
+
+    private RenderFragment Field(string label, string? value) =>
+        @<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="4">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@label</MudText>
+            <MudText Typo="Typo.body2" Class="font-weight-medium">@(string.IsNullOrWhiteSpace(value) ? "Not set" : value)</MudText>
+        </MudStack>;
+}

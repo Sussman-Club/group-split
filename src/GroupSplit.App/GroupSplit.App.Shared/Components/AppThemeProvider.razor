@@ -1,0 +1,70 @@
+@using GroupSplit.App.Shared.Services
+@implements IDisposable
+@inject ThemePreference Preference
+@inject IJSRuntime JS
+
+<MudThemeProvider @ref="_provider"
+                  Theme="Theme"
+                  IsDarkMode="Preference.IsDark"
+                  ObserveSystemThemeChange="false" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+@code {
+    [Inject] private MudTheme Theme { get; set; } = default!;
+
+    private MudThemeProvider? _provider;
+
+    protected override void OnInitialized() => Preference.Changed += OnChanged;
+
+    public void Dispose() => Preference.Changed -= OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // localStorage is unavailable during prerender, so the stored choice can
+        // only be restored once there is a browser to ask.
+        if (!firstRender || _provider is null)
+        {
+            return;
+        }
+
+        Preference.SetSystemIsDark(await _provider.GetSystemDarkModeAsync());
+        Preference.Set(ThemePreference.Parse(await ReadStoredModeAsync()));
+
+        await _provider.WatchSystemDarkModeAsync(isDark =>
+        {
+            Preference.SetSystemIsDark(isDark);
+            return Task.CompletedTask;
+        });
+
+        StateHasChanged();
+    }
+
+    private async Task<string?> ReadStoredModeAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string?>("localStorage.getItem", ThemePreference.StorageKey);
+        }
+        catch (JSException)
+        {
+            // Storage can be blocked outright; the system default is a fine answer.
+            return null;
+        }
+    }
+
+    private async void OnChanged()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+            await JS.InvokeVoidAsync("localStorage.setItem", ThemePreference.StorageKey, Preference.Mode.ToString());
+        }
+        catch (Exception exception) when (exception is JSException or ObjectDisposedException or TaskCanceledException)
+        {
+            // Nothing can observe a throw from async void, and none of these are
+            // worth tearing the circuit down for: the theme is already applied.
+        }
+    }
+}

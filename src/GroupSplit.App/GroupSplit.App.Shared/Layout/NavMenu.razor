@@ -63,24 +63,20 @@
     {
         new MenuSection
         {
-            // No title
             Items =
             {
                 new MenuItem { Href = "/", Text = "Dashboard", Icon = Icons.Material.Filled.Dashboard, Match = NavLinkMatch.All },
                 new MenuItem { Href = "/transactions", Text = "Transactions", Icon = Icons.Material.Filled.Receipt },
-                new MenuItem { Href = "/groups", Text = "Groups", Icon = Icons.Material.Filled.Groups },
-                new MenuItem { Href = "/spending", Text = "Spending", Icon = Icons.Material.Filled.TrendingUp }
+                new MenuItem { Href = "/groups", Text = "Groups", Icon = Icons.Material.Filled.Groups }
             }
         },
 
         new MenuSection
         {
-            Title = "Testing",
+            Title = "You",
             Items =
             {
-                new MenuItem { Href = "/weather", Text = "Weather", Icon = Icons.Material.Filled.Cloud },
-                new MenuItem { Href = "/counter", Text = "Counter", Icon = Icons.Material.Filled.AddBox },
-                new MenuItem { Href = "/login", Text = "Log In", Icon = Icons.Material.Filled.Login }
+                new MenuItem { Href = "/account", Text = "Account", Icon = Icons.Material.Filled.AccountCircle }
             }
         }
     };

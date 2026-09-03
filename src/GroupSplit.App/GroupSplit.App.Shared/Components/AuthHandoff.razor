@@ -1,0 +1,135 @@
+@using GroupSplit.App.Shared.Services
+
+@*
+    Branded hand-off to the Keycloak-hosted sign-in and registration pages.
+
+    Credentials are never collected here. Keycloak owns the forms, which is what
+    keeps SSO, MFA, password policy and brute-force protection working; this
+    component only explains where the user is going and gets them there.
+*@
+
+<MudStack Class="flex-1" AlignItems="AlignItems.Center" Justify="Justify.Center">
+    <MudPaper Elevation="0" Class="gs-auth-card pa-8" MaxWidth="26rem" Width="100%">
+        <MudStack Spacing="4" AlignItems="AlignItems.Center">
+
+            <svg width="52" height="52" viewBox="0 0 64 64" role="img" aria-label="Group Split">
+                <path d="M 33.81 6.06 A 26 26 0 0 1 55.37 43.40 L 40.09 35.95 A 9 9 0 0 0 32.63 23.02 Z"
+                      fill="#22817a"/>
+                <path d="M 53.55 46.54 A 26 26 0 0 1 10.45 46.54 L 24.54 37.03 A 9 9 0 0 0 39.46 37.03 Z"
+                      fill="#2f9e95"/>
+                <path d="M 8.63 43.40 A 26 26 0 0 1 30.19 6.06 L 31.37 23.02 A 9 9 0 0 0 23.91 35.95 Z" fill="#cb6e3a"/>
+            </svg>
+
+            <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.overline" Color="Color.Primary">Group Split</MudText>
+                <MudText Typo="Typo.h5" Align="Align.Center" Class="font-weight-bold">@Title</MudText>
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">@Subtitle</MudText>
+            </MudStack>
+
+            @if (Error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense Class="w-100">
+                    @Error
+                </MudAlert>
+            }
+            else if (_redirecting)
+            {
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="py-2">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small"/>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Taking you to the secure sign-in page...
+                    </MudText>
+                </MudStack>
+            }
+
+            @* Always rendered: the automatic redirect needs interactivity, and this
+               is also the way back if the user returns via the browser's history. *@
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       FullWidth
+                       Size="Size.Large"
+                       Disabled="_redirecting && Error is null"
+                       OnClick="GoAsync">
+                @ActionLabel
+            </MudButton>
+
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @AlternatePrompt <MudLink Href="@AlternateHref" Typo="Typo.body2">@AlternateLabel</MudLink>
+            </MudText>
+
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [Inject] private IAuthService AuthService { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Subtitle { get; set; } = "";
+    [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
+    [Parameter, EditorRequired] public string AlternatePrompt { get; set; } = "";
+    [Parameter, EditorRequired] public string AlternateLabel { get; set; } = "";
+    [Parameter, EditorRequired] public string AlternateHref { get; set; } = "";
+
+    /// <summary>Which hosted flow to start.</summary>
+    [Parameter, EditorRequired]
+    public AuthFlow Flow { get; set; }
+
+    private bool _redirecting;
+    private string? Error { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Error = ReadQueryValue("error");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Only hand off automatically once, and never on top of an error --
+        // bouncing straight back to the identity provider would hide why the
+        // previous attempt failed and can loop.
+        if (!firstRender || _redirecting || Error is not null)
+        {
+            return;
+        }
+
+        _redirecting = true;
+        StateHasChanged();
+
+        await GoAsync();
+    }
+
+    private async Task GoAsync()
+    {
+        var returnUrl = ReadQueryValue("returnUrl");
+
+        await (Flow switch
+        {
+            AuthFlow.Register => AuthService.Register(returnUrl),
+            _ => AuthService.Login(returnUrl)
+        });
+    }
+
+    private string? ReadQueryValue(string key)
+    {
+        var query = new Uri(Nav.Uri).Query;
+
+        return string.IsNullOrEmpty(query) 
+            ? null 
+            : (from pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries) 
+               let separator = pair.IndexOf('=') 
+               where separator > 0 && Uri.UnescapeDataString(pair[..separator]) == key 
+               select Uri.UnescapeDataString(pair[(separator + 1)..]) 
+               into value 
+               select string.IsNullOrWhiteSpace(value) 
+                   ? null 
+                   : value).FirstOrDefault();
+    }
+
+    public enum AuthFlow
+    {
+        Login,
+        Register
+    }
+
+}

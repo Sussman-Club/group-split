@@ -1,22 +1,76 @@
-﻿{
+{
   "realm": "group-split",
+  "displayName": "Group Split",
+  "displayNameHtml": "<span class=\"gs-realm-name\">Group Split</span>",
   "enabled": true,
+  "loginTheme": "group-split",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "editUsernameAllowed": false,
+  "verifyEmail": false,
+  "passwordPolicy": "length(8) and notUsername and notEmail and passwordHistory(3)",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "accessCodeLifespan": 60,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "no-reply@groupsplit.local",
+    "fromDisplayName": "Group Split",
+    "replyTo": "no-reply@groupsplit.local",
+    "auth": "",
+    "ssl": "",
+    "starttls": ""
+  },
   "clients": [
     {
       "clientId": "api",
       "name": "API Service",
+      "description": "Resource server. Only ever validates bearer tokens, so every login flow is disabled.",
       "enabled": true,
       "publicClient": true,
-      "protocol": "openid-connect"
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
     },
     {
       "clientId": "web-app",
       "name": "Web Application",
+      "description": "Blazor BFF. Authorization code + PKCE only.",
       "enabled": true,
       "publicClient": true,
-      "redirectUris": ["*"],
-      "webOrigins": ["*"],
       "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
       "protocolMappers": [
         {
           "name": "audience-mapper",
@@ -35,7 +89,7 @@
   "users": [
     {
       "id": "FFDFB4C9-6321-49EA-9160-0F618ACF6D4B",
-      "username": "daniel",
+      "username": "daniel@test.com",
       "enabled": true,
       "emailVerified": true,
       "firstName": "Daniel",
@@ -44,14 +98,14 @@
       "credentials": [
         {
           "type": "password",
-          "value": "123",
+          "value": "groupsplit-dev",
           "temporary": false
         }
       ]
     },
     {
       "id": "F1C2D3E4-5678-90AB-CDEF-1234567890AB",
-      "username": "loraine",
+      "username": "loraine@test.com",
       "enabled": true,
       "emailVerified": true,
       "firstName": "Loraine",
@@ -60,14 +114,14 @@
       "credentials": [
         {
           "type": "password",
-          "value": "123",
+          "value": "groupsplit-dev",
           "temporary": false
         }
       ]
     },
     {
       "id": "9F8E7D6C-5B4A-3C2D-1E0F-1234567890AB",
-      "username": "anabel",
+      "username": "anabel@test.com",
       "enabled": true,
       "emailVerified": true,
       "firstName": "Anabel",
@@ -76,14 +130,14 @@
       "credentials": [
         {
           "type": "password",
-          "value": "123",
+          "value": "groupsplit-dev",
           "temporary": false
         }
       ]
     },
     {
       "id": "0A1B2C3D-4E5F-6071-8293-0A1B2C3D4E5F",
-      "username": "omar",
+      "username": "omar@test.com",
       "enabled": true,
       "emailVerified": true,
       "firstName": "Omar",
@@ -92,10 +146,30 @@
       "credentials": [
         {
           "type": "password",
-          "value": "123",
+          "value": "groupsplit-dev",
           "temporary": false
         }
       ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": "${GS_GOOGLE_ENABLED}",
+      "hideOnLogin": "${GS_GOOGLE_HIDDEN}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GS_GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GS_GOOGLE_CLIENT_SECRET}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
     }
   ]
 }

@@ -1,3 +1,4 @@
+using GroupSplit.AppHost.Keycloak;
 using GroupSplit.AppHost.Migrations;
 using GroupSplit.AppHost.Seeder;
 using Projects;
@@ -13,14 +14,19 @@ var dbServer = builder
     .WithPgWeb()
     .WithTerminal();
 
-var db = dbServer.AddDatabase("db")
+var db = dbServer.AddDatabase("db", "groupsplit")
     .WithPostgresMcp();
 
-var keycloak = builder.AddKeycloak("keycloak", 8080)
+var mailpit = builder.AddMailPit("mailpit");
+
+var keycloak = builder.AddKeycloak("keycloak")
+    .WithGoogleSignIn(builder.Configuration)
     .WithRealmImport("./realms.json")
+    .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
     .WithOtlpExporter()
-    .WithTerminal();
+    .WithTerminal()
+    .WaitFor(mailpit);
 
 var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)

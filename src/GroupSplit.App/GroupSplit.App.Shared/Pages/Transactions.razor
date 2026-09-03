@@ -4,7 +4,6 @@
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject ITransactionsPageStateService TransactionsService
-@inject MudTheme Theme
 @inject IDialogService DialogService
 @implements IAsyncDisposable
 
@@ -26,7 +25,7 @@
               AdornmentIcon="@Icons.Material.Outlined.Search"
               IconSize="Size.Medium"
               Immediate="true"
-              Style="@Theme.PaletteLight.Surface.BackgroundColorStyle"
+              Style="background-color: var(--mud-palette-surface);"
               Variant="Variant.Outlined"
               Class="flex-grow-1 pa-6"/>
 
@@ -88,8 +87,8 @@
     </Columns>
     <NoRecordsContent>
         <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-8">
-            <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
-            <MudText Typo="Typo.body1" Color="Color.Secondary">No transactions found</MudText>
+            <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Class="mud-text-secondary"/>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">No transactions found</MudText>
         </MudStack>
     </NoRecordsContent>
 </MudDataGrid>

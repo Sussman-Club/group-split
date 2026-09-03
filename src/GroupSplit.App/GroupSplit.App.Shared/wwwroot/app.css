@@ -19,3 +19,46 @@
     background-color: var(--mud-palette-primary-hover) !important;
     transform: translateX(4px);
 }
+
+/* Warm brand wash behind the standalone auth pages, matching the Keycloak theme. */
+.gs-auth-backdrop {
+    min-height: 100dvh;
+    background:
+        radial-gradient(circle at 12% 18%, rgb(34 129 122 / 12%), transparent 45%),
+        radial-gradient(circle at 88% 82%, rgb(203 110 58 / 10%), transparent 45%),
+        var(--mud-palette-background);
+}
+
+.gs-auth-card {
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 14px;
+    background: var(--mud-palette-surface);
+    box-shadow: 0 1px 2px rgb(42 42 42 / 6%), 0 12px 32px -12px rgb(42 42 42 / 18%);
+    position: relative;
+    overflow: hidden;
+}
+
+.gs-auth-card::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--mud-palette-primary), #cb6e3a);
+}
+
+.gs-surface-card {
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 12px;
+    background: var(--mud-palette-surface);
+}
+
+.gs-shortcut {
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gs-shortcut:hover {
+    border-color: var(--mud-palette-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -12px rgb(42 42 42 / 25%);
+}

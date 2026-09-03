@@ -1,8 +1,15 @@
-﻿namespace GroupSplit.App.Shared.Services;
+namespace GroupSplit.App.Shared.Services;
 
+/// <summary>
+/// Starts the Keycloak-hosted flows. Each call is a navigation that does not return.
+/// </summary>
 public interface IAuthService
 {
-    Task Register(CancellationToken ct = default);
-    Task Login(CancellationToken ct = default);
+    /// <param name="returnUrl">Local path to land on afterwards.</param>
+    Task Register(string? returnUrl = null, CancellationToken ct = default);
+
+    /// <inheritdoc cref="Register"/>
+    Task Login(string? returnUrl = null, CancellationToken ct = default);
+
     Task Logout(CancellationToken ct = default);
 }
