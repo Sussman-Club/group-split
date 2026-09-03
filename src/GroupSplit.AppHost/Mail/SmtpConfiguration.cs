@@ -16,32 +16,27 @@ internal sealed record SmtpConfiguration(
     ReferenceExpression From,
     ReferenceExpression User,
     ReferenceExpression Password,
-    bool Auth,
-    bool StartTls)
-{
-    /// <summary>No relay: mail is simply never sent, the way it behaved before SMTP existed.</summary>
-    public static SmtpConfiguration Disabled { get; } = new(
-        Enabled: false,
-        Host: Blank,
-        Port: Blank,
-        From: Blank,
-        User: Blank,
-        Password: Blank,
-        Auth: false,
-        StartTls: false);
-
-    private static ReferenceExpression Blank => ReferenceExpression.Create($"");
-}
+    ReferenceExpression Auth,
+    ReferenceExpression StartTls);
 
 internal static class SmtpConfigurationExtensions
 {
     /// <summary>
-    /// Publishes a relay as the <c>GS_SMTP_*</c> variables that realms.json interpolates.
+    /// Publishes a relay as the variables realms.json interpolates.
     /// <para>
-    /// Every variable is set even when the relay is disabled: Keycloak's realm import
-    /// leaves an unresolved <c>${...}</c> in place verbatim rather than treating it as
-    /// empty, so an unset variable would put the literal placeholder text into the
-    /// realm's SMTP host.
+    /// The names here are not free. Publishing does not mount realms.json as a file: the
+    /// Compose publisher inlines its text into a Compose config's <c>content</c>, and
+    /// Compose interpolates <c>${...}</c> inside that text against its own env file
+    /// before Keycloak ever reads it. So every placeholder in realms.json has to spell a
+    /// name Compose's env file defines, which means the screaming-snake form of the
+    /// parameter it comes from -- <c>smtp-from</c> becomes <c>SMTP_FROM</c>. A name
+    /// Compose cannot resolve is silently replaced with a blank string, and Keycloak
+    /// refuses to boot on a blank sender address.
+    /// </para>
+    /// <para>
+    /// The same variables are still set on the container, which is what resolves the
+    /// placeholders in run mode, where the file really is mounted and Keycloak does its
+    /// own substitution.
     /// </para>
     /// </summary>
     public static IResourceBuilder<T> WithSmtpEnvironment<T>(
@@ -50,15 +45,12 @@ internal static class SmtpConfigurationExtensions
         where T : IResourceWithEnvironment
     {
         return resource
-            .WithEnvironment("GS_SMTP_ENABLED", Flag(smtp.Enabled))
-            .WithEnvironment("GS_SMTP_HOST", smtp.Host)
-            .WithEnvironment("GS_SMTP_PORT", smtp.Port)
-            .WithEnvironment("GS_SMTP_FROM", smtp.From)
-            .WithEnvironment("GS_SMTP_USER", smtp.User)
-            .WithEnvironment("GS_SMTP_PASSWORD", smtp.Password)
-            .WithEnvironment("GS_SMTP_AUTH", Flag(smtp.Auth))
-            .WithEnvironment("GS_SMTP_STARTTLS", Flag(smtp.StartTls));
+            .WithEnvironment("SMTP_HOST", smtp.Host)
+            .WithEnvironment("SMTP_PORT", smtp.Port)
+            .WithEnvironment("SMTP_FROM", smtp.From)
+            .WithEnvironment("SMTP_USER", smtp.User)
+            .WithEnvironment("SMTP_PASSWORD", smtp.Password)
+            .WithEnvironment("SMTP_AUTH", smtp.Auth)
+            .WithEnvironment("SMTP_STARTTLS", smtp.StartTls);
     }
-
-    private static string Flag(bool value) => value ? "true" : "false";
 }

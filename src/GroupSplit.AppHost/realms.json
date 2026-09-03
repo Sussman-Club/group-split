@@ -13,7 +13,7 @@
   "resetPasswordAllowed": true,
   "rememberMe": true,
   "editUsernameAllowed": false,
-  "verifyEmail": "${GS_VERIFY_EMAIL}",
+  "verifyEmail": "${VERIFY_EMAIL}",
   "passwordPolicy": "length(8) and notUsername and notEmail and passwordHistory(3)",
   "bruteForceProtected": true,
   "permanentLockout": false,
@@ -29,15 +29,15 @@
   "accessCodeLifespan": 60,
   "actionTokenGeneratedByUserLifespan": 900,
   "smtpServer": {
-    "host": "${GS_SMTP_HOST}",
-    "port": "${GS_SMTP_PORT}",
-    "from": "${GS_SMTP_FROM}",
+    "host": "${SMTP_HOST}",
+    "port": "${SMTP_PORT}",
+    "from": "${SMTP_FROM}",
     "fromDisplayName": "Group Split",
     "ssl": "false",
-    "starttls": "${GS_SMTP_STARTTLS}",
-    "auth": "${GS_SMTP_AUTH}",
-    "user": "${GS_SMTP_USER}",
-    "password": "${GS_SMTP_PASSWORD}"
+    "starttls": "${SMTP_STARTTLS}",
+    "auth": "${SMTP_AUTH}",
+    "user": "${SMTP_USER}",
+    "password": "${SMTP_PASSWORD}"
   },
   "clients": [
     {

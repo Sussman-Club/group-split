@@ -8,6 +8,7 @@ public static class SmtpExtensions
     // Deploy-time values arrive as Aspire parameters. The deploy workflow turns every
     // GitHub secret and variable into Parameters__<kebab-name>, so SMTP_HOST, SMTP_FROM,
     // SMTP_USER and SMTP_PASSWORD there land on the names below with no extra wiring.
+    // These names also decide what realms.json can interpolate -- see WithSmtpEnvironment.
     private const string HostParameterName = "smtp-host";
 
     private const string PortParameterName = "smtp-port";
@@ -18,26 +19,36 @@ public static class SmtpExtensions
 
     private const string PasswordParameterName = "smtp-password";
 
-    // Deliberately not an SMTP_ name: it is a realm policy rather than part of the relay.
+    private const string AuthParameterName = "smtp-auth";
+
+    private const string StartTlsParameterName = "smtp-starttls";
+
+    // Not an SMTP_ name: it is a realm policy rather than part of the relay.
     private const string VerifyEmailParameterName = "verify-email";
 
     // Submission with STARTTLS. Port 25 is blocked outbound by most hosts, and 465 wants
     // implicit TLS, which is the realm's `ssl` flag rather than its `starttls` one.
     private const string DefaultPort = "587";
 
+    // Keycloak validates the sender address while importing the realm and refuses to
+    // start on one it cannot parse -- an empty string included. So the unconfigured case
+    // still needs a syntactically valid address, and .invalid is reserved by RFC 2606
+    // precisely so that it can never resolve. With no host to connect to, nothing sends.
+    private const string UnroutableSender = "no-reply@group-split.invalid";
+
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
         /// Points the realm's SMTP server at a relay described by deployment parameters.
         /// <para>
-        /// Keycloak substitutes these into the <c>${...}</c> placeholders in the
-        /// <c>smtpServer</c> block of realms.json at import time, so no credential is
-        /// committed. Provider-agnostic on purpose -- host, port, user and sender are all
+        /// The values reach the realm's <c>smtpServer</c> block through the
+        /// <c>${...}</c> placeholders in realms.json, so no credential is committed.
+        /// Provider-agnostic on purpose -- host, port, user and sender are all
         /// parameters -- so changing relay is a secret change rather than a code one.
         /// </para>
         /// <para>
-        /// With no relay configured this degrades to SMTP disabled rather than failing the
-        /// deploy, and registration keeps working rather than trapping every new user
+        /// With no relay configured this degrades to SMTP disabled rather than failing
+        /// the deploy, and registration keeps working rather than trapping every new user
         /// behind a verification mail that could never be delivered.
         /// </para>
         /// </summary>
@@ -47,43 +58,45 @@ public static class SmtpExtensions
             var from = configuration[$"Parameters:{FromParameterName}"];
             var user = configuration[$"Parameters:{UserParameterName}"];
             var password = configuration[$"Parameters:{PasswordParameterName}"];
+            var port = configuration[$"Parameters:{PortParameterName}"];
 
             var configured = !string.IsNullOrWhiteSpace(host)
                              && !string.IsNullOrWhiteSpace(from)
                              && !string.IsNullOrWhiteSpace(user)
                              && !string.IsNullOrWhiteSpace(password);
 
-            if (!configured)
-                return keycloak.WithSmtp(SmtpConfiguration.Disabled, verifyEmail: false);
-
             var builder = keycloak.ApplicationBuilder;
 
-            // Parameters rather than raw strings: the dashboard masks the password and the
-            // values reach the manifest when this model is published. Declared without a
-            // value callback for everything proven present above, so Aspire owns
-            // resolution; the port is the one value worth defaulting.
-            var portValue = configuration[$"Parameters:{PortParameterName}"];
-
+            // Declared unconditionally, and with a value for every one of them. A
+            // parameter that is absent leaves its name undefined in the published env
+            // file, and an undefined name is what Compose turns into the blank string
+            // that stops Keycloak from starting.
             var smtp = new SmtpConfiguration(
-                Enabled: true,
-                Host: Parameter(builder.AddParameter(HostParameterName)),
-                Port: Parameter(builder.AddParameter(
-                    PortParameterName,
-                    () => string.IsNullOrWhiteSpace(portValue) ? DefaultPort : portValue)),
-                From: Parameter(builder.AddParameter(FromParameterName)),
-                User: Parameter(builder.AddParameter(UserParameterName)),
-                Password: Parameter(builder.AddParameter(PasswordParameterName, secret: true)),
-                Auth: true,
-                StartTls: true);
+                Enabled: configured,
+                Host: Parameter(builder, HostParameterName, configured ? host! : string.Empty),
+                Port: Parameter(builder, PortParameterName,
+                    string.IsNullOrWhiteSpace(port) ? DefaultPort : port),
+                From: Parameter(builder, FromParameterName, configured ? from! : UnroutableSender),
+                User: Parameter(builder, UserParameterName, configured ? user! : string.Empty),
+                Password: Parameter(builder, PasswordParameterName,
+                    configured ? password! : string.Empty, secret: true),
+                Auth: Parameter(builder, AuthParameterName, Flag(configured)),
+                StartTls: Parameter(builder, StartTlsParameterName, Flag(configured)));
 
             // Having a relay and trusting it are separate decisions. A sender domain part
-            // way through verification at the provider has every send rejected, and turning
-            // verification on then would strand existing users at their next login behind a
-            // mail that cannot arrive. So it is opt-in, once mail is really flowing.
+            // way through verification at the provider has every send rejected, and
+            // turning verification on then would strand existing users at their next
+            // login behind a mail that cannot arrive. So it is opt-in, once mail flows.
             var requested = configuration[$"Parameters:{VerifyEmailParameterName}"];
 
-            return keycloak.WithSmtp(
-                smtp, verifyEmail: bool.TryParse(requested, out var parsed) && parsed);
+            var verifyEmail = smtp.Enabled
+                              && bool.TryParse(requested, out var parsed)
+                              && parsed;
+
+            return keycloak
+                .WithSmtpEnvironment(smtp)
+                .WithEnvironment("VERIFY_EMAIL",
+                    Parameter(builder, VerifyEmailParameterName, Flag(verifyEmail)));
         }
 
         /// <summary>
@@ -91,7 +104,9 @@ public static class SmtpExtensions
         /// <para>
         /// Mailpit accepts everything and delivers nothing, so local development needs
         /// neither a relay account nor a secret, and a reset or verification mail can be
-        /// read in Mailpit's inbox rather than taken on trust.
+        /// read in Mailpit's inbox rather than taken on trust. Plain literals rather than
+        /// parameters, because run mode mounts realms.json and leaves the substitution to
+        /// Keycloak, reading the container's own environment.
         /// </para>
         /// </summary>
         public IResourceBuilder<KeycloakResource> WithSmtp(
@@ -105,28 +120,33 @@ public static class SmtpExtensions
                 Port: ReferenceExpression.Create($"{endpoint.Property(EndpointProperty.Port)}"),
                 // Mailpit accepts any sender, but Keycloak still puts this in the From
                 // header. `.localhost` is reserved, so a stray real send cannot resolve.
-                From: ReferenceExpression.Create($"no-reply@group-split.localhost"),
-                User: ReferenceExpression.Create($""),
-                Password: ReferenceExpression.Create($""),
-                Auth: false,
-                StartTls: false);
+                From: Literal("no-reply@group-split.localhost"),
+                User: Literal(string.Empty),
+                Password: Literal(string.Empty),
+                Auth: Literal(Flag(false)),
+                StartTls: Literal(Flag(false)));
 
-            // On locally, where the verification mail is one click away in the inbox.
             return keycloak
-                .WithSmtp(smtp, verifyEmail: true)
+                .WithSmtpEnvironment(smtp)
+                // On locally, where the verification mail is one click away in the inbox.
+                .WithEnvironment("VERIFY_EMAIL", Flag(true))
                 .WaitFor(mailpit);
         }
-
-        private IResourceBuilder<KeycloakResource> WithSmtp(
-            SmtpConfiguration smtp,
-            bool verifyEmail) =>
-            keycloak
-                .WithSmtpEnvironment(smtp)
-                // Verification can never be on without a relay: Keycloak would raise the
-                // required action and then have nowhere to send the mail that clears it.
-                .WithEnvironment("GS_VERIFY_EMAIL", smtp.Enabled && verifyEmail ? "true" : "false");
     }
 
-    private static ReferenceExpression Parameter(IResourceBuilder<ParameterResource> parameter) =>
-        ReferenceExpression.Create($"{parameter.Resource}");
+    private static string Flag(bool value) => value ? "true" : "false";
+
+    private static ReferenceExpression Literal(string value) =>
+        ReferenceExpression.Create($"{value}");
+
+    private static ReferenceExpression Parameter(
+        IDistributedApplicationBuilder builder,
+        string name,
+        string value,
+        bool secret = false)
+    {
+        var parameter = builder.AddParameter(name, () => value, secret: secret);
+
+        return ReferenceExpression.Create($"{parameter.Resource}");
+    }
 }

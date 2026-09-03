@@ -64,6 +64,21 @@ required action with nowhere to send the mail that clears it.
 Whichever relay you use, expect to prove you own the sender domain by adding the SPF and
 DKIM records it gives you. Mail from an unverified sender is rejected or filed as spam.
 
+### Why the variable names have to match
+
+Publishing does not mount `realms.json` as a file. The Compose publisher inlines its
+text into a Compose config's `content`, and Compose interpolates `${...}` inside that
+text against its own environment file before Keycloak ever reads it. So every
+placeholder in `realms.json` has to spell a name that file defines -- which is the
+screaming-snake form of the Aspire parameter it comes from, so `smtp-from` pairs with
+`${SMTP_FROM}`.
+
+A name Compose cannot resolve is replaced with a blank string and nothing complains
+except a warning in the deploy log. That matters most for the sender address: Keycloak
+validates it while importing the realm and **refuses to start** on one it cannot parse,
+an empty string included. Hence a valid unroutable default for the unconfigured case
+rather than an empty one.
+
 ### Applying this to a realm that already exists
 
 `realms.json` is the source of truth, but `start --import-realm` only ever creates a realm
