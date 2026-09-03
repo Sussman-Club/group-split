@@ -55,6 +55,8 @@ app.MapDefaultEndpoints();
 
 app.MapApiForwarder();
 
+app.MapAuthForwarder();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
