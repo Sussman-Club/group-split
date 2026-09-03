@@ -83,7 +83,10 @@ var migrations = db
     .AddEFMigrations(migrationsName,
         "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
         dbContextTypeName: "AppDbContext",
-        connectionName: "DefaultConnection")
+        connectionName: "DefaultConnection",
+        // The startup project exists only to give EF a project to run against and is never
+        // launched, but publish still tries to build and tag a container image it never produced.
+        configureProjectResource: project => project.ExcludeFromManifest())
     .RunDatabaseUpdateOnStart()
     // Deployments get the migrations as a run-once container so the schema exists before anything uses it.
     .PublishAsMigrationBundle(publishContainer: true)
@@ -105,10 +108,6 @@ if (builder.ExecutionContext.IsRunMode)
 
 compose.ConfigureComposeFile(file =>
 {
-    // AddEFMigrations also emits its wrapper resource as an empty compute service with no image
-    // behind it. Only the generated bundle container above does the real work.
-    file.Services.Remove(migrationsName);
-
     // Compose defaults to no restart policy, so a crash or a host reboot leaves the
     // stack down. The one-shot migration bundle keeps its own "no".
     foreach (var service in file.Services.Values)
