@@ -101,4 +101,21 @@ public class UserProvisionerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.NotEqual(first.Id, second.Id);
     }
+
+    [Fact]
+    public void Email_is_indexed_without_being_unique()
+    {
+        // The test above asserts two subjects sharing an address stay two users, but it
+        // runs on the in-memory provider, which does not enforce unique indexes -- so it
+        // passed while a unique index on Email had provisioning fail against Postgres
+        // with 23505. Asserted on the model instead, where the provider cannot hide it.
+        var index = Assert.Single(
+            DbContext.Model
+                .FindEntityType(typeof(Data.Entities.User))!
+                .GetIndexes()
+                .Where(candidate => candidate.Properties
+                    .Any(property => property.Name == nameof(Data.Entities.User.Email))));
+
+        Assert.False(index.IsUnique);
+    }
 }

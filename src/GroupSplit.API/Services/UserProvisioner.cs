@@ -82,9 +82,22 @@ internal sealed class UserProvisioner(AppDbContext context) : IUserProvisioner
             // Provisioning can race on a user's first concurrent requests. At this point
             // no endpoint work has run, so clearing the failed insert graph is safe.
             context.ChangeTracker.Clear();
-            return await users.FirstAsync(
+
+            var raced = await users.FirstOrDefaultAsync(
                 candidate => candidate.Identity.IdentityId == identityId,
                 cancellationToken);
+
+            // Only a concurrent provision of this same identity is recoverable, because
+            // the row that insert won with is the one this request set out to create.
+            // Any other unique violation is a different fault, and treating it as this
+            // one buried it: the recovery query found nothing and threw "Sequence
+            // contains no elements", naming neither the constraint nor the column.
+            if (raced is null)
+            {
+                throw;
+            }
+
+            return raced;
         }
     }
 

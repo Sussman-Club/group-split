@@ -33,7 +33,15 @@ public class AppDbContext : DbContext
                 .HasForeignKey<User>("PersonalGroupId")
                 .IsRequired();
 
-            entity.HasIndex(user => user.Email).IsUnique();
+            // Not unique. Email is mirrored from Keycloak, which owns it exactly as it
+            // owns first and last name -- and those carry no unique index either.
+            // Uniqueness is the realm's job, through duplicateEmailsAllowed. Enforcing it
+            // here instead breaks provisioning whenever an identity arrives carrying an
+            // address some other row already holds, which is what a Keycloak user
+            // recreated under a new subject looks like. The constraint was weak anyway:
+            // the column is nullable, and Postgres lets a unique index hold any number of
+            // nulls.
+            entity.HasIndex(user => user.Email);
         });
 
         modelBuilder.Entity<Group>(entity =>
