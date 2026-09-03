@@ -1,4 +1,5 @@
 using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
+using GroupSplit.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
