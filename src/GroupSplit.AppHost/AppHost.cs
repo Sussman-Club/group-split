@@ -23,16 +23,14 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak")
 var mailpit = builder.AddMailPit("mailpit");
 
 var keycloak = builder.AddKeycloak("keycloak")
-    // Google needs an exact, pre-registered redirect URI, and cookies are scoped
-    // to the host rather than the port, so a port that moves on every restart
-    // breaks the broker and piles up stale cookies. 8443 is what this image
-    // actually publishes.
-    .WithEndpoint("https", endpoint => endpoint.Port = 8443)
     .WithGoogleSignIn(builder.Configuration)
     .WithRealmImport("./realms.json")
     .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
     .WithPostgres(keycloakDb)
+    // Without this Keycloak races the database and dies on
+    // UnknownHostException for db-server.dev.internal.
+    .WaitFor(keycloakDb)
     .WithOtlpExporter()
     .WithTerminal()
     .WaitFor(mailpit);
