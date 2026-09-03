@@ -1,9 +1,12 @@
 name: Deploy
 
+# Deploys what lands on main, which in practice means a dev -> main merge.
+# Targeting the branch rather than the pull_request event means a merge still
+# deploys when it is pushed directly or fast-forwarded outside a PR.
 on:
   push:
     branches:
-      - dev
+      - main
   workflow_dispatch:
 
 # One deploy at a time: two concurrent runs would push different image tags into
