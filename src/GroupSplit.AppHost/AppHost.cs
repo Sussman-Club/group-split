@@ -76,10 +76,7 @@ if (builder.ExecutionContext.IsRunMode)
 {
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
-
-    // Mail never leaves the machine: Keycloak's reset and verification mail lands in
-    // Mailpit's inbox instead, so working on anything that sends email needs neither a
-    // relay account nor a secret.
+    
     var mailpit = builder.AddMailPit("mailpit");
 
     keycloak

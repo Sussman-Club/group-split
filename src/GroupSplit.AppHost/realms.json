@@ -13,7 +13,7 @@
   "resetPasswordAllowed": true,
   "rememberMe": true,
   "editUsernameAllowed": false,
-  "verifyEmail": "${GS_SMTP_ENABLED}",
+  "verifyEmail": "${GS_VERIFY_EMAIL}",
   "passwordPolicy": "length(8) and notUsername and notEmail and passwordHistory(3)",
   "bruteForceProtected": true,
   "permanentLockout": false,

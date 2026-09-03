@@ -18,6 +18,9 @@ public static class SmtpExtensions
 
     private const string PasswordParameterName = "smtp-password";
 
+    // Deliberately not an SMTP_ name: it is a realm policy rather than part of the relay.
+    private const string VerifyEmailParameterName = "verify-email";
+
     // Submission with STARTTLS. Port 25 is blocked outbound by most hosts, and 465 wants
     // implicit TLS, which is the realm's `ssl` flag rather than its `starttls` one.
     private const string DefaultPort = "587";
@@ -34,9 +37,8 @@ public static class SmtpExtensions
         /// </para>
         /// <para>
         /// With no relay configured this degrades to SMTP disabled rather than failing the
-        /// deploy. Because the realm reads <c>GS_SMTP_ENABLED</c> for <c>verifyEmail</c>
-        /// too, registration then keeps working instead of trapping every new user behind
-        /// a verification mail that can never be delivered.
+        /// deploy, and registration keeps working rather than trapping every new user
+        /// behind a verification mail that could never be delivered.
         /// </para>
         /// </summary>
         public IResourceBuilder<KeycloakResource> WithSmtp(IConfiguration configuration)
@@ -52,7 +54,7 @@ public static class SmtpExtensions
                              && !string.IsNullOrWhiteSpace(password);
 
             if (!configured)
-                return keycloak.WithSmtp(SmtpConfiguration.Disabled);
+                return keycloak.WithSmtp(SmtpConfiguration.Disabled, verifyEmail: false);
 
             var builder = keycloak.ApplicationBuilder;
 
@@ -74,7 +76,14 @@ public static class SmtpExtensions
                 Auth: true,
                 StartTls: true);
 
-            return keycloak.WithSmtp(smtp);
+            // Having a relay and trusting it are separate decisions. A sender domain part
+            // way through verification at the provider has every send rejected, and turning
+            // verification on then would strand existing users at their next login behind a
+            // mail that cannot arrive. So it is opt-in, once mail is really flowing.
+            var requested = configuration[$"Parameters:{VerifyEmailParameterName}"];
+
+            return keycloak.WithSmtp(
+                smtp, verifyEmail: bool.TryParse(requested, out var parsed) && parsed);
         }
 
         /// <summary>
@@ -102,13 +111,20 @@ public static class SmtpExtensions
                 Auth: false,
                 StartTls: false);
 
+            // On locally, where the verification mail is one click away in the inbox.
             return keycloak
-                .WithSmtp(smtp)
+                .WithSmtp(smtp, verifyEmail: true)
                 .WaitFor(mailpit);
         }
 
-        private IResourceBuilder<KeycloakResource> WithSmtp(SmtpConfiguration smtp) =>
-            keycloak.WithSmtpEnvironment(smtp);
+        private IResourceBuilder<KeycloakResource> WithSmtp(
+            SmtpConfiguration smtp,
+            bool verifyEmail) =>
+            keycloak
+                .WithSmtpEnvironment(smtp)
+                // Verification can never be on without a relay: Keycloak would raise the
+                // required action and then have nowhere to send the mail that clears it.
+                .WithEnvironment("GS_VERIFY_EMAIL", smtp.Enabled && verifyEmail ? "true" : "false");
     }
 
     private static ReferenceExpression Parameter(IResourceBuilder<ParameterResource> parameter) =>
