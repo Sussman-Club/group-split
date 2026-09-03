@@ -54,6 +54,31 @@ jobs:
             fi
           done
 
+          # Email is optional: the deploy succeeds without a relay and Keycloak simply
+          # cannot send mail. A half-configured one is worse than none though, because
+          # the realm would then advertise password reset and email verification while
+          # every send failed, so these four stand or fall together.
+          smtp_present=""
+          smtp_absent=""
+
+          for name in SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD; do
+            value="$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")"
+            [ -n "$value" ] || value="$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")"
+
+            if [ -n "$value" ]; then
+              smtp_present="${smtp_present} ${name}"
+            else
+              smtp_absent="${smtp_absent} ${name}"
+            fi
+          done
+
+          if [ -n "$smtp_present" ] && [ -n "$smtp_absent" ]; then
+            echo "Incomplete SMTP configuration. Either set:${smtp_absent} or clear:${smtp_present}" >&2
+            missing=1
+          elif [ -z "$smtp_present" ]; then
+            echo "::notice::No SMTP relay configured. Keycloak will not send password reset or email verification mail."
+          fi
+
           [ "$missing" -eq 0 ] || exit 1
 
       - name: Check out repository

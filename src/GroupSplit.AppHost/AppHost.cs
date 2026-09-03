@@ -77,9 +77,15 @@ if (builder.ExecutionContext.IsRunMode)
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
 
+    // Mail never leaves the machine: Keycloak's reset and verification mail lands in
+    // Mailpit's inbox instead, so working on anything that sends email needs neither a
+    // relay account nor a secret.
+    var mailpit = builder.AddMailPit("mailpit");
+
     keycloak
         .WithRealmImport("./realms.json")
         .WithContainerFiles("/opt/keycloak/themes/group-split", "./keycloak-themes/group-split")
+        .WithSmtp(mailpit)
         .WithDataVolume();
 
     builder
@@ -107,6 +113,7 @@ else
 
     keycloak
         .AsDeployedKeycloak(keycloakHostname)
+        .WithSmtp(builder.Configuration)
         .PublishOnHostPort(8081);
 
     frontend
