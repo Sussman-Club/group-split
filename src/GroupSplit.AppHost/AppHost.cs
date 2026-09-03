@@ -1,3 +1,4 @@
+using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using GroupSplit.AppHost.Keycloak;
 using GroupSplit.AppHost.Migrations;
 using GroupSplit.AppHost.Seeder;
@@ -8,7 +9,8 @@ using Scalar.Aspire;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var compose = builder.AddDockerComposeEnvironment("env").WithDashboard();
+var compose = builder.AddDockerComposeEnvironment("compose")
+    .WithDashboard(dashboard => dashboard.WithHostPort(18888));
 
 var dbServer = builder
     .AddPostgres("db-server")
@@ -23,9 +25,6 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn(builder.Configuration)
     .WithSmtp(builder.Configuration)
-    .WithRealmImport("./realms.json")
-    .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
-    .WithDataVolume()
     .WithPostgres(keycloakDb)
     .WaitFor(keycloakDb)
     .WithOtlpExporter()
@@ -41,6 +40,16 @@ if (builder.ExecutionContext.IsRunMode)
     var mailpit = builder.AddMailPit("mailpit");
 
     keycloak.WaitFor(mailpit);
+
+    // Mounted from disk so realm and theme edits only need a restart, not a rebuild.
+    keycloak
+        .WithRealmImport("./realms.json")
+        .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
+        .WithDataVolume();
+}
+else
+{
+    keycloak.AsDeployedKeycloak(builder.Configuration);
 }
 
 var backend = builder.AddProject<GroupSplit_API>("api")
@@ -99,6 +108,28 @@ compose.ConfigureComposeFile(file =>
     // AddEFMigrations also emits its wrapper resource as an empty compute service with no image
     // behind it. Only the generated bundle container above does the real work.
     file.Services.Remove(migrationsName);
+
+    // Compose defaults to no restart policy, so a crash or a host reboot leaves the
+    // stack down. The one-shot migration bundle keeps its own "no".
+    foreach (var service in file.Services.Values)
+    {
+        service.Restart ??= "unless-stopped";
+    }
+
+    // Published ports otherwise land on a random host port, which makes the
+    // deployment unreachable without inspecting docker ps first.
+    PublishOnHostPort(file.Services["web"], 8080);
+    PublishOnHostPort(file.Services["keycloak"], 8081);
+
+    // Keeps the container port Aspire chose, but pins the host side. Any extra
+    // ports are dropped: for Keycloak that is 9000, the management endpoint.
+    static void PublishOnHostPort(Service service, int hostPort)
+    {
+        if (service.Ports is [var containerPort, ..])
+        {
+            service.Ports = [$"{hostPort}:{containerPort}"];
+        }
+    }
 });
 
 if (builder.ExecutionContext.IsRunMode)
