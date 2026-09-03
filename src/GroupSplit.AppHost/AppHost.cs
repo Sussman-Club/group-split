@@ -28,8 +28,6 @@ var keycloak = builder.AddKeycloak("keycloak")
     .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
     .WithPostgres(keycloakDb)
-    // Without this Keycloak races the database and dies on
-    // UnknownHostException for db-server.dev.internal.
     .WaitFor(keycloakDb)
     .WithOtlpExporter()
     .WithTerminal()
