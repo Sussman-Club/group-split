@@ -26,6 +26,13 @@
     <PackageReference Include="Aspire.Hosting.Testing" Version="13.5.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="Microsoft.Playwright.Xunit.v3" Version="1.62.0" />
+    <!-- Collects coverage under Microsoft.Testing.Platform. Filters live in
+         tests/coverage.config, which every run passes on the command line. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
+    <!-- The trx reporter is not built into Microsoft.Testing.Platform; without this
+         extension the test app rejects the CI report option with MTP exit code 5.
+         Version tracks the MTP that xunit.v3 brings in. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
     <PackageReference Include="xunit.v3" Version="4.0.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <PrivateAssets>all</PrivateAssets>

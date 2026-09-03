@@ -25,6 +25,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <!-- Collects coverage under Microsoft.Testing.Platform. Filters live in
+         tests/coverage.config, which every run passes on the command line. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
     <!-- The trx reporter is not built into Microsoft.Testing.Platform; without this
          extension the test app rejects the CI report option with MTP exit code 5.
          Version tracks the MTP that xunit.v3 brings in. -->

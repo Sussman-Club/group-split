@@ -21,6 +21,14 @@ jobs:
     name: Build & unit tests
     runs-on: ubuntu-latest
 
+    env:
+      # The share of hand-written lines and branches the unit tests must keep
+      # covered. Set to what was measured the day the gate went in, so it is a
+      # ratchet against regression rather than a target: raise it when coverage
+      # improves, and never lower it to turn a red build green.
+      COVERAGE_LINE_FLOOR: 41
+      COVERAGE_BRANCH_FLOOR: 32
+
     steps:
       - uses: actions/checkout@v5
 
@@ -44,14 +52,12 @@ jobs:
         run: |
           dotnet restore tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
           dotnet restore tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj
-          dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
       - name: Build
         run: |
           dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
-          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
       # Everything above is Release, but `aspire do` builds Debug, so the deploy
@@ -66,8 +72,9 @@ jobs:
       - name: Build the deploy configuration
         run: dotnet build src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj -c Debug --no-restore
 
-      # GroupSplit.AppHost.Test is built but not run: it needs Docker, Playwright
-      # browsers and DCP from the Aspire CLI. Worth its own job later.
+      # GroupSplit.AppHost.Test used to be built here and never run. It now has the
+      # `integration` job below, which is the only place with the Docker and
+      # Playwright setup it needs, so building it twice bought nothing.
       - name: Test
         run: |
           # --results-directory stays ahead of the `--`: past it the CLI resolves the
@@ -75,15 +82,103 @@ jobs:
           # directory exists, so the second invocation would fail where the first passed.
           dotnet test --project tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj \
             -c Release --no-build --results-directory TestResults \
-            -- --report-trx --report-trx-filename api-tests.trx
+            -- --report-trx --report-trx-filename api-tests.trx \
+               --coverage --coverage-settings tests/coverage.config \
+               --coverage-output-format cobertura --coverage-output api.cobertura.xml
           dotnet test --project tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj \
             -c Release --no-build --results-directory TestResults \
-            -- --report-trx --report-trx-filename app-web-tests.trx
+            -- --report-trx --report-trx-filename app-web-tests.trx \
+               --coverage --coverage-settings tests/coverage.config \
+               --coverage-output-format cobertura --coverage-output app-web.cobertura.xml
+
+      # Merges the per-project Cobertura files into one report and renders the
+      # summary onto the run's own page, so a reviewer sees the numbers without
+      # downloading an artifact first.
+      - name: Report coverage
+        if: always()
+        run: |
+          set -euo pipefail
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.5.11
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          reportgenerator \
+            -reports:'TestResults/*.cobertura.xml' \
+            -targetdir:TestResults/coverage \
+            -reporttypes:'Cobertura;Html;MarkdownSummaryGithub'
+          cat TestResults/coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Quietly covering less than it used to is the failure coverage exists to
+      # catch, so this gates the build rather than only reporting.
+      - name: Enforce the coverage floor
+        if: always()
+        run: |
+          python3 tests/coverage-gate.py TestResults/coverage/Cobertura.xml \
+            "$COVERAGE_LINE_FLOOR" "$COVERAGE_BRANCH_FLOOR"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
+          path: TestResults/
+          if-no-files-found: ignore
+
+  integration:
+    name: Integration tests (Aspire)
+    runs-on: ubuntu-latest
+
+    # These bring the stack up under Aspire's testing host -- Postgres, Keycloak, the
+    # API, the web app -- and drive it with Playwright. They are the only thing in CI
+    # that touches the real database provider, the container wiring and a rendered
+    # page, so without them nothing tells us the infrastructure still works until a
+    # deploy does.
+    #
+    # Not required to pass yet: they had never run in CI, so their reliability on a
+    # hosted runner is unmeasured, and a job that is red for environmental reasons
+    # teaches people to ignore it. Watch a few weeks of results, then delete this
+    # line and make the job blocking.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: |
+          dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
+          dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
+
+      - name: Build
+        run: |
+          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
+          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+
+      # Playwright ships its browsers separately from the NuGet package; the install
+      # script is written into the test project's build output.
+      - name: Install Playwright browsers
+        run: pwsh tests/GroupSplit.AppHost.Test/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Test
+        run: |
+          dotnet test --project tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --report-trx --report-trx-filename apphost-tests.trx \
+               --coverage --coverage-settings tests/coverage.config \
+               --coverage-output-format cobertura --coverage-output apphost.cobertura.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
           path: TestResults/
           if-no-files-found: ignore
