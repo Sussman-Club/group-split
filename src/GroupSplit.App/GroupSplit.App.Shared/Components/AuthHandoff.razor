@@ -1,7 +1,7 @@
 @using GroupSplit.App.Shared.Services
 
 @*
-    Branded hand-off to the Keycloak-hosted sign-in and registration pages.
+    Branded hand-off to the Keycloak-hosted sign-in page.
 
     Credentials are never collected here. Keycloak owns the forms, which is what
     keeps SSO, MFA, password policy and brute-force protection working; this
@@ -52,10 +52,6 @@
                 @ActionLabel
             </MudButton>
 
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                @AlternatePrompt <MudLink Href="@AlternateHref" Typo="Typo.body2">@AlternateLabel</MudLink>
-            </MudText>
-
         </MudStack>
     </MudPaper>
 </MudStack>
@@ -67,13 +63,6 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Subtitle { get; set; } = "";
     [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
-    [Parameter, EditorRequired] public string AlternatePrompt { get; set; } = "";
-    [Parameter, EditorRequired] public string AlternateLabel { get; set; } = "";
-    [Parameter, EditorRequired] public string AlternateHref { get; set; } = "";
-
-    /// <summary>Which hosted flow to start.</summary>
-    [Parameter, EditorRequired]
-    public AuthFlow Flow { get; set; }
 
     private bool _redirecting;
     private string? Error { get; set; }
@@ -103,11 +92,7 @@
     {
         var returnUrl = ReadQueryValue("returnUrl");
 
-        await (Flow switch
-        {
-            AuthFlow.Register => AuthService.Register(returnUrl),
-            _ => AuthService.Login(returnUrl)
-        });
+        await AuthService.Login(returnUrl);
     }
 
     private string? ReadQueryValue(string key)
@@ -124,12 +109,6 @@
                select string.IsNullOrWhiteSpace(value) 
                    ? null 
                    : value).FirstOrDefault();
-    }
-
-    public enum AuthFlow
-    {
-        Login,
-        Register
     }
 
 }

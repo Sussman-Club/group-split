@@ -10,8 +10,6 @@ public static class AuthRoutes
 
     public static string Login(string? returnUrl = null) => WithReturnUrl("/auth/login", returnUrl);
 
-    public static string Register(string? returnUrl = null) => WithReturnUrl("/auth/register", returnUrl);
-
     /// <summary>
     /// Appends <paramref name="returnUrl"/> when it is a same-site path. The
     /// server validates it again before honouring it.
