@@ -14,9 +14,9 @@ public static class WebAppExtensions
     /// <summary>
     /// Path Keycloak is forwarded from. Matches the AppHost's
     /// <c>KeycloakDeploymentExtensions.RelativePath</c>, which is what Keycloak is told
-    /// to serve at.
+    /// to serve at. Distinct from the <c>/auth</c> group <c>MapIdentity</c> owns.
     /// </summary>
-    private const string AuthPrefix = "/auth";
+    private const string KeycloakPrefix = "/idp";
 
     extension(IEndpointRouteBuilder app)
     {
@@ -73,8 +73,8 @@ public static class WebAppExtensions
         /// cheaper than branching the pipeline on the environment.
         /// </para>
         /// </summary>
-        public IEndpointConventionBuilder MapAuthForwarder()
-            => app.MapForwarder($"{AuthPrefix}/{{*path}}", "http://keycloak")
+        public IEndpointConventionBuilder MapKeycloakForwarder()
+            => app.MapForwarder($"{KeycloakPrefix}/{{*path}}", "http://keycloak")
                 .AllowAnonymous()
                 .DisableAntiforgery();
     }

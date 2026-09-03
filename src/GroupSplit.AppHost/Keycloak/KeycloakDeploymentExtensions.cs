@@ -12,11 +12,16 @@ public static class KeycloakDeploymentExtensions
     /// so the stack exposes one origin. Keycloak has to serve at the prefix rather
     /// than have the forwarder strip it, because it scopes its session cookies to
     /// the paths it generates -- stripping would mint <c>Path=/realms/...</c> cookies
-    /// that a browser never sends back to <c>/auth/realms/...</c>, and sign-in would
+    /// that a browser never sends back to <c>/idp/realms/...</c>, and sign-in would
     /// loop with no error.
     /// </para>
+    /// <para>
+    /// Deliberately not <c>/auth</c>: the web app's own <c>MapIdentity</c> group owns
+    /// that prefix for the endpoints that start and end a session. Route precedence
+    /// would keep both working, but the two would be indistinguishable by path.
+    /// </para>
     /// </summary>
-    public const string RelativePath = "/auth";
+    public const string RelativePath = "/idp";
 
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
