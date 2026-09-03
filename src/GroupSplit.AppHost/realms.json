@@ -151,5 +151,25 @@
         }
       ]
     }
-    ]
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": "${GS_GOOGLE_ENABLED}",
+      "hideOnLogin": "${GS_GOOGLE_HIDDEN}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GS_GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GS_GOOGLE_CLIENT_SECRET}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
+    }
+  ]
 }
