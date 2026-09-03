@@ -1,4 +1,4 @@
-﻿@using System.ComponentModel.DataAnnotations
+@using System.ComponentModel.DataAnnotations
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.Shared
 @inject IRulesClient RulesClient
@@ -72,7 +72,7 @@
                     Total: @PercentTotal%
                 </MudText>
 
-                <MudStack Direction="Row" Spacing="2" Class="mt-2">
+                <MudStack Row="true" Spacing="2" Class="mt-2">
                     <MudButton Variant="Variant.Outlined" OnClick="@SplitPercentEvenly">
                         Split Evenly
                     </MudButton>
@@ -105,7 +105,7 @@
                     @(SharesTotal > 0 ? $"Total shares: {SharesTotal}" : "At least one member must have shares")
                 </MudText>
 
-                <MudStack Direction="Row" Spacing="2" Class="mt-2">
+                <MudStack Row="true" Spacing="2" Class="mt-2">
                     <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
                         Clear All Shares
                     </MudButton>
