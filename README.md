@@ -46,12 +46,20 @@ environment. `SMTP_PASSWORD` is a secret; the rest are variables:
 | `SMTP_PORT` | `587` | Optional, defaults to 587 (submission over STARTTLS) |
 | `SMTP_FROM` | `no-reply@example.com` | Sender address, on a domain the relay has verified |
 | `SMTP_USER` | `resend` | SMTP username |
-| `SMTP_PASSWORD` | | SMTP password or API key |
+| `SMTP_PASSWORD` | | SMTP password or API key (secret) |
+| `VERIFY_EMAIL` | `true` | Whether registration has to prove the address. Off unless set |
 
-Leave them all unset and the deploy still succeeds: Keycloak simply cannot send mail, and
-email verification stays off so registration keeps working. Setting only some of them
-fails the deploy deliberately, because a realm that offers password reset over a relay
-that rejects every send is worse than one that never offered it.
+Leave the four `SMTP_*` values unset and the deploy still succeeds: Keycloak simply
+cannot send mail. Setting only some of them fails the deploy deliberately, because a
+realm that offers password reset over a relay that rejects every send is worse than one
+that never offered it.
+
+`VERIFY_EMAIL` is separate on purpose, and off until set. Having a relay is not the same
+as trusting it: a sender domain part way through verification at the provider has every
+send rejected, and switching verification on then would strand existing users at their
+next login behind a mail that cannot arrive. Turn it on once mail is really flowing. It
+is also ignored unless a relay is configured, since Keycloak would otherwise raise the
+required action with nowhere to send the mail that clears it.
 
 Whichever relay you use, expect to prove you own the sender domain by adding the SPF and
 DKIM records it gives you. Mail from an unverified sender is rejected or filed as spam.

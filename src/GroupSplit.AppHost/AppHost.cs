@@ -76,7 +76,7 @@ if (builder.ExecutionContext.IsRunMode)
 {
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
-    
+
     var mailpit = builder.AddMailPit("mailpit");
 
     keycloak
