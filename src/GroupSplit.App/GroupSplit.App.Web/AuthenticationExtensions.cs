@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -80,6 +80,13 @@ public static class AuthenticationExtensions
                             options.Authority = builder.Configuration["Keycloak:Authority"]
                                 ?? throw new InvalidOperationException(
                                     "Keycloak:Authority must be configured outside of development.");
+
+                            // Defaults to the strictest setting the authority can support: an
+                            // https authority gets metadata validation, an http one cannot have
+                            // it. So putting TLS in front of Keycloak turns this on by itself.
+                            options.RequireHttpsMetadata =
+                                builder.Configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata")
+                                ?? options.Authority.StartsWith(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
                         }
                     });
 

@@ -1,4 +1,4 @@
-using GroupSplit.API.Endpoints;
+﻿using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.PostgreSQL;
@@ -28,6 +28,13 @@ builder.Services.AddAuthentication()
                 options.Authority = builder.Configuration["Keycloak:Authority"]
                     ?? throw new InvalidOperationException(
                         "Keycloak:Authority must be configured outside of development.");
+
+                // Defaults to the strictest setting the authority can support: an https
+                // authority gets metadata validation, an http one cannot have it. So putting
+                // TLS in front of Keycloak turns this on by itself.
+                options.RequireHttpsMetadata =
+                    builder.Configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata")
+                    ?? options.Authority.StartsWith(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
             }
         });
 

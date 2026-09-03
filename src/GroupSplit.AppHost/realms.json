@@ -26,16 +26,6 @@
   "ssoSessionMaxLifespan": 36000,
   "accessCodeLifespan": 60,
   "actionTokenGeneratedByUserLifespan": 300,
-  "smtpServer": {
-    "host": "mailpit",
-    "port": "1025",
-    "from": "no-reply@groupsplit.local",
-    "fromDisplayName": "Group Split",
-    "replyTo": "no-reply@groupsplit.local",
-    "auth": "",
-    "ssl": "",
-    "starttls": ""
-  },
   "clients": [
     {
       "clientId": "api",
@@ -82,72 +72,6 @@
             "access.token.claim": "true",
             "id.token.claim": "true"
           }
-        }
-      ]
-    }
-  ],
-  "users": [
-    {
-      "id": "FFDFB4C9-6321-49EA-9160-0F618ACF6D4B",
-      "username": "daniel@test.com",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Daniel",
-      "lastName": "Rivero",
-      "email": "daniel@test.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "groupsplit-dev",
-          "temporary": false
-        }
-      ]
-    },
-    {
-      "id": "F1C2D3E4-5678-90AB-CDEF-1234567890AB",
-      "username": "loraine@test.com",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Loraine",
-      "lastName": "Monteagudo",
-      "email": "loraine@test.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "groupsplit-dev",
-          "temporary": false
-        }
-      ]
-    },
-    {
-      "id": "9F8E7D6C-5B4A-3C2D-1E0F-1234567890AB",
-      "username": "anabel@test.com",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Anabel",
-      "lastName": "Benítez",
-      "email": "anabel@test.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "groupsplit-dev",
-          "temporary": false
-        }
-      ]
-    },
-    {
-      "id": "0A1B2C3D-4E5F-6071-8293-0A1B2C3D4E5F",
-      "username": "omar@test.com",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Omar",
-      "lastName": "Rivero",
-      "email": "omar@test.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "groupsplit-dev",
-          "temporary": false
         }
       ]
     }
