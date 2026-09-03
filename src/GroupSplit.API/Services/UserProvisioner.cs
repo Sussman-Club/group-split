@@ -30,6 +30,16 @@ internal sealed class UserProvisioner(AppDbContext context) : IUserProvisioner
 
         if (existingUser is not null)
         {
+            // Keycloak owns the profile -- the app only ever reads these, and the account
+            // page hands editing off to Keycloak's own console -- so a rename or an address
+            // change there has to be mirrored here or the app shows the values captured at
+            // first sign-in forever. Written only when something actually differs: this runs
+            // on every authenticated request, via CurrentUserMiddleware.
+            if (ApplyProfile(existingUser, principal))
+            {
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
             return existingUser;
         }
 
@@ -52,13 +62,12 @@ internal sealed class UserProvisioner(AppDbContext context) : IUserProvisioner
 
         var user = new User
         {
-            FirstName = principal.FindFirstValue(ClaimTypes.GivenName),
-            LastName = principal.FindFirstValue(ClaimTypes.Surname),
-            Email = principal.FindFirstValue(ClaimTypes.Email),
             Identity = new UserIdentity { IdentityId = identityId },
             PersonalGroup = personalGroup,
             Groups = { personalGroup }
         };
+
+        ApplyProfile(user, principal);
 
         users.Add(user);
 
@@ -77,5 +86,29 @@ internal sealed class UserProvisioner(AppDbContext context) : IUserProvisioner
                 candidate => candidate.Identity.IdentityId == identityId,
                 cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Copies the profile claims onto <paramref name="user"/>, reporting whether anything
+    /// changed. Shared with the create path so both read the same claims: an absent claim
+    /// clears the field, because absent is what Keycloak sends for a value an admin has
+    /// cleared.
+    /// </summary>
+    private static bool ApplyProfile(User user, ClaimsPrincipal principal)
+    {
+        var firstName = principal.FindFirstValue(ClaimTypes.GivenName);
+        var lastName = principal.FindFirstValue(ClaimTypes.Surname);
+        var email = principal.FindFirstValue(ClaimTypes.Email);
+
+        if (user.FirstName == firstName && user.LastName == lastName && user.Email == email)
+        {
+            return false;
+        }
+
+        user.FirstName = firstName;
+        user.LastName = lastName;
+        user.Email = email;
+
+        return true;
     }
 }
