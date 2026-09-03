@@ -5,7 +5,7 @@ using GroupSplit.AppHost.Seeder;
 using Projects;
 using Scalar.Aspire;
 
-#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001
+#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -119,6 +119,26 @@ else
             "keycloak-themes/group-split",
             "/opt/keycloak/themes/group-split")
         .WithComposeDefaults(databaseService: dbServer.Resource.Name);
+
+    // A barrier so the pushes and the Compose generation share one pipeline execution.
+    // Run as separate `aspire do` invocations they each get their own deploy-prereq,
+    // and that stamps a fresh timestamp tag every time: the generated compose file then
+    // points at a tag nothing was ever pushed under, and the pull fails with
+    // "manifest unknown". Deliberately not `docker-compose-up-compose`, the built-in
+    // step that already aggregates these: it also runs `docker compose up`, which would
+    // start the stack on the runner instead of the server.
+    builder.Pipeline.AddStep(
+        "push-and-prepare-compose",
+        _ => Task.CompletedTask,
+        dependsOn: new[]
+        {
+            "prepare-compose",
+            $"push-{backend.Resource.Name}",
+            $"push-{frontend.Resource.Name}",
+            // Already "migrations-internal": PublishAsMigrationBundle(publishContainer: true)
+            // hands back the separate bundle container, not the original resource.
+            $"push-{migrations.Resource.Name}",
+        });
 }
 
 var host = builder.Build();
