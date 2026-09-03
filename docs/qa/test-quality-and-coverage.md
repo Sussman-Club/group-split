@@ -39,14 +39,15 @@ does not run.
 2. **CI reports and gates on it.** The unit-test job merges the per-project
    Cobertura files, writes the summary onto the run page, and fails if line or
    branch coverage falls below a recorded floor (`tests/coverage-gate.py`).
-3. **The integration tests run, and pass.** `GroupSplit.AppHost.Test` was built by CI
+3. **The integration tests pass locally.** `GroupSplit.AppHost.Test` was built by CI
    and never executed. Turning it on surfaced a real bug in the app, described in
    [The reason they never finished](#the-reason-they-never-finished); with that fixed
-   the whole suite runs in about 40 seconds against warm images. It now has its own
-   blocking CI job with Docker and Playwright.
+   the whole suite runs in about 40 seconds against warm images. It is **not in CI**
+   — see [Why the job is out again](#why-the-job-is-out-again). CI still builds the
+   project so it cannot rot.
 4. **Nothing waits forever.** The fixture bounds start-up and every `WaitFor…`, each
-   test carries a `Timeout`, and both CI jobs have `timeout-minutes`. A stall now
-   fails with the last state of every resource instead of hanging.
+   test carries a `Timeout`, and the CI job has `timeout-minutes`. A stall now fails
+   with the last state of every resource instead of hanging.
 
 The filters in `tests/coverage.config` matter for reading any of these numbers. An
 unfiltered run reports **32.0%**, but that denominator includes ~1,800 lines of
@@ -292,3 +293,44 @@ runs. `HomeTest` expected the page title to match `Home`; it has been `Group Spl
 since `Home.razor` set it. And `DataTest` asserted nothing at all. The suite is now
 three tests — the offset round-trip, the home page title, and an anonymous visitor
 being offered a sign-in — and takes about 40 seconds with images cached.
+
+## Why the job is out again
+
+The job ran once on `dev` and failed in 1m42s — not a hang, which is the timeouts
+doing their job, but a failure all the same:
+
+```
+net::ERR_CERT_AUTHORITY_INVALID at https://localhost:33587/
+  navigating to "https://localhost:33587/", waiting until "load"
+```
+
+`DataTest` passed against real Postgres. Both Playwright tests failed at
+`Page.GotoAsync`, before any assertion: `GetEndpoint("web")` hands back the HTTPS
+endpoint, and Chromium will not open it because the ASP.NET Core development
+certificate is not a trusted authority on a hosted runner. It is trusted on a
+developer machine — `dotnet dev-certs https --trust` — which is why the same three
+tests pass locally and two of them cannot pass in CI.
+
+The job has been removed rather than left red. CI still restores and builds the
+project, so the tests compile with every change and cannot rot the way they did
+before.
+
+### Bringing it back
+
+1. **Let the browser accept the dev certificate.** `IgnoreHTTPSErrors` on the browser
+   context is the usual answer for Aspire plus Playwright, and it is honest about what
+   is being tested: the app, not the certificate chain. In
+   `Microsoft.Playwright.Xunit.v3` the `PageTest` base class does not expose the
+   `ContextOptions()` hook the NUnit and MSTest packages have, so `WebPageTest` will
+   need to make its own context and page from `Browser` rather than inherit them.
+   Trusting the cert on the runner instead is the worse option: `dotnet dev-certs
+   https --trust` on Linux only reaches Chromium if `certutil` and the right NSS
+   database are present, which is a lot of moving parts for a test.
+2. **Clear the two `xUnit1069` warnings.** The analyzer is right that a test carrying
+   `Timeout` should also reference `TestContext.Current.CancellationToken`, so the
+   timeout can actually abort it. Playwright's own APIs take no cancellation token, so
+   either thread the token through something that does, or suppress the rule with the
+   reason written down.
+3. **Then re-add the job.** The version that ran is in the history of
+   `.github/workflows/ci.yml`; it needs Docker, `pwsh … playwright.ps1 install
+   --with-deps chromium`, and a `timeout-minutes` backstop.
