@@ -482,3 +482,5 @@ FodyWeavers.xsd
 # Generated NSwag API client (do not commit)
 GroupSplit.App/GroupSplit.App.Shared/ApiClient/ApiClient.g.cs
 
+# Aspire publish/deploy artifacts (generated)
+aspire-output/

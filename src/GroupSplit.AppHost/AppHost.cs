@@ -8,25 +8,40 @@ using Scalar.Aspire;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+var compose = builder.AddDockerComposeEnvironment("env").WithDashboard();
+
 var dbServer = builder
     .AddPostgres("db-server")
     .WithDataVolume()
     .WithPgWeb()
     .WithTerminal();
 
-var db = dbServer.AddDatabase("db", "groupsplit")
-    .WithPostgresMcp();
+var db = dbServer.AddDatabase("db", "groupsplit");
 
-var mailpit = builder.AddMailPit("mailpit");
+var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn(builder.Configuration)
+    .WithSmtp(builder.Configuration)
     .WithRealmImport("./realms.json")
     .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()
+    .WithPostgres(keycloakDb)
+    .WaitFor(keycloakDb)
     .WithOtlpExporter()
     .WithTerminal()
-    .WaitFor(mailpit);
+    .WithExternalHttpEndpoints();
+
+// Developer tooling: an unrestricted SQL endpoint and a mail catcher have no place in a deployment.
+if (builder.ExecutionContext.IsRunMode)
+{
+    db.WithPostgresMcp();
+    keycloakDb.WithPostgresMcp();
+
+    var mailpit = builder.AddMailPit("mailpit");
+
+    keycloak.WaitFor(mailpit);
+}
 
 var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
@@ -42,35 +57,54 @@ var frontend = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(backend)
     .WithHttpProbe(ProbeType.Liveness, "/alive")
     .WithHttpProbe(ProbeType.Readiness, "/health")
+    .WithExternalHttpEndpoints()
     .WithBrowserLogs();
 
-var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
+// The MAUI client is a locally launched device app, not a deployable container workload.
+if (builder.ExecutionContext.IsRunMode)
+{
+    var mauiapp = builder.AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj");
 
-mauiapp.AddWindowsDevice().WithReference(backend).WaitFor(backend);
+    mauiapp.AddWindowsDevice().WithReference(backend).WaitFor(backend);
+}
 
-var seeder = builder
-    .AddSeeder<GroupSplit_Seeder>("seeder")
-    .WaitFor(db)
-    .WithReference(db)
-    .WithResetAndSeedCommand();
+const string migrationsName = "migrations";
+
+var migrations = db
+    .AddEFMigrations(migrationsName,
+        "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
+        dbContextTypeName: "AppDbContext",
+        connectionName: "DefaultConnection")
+    .RunDatabaseUpdateOnStart()
+    // Deployments get the migrations as a run-once container so the schema exists before anything uses it.
+    .PublishAsMigrationBundle(publishContainer: true)
+    .PublishAsDockerComposeService((_, service) => service.Restart = "no");
+
+// Nothing should touch the schema until migrations have been applied.
+backend.WaitForCompletion(migrations);
+
+// The seeder is a local development convenience, not a deployed workload.
+if (builder.ExecutionContext.IsRunMode)
+{
+    builder
+        .AddSeeder<GroupSplit_Seeder>("seeder")
+        .WaitFor(db)
+        .WithReference(db)
+        .WithResetAndSeedCommand()
+        .WaitForCompletion(migrations);
+}
+
+compose.ConfigureComposeFile(file =>
+{
+    // AddEFMigrations also emits its wrapper resource as an empty compute service with no image
+    // behind it. Only the generated bundle container above does the real work.
+    file.Services.Remove(migrationsName);
+});
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    var migrations = db
-        .AddEFMigrations("migrations",
-            "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
-            dbContextTypeName: "AppDbContext",
-            connectionName: "DefaultConnection")
-        .RunDatabaseUpdateOnStart();
-
-    // Nothing should touch the schema until migrations have been applied.
-    backend.WaitFor(migrations);
-    seeder.WaitFor(migrations);
+    builder.AddScalarApiReference().WithApiReference(backend);
 }
-
-var scalar = builder.AddScalarApiReference();
-
-scalar.WithApiReference(backend);
 
 var host = builder.Build();
 
