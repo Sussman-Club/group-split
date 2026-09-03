@@ -112,11 +112,24 @@ public static class Extensions
     
     extension(WebApplication app)
     {
-        public WebApplication MapDefaultEndpoints()
+        /// <summary>
+        /// Maps the health check endpoints.
+        /// </summary>
+        /// <param name="exposeOutsideDevelopment">
+        /// Maps the endpoints in every environment rather than development only.
+        /// <para>
+        /// Opt in only for a service that is not published outside the deployment network. A
+        /// reachable /health answers with the status of every registered check, which tells an
+        /// anonymous caller which dependencies exist and which of them are currently down. The
+        /// deployed probes need the endpoints to exist, so a service that is published has to
+        /// leave this alone and be probed some other way.
+        /// </para>
+        /// </summary>
+        public WebApplication MapDefaultEndpoints(bool exposeOutsideDevelopment = false)
         {
             // Adding health checks endpoints to applications in non-development environments has security implications.
             // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
-            if (app.Environment.IsDevelopment())
+            if (app.Environment.IsDevelopment() || exposeOutsideDevelopment)
             {
                 // All health checks must pass for app to be considered ready to accept traffic after starting
                 app.MapHealthChecks(HealthEndpointPath);
