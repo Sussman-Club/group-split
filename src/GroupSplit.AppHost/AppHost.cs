@@ -21,7 +21,23 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak")
 
 var mailpit = builder.AddMailPit("mailpit");
 
+// Google requires an exact, pre-registered redirect URI, and cookies are scoped
+// to the host rather than the port, so a port that moves on every restart both
+// breaks the broker and piles up stale cookies on localhost. Pin the endpoint
+// that is actually published: this image serves HTTPS on 8443.
+var googleClientId = builder.Configuration["Google:ClientId"] ?? string.Empty;
+var googleClientSecret = builder.Configuration["Google:ClientSecret"] ?? string.Empty;
+var googleConfigured = !string.IsNullOrWhiteSpace(googleClientId)
+                       && !string.IsNullOrWhiteSpace(googleClientSecret);
+
 var keycloak = builder.AddKeycloak("keycloak")
+    .WithEndpoint("https", endpoint => endpoint.Port = 8443)
+    // Substituted into realms.json at import time. Until credentials are set the
+    // provider imports disabled and hidden, so the login page is unchanged.
+    .WithEnvironment("GS_GOOGLE_ENABLED", googleConfigured ? "true" : "false")
+    .WithEnvironment("GS_GOOGLE_HIDDEN", googleConfigured ? "false" : "true")
+    .WithEnvironment("GS_GOOGLE_CLIENT_ID", googleClientId)
+    .WithEnvironment("GS_GOOGLE_CLIENT_SECRET", googleClientSecret)
     .WithRealmImport("./realms.json")
     .WithBindMount("./keycloak-themes/group-split", "/opt/keycloak/themes/group-split", isReadOnly: true)
     .WithDataVolume()

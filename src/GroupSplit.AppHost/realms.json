@@ -3,9 +3,7 @@
   "displayName": "Group Split",
   "displayNameHtml": "<span class=\"gs-realm-name\">Group Split</span>",
   "enabled": true,
-
   "loginTheme": "group-split",
-
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
@@ -14,9 +12,7 @@
   "rememberMe": true,
   "editUsernameAllowed": false,
   "verifyEmail": false,
-
   "passwordPolicy": "length(8) and notUsername and notEmail and passwordHistory(3)",
-
   "bruteForceProtected": true,
   "permanentLockout": false,
   "failureFactor": 10,
@@ -25,13 +21,11 @@
   "minimumQuickLoginWaitSeconds": 60,
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
-
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "accessCodeLifespan": 60,
   "actionTokenGeneratedByUserLifespan": 300,
-
   "smtpServer": {
     "host": "mailpit",
     "port": "1025",
@@ -42,7 +36,6 @@
     "ssl": "",
     "starttls": ""
   },
-
   "clients": [
     {
       "clientId": "api",
@@ -68,8 +61,12 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "frontchannelLogout": true,
-      "redirectUris": ["*"],
-      "webOrigins": ["*"],
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "+"
@@ -89,7 +86,6 @@
       ]
     }
   ],
-
   "users": [
     {
       "id": "FFDFB4C9-6321-49EA-9160-0F618ACF6D4B",
@@ -154,6 +150,26 @@
           "temporary": false
         }
       ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": "${GS_GOOGLE_ENABLED}",
+      "hideOnLogin": "${GS_GOOGLE_HIDDEN}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GS_GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GS_GOOGLE_CLIENT_SECRET}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
     }
   ]
 }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -19,6 +20,14 @@ public static class AuthenticationExtensions
     {
         public IHostApplicationBuilder AddGroupSplitAuthentication()
         {
+            // Holds the ticket -- and therefore the tokens -- server-side, leaving
+            // the cookie small enough not to blow past Kestrel's header limit.
+            builder.Services.AddDistributedMemoryCache();
+            builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
+            builder.Services
+                .AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+                .Configure<ITicketStore>((options, store) => options.SessionStore = store);
+
             builder.Services
                 .AddAuthentication(options =>
                 {
