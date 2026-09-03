@@ -84,8 +84,8 @@ public class RulesGetTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
-        var user = await userService.GetCurrentUser();
+        var userService = GetService<ICurrentUser>();
+        var user = userService.User;
 
         var g1 = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "G1" };
         var g2 = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "G2" };

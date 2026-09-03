@@ -13,9 +13,9 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userService.User;
 
         // Create a new group with current user
         var group = await groupService.CreateGroup(

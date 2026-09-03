@@ -14,10 +14,9 @@ public class TransactionListTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Ensure user exists
-        await userService.GetCurrentUser();
 
         // Act
         var transactions = (await transactionService.List(TestContext.Current.CancellationToken)).ToList();
@@ -31,9 +30,9 @@ public class TransactionListTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         var now = DateTimeOffset.UtcNow;
 
         var request1 = new CreateTransactionRequest

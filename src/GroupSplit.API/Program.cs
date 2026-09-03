@@ -1,8 +1,8 @@
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
+using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
 using GroupSplit.Data.PostgreSQL;
-using GroupSplit.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,11 +40,9 @@ builder.Services.AddAuthentication()
 
 builder.Services.AddAuthorizationBuilder();
 
-builder.Services.AddHttpContextAccessor();
-
 builder.AddPostgreSqlAppDbContext("db");
-builder.Services.AddSingleton<IUserService, UserService>();
-builder.Services.AddSingleton<IDebtCalculationService, DebtCalculationService>();
+builder.Services.AddCurrentUser();
+builder.Services.AddScoped<IDebtCalculationService, DebtCalculationService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddRuleVersionServices();
@@ -66,6 +64,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseMiddleware<CurrentUserMiddleware>();
+app.UseAuthorization();
 
 app.MapGroupApi();
 app.MapUserApi();

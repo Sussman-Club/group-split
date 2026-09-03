@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Services;
+using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -44,10 +44,10 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task DeleteGroupMember_CannotRemoveCurrentUser()
     {
         // Arrange
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         var groupService = GetService<IGroupService>();
 
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userService.User;
         var group = await groupService.CreateGroup(new CreateGroupRequest
         {
             Name = "Test Group",

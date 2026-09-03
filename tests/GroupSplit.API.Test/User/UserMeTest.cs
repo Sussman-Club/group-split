@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Services;
+using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,10 +14,10 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task GetCurrentUser_WhenUserDoesNotExist_CreatesNewUserWithPersonalGroup()
     {
         // Arrange
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Act
-        var result = await userService.GetCurrentUser();
+        var result = userService.User;
 
         // Assert
         Assert.NotNull(result);
@@ -26,7 +26,7 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Contains(result.PersonalGroup, result.Groups);
 
         // Verify user was saved to database
-        var userInDb = await DbContext.Set<GroupSplit.Data.Entities.User>()
+        var userInDb = await DbContext.Set<Data.Entities.User>()
             .FirstOrDefaultAsync(u => u.Identity.IdentityId == TestUserClaims.UserId, TestContext.Current.CancellationToken);
 
         Assert.NotNull(userInDb);
@@ -37,11 +37,11 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task GetCurrentUser_MultipleCalls_ReturnsSameUser()
     {
         // Arrange
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Act
-        var firstCall = await userService.GetCurrentUser();
-        var secondCall = await userService.GetCurrentUser();
+        var firstCall = userService.User;
+        var secondCall = userService.User;
 
         // Assert
         Assert.Equal(firstCall.Id, secondCall.Id);
@@ -52,10 +52,10 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task GetCurrentUser_Email()
     {
         // Arrange
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Act
-        var result = await userService.GetCurrentUser();
+        var result = userService.User;
 
         // Assert
         Assert.Equal(TestUserClaims.Email, result.Email);
@@ -65,8 +65,8 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task GetCurrentUser_Different()
     {
         // Arrange
-        var userService = GetService<IUserService>();
-        var firstUser = await userService.GetCurrentUser();
+        var userService = GetService<ICurrentUser>();
+        var firstUser = userService.User;
 
         // Arrange different user
         var secondUser = await CreateNewUser();

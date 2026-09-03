@@ -54,11 +54,11 @@ public interface IGroupService
         CancellationToken cancellationToken = default);
 }
 
-public class GroupService(IUserService userService, AppDbContext context) : IGroupService
+public class GroupService(ICurrentUser userContext, AppDbContext context) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await userService.GetCurrentUser();
+        var user = userContext.User;
 
         var group = new Group
         {
@@ -77,7 +77,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
 
     public async Task<IQueryable<Group>> GetAllGroups(CancellationToken cancellationToken = default)
     {
-        var user = await userService.GetCurrentUser();
+        var user = userContext.User;
 
         // Load the user's groups
         return context.Set<Group>()
@@ -145,7 +145,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
         if (userId == currentUser.Id)
             throw new ArgumentException("Cannot remove current user from group");
 
@@ -199,13 +199,13 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
                     {
                         UserId = user.Id,
                         UserName = user.FirstName + " " + user.LastName,
-                        AmountPaid = (from rule in @group.Rules
-                                      from ruleVersion in rule.Versions
-                                      where !(ruleVersion is PersonalRuleVersion)
-                                      from transaction in ruleVersion.Transactions
-                                      where transaction.User == user
-                                      select transaction.Amount
-                                    ).Sum(),
+                        AmountPaid = Enumerable.Sum((IEnumerable<decimal>)(from rule in @group.Rules
+                                from ruleVersion in rule.Versions
+                                where !(ruleVersion is PersonalRuleVersion)
+                                from transaction in ruleVersion.Transactions
+                                where transaction.User == user
+                                select transaction.Amount
+                            )),
                         AmountOwed = (from rule in @group.Rules
                                       from ruleVersion in rule.Versions
                                       join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
@@ -235,7 +235,7 @@ public class GroupService(IUserService userService, AppDbContext context) : IGro
     public async Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
 
         var groupQuery = from @group in await GetGroupById(groupId, cancellationToken)
                          from groupUser in (from groupUser in @group.Users

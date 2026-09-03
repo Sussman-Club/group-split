@@ -15,9 +15,9 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         var initialGroupCount = user.Groups.Count;
 
         // Act
@@ -29,7 +29,7 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotEqual(Guid.Empty, result.Id); // Should have an ID after saving
 
         // Verify the group was saved to database with the user
-        var groupInDb = await DbContext.Set<GroupSplit.Data.Entities.Group>()
+        var groupInDb = await DbContext.Set<Data.Entities.Group>()
             .Include(g => g.Users)
             .FirstOrDefaultAsync(g => g.Id == result.Id, cancellationToken: TestContext.Current.CancellationToken);
 
@@ -58,7 +58,7 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotEqual(group1.Id, group2.Id);
 
         // Verify both groups exist in database
-        var groupCount = await DbContext.Set<GroupSplit.Data.Entities.Group>()
+        var groupCount = await DbContext.Set<Data.Entities.Group>()
             .CountAsync(g => g.Id == group1.Id || g.Id == group2.Id,
                 cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, groupCount);

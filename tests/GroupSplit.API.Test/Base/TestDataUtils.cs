@@ -13,10 +13,11 @@ public static class TestDataUtils
     {
         await using var scope = serviceProvider.CreateAsyncScope();
 
-        var userServiceScoped = scope.ServiceProvider.GetRequiredService<IUserService>();
+        await ApiUnitTest.InitializeCurrentUser(scope.ServiceProvider);
+        var currentUser = scope.ServiceProvider.GetRequiredService<ICurrentUser>();
         var transactionServiceScoped = scope.ServiceProvider.GetRequiredService<ITransactionService>();
 
-        var otherUser = await userServiceScoped.GetCurrentUser();
+        var otherUser = currentUser.User;
 
         var request = new CreateTransactionRequest
         {

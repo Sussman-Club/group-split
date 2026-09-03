@@ -7,12 +7,12 @@ public interface IDebtCalculationService
     Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance);
 }
 
-public class DebtCalculationService(IUserService userService) : IDebtCalculationService
+public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculationService
 {
     public async Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance)
     {
         var settlements = MinimizeTransactions(netBalance);
-        var user = await userService.GetCurrentUser();
+        var user = currentUser.User;
         if (!settlements.TryGetValue(user.Id, out var balance))
             throw new ArgumentException($"User {user.Id} not found in settlements.");
 

@@ -13,10 +13,10 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         var g1 = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
             TestContext.Current.CancellationToken);
@@ -56,9 +56,9 @@ public class RulesListTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         // A group the user IS in
         var userGroup = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "MyGroup" };

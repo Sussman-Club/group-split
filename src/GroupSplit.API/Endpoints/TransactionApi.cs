@@ -34,11 +34,11 @@ public static class TransactionApi
         {
             return group.MapGet(string.Empty, async (
                     [AsParameters] TransactionFilter filter,
-                    IUserService userService,
+                    ICurrentUser currentUser,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
-                    var user = await userService.GetCurrentUser();
+                    var user = currentUser.User;
                     var transactions = await transactionService.List(ct);
                     var transactionResponses = await transactions
                         .Where(x => x.User.Id == user.Id)
