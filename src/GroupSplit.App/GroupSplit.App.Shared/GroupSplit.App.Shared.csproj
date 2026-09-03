@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -14,7 +14,13 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.11" />
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.11" />
-        <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.11" />
+        <!-- Pinned, and not to a released version: every 10.0.x release of this package
+             declares a FrameworkReference on Microsoft.AspNetCore.App, and that flows
+             transitively into GroupSplit.App.Web.Client. No Microsoft.AspNetCore.App
+             runtime pack exists for browser-wasm, so the WASM build fails to restore
+             with NETSDK1082. This preview is the last build that ships as a plain
+             library. Do not upgrade without checking the nuspec for that reference. -->
+        <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.0-preview.7.25380.108" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
         <PackageReference Include="MudBlazor" Version="9.9.0" />
         <PackageReference Include="NSwag.ApiDescription.Client" Version="14.7.1">
