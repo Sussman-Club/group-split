@@ -73,10 +73,10 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group" },
             TestContext.Current.CancellationToken);
@@ -193,7 +193,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var rulesService = GetService<IRuleService>();
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "A" },
             TestContext.Current.CancellationToken);
@@ -207,7 +207,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var missingUser = Guid.NewGuid();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         var request = new UpdateRuleRequest
         {

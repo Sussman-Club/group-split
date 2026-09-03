@@ -14,10 +14,9 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Ensure user exists (which creates personal group)
-        await userService.GetCurrentUser();
 
         // Act
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
@@ -31,9 +30,9 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         var personalGroupId = user.PersonalGroup.Id;
 
         // Create additional groups

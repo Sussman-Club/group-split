@@ -46,10 +46,10 @@ public class RulesDeleteTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var rulesService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         // Create group
         var createGroupRequest = new CreateGroupRequest { Name = "Percent Delete Test" };

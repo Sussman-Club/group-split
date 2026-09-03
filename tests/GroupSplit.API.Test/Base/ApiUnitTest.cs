@@ -1,9 +1,9 @@
-﻿using GroupSplit.API.Services;
+﻿using System.Security.Claims;
+using GroupSplit.API.Services;
 using GroupSplit.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using System.Security.Claims;
 using Moq;
 
 namespace GroupSplit.API.Test.Base;
@@ -75,6 +75,8 @@ public class ApiUnitTest : IAsyncLifetime
 
         // Ensure database is created
         await DbContext.Database.EnsureCreatedAsync();
+
+        await InitializeCurrentUser(ServiceProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -149,8 +151,17 @@ public class ApiUnitTest : IAsyncLifetime
     protected async Task<Data.Entities.User> CreateNewUser()
     {
         using var scope = ServiceProvider.CreateScope();
-        var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
+        await InitializeCurrentUser(scope.ServiceProvider);
+        return scope.ServiceProvider.GetRequiredService<ICurrentUser>().User;
+    }
 
-        return await userService.GetCurrentUser();
+    internal static async Task InitializeCurrentUser(IServiceProvider services)
+    {
+        var httpContext = services.GetRequiredService<IHttpContextAccessor>().HttpContext
+            ?? throw new InvalidOperationException("No test HTTP context is available.");
+        var provisioner = services.GetRequiredService<IUserProvisioner>();
+        var initializer = services.GetRequiredService<ICurrentUserInitializer>();
+        var user = await provisioner.GetOrCreate(httpContext.User, TestContext.Current.CancellationToken);
+        initializer.Initialize(user);
     }
 }

@@ -16,11 +16,11 @@ public interface ITransactionService
     Task Delete(Guid id, CancellationToken ct = default);
 }
 
-public class TransactionService(IUserService userService, AppDbContext dbContext) : ITransactionService
+public class TransactionService(ICurrentUser userContext, AppDbContext dbContext) : ITransactionService
 {
     public async Task<IQueryable<Transaction>> List(CancellationToken ct = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
 
         var query = from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
                     from rule in @group.Rules
@@ -41,7 +41,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
     public async ValueTask<Transaction> Create(CreateTransactionRequest request,
         CancellationToken ct = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
         if (paidByUserId != currentUser.Id && request.RuleVersionId is null)
@@ -186,7 +186,7 @@ public class TransactionService(IUserService userService, AppDbContext dbContext
     public async ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
         CancellationToken ct = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
         var userGroups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
         var query =

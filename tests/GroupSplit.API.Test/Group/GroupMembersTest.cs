@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Services;
+using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -15,9 +15,9 @@ public class GroupMembersTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         // Ensure user exists (creates personal group implicitly)
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         var personalGroupId = user.PersonalGroup.Id;
         // Act
         var membersQuery = await groupService.GetGroupMembers(personalGroupId, TestContext.Current.CancellationToken);
@@ -32,7 +32,7 @@ public class GroupMembersTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         // Create an additional group for the current user
         var createdGroup = await groupService.CreateGroup(new CreateGroupRequest { Name = "My Extra Group" },
             TestContext.Current.CancellationToken);
@@ -41,7 +41,7 @@ public class GroupMembersTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var members = await membersQuery.ToListAsync(TestContext.Current.CancellationToken);
         // Assert
         Assert.Single(members);
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         Assert.Equal(user.Id, members[0].Id);
     }
 }

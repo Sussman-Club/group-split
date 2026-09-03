@@ -14,9 +14,9 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userService.User;
 
         // Create a transaction
         var transaction = await transactionService.Create(new CreateTransactionRequest
@@ -72,8 +72,8 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
-        var currentUser = await userService.GetCurrentUser();
+        var userService = GetService<ICurrentUser>();
+        var currentUser = userService.User;
 
         // Create transaction without any rule version
         var transaction = await transactionService.Create(new CreateTransactionRequest
@@ -104,9 +104,9 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userService.User;
 
         var transaction = await transactionService.Create(new CreateTransactionRequest
         {

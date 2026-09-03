@@ -14,10 +14,10 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Ensure current user exists
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         // Create a transaction inside the group
         var created = await transactionService.Create(
@@ -43,10 +43,9 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
         // Ensure user exists
-        await userService.GetCurrentUser();
 
         var randomId = Guid.NewGuid();
 
@@ -63,9 +62,8 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        await userService.GetCurrentUser();
 
         var otherTransaction = await TestDataUtils.CreateTransactionForNewUserAsync(ServiceProvider);
 

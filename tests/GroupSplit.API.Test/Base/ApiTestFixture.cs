@@ -43,7 +43,7 @@ public class ApiTestFixture : IAsyncLifetime
     protected virtual void RegisterServices(IServiceCollection services)
     {
         // Register your API services
-        services.AddScoped<IUserService, UserService>();
+        services.AddCurrentUser();
         services.AddScoped<IGroupService, GroupService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddRuleVersionServices();

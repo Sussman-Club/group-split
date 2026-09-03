@@ -1,6 +1,5 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 
 namespace GroupSplit.API.Test.Rules;
@@ -53,11 +52,11 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
     public async Task GetUpdateModel_ReturnsPercentRule_WhenCreatedThroughService()
     {
         // Arrange
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         var ruleService = GetService<IRuleService>();
         var groupService = GetService<IGroupService>();
 
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userService.User;
         var createGroupRequest = new CreateGroupRequest { Name = "Test Group" };
         var group = await groupService.CreateGroup(createGroupRequest, TestContext.Current.CancellationToken);
 
@@ -102,10 +101,10 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
     {
         // Arrange
         var ruleService = GetService<IRuleService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
         var groupService = GetService<IGroupService>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
 
         var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "Group Multi" },
             TestContext.Current.CancellationToken);

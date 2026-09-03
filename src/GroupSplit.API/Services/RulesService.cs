@@ -17,13 +17,13 @@ public interface IRuleService
 }
 
 public class RuleService(
-    IUserService userService,
+    ICurrentUser userContext,
     AppDbContext dbContext,
     IRuleVersionHandler ruleVersionHandler) : IRuleService
 {
     public async Task<IQueryable<RuleVersion>> List(CancellationToken ct = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
 
         var query = from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
             from rule in @group.Rules
@@ -43,7 +43,7 @@ public class RuleService(
 
     public async Task<RuleVersion> Create(CreateRuleRequest request, CancellationToken ct = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
 
         var groupResult =
             await (from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
@@ -116,7 +116,7 @@ public class RuleService(
 
     public async Task Update(Guid ruleId, UpdateRuleRequest request, CancellationToken ct = default)
     {
-        var currentUser = await userService.GetCurrentUser();
+        var currentUser = userContext.User;
 
         var result =
             await (from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()

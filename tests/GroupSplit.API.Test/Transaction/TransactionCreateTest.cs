@@ -12,9 +12,9 @@ public class TransactionCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         var now = DateTimeOffset.UtcNow;
 
         var request = new CreateTransactionRequest
@@ -53,9 +53,9 @@ public class TransactionCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
-        var userService = GetService<IUserService>();
+        var userService = GetService<ICurrentUser>();
 
-        var user = await userService.GetCurrentUser();
+        var user = userService.User;
         var now = DateTimeOffset.UtcNow;
 
         var request1 = new CreateTransactionRequest

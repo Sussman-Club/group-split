@@ -23,11 +23,11 @@ public static class UserApi
     {
         private RouteHandlerBuilder MapGetCurrentUser()
         {
-            return group.MapGet("/me", async (
-                    IUserService userService) =>
+            return group.MapGet("/me", (
+                    ICurrentUser currentUser) =>
                 {
-                    var user = await userService.GetCurrentUser();
-                    var userInfo = new UserInfo(user.Id, user.FirstName, user?.LastName, user?.Email);
+                    var user = currentUser.User;
+                    var userInfo = new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
                     return Results.Ok(userInfo);
                 })
                 .WithName("GetCurrentUser")
