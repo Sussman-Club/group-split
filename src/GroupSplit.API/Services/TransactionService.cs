@@ -138,9 +138,11 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
 
     public async Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default)
     {
-        var transaction = await (from t in dbContext.Set<Transaction>()
-                where t.Id == id
-                select t)
+        // Through Get, which is scoped to the caller's groups, rather than over the whole
+        // table. Reading straight from the set returned any transaction to any signed-in
+        // caller who knew its id — amount, group name, category, who paid and the full
+        // per-member split — while every other read here is scoped and List never shows it.
+        var transaction = await (await Get(id, ct))
             .Include(t => t.User)
             .Include(t => t.RuleVersion)
             .ThenInclude(rv => rv.Rule)

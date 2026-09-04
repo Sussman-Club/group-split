@@ -92,14 +92,16 @@ public class RuleService(
 
     public async Task<RuleDetailsResponse> GetRuleDetails(Guid ruleId, CancellationToken ct)
     {
-        var ruleVersion =
-            await (from rv in dbContext.Set<RuleVersion>()
-                    where rv.Rule.Id == ruleId
-                    where rv.EndDateTime == null
-                    select rv)
-                .Include(rv => rv.Rule)
-                .FirstOrDefaultAsync(ct);
+        // Through Get, which is scoped to the caller's groups and already keeps only the
+        // current version, rather than over the whole table. Reading straight from the set
+        // handed any signed-in caller who knew a rule id the category and the split itself
+        // — every member's percentage or share count against their user id.
+        var ruleVersion = await (await Get(ruleId, ct))
+            .Include(rv => rv.Rule)
+            .FirstOrDefaultAsync(ct);
 
+        // A rule in someone else's group takes this path too, and says the same thing a
+        // missing one does: whether it exists is not the caller's to learn.
         if (ruleVersion is null)
             throw new InvalidOperationException("Rule does not exist.");
 
