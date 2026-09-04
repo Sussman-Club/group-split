@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [dev, main]
   push:
-    branches: [dev, main]
+    branches: [main]
 
 # A new push to a PR supersedes the run already in flight.
 concurrency:
@@ -168,6 +168,56 @@ jobs:
       # script is written into the test project's build output.
       - name: Install Playwright browsers
         run: pwsh tests/GroupSplit.AppHost.Test/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      # The tests navigate to the web app's HTTPS endpoint, so both Chromium and the
+      # .NET side of the stack have to trust the ASP.NET Core development certificate.
+      # That trust is what the job was pulled over: it is present on a developer machine
+      # and absent on a runner, and Chromium refused the endpoint with
+      # ERR_CERT_AUTHORITY_INVALID before any assertion ran.
+      #
+      # Pinned to the Aspire version the projects reference, so the CLI and the AppHost
+      # SDK agree. `dotnet tool install` puts it in ~/.dotnet/tools.
+      - name: Install the Aspire CLI
+        run: |
+          dotnet tool install -g Aspire.Cli --version 13.5.3
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # `aspire certs trust` trusts the certificate for OpenSSL *and* for browsers, but
+      # the browser half goes through certutil against Chromium's NSS database, and
+      # neither the tool nor the database is present on a fresh runner. Both have to
+      # exist before the trust step or that half silently does nothing -- on a
+      # non-interactive Linux run Aspire treats a partially trusted certificate as
+      # success rather than a failure, so it would not tell us.
+      - name: Prepare Chromium's certificate store
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libnss3-tools
+          mkdir -p "$HOME/.pki/nssdb"
+          certutil -d "sql:$HOME/.pki/nssdb" -N --empty-password || true
+
+      # SSL_CERT_DIR is how the .NET processes under test find the certificate: on Linux
+      # `dotnet dev-certs` exports it to ~/.aspnet/dev-certs/trust, and OpenSSL only
+      # looks there when the variable says to. Without it the AppHost's own health
+      # checks reject the endpoints they probe. The system directory is kept so the
+      # runner's normal roots still resolve.
+      - name: Trust the development certificate
+        run: |
+          set -euo pipefail
+          aspire certs trust --non-interactive
+          echo "SSL_CERT_DIR=/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust" >> "$GITHUB_ENV"
+
+      # Aspire reports partial trust as success, so this is the step that actually says
+      # whether Chromium will accept the endpoint. Failing here points at the
+      # certificate rather than letting the suite fail later as a browser error.
+      - name: Verify Chromium trusts the certificate
+        run: |
+          set -euo pipefail
+          certutil -d "sql:$HOME/.pki/nssdb" -L
+          if ! certutil -d "sql:$HOME/.pki/nssdb" -L | grep -qi 'localhost\|ASP.NET'; then
+            echo "::error::The dev certificate is not in Chromium's NSS database; the Playwright tests would fail with ERR_CERT_AUTHORITY_INVALID."
+            exit 1
+          fi
 
       - name: Test
         run: |

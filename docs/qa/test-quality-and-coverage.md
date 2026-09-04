@@ -311,29 +311,68 @@ certificate is not a trusted authority on a hosted runner. It is trusted on a
 developer machine — `dotnet dev-certs https --trust` — which is why the same three
 tests passed locally and two of them could not pass in CI.
 
-The job is back. Three things changed:
+The job is back. The certificate is now trusted on the runner rather than waved past
+in the browser, which is the difference between testing the app over TLS and testing it
+with verification switched off. Four things changed:
 
-1. **The browser accepts the dev certificate.** `WebPageTest` overrides
-   `ContextOptions()` and sets `IgnoreHTTPSErrors`, which is honest about what these
-   tests cover: the app, not the certificate chain. An earlier reading of this file
-   said `Microsoft.Playwright.Xunit.v3` does not expose that hook and that
-   `WebPageTest` would have to build its own context and page from `Browser`. That is
-   no longer true — in 1.62.0 `PageTest` derives from `ContextTest`, whose
-   `ContextOptions()` is `public virtual` — so the override is a few lines and the
-   inherited `Page` is kept. Trusting the certificate on the runner instead remains
-   the worse option: on Linux `dotnet dev-certs https --trust` only reaches Chromium
-   when `certutil` and the right NSS database are present.
+1. **CI trusts the development certificate, via Aspire.** The `integration` job installs
+   the Aspire CLI — pinned to 13.5.3, the version the projects reference — and runs
+   `aspire certs trust --non-interactive`. Two things have to be in place first, or the
+   half of that command that matters here quietly does nothing:
+
+   - **`certutil`, from `libnss3-tools`.** Aspire trusts the certificate for OpenSSL and
+     for browsers, and the browser half goes through `certutil`. The tool is not on a
+     fresh runner.
+   - **Chromium's NSS database at `~/.pki/nssdb`.** `certutil` needs an existing database
+     to write into. Chromium on Linux reads user certificates from there, and Playwright's
+     bundled Chromium is no exception.
+
+   On a non-interactive Linux run Aspire treats a *partially* trusted certificate —
+   OpenSSL trust succeeded, NSS trust could not complete — as success rather than a
+   failure. So the job does not trust its exit code: a following step greps the NSS
+   database for the certificate and fails with an explicit message if it is not there,
+   which puts the error at the certificate rather than several minutes later at a
+   browser navigation.
+
+   `SSL_CERT_DIR` is also extended to include `~/.aspnet/dev-certs/trust`, which is where
+   `dotnet dev-certs` exports the certificate on Linux and the only place OpenSSL will
+   look for it. Without that the .NET side of the stack — including the AppHost's own
+   health checks, which probe the HTTPS endpoints — rejects the very certificate the
+   browser now accepts.
+
+   `IgnoreHTTPSErrors` on the browser context was the other option and is not what this
+   does. It would have been one line, but it suppresses verification rather than
+   establishing trust: a real TLS regression in the app would stop failing the suite, and
+   it fixes nothing for the .NET half of the stack, which does not go through Playwright
+   at all.
+
 2. **The two `xUnit1069` warnings are gone.** Playwright's API takes no
    `CancellationToken`, so there is nothing to hand `TestContext.Current.CancellationToken`
    to and the rule is suppressed in `HomePageTest` with that reason written above it.
    In exchange each Playwright call now carries an explicit timeout of its own, well
    inside the `Timeout` on the test, so a stall fails with a Playwright error naming
    the operation and the selector rather than a bare xUnit timeout.
-3. **The `integration` job is back in `.github/workflows/ci.yml`**, with Docker, `pwsh
+
+3. **A resource that fails to start now says so.** `AppHostFixture.WaitForAsync` attached
+   its resource-state report only to timeouts. A resource that failed outright throws
+   `DistributedApplicationException` instead, and that path lost the report entirely — the
+   failure arrived as a bare stack trace naming only the resource being waited on, which
+   is usually downstream of the one that actually broke. Both paths now carry the states.
+
+4. **The `integration` job is back in `.github/workflows/ci.yml`**, with Docker, `pwsh
    … playwright.ps1 install --with-deps chromium` and a 25-minute `timeout-minutes`
    backstop. `GroupSplit.AppHost.Test` is no longer built by the unit-test job, since
    the integration job is the only place with the setup it needs.
 
-Not yet verified on a hosted runner: the certificate fix is the documented cause of
-the original failure and the suite passes locally with it in place, but the first CI
-run on this branch is what confirms it.
+Not yet verified on a hosted runner. The certificate trust is the documented cause of the
+original failure and the suite passes locally, but locally the certificate is already
+trusted, so the CI steps that establish that trust are exercised for the first time by the
+first run on this branch.
+
+## Running the integration tests locally
+
+One AppHost at a time. The suite brings up Postgres, Keycloak and the web app under fixed
+container names and a Keycloak data volume, so a second run started while one is in
+flight — a `dotnet test` beside the IDE's test runner, say — takes the ports and the
+volume from the first and the `web` resource fails to start. That failure now prints the
+state of every resource, which is what tells it apart from a real break.

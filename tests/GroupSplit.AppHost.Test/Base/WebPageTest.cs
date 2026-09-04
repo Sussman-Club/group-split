@@ -22,7 +22,7 @@ namespace GroupSplit.AppHost.Test.Base
         {
             // Built on the base options rather than replacing them, so any default the
             // Playwright fixture sets (video, trace, viewport) survives.
-            var options = base.ContextOptions() ?? new BrowserNewContextOptions();
+            var options = base.ContextOptions();
             options.IgnoreHTTPSErrors = true;
             return options;
         }
