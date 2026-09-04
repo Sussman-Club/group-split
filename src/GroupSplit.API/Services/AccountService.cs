@@ -1,4 +1,5 @@
 using GroupSplit.Data;
+using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,18 +8,22 @@ namespace GroupSplit.API.Services;
 public interface IAccountService
 {
     /// <summary>
-    /// Deletes the calling user's own account, reporting the groups that block it.
+    /// Deletes one account, reporting the groups that block it.
     /// </summary>
     /// <returns>
-    /// The groups where their balance is not settled. Empty when the account was
-    /// deleted; nothing is changed when it is not.
+    /// The groups where that account's balance is not settled. Empty when the account
+    /// was deleted; nothing is changed when it is not.
     /// </returns>
-    Task<IReadOnlyList<OutstandingBalance>> DeleteCurrentAccount(
+    /// <remarks>
+    /// Deletes whichever account it is handed and asks nothing about who is asking:
+    /// deciding that is the caller's job. <c>DELETE /users/me</c> passes the
+    /// authenticated user's own id, which is what keeps it self-service.
+    /// </remarks>
+    Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default);
 }
 
 public sealed class AccountService(
-    ICurrentUser currentUser,
     IGroupService groups,
     AppDbContext context) : IAccountService
 {
@@ -30,10 +35,12 @@ public sealed class AccountService(
     /// identifies the person: their name, their address, and the mapping to their
     /// Keycloak subject.
     /// </summary>
-    public async Task<IReadOnlyList<OutstandingBalance>> DeleteCurrentAccount(
+    public async Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var user = currentUser.User;
+        var user = await context.Set<User>()
+                       .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
+                   ?? throw new ArgumentException($"No account with id {userId}.", nameof(userId));
 
         await context.Entry(user).Reference(entity => entity.PersonalGroup)
             .LoadAsync(cancellationToken);
@@ -54,7 +61,10 @@ public sealed class AccountService(
 
         foreach (var group in sharedGroups)
         {
-            var balance = await (await groups.GetGroupNetBalance(group.Id, cancellationToken))
+            // Scoped to this account, not to whoever is calling. The caller need not share
+            // the group -- and when they do not, the caller-scoped query would return no
+            // rows, which is indistinguishable from a settled balance.
+            var balance = await (await groups.GetGroupNetBalanceFor(group.Id, user.Id, cancellationToken))
                 .Where(netBalance => netBalance.UserId == user.Id)
                 .Select(netBalance => netBalance.Balance)
                 .FirstOrDefaultAsync(cancellationToken);
@@ -82,7 +92,12 @@ public sealed class AccountService(
         await context.Entry(user).Reference(entity => entity.Identity)
             .LoadAsync(cancellationToken);
 
-        context.Remove(user.Identity);
+        // Absent when the account has already been anonymised. Reaching that state twice
+        // is only possible now that a caller can name an account instead of being one.
+        if (user.Identity is not null)
+        {
+            context.Remove(user.Identity);
+        }
 
         user.FirstName = null;
         user.LastName = null;

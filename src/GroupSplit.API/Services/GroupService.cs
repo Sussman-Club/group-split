@@ -64,6 +64,19 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The same balances, for a group <paramref name="memberId"/> belongs to rather than
+    /// one the caller belongs to.
+    /// <para>
+    /// Needed by anything acting on somebody else's behalf. Going through
+    /// <see cref="GetGroupNetBalance"/> instead would scope the lookup to the caller's own
+    /// groups, so a group they are not in yields no rows at all -- which reads as a
+    /// settled balance rather than as an answer that could not be given.
+    /// </para>
+    /// </summary>
+    Task<IQueryable<GroupNetBalance>> GetGroupNetBalanceFor(Guid groupId, Guid memberId,
+        CancellationToken cancellationToken = default);
+
     Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
 }
@@ -94,9 +107,16 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         var user = userContext.User;
 
         // Load the user's groups
-        return context.Set<Group>()
-            .Where(g => g.Users.Any(u => u.Id == user.Id));
+        return GroupsOf(user.Id);
     }
+
+    /// <summary>
+    /// The groups one user belongs to. The caller says whose, so this is the one place
+    /// that does not assume the answer is about whoever is signed in.
+    /// </summary>
+    private IQueryable<Group> GroupsOf(Guid userId) =>
+        context.Set<Group>()
+            .Where(g => g.Users.Any(u => u.Id == userId));
 
     public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
     {
@@ -226,8 +246,24 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
         CancellationToken cancellationToken = default)
     {
-        var groupQuery = await GetGroupById(groupId, cancellationToken);
+        return NetBalances(await GetGroupById(groupId, cancellationToken));
+    }
 
+    public Task<IQueryable<GroupNetBalance>> GetGroupNetBalanceFor(Guid groupId, Guid memberId,
+        CancellationToken cancellationToken = default)
+    {
+        var groupQuery = GroupsOf(memberId).Where(g => g.Id == groupId);
+
+        return Task.FromResult(NetBalances(groupQuery));
+    }
+
+    /// <summary>
+    /// Builds the per-member balances over whatever group query it is handed, so the
+    /// arithmetic -- and the truncation it depends on -- has one home no matter who is
+    /// asking or on whose behalf.
+    /// </summary>
+    private IQueryable<GroupNetBalance> NetBalances(IQueryable<Group> groupQuery)
+    {
         var groupBalance =
                     from @group in groupQuery
                     from user in @group.Users
