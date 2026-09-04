@@ -118,7 +118,11 @@ else
 
     frontend
         .WithKeycloakAuthority(authority)
-        .PublishOnHostPort(8080);
+        .PublishOnHostPort(8080)
+        // Exposed the way every other stack on the host is: joined to the shared `internal`
+        // network so Caddy can dial it as group-split-web. The host port above stays until
+        // the Caddyfile route and WEB_HOSTNAME point at the proxied hostname; then it can go.
+        .WithExternalNetwork(compose, "internal", "group-split-web");
 
     // The API stays internal: the web app forwards to it and the WASM client uses its own origin.
     // It still validates browser-issued tokens, so it needs the same public issuer.
