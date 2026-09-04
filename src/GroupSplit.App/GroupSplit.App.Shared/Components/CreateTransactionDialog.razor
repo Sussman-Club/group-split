@@ -183,6 +183,12 @@
             TimeZoneInfo.Local.GetUtcOffset(localDateTime)
         );
 
+        // Send the group that was picked, not just the rule. When the group has no rules
+        // the Category select above is empty and disabled, so RuleVersionId stays null --
+        // and without the group the API cannot tell that from a personal expense, and
+        // would file the transaction against the personal group instead.
+        model.GroupId = SelectedGroupId;
+
         MudDialog.Close(DialogResult.Ok(model));
     }
 

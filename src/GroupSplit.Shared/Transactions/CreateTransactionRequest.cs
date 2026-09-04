@@ -6,6 +6,18 @@ namespace GroupSplit.Shared;
 public record CreateTransactionRequest
 {
     public Guid? PaidByUserId { get; set; }
+
+    /// <summary>
+    /// The group the transaction is being recorded in, when the caller picked one.
+    /// </summary>
+    /// <remarks>
+    /// The rule version already implies a group, so this is only consulted when none was
+    /// given: it is what lets the API tell "this is a personal expense" apart from "I
+    /// chose a group but there was no rule to select", which would otherwise both arrive
+    /// as an absent <see cref="RuleVersionId"/> and be filed personally.
+    /// </remarks>
+    public Guid? GroupId { get; set; }
+
     public Guid? RuleVersionId { get; set; }
 
     [Required(ErrorMessage = "Name is required.")]

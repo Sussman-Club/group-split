@@ -47,6 +47,9 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         if (paidByUserId != currentUser.Id && request.RuleVersionId is null)
             throw new Exception("Paid by user must be the current user or a rule version must be specified");
 
+        if (request.RuleVersionId is null && request.GroupId is { } requestedGroupId)
+            await RejectGroupTransactionWithoutARule(currentUser, requestedGroupId, ct);
+
         var groupQuery =
             request.RuleVersionId is null
                 ? dbContext.Entry(currentUser).Reference(u => u.PersonalGroup).Query()
@@ -264,6 +267,44 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         dbContext.Remove(transaction);
 
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Refuses a transaction aimed at a real group that names no rule version.
+    /// </summary>
+    /// <remarks>
+    /// Without a rule version the query below falls back to the personal group's default
+    /// rule, which is right for a personal expense and wrong for anything else: a
+    /// transaction the member entered against "Trip to Rome" would be saved as a personal
+    /// one, under a group they never picked, and nothing would say so. The client can only
+    /// offer rules the group actually has, so this is what a group with no rules looks
+    /// like by the time it reaches here.
+    /// </remarks>
+    private async Task RejectGroupTransactionWithoutARule(
+        User currentUser,
+        Guid groupId,
+        CancellationToken ct)
+    {
+        var personalGroupId = await dbContext.Entry(currentUser)
+            .Reference(u => u.PersonalGroup)
+            .Query()
+            .Select(personalGroup => personalGroup.Id)
+            .FirstOrDefaultAsync(ct);
+
+        // The personal group is the fallback, so naming it explicitly is not an error.
+        if (groupId == personalGroupId)
+            return;
+
+        var groupHasAUsableRule = await dbContext.Entry(currentUser)
+            .Collection(u => u.Groups)
+            .Query()
+            .Where(@group => @group.Id == groupId)
+            .SelectMany(@group => @group.Rules)
+            .AnyAsync(rule => (rule.Flags & RuleFlags.NoUserTransactions) == 0, ct);
+
+        throw new InvalidOperationException(groupHasAUsableRule
+            ? "A rule must be selected for a transaction in this group."
+            : "This group has no rule to record a transaction against. Add a rule to the group first.");
     }
 
     private async Task<bool> RuleVersionReferencesRemovedMember(
