@@ -232,6 +232,49 @@ body,
     background: var(--gs-teal-soft);
 }
 
+/*
+ * "Account already exists" -- the identity-provider link confirmation. Its template
+ * stacks two submit buttons in one form group and asks for kcButtonDefaultClass and
+ * kcButtonLargeClass, neither of which keycloak.v2 defines; FreeMarker's `!` turns
+ * both into empty strings. So both buttons arrive as a bare
+ * .pf-v5-c-button.pf-m-block: no modifier to tell them apart, nothing from the rules
+ * above, and no margin between them -- which is why two full-width controls read as
+ * one slab. Addressed by id rather than by copying the template, so this theme stays
+ * CSS-only and a Keycloak upgrade cannot strand it on stale markup.
+ */
+#kc-register-form .pf-v5-c-button.pf-m-block + .pf-v5-c-button.pf-m-block {
+    margin-block-start: 0.75rem;
+}
+
+/* Transparent rather than a colour, so it sits correctly on either scheme's card. */
+#kc-register-form #updateProfile {
+    background: transparent;
+    border: 1px solid var(--gs-divider);
+    color: var(--gs-charcoal);
+    padding-block: 0.7rem;
+}
+
+#kc-register-form #updateProfile:hover,
+#kc-register-form #updateProfile:focus {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+}
+
+/* Linking is what the visitor came to do; reviewing the profile is the way out. */
+#kc-register-form #linkAccount {
+    background: var(--gs-teal);
+    border: 1px solid var(--gs-teal);
+    color: #fff;
+    padding-block: 0.7rem;
+    box-shadow: 0 1px 2px rgb(26 101 95 / 30%);
+}
+
+#kc-register-form #linkAccount:hover,
+#kc-register-form #linkAccount:focus {
+    background: var(--gs-teal-deep);
+    border-color: var(--gs-teal-deep);
+}
+
 /* --------------------------------------------------------------- links ---- */
 
 a,
