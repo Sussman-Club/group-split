@@ -1,38 +1,34 @@
 <Solution>
-  <Folder Name="/Solution Items/">
-    <File Path=".gitignore" />
-    <File Path="README.md" />
-    <File Path="aspire.config.json" />
-    <File Path="dotnet-tools.json" />
-    <File Path="global.json" />
-  </Folder>
-  <Folder Name="/Solution Items/build/">
-    <File Path=".github/workflows/ci.yml" />
-    <File Path=".github/workflows/deploy.yml" />
-  </Folder>
-  <Folder Name="/Solution Items/docs/">
-    <File Path="docs/qa/test-quality-and-coverage.md" />
-  </Folder>
+  <!-- Folders group projects by the role they play. They are virtual: on disk every
+       project sits flat under src/ or tests/, at the paths shown below. -->
+  <!-- The HTTP API, and the DTOs and validation it shares with the clients. -->
   <Folder Name="/src/">
     <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
     <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
   </Folder>
+  <!-- Aspire: the app model that runs everything locally, the seeding worker it
+       launches, and the telemetry/health/service-discovery defaults services opt into. -->
   <Folder Name="/src/Aspire/">
     <Project Path="src/GroupSplit.AppHost/GroupSplit.AppHost.csproj" />
     <Project Path="src/GroupSplit.Seeder/GroupSplit.Seeder.csproj" />
     <Project Path="src/GroupSplit.ServiceDefaults/GroupSplit.ServiceDefaults.csproj" />
   </Folder>
+  <!-- Front ends: the MAUI app, the Blazor Web host and its WebAssembly client,
+       plus the Razor class library holding the UI they all share. -->
   <Folder Name="/src/Clients/">
     <Project Path="src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Shared/GroupSplit.App.Shared.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Web.Client/GroupSplit.App.Web.Client.csproj" />
   </Folder>
+  <!-- Persistence: provider-agnostic entities and DbContext, the PostgreSQL
+       provider, and the EF Core design-time project holding the migrations. -->
   <Folder Name="/src/Data/">
     <Project Path="src/GroupSplit.Data/GroupSplit.Data.csproj" />
     <Project Path="src/GroupSplit.Data.PostgreSQL/GroupSplit.Data.PostgreSQL.csproj" />
     <Project Path="src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj" />
   </Folder>
+  <!-- One test project per deployable: the API, the Blazor Web host, the app model. -->
   <Folder Name="/tests/">
     <Project Path="tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
     <Project Path="tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj" />

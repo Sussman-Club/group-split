@@ -17,12 +17,20 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 folders are how the solution reads in an IDE; on disk the projects stay flat under
 `src/`, at the paths listed below.
 
-### Services — backend processes
+### src — API and contracts
 
 | Project | Purpose |
 | --- | --- |
 | `src/GroupSplit.API` | ASP.NET Core API for groups, transactions, rules, and users |
-| `src/GroupSplit.Seeder` | Worker that seeds reference and demo data |
+| `src/GroupSplit.Shared` | DTOs and validation shared between the API and the clients |
+
+### Aspire — orchestration
+
+| Project | Purpose |
+| --- | --- |
+| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing |
+| `src/GroupSplit.Seeder` | Worker, launched by the app model, that seeds reference and demo data |
+| `src/GroupSplit.ServiceDefaults` | Shared telemetry, health check, and service discovery defaults |
 
 ### Clients — front ends
 
@@ -41,18 +49,10 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 | `src/GroupSplit.Data.PostgreSQL` | PostgreSQL provider wiring |
 | `src/GroupSplit.Data.PostgreSQL.Migrations` | EF Core design-time project holding the migrations |
 
-### Aspire — orchestration
+### tests
 
 | Project | Purpose |
 | --- | --- |
-| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing |
-| `src/GroupSplit.ServiceDefaults` | Shared telemetry, health check, and service discovery defaults |
-
-### Shared and tests
-
-| Project | Purpose |
-| --- | --- |
-| `src/GroupSplit.Shared` | DTOs and validation shared between the API and the clients |
 | `tests/GroupSplit.API.Test` | API endpoint tests |
 | `tests/GroupSplit.App.Web.Test` | Blazor Web host tests |
 | `tests/GroupSplit.AppHost.Test` | Aspire orchestration and integration tests |
