@@ -33,5 +33,6 @@
     <Project Path="tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
     <Project Path="tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj" />
     <Project Path="tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj" />
+    <Project Path="tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj" />
   </Folder>
 </Solution>

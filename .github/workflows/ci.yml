@@ -28,12 +28,13 @@ jobs:
       # ratchet against regression rather than a target: raise it when coverage
       # improves, and never lower it to turn a red build green.
       #
-      # Turned up on the branch that added the debt, rules, validation, middleware and
-      # transaction-detail tests: 45.92/33.40 line/branch before, 57.84/48.87 after. The
-      # floors keep the few points of slack the previous pair had, so an unrelated change
-      # in what the in-memory provider happens to execute cannot fail a build on its own.
-      COVERAGE_LINE_FLOOR: 54
-      COVERAGE_BRANCH_FLOOR: 45
+      # Turned up twice on this branch. First for the debt, rules, validation, middleware
+      # and transaction-detail tests, then again once the endpoints were reachable at all:
+      # 45.92/33.40 line/branch at the start, 69.5/58.0 now. The floors keep the few points
+      # of slack the original pair had, so an unrelated change in what the in-memory
+      # provider happens to execute cannot fail a build on its own.
+      COVERAGE_LINE_FLOOR: 65
+      COVERAGE_BRANCH_FLOOR: 54
 
     steps:
       - uses: actions/checkout@v5
@@ -58,12 +59,14 @@ jobs:
         run: |
           dotnet restore tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
           dotnet restore tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj
+          dotnet restore tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
       - name: Build
         run: |
           dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
       # Everything above is Release, but `aspire do` builds Debug, so the deploy
@@ -96,6 +99,11 @@ jobs:
             -- --report-trx --report-trx-filename app-web-tests.trx \
                --coverage --coverage-settings tests/coverage.config \
                --coverage-output-format cobertura --coverage-output app-web.cobertura.xml
+          dotnet test --project tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --report-trx --report-trx-filename seeder-tests.trx \
+               --coverage --coverage-settings tests/coverage.config \
+               --coverage-output-format cobertura --coverage-output seeder.cobertura.xml
 
       # Merges the per-project Cobertura files into one report and renders the
       # summary onto the run's own page, so a reviewer sees the numbers without
