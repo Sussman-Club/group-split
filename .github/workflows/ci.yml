@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [dev, main]
   push:
-    branches: [dev, main]
+    branches: [main]
 
 # A new push to a PR supersedes the run already in flight.
 concurrency:
@@ -53,14 +53,12 @@ jobs:
         run: |
           dotnet restore tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
           dotnet restore tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj
-          dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
       - name: Build
         run: |
           dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
-          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
       # Everything above is Release, but `aspire do` builds Debug, so the deploy
@@ -75,16 +73,9 @@ jobs:
       - name: Build the deploy configuration
         run: dotnet build src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj -c Debug --no-restore
 
-      # GroupSplit.AppHost.Test is built above but not run here. It had a job of its
-      # own briefly; that job is out again because Chromium rejects the ASP.NET dev
-      # certificate on a hosted runner -- ERR_CERT_AUTHORITY_INVALID as soon as
-      # Playwright opens the web endpoint, which is trusted on a developer machine and
-      # not on a runner. Run it locally with
-      #
-      #     dotnet test --project tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
-      #
-      # where it passes in about 40 seconds. See docs/qa/test-quality-and-coverage.md
-      # for what it takes to bring the job back.
+      # GroupSplit.AppHost.Test is neither built nor run here. It has the `integration`
+      # job below, which is the only place carrying the Docker and Playwright setup it
+      # needs, so building it twice would buy nothing.
       - name: Test
         run: |
           # --results-directory stays ahead of the `--`: past it the CLI resolves the
@@ -129,5 +120,117 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
+          path: TestResults/
+          if-no-files-found: ignore
+
+  integration:
+    name: Integration tests (Aspire)
+    runs-on: ubuntu-latest
+
+    # These bring the stack up under Aspire's testing host -- Postgres, Keycloak, the
+    # API, the web app -- and drive it with Playwright. They are the only thing in CI
+    # that touches the real database provider, the container wiring and a rendered
+    # page, so without them nothing tells us the infrastructure still works until a
+    # deploy does.
+    #
+    # A backstop only. The suite bounds its own waits (see AppHostFixture), so a stall
+    # should fail with the resource states rather than run out the clock; this is here
+    # so that a hang somewhere those timeouts do not reach cannot hold a runner for the
+    # six-hour default. Locally the whole run takes about 40 seconds once images are
+    # cached, so the budget is almost entirely image pulls on a cold runner.
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: |
+          dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
+          dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
+
+      - name: Build
+        run: |
+          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
+          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+
+      # Playwright ships its browsers separately from the NuGet package; the install
+      # script is written into the test project's build output.
+      - name: Install Playwright browsers
+        run: pwsh tests/GroupSplit.AppHost.Test/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      # The tests navigate to the web app's HTTPS endpoint, so both Chromium and the
+      # .NET side of the stack have to trust the ASP.NET Core development certificate.
+      # That trust is what the job was pulled over: it is present on a developer machine
+      # and absent on a runner, and Chromium refused the endpoint with
+      # ERR_CERT_AUTHORITY_INVALID before any assertion ran.
+      #
+      # Pinned to the Aspire version the projects reference, so the CLI and the AppHost
+      # SDK agree. `dotnet tool install` puts it in ~/.dotnet/tools.
+      - name: Install the Aspire CLI
+        run: |
+          dotnet tool install -g Aspire.Cli --version 13.5.3
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # `aspire certs trust` trusts the certificate for OpenSSL *and* for browsers, but
+      # the browser half goes through certutil against Chromium's NSS database, and
+      # neither the tool nor the database is present on a fresh runner. Both have to
+      # exist before the trust step or that half silently does nothing -- on a
+      # non-interactive Linux run Aspire treats a partially trusted certificate as
+      # success rather than a failure, so it would not tell us.
+      - name: Prepare Chromium's certificate store
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libnss3-tools
+          mkdir -p "$HOME/.pki/nssdb"
+          certutil -d "sql:$HOME/.pki/nssdb" -N --empty-password || true
+
+      # SSL_CERT_DIR is how the .NET processes under test find the certificate: on Linux
+      # `dotnet dev-certs` exports it to ~/.aspnet/dev-certs/trust, and OpenSSL only
+      # looks there when the variable says to. Without it the AppHost's own health
+      # checks reject the endpoints they probe. The system directory is kept so the
+      # runner's normal roots still resolve.
+      - name: Trust the development certificate
+        run: |
+          set -euo pipefail
+          aspire certs trust --non-interactive
+          echo "SSL_CERT_DIR=/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust" >> "$GITHUB_ENV"
+
+      # Aspire reports partial trust as success, so this is the step that actually says
+      # whether Chromium will accept the endpoint. Failing here points at the
+      # certificate rather than letting the suite fail later as a browser error.
+      - name: Verify Chromium trusts the certificate
+        run: |
+          set -euo pipefail
+          certutil -d "sql:$HOME/.pki/nssdb" -L
+          if ! certutil -d "sql:$HOME/.pki/nssdb" -L | grep -qi 'localhost\|ASP.NET'; then
+            echo "::error::The dev certificate is not in Chromium's NSS database; the Playwright tests would fail with ERR_CERT_AUTHORITY_INVALID."
+            exit 1
+          fi
+
+      - name: Test
+        run: |
+          dotnet test --project tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --report-trx --report-trx-filename apphost-tests.trx \
+               --coverage --coverage-settings tests/coverage.config \
+               --coverage-output-format cobertura --coverage-output apphost.cobertura.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
           path: TestResults/
           if-no-files-found: ignore

@@ -31,7 +31,28 @@ public class AppHostFixture : IAsyncLifetime
     public DistributedApplication Application { get; private set; } = null!;
 
     private readonly List<string> _log = [];
+
+    /// <summary>Last state text per resource, so a failed one can be found by name.</summary>
+    private readonly Dictionary<string, string> _states = new(StringComparer.Ordinal);
+
     private CancellationTokenSource? _watch;
+
+    /// <summary>
+    /// States a resource lands in when it is not coming back. A resource in one of these
+    /// is the thing to look at; the resource a test was waiting on is usually just
+    /// downstream of it.
+    /// </summary>
+    private static readonly string[] FailedStates =
+        [KnownResourceStates.FailedToStart, KnownResourceStates.Exited];
+
+    /// <summary>How many trailing log lines to quote from a resource that failed.</summary>
+    private const int LogTailLines = 40;
+
+    /// <summary>
+    /// How long to spend collecting those lines. The logs are already buffered, so this is
+    /// only here because the enumerator keeps watching rather than completing on its own.
+    /// </summary>
+    private static readonly TimeSpan LogCollectionTimeout = TimeSpan.FromSeconds(10);
 
     public async ValueTask InitializeAsync()
     {
@@ -58,7 +79,7 @@ public class AppHostFixture : IAsyncLifetime
         {
             throw new TimeoutException(
                 $"The AppHost did not finish starting within {StartupTimeout.TotalMinutes:0} minutes."
-                + Environment.NewLine + DescribeResources());
+                + Environment.NewLine + await DescribeFailuresAsync());
         }
     }
 
@@ -97,7 +118,20 @@ public class AppHostFixture : IAsyncLifetime
             throw new TimeoutException(
                 $"Resource '{resourceName}' did not {what} within "
                 + $"{ResourceTimeout.TotalMinutes:0} minutes."
-                + Environment.NewLine + DescribeResources());
+                + Environment.NewLine + await DescribeFailuresAsync());
+        }
+        // A resource that fails outright throws instead of timing out, and Aspire's
+        // message names only the resource that was waited on -- 'web' here -- which is
+        // usually downstream of the one that actually broke. Without this the failure
+        // arrives as a bare stack trace: no states, no indication of which resource to
+        // look at, and nothing to tell a genuine break from a second AppHost running
+        // beside this one and taking the ports and container names.
+        catch (DistributedApplicationException exception)
+        {
+            throw new DistributedApplicationException(
+                $"Resource '{resourceName}' did not {what}: {exception.Message}"
+                + Environment.NewLine + await DescribeFailuresAsync(),
+                exception);
         }
     }
 
@@ -111,6 +145,70 @@ public class AppHostFixture : IAsyncLifetime
                 : "Last reported resource states:" + Environment.NewLine
                     + string.Join(Environment.NewLine, _log);
         }
+    }
+
+    /// <summary>
+    /// The resource states, plus the tail of the console log of every resource that failed.
+    /// The states alone say which resource broke but never why, and the why is in the
+    /// resource's own output -- which otherwise only exists in the test host's console,
+    /// where a CI run or an IDE test pane may not surface it beside the failure.
+    /// </summary>
+    public async Task<string> DescribeFailuresAsync()
+    {
+        string[] failed;
+
+        lock (_log)
+        {
+            failed = _states
+                .Where(entry => FailedStates.Contains(entry.Value, StringComparer.Ordinal))
+                .Select(entry => entry.Key)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        var report = DescribeResources();
+
+        foreach (var name in failed)
+        {
+            report += Environment.NewLine + Environment.NewLine
+                + $"Last {LogTailLines} log lines from '{name}':" + Environment.NewLine
+                + await ReadLogTailAsync(name);
+        }
+
+        return report;
+    }
+
+    private async Task<string> ReadLogTailAsync(string resourceName)
+    {
+        var logs = Application.Services.GetRequiredService<ResourceLoggerService>();
+        var tail = new Queue<string>(LogTailLines);
+
+        using var timeout = new CancellationTokenSource(LogCollectionTimeout);
+
+        try
+        {
+            // GetAllAsync replays what was buffered and then keeps watching, so it never
+            // completes on its own -- the timeout above is what ends the enumeration.
+            await foreach (var batch in logs.GetAllAsync(resourceName)
+                               .WithCancellation(timeout.Token))
+            {
+                foreach (var line in batch)
+                {
+                    if (tail.Count == LogTailLines)
+                        tail.Dequeue();
+
+                    tail.Enqueue($"    {line.Content}");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected: the enumeration is ended by the timeout, not by the source.
+        }
+
+        return tail.Count == 0
+            ? "    (no output was captured)"
+            : string.Join(Environment.NewLine, tail);
     }
 
     private void StartRecordingResourceStates()
@@ -134,6 +232,7 @@ public class AppHostFixture : IAsyncLifetime
                             StringComparison.Ordinal));
                         _log.Add(line);
                         _log.Sort(StringComparer.Ordinal);
+                        _states[change.Resource.Name] = change.Snapshot.State?.Text ?? "unknown";
                     }
                 }
             }

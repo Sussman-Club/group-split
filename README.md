@@ -13,15 +13,49 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 
 ## Project structure
 
-| Component | Purpose |
+`group-split.slnx` groups projects into solution folders by the role they play. Those
+folders are how the solution reads in an IDE; on disk the projects stay flat under
+`src/`, at the paths listed below.
+
+### src — API and contracts
+
+| Project | Purpose |
 | --- | --- |
 | `src/GroupSplit.API` | ASP.NET Core API for groups, transactions, rules, and users |
-| `src/GroupSplit.App/GroupSplit.App.Web` | Blazor web client |
-| `src/GroupSplit.App/GroupSplit.App` | .NET MAUI client |
-| `src/GroupSplit.Data` + `src/GroupSplit.Data.PostgreSQL*` | Domain models, data access, and PostgreSQL integration |
-| `src/GroupSplit.AppHost` | .NET Aspire orchestration for local development |
+| `src/GroupSplit.Shared` | DTOs and validation shared between the API and the clients |
+
+### Aspire — orchestration
+
+| Project | Purpose |
+| --- | --- |
+| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing |
+| `src/GroupSplit.Seeder` | Worker, launched by the app model, that seeds reference and demo data |
 | `src/GroupSplit.ServiceDefaults` | Shared telemetry, health check, and service discovery defaults |
-| `tests/GroupSplit.API.Test` / `tests/GroupSplit.AppHost.Test` | API and orchestration tests |
+
+### Clients — front ends
+
+| Project | Purpose |
+| --- | --- |
+| `src/GroupSplit.App/GroupSplit.App` | .NET MAUI client |
+| `src/GroupSplit.App/GroupSplit.App.Web` | Blazor Web host |
+| `src/GroupSplit.App/GroupSplit.App.Web.Client` | Blazor WebAssembly client |
+| `src/GroupSplit.App/GroupSplit.App.Shared` | Razor class library with the UI both clients share |
+
+### Data — persistence
+
+| Project | Purpose |
+| --- | --- |
+| `src/GroupSplit.Data` | Entities and the provider-agnostic `DbContext` |
+| `src/GroupSplit.Data.PostgreSQL` | PostgreSQL provider wiring |
+| `src/GroupSplit.Data.PostgreSQL.Migrations` | EF Core design-time project holding the migrations |
+
+### tests
+
+| Project | Purpose |
+| --- | --- |
+| `tests/GroupSplit.API.Test` | API endpoint tests |
+| `tests/GroupSplit.App.Web.Test` | Blazor Web host tests |
+| `tests/GroupSplit.AppHost.Test` | Aspire orchestration and integration tests |
 
 ## Run locally
 
