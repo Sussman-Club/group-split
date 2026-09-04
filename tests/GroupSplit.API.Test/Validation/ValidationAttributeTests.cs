@@ -131,15 +131,24 @@ public class MaxDecimalPlacesAttributeTests
 
     /// <summary>
     /// The scale is applied by multiplying, so a value large enough that
-    /// <c>value * 10^places</c> leaves decimal's range throws out of validation rather
-    /// than returning false. An amount that big is not a realistic request, but a
-    /// validation attribute throwing where it is expected to answer is worth pinning:
-    /// it surfaces as a 500, not a 400.
+    /// <c>value * 10^places</c> leaves decimal's range cannot be checked that way. It used
+    /// to throw straight out of validation, which reached the client as a 500 for what is
+    /// simply a rejected amount; it now fails validation like any other bad input.
     /// </summary>
     [Fact]
-    public void A_value_too_large_to_scale_throws_instead_of_failing_validation()
+    public void A_value_too_large_to_scale_fails_validation_rather_than_throwing()
     {
-        Assert.Throws<OverflowException>(
-            () => new MaxDecimalPlacesAttribute(2).IsValid(decimal.MaxValue));
+        Assert.False(new MaxDecimalPlacesAttribute(2).IsValid(decimal.MaxValue));
+        Assert.False(new MaxDecimalPlacesAttribute(2).IsValid(decimal.MinValue));
+    }
+
+    /// <summary>
+    /// Same reasoning at the other end: a scale too large to express as a decimal at all
+    /// overflows building the multiplier rather than applying it.
+    /// </summary>
+    [Fact]
+    public void A_scale_too_large_to_express_fails_validation_rather_than_throwing()
+    {
+        Assert.False(new MaxDecimalPlacesAttribute(30).IsValid(1.5m));
     }
 }

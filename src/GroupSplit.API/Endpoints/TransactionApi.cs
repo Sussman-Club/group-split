@@ -1,3 +1,4 @@
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -94,6 +95,9 @@ public static class TransactionApi
                     if (transactionUpdateRequest is null) return Results.NotFound();
 
                     patchDocument.ApplyTo(transactionUpdateRequest);
+
+                    if (!PatchedModel.IsValid(transactionUpdateRequest, out var invalid))
+                        return invalid;
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 

@@ -1,4 +1,5 @@
-﻿using GroupSplit.API.Services;
+﻿using GroupSplit.API.Extensions;
+using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
@@ -97,6 +98,9 @@ public static class GroupApi
                     if (groupUpdateRequest is null) return Results.NotFound();
 
                     patchDocument.ApplyTo(groupUpdateRequest);
+
+                    if (!PatchedModel.IsValid(groupUpdateRequest, out var invalid))
+                        return invalid;
 
                     await groupService.UpdateGroup(id, groupUpdateRequest, ct);
                     

@@ -259,6 +259,77 @@ Two things worth knowing about what these tests assert:
 - **One behaviour was changed, not just covered.** See
   [A group with no rule](#a-group-with-no-rule).
 
+## What a feature-by-feature review found
+
+Reading every service against the tests turned up three defects. All three are fixed on
+this branch, each with a test that fails without the fix.
+
+### Two reads ignored the authorization model
+
+Authorization in this API is entirely the query scoping in the services: every read
+starts from `dbContext.Entry(currentUser).Collection(u => u.Groups)`, and the endpoints
+add nothing of their own — they take an id from the route and pass it straight down.
+
+Two reads did not start there. `TransactionService.GetDetails` and
+`RulesService.GetRuleDetails` queried `dbContext.Set<...>()` over the whole table, so any
+signed-in caller who knew an id got back:
+
+- the transaction's amount, name, category, group name, who paid, and the full per-member
+  split with names; and
+- the rule's category and the split itself — every member's percentage or share count
+  against their user id.
+
+Neither is reachable from a listing, and the sibling operations on the same entities
+refuse it: `Delete` on another member's transaction already threw, and there was a test
+saying so. These two just took a different route to the data. Both now go through the
+scoped `Get`, and a rule in someone else's group reports "Rule does not exist." — the
+same answer a missing one gives, because whether it exists is not the caller's to learn.
+
+`tests/GroupSplit.API.Test/Authorization/CrossUserAccessTest.cs` now comes at fourteen
+reads and writes from the outside, as a member of no shared group. Twelve already held.
+
+### Nothing validated a patched model
+
+The three PATCH routes — groups, rules, transactions — load the current model, apply a
+`JsonPatchDocument` to it, and hand the result to the service. `AddValidation()` validates
+an endpoint's *parameters*, and on those routes the parameter is the patch document, so
+the model it produced reached the service checked by nothing.
+
+Everything the create path enforces was therefore skipped on update: a required name could
+be cleared, a name or description could exceed its length limit, and an amount could carry
+fractions of a cent that the split arithmetic would then divide up. `PatchedModel.IsValid`
+now runs the annotations on the patched model and returns a validation problem shaped like
+the one the create routes produce.
+
+Two related fixes fell out of it:
+
+- `UpdateTransactionRequest.Amount` gained the `[MaxDecimalPlaces(2)]` the create request
+  already had. Without it the new check would have had nothing to enforce on the field
+  that motivated it.
+- `MaxDecimalPlacesAttribute` no longer throws `OverflowException` on a value too large to
+  scale. That behaviour was pinned by a test one commit earlier as surprising-but-current;
+  putting the attribute on the update path gave it a reason to change, because a rejected
+  amount reaching the client as a 500 rather than a 400 is the wrong answer.
+
+## Still open
+
+- **Endpoint tests.** `GroupApi`, `TransactionApi` and `RulesApi` are 372 uncovered lines,
+  and both defects above lived at or just behind that boundary. The authorization one was
+  reachable through the service layer and so could be pinned by a test; the patch one was
+  not, and `PatchedModel` is tested directly precisely because the endpoint calling it
+  cannot be. A `WebApplicationFactory` harness is the single highest-value thing left.
+- **`TokenRefreshService`** — 97 lines at 0%, and the one place left where a fault would
+  be quiet rather than loud. `ShouldRefresh` returns `false` when the stored `expires_at`
+  is missing or unparseable, so an unknown expiry means "never refresh": the session keeps
+  presenting a token that has expired and the API answers 401 to everything. That degrades
+  to an error rather than to unauthorised access, which is why it is listed here and not
+  above, but "cannot parse the expiry" and "the token is still good" should not be the same
+  branch.
+- **`SeederOrderingExtensions.TopologicallySort`**, as before, with the same problem of
+  which project it belongs in.
+- **`DistributedCacheTicketStore` and `AuthDelegatingHandler`** — 34 lines between them, no
+  faults found by reading, both straightforwardly testable.
+
 ## A group with no rule
 
 `CreateTransactionRequest` carried no group, so the API could not tell a personal

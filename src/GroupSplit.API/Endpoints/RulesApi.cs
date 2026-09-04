@@ -1,3 +1,4 @@
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -74,6 +75,9 @@ public static class RulesApi
                         Version = ruleDetails.Version
                     };
                     patchDocument.ApplyTo(updateModel);
+
+                    if (!PatchedModel.IsValid(updateModel, out var invalid))
+                        return invalid;
                     await ruleService.Update(ruleId, updateModel, ct);
 
                     var query = await ruleService.Get(ruleId, ct);
