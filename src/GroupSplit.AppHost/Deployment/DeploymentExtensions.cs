@@ -92,6 +92,30 @@ public static class DeploymentExtensions
     extension(IResourceBuilder<DockerComposeEnvironmentResource> compose)
     {
         /// <summary>
+        /// Publishes the Aspire dashboard alongside the stack, behind a browser token.
+        /// <para>
+        /// The dashboard shows every environment variable of every service, secrets among
+        /// them, and it is published on a host port so the operator can reach it from the
+        /// LAN without a Caddy route. That is why the token is not optional here: left to
+        /// itself the standalone dashboard image generates a random token and prints it to
+        /// its own log, and a token nobody can read without shell access to the host is a
+        /// dashboard nobody uses.
+        /// </para>
+        /// <para>
+        /// TLS is terminated upstream when the dashboard is fronted by the proxy, so it has
+        /// to learn the original scheme and host from the forwarded headers the same way
+        /// Keycloak does, or its redirects point back at plain HTTP.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithProtectedDashboard(
+            IResourceBuilder<ParameterResource> token)
+            => compose.WithDashboard(dashboard => dashboard
+                .WithHostPort(18888)
+                .WithForwardedHeaders(enabled: true)
+                .WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
+                .WithEnvironment("Dashboard__Frontend__BrowserToken", token));
+
+        /// <summary>
         /// Applies the Compose defaults Aspire leaves to the operator.
         /// <para>
         /// Compose gives services no restart policy, so a crash or host reboot leaves the

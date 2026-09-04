@@ -28,7 +28,7 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 
 | Project | Purpose |
 | --- | --- |
-| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing |
+| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing; see [docs/development-and-deployment.md](docs/development-and-deployment.md) |
 | `src/GroupSplit.Seeder` | Worker, launched by the app model, that seeds reference and demo data |
 | `src/GroupSplit.ServiceDefaults` | Shared telemetry, health check, and service discovery defaults |
 
@@ -60,8 +60,14 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 ## Run locally
 
 ```bash
-dotnet run --project src/GroupSplit.AppHost
+aspire start
 ```
+
+`dotnet run --project src/GroupSplit.AppHost` does the same from an IDE. Either way the
+AppHost is in run mode: it orchestrates the stack itself and adds the development
+tooling (Mailpit, the seeder, Scalar, the Postgres MCP servers) that a deployment never gets. How that
+differs from what ships, and what a deployment has to be told, is in
+[docs/development-and-deployment.md](docs/development-and-deployment.md).
 
 ## Email
 

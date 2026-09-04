@@ -49,7 +49,8 @@ public static class SmtpExtensions
         /// <para>
         /// With no relay configured this degrades to SMTP disabled rather than failing
         /// the deploy, and registration keeps working rather than trapping every new user
-        /// behind a verification mail that could never be delivered.
+        /// behind a verification mail that could never be delivered. A relay that is only
+        /// partly configured is a different matter, and fails the publish.
         /// </para>
         /// </summary>
         public IResourceBuilder<KeycloakResource> WithSmtp(IConfiguration configuration)
@@ -60,10 +61,39 @@ public static class SmtpExtensions
             var password = configuration[$"Parameters:{PasswordParameterName}"];
             var port = configuration[$"Parameters:{PortParameterName}"];
 
-            var configured = !string.IsNullOrWhiteSpace(host)
-                             && !string.IsNullOrWhiteSpace(from)
-                             && !string.IsNullOrWhiteSpace(user)
-                             && !string.IsNullOrWhiteSpace(password);
+            var relay = new Dictionary<string, string?>
+            {
+                [HostParameterName] = host,
+                [FromParameterName] = from,
+                [UserParameterName] = user,
+                [PasswordParameterName] = password
+            };
+
+            var absent = relay
+                .Where(entry => string.IsNullOrWhiteSpace(entry.Value))
+                .Select(entry => entry.Key)
+                .ToArray();
+
+            var configured = absent.Length == 0;
+
+            // The four stand or fall together: a realm that advertises password reset over a
+            // relay that rejects every send is worse than one that never offered it, so a
+            // partly described relay fails the publish instead of degrading to "no relay".
+            //
+            // The sender alone does not count as describing one. Aspire's deployment state
+            // cache feeds every resolved parameter back in on the next publish for the same
+            // environment, the unroutable placeholder this method supplies included.
+            var described = !string.IsNullOrWhiteSpace(host)
+                            || !string.IsNullOrWhiteSpace(user)
+                            || !string.IsNullOrWhiteSpace(password);
+
+            if (described && !configured)
+            {
+                throw new InvalidOperationException(
+                    "Incomplete SMTP configuration: set every one of "
+                    + string.Join(", ", relay.Keys.Select(name => $"Parameters:{name}"))
+                    + " or none of them. Missing: " + string.Join(", ", absent) + ".");
+            }
 
             var builder = keycloak.ApplicationBuilder;
 

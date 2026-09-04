@@ -1,41 +1,19 @@
-using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using GroupSplit.AppHost.Deployment;
 using GroupSplit.AppHost.Health;
 using GroupSplit.AppHost.Keycloak;
 using GroupSplit.AppHost.Migrations;
+using GroupSplit.AppHost.Postgres;
 using GroupSplit.AppHost.Seeder;
 using Projects;
 using Scalar.Aspire;
 
-#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001
+#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREINTERACTION001
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var compose = builder.AddDockerComposeEnvironment("compose")
-    .WithDashboard(dashboard =>
-    {
-        dashboard.WithHostPort(18888)
-            // Behind TLS terminated upstream, the dashboard has to learn the original
-            // scheme and host the way Keycloak does, or its redirects point back at
-            // plain HTTP.
-            .WithForwardedHeaders(enabled: true);
-
-        var dashboardToken = builder.Configuration["Parameters:dashboard-token"];
-
-        if (string.IsNullOrWhiteSpace(dashboardToken))
-            return;
-
-        var token = builder.AddParameter(
-            "dashboard-token", () => dashboardToken, secret: true);
-
-        dashboard.WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
-            .WithEnvironment("Dashboard__Frontend__BrowserToken", token);
-    });
-
 var dbServer = builder
     .AddPostgres("db-server")
-    .WithDataVolume()
-    .WithPgWeb();
+    .WithDataVolume();
 
 var db = dbServer.AddDatabase("db", "groupsplit");
 
@@ -57,7 +35,7 @@ var migrations = db
     .PublishAsMigrationBundle(publishContainer: true)
     .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
-var backend = builder.AddProject<GroupSplit_API>("api")
+var api = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WithReference(db)
     .WithReference(keycloak)
@@ -65,10 +43,10 @@ var backend = builder.AddProject<GroupSplit_API>("api")
     .WaitForCompletion(migrations)
     .WithHealthEndpoints();
 
-var frontend = builder.AddProject<GroupSplit_App_Web>("web")
+var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)
-    .WaitFor(backend)
-    .WithReference(backend)
+    .WaitFor(api)
+    .WithReference(api)
     .WithHealthEndpoints()
     .WithBrowserLogs();
 
@@ -79,17 +57,13 @@ if (builder.ExecutionContext.IsRunMode)
 
     var mailpit = builder.AddMailPit("mailpit");
 
-    keycloak
-        .WithRealmImport("./realms.json")
-        .WithContainerFiles("/opt/keycloak/themes/group-split", "./keycloak-themes/group-split")
-        .WithSmtp(mailpit)
-        .WithDataVolume();
+    keycloak.AsDevelopmentKeycloak(mailpit);
 
     builder
         .AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj")
         .AddWindowsDevice()
-        .WithReference(backend)
-        .WaitFor(backend);
+        .WithReference(api)
+        .WaitFor(api);
 
     builder
         .AddSeeder<GroupSplit_Seeder>("seeder")
@@ -98,14 +72,28 @@ if (builder.ExecutionContext.IsRunMode)
         .WithResetAndSeedCommand()
         .WaitForCompletion(migrations);
 
-    builder.AddScalarApiReference().WithApiReference(backend);
+    builder
+        .AddScalarApiReference()
+        .WithApiReference(api);
 }
 else
 {
+    var dashboardToken = builder
+        .AddParameter("dashboard-token", secret: true)
+        .WithDescription("Browser token for the published Aspire dashboard on port 18888.");
+
+    var compose = builder.AddDockerComposeEnvironment("compose")
+        .WithProtectedDashboard(dashboardToken);
+
     // The stack's single public origin. Has to resolve to the same address from a browser
     // and from inside the Compose network -- "localhost" cannot: a container resolves it to
     // itself, and the two services below fetch OIDC metadata from this address at runtime.
-    var hostname = builder.AddParameter("web-hostname");
+    var hostname = builder
+        .AddParameter("web-hostname")
+        .WithDescription(
+            "Public origin of the web app, scheme included, e.g. https://groupsplit.example.com. "
+            + $"Keycloak is served under it at {KeycloakDeploymentExtensions.RelativePath}, and it "
+            + "must resolve from inside the Compose network as well as from a browser.");
 
     var authority = ReferenceExpression.Create(
         $"{hostname}{KeycloakDeploymentExtensions.RelativePath}/realms/group-split");
@@ -116,7 +104,7 @@ else
         .AsDeployedKeycloak(hostname)
         .WithSmtp(builder.Configuration);
 
-    frontend
+    web
         .WithKeycloakAuthority(authority)
         // Exposed the way every other stack on the host is: joined to the shared `internal`
         // network so Caddy dials it as group-split-web -- and no host port, so nothing on
@@ -126,47 +114,19 @@ else
 
     // The API stays internal: the web app forwards to it and the WASM client uses its own origin.
     // It still validates browser-issued tokens, so it needs the same public issuer.
-    backend.WithKeycloakAuthority(authority);
+    api
+        .WithKeycloakAuthority(authority)
+        .WithManagementHealthcheck();
+
+    dbServer.AsDeployedPostgres();
 
     // A remote host can only pull images it can reach, so publish tags into the shared
     // registry rather than leaving them tagged on whatever machine ran the deploy.
     var registry = builder.AddContainerRegistry("registry", "registry.sussman.win", "group-split");
 
-    compose.WithContainerRegistry(registry);
-
-    // Shipped as Compose configs rather than baked into derived images: the base layers
-    // would then have to travel through the registry on every deploy.
-    dbServer
-        .WithFiles(
-            "postgres-init/create-databases.sql",
-            "/docker-entrypoint-initdb.d/10-create-databases.sql")
-        .WithComposeHealthcheck(new Healthcheck
-        {
-            Test = ["CMD-SHELL", "pg_isready -U postgres -d postgres"],
-            Interval = "5s",
-            Timeout = "5s",
-            Retries = 12,
-            StartPeriod = "10s"
-        });
-
-    keycloak
-        .WithFiles("realms.json", "/opt/keycloak/data/import/realms.json")
-        .WithFiles("keycloak-themes/group-split", "/opt/keycloak/themes/group-split");
-
-    backend.WithComposeHealthcheck(new Healthcheck
-    {
-        Test =
-        [
-            "CMD", "bash", "-c",
-            @"{ printf 'HEAD /health HTTP/1.0\r\n\r\n' >&0; grep -q '^HTTP/1\.[01] 200'; } 0<>/dev/tcp/localhost/$$HealthChecks__Port"
-        ],
-        Interval = "5s",
-        Timeout = "5s",
-        Retries = 12,
-        StartPeriod = "30s"
-    });
-
-    compose.WithComposeDefaults();
+    compose
+        .WithContainerRegistry(registry)
+        .WithComposeDefaults();
 
     // A barrier so the pushes and the Compose generation share one pipeline execution.
     // Run as separate `aspire do` invocations they each get their own deploy-prereq,
@@ -179,12 +139,10 @@ else
         dependsOn: new[]
         {
             "prepare-compose",
-            $"push-{backend.Resource.Name}",
-            $"push-{frontend.Resource.Name}",
+            $"push-{api.Resource.Name}",
+            $"push-{web.Resource.Name}",
             $"push-{migrations.Resource.Name}",
         });
 }
 
-var host = builder.Build();
-
-host.Run();
+builder.Build().Run();

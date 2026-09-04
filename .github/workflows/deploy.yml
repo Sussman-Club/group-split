@@ -38,8 +38,9 @@ jobs:
 
           missing=0
 
-          # Credentials.
-          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET KEYCLOAK_PASSWORD DB_SERVER_PASSWORD; do
+          # Credentials. DASHBOARD_TOKEN is what the AppHost publishes the dashboard behind;
+          # the publish fails without it, so catch it here before spending a runner on the build.
+          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET KEYCLOAK_PASSWORD DB_SERVER_PASSWORD DASHBOARD_TOKEN; do
             if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")" ]; then
               echo "Missing required GitHub secret: ${name}" >&2
               missing=1
@@ -47,7 +48,7 @@ jobs:
           done
 
           # Non-sensitive deployment config, kept as variables so it stays readable.
-          # WEB_HOSTNAME is the stack's single public origin; Keycloak shares it under /auth.
+          # WEB_HOSTNAME is the stack's single public origin; Keycloak shares it under /idp.
           for name in WEB_HOSTNAME; do
             if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")" ]; then
               echo "Missing required GitHub variable: ${name}" >&2
@@ -58,7 +59,9 @@ jobs:
           # Email is optional: the deploy succeeds without a relay and Keycloak simply
           # cannot send mail. A half-configured one is worse than none though, because
           # the realm would then advertise password reset and email verification while
-          # every send failed, so these four stand or fall together.
+          # every send failed, so these four stand or fall together. The AppHost enforces
+          # the same rule when it publishes (see Keycloak/SmtpExtensions.cs); this copy
+          # only fails faster.
           smtp_present=""
           smtp_absent=""
 
