@@ -99,7 +99,7 @@
       "trustEmail": true,
       "storeToken": false,
       "linkOnly": false,
-      "firstBrokerLoginFlowAlias": "first broker login",
+      "firstBrokerLoginFlowAlias": "link only first broker login",
       "config": {
         "clientId": "${GS_GOOGLE_CLIENT_ID}",
         "clientSecret": "${GS_GOOGLE_CLIENT_SECRET}",
@@ -107,6 +107,63 @@
         "syncMode": "IMPORT",
         "useJwksUrl": "true"
       }
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "link only review profile config",
+      "config": {
+        "update.profile.on.first.login": "missing"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "link only first broker login",
+      "description": "Google may sign in an existing account or attach itself to one, but never create one. Keycloak's documented flow for that: detect, then set. Registration is off on this realm, so brokered creation was the one way around it.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-review-profile",
+          "authenticatorConfig": "link only review profile config",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "link only first broker login user creation or linking",
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "link only first broker login user creation or linking",
+      "description": "Detect errors when no account carries the address, which is what refuses a sign-up; auto-link adopts the one it found. Safe only while account creation stays curated: with self-registration on, someone could claim an address they do not own.",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-detect-existing-broker-user",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "idp-auto-link",
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
     }
   ]
 }

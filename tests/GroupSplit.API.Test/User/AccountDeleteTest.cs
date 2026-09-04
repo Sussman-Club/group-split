@@ -3,6 +3,7 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.API.Test.User;
 
@@ -14,7 +15,10 @@ namespace GroupSplit.API.Test.User;
 public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     private Task<IReadOnlyList<OutstandingBalance>> Delete() =>
-        GetService<IAccountService>().DeleteCurrentAccount(TestContext.Current.CancellationToken);
+        Delete(GetService<ICurrentUser>().User.Id);
+
+    private Task<IReadOnlyList<OutstandingBalance>> Delete(Guid userId) =>
+        GetService<IAccountService>().DeleteAccount(userId, TestContext.Current.CancellationToken);
 
     private Task<Data.Entities.User> Stored(Guid id) =>
         DbContext.Set<Data.Entities.User>()
@@ -23,6 +27,43 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private Task<bool> HasIdentity(Guid id) =>
         DbContext.Set<Data.Entities.UserIdentity>()
             .AnyAsync(identity => identity.User.Id == id, TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// Reads past whatever this test's own context is tracking, for the cases where the
+    /// deletion ran in another scope and the stale instance would say nothing happened.
+    /// </summary>
+    private Task<Data.Entities.User> Reread(Guid id) =>
+        DbContext.Set<Data.Entities.User>()
+            .AsNoTracking()
+            .FirstAsync(candidate => candidate.Id == id, TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// An account the caller shares nothing with, owing money in a group the caller is
+    /// not a member of.
+    /// </summary>
+    private async Task<(Data.Entities.User User, Data.Entities.Group Group)> StrangerOwingIn(string name)
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        using var scope = ServiceProvider.CreateScope();
+        await InitializeCurrentUser(scope.ServiceProvider);
+
+        var stranger = scope.ServiceProvider.GetRequiredService<ICurrentUser>().User;
+        var groups = scope.ServiceProvider.GetRequiredService<IGroupService>();
+
+        var group = await groups.CreateGroup(new CreateGroupRequest { Name = name }, ct);
+        var third = await CreateNewUser();
+
+        await groups.AddGroupMembers(
+            group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = third.Email! }]),
+            ct);
+
+        // Settling against a debt that is not there leaves both sides out by the amount.
+        await groups.Settle(group.Id, new SettleRequest { UserId = third.Id, Amount = 50 }, ct);
+
+        return (stranger, group);
+    }
 
     private async Task<Data.Entities.Group> GroupWithAnotherMember(string name)
     {
@@ -136,5 +177,58 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var provisioned = await GetService<IUserProvisioner>().GetOrCreate(principal, ct);
 
         Assert.NotEqual(user.Id, provisioned.Id);
+    }
+
+    [Fact]
+    public async Task An_unsettled_group_blocks_deletion_from_outside_that_group()
+    {
+        var (stranger, group) = await StrangerOwingIn("Vigo");
+
+        // The balance has to be read as the account being deleted, not as the caller.
+        // Asked the caller's way, a group they are not in returns no rows at all, and no
+        // rows reads exactly like a settled balance -- so the debt would be deleted over.
+        var outstanding = await Delete(stranger.Id);
+
+        var blocked = Assert.Single(outstanding);
+
+        Assert.Equal(group.Id, blocked.GroupId);
+        Assert.Equal("Vigo", blocked.GroupName);
+        Assert.NotEqual(0, blocked.Balance);
+
+        var stored = await Reread(stranger.Id);
+
+        Assert.NotNull(stored.Email);
+        Assert.True(await HasIdentity(stranger.Id));
+    }
+
+    [Fact]
+    public async Task Deleting_needs_no_signed_in_user()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var user = GetService<ICurrentUser>().User;
+
+        // What a CLI or a background job gets: a scope where nobody is signed in, so
+        // ICurrentUser.User would throw. Nothing in the deletion may reach for one.
+        using var scope = ServiceProvider.CreateScope();
+
+        var outstanding = await scope.ServiceProvider.GetRequiredService<IAccountService>()
+            .DeleteAccount(user.Id, ct);
+
+        Assert.Empty(outstanding);
+
+        var stored = await Reread(user.Id);
+
+        Assert.Null(stored.Email);
+        Assert.False(await HasIdentity(user.Id));
+    }
+
+    [Fact]
+    public async Task Deleting_an_account_that_is_not_there_is_refused()
+    {
+        var missing = Guid.NewGuid();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => Delete(missing));
+
+        Assert.Contains(missing.ToString(), exception.Message);
     }
 }

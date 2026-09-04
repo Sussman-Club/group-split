@@ -38,10 +38,13 @@ public static class UserApi
         private RouteHandlerBuilder MapDeleteCurrentUser()
         {
             return group.MapDelete("/me", async (
+                    ICurrentUser currentUser,
                     IAccountService accounts,
                     CancellationToken ct) =>
                 {
-                    var outstanding = await accounts.DeleteCurrentAccount(ct);
+                    // Self-service is this route passing its own caller's id, and nothing
+                    // more: the service itself will delete whichever account it is given.
+                    var outstanding = await accounts.DeleteAccount(currentUser.User.Id, ct);
 
                     // Settling up first is the rule that already governs leaving a single
                     // group, so a refusal names the groups that are in the way instead of
