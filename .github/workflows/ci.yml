@@ -27,8 +27,13 @@ jobs:
       # covered. Set to what was measured the day the gate went in, so it is a
       # ratchet against regression rather than a target: raise it when coverage
       # improves, and never lower it to turn a red build green.
-      COVERAGE_LINE_FLOOR: 41
-      COVERAGE_BRANCH_FLOOR: 32
+      #
+      # Turned up on the branch that added the debt, rules, validation, middleware and
+      # transaction-detail tests: 45.92/33.40 line/branch before, 57.84/48.87 after. The
+      # floors keep the few points of slack the previous pair had, so an unrelated change
+      # in what the in-memory provider happens to execute cannot fail a build on its own.
+      COVERAGE_LINE_FLOOR: 54
+      COVERAGE_BRANCH_FLOOR: 45
 
     steps:
       - uses: actions/checkout@v5

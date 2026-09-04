@@ -22,15 +22,16 @@ public class GroupMemberAddTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var newUser = await CreateNewUser();
 
-        var exception = await Record.ExceptionAsync(async () =>
-        {
-            // Act
-            await groupService.AddGroupMembers(group.Id, new AddMemberRequest(
-                [new UserIdentifier { Email = newUser.Email! }]
-            ), TestContext.Current.CancellationToken);
-        });
+        // Act
+        await groupService.AddGroupMembers(group.Id, new AddMemberRequest(
+            [new UserIdentifier { Email = newUser.Email! }]
+        ), TestContext.Current.CancellationToken);
 
-        Assert.Null(exception);
+        // Assert: the member is actually in the group. Asserting only that nothing threw
+        // let an implementation whose body was deleted pass.
+        var members = await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken);
+
+        Assert.Contains(members, member => member.Id == newUser.Id);
     }
 
     [Fact]

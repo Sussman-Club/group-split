@@ -31,6 +31,12 @@ does not run.
 | Branch coverage | **32.6%** |
 | Infrastructure code under test | ~0% |
 
+> **Superseded in part.** A later branch acted on steps 1 to 4 of
+> [Recommended next steps](#recommended-next-steps); the API test count is now 153 and
+> coverage is **57.84% line, 48.87% branch**, with the CI floors at 54/45. The figures
+> in the rest of this document are the ones measured at `b1c686c` and are kept as the
+> before picture — see [What the follow-up branch covered](#what-the-follow-up-branch-covered).
+
 ## What was changed on this branch
 
 1. **Coverage is now measured.** `Microsoft.Testing.Extensions.CodeCoverage` is
@@ -207,18 +213,67 @@ have failed before running a test. Added on this branch.
 
 In value order. The first three are small.
 
-1. **Fix the test that cannot fail** (finding 1). Under an hour.
+1. ~~**Fix the test that cannot fail** (finding 1).~~ Done.
 2. **Test `SeederOrderingExtensions.TopologicallySort`** — layering, the cycle error,
    the unregistered-dependency error. Pure function, no host, ~25 lines of test.
-3. **Test the two validation attributes**, including `null` and non-decimal input.
-   Expect finding 4's `null` case to force a decision about intended behaviour.
-4. **Test `DebtCalculationService`.** It is the product. Worth covering: a settled
-   group, one debtor against many creditors, fractional amounts, and the
-   `ArgumentException` when the current user is absent from the balances.
+   Still open, and it needs a home: `GroupSplit.Seeder` is reachable from
+   `GroupSplit.AppHost.Test`, whose coverage goes to the integration job, not to the
+   gate the floors apply to.
+3. ~~**Test the two validation attributes**, including `null` and non-decimal input.~~
+   Done, and the `null` case is pinned rather than fixed — see below.
+4. ~~**Test `DebtCalculationService`.**~~ Done.
 5. **Add endpoint tests** for at least the authorization boundaries — a member of no
-   group asking for another group's transactions should be a test, not a hope.
-6. **Raise the coverage floor** in `.github/workflows/ci.yml` as each of the above
-   lands. The floor is a ratchet; it is only useful if someone turns it.
+   group asking for another group's transactions should be a test, not a hope. Still
+   open, and now the single largest gap: `GroupApi`, `TransactionApi` and `RulesApi`
+   are 372 uncovered lines between them.
+6. ~~**Raise the coverage floor** in `.github/workflows/ci.yml` as each of the above
+   lands.~~ Done: 41/32 to 54/45.
+
+## What the follow-up branch covered
+
+Measured the same way as the figures above, before and after:
+
+| | Line | Branch |
+|---|---|---|
+| Before | 45.92% | 33.40% |
+| After | **57.84%** | **48.87%** |
+
+The API test count went from 70 executed cases to 153. What moved:
+
+| Area | Before | After |
+|---|---|---|
+| `Services/DebtCalculationService.cs` | 0% | covered |
+| `Services/RuleVersionHandlers/SharesRuleVersionHandler.cs` | 0% | 98.5% |
+| `Services/RuleVersionHandlers/PercentRuleVersionHandler.cs` | 92.2% | covered incl. the `Equals` paths |
+| `Middleware/CurrentUserMiddleware.cs` | 0% | covered |
+| `Shared/CustomValidationAttributes` | 0% | covered |
+| `Services/TransactionService.cs` | 61.2% | the details, edit-model and update paths |
+
+Two things worth knowing about what these tests assert:
+
+- **The validation attributes are pinned, not fixed.** `GreaterThanAttribute` still
+  rejects `null` and still rejects any non-`decimal`, and `MaxDecimalPlacesAttribute`
+  still throws `OverflowException` rather than returning false on a value too large to
+  scale. The tests say so in as many words, so changing the behaviour breaks a test
+  that describes what it was rather than one that claims it was right.
+- **One behaviour was changed, not just covered.** See
+  [A group with no rule](#a-group-with-no-rule).
+
+## A group with no rule
+
+`CreateTransactionRequest` carried no group, so the API could not tell a personal
+expense from a group transaction whose rule the member was never able to pick. The
+create dialog lets you choose a group, fills the category select from that group's
+rules, and leaves `RuleVersionId` null when there are none to offer — and the service
+then fell back to the personal group's default rule. A transaction entered against
+"Trip to Rome" was saved as a personal one, under a group the member never chose, with
+nothing anywhere saying so.
+
+The request now carries an optional `GroupId`, the dialog sends the group it selected,
+and `TransactionService.Create` refuses the combination of a real group and no rule
+version. The message distinguishes the two ways to get there — the group has no rule at
+all, or it has rules and none was selected — because the fix for each is different. The
+existing path, no group and no rule, still means a personal expense and is unchanged.
 
 ## The reason they never finished
 
