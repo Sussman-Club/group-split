@@ -365,6 +365,46 @@ error, and the cycle — including a self-dependency, and a cycle off to one sid
 matters because without the check those seeders are silently dropped from the run rather
 than reported.
 
+## The wire contract between API and client
+
+`RuleVersionDto` is the one polymorphic type that crosses the wire, and the two ends do
+not use the same serializer settings: the API is a minimal API and so uses
+`JsonSerializerDefaults.Web`, while the generated client is handed
+`GroupSplitSerializer.Transform(new JsonSerializerOptions())` — plain defaults with a
+camel-case policy on top, case-sensitive where the API is not. `RuleVersionContractTest`
+covers the gap in both directions, for all three rule types, at the root and nested inside
+the request that creates a rule and the response that returns one, and pins the
+discriminator strings literally: renaming one is invisible in C# and breaks every client
+that has not been regenerated.
+
+The tests are deliberately **not** written with the generated client. It lives in
+`GroupSplit.App.Shared` behind MudBlazor and the Blazor component stack, its typed methods
+exist to stop you constructing the malformed requests the endpoint tests need, and being
+generated *from* the OpenAPI document it drifts with the document rather than catching
+drift. Its serializer options are the part that can actually disagree with the API, so
+those are what is tested.
+
+Writing them turned up something worth knowing: System.Text.Json writes the discriminator
+only when the **static** type is the base. Serialize a concrete `PercentRuleVersionDto` and
+`$type` is simply absent, and the reading end then cannot reconstruct it. That is why every
+DTO carrying a rule version declares the property as `RuleVersionDto`, and nothing in C#
+marks the difference — so it has a test of its own.
+
+## A note on what the coverage figure measures
+
+`GroupSplit.App.Shared` is excluded in `tests/coverage.config`. It is the Blazor component
+library, it has no component tests of any kind, and its ~1,260 lines sit at 0%.
+
+It is excluded because it is **unmeasured, not covered**. Until the contract tests above,
+nothing loaded the assembly, so it never appeared in the report at all and the headline
+figure quietly excluded it anyway. Loading one serializer helper out of it dropped the
+reported number from 69.5% to 44.9% without a line of production code changing. A floor
+that moves on which assemblies happen to get loaded is not a ratchet, so the exclusion is
+written down rather than left to chance. Adding component tests — and taking that line back
+out — is the honest fix.
+
+Within what is measured, the API assembly is at **86.5%** line, up from 43.9%.
+
 ## Still open
 
 - **Exception-to-status mapping.** Every guard in these services throws a bare exception
@@ -374,6 +414,8 @@ than reported.
 - **Create-route validation over HTTP**, per the interceptor limitation above. Reaching it
   would mean booting the real `Program` through `WebApplicationFactory`, which needs
   Keycloak and Postgres stubbed at their registration points.
+- **Blazor component tests.** `GroupSplit.App.Shared` and `GroupSplit.App.Web.Client` have
+  none, which is why the former is excluded from the gate above. bUnit is the usual answer.
 - **The rest of `TokenRefreshService`.** The two decisions it makes on its own are covered;
   the HTTP exchange around them — the refresh request itself, a non-success response, a
   reused refresh token — still is not, and would need a stubbed token endpoint.
