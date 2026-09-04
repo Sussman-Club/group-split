@@ -311,22 +311,72 @@ Two related fixes fell out of it:
   putting the attribute on the update path gave it a reason to change, because a rejected
   amount reaching the client as a 500 rather than a 400 is the wrong answer.
 
+## The three gaps, closed
+
+### Endpoint tests
+
+`tests/GroupSplit.API.Test/Base/ApiEndpointHost.cs` boots the API's own pipeline over a
+`TestServer`: routing, model binding, the authorization policies, `CurrentUserMiddleware`
+and the endpoint code. Two things are swapped and nothing else — Keycloak for a scheme
+that authenticates whoever the test says, and Postgres for the in-memory provider the rest
+of the suite already uses.
+
+That makes the boundary testable from the outside: anonymous requests are refused on every
+group, a second signed-in caller sharing no group gets a 404 for another member's
+transaction rather than its contents, and a patch that clears a name or asks for fractions
+of a cent comes back 400.
+
+**One limitation, and it is worth knowing.** Body validation on the *create* routes is not
+asserted there. In .NET 10 minimal-API validation is a source-generated *interceptor* on
+the `AddValidation()` call site, so it exists only inside the API assembly's own
+`Program.cs`; a host assembled from outside gets the registration without the interceptor
+and the annotations never run. Two tests were written against it, failed, and were removed
+rather than left asserting an artifact of the harness. What the annotations do is covered
+by `ValidationAttributeTests`; the PATCH routes go through `PatchedModel`, which is
+ordinary code and does run there.
+
+The harness also surfaced something the service tests could not: deleting another member's
+transaction is correctly refused, but refused by throwing, and with no exception-to-status
+mapping in the API what reaches a client is a **500 where a 404 belongs**. That is pinned
+by a test that says so.
+
+### TokenRefreshService
+
+`ShouldRefresh` answered `false` when the stored `expires_at` was missing or unparseable,
+so an unknown expiry meant *never refresh*: the app kept presenting a token that may well
+have been dead and every call to the API came back 401 with nothing saying why. Not
+knowing when a token expires is not evidence that it has not, so it now refreshes.
+
+That change needed a second one to be safe. The write-back stored
+`UtcNow.AddSeconds(expires_in ?? 0)`, so a token response without `expires_in` — only
+RECOMMENDED by RFC 6749 — stored an expiry of *now*, which paired with the new behaviour
+would have refreshed on every single request. `ResolveExpiry` now takes `expires_in` when
+it is given, falls back to the access token's own `exp` claim, and only then to a short
+floor that is still in the future. The tests include the round trip: what a refresh writes
+has to be something the next `ShouldRefresh` can read back.
+
+### SeederOrderingExtensions
+
+`tests/GroupSplit.Seeder.Test` is a new project, in the solution and in the unit-test CI
+job with the other two, so its coverage counts toward the same gate. Twelve tests over
+`TopologicallySort`: layering, that registration order does not decide execution order,
+that a seeder waits for every dependency rather than the first, the unregistered-dependency
+error, and the cycle — including a self-dependency, and a cycle off to one side, which
+matters because without the check those seeders are silently dropped from the run rather
+than reported.
+
 ## Still open
 
-- **Endpoint tests.** `GroupApi`, `TransactionApi` and `RulesApi` are 372 uncovered lines,
-  and both defects above lived at or just behind that boundary. The authorization one was
-  reachable through the service layer and so could be pinned by a test; the patch one was
-  not, and `PatchedModel` is tested directly precisely because the endpoint calling it
-  cannot be. A `WebApplicationFactory` harness is the single highest-value thing left.
-- **`TokenRefreshService`** — 97 lines at 0%, and the one place left where a fault would
-  be quiet rather than loud. `ShouldRefresh` returns `false` when the stored `expires_at`
-  is missing or unparseable, so an unknown expiry means "never refresh": the session keeps
-  presenting a token that has expired and the API answers 401 to everything. That degrades
-  to an error rather than to unauthorised access, which is why it is listed here and not
-  above, but "cannot parse the expiry" and "the token is still good" should not be the same
-  branch.
-- **`SeederOrderingExtensions.TopologicallySort`**, as before, with the same problem of
-  which project it belongs in.
+- **Exception-to-status mapping.** Every guard in these services throws a bare exception
+  and the API maps none of them, so a refusal a client should see as a 404 or a 400 arrives
+  as a 500. The endpoint harness now demonstrates it. This is the largest remaining
+  correctness gap and it is a design decision, not a cleanup.
+- **Create-route validation over HTTP**, per the interceptor limitation above. Reaching it
+  would mean booting the real `Program` through `WebApplicationFactory`, which needs
+  Keycloak and Postgres stubbed at their registration points.
+- **The rest of `TokenRefreshService`.** The two decisions it makes on its own are covered;
+  the HTTP exchange around them — the refresh request itself, a non-success response, a
+  reused refresh token — still is not, and would need a stubbed token endpoint.
 - **`DistributedCacheTicketStore` and `AuthDelegatingHandler`** — 34 lines between them, no
   faults found by reading, both straightforwardly testable.
 

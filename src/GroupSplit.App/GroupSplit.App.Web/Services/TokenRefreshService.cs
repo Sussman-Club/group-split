@@ -14,6 +14,9 @@ internal sealed class TokenRefreshService(
     IOptionsMonitor<OpenIdConnectOptions> openIdConnectOptionsMonitor)
 {
     private static readonly TimeSpan RefreshSkew = TimeSpan.FromMinutes(1);
+
+    /// <summary>How long a token is assumed good for when nothing says otherwise.</summary>
+    private static readonly TimeSpan UnknownExpiryFloor = TimeSpan.FromMinutes(2);
     private static readonly JwtSecurityTokenHandler JwtTokenHandler = new();
 
     public async Task<string?> GetValidAccessTokenAsync(
@@ -89,8 +92,8 @@ internal sealed class TokenRefreshService(
 
         var refreshedRefreshToken =
             GetOptionalString(payload.RootElement, TokenNames.RefreshToken) ?? currentRefreshToken;
-        var expiresIn = GetOptionalInt(payload.RootElement, "expires_in");
-        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresIn ?? 0).ToString("o", CultureInfo.InvariantCulture);
+        var expiresAt = ResolveExpiry(
+            GetOptionalInt(payload.RootElement, "expires_in"), refreshedAccessToken);
 
         var tokens = authResult.Properties.GetTokens().ToDictionary(token => token.Name, token => token.Value);
         tokens[TokenNames.AccessToken] = refreshedAccessToken;
@@ -111,20 +114,73 @@ internal sealed class TokenRefreshService(
         return refreshedAccessToken;
     }
 
-    private static bool ShouldRefresh(string? expiresAtRaw)
+    /// <summary>
+    /// Whether the stored access token is close enough to expiry to be replaced.
+    /// </summary>
+    /// <remarks>
+    /// An expiry that is missing or unreadable used to answer "no". That is the wrong way
+    /// round: not knowing when a token expires is not evidence that it has not, so the app
+    /// went on presenting a token that may well have been dead and every call to the API
+    /// came back 401 with nothing saying why. Refreshing instead costs one round trip and
+    /// settles the question, and the refresh writes a readable expiry back, so an
+    /// unreadable one does not persist and cannot turn into a refresh on every request.
+    /// </remarks>
+    internal static bool ShouldRefresh(string? expiresAtRaw)
     {
         if (string.IsNullOrWhiteSpace(expiresAtRaw))
         {
-            return false;
+            return true;
         }
 
         if (!DateTimeOffset.TryParse(expiresAtRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
                 out var expiresAt))
         {
-            return false;
+            return true;
         }
 
         return expiresAt <= DateTimeOffset.UtcNow.Add(RefreshSkew);
+    }
+
+    /// <summary>
+    /// When the new access token expires, as a round-trippable string.
+    /// </summary>
+    /// <remarks>
+    /// <c>expires_in</c> is only RECOMMENDED by RFC 6749, so when the token response omits
+    /// it the access token's own <c>exp</c> claim is read instead. If neither can be had,
+    /// a short floor is used rather than the "now" this used to fall back to: paired with
+    /// <see cref="ShouldRefresh"/> treating an unknown expiry as due, storing a value that
+    /// is already in the past would refresh on every single request.
+    /// </remarks>
+    internal static string ResolveExpiry(int? expiresIn, string accessToken)
+    {
+        if (expiresIn is { } seconds)
+        {
+            return DateTimeOffset.UtcNow.AddSeconds(seconds).ToString("o", CultureInfo.InvariantCulture);
+        }
+
+        if (TryReadExpiry(accessToken) is { } fromToken)
+        {
+            return fromToken.ToString("o", CultureInfo.InvariantCulture);
+        }
+
+        return DateTimeOffset.UtcNow.Add(UnknownExpiryFloor).ToString("o", CultureInfo.InvariantCulture);
+    }
+
+    private static DateTimeOffset? TryReadExpiry(string accessToken)
+    {
+        try
+        {
+            if (!JwtTokenHandler.CanReadToken(accessToken))
+                return null;
+
+            var expiry = JwtTokenHandler.ReadJwtToken(accessToken).ValidTo;
+
+            return expiry == DateTime.MinValue ? null : new DateTimeOffset(expiry, TimeSpan.Zero);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static FormUrlEncodedContent CreateRefreshContent(OpenIdConnectOptions options, string refreshToken)
@@ -174,7 +230,7 @@ internal sealed class TokenRefreshService(
         return root.TryGetProperty(propertyName, out var property) ? property.GetString() : null;
     }
 
-    private bool HasExpectedIssuer(string accessToken, string? expectedIssuer)
+    private static bool HasExpectedIssuer(string accessToken, string? expectedIssuer)
     {
         if (string.IsNullOrWhiteSpace(expectedIssuer))
             return true;

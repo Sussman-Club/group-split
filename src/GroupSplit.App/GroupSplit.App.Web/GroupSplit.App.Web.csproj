@@ -20,4 +20,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.11" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- TokenRefreshService is internal and is the silent-refresh path; the tests reach
+         it directly rather than through a sign-in that would need a live Keycloak. -->
+    <InternalsVisibleTo Include="GroupSplit.App.Web.Test" />
+  </ItemGroup>
+
 </Project>
