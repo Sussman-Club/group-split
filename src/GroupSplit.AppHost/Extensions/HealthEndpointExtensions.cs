@@ -2,7 +2,9 @@
 // same way AppHost.cs suppresses them.
 #pragma warning disable ASPIREPROBES001
 
-namespace GroupSplit.AppHost.Health;
+using Aspire.Hosting.Docker.Resources.ServiceNodes;
+
+namespace GroupSplit.AppHost.Extensions;
 
 public static class HealthEndpointExtensions
 {
@@ -46,5 +48,32 @@ public static class HealthEndpointExtensions
                     ProbeType.Readiness,
                     () => project.GetEndpoint(ManagementEndpointName),
                     "/health");
+
+        /// <summary>
+        /// The publish-mode counterpart of <see cref="WithHealthEndpoints"/>: the same
+        /// readiness check, restated as a Compose healthcheck because the publisher does not
+        /// translate the probes above.
+        /// <para>
+        /// Same shape as Keycloak's, for the same reason: the image ships no HTTP client, so
+        /// bash opens a socket on the management port and speaks HTTP/1.0 across it. The port
+        /// is read from <c>HealthChecks__Port</c> inside the container -- <c>$$</c> is how a
+        /// Compose file spells a literal <c>$</c> -- which is the variable
+        /// <see cref="WithHealthEndpoints"/> sets, so the probe and the endpoint cannot drift
+        /// apart.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<ProjectResource> WithManagementHealthcheck()
+            => project.WithComposeHealthcheck(new Healthcheck
+            {
+                Test =
+                [
+                    "CMD", "bash", "-c",
+                    @"{ printf 'HEAD /health HTTP/1.0\r\n\r\n' >&0; grep -q '^HTTP/1\.[01] 200'; } 0<>/dev/tcp/localhost/$$HealthChecks__Port"
+                ],
+                Interval = "5s",
+                Timeout = "5s",
+                Retries = 12,
+                StartPeriod = "30s"
+            });
     }
 }

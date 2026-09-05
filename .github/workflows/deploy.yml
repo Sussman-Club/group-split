@@ -15,10 +15,21 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Pinned to the Aspire version the AppHost SDK references, so the CLI that evaluates
+  # the model agrees with the model. ci.yml pins the same number; bump them together.
+  ASPIRE_CLI_VERSION: 13.5.3
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: production
+    # A backstop: image builds take a couple of minutes and the Komodo poll below is
+    # bounded at five, so anything near this is a hang, not a slow run.
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -31,63 +42,71 @@ jobs:
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
     steps:
-      - name: Validate required secrets
+      # Fails in seconds on a missing value rather than after the images are built.
+      # The AppHost enforces the same rules once the parameters are resolved (its
+      # validate-smtp and validate-google-sign-in pipeline steps); this copy is the
+      # cheap one.
+      - name: Validate deployment inputs
         shell: bash
         run: |
           set -euo pipefail
 
           missing=0
 
-          # Credentials.
-          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET KEYCLOAK_PASSWORD DB_SERVER_PASSWORD; do
-            if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")" ]; then
-              echo "Missing required GitHub secret: ${name}" >&2
-              missing=1
-            fi
-          done
+          # value NAME: the variable or secret of that name, whichever is set.
+          value() {
+            local v
+            v="$(jq -r --arg k "$1" '.[$k] // empty' <<<"$VARS_JSON")"
+            [ -n "$v" ] || v="$(jq -r --arg k "$1" '.[$k] // empty' <<<"$SECRETS_JSON")"
+            printf '%s' "$v"
+          }
 
-          # Non-sensitive deployment config, kept as variables so it stays readable.
-          # WEB_HOSTNAME is the stack's single public origin; Keycloak shares it under /auth.
-          for name in WEB_HOSTNAME; do
-            if [ -z "$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")" ]; then
-              echo "Missing required GitHub variable: ${name}" >&2
-              missing=1
-            fi
-          done
+          # require NAME...: every NAME must have a value.
+          require() {
+            for name in "$@"; do
+              if [ -z "$(value "$name")" ]; then
+                echo "${name} is not set on the production environment" >&2
+                missing=1
+              fi
+            done
+          }
 
-          # Email is optional: the deploy succeeds without a relay and Keycloak simply
-          # cannot send mail. A half-configured one is worse than none though, because
-          # the realm would then advertise password reset and email verification while
-          # every send failed, so these four stand or fall together.
-          smtp_present=""
-          smtp_absent=""
+          # require_when FLAG NAME...: when FLAG is true, every NAME must have a value.
+          # Returns 1 when FLAG is not true, so a caller can attach a notice.
+          require_when() {
+            local flag="$1"
+            shift
+            [ "$(value "$flag")" = "true" ] || return 1
+            require "$@"
+          }
 
-          for name in SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD; do
-            value="$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")"
-            [ -n "$value" ] || value="$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")"
+          # What the workflow itself needs, and what the AppHost refuses to publish
+          # without. WEB_HOSTNAME is the stack's single public origin; Keycloak shares it
+          # under /idp. DASHBOARD_TOKEN is what the dashboard is published behind.
+          require KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET \
+                  WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD
 
-            if [ -n "$value" ]; then
-              smtp_present="${smtp_present} ${name}"
-            else
-              smtp_absent="${smtp_absent} ${name}"
-            fi
-          done
+          # Mail and Google sign-in are each switched on by a variable, and then need
+          # their credentials. A relay that is on but incomplete is worse than none: the
+          # realm would advertise password reset while every send failed.
+          require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
+            || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
 
-          if [ -n "$smtp_present" ] && [ -n "$smtp_absent" ]; then
-            echo "Incomplete SMTP configuration. Either set:${smtp_absent} or clear:${smtp_present}" >&2
-            missing=1
-          elif [ -z "$smtp_present" ]; then
-            echo "::notice::No SMTP relay configured. Keycloak will not send password reset or email verification mail."
-          fi
+          require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+            || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
 
           [ "$missing" -eq 0 ] || exit 1
 
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # Aspire reads deployment parameters from Parameters__<name>. Secret and variable
-      # names are SCREAMING_SNAKE, parameter names are kebab-case, so export both
-      # spellings and let the ones that match a parameter win. Komodo, registry and
+      # Parameters reach the AppHost the way Aspire documents for CI: an environment
+      # variable per parameter named Parameters__ plus the parameter name, with the
+      # name's dashes written as underscores. GitHub names are SCREAMING_SNAKE and
+      # parameter names kebab-case, so lower-casing a GitHub name is exactly that
+      # spelling: WEB_HOSTNAME becomes Parameters__web_hostname and lands on
+      # `web-hostname`. Every secret and variable is exported, so adding a parameter to
+      # the AppHost needs only a GitHub entry of the matching name; a parameter nothing
+      # here names keeps the default the AppHost declares for it. Komodo, registry and
       # GitHub's own entries are excluded: they configure this workflow, not the app.
       - name: Export secrets and variables as Aspire parameters
         shell: bash
@@ -97,22 +116,28 @@ jobs:
             jq -r '
               to_entries[]
               | select(.key | test("^KOMODO_|^GITHUB_|^REGISTRY_") | not)
-              | "\(.key)=\(.value)",
-                "Parameters__\(.key | ascii_downcase | gsub("_";"-"))=\(.value)"
+              | "Parameters__\(.key | ascii_downcase)=\(.value)"
             ' <<<"$payload" >> "$GITHUB_ENV"
           done
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
-      - name: Install Aspire CLI
-        shell: bash
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # The NuGet global tool rather than the install script, so the version can be
+      # pinned: the script installs whatever is current, and a CLI ahead of the AppHost
+      # SDK has evaluated models differently before.
+      - name: Install the Aspire CLI
         run: |
-          set -euo pipefail
-          curl -sSL https://aspire.dev/install.sh | bash
-          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+          dotnet tool install -g Aspire.Cli --version "$ASPIRE_CLI_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Show Aspire CLI version
         run: aspire --version
@@ -121,7 +146,7 @@ jobs:
       # credentials are absent so the workflow works either way.
       - name: Log in to the container registry
         if: ${{ env.REGISTRY_USERNAME != '' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: registry.sussman.win
           username: ${{ env.REGISTRY_USERNAME }}
@@ -129,20 +154,35 @@ jobs:
 
       # The api/web images restore inside their own docker build, but the EF
       # migration bundle is generated by msbuild on the runner, so that project
-      # needs its assets file here or prepare-compose fails with NETSDK1004.
+      # needs its assets file here or generating the bundle fails with NETSDK1004.
       # Restored by project, not by solution: the solution also holds the MAUI
       # app, whose android target needs a workload no deploy runner has.
       - name: Restore the migrations project
         run: dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
-      # One invocation, not `prepare-compose` then a push per image: each `aspire do`
+      # One invocation, not the Compose prepare step then a push per image: each `aspire do`
       # runs deploy-prereq, which stamps a fresh timestamp tag, so separate calls put
-      # the images under tags the generated compose file does not reference. The
-      # push-and-prepare-compose barrier step in the AppHost joins them into one
-      # pipeline execution sharing a single tag. Deliberately not `aspire deploy`:
-      # that would run `docker compose up` on the runner instead of the server.
+      # the images under tags the generated compose file does not reference. The AppHost
+      # declares its Compose prepare step as required by Aspire's `push` entry point
+      # (see WithPrepareOnPush), so this documented command yields both the pushed images
+      # and the artifacts that reference them, in one pipeline execution sharing a single
+      # tag. Deliberately not `aspire deploy`: that would run `docker compose up` on the
+      # runner instead of the server.
       - name: Push images and prepare Compose artifacts
-        run: aspire do push-and-prepare-compose --environment production --non-interactive
+        run: aspire do push --environment production --non-interactive
+
+      # The Compose file is what the host will run, kept with the run for a month so a
+      # deploy can be inspected after the fact. Only the Compose file: the env file next
+      # to it holds every secret in the clear, and artifacts are readable by anyone with
+      # read access to the repository.
+      - name: Keep the generated Compose file
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-compose
+          path: src/GroupSplit.AppHost/aspire-output/docker-compose.yaml
+          if-no-files-found: ignore
+          retention-days: 30
 
       # Hand the generated compose file and env to Komodo, then deploy the stack.
       # The stack must already exist in Komodo in `file_contents` mode.

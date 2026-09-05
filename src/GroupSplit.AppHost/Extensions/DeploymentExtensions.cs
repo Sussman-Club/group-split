@@ -1,8 +1,11 @@
 using Aspire.Hosting.Docker;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
+using Aspire.Hosting.Pipelines;
 
-namespace GroupSplit.AppHost.Deployment;
+namespace GroupSplit.AppHost.Extensions;
+
+#pragma warning disable ASPIREPIPELINES001
 
 /// <summary>
 /// Publish-time wiring for the Docker Compose target. Everything here is deployment shaped and
@@ -10,24 +13,6 @@ namespace GroupSplit.AppHost.Deployment;
 /// </summary>
 public static class DeploymentExtensions
 {
-    extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEndpoints
-    {
-        /// <summary>
-        /// Publishes the primary HTTP endpoint on a fixed host port.
-        /// <para>
-        /// An unpinned endpoint lands on a random host port, and
-        /// <c>WithExternalHttpEndpoints</c> would publish every HTTP endpoint, including
-        /// Keycloak's management port. This exposes exactly one.
-        /// </para>
-        /// </summary>
-        public IResourceBuilder<T> PublishOnHostPort(int hostPort)
-            => resource.WithEndpoint("http", endpoint =>
-            {
-                endpoint.IsExternal = true;
-                endpoint.Port = hostPort;
-            });
-    }
-
     extension<T>(IResourceBuilder<T> resource) where T : ContainerResource
     {
         /// <summary>
@@ -64,11 +49,13 @@ public static class DeploymentExtensions
             {
                 return resource.WithContainerFiles(
                     Path.GetDirectoryName(targetPath)!.Replace('\\', '/'),
-                    [new ContainerFile
-                    {
-                        Name = Path.GetFileName(targetPath),
-                        Contents = File.ReadAllText(source)
-                    }]);
+                    [
+                        new ContainerFile
+                        {
+                            Name = Path.GetFileName(targetPath),
+                            Contents = File.ReadAllText(source)
+                        }
+                    ]);
             }
 
             foreach (var path in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
@@ -78,11 +65,13 @@ public static class DeploymentExtensions
 
                 resource.WithContainerFiles(
                     directory == "." ? targetPath : $"{targetPath}/{directory}",
-                    [new ContainerFile
-                    {
-                        Name = Path.GetFileName(path),
-                        Contents = File.ReadAllText(path)
-                    }]);
+                    [
+                        new ContainerFile
+                        {
+                            Name = Path.GetFileName(path),
+                            Contents = File.ReadAllText(path)
+                        }
+                    ]);
             }
 
             return resource;
@@ -91,6 +80,60 @@ public static class DeploymentExtensions
 
     extension(IResourceBuilder<DockerComposeEnvironmentResource> compose)
     {
+        /// <summary>
+        /// Publishes the Aspire dashboard alongside the stack, behind a browser token.
+        /// <para>
+        /// The dashboard shows every environment variable of every service, secrets among
+        /// them, and it is published on a host port so the operator can reach it from the
+        /// LAN without a Caddy route. That is why the token is not optional here: left to
+        /// itself the standalone dashboard image generates a random token and prints it to
+        /// its own log, and a token nobody can read without shell access to the host is a
+        /// dashboard nobody uses.
+        /// </para>
+        /// <para>
+        /// TLS is terminated upstream when the dashboard is fronted by the proxy, so it has
+        /// to learn the original scheme and host from the forwarded headers the same way
+        /// Keycloak does, or its redirects point back at plain HTTP.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithProtectedDashboard(
+            IResourceBuilder<ParameterResource> token)
+            => compose.WithDashboard(dashboard => dashboard
+                .WithHostPort(18888)
+                .WithForwardedHeaders(enabled: true)
+                .WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
+                .WithEnvironment("Dashboard__Frontend__BrowserToken", token));
+
+        /// <summary>
+        /// Makes <c>aspire do push</c> also generate the Compose file and env file, so the
+        /// images and the artifacts that reference them come out of one pipeline execution.
+        /// <para>
+        /// Run as separate <c>aspire do</c> invocations, the pushes and the prepare step each
+        /// get their own <c>deploy-prereq</c>, and that stamps a fresh timestamp tag every
+        /// time: the generated Compose file then points at a tag nothing was ever pushed
+        /// under, and the pull fails with "manifest unknown".
+        /// </para>
+        /// <para>
+        /// Wired the way Aspire extends its own entry points: a step that depends on the
+        /// prepare step the Docker integration names after this environment, and declares
+        /// itself required by <see cref="WellKnownPipelineSteps.Push"/>. The deploy workflow
+        /// therefore calls a documented command and knows neither this step's name nor the
+        /// Compose resource's; renaming either touches nothing outside the AppHost. Every
+        /// image the environment owns is pushed, since <c>push</c> is the step all push
+        /// steps are required by.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithPrepareOnPush()
+        {
+            compose.ApplicationBuilder.Pipeline.AddStep(
+                $"prepare-{compose.Resource.Name}-on-push",
+                _ => Task.CompletedTask,
+                dependsOn: $"prepare-{compose.Resource.Name}",
+                requiredBy: WellKnownPipelineSteps.Push);
+
+            return compose;
+        }
+
         /// <summary>
         /// Applies the Compose defaults Aspire leaves to the operator.
         /// <para>
@@ -127,9 +170,9 @@ public static class DeploymentExtensions
                     .ToHashSet();
 
                 foreach (var dependency in file.Services.Values
-                    .SelectMany(service => service.DependsOn)
-                    .Where(edge => healthchecked.Contains(edge.Key))
-                    .Select(edge => edge.Value))
+                             .SelectMany(service => service.DependsOn)
+                             .Where(edge => healthchecked.Contains(edge.Key))
+                             .Select(edge => edge.Value))
                 {
                     // Only the default is ours to strengthen. A "run to completion" edge, which
                     // is what the migration bundle's consumers get, already says something

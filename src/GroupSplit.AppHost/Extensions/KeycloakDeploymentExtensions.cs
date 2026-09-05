@@ -1,7 +1,6 @@
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
-using GroupSplit.AppHost.Deployment;
 
-namespace GroupSplit.AppHost.Keycloak;
+namespace GroupSplit.AppHost.Extensions;
 
 public static class KeycloakDeploymentExtensions
 {
@@ -26,7 +25,8 @@ public static class KeycloakDeploymentExtensions
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
-        /// Prepares Keycloak to run outside local development.
+        /// Prepares Keycloak to run outside local development. The publish-mode counterpart
+        /// of <see cref="KeycloakDevelopmentExtensions.AsDevelopmentKeycloak"/>.
         /// <para>
         /// <c>WithRealmImport</c> relies on development-time container file
         /// injection that <c>aspire publish</c> cannot express: it degrades to a
@@ -42,6 +42,8 @@ public static class KeycloakDeploymentExtensions
             IResourceBuilder<ParameterResource> hostname)
         {
             return keycloak
+                .WithFiles("Assets/keycloak/realms.json", "/opt/keycloak/data/import/realms.json")
+                .WithFiles("Assets/keycloak/themes", "/opt/keycloak/themes/group-split")
                 // Production mode serves HTTPS only unless plain HTTP is opted into. TLS is
                 // terminated upstream, so Keycloak speaks plain HTTP and learns the original
                 // scheme and host from the forwarded headers the proxy sets.

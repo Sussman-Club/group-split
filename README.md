@@ -28,7 +28,7 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 
 | Project | Purpose |
 | --- | --- |
-| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing |
+| `src/GroupSplit.AppHost` | .NET Aspire app model for local development and publishing; see [docs/development-and-deployment.md](docs/development-and-deployment.md) |
 | `src/GroupSplit.Seeder` | Worker, launched by the app model, that seeds reference and demo data |
 | `src/GroupSplit.ServiceDefaults` | Shared telemetry, health check, and service discovery defaults |
 
@@ -60,8 +60,14 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 ## Run locally
 
 ```bash
-dotnet run --project src/GroupSplit.AppHost
+aspire start
 ```
+
+`dotnet run --project src/GroupSplit.AppHost` does the same from an IDE. Either way the
+AppHost is in run mode: it orchestrates the stack itself and adds the development
+tooling (Mailpit, the seeder, Scalar, the Postgres MCP servers) that a deployment never gets. How that
+differs from what ships, and what a deployment has to be told, is in
+[docs/development-and-deployment.md](docs/development-and-deployment.md).
 
 ## Email
 
@@ -76,24 +82,29 @@ environment. `SMTP_PASSWORD` is a secret; the rest are variables:
 
 | Name | Example | Purpose |
 | --- | --- | --- |
+| `SMTP_ENABLED` | `true` | The switch. Off unless set, and then the four below are required |
 | `SMTP_HOST` | `smtp.resend.com` | Relay hostname |
 | `SMTP_PORT` | `587` | Optional, defaults to 587 (submission over STARTTLS) |
 | `SMTP_FROM` | `no-reply@example.com` | Sender address, on a domain the relay has verified |
 | `SMTP_USER` | `resend` | SMTP username |
 | `SMTP_PASSWORD` | | SMTP password or API key (secret) |
-| `VERIFY_EMAIL` | `true` | Whether registration has to prove the address. Off unless set |
 
-Leave the four `SMTP_*` values unset and the deploy still succeeds: Keycloak simply
-cannot send mail. Setting only some of them fails the deploy deliberately, because a
-realm that offers password reset over a relay that rejects every send is worse than one
-that never offered it.
+Leave `SMTP_ENABLED` unset and the deploy still succeeds: Keycloak simply cannot send
+mail. Setting it to `true` with any of the four missing fails the deploy deliberately,
+because a realm that offers password reset over a relay that rejects every send is worse
+than one that never offered it. The check runs twice: once in the workflow before
+anything is built, and once in the AppHost's `validate-smtp` pipeline step once the
+parameters are resolved, so a publish from a laptop gets it too.
 
-`VERIFY_EMAIL` is separate on purpose, and off until set. Having a relay is not the same
-as trusting it: a sender domain part way through verification at the provider has every
-send rejected, and switching verification on then would strand existing users at their
-next login behind a mail that cannot arrive. Turn it on once mail is really flowing. It
-is also ignored unless a relay is configured, since Keycloak would otherwise raise the
-required action with nowhere to send the mail that clears it.
+The realm does not require registrations to verify their address. Having a relay is not
+the same as trusting it: a sender domain part way through verification at the provider
+has every send rejected, and a verification requirement then strands users at their next
+login behind a mail that cannot arrive. Switch `verifyEmail` on in `realms.json` once
+mail is really flowing, if you want it at all.
+
+Google sign-in follows the same shape: `GOOGLE_SIGN_IN_ENABLED` is the variable that
+switches it on, and it then requires the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+secrets.
 
 Whichever relay you use, expect to prove you own the sender domain by adding the SPF and
 DKIM records it gives you. Mail from an unverified sender is rejected or filed as spam.
