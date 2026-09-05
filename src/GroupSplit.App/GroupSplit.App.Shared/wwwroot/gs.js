@@ -102,9 +102,69 @@
         document.addEventListener("DOMContentLoaded", () => scan(document.body));
     }
 
+    // -------------------------------------------------- before the runtime --
+
+    // The page is server-rendered and interactive only once the WebAssembly
+    // runtime has downloaded. The two pieces of chrome that need no data,
+    // the theme switcher and the sidebar collapse, work from here in the
+    // meantime; Blazor picks up whatever state they left when it takes over.
+    const railKey = "groupsplit.rail";
+
+    function read(key) {
+        try { return localStorage.getItem(key); } catch { return null; }
+    }
+
+    function write(key, value) {
+        try { localStorage.setItem(key, value); } catch { /* blocked storage */ }
+    }
+
+    document.addEventListener("click", function (event) {
+        if (root.hasAttribute("data-gs-ready")) return;
+
+        const seg = event.target.closest(".gs-seg-btn[data-mode]");
+        if (seg) {
+            const mode = seg.dataset.mode;
+            write(storageKey, mode);
+            root.dataset.theme = resolve(mode) ? "dark" : "light";
+            const group = seg.closest(".gs-seg");
+            const buttons = [...group.querySelectorAll(".gs-seg-btn")];
+            buttons.forEach(b => b.classList.toggle("active", b === seg));
+            group.style.setProperty("--gs-seg-i", String(buttons.indexOf(seg)));
+            return;
+        }
+
+        if (event.target.closest(".gs-sidebar-toggle")) {
+            const shell = document.querySelector(".gs-shell");
+            if (!shell) return;
+            const rail = shell.classList.toggle("is-rail");
+            write(railKey, rail ? "1" : "0");
+        }
+    });
+
+    function applyRail() {
+        const shell = document.querySelector(".gs-shell");
+        if (shell && read(railKey) === "1") shell.classList.add("is-rail");
+    }
+
+    if (document.body) applyRail(); else document.addEventListener("DOMContentLoaded", applyRail);
+
     window.gs = {
         setTheme(isDark) {
             root.dataset.theme = isDark ? "dark" : "light";
+        },
+
+        // Called once Blazor has rendered interactively: hands the chrome over
+        // and hides the boot indicator.
+        ready() {
+            root.setAttribute("data-gs-ready", "");
+        },
+
+        rail() {
+            return read(railKey) === "1";
+        },
+
+        setRail(value) {
+            write(railKey, value ? "1" : "0");
         }
     };
 })();

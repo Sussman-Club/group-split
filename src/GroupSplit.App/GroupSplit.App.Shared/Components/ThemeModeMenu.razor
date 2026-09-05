@@ -11,6 +11,7 @@
             <button type="button"
                     class="gs-seg-btn @(mode == Preference.Mode ? "active" : "")"
                     role="radio"
+                    data-mode="@mode"
                     aria-checked="@(mode == Preference.Mode ? "true" : "false")"
                     aria-label="@Label(mode)"
                     @onclick="@(() => Preference.Set(mode))">

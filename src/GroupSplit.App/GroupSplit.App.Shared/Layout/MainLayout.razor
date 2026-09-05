@@ -3,6 +3,7 @@
 @using GroupSplit.Shared
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @implements IDisposable
 
 <AppThemeProvider />
@@ -68,7 +69,37 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void ToggleRail() => _rail = !_rail;
+    // The collapse works before the runtime arrives (gs.js), so pick up
+    // whatever the user did in the meantime rather than snapping it back.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            var rail = await JS.InvokeAsync<bool>("gs.rail");
+            if (rail != _rail)
+            {
+                _rail = rail;
+                StateHasChanged();
+            }
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private async Task ToggleRail()
+    {
+        _rail = !_rail;
+        try
+        {
+            await JS.InvokeVoidAsync("gs.setRail", _rail);
+        }
+        catch (JSException)
+        {
+        }
+    }
 
     public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

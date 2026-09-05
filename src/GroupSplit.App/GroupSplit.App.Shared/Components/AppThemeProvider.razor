@@ -39,6 +39,7 @@
         });
 
         await ApplyDocumentThemeAsync();
+        await JS.InvokeVoidAsync("gs.ready");
         StateHasChanged();
     }
 

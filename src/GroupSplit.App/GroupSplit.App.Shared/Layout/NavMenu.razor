@@ -1,4 +1,5 @@
 @using GroupSplit.App.Shared.Models
+@using GroupSplit.Shared
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -19,7 +20,9 @@
 @code {
     private const int ItemPitch = 50; // 46px item + 4px gap, see .gs-nav in app.css
 
-    private static readonly List<MenuItem> Items =
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    private static readonly List<MenuItem> SignedIn =
     [
         new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
         new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups },
@@ -27,13 +30,21 @@
         new() { Href = "/account", Text = "Account", Icon = Icons.Material.Rounded.AccountCircle }
     ];
 
+    // Everything else needs a session, and a link that only bounces to the
+    // sign-in page is not worth showing.
+    private static readonly List<MenuItem> SignedOut =
+    [
+        new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
+        new() { Href = "/login", Text = "Sign in", Icon = Icons.Material.Rounded.Login }
+    ];
+
+    private List<MenuItem> Items => UserInfo is null ? SignedOut : SignedIn;
+
     private int ActiveIndex { get; set; } = -1;
 
-    protected override void OnInitialized()
-    {
-        Nav.LocationChanged += OnLocationChanged;
-        Resolve();
-    }
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    protected override void OnParametersSet() => Resolve();
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {

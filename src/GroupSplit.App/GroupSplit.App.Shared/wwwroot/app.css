@@ -258,6 +258,45 @@ h1:focus {
     }
 }
 
+/* Boot indicator: a thin bar sweeping under the top bar until Blazor reports
+   in via gs.ready(). Before that the page is server-rendered HTML, and only
+   the theme switcher and collapse (handled in gs.js) respond. */
+.gs-topbar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    height: 2px;
+    width: 30%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--gs-teal), transparent);
+    animation: gs-boot 1.1s ease-in-out infinite;
+    opacity: 1;
+    transition: opacity var(--gs-base) var(--gs-ease);
+    pointer-events: none;
+}
+
+html[data-gs-ready] .gs-topbar::after {
+    animation: none;
+    opacity: 0;
+}
+
+@keyframes gs-boot {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(calc(100vw)); }
+}
+
+/* Controls that need the runtime are muted until it is there. */
+html:not([data-gs-ready]) .gs-user-btn,
+html:not([data-gs-ready]) .gs-fab,
+html:not([data-gs-ready]) .gs-toolbar,
+html:not([data-gs-ready]) .gs-chip:not(.active),
+html:not([data-gs-ready]) .gs-row,
+html:not([data-gs-ready]) .gs-group-card {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
 .gs-topbar-title {
     font-family: var(--gs-font-display);
     font-size: 1.0625rem;
