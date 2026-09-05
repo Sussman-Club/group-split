@@ -1,4 +1,4 @@
-namespace GroupSplit.AppHost.Keycloak;
+namespace GroupSplit.AppHost.Extensions;
 
 public static class KeycloakDevelopmentExtensions
 {
@@ -24,8 +24,8 @@ public static class KeycloakDevelopmentExtensions
             IResourceBuilder<MailPitContainerResource> mailpit)
         {
             return keycloak
-                .WithRealmImport("./realms.json")
-                .WithContainerFiles("/opt/keycloak/themes/group-split", "./keycloak-themes/group-split")
+                .WithRealmImport("./Assets/keycloak/realms.json")
+                .WithContainerFiles("/opt/keycloak/themes/group-split", "./Assets/keycloak/themes")
                 .WithSmtp(mailpit)
                 .WithDataVolume();
         }

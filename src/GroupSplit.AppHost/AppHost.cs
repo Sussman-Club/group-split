@@ -1,9 +1,4 @@
-using GroupSplit.AppHost.Deployment;
-using GroupSplit.AppHost.Health;
-using GroupSplit.AppHost.Keycloak;
-using GroupSplit.AppHost.Migrations;
-using GroupSplit.AppHost.Postgres;
-using GroupSplit.AppHost.Seeder;
+using GroupSplit.AppHost.Extensions;
 using Projects;
 using Scalar.Aspire;
 
@@ -20,7 +15,7 @@ var db = dbServer.AddDatabase("db", "groupsplit");
 var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
 var keycloak = builder.AddKeycloak("keycloak")
-    .WithGoogleSignIn(builder.Configuration)
+    .WithGoogleSignIn()
     .WithPostgres(keycloakDb)
     .WaitFor(keycloakDb)
     .WithOtlpExporter();
@@ -102,7 +97,7 @@ else
     // it on the web origin under its relative path. Keycloak's port stays off the host.
     keycloak
         .AsDeployedKeycloak(hostname)
-        .WithSmtp(builder.Configuration);
+        .WithSmtp();
 
     web
         .WithKeycloakAuthority(authority)

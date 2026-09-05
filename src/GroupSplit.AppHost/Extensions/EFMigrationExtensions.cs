@@ -2,9 +2,9 @@ using Aspire.Hosting.EntityFrameworkCore;
 
 #pragma warning disable ASPIREDOTNETTOOL, ASPIRECSHARPAPPS001
 
-namespace GroupSplit.AppHost.Migrations;
+namespace GroupSplit.AppHost.Extensions;
 
-public static class Extensions
+public static class EFMigrationExtensions
 {
     extension(IResourceBuilder<IResourceWithConnectionString> builder)
     {

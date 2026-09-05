@@ -56,32 +56,38 @@ jobs:
             fi
           done
 
-          # Email is optional: the deploy succeeds without a relay and Keycloak simply
-          # cannot send mail. A half-configured one is worse than none though, because
-          # the realm would then advertise password reset and email verification while
-          # every send failed, so these four stand or fall together. The AppHost enforces
-          # the same rule when it publishes (see Keycloak/SmtpExtensions.cs); this copy
-          # only fails faster.
-          smtp_present=""
-          smtp_absent=""
+          # Mail and Google sign-in are each switched on by a variable, and then need their
+          # credentials. A relay that is on but incomplete is worse than none, because the
+          # realm would advertise password reset while every send failed. The AppHost checks
+          # the same rules once the parameters are resolved (the validate-smtp and
+          # validate-google-sign-in pipeline steps); this copy fails before a runner is spent
+          # on the build.
+          value() {
+            local v
+            v="$(jq -r --arg k "$1" '.[$k] // empty' <<<"$VARS_JSON")"
+            [ -n "$v" ] || v="$(jq -r --arg k "$1" '.[$k] // empty' <<<"$SECRETS_JSON")"
+            printf '%s' "$v"
+          }
 
-          for name in SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD; do
-            value="$(jq -r --arg k "$name" '.[$k] // empty' <<<"$SECRETS_JSON")"
-            [ -n "$value" ] || value="$(jq -r --arg k "$name" '.[$k] // empty' <<<"$VARS_JSON")"
+          # require_when FLAG NAME...: when FLAG is true, every NAME must have a value.
+          # Returns 1 when FLAG is not true, so a caller can attach a notice.
+          require_when() {
+            local flag="$1"
+            shift
+            [ "$(value "$flag")" = "true" ] || return 1
+            for name in "$@"; do
+              if [ -z "$(value "$name")" ]; then
+                echo "${flag} is true but ${name} is not set" >&2
+                missing=1
+              fi
+            done
+          }
 
-            if [ -n "$value" ]; then
-              smtp_present="${smtp_present} ${name}"
-            else
-              smtp_absent="${smtp_absent} ${name}"
-            fi
-          done
+          require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
+            || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
 
-          if [ -n "$smtp_present" ] && [ -n "$smtp_absent" ]; then
-            echo "Incomplete SMTP configuration. Either set:${smtp_absent} or clear:${smtp_present}" >&2
-            missing=1
-          elif [ -z "$smtp_present" ]; then
-            echo "::notice::No SMTP relay configured. Keycloak will not send password reset or email verification mail."
-          fi
+          require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+            || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
 
           [ "$missing" -eq 0 ] || exit 1
 

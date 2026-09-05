@@ -3,9 +3,8 @@
 #pragma warning disable ASPIREPROBES001
 
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
-using GroupSplit.AppHost.Deployment;
 
-namespace GroupSplit.AppHost.Health;
+namespace GroupSplit.AppHost.Extensions;
 
 public static class HealthEndpointExtensions
 {

@@ -1,7 +1,6 @@
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
-using GroupSplit.AppHost.Deployment;
 
-namespace GroupSplit.AppHost.Keycloak;
+namespace GroupSplit.AppHost.Extensions;
 
 public static class KeycloakDeploymentExtensions
 {
@@ -43,8 +42,8 @@ public static class KeycloakDeploymentExtensions
             IResourceBuilder<ParameterResource> hostname)
         {
             return keycloak
-                .WithFiles("realms.json", "/opt/keycloak/data/import/realms.json")
-                .WithFiles("keycloak-themes/group-split", "/opt/keycloak/themes/group-split")
+                .WithFiles("Assets/keycloak/realms.json", "/opt/keycloak/data/import/realms.json")
+                .WithFiles("Assets/keycloak/themes", "/opt/keycloak/themes/group-split")
                 // Production mode serves HTTPS only unless plain HTTP is opted into. TLS is
                 // terminated upstream, so Keycloak speaks plain HTTP and learns the original
                 // scheme and host from the forwarded headers the proxy sets.

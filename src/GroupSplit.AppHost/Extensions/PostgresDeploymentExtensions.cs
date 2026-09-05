@@ -1,7 +1,6 @@
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
-using GroupSplit.AppHost.Deployment;
 
-namespace GroupSplit.AppHost.Postgres;
+namespace GroupSplit.AppHost.Extensions;
 
 public static class PostgresDeploymentExtensions
 {
@@ -27,7 +26,7 @@ public static class PostgresDeploymentExtensions
         {
             return dbServer
                 .WithFiles(
-                    "postgres-init/create-databases.sql",
+                    "Assets/postgres/create-databases.sql",
                     "/docker-entrypoint-initdb.d/10-create-databases.sql")
                 .WithComposeHealthcheck(new Healthcheck
                 {

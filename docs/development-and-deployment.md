@@ -27,10 +27,10 @@ each mode carries that shape as a pair of extension methods next to the code tha
 
 | Resource | Run mode | Publish mode |
 | --- | --- | --- |
-| Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Keycloak/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Keycloak/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Keycloak/SmtpExtensions.cs) for the relay |
-| Postgres | `WithPostgresMcp` on each database (Aspire's own) | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Postgres/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
-| API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Health/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
-| Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Deployment/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, the `push-and-prepare-compose` pipeline step |
+| Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
+| Postgres | `WithPostgresMcp` on each database (Aspire's own) | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
+| API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
+| Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, the `push-and-prepare-compose` pipeline step |
 
 Only run mode adds the MAUI head, the seeder and its dashboard command, Scalar, and Mailpit
 itself; only publish mode declares the deployment parameters below. `PublishAs*` calls,
@@ -40,11 +40,12 @@ resource's definition.
 The rule for adding something new: if a deployment would never run it, it goes in the run
 block; if it only makes sense once there is no AppHost around to orchestrate, it goes in
 the publish block; otherwise it is shared. If a resource needs more than a line or two in
-either block, give it an `AsDevelopment*` / `AsDeployed*` pair in its own folder rather
-than growing the block.
+either block, give it an `AsDevelopment*` / `AsDeployed*` pair in its own file under
+`Extensions/` rather than growing the block. Files that are shipped into containers, the
+realm, the Keycloak theme and the Postgres init script, live under `Assets/`.
 
 The generic Compose plumbing those methods lean on is in
-[`Deployment/DeploymentExtensions.cs`](../src/GroupSplit.AppHost/Deployment/DeploymentExtensions.cs):
+[`Extensions/DeploymentExtensions.cs`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs):
 shipping files as configs, healthchecks, the external network, and the restart and
 `depends_on` defaults the publisher leaves to the operator.
 
@@ -61,19 +62,33 @@ a GitHub entry called `WEB_HOSTNAME` is what the parameter `web-hostname` resolv
 | `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
 | `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. |
-| `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | Google sign-in. Absent, the provider imports disabled and hidden. |
-| `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | all or none | Keycloak's mail relay. See [Email](../README.md#email). Setting some but not all fails the publish. |
-| `smtp-port` | variable `SMTP_PORT` | no | Defaults to 587. |
-| `verify-email` | variable `VERIFY_EMAIL` | no | Whether registration has to prove the address. Off unless set, and ignored without a relay. |
+| `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
+| `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
+| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
+| `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
+| `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
+
+The optional ones are declared with
+[`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
+which supplies the default when configuration has no value: an environment variable from
+the workflow wins over it, and a deployment that never mentions mail or Google gets both
+switched off rather than a prompt. (Aspire reads an empty value in `appsettings.json` as a
+missing parameter, which is why the defaults are in code rather than there.) The two
+switches exist so that the AppHost never has to read a parameter's value while it builds
+the model; the rules that span several values run as the `validate-smtp` and
+`validate-google-sign-in` pipeline steps, after Aspire's `process-parameters` step has
+resolved the values and before `build-prereq`, which every image build waits on, so a bad
+deployment fails before an image is built.
 
 `KOMODO_*` and `REGISTRY_*` configure the workflow itself and are not exported as
 parameters.
 
-Run mode has no such list. The passwords are generated and kept in the AppHost's user
-secrets, Mailpit replaces the relay, and the Google credentials are the one thing a
-developer may want to set locally:
+Run mode uses the same defaults. The passwords are generated and kept in the AppHost's
+user secrets, Mailpit replaces the relay, and Google is the one thing a developer may
+want to switch on locally:
 
 ```bash
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-sign-in-enabled true
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-client-id <id>
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-client-secret <secret>
 ```

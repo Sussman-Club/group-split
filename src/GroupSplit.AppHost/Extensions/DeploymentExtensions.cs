@@ -2,7 +2,7 @@ using Aspire.Hosting.Docker;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 
-namespace GroupSplit.AppHost.Deployment;
+namespace GroupSplit.AppHost.Extensions;
 
 /// <summary>
 /// Publish-time wiring for the Docker Compose target. Everything here is deployment shaped and
@@ -10,24 +10,6 @@ namespace GroupSplit.AppHost.Deployment;
 /// </summary>
 public static class DeploymentExtensions
 {
-    extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEndpoints
-    {
-        /// <summary>
-        /// Publishes the primary HTTP endpoint on a fixed host port.
-        /// <para>
-        /// An unpinned endpoint lands on a random host port, and
-        /// <c>WithExternalHttpEndpoints</c> would publish every HTTP endpoint, including
-        /// Keycloak's management port. This exposes exactly one.
-        /// </para>
-        /// </summary>
-        public IResourceBuilder<T> PublishOnHostPort(int hostPort)
-            => resource.WithEndpoint("http", endpoint =>
-            {
-                endpoint.IsExternal = true;
-                endpoint.Port = hostPort;
-            });
-    }
-
     extension<T>(IResourceBuilder<T> resource) where T : ContainerResource
     {
         /// <summary>
@@ -64,11 +46,13 @@ public static class DeploymentExtensions
             {
                 return resource.WithContainerFiles(
                     Path.GetDirectoryName(targetPath)!.Replace('\\', '/'),
-                    [new ContainerFile
-                    {
-                        Name = Path.GetFileName(targetPath),
-                        Contents = File.ReadAllText(source)
-                    }]);
+                    [
+                        new ContainerFile
+                        {
+                            Name = Path.GetFileName(targetPath),
+                            Contents = File.ReadAllText(source)
+                        }
+                    ]);
             }
 
             foreach (var path in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
@@ -78,11 +62,13 @@ public static class DeploymentExtensions
 
                 resource.WithContainerFiles(
                     directory == "." ? targetPath : $"{targetPath}/{directory}",
-                    [new ContainerFile
-                    {
-                        Name = Path.GetFileName(path),
-                        Contents = File.ReadAllText(path)
-                    }]);
+                    [
+                        new ContainerFile
+                        {
+                            Name = Path.GetFileName(path),
+                            Contents = File.ReadAllText(path)
+                        }
+                    ]);
             }
 
             return resource;
@@ -151,9 +137,9 @@ public static class DeploymentExtensions
                     .ToHashSet();
 
                 foreach (var dependency in file.Services.Values
-                    .SelectMany(service => service.DependsOn)
-                    .Where(edge => healthchecked.Contains(edge.Key))
-                    .Select(edge => edge.Value))
+                             .SelectMany(service => service.DependsOn)
+                             .Where(edge => healthchecked.Contains(edge.Key))
+                             .Select(edge => edge.Value))
                 {
                     // Only the default is ours to strengthen. A "run to completion" edge, which
                     // is what the migration bundle's consumers get, already says something

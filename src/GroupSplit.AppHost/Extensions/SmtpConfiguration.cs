@@ -1,23 +1,21 @@
-namespace GroupSplit.AppHost.Mail;
+namespace GroupSplit.AppHost.Extensions;
 
 /// <summary>
-/// A resolved mail relay, in the shape Keycloak's realm placeholders expect.
+/// A mail relay, in the shape Keycloak's realm placeholders expect.
 /// <para>
 /// Every field is a <see cref="ReferenceExpression"/> rather than a string, so that a
-/// value sourced from a secret parameter or from another resource's endpoint stays
-/// unresolved until Aspire renders it -- which is what lets a relay be described the
-/// same way whether it is a deployment secret or a container next door.
+/// value sourced from a parameter or from another resource's endpoint stays unresolved
+/// until Aspire renders it -- which is what lets a relay be described the same way
+/// whether it is a deployment parameter or a container next door.
 /// </para>
 /// </summary>
 internal sealed record SmtpConfiguration(
-    bool Enabled,
+    ReferenceExpression Enabled,
     ReferenceExpression Host,
     ReferenceExpression Port,
     ReferenceExpression From,
     ReferenceExpression User,
-    ReferenceExpression Password,
-    ReferenceExpression Auth,
-    ReferenceExpression StartTls);
+    ReferenceExpression Password);
 
 internal static class SmtpConfigurationExtensions
 {
@@ -36,7 +34,9 @@ internal static class SmtpConfigurationExtensions
     /// <para>
     /// The same variables are still set on the container, which is what resolves the
     /// placeholders in run mode, where the file really is mounted and Keycloak does its
-    /// own substitution.
+    /// own substitution. <c>SMTP_ENABLED</c> drives both the realm's <c>auth</c> and its
+    /// <c>starttls</c>: a relay this stack talks to authenticates over STARTTLS, and a
+    /// disabled one has neither.
     /// </para>
     /// </summary>
     public static IResourceBuilder<T> WithSmtpEnvironment<T>(
@@ -45,12 +45,11 @@ internal static class SmtpConfigurationExtensions
         where T : IResourceWithEnvironment
     {
         return resource
+            .WithEnvironment("SMTP_ENABLED", smtp.Enabled)
             .WithEnvironment("SMTP_HOST", smtp.Host)
             .WithEnvironment("SMTP_PORT", smtp.Port)
             .WithEnvironment("SMTP_FROM", smtp.From)
             .WithEnvironment("SMTP_USER", smtp.User)
-            .WithEnvironment("SMTP_PASSWORD", smtp.Password)
-            .WithEnvironment("SMTP_AUTH", smtp.Auth)
-            .WithEnvironment("SMTP_STARTTLS", smtp.StartTls);
+            .WithEnvironment("SMTP_PASSWORD", smtp.Password);
     }
 }
