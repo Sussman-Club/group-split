@@ -63,6 +63,14 @@ Every non-2xx API response is RFC 9457 problem details carrying a stable `code`,
 and, where it helps, extension members naming what is in the way. The contract, the code
 catalog and how each side produces and consumes it are in [docs/errors.md](docs/errors.md).
 
+## Design system
+
+One palette, one type pair, one set of radii and shadows -- shared by the app, the Keycloak
+login pages, the Keycloak account console and the mail Keycloak sends. Nothing fans a token
+out at build time, so **a style change is not finished until it is in every view that shows
+it.** The files that each carry a copy, and how to check a change in both light and dark,
+are in [docs/design-system.md](docs/design-system.md).
+
 ## Run locally
 
 ```bash

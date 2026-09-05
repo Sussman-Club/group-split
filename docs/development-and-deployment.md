@@ -42,7 +42,9 @@ block; if it only makes sense once there is no AppHost around to orchestrate, it
 the publish block; otherwise it is shared. If a resource needs more than a line or two in
 either block, give it an `AsDevelopment*` / `AsDeployed*` pair in its own file under
 `Extensions/` rather than growing the block. Files that are shipped into containers, the
-realm, the Keycloak theme and the Postgres init script, live under `Assets/`.
+realm, the Keycloak theme and the Postgres init script, live under `Assets/`. The theme
+restates the app's design tokens rather than importing them, so a style change has to be
+made in every view that shows it -- see [design-system.md](design-system.md).
 
 The generic Compose plumbing those methods lean on is in
 [`Extensions/DeploymentExtensions.cs`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs):
