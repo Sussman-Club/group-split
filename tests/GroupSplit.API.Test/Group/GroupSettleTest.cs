@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -83,7 +84,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
             groupService.Settle(group.Id, request,
                 TestContext.Current.CancellationToken));
 
@@ -103,7 +104,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
             groupService.Settle(Guid.NewGuid(), request,
                 TestContext.Current.CancellationToken));
 

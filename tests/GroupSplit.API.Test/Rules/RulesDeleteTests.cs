@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -107,7 +108,7 @@ public class RulesDeleteTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var nonExistentRuleId = Guid.NewGuid();
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
             await rulesService.Delete(nonExistentRuleId, TestContext.Current.CancellationToken));
 
         Assert.Equal("Rule does not exist.", ex.Message);
@@ -136,7 +137,7 @@ public class RulesDeleteTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await rulesService.Delete(createdVersion.Rule.Id, TestContext.Current.CancellationToken);
 
         // Assert - second delete should throw
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
             await rulesService.Delete(createdVersion.Rule.Id, TestContext.Current.CancellationToken));
 
         Assert.Equal("Rule does not exist.", ex.Message);

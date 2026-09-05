@@ -1,10 +1,12 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject IRulesClient RulesClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject ApiErrorPresenter Errors
 
 <MudDialog>
     <TitleContent>
@@ -15,6 +17,11 @@
 
     <DialogContent>
         <MudStack Spacing="4">
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" ShowCloseIcon="true" CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+            }
+
             <MudTable Items="_rules">
                 <HeaderContent>
                     <MudTh>Category</MudTh>
@@ -64,10 +71,43 @@
 
     private ICollection<RuleVersionResponse> _rules = [];
 
+    private string? _error;
+
     protected override async Task OnInitializedAsync()
     {
-        _rules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false);
+        var loaded = await Run(
+            async () => _rules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false),
+            "Could not load the rules.");
+
+        if (!loaded) MudDialog.Cancel();
+
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// A refusal stays in the dialog, inline, so the list and the buttons remain usable and
+    /// the person can correct course without reopening it. Only a lost session leaves the
+    /// dialog, because only signing in again can fix that.
+    /// </summary>
+    private async Task<bool> Run(Func<Task> action, string context)
+    {
+        var error = await Errors.CaptureAsync(action);
+
+        if (error is null)
+        {
+            _error = null;
+            return true;
+        }
+
+        if (error.Kind == ApiErrorKind.Unauthenticated || error.Message.Length == 0)
+        {
+            await Errors.ShowAsync(error);
+            return false;
+        }
+
+        _error = $"{context} {error.Message}";
+        StateHasChanged();
+        return false;
     }
 
     private async Task OpenCreateRuleDialog()
@@ -92,17 +132,28 @@
 
     private async Task CreateRule(CreateRuleRequest request)
     {
-        var response = await RulesClient.CreateRuleAsync(request);
+        var created = await Run(async () =>
+        {
+            var response = await RulesClient.CreateRuleAsync(request);
+            _rules.Add(response);
+        }, "Could not create the rule.");
+
+        if (!created) return;
 
         Snackbar.Add("Rule created successfully.", Severity.Success);
-
-        _rules.Add(response);
         StateHasChanged();
     }
 
     private async Task OpenEditRuleDialog(RuleVersionResponse rule)
     {
-        var ruleDetails = await RulesClient.GetRuleAsync(rule.RuleId);
+        RuleDetailsResponse? ruleDetails = null;
+
+        var loaded = await Run(
+            async () => ruleDetails = await RulesClient.GetRuleAsync(rule.RuleId),
+            "Could not load the rule.");
+
+        if (!loaded || ruleDetails is null) return;
+
         var ruleToUpdate = new UpdateRuleRequest
         {
             Category = ruleDetails.Category,
@@ -130,18 +181,23 @@
 
     private async Task UpdateRule(RuleVersionResponse rule, JsonPatchDocument<UpdateRuleRequest> patch)
     {
-        var updated = await RulesClient.UpdateRuleAsync(rule.RuleId, patch);
-        Snackbar.Add("Rule updated successfully.", Severity.Success);
-
-        var list = _rules.ToList();
-
-        var index = list.FindIndex(x => x.RuleId == rule.RuleId);
-        if (index != -1)
+        var updated = await Run(async () =>
         {
-            list[index] = updated;
-            _rules = list;
-        }
+            var response = await RulesClient.UpdateRuleAsync(rule.RuleId, patch);
 
+            var list = _rules.ToList();
+            var index = list.FindIndex(x => x.RuleId == rule.RuleId);
+
+            if (index != -1)
+            {
+                list[index] = response;
+                _rules = list;
+            }
+        }, "Could not update the rule.");
+
+        if (!updated) return;
+
+        Snackbar.Add("Rule updated successfully.", Severity.Success);
         StateHasChanged();
     }
 
@@ -164,10 +220,15 @@
 
     private async Task DeleteRule(RuleVersionResponse rule)
     {
-        await RulesClient.DeleteRuleAsync(rule.RuleId);
-        Snackbar.Add("Rule deleted successfully.", Severity.Success);
+        var deleted = await Run(async () =>
+        {
+            await RulesClient.DeleteRuleAsync(rule.RuleId);
+            _rules.Remove(rule);
+        }, "Could not delete the rule.");
 
-        _rules.Remove(rule);
+        if (!deleted) return;
+
+        Snackbar.Add("Rule deleted successfully.", Severity.Success);
         StateHasChanged();
     }
 

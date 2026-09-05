@@ -202,7 +202,7 @@ public class DebtCalculationTests
         var alice = Guid.NewGuid();
         var bob = Guid.NewGuid();
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             ServiceFor(stranger).GetUserBalance(
                 [Balance(alice, "Alice", 5m), Balance(bob, "Bob", -5m)]));
 

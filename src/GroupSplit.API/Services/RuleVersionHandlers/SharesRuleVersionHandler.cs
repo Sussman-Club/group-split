@@ -1,4 +1,6 @@
 ﻿using GroupSplit.Data;
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +37,7 @@ public class SharesRuleVersionHandler(AppDbContext dbContext)
         ).ToListAsync(ct);
 
         if (users.Count != dto.Shares.Count)
-            throw new InvalidOperationException("Some users in the shares rule do not exist.");
+            throw new ValidationException(ErrorCodes.RuleUsersNotInGroup, "Some users in the shares rule are not members of the group.");
 
         var totalShares = dto.Shares.Values.Sum();
 
@@ -51,7 +53,7 @@ public class SharesRuleVersionHandler(AppDbContext dbContext)
         }
 
         if (calculated.Count == 0)
-            throw new InvalidOperationException("No users have shares.");
+            throw new ValidationException(ErrorCodes.RuleSharesEmpty, "No users have shares.");
 
         // Fix rounding drift so total = 100
         var diff = 100 - calculated.Sum(x => x.Percentage);

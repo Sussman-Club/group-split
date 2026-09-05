@@ -1,7 +1,9 @@
-﻿using GroupSplit.API.Extensions;
+using GroupSplit.API.Errors;
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +17,8 @@ public static class GroupApi
         {
             var group = routeBuilder
                 .MapGroup("/groups")
-                .RequireAuthorization();
+                .RequireAuthorization()
+                .ProducesStandardProblems();
 
             group.WithTags("Groups");
 
@@ -49,7 +52,8 @@ public static class GroupApi
                     return Results.Ok(groupInfo);
                 })
                 .WithName("CreateGroup")
-                .Produces<GroupResponse>();
+                .Produces<GroupResponse>()
+                .ProducesValidationProblem();
         }
 
         private RouteHandlerBuilder MapGetAllGroups()
@@ -76,7 +80,8 @@ public static class GroupApi
                     var group = await groupService.GetGroupById(id, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
-                    if (groupResponse is null) return Results.NotFound();
+                    if (groupResponse is null)
+                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
 
                     return Results.Ok(groupResponse);
                 })
@@ -94,8 +99,9 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     var groupUpdateRequest = await groupService.GetUpdateModel(id, ct);
-                    
-                    if (groupUpdateRequest is null) return Results.NotFound();
+
+                    if (groupUpdateRequest is null)
+                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
 
                     patchDocument.ApplyTo(groupUpdateRequest);
 
@@ -103,7 +109,7 @@ public static class GroupApi
                         return invalid;
 
                     await groupService.UpdateGroup(id, groupUpdateRequest, ct);
-                    
+
                     var group = await groupService.GetGroupById(id, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
@@ -111,6 +117,7 @@ public static class GroupApi
                 })
                 .WithName("UpdateGroup")
                 .Produces<GroupResponse>()
+                .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -153,6 +160,8 @@ public static class GroupApi
                 .Produces<RuleVersionResponse[]>();
         }
 
+        // A group the caller is not in answers with an empty list, like the transaction and
+        // rule listings above, so there is no 404 to declare here.
         private RouteHandlerBuilder MapGetMembers()
         {
             return group.MapGet("{id:guid}/members", async (
@@ -162,11 +171,10 @@ public static class GroupApi
                 {
                     var members = (await groupService.GetGroupMembers(id, ct)).SelectDto();
                     var userResponse = await members.ToListAsync(ct);
-                    return userResponse is null ? Results.NotFound() : Results.Ok(userResponse);
+                    return Results.Ok(userResponse);
                 })
                 .WithName("GetGroupMembers")
-                .Produces<UserInfo[]>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .Produces<UserInfo[]>();
         }
 
         private RouteHandlerBuilder MapAddMember()
@@ -177,16 +185,17 @@ public static class GroupApi
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    // Implementation for adding a member would go here
                     var group = await groupService.AddGroupMembers(id, request, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
-                    if (groupResponse is null) return Results.NotFound();
+                    if (groupResponse is null)
+                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
 
                     return Results.Ok(groupResponse);
                 })
                 .WithName("AddGroupMember")
                 .Produces<GroupResponse>()
+                .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -201,13 +210,16 @@ public static class GroupApi
                     var group = await groupService.RemoveGroupMember(groupId, userId, ct);
                     var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
 
-                    if (groupResponse is null) return Results.NotFound();
+                    if (groupResponse is null)
+                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
 
                     return Results.Ok(groupResponse);
                 })
                 .WithName("RemoveGroupMember")
                 .Produces<GroupResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status403Forbidden)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         private RouteHandlerBuilder MapGetGroupUserBalance()
@@ -219,9 +231,14 @@ public static class GroupApi
                     CancellationToken ct) =>
             {
                 var balances = await groupService.GetGroupNetBalance(groupId, ct);
-                var balanceResponse =  await balances.ToArrayAsync(ct);
+                var balanceResponse = await balances.ToArrayAsync(ct);
 
-                if (balanceResponse is null) return Results.NotFound();
+                // Every group has at least its creator, so no rows means the group is not
+                // one of the caller's. Left to the calculator, the caller's absence from the
+                // settlement would surface as a bug rather than as this.
+                if (balanceResponse.Length == 0)
+                    return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+
                 var groupUserBalance = await debtCalculator.GetUserBalance(balanceResponse);
 
                 return Results.Ok(groupUserBalance);
@@ -243,7 +260,9 @@ public static class GroupApi
                 return Results.NoContent();
             })
             .WithName("SettleGroupDebts")
-            .Produces(StatusCodes.Status204NoContent);
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }
 

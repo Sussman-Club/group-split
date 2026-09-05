@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -146,7 +147,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             rulesService.Update(Guid.NewGuid(), request, TestContext.Current.CancellationToken));
     }
 
@@ -181,7 +182,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             rulesService.Update(ruleB.Rule.Id, request, TestContext.Current.CancellationToken));
 
         Assert.Equal("Group already has a rule with this category.", ex.Message);
@@ -223,7 +224,7 @@ public class RulesUpdateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ValidationException>(() =>
             rulesService.Update(rule.Rule.Id, request, TestContext.Current.CancellationToken));
     }
 }

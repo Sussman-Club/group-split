@@ -14,7 +14,7 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
         var settlements = MinimizeTransactions(netBalance);
         var user = currentUser.User;
         if (!settlements.TryGetValue(user.Id, out var balance))
-            throw new ArgumentException($"User {user.Id} not found in settlements.");
+            throw new InvalidOperationException($"User {user.Id} not found in settlements.");
 
         return balance;
     }

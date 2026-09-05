@@ -1,3 +1,4 @@
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
@@ -14,7 +15,8 @@ public static class RulesApi
         public RouteGroupBuilder MapRulesApi()
         {
             var group = routes.MapGroup("/rules")
-                .RequireAuthorization();
+                .RequireAuthorization()
+                .ProducesStandardProblems();
 
             group.WithTags("Rules");
 
@@ -57,7 +59,10 @@ public static class RulesApi
                     return Results.Ok(response);
                 })
                 .WithName("CreateRule")
-                .Produces<RuleVersionResponse>();
+                .Produces<RuleVersionResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         private RouteHandlerBuilder MapUpdateRule()
@@ -87,7 +92,9 @@ public static class RulesApi
                 })
                 .WithName("UpdateRule")
                 .Produces<RuleVersionResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         private RouteHandlerBuilder MapDeleteRule()
@@ -101,7 +108,9 @@ public static class RulesApi
                     return Results.Ok();
                 })
                 .WithName("DeleteRule")
-                .Produces(StatusCodes.Status404NotFound);
+                .Produces(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
     }
 

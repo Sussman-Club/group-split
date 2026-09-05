@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
@@ -10,18 +11,21 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     private readonly TransactionsTracker _tracker;
     private readonly ISnackbar _snackbar;
     private readonly LoadGuard _guard;
+    private readonly ApiErrorPresenter _errors;
 
     public Task IsReadyTask { get; }
 
     public TransactionsPageStateService(ITransactionsClient client,
         TransactionsTracker tracker,
         ISnackbar snackbar,
-        LoadGuard guard)
+        LoadGuard guard,
+        ApiErrorPresenter errors)
     {
         _client = client;
         _tracker = tracker;
         _snackbar = snackbar;
         _guard = guard;
+        _errors = errors;
         IsReadyTask = Task.Run(async () =>
         {
             if (tracker.Transactions is not null) return;
@@ -47,37 +51,44 @@ public class TransactionsPageStateService : ITransactionsPageStateService
             .ToListAsync(cancellationToken: ct);
     }
 
-    public async Task CreateAsync(CreateTransactionRequest request, CancellationToken ct = default)
-    {
-        var transaction = await _client.CreateTransactionAsync(request, ct);
-        AddTransaction(transaction);
-        _snackbar.Add("Transaction created successfully.", Severity.Success);
-        await LoadAsync(ct);
-    }
+    // Every write below runs through the presenter: a refusal from the API becomes an
+    // error snackbar naming the reason, a lost session becomes a sign-in, and the caller
+    // gets false instead of an exception it would have had to catch itself.
 
-    public async Task UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
-        CancellationToken ct = default)
-    {
-        var updated = await _client.UpdateTransactionAsync(transaction.Id, patch, ct);
-
-        if (updated.PaidByUserId != transaction.PaidByUserId)
+    public Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
+        _errors.TryAsync(async () =>
         {
+            var transaction = await _client.CreateTransactionAsync(request, ct);
+            AddTransaction(transaction);
+            _snackbar.Add("Transaction created successfully.", Severity.Success);
+            await LoadAsync(ct);
+        }, "Could not save the expense.");
+
+    public Task<bool> UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
+        CancellationToken ct = default) =>
+        _errors.TryAsync(async () =>
+        {
+            var updated = await _client.UpdateTransactionAsync(transaction.Id, patch, ct);
+
+            if (updated.PaidByUserId != transaction.PaidByUserId)
+            {
+                RemoveTransaction(transaction);
+            }
+            else
+            {
+                UpdateTransaction(updated);
+            }
+
+            _snackbar.Add("Transaction updated successfully.", Severity.Success);
+        }, "Could not update the expense.");
+
+    public Task<bool> DeleteAsync(TransactionResponse transaction, CancellationToken ct = default) =>
+        _errors.TryAsync(async () =>
+        {
+            await _client.DeleteTransactionAsync(transaction.Id, ct);
             RemoveTransaction(transaction);
-        }
-        else
-        {
-            UpdateTransaction(updated);
-        }
-        
-        _snackbar.Add("Transaction updated successfully.", Severity.Success);
-    }
-
-    public async Task DeleteAsync(TransactionResponse transaction, CancellationToken ct = default)
-    {
-        await _client.DeleteTransactionAsync(transaction.Id, ct);
-        RemoveTransaction(transaction);
-        _snackbar.Add("Transaction deleted successfully.", Severity.Success);
-    }
+            _snackbar.Add("Transaction deleted successfully.", Severity.Success);
+        }, "Could not delete the expense.");
 
     private void UpdateTransaction(TransactionResponse transaction)
     {

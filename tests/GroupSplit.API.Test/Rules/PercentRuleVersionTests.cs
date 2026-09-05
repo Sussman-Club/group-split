@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -64,7 +65,7 @@ public class PercentRuleVersionTests(ApiTestFixture fixture) : ApiUnitTest(fixtu
     {
         var (groupId, users) = await GroupOf(1);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             CreatePercent(groupId, new Dictionary<Guid, decimal>
             {
                 [users[0]] = firstShare,
@@ -112,14 +113,14 @@ public class PercentRuleVersionTests(ApiTestFixture fixture) : ApiUnitTest(fixtu
     {
         var (groupId, users) = await GroupOf(0);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             CreatePercent(groupId, new Dictionary<Guid, decimal>
             {
                 [users[0]] = 50,
                 [Guid.NewGuid()] = 50
             }));
 
-        Assert.Contains("do not exist", exception.Message);
+        Assert.Contains("not members", exception.Message);
     }
 
     [Fact]
@@ -233,7 +234,7 @@ public class SettlementRuleTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var rule = await SettledGroupRule();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
             GetService<IRuleService>().Update(rule.Id, new UpdateRuleRequest
             {
                 Category = "Renamed",
@@ -248,7 +249,7 @@ public class SettlementRuleTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var rule = await SettledGroupRule();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
             GetService<IRuleService>().Delete(rule.Id, TestContext.Current.CancellationToken));
 
         Assert.Contains("not deletable", exception.Message);

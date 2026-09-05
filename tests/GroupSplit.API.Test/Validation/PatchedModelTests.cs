@@ -1,4 +1,5 @@
 using GroupSplit.API.Extensions;
+using HttpValidationProblemDetails = Microsoft.AspNetCore.Http.HttpValidationProblemDetails;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;

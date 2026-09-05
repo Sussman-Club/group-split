@@ -1,4 +1,6 @@
 using GroupSplit.API.Services;
+using GroupSplit.Shared.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -131,12 +133,12 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<ValidationException>(async () =>
         {
             await rulesService.Create(request, TestContext.Current.CancellationToken);
         });
 
-        Assert.Equal("Some users in the percentage rule do not exist.", ex.Message);
+        Assert.Equal(ErrorCodes.RuleUsersNotInGroup, ex.Code);
     }
 
     [Fact]
@@ -163,7 +165,7 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             rulesService.Create(request, TestContext.Current.CancellationToken));
     }
 
@@ -195,7 +197,7 @@ public class RulesCreateTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ConflictException>(() =>
             rulesService.Create(createRuleRequest2, TestContext.Current.CancellationToken));
     }
 

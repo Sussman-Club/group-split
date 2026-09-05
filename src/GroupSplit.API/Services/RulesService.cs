@@ -1,4 +1,6 @@
 using GroupSplit.API.Services.RuleVersionHandlers;
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -56,12 +58,12 @@ public class RuleService(
                 .FirstOrDefaultAsync(ct);
 
         if (groupResult is not { Group: not null })
-            throw new InvalidOperationException("Group does not exist.");
+            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group does not exist.");
 
         if (groupResult.Rule is not null &&
             await dbContext.Entry(groupResult.Rule).Collection(r => r.Versions).Query()
                 .AnyAsync(x => x.EndDateTime == null, ct))
-            throw new InvalidOperationException("Group already has a rule with the same category.");
+            throw new ConflictException(ErrorCodes.RuleCategoryTaken, "Group already has a rule with the same category.");
 
         var existingRule = groupResult.Rule;
 
@@ -103,7 +105,7 @@ public class RuleService(
         // A rule in someone else's group takes this path too, and says the same thing a
         // missing one does: whether it exists is not the caller's to learn.
         if (ruleVersion is null)
-            throw new InvalidOperationException("Rule does not exist.");
+            throw new NotFoundException(ErrorCodes.RuleNotFound, "Rule does not exist.");
 
         var version = await ruleVersionHandler.ToDto(ruleVersion, ct);
 
@@ -136,13 +138,13 @@ public class RuleService(
                 .FirstOrDefaultAsync(ct);
 
         if (result is not { Rule: { } existingRule, LatestVersion: { } latestVersion })
-            throw new InvalidOperationException("Rule does not exist.");
+            throw new NotFoundException(ErrorCodes.RuleNotFound, "Rule does not exist.");
 
         if (result.CategoryConflict)
-            throw new InvalidOperationException("Group already has a rule with this category.");
+            throw new ConflictException(ErrorCodes.RuleCategoryTaken, "Group already has a rule with this category.");
         
         if (!existingRule.IsEditable)
-            throw new InvalidOperationException("Rule is not editable.");
+            throw new ConflictException(ErrorCodes.RuleNotEditable, "Rule is not editable.");
 
         existingRule.Category = request.Category;
 
@@ -168,10 +170,10 @@ public class RuleService(
             .FirstOrDefaultAsync(ct);
 
         if (version is null)
-            throw new InvalidOperationException("Rule does not exist.");
+            throw new NotFoundException(ErrorCodes.RuleNotFound, "Rule does not exist.");
         
         if (!version.Rule.IsDeletable)
-            throw new InvalidOperationException("Rule is not deletable.");
+            throw new ConflictException(ErrorCodes.RuleNotDeletable, "Rule is not deletable.");
 
         version.EndDateTime = DateTime.UtcNow;
 

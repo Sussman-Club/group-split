@@ -1,7 +1,9 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
 
 <MudDialog>
     <TitleContent>
@@ -112,13 +114,24 @@
         selectedDate = Original.DateTime.Date;
         selectedTime = Original.DateTime.TimeOfDay;
 
-        // Load categories + users for the transaction's group
-        GroupCategories = await GroupsClient.GetGroupRulesAsAsyncEnumerable(Original.GroupId, allowUserTransactions: true).Select(x => new RuleVersionInfo(x.RuleVersionId, x.Category)).ToListAsync();
+        // Load categories + users for the transaction's group. Without them there is
+        // nothing to edit against, so a failed load closes the dialog once the presenter
+        // has said why.
+        var loaded = await Errors.TryAsync(async () =>
+        {
+            GroupCategories = await GroupsClient.GetGroupRulesAsAsyncEnumerable(Original.GroupId, allowUserTransactions: true).Select(x => new RuleVersionInfo(x.RuleVersionId, x.Category)).ToListAsync();
 
-        if (GroupCategories.All(x => x.RuleVersionId != Original.RuleVersionId))
-            GroupCategories.Add(new RuleVersionInfo(Original.RuleVersionId, Original.Category));
+            if (GroupCategories.All(x => x.RuleVersionId != Original.RuleVersionId))
+                GroupCategories.Add(new RuleVersionInfo(Original.RuleVersionId, Original.Category));
 
-        GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+            GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+        }, "Could not load the group.");
+
+        if (!loaded)
+        {
+            MudDialog.Cancel();
+            return;
+        }
 
         StateHasChanged();
     }
