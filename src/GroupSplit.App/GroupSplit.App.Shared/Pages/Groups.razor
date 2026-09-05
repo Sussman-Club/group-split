@@ -7,196 +7,173 @@
 @inject IGroupsPageStateService GroupsService
 @implements IAsyncDisposable
 
-<PageTitle>Groups</PageTitle>
+<PageTitle>Groups - Group Split</PageTitle>
 
-@if (GroupsService.SelectedGroup != null)
+<GroupSwitcher Groups="GroupsService.Groups"
+               SelectedGroup="GroupsService.SelectedGroup"
+               SelectedGroupChanged="@(g => GroupsService.SelectedGroup = g)"
+               OnCreateClick="OpenCreateDialogAsync" />
+
+@if (GroupsService.SelectedGroup is { } group)
 {
-    <!-- Group Header -->
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
-        <MudStack Spacing="1">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Outlined.AccountBalance" Color="Color.Primary" Size="Size.Large" />
-                <MudText Typo="Typo.h4" Class="font-weight-bold">@GroupsService.SelectedGroup.Name</MudText>
-            </MudStack>
-            <MudText Typo="Typo.body2">
-                @GroupsService.SelectedGroup.MemberCount members · @GroupsService.Transactions.Count expenses
-            </MudText>
-        </MudStack>
-        <MudStack Row="true" Spacing="2">
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       Size="Size.Small"
-                       StartIcon="@Icons.Material.Outlined.Settings"
-                       OnClick="@ManageRules">
-                Manage Rules
-            </MudButton>
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       Size="Size.Small"
-                       StartIcon="@Icons.Material.Outlined.Edit"
-                       OnClick="@OpenUpdateGroupDialog">
-                Edit Group
-            </MudButton>
-            @if (!GroupsService.SelectedGroup.IsArchive)
+    <div class="gs-page-head" @key="@($"head-{group.Id}")">
+        <div class="gs-inline" style="gap: 16px">
+            <Avatar Name="@group.Name" Size="lg" />
+            <div>
+                <div class="gs-eyebrow">@(group.IsArchive ? "Archived group" : "Group")</div>
+                <h1 style="margin-top: 2px">@group.Name</h1>
+                <p style="margin-top: 2px">@group.MemberCount member@(group.MemberCount == 1 ? "" : "s") · @GroupsService.Transactions.Count expense@(GroupsService.Transactions.Count == 1 ? "" : "s")</p>
+            </div>
+        </div>
+
+        <div class="gs-toolbar" role="toolbar" aria-label="Group actions">
+            <MudTooltip Text="Split rules">
+                <MudIconButton Icon="@Icons.Material.Rounded.Rule" OnClick="@ManageRules" aria-label="Manage rules" />
+            </MudTooltip>
+            <MudTooltip Text="Rename group">
+                <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@OpenUpdateGroupDialog" aria-label="Edit group" />
+            </MudTooltip>
+            @if (!group.IsArchive)
             {
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           Size="Size.Small"
-                           StartIcon="@Icons.Material.Outlined.PersonAdd"
-                           OnClick="@OpenAddMemberDialogAsync">
-                    Add Member
-                </MudButton>
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Error"
-                           Size="Size.Small"
-                           StartIcon="@Icons.Material.Outlined.PersonRemove"
-                           OnClick="@OpenRemoveMemberDialogAsync">
-                    Remove Member
-                </MudButton>
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Tertiary"
-                           Size="Size.Small"
-                           StartIcon="@Icons.Material.Outlined.Archive"
-                           OnClick="@ArchiveGroup">
-                    Archive
-                </MudButton>
+                <span class="sep"></span>
+                <MudTooltip Text="Add member">
+                    <MudIconButton Icon="@Icons.Material.Rounded.PersonAdd" Color="Color.Primary" OnClick="@OpenAddMemberDialogAsync" aria-label="Add member" />
+                </MudTooltip>
+                <MudTooltip Text="Remove member">
+                    <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove" Color="Color.Error" OnClick="@OpenRemoveMemberDialogAsync" aria-label="Remove member" />
+                </MudTooltip>
             }
-        </MudStack>
-    </MudStack>
-}
+        </div>
+    </div>
 
-<MudStack Spacing="4" Class="mb-10">
-    @if (GroupsService.SelectedGroup != null)
-    {
-        <!-- Balance Row -->
-        @if (GroupsService.Balance is { } balance)
-        {
-            <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
-                <!-- Your Balance -->
-                <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                    <MudStack Spacing="3">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Your Balance</MudText>
-
-
-                        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="py-4">
-                            <MudStack Spacing="2">
-                                @if (UserBalance > 0)
-                                {
-                                    <MudText Typo="Typo.h5" Class="font-weight-bold">
-                                        You are owed
-                                        @UserBalance.ToString("C")
-                                    </MudText>
-                                    <MudStack Spacing="3">
-                                        @foreach (var debt in balance.OwedToYou)
-                                        {
-                                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                                <MudText Typo="Typo.body2">
-                                                    @debt.UserName owes you <strong>@debt.Amount.ToString("C")</strong>
-                                                </MudText>
-
-                                                <MudButton 
-                                                    Color="Color.Primary"
-                                                    Size="Size.Small"
-                                                    Variant="Variant.Outlined"
-                                                    OnClick="@(async() => await OpenSettleDialogAsync(debt))">
-                                                    Settle
-                                                </MudButton>
-                                            </MudStack>
-                                        }
-                                    </MudStack>
-                                }
-                                else if (UserBalance < 0)
-                                {
-                                    <MudText Typo="Typo.h5" Class="font-weight-bold">
-                                        You owe
-                                        @(Math.Abs(UserBalance).ToString("C"))
-                                    </MudText>
-                                    <MudText Typo="Typo.body2">
-                                        @foreach (var debt in balance.YouOwed)
-                                        {
-                                            <div>You owe @debt.UserName <strong>@debt.Amount.ToString("C")</strong></div>
-                                        }
-                                    </MudText>
-                                }
-                                else
-                                {
-                                    <MudText Typo="Typo.h5" Class="font-weight-bold">You're all settled up! 🎉</MudText>
-                                }
-                            </MudStack>
-                        </MudAlert>
-
-                    </MudStack>
-                </MudPaper>
-
-                <!-- Group Balances -->
-                <MudPaper Elevation="2" Class="pa-6" Style="min-width: 280px; max-width: 320px;">
-                    <MudStack Spacing="3">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Group Balances</MudText>
-                        <MudStack Spacing="2">
-                            @foreach (var member in balance.NetBalances)
+    <div class="gs-two-col @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}")" aria-busy="@(GroupsService.IsLoading ? "true" : "false")">
+        <div class="gs-stack">
+            @if (GroupsService.Balance is { } balance)
+            {
+                <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
+                    @if (UserBalance > 0)
+                    {
+                        <div class="gs-eyebrow">You are owed</div>
+                        <Money Value="UserBalance" Animate Class="gs-hero-amount" />
+                        <div class="gs-hero-sub">by @balance.OwedToYou.Count() @(balance.OwedToYou.Count() == 1 ? "person" : "people") in @group.Name</div>
+                        <div class="gs-hero-list">
+                            @foreach (var debt in balance.OwedToYou)
                             {
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                        <MudAvatar Color="Color.Primary" Size="Size.Small">@member.UserName[0]</MudAvatar>
-                                        <MudText Typo="Typo.body2">@member.UserName</MudText>
-                                    </MudStack>
-                                    <MudText Typo="Typo.body2" Class="font-weight-medium"
-                                             Color="@(member.Balance > 0 ? Color.Success : member.Balance < 0 ? Color.Error : Color.Default)">
-                                        @(member.Balance >= 0 ? "+" : "")@member.Balance.ToString("C")
-                                    </MudText>
-                                </MudStack>
+                                var d = debt;
+                                <div class="gs-hero-row">
+                                    <Avatar Name="@d.UserName" Size="sm" />
+                                    <div class="who">@d.UserName <small>owes you</small></div>
+                                    <Money Value="d.Amount" Animate />
+                                    <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                               OnClick="@(() => OpenSettleDialogAsync(d))">Settle</MudButton>
+                                </div>
                             }
-                        </MudStack>
-                    </MudStack>
-                </MudPaper>
-            </MudStack>
-        }
+                        </div>
+                    }
+                    else if (UserBalance < 0)
+                    {
+                        <div class="gs-eyebrow">You owe</div>
+                        <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
+                        <div class="gs-hero-sub">to @balance.YouOwed.Count() @(balance.YouOwed.Count() == 1 ? "person" : "people") in @group.Name</div>
+                        <div class="gs-hero-list">
+                            @foreach (var debt in balance.YouOwed)
+                            {
+                                <div class="gs-hero-row">
+                                    <Avatar Name="@debt.UserName" Size="sm" />
+                                    <div class="who">@debt.UserName <small>is waiting on you</small></div>
+                                    <Money Value="debt.Amount" Animate />
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="gs-eyebrow">Your balance</div>
+                        <div class="gs-hero-amount">All settled</div>
+                        <div class="gs-hero-sub">Nothing owed either way in @group.Name. Nice.</div>
+                    }
+                </section>
+            }
 
-        <!-- Expenses Row -->
-        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
-            <!-- Expenses List -->
-            <MudPaper Elevation="2" Class="pa-6 flex-grow-1">
-                <TransactionsList Title="Recent Expenses" Transactions="GroupsService.Transactions" />
-            </MudPaper>
-            <!-- My Groups -->
-            <MudStack Spacing="4">
-                <GroupsList Title="My Groups"
-                            Icon="@Icons.Material.Outlined.Groups"
-                            Groups="GroupsService.Groups"
-                            @bind-SelectedGroup="GroupsService.SelectedGroup"
-                            ShowCreateButton="true"
-                            OnCreateClick="OpenCreateDialogAsync" />
+            <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+                <div class="gs-card-title">
+                    <h2>Recent expenses</h2>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/transactions"
+                               EndIcon="@Icons.Material.Rounded.ArrowForward">All expenses</MudButton>
+                </div>
+                <TransactionsList Transactions="GroupsService.Transactions" Limit="8" />
+            </div>
+        </div>
 
-                <GroupsList Title="Archived Groups"
-                            Icon="@Icons.Material.Outlined.Archive"
-                            Groups="_archivedGroups"
-                            @bind-SelectedGroup="GroupsService.SelectedGroup"
-                            ShowCreateButton="false" />
-            </MudStack>
-        </MudStack>
-    }
-    else
-    {
-        <MudPaper Elevation="0" Class="pa-10">
-            <MudStack AlignItems="AlignItems.Center" Spacing="3">
-                <MudIcon Icon="@Icons.Material.Outlined.Groups" Size="Size.Large" />
-                <MudText Typo="Typo.h6">Select a group to view details</MudText>
-            </MudStack>
-        </MudPaper>
-    }
-</MudStack>
-
+        <div class="gs-stack">
+            <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
+                <div class="gs-card-title">
+                    <h2>Members</h2>
+                    <span class="gs-tag neutral">net balances</span>
+                </div>
+                @if (GroupsService.Balance is { } b && b.NetBalances.Any())
+                {
+                    var max = Math.Max(b.NetBalances.Max(m => Math.Abs(m.Balance)), 0.01m);
+                    var i = 0;
+                    <div class="gs-balances">
+                        @foreach (var member in b.NetBalances.OrderByDescending(m => m.Balance))
+                        {
+                            var w = (double)(Math.Abs(member.Balance) / max);
+                            <div class="gs-balance-row @(member.Balance < 0 ? "is-neg" : "")" style="--i: @(i++)">
+                                <Avatar Name="@member.UserName" Size="sm" />
+                                <div style="min-width: 0">
+                                    <div class="name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                                        @member.UserName
+                                        @if (member.UserId == UserInfo?.Id)
+                                        {
+                                            <span class="gs-muted" style="font-weight: 500"> (you)</span>
+                                        }
+                                    </div>
+                                    <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
+                                </div>
+                                <Money Value="member.Balance" Signed Animate />
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="gs-empty" style="padding: 20px">
+                        <MudIcon Icon="@Icons.Material.Rounded.Balance" />
+                        <span>Balances appear once there is an expense.</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="gs-card gs-empty" style="padding: 64px 24px">
+        <MudIcon Icon="@Icons.Material.Rounded.Groups" />
+        <h3>No group yet</h3>
+        <span>Create a group and invite the people you share costs with.</span>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+                   StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">Create a group</MudButton>
+    </div>
+}
 
 @if (GroupsService.SelectedGroup is { IsArchive: false })
 {
-    <ExtendedFab Label="Expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog" />
+    <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog" />
 }
 
 @code {
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
-    private readonly List<GroupResponse> _archivedGroups = [];
 
     private decimal UserBalance => GroupsService.Balance?.NetBalances.FirstOrDefault(x => x.UserId == UserInfo?.Id)?.Balance ?? 0m;
+
+    private string HeroClass => UserBalance switch
+    {
+        > 0 => "",
+        < 0 => "is-neg",
+        _ => "is-zero"
+    };
 
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
@@ -237,12 +214,6 @@
         };
 
         await DialogService.ShowAsync<ManageRulesDialog>("Manage Rules", parameters, options);
-    }
-
-    private void ArchiveGroup()
-    {
-        // TODO: Implement archive group dialog
-        // Allow user to archive the selected group
     }
 
     private async Task OpenCreateDialogAsync()

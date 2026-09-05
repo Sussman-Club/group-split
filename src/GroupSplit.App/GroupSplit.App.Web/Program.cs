@@ -12,6 +12,19 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Every service on localhost shares one cookie jar regardless of port, and each
+// abandoned sign-in leaves an OIDC correlation and nonce cookie behind for
+// fifteen minutes, scoped to /signin-oidc. Kestrel's 32KB defaults make that
+// callback answer 431 once enough pile up: the total-size limit over HTTP/1.1,
+// and the per-field limit over HTTP/2, which is what a browser uses on TLS and
+// where one Cookie header is one field. The ticket itself is held server-side,
+// so the session cookie is not what fills the header.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestHeadersTotalSize = 128 * 1024;
+    options.Limits.Http2.MaxRequestHeaderFieldSize = 128 * 1024;
+});
+
 builder.AddGroupSplitAuthentication();
 
 builder.Services.AddHttpContextAccessor();
@@ -69,7 +82,14 @@ else
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Only pages get the friendly 404. The two forwarders must answer with their
+// real status: re-executing an API 401 at /not-found lands on a Blazor page
+// carrying [Authorize], which challenges OpenID Connect and turns the 401 into
+// a 302 to Keycloak that a fetch cannot follow.
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api")
+               && !context.Request.Path.StartsWithSegments("/idp"),
+    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseDefaultHttpsRedirection();
 
 app.UseAuthentication();

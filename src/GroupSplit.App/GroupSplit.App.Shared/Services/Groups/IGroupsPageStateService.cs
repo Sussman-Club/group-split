@@ -13,6 +13,9 @@ public interface IGroupsPageStateService
 
     UserGroupBalanceResponse? Balance { get; }
 
+    /// <summary>True while the selected group's expenses and balances are on their way.</summary>
+    bool IsLoading { get; }
+
 
     event Action? OnGroupSelected;
     event Action? OnTransactionsChanged;

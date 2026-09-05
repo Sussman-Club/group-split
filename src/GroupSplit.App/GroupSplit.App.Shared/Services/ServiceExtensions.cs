@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Shared.Services.Groups;
+using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
@@ -17,6 +17,7 @@ public static class ServiceExtensions
         {
             services.AddMudTheme();
             services.TryAdd<ThemePreference>(sessionLifetime);
+            services.TryAddScoped<LoadGuard>();
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();

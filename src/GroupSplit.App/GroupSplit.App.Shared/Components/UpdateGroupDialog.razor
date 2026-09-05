@@ -21,9 +21,9 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
 
-        <MudButton Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
             Submit
         </MudButton>
     </DialogActions>

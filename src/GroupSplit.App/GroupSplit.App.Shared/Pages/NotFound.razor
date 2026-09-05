@@ -1,11 +1,12 @@
-﻿@page "/not-found"
+@page "/not-found"
 @layout MainLayout
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
-    <MudAlert Severity="Severity.Error" Elevation="6" Variant="Variant.Filled" Dense="false" Icon="@Icons.Material.Filled.ReportProblem">
-        <MudText Typo="Typo.h6" Class="fw-bold">Not Found</MudText>
-        <MudText>The content you are looking for does not exist.</MudText>
-        <MudDivider Class="my-2" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/" StartIcon="@Icons.Material.Filled.ArrowBack">Go Home</MudButton>
-    </MudAlert>
-</MudContainer>
+<PageTitle>Not found - Group Split</PageTitle>
+
+<div class="gs-empty" style="padding-top: 80px">
+    <div class="gs-money gs-display" style="font-size: clamp(4rem, 12vw, 7rem); line-height: 1; color: var(--gs-line-strong)">404</div>
+    <h3 style="font-size: 1.375rem">That page isn't in the ledger</h3>
+    <span>The link may be old, or the address has a typo.</span>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" Href="/"
+               StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
+</div>

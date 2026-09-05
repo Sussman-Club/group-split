@@ -8,23 +8,17 @@
     component only explains where the user is going and gets them there.
 *@
 
-<MudStack Class="flex-1" AlignItems="AlignItems.Center" Justify="Justify.Center">
-    <MudPaper Elevation="0" Class="gs-auth-card pa-8" MaxWidth="26rem" Width="100%">
-        <MudStack Spacing="4" AlignItems="AlignItems.Center">
+<div style="flex: 1; display: flex; align-items: center; justify-content: center">
+    <div class="gs-auth-card" style="width: 100%; max-width: 26rem; padding: 40px 32px 32px">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center">
 
-            <svg width="52" height="52" viewBox="0 0 64 64" role="img" aria-label="Group Split">
-                <path d="M 33.81 6.06 A 26 26 0 0 1 55.37 43.40 L 40.09 35.95 A 9 9 0 0 0 32.63 23.02 Z"
-                      fill="#22817a"/>
-                <path d="M 53.55 46.54 A 26 26 0 0 1 10.45 46.54 L 24.54 37.03 A 9 9 0 0 0 39.46 37.03 Z"
-                      fill="#2f9e95"/>
-                <path d="M 8.63 43.40 A 26 26 0 0 1 30.19 6.06 L 31.37 23.02 A 9 9 0 0 0 23.91 35.95 Z" fill="#cb6e3a"/>
-            </svg>
+            <BrandMark Class="gs-auth-mark" Size="64" />
 
-            <MudStack Spacing="1" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.overline" Color="Color.Primary">Group Split</MudText>
-                <MudText Typo="Typo.h5" Align="Align.Center" Class="font-weight-bold">@Title</MudText>
-                <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">@Subtitle</MudText>
-            </MudStack>
+            <div>
+                <div class="gs-eyebrow" style="color: var(--gs-teal)">Group Split</div>
+                <h1 style="margin: 8px 0 6px; font-size: 1.75rem; font-weight: 800">@Title</h1>
+                <p class="gs-muted" style="margin: 0; font-size: .9375rem">@Subtitle</p>
+            </div>
 
             @if (Error is not null)
             {
@@ -34,11 +28,10 @@
             }
             else if (_redirecting)
             {
-                <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="py-2">
-                    <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small"/>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Taking you to the secure sign-in page...
-                    </MudText>
-                </MudStack>
+                <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
+                    <span>Taking you to the secure sign-in page…</span>
+                </div>
             }
 
             @* Always rendered: the automatic redirect needs interactivity, and this
@@ -47,14 +40,19 @@
                        Variant="Variant.Filled"
                        FullWidth
                        Size="Size.Large"
+                       Class="gs-btn-pill"
+                       EndIcon="@Icons.Material.Rounded.ArrowForward"
                        Disabled="_redirecting && Error is null"
                        OnClick="GoAsync">
                 @ActionLabel
             </MudButton>
 
-        </MudStack>
-    </MudPaper>
-</MudStack>
+            <p class="gs-muted" style="margin: 4px 0 0; font-size: .75rem">
+                Sign-in is handled by our identity provider, so your password never touches this app.
+            </p>
+        </div>
+    </div>
+</div>
 
 @code {
     [Inject] private IAuthService AuthService { get; set; } = default!;
@@ -99,15 +97,15 @@
     {
         var query = new Uri(Nav.Uri).Query;
 
-        return string.IsNullOrEmpty(query) 
-            ? null 
-            : (from pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries) 
-               let separator = pair.IndexOf('=') 
-               where separator > 0 && Uri.UnescapeDataString(pair[..separator]) == key 
-               select Uri.UnescapeDataString(pair[(separator + 1)..]) 
-               into value 
-               select string.IsNullOrWhiteSpace(value) 
-                   ? null 
+        return string.IsNullOrEmpty(query)
+            ? null
+            : (from pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+               let separator = pair.IndexOf('=')
+               where separator > 0 && Uri.UnescapeDataString(pair[..separator]) == key
+               select Uri.UnescapeDataString(pair[(separator + 1)..])
+               into value
+               select string.IsNullOrWhiteSpace(value)
+                   ? null
                    : value).FirstOrDefault();
     }
 

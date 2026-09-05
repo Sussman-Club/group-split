@@ -1,0 +1,17 @@
+@namespace GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
+
+<span class="gs-avatar @Size @(Tone ?? Name.AvatarTone()) @Class" style="@Style" title="@Name" aria-hidden="true">@Name.Initials()</span>
+
+@code {
+    [Parameter, EditorRequired] public string? Name { get; set; }
+
+    /// <summary>"sm", "" (default), "lg" or "xl".</summary>
+    [Parameter] public string Size { get; set; } = "";
+
+    /// <summary>Force a tint ("", "clay", "ink"); by default it is derived from the name.</summary>
+    [Parameter] public string? Tone { get; set; }
+
+    [Parameter] public string Class { get; set; } = "";
+    [Parameter] public string Style { get; set; } = "";
+}
