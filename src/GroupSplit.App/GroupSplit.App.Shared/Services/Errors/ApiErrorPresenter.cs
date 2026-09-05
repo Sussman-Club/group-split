@@ -72,12 +72,7 @@ public sealed class ApiErrorPresenter(IAuthService auth, NavigationManager nav, 
                 // something to let scroll away.
                 snackbar.Add(
                     string.IsNullOrEmpty(context) ? error.Message : $"{context} {error.Message}",
-                    Severity.Error,
-                    options =>
-                    {
-                        options.RequireInteraction = true;
-                        options.ShowCloseIcon = true;
-                    });
+                    Severity.Error);
                 return;
         }
     }
