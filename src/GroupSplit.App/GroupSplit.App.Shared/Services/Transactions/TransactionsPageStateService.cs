@@ -9,20 +9,23 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     private readonly ITransactionsClient _client;
     private readonly TransactionsTracker _tracker;
     private readonly ISnackbar _snackbar;
+    private readonly LoadGuard _guard;
 
     public Task IsReadyTask { get; }
 
     public TransactionsPageStateService(ITransactionsClient client,
         TransactionsTracker tracker,
-        ISnackbar snackbar)
+        ISnackbar snackbar,
+        LoadGuard guard)
     {
         _client = client;
         _tracker = tracker;
         _snackbar = snackbar;
+        _guard = guard;
         IsReadyTask = Task.Run(async () =>
         {
             if (tracker.Transactions is not null) return;
-            await LoadAsync();
+            await _guard.RunAsync(() => LoadAsync(), "your expenses");
         });
     }
 

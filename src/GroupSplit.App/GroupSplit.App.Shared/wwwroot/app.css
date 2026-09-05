@@ -1330,6 +1330,16 @@ html:not([data-gs-ready]) .gs-group-card {
     transform: rotate(-6deg) scale(1.06);
 }
 
+/* A panel whose data is on its way. Dimmed rather than blanked, so the
+   layout holds still; the figures underneath are the previous group's and
+   must not be read, hence no pointer events either. */
+.gs-loading {
+    opacity: 0.45;
+    pointer-events: none;
+    filter: saturate(0.6);
+    transition: opacity var(--gs-base) var(--gs-ease), filter var(--gs-base) var(--gs-ease);
+}
+
 /* Empty state. */
 .gs-empty {
     display: flex;

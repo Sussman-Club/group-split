@@ -46,7 +46,7 @@
         </div>
     </div>
 
-    <div class="gs-two-col" @key="@($"body-{group.Id}")">
+    <div class="gs-two-col @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}")" aria-busy="@(GroupsService.IsLoading ? "true" : "false")">
         <div class="gs-stack">
             @if (GroupsService.Balance is { } balance)
             {
