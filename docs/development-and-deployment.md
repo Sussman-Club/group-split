@@ -53,8 +53,10 @@ shipping files as configs, healthchecks, the external network, and the restart a
 
 Anything that differs between deployments is an Aspire parameter. Parameter names are
 kebab-case; the deploy workflow exports every GitHub secret and variable of the
-`production` environment as `Parameters__<kebab-name>` as well as under its own name, so
-a GitHub entry called `WEB_HOSTNAME` is what the parameter `web-hostname` resolves to.
+`production` environment as `Parameters__<lower-cased name>`, the spelling Aspire documents
+for CI (dashes in a parameter name are written as underscores), so a GitHub entry called
+`WEB_HOSTNAME` is what the parameter `web-hostname` resolves to. Adding a parameter to the
+AppHost needs only a GitHub entry of the matching name.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
@@ -99,7 +101,7 @@ The workflow is not the only way to see what a deploy would ship. The same step 
 can be run from a checkout, minus the pushes:
 
 ```bash
-Parameters__web-hostname=https://groupsplit.example.com Parameters__dashboard-token=anything aspire do prepare-compose --environment preview --non-interactive
+Parameters__web_hostname=https://groupsplit.example.com Parameters__dashboard_token=anything aspire do prepare-compose --environment preview --non-interactive
 ```
 
 The step is named after the Compose environment resource, `compose`, the way the Docker
@@ -132,7 +134,8 @@ A push to `main`, in practice a `dev` to `main` merge, triggers
 
 1. The required secrets and variables are checked before anything is built, so a missing
    value fails in seconds rather than after the images exist.
-2. Every secret and variable is exported as `Parameters__*`.
+2. Every secret and variable is exported as `Parameters__*`, so the AppHost sees them the
+   way Aspire's CI guidance describes.
 3. `aspire do push --environment production` builds the API, web and migration images,
    pushes them to `registry.sussman.win/group-split` under one timestamp tag, and
    generates the Compose file that references that tag. The generation rides on `push`

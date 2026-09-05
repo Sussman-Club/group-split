@@ -7,8 +7,8 @@ namespace GroupSplit.AppHost.Extensions;
 public static class SmtpExtensions
 {
     // Deploy-time values arrive as Aspire parameters. The deploy workflow turns every GitHub
-    // secret and variable into Parameters__<kebab-name>, so SMTP_ENABLED, SMTP_HOST and the
-    // rest land on the names below with no extra wiring. These names also decide what
+    // secret and variable into Parameters__<lower-cased name>, so SMTP_ENABLED, SMTP_HOST and
+    // the rest land on the names below with no extra wiring. These names also decide what
     // realms.json can interpolate -- see WithSmtpEnvironment.
     private const string EnabledParameterName = "smtp-enabled";
 
