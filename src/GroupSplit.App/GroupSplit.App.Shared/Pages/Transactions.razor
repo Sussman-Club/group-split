@@ -32,19 +32,19 @@
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Recorded</span>
-            <span class="gs-stat-value">@All.Count</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@All.Count">@All.Count</span>
             <span class="gs-muted" style="font-size: .8125rem">@(Filtered.Count == All.Count ? "showing all" : $"{Filtered.Count} match")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
             <span class="gs-eyebrow">This month</span>
-            <span class="gs-stat-value gs-money">@ThisMonth.ToString("C")</span>
+            <Money Value="ThisMonth" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">@DateTime.Today.ToString("MMMM")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             <span class="gs-eyebrow">Total</span>
-            <span class="gs-stat-value gs-money">@Filtered.Sum(t => t.Amount).ToString("C")</span>
+            <Money Value="Filtered.Sum(t => t.Amount)" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">@(string.IsNullOrWhiteSpace(_searchString) ? "all time" : "of the matches")</span>
         </div>
     </div>
@@ -93,7 +93,7 @@
 
                 <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
-                        <span class="gs-money" style="font-size: 1.0625rem">@context.Item.Amount.ToString("C")</span>
+                        <Money Value="context.Item.Amount" Class="gs-grid-amount" />
                     </CellTemplate>
                 </PropertyColumn>
 

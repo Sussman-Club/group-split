@@ -48,11 +48,10 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton OnClick="@Cancel" Variant="Variant.Outlined">Cancel</MudButton>
-        <MudButton Color="Color.Error"
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Error"
                    Disabled="@(selectedMember == null)"
-                   OnClick="@Submit"
-                   Variant="Variant.Outlined">
+                   OnClick="@Submit">
             Remove Member
         </MudButton>
     </DialogActions>

@@ -54,7 +54,7 @@
                     @if (UserBalance > 0)
                     {
                         <div class="gs-eyebrow">You are owed</div>
-                        <div class="gs-hero-amount">@UserBalance.ToString("C")</div>
+                        <Money Value="UserBalance" Animate Class="gs-hero-amount" />
                         <div class="gs-hero-sub">by @balance.OwedToYou.Count() @(balance.OwedToYou.Count() == 1 ? "person" : "people") in @group.Name</div>
                         <div class="gs-hero-list">
                             @foreach (var debt in balance.OwedToYou)
@@ -63,7 +63,7 @@
                                 <div class="gs-hero-row">
                                     <Avatar Name="@d.UserName" Size="sm" />
                                     <div class="who">@d.UserName <small>owes you</small></div>
-                                    <span class="gs-money">@d.Amount.ToString("C")</span>
+                                    <Money Value="d.Amount" Animate />
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                OnClick="@(() => OpenSettleDialogAsync(d))">Settle</MudButton>
                                 </div>
@@ -73,7 +73,7 @@
                     else if (UserBalance < 0)
                     {
                         <div class="gs-eyebrow">You owe</div>
-                        <div class="gs-hero-amount">@Math.Abs(UserBalance).ToString("C")</div>
+                        <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
                         <div class="gs-hero-sub">to @balance.YouOwed.Count() @(balance.YouOwed.Count() == 1 ? "person" : "people") in @group.Name</div>
                         <div class="gs-hero-list">
                             @foreach (var debt in balance.YouOwed)
@@ -81,7 +81,7 @@
                                 <div class="gs-hero-row">
                                     <Avatar Name="@debt.UserName" Size="sm" />
                                     <div class="who">@debt.UserName <small>is waiting on you</small></div>
-                                    <span class="gs-money">@debt.Amount.ToString("C")</span>
+                                    <Money Value="debt.Amount" Animate />
                                 </div>
                             }
                         </div>
@@ -131,9 +131,7 @@
                                     </div>
                                     <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
                                 </div>
-                                <span class="gs-money @(member.Balance > 0 ? "gs-pos" : member.Balance < 0 ? "gs-neg" : "gs-muted")">
-                                    @(member.Balance > 0 ? "+" : "")@member.Balance.ToString("C")
-                                </span>
+                                <Money Value="member.Balance" Signed Animate />
                             </div>
                         }
                     </div>

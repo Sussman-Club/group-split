@@ -187,6 +187,30 @@ body,
     outline: none;
 }
 
+/* One ring only. PatternFly wraps the <input> in the form-control box, so
+   the browser's own focus outline on the input and PatternFly's ::after
+   underline would otherwise both draw inside the ring above. */
+.pf-v5-c-form-control > input,
+.pf-v5-c-form-control > textarea,
+.pf-v5-c-form-control > select {
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    color: inherit;
+}
+
+.pf-v5-c-form-control > input:focus,
+.pf-v5-c-form-control > input:focus-visible,
+.pf-v5-c-form-control > textarea:focus,
+.pf-v5-c-form-control > select:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.pf-v5-c-form-control::after {
+    border-bottom-width: 0;
+}
+
 /* PatternFly renders the password field as a wrapper with a reveal button. */
 .pf-v5-c-input-group,
 .pf-v5-c-input-group__item {

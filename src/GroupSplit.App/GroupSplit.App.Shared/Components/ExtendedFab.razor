@@ -14,5 +14,5 @@
     [Parameter] public EventCallback OnClick { get; set; }
     [Parameter] public string Icon { get; set; } = Icons.Material.Rounded.Add;
 
-    private string AriaLabel => $"Add {Label}";
+    private string AriaLabel => Label;
 }

@@ -89,7 +89,7 @@ else
                         {
                             <div class="gs-inline" style="justify-content: space-between; font-size: .875rem">
                                 <span>@group.GroupName</span>
-                                <span class="gs-money">@group.Balance.ToString("C")</span>
+                                <Money Value="group.Balance" />
                             </div>
                         }
                     </MudAlert>

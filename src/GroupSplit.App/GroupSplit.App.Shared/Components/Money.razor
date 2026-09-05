@@ -1,0 +1,33 @@
+@namespace GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
+
+@*
+    Every amount goes through here so figures share one face, tabular digits
+    and one sign convention. The text is final as rendered, so it is correct
+    with scripting off; `data-gs-count` only asks gs.js to roll up to it, and
+    to roll again whenever the value changes underneath.
+*@
+
+<span class="gs-money @Tone @Class"
+      data-gs-count="@(Animate ? Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : null)">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public decimal Value { get; set; }
+
+    /// <summary>Colour by sign and prefix a positive figure with "+".</summary>
+    [Parameter] public bool Signed { get; set; }
+
+    /// <summary>Show the magnitude only, for "you owe X" phrasing where the words carry the sign.</summary>
+    [Parameter] public bool Absolute { get; set; }
+
+    /// <summary>Count up from zero when the figure appears or changes.</summary>
+    [Parameter] public bool Animate { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private decimal Shown => Absolute ? Math.Abs(Value) : Value;
+
+    private string Text => Signed && Shown > 0 ? "+" + Shown.ToMoney() : Shown.ToMoney();
+
+    private string Tone => !Signed ? "" : Value > 0 ? "gs-pos" : Value < 0 ? "gs-neg" : "gs-muted";
+}

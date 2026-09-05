@@ -4,6 +4,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsPageStateService GroupsService
 @inject ITransactionsPageStateService TransactionsService
+@inject IGroupsClient GroupsClient
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -23,25 +24,25 @@
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.Groups" /></span>
             <span class="gs-eyebrow">Groups</span>
-            <span class="gs-stat-value">@ActiveGroups.Count</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@ActiveGroups.Count">@ActiveGroups.Count</span>
             <span class="gs-muted" style="font-size: .8125rem">@(ArchivedCount == 0 ? "All active" : $"{ArchivedCount} archived")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Expenses</span>
-            <span class="gs-stat-value">@Transactions.Count</span>
-            <span class="gs-muted" style="font-size: .8125rem">recorded all time</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@Transactions.Count">@Transactions.Count</span>
+            <span class="gs-muted" style="font-size: .8125rem">recorded by you</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
             <span class="gs-eyebrow">This month</span>
-            <span class="gs-stat-value gs-money">@ThisMonth.ToString("C")</span>
+            <Money Value="ThisMonth" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">@ThisMonthCount expense@(ThisMonthCount == 1 ? "" : "s")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 3">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
-            <span class="gs-eyebrow">Total spent</span>
-            <span class="gs-stat-value gs-money">@Total.ToString("C")</span>
+            <span class="gs-eyebrow">You paid</span>
+            <Money Value="Total" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">across every group</span>
         </div>
     </div>
@@ -68,14 +69,44 @@
                     @foreach (var group in ActiveGroups)
                     {
                         var g = group;
+                        var paid = Transactions.Where(t => t.GroupId == g.Id).ToList();
+                        var members = _members.GetValueOrDefault(g.Id);
                         <button type="button" class="gs-card gs-card-hover gs-group-card gs-reveal" style="--i: @(5 + i++)"
                                 @onclick="() => OpenGroup(g)">
-                            <div class="gs-inline" style="justify-content: space-between">
-                                <Avatar Name="@g.Name" />
-                                <span class="gs-tag neutral">@g.MemberCount member@(g.MemberCount == 1 ? "" : "s")</span>
+                            <Avatar Name="@g.Name" />
+                            <div class="head">
+                                <span class="name">@g.Name</span>
+                                <span class="go">Open <MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Style="width:16px;height:16px" /></span>
                             </div>
-                            <span class="name">@g.Name</span>
-                            <span class="go">View balances <MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Style="width:16px;height:16px" /></span>
+                            <div class="people">
+                                @if (members is { Count: > 1 })
+                                {
+                                    <span class="gs-avatar-stack">
+                                        @{ var j = 0; }
+                                        @foreach (var m in members.Take(4))
+                                        {
+                                            <Avatar Name="@m.FullName" Style="@($"--i: {j++}")" />
+                                        }
+                                        @if (members.Count > 4)
+                                        {
+                                            <span class="more" style="--i: @j">+@(members.Count - 4)</span>
+                                        }
+                                    </span>
+                                    <span>@members.Count members</span>
+                                }
+                                else if (g.MemberCount <= 1)
+                                {
+                                    <span>Just you</span>
+                                }
+                                else
+                                {
+                                    <span>@g.MemberCount members</span>
+                                }
+                            </div>
+                            <div class="foot">
+                                <span class="gs-eyebrow">@(paid.Count == 0 ? "Nothing paid yet" : $"You paid · {paid.Count} expense{(paid.Count == 1 ? "" : "s")}")</span>
+                                <Money Value="paid.Sum(t => t.Amount)" Animate />
+                            </div>
                         </button>
                     }
                 </div>
@@ -95,6 +126,8 @@
 
 @code {
     [Parameter, EditorRequired] public UserInfo UserInfo { get; set; } = null!;
+
+    private readonly Dictionary<Guid, ICollection<UserInfo>> _members = new();
 
     private List<GroupResponse> ActiveGroups => GroupsService.Groups.Where(g => !g.IsArchive).ToList();
     private int ArchivedCount => GroupsService.Groups.Count(g => g.IsArchive);
@@ -125,6 +158,19 @@
     protected override async Task OnInitializedAsync()
     {
         await Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
+
+        // Member faces on the cards. One call per group, all at once; a group
+        // whose call fails simply falls back to its member count.
+        await Task.WhenAll(ActiveGroups.Where(g => g.MemberCount > 1).Select(async g =>
+        {
+            try
+            {
+                _members[g.Id] = await GroupsClient.GetGroupMembersAsync(g.Id);
+            }
+            catch (ApiException)
+            {
+            }
+        }));
     }
 
     private void OpenGroup(GroupResponse group)
