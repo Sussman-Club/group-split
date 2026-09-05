@@ -1,8 +1,10 @@
 @using System.ComponentModel.DataAnnotations
 @using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @inject IRulesClient RulesClient
 @inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
 
 <MudForm @ref="_form" Model="@Model">
     <MudStack Spacing="3">
@@ -127,10 +129,22 @@
     private ICollection<RuleVersionResponse> _groupRules = [];
     private Guid? _copySourceRuleId;
 
+    // The form is meaningless without the members to split between, so a failed load
+    // closes the dialog it sits in once the presenter has said why.
     protected override async Task OnInitializedAsync()
     {
-        _members = await GroupsClient.GetGroupMembersAsync(GroupId);
-        _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false);
+        var loaded = await Errors.TryAsync(async () =>
+        {
+            _members = await GroupsClient.GetGroupMembersAsync(GroupId);
+            _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false);
+        }, "Could not load the group.");
+
+        if (!loaded)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
         OnModelVersionChange();
     }
 
@@ -177,7 +191,14 @@
         if (_copySourceRuleId is not { } sourceRuleId)
             return;
 
-        var details = await RulesClient.GetRuleAsync(sourceRuleId);
+        RuleDetailsResponse? details = null;
+
+        var loaded = await Errors.TryAsync(
+            async () => details = await RulesClient.GetRuleAsync(sourceRuleId),
+            "Could not load the rule to copy.");
+
+        if (!loaded || details is null) return;
+
         Model.Version = details.Version;
         OnModelVersionChange();
     }

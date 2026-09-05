@@ -1,11 +1,14 @@
 @page "/account"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
+@using GroupSplit.Shared.Errors
 @inject IAuthService AuthService
 @inject NavigationManager Nav
 @inject IUsersClient Users
 @inject IDialogService DialogService
+@inject ApiErrorPresenter Errors
 
 <PageTitle>Account - Group Split</PageTitle>
 
@@ -156,14 +159,26 @@ else
             // fresh, empty account under the same sign-in.
             await AuthService.Logout();
         }
-        catch (ApiException<ICollection<OutstandingBalance>> conflict)
+        catch (Exception exception) when (ApiErrors.IsApiFailure(exception))
         {
-            // The groups come back named so the reason is actionable rather than a refusal.
-            _blocking = conflict.Result.ToList();
-        }
-        catch (ApiException)
-        {
-            _error = "We could not delete your account. Please try again in a moment.";
+            var error = ApiErrors.Read(exception);
+
+            if (error.Code == ErrorCodes.AccountNotSettled)
+            {
+                // The groups come back named, on the problem, so the reason is actionable
+                // rather than a refusal. Branching on the code rather than the body's shape
+                // is what lets the API change the wording without breaking this.
+                _blocking = error.Extension<List<OutstandingBalance>>(
+                    ProblemDetails.OutstandingBalancesExtension) ?? [];
+            }
+            else if (error.Kind == ApiErrorKind.Unauthenticated)
+            {
+                await Errors.ShowAsync(error);
+            }
+            else
+            {
+                _error = $"Your account was not deleted. {error.Message}";
+            }
         }
         finally
         {

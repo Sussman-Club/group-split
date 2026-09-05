@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -129,7 +130,7 @@ public class SharesRuleVersionTests(ApiTestFixture fixture) : ApiUnitTest(fixtur
     {
         var (groupId, users) = await GroupOf(1);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             CreateShares(groupId, new Dictionary<Guid, int> { [users[0]] = 0, [users[1]] = 0 }));
 
         Assert.Contains("No users have shares", exception.Message);
@@ -140,11 +141,11 @@ public class SharesRuleVersionTests(ApiTestFixture fixture) : ApiUnitTest(fixtur
     {
         var (groupId, users) = await GroupOf(0);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             CreateShares(groupId,
                 new Dictionary<Guid, int> { [users[0]] = 1, [Guid.NewGuid()] = 1 }));
 
-        Assert.Contains("do not exist", exception.Message);
+        Assert.Contains("not members", exception.Message);
     }
 
     [Fact]

@@ -1,4 +1,6 @@
 using GroupSplit.Data;
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -40,7 +42,7 @@ public sealed class AccountService(
     {
         var user = await context.Set<User>()
                        .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
-                   ?? throw new ArgumentException($"No account with id {userId}.", nameof(userId));
+                   ?? throw new NotFoundException(ErrorCodes.AccountNotFound, $"No account with id {userId}.");
 
         await context.Entry(user).Reference(entity => entity.PersonalGroup)
             .LoadAsync(cancellationToken);

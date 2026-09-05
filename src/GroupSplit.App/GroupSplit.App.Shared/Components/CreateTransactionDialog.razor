@@ -1,6 +1,8 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
 
 <MudDialog>
     <TitleContent>
@@ -138,16 +140,28 @@
     private ICollection<RuleVersionResponse> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
 
+    // A dialog that cannot load what it offers has nothing to offer, so it closes; the
+    // presenter has already said why.
     protected override async Task OnInitializedAsync()
     {
-        UserGroups = await GroupsClient.GetGroupsAsync();
-        await LoadGroupDetails();
+        var loaded = await Errors.TryAsync(async () =>
+        {
+            UserGroups = await GroupsClient.GetGroupsAsync();
+            await LoadGroupDetails();
+        }, "Could not load your groups.");
+
+        if (!loaded)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
         StateHasChanged();
     }
 
     private async Task OnGroupChanged()
     {
-        await LoadGroupDetails();
+        await Errors.TryAsync(LoadGroupDetails, "Could not load the group.");
         StateHasChanged();
     }
 

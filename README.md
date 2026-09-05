@@ -57,6 +57,12 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 | `tests/GroupSplit.App.Web.Test` | Blazor Web host tests |
 | `tests/GroupSplit.AppHost.Test` | Aspire orchestration and integration tests |
 
+## Errors
+
+Every non-2xx API response is RFC 9457 problem details carrying a stable `code`, a `traceId`
+and, where it helps, extension members naming what is in the way. The contract, the code
+catalog and how each side produces and consumes it are in [docs/errors.md](docs/errors.md).
+
 ## Run locally
 
 ```bash

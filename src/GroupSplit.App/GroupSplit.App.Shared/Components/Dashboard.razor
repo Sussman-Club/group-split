@@ -1,4 +1,5 @@
 @using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
@@ -139,13 +140,7 @@
     private decimal ThisMonth => MonthToDate.Sum(t => t.Amount);
     private int ThisMonthCount => MonthToDate.Count();
 
-    private static string Greeting => DateTime.Now.Hour switch
-    {
-        < 5 => "Still up",
-        < 12 => "Good morning",
-        < 18 => "Good afternoon",
-        _ => "Good evening"
-    };
+    // Greeting lives in Dashboard.razor.cs; see the note there.
 
     private void ReRender() => InvokeAsync(StateHasChanged);
 
@@ -167,8 +162,12 @@
             {
                 _members[g.Id] = await GroupsClient.GetGroupMembersAsync(g.Id);
             }
-            catch (ApiException)
+            catch (Exception exception)
             {
+                // Only an API failure is worth swallowing; a bug is not. (Written as a
+                // rethrow rather than an exception filter, which the Razor parser does not
+                // accept inside this lambda.)
+                if (!ApiErrors.IsApiFailure(exception)) throw;
             }
         }));
     }

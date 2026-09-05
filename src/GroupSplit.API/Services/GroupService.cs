@@ -1,4 +1,6 @@
 using GroupSplit.Data;
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -143,7 +145,7 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         var existingGroup = await group.FirstOrDefaultAsync(cancellationToken);
 
         if (existingGroup is null)
-            throw new Exception("Group was not found");
+            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         existingGroup.Name = request.Name;
 
@@ -165,7 +167,7 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         var groupQuery = await GetGroupById(groupId, cancellationToken);
         var group = await groupQuery.FirstOrDefaultAsync(cancellationToken: cancellationToken);
         if (group is null)
-            throw new ArgumentException("Group was not found");
+            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
         var users = from user in context.Set<User>()
                     where request.UserIdentifiers.Select(ui => ui.Email).Contains(user.Email)
                     select user;
@@ -181,16 +183,16 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
     {
         var currentUser = userContext.User;
         if (userId == currentUser.Id)
-            throw new ArgumentException("Cannot remove current user from group");
+            throw new ForbiddenException(ErrorCodes.GroupCannotRemoveSelf, "You cannot remove yourself from a group.");
 
         var groupQuery = (await GetGroupById(groupId, cancellationToken)).Include(g => g.Users);
         var group = await groupQuery.FirstOrDefaultAsync(cancellationToken);
         if (group is null)
-            throw new ArgumentException("Group was not found");
+            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
         var user = await context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
         if (user is null)
-            throw new ArgumentException("User was not found");
+            throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
 
         var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
         var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
@@ -198,7 +200,8 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
             .FirstOrDefaultAsync(cancellationToken);
 
         if (userBalance is not 0)
-            throw new ArgumentException("User must settle before leaving the group");
+            throw new ConflictException(ErrorCodes.GroupMemberNotSettled, "The member has to settle up before leaving the group.")
+                .WithExtension("balance", userBalance);
 
         await DetachMember(group, user, cancellationToken);
 
@@ -340,12 +343,12 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
                 CurrentUserRuleVersion: var currentUserSettlementRuleVersion
             })
         {
-            throw new ArgumentException("Group was not found");
+            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
         }
 
         if (user is null)
         {
-            throw new ArgumentException("User was not found");
+            throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
         }
 
         settlementRule ??= new Rule

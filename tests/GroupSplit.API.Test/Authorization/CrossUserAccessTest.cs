@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
@@ -122,7 +123,7 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var (ruleId, _, _, _) = await SomeoneElsesGroup();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             GetService<IRuleService>().GetRuleDetails(ruleId, TestContext.Current.CancellationToken));
     }
 

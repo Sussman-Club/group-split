@@ -1,4 +1,6 @@
 using GroupSplit.Data;
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -45,7 +47,7 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
         if (paidByUserId != currentUser.Id && request.RuleVersionId is null)
-            throw new Exception("Paid by user must be the current user or a rule version must be specified");
+            throw new ValidationException(ErrorCodes.TransactionPayerRequiresRule, "A rule version must be specified to record a transaction paid by someone else.");
 
         if (request.RuleVersionId is null && request.GroupId is { } requestedGroupId)
             await RejectGroupTransactionWithoutARule(currentUser, requestedGroupId, ct);
@@ -73,16 +75,16 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
             .FirstOrDefaultAsync(ct);
 
         if (result is null)
-            throw new Exception("Rule version not found");
+            throw new NotFoundException(ErrorCodes.RuleVersionNotFound, "Rule version not found.");
 
         if (!result.RuleAllowsUserTransactions)
-            throw new Exception("Rule does not allow user transactions");
+            throw new ConflictException(ErrorCodes.RuleNoUserTransactions, "The rule does not allow user transactions.");
 
         if (result.User is null)
-            throw new Exception("User is not in the group");
+            throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup, "The paying user is not a member of the group.");
 
         if (await RuleVersionReferencesRemovedMember(result.Version, ct))
-            throw new Exception("Rule version references a member that was removed from the group");
+            throw new ConflictException(ErrorCodes.RuleVersionHasRemovedMember, "The rule version references a member who was removed from the group.");
 
         var transaction = new Transaction
         {
@@ -227,18 +229,18 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
 
         var result = await query.FirstOrDefaultAsync(ct);
 
-        if (result is null) throw new Exception("Transaction not found");
+        if (result is null) throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
-        if (result.RuleVersion is null) throw new Exception("Rule version not found");
+        if (result.RuleVersion is null) throw new NotFoundException(ErrorCodes.RuleVersionNotFound, "Rule version not found.");
 
-        if (result.PayingUser is null) throw new Exception("Paid by user not found");
+        if (result.PayingUser is null) throw new NotFoundException(ErrorCodes.UserNotFound, "Paid by user not found.");
 
-        if (!result.PayingUserBelongsToGroup) throw new Exception("Paid by user is not in the group");
+        if (!result.PayingUserBelongsToGroup) throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup, "The paying user is not a member of the group.");
 
-        if (!result.RuleAllowsUserTransactions) throw new Exception("Rule does not allow user transactions");
+        if (!result.RuleAllowsUserTransactions) throw new ConflictException(ErrorCodes.RuleNoUserTransactions, "The rule does not allow user transactions.");
 
         if (await RuleVersionReferencesRemovedMember(result.RuleVersion, ct))
-            throw new Exception("Rule version references a member that was removed from the group");
+            throw new ConflictException(ErrorCodes.RuleVersionHasRemovedMember, "The rule version references a member who was removed from the group.");
 
         var updatedTransaction = result.Transaction;
 
@@ -261,10 +263,10 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         var transaction = await query.Include(x => x.RuleVersion).FirstOrDefaultAsync(ct);
 
         if (transaction is null)
-            throw new Exception("Transaction not found");
+            throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
         if (await RuleVersionReferencesRemovedMember(transaction.RuleVersion, ct))
-            throw new Exception("Rule version references a member that was removed from the group");
+            throw new ConflictException(ErrorCodes.RuleVersionHasRemovedMember, "The rule version references a member who was removed from the group.");
 
         dbContext.Remove(transaction);
 
@@ -304,9 +306,14 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
             .SelectMany(@group => @group.Rules)
             .AnyAsync(rule => (rule.Flags & RuleFlags.NoUserTransactions) == 0, ct);
 
-        throw new InvalidOperationException(groupHasAUsableRule
-            ? "A rule must be selected for a transaction in this group."
-            : "This group has no rule to record a transaction against. Add a rule to the group first.");
+        // Two different failures: the client had a rule to pick and did not, or the group
+        // has none to pick, which only adding one can fix.
+        if (groupHasAUsableRule)
+            throw new ValidationException(ErrorCodes.TransactionRuleRequired,
+                "A rule must be selected for a transaction in this group.");
+
+        throw new ConflictException(ErrorCodes.GroupHasNoRule,
+            "This group has no rule to record a transaction against. Add a rule to the group first.");
     }
 
     private async Task<bool> RuleVersionReferencesRemovedMember(

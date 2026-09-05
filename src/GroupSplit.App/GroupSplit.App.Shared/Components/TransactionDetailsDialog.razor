@@ -1,10 +1,12 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject ApiErrorPresenter Errors
 
 <MudDialog>
     <TitleContent>
@@ -84,17 +86,15 @@
 
     private TransactionDetailsResponse? details;
 
+    // Failures go through the presenter, which names the reason the API gave; a dialog
+    // that cannot load its subject has nothing to show, so it closes.
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            details = await TransactionsClient.GetTransactionAsync(TransactionId);
-        }
-        catch (Exception)
-        {
-            Snackbar.Add("Failed to load transaction details.", Severity.Error);
-            MudDialog.Cancel();
-        }
+        var loaded = await Errors.TryAsync(
+            async () => details = await TransactionsClient.GetTransactionAsync(TransactionId),
+            "Could not load the expense.");
+
+        if (!loaded) MudDialog.Cancel();
     }
 
     private void Close() => MudDialog.Close();
@@ -116,9 +116,14 @@
 
         var request = await dialogReference.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
 
-        if (request is not null)
+        if (request is null) return;
+
+        var updated = await Errors.TryAsync(
+            () => TransactionsClient.UpdateTransactionAsync(TransactionId, request),
+            "Could not update the expense.");
+
+        if (updated)
         {
-            await TransactionsClient.UpdateTransactionAsync(TransactionId, request);
             Snackbar.Add("Transaction updated.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
         }
@@ -131,18 +136,16 @@
             "Are you sure you want to delete this transaction?",
             yesText: "Delete", cancelText: "Cancel");
 
-        if (boolResult is true)
+        if (boolResult is not true) return;
+
+        var deleted = await Errors.TryAsync(
+            () => TransactionsClient.DeleteTransactionAsync(TransactionId),
+            "Could not delete the expense.");
+
+        if (deleted)
         {
-            try
-            {
-                await TransactionsClient.DeleteTransactionAsync(TransactionId);
-                Snackbar.Add("Transaction deleted.", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(true));
-            }
-            catch (Exception)
-            {
-                Snackbar.Add("Failed to delete transaction.", Severity.Error);
-            }
+            Snackbar.Add("Transaction deleted.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
         }
     }
 }

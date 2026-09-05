@@ -326,23 +326,21 @@ public class EndpointTest : IAsyncLifetime
     }
 
     /// <summary>
-    /// The delete is refused, which is the point — but it is refused by throwing, and the
-    /// API maps no exception to a status code, so what reaches a client is a 500 where a
-    /// 404 belongs. TestServer surfaces the exception rather than swallowing it into a
-    /// response, which is what makes it visible here at all.
+    /// The delete is refused by the service throwing, and the exception handler turns that
+    /// into the 404 a client can act on. It used to escape as a 500; the full shape of the
+    /// answer is pinned in <c>ProblemResponseTest</c>, this only keeps the boundary.
     /// </summary>
     [Fact]
-    public async Task Another_member_deleting_my_transaction_is_refused_but_as_a_500()
+    public async Task Another_member_deleting_my_transaction_is_not_found()
     {
         var transactionId = await CreateTransaction();
 
         using var stranger = _host.ClientForAnotherUser();
 
-        var refusal = await Assert.ThrowsAnyAsync<Exception>(() =>
-            stranger.DeleteAsync($"/transactions/{transactionId}",
-                TestContext.Current.CancellationToken));
+        var refusal = await stranger.DeleteAsync($"/transactions/{transactionId}",
+            TestContext.Current.CancellationToken);
 
-        Assert.Contains("not found", refusal.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.NotFound, refusal.StatusCode);
 
         // The transaction is untouched and still mine.
         var mine = await Client.GetAsync($"/transactions/{transactionId}",

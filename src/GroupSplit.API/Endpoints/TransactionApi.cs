@@ -1,7 +1,9 @@
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +17,8 @@ public static class TransactionApi
         {
             var group = routeBuilder
                 .MapGroup("/transactions")
-                .RequireAuthorization();
+                .RequireAuthorization()
+                .ProducesStandardProblems();
 
             group.WithTags("Transactions");
 
@@ -49,7 +52,7 @@ public static class TransactionApi
                 .WithName("GetTransactions")
                 .Produces<TransactionResponse[]>();
         }
-        
+
         private RouteHandlerBuilder MapGetById()
         {
             return group.MapGet("{id:guid}", async (
@@ -58,11 +61,13 @@ public static class TransactionApi
                     CancellationToken ct) =>
                 {
                     var details = await transactionService.GetDetails(id, ct);
-                    return details is not null ? Results.Ok(details) : Results.NotFound();
+                    return details is not null
+                        ? Results.Ok(details)
+                        : Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
                 })
                 .WithName("GetTransaction")
                 .Produces<TransactionDetailsResponse>()
-                .Produces(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapCreate()
@@ -79,7 +84,9 @@ public static class TransactionApi
                 })
                 .WithName("CreateTransaction")
                 .Produces<TransactionResponse>()
-                .Produces(StatusCodes.Status404NotFound);
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         private RouteHandlerBuilder MapUpdate()
@@ -92,7 +99,8 @@ public static class TransactionApi
                 {
                     var transactionUpdateRequest = await transactionService.GetUpdateModel(id, ct);
 
-                    if (transactionUpdateRequest is null) return Results.NotFound();
+                    if (transactionUpdateRequest is null)
+                        return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
                     patchDocument.ApplyTo(transactionUpdateRequest);
 
@@ -109,7 +117,9 @@ public static class TransactionApi
                 })
                 .WithName("UpdateTransaction")
                 .Produces<TransactionResponse>()
-                .Produces(StatusCodes.Status404NotFound);
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         private RouteHandlerBuilder MapDelete()
@@ -123,7 +133,8 @@ public static class TransactionApi
                 )
                 .WithName("DeleteTransaction")
                 .Produces(StatusCodes.Status200OK)
-                .Produces(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
     }
 

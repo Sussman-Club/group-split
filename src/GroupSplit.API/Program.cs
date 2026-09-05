@@ -1,4 +1,5 @@
 using GroupSplit.API.Endpoints;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
@@ -53,8 +54,12 @@ builder.Services.AddScoped<IRuleService, RuleService>();
 builder.Services.AddOpenApiDocuments();
 
 builder.Services.AddValidation();
+builder.Services.AddApiErrorHandling();
 
 var app = builder.Build();
+
+// Before anything else, so that every failure below it leaves as problem details.
+app.UseApiErrorHandling();
 
 app.MapDefaultEndpoints();
 

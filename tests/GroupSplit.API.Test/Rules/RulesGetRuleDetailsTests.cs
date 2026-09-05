@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 
@@ -13,7 +14,7 @@ public class RulesGetRuleDetailsTests(ApiTestFixture fixture) : ApiUnitTest(fixt
         var ruleService = GetService<IRuleService>();
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<NotFoundException>(async () =>
         {
             await ruleService.GetRuleDetails(Guid.NewGuid(), TestContext.Current.CancellationToken);
         });

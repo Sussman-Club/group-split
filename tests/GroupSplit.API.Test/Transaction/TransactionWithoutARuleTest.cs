@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,7 @@ public class TransactionWithoutARuleTest(ApiTestFixture fixture) : ApiUnitTest(f
         var group = await GetService<IGroupService>().CreateGroup(
             new CreateGroupRequest { Name = "Ruleless" }, TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
             GetService<ITransactionService>()
                 .Create(Request(groupId: group.Id), TestContext.Current.CancellationToken)
                 .AsTask());
@@ -48,7 +49,7 @@ public class TransactionWithoutARuleTest(ApiTestFixture fixture) : ApiUnitTest(f
         var group = await GetService<IGroupService>().CreateGroup(
             new CreateGroupRequest { Name = "Ruleless" }, TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ConflictException>(() =>
             GetService<ITransactionService>()
                 .Create(Request(groupId: group.Id), TestContext.Current.CancellationToken)
                 .AsTask());
@@ -77,7 +78,7 @@ public class TransactionWithoutARuleTest(ApiTestFixture fixture) : ApiUnitTest(f
             Version = new PersonalRuleVersionDto()
         }, TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             GetService<ITransactionService>()
                 .Create(Request(groupId: group.Id), TestContext.Current.CancellationToken)
                 .AsTask());

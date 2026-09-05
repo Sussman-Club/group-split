@@ -1,4 +1,6 @@
 using GroupSplit.API.Services;
+using GroupSplit.Shared.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -54,7 +56,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
         }, TestContext.Current.CancellationToken);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ForbiddenException>(async () =>
         {
             await groupService.RemoveGroupMember(
                 group.Id,
@@ -62,6 +64,6 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 TestContext.Current.CancellationToken);
         });
 
-        Assert.Equal("Cannot remove current user from group", exception.Message);
+        Assert.Equal(ErrorCodes.GroupCannotRemoveSelf, exception.Code);
     }
 }

@@ -1,12 +1,15 @@
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using GroupSplit.API.Endpoints;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
 using GroupSplit.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,9 +21,9 @@ namespace GroupSplit.API.Test.Base;
 
 /// <summary>
 /// Boots the API's real HTTP pipeline — routing, model binding, the authorization
-/// policies, the validation filter and <see cref="CurrentUserMiddleware"/> — over a
-/// <see cref="TestServer"/>, so a test can send a request and read the status code the
-/// endpoints actually produce.
+/// policies, the validation filter, the exception handlers and
+/// <see cref="CurrentUserMiddleware"/> — over a <see cref="TestServer"/>, so a test can
+/// send a request and read the status code and body the endpoints actually produce.
 /// <para>
 /// The service tests below this reach past all of that and call a service directly, which
 /// is why 372 lines of endpoint code sat uncovered and why two of the defects on this
@@ -32,11 +35,22 @@ namespace GroupSplit.API.Test.Base;
 /// </summary>
 internal sealed class ApiEndpointHost : IAsyncDisposable
 {
-    private readonly WebApplication _app;
+    /// <summary>
+    /// A route the API does not have, whose handler throws. It is how the tests reach the
+    /// last exception handler: nothing in the real API is meant to get there.
+    /// </summary>
+    public const string ThrowingRoute = "/test/throw";
 
-    private ApiEndpointHost(WebApplication app, string subject)
+    /// <summary>What the throwing route throws, so a test can check that none of it leaks.</summary>
+    public const string ThrowingMessage = "SELECT secret FROM table -- must never reach a client";
+
+    private readonly WebApplication _app;
+    private readonly CapturingLoggerProvider _logs;
+
+    private ApiEndpointHost(WebApplication app, CapturingLoggerProvider logs, string subject)
     {
         _app = app;
+        _logs = logs;
 
         Client = app.GetTestServer().CreateClient();
         Client.DefaultRequestHeaders.Add(TestAuthenticationHandler.SubjectHeader, subject);
@@ -46,6 +60,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
     public HttpClient Client { get; }
 
     public IServiceProvider Services => _app.Services;
+
+    /// <summary>Everything the API logged since the host started, in order.</summary>
+    public IReadOnlyList<CapturedLog> Logs => _logs.Entries;
 
     /// <summary>
     /// A second client on the same server, authenticated as somebody else. The API
@@ -71,7 +88,11 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         });
 
         builder.WebHost.UseTestServer();
+
+        var logs = new CapturingLoggerProvider();
         builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(logs);
+        builder.Logging.SetMinimumLevel(LogLevel.Information);
 
         builder.Services
             .AddAuthentication(TestAuthenticationHandler.SchemeName)
@@ -94,11 +115,14 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         builder.Services.AddRuleVersionServices();
         builder.Services.AddScoped<IRuleService, RuleService>();
         builder.Services.AddValidation();
+        builder.Services.AddApiErrorHandling();
 
         var app = builder.Build();
 
-        // Order matters and is the order Program.cs uses: the middleware that resolves the
-        // caller runs after authentication and before authorization.
+        // Order matters and is the order Program.cs uses: error handling first, so it wraps
+        // everything; the middleware that resolves the caller after authentication and
+        // before authorization.
+        app.UseApiErrorHandling();
         app.UseAuthentication();
         app.UseMiddleware<CurrentUserMiddleware>();
         app.UseAuthorization();
@@ -108,6 +132,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         app.MapTransaction();
         app.MapRulesApi();
 
+        app.MapGet(ThrowingRoute, () => { throw new InvalidOperationException(ThrowingMessage); })
+            .RequireAuthorization();
+
         await using (var scope = app.Services.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<AppDbContext>()
@@ -116,7 +143,7 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
 
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        return new ApiEndpointHost(app, Guid.NewGuid().ToString());
+        return new ApiEndpointHost(app, logs, Guid.NewGuid().ToString());
     }
 
     public async ValueTask DisposeAsync()
@@ -159,6 +186,36 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
 
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
+        }
+    }
+
+    public sealed record CapturedLog(LogLevel Level, string Category, string Message, Exception? Exception);
+
+    /// <summary>
+    /// Keeps what the API logs, so a test can check that a 500 was logged at Error with the
+    /// trace id the client was given -- the property the whole scheme rests on.
+    /// </summary>
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        private readonly ConcurrentQueue<CapturedLog> _entries = new();
+
+        public IReadOnlyList<CapturedLog> Entries => _entries.ToArray();
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, _entries);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(string category, ConcurrentQueue<CapturedLog> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) =>
+                entries.Enqueue(new CapturedLog(logLevel, category, formatter(state, exception), exception));
         }
     }
 }

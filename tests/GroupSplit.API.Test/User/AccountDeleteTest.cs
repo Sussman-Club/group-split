@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
@@ -227,7 +228,7 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var missing = Guid.NewGuid();
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => Delete(missing));
+        var exception = await Assert.ThrowsAsync<NotFoundException>(() => Delete(missing));
 
         Assert.Contains(missing.ToString(), exception.Message);
     }

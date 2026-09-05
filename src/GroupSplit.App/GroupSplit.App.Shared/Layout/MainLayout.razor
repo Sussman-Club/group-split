@@ -39,7 +39,23 @@
         <AppBar />
         <main class="gs-content">
             <div class="gs-page" @key="_path">
-                @Body
+                @* The last resort, for bugs. Rejected requests never reach it: the API's
+                   refusals are read by ApiErrorPresenter and shown as messages, so what
+                   lands here is an exception nothing expected. Re-keyed with the page, so
+                   a navigation starts clean. *@
+                <ErrorBoundary @ref="_errorBoundary">
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent>
+                        <div class="gs-card gs-empty" style="padding: 64px 24px">
+                            <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" />
+                            <h3>Something went wrong</h3>
+                            <span>This page hit a problem it could not recover from. The details have been logged.</span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" OnClick="Recover">Try again</MudButton>
+                        </div>
+                    </ErrorContent>
+                </ErrorBoundary>
             </div>
         </main>
     </div>
@@ -54,6 +70,9 @@
 
     private bool _rail;
     private string _path = "";
+    private ErrorBoundary? _errorBoundary;
+
+    private void Recover() => _errorBoundary?.Recover();
 
     protected override void OnInitialized()
     {

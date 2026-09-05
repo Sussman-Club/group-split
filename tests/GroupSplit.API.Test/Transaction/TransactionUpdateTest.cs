@@ -1,4 +1,5 @@
 using GroupSplit.API.Services;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 
@@ -62,9 +63,9 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<Exception>(async () =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
             await transactionService.Update(Guid.NewGuid(), request, TestContext.Current.CancellationToken));
-        Assert.Equal("Transaction not found", ex.Message);
+        Assert.Equal("Transaction not found.", ex.Message);
     }
 
     [Fact]
@@ -94,9 +95,9 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<Exception>(async () =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
             await transactionService.Update(transaction.Id, request, TestContext.Current.CancellationToken));
-        Assert.Equal("Rule version not found", ex.Message);
+        Assert.Equal("Rule version not found.", ex.Message);
     }
 
     [Fact]
@@ -128,9 +129,9 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<Exception>(async () =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
             await transactionService.Update(transaction.Id, request, TestContext.Current.CancellationToken));
 
-        Assert.Equal("Paid by user not found", ex.Message);
+        Assert.Equal("Paid by user not found.", ex.Message);
     }
 }

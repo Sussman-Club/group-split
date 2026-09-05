@@ -1,4 +1,6 @@
 using GroupSplit.Data;
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +32,7 @@ public class PercentRuleVersionHandler(AppDbContext dbContext)
 
         const decimal epsilon = 10e-3M;
         if (total + epsilon < 100 || total - epsilon > 100)
-            throw new InvalidOperationException("Percentages must sum to 100%.");
+            throw new ValidationException(ErrorCodes.RulePercentagesInvalid, "Percentages must sum to 100%.");
 
         var users = await (from @group in dbContext.Set<Group>()
             where @group.Id == groupId
@@ -39,7 +41,7 @@ public class PercentRuleVersionHandler(AppDbContext dbContext)
             select user).ToListAsync(ct);
 
         if (users.Count != dto.Percentages.Count)
-            throw new InvalidOperationException("Some users in the percentage rule do not exist.");
+            throw new ValidationException(ErrorCodes.RuleUsersNotInGroup, "Some users in the percentage rule are not members of the group.");
 
         var version = new PercentRuleVersion
         {

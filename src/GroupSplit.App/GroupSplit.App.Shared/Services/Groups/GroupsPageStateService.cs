@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
@@ -11,6 +12,7 @@ public class GroupsPageStateService : IGroupsPageStateService
     private readonly ISnackbar _snackbar;
     private readonly ITransactionsClient _transactionsClient;
     private readonly LoadGuard _guard;
+    private readonly ApiErrorPresenter _errors;
 
     public Task IsReadyTask { get; }
     public bool IsLoading { get; private set; }
@@ -18,13 +20,14 @@ public class GroupsPageStateService : IGroupsPageStateService
     private Task _balancesLoad = Task.CompletedTask;
 
     public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient, ISnackbar snackbar,
-        ITransactionsClient transactionsClient, LoadGuard guard)
+        ITransactionsClient transactionsClient, LoadGuard guard, ApiErrorPresenter errors)
     {
         _tracker = tracker;
         _groupsClient = groupsClient;
         _snackbar = snackbar;
         _transactionsClient = transactionsClient;
         _guard = guard;
+        _errors = errors;
         IsReadyTask = Task.Run(async () =>
         {
             if (tracker.Groups is not null) return;
@@ -33,7 +36,7 @@ public class GroupsPageStateService : IGroupsPageStateService
             await _balancesLoad;
         });
     }
-    
+
     public ICollection<GroupResponse> Groups
     {
         get => _tracker.Groups ?? [];
@@ -43,7 +46,7 @@ public class GroupsPageStateService : IGroupsPageStateService
             OnGroupsChanged?.Invoke();
         }
     }
-    
+
     public GroupResponse? SelectedGroup
     {
         get => _tracker.SelectedGroup;
@@ -133,7 +136,7 @@ public class GroupsPageStateService : IGroupsPageStateService
     }
 
     public async Task LoadGroupBalancesAsync(CancellationToken cancellationToken = default)
-    {   
+    {
         if (SelectedGroup is null)
         {
             Balance = null;
@@ -144,13 +147,18 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
     }
 
-    public async Task CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default)
-    {
-        var newGroup = await _groupsClient.CreateGroupAsync(request, cancellationToken);
-        Groups.Add(newGroup);
-        SelectedGroup = newGroup;
-        _snackbar.Add("Group created successfully.", Severity.Success);
-    }
+    // Every write below runs through the presenter: a refusal from the API becomes an
+    // error snackbar naming the reason, a lost session becomes a sign-in, and the caller
+    // gets false instead of an exception it would have had to catch itself.
+
+    public Task<bool> CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default) =>
+        _errors.TryAsync(async () =>
+        {
+            var newGroup = await _groupsClient.CreateGroupAsync(request, cancellationToken);
+            Groups.Add(newGroup);
+            SelectedGroup = newGroup;
+            _snackbar.Add("Group created successfully.", Severity.Success);
+        }, "Could not create the group.");
 
     public IAsyncEnumerable<UserInfo> GetGroupMembersAsync(CancellationToken cancellationToken = default)
     {
@@ -159,66 +167,78 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _groupsClient.GetGroupMembersAsAsyncEnumerable(SelectedGroup.Id, cancellationToken);
     }
 
-    public async Task AddGroupMemberAsync(AddMemberRequest request, CancellationToken cancellationToken = default)
+    public Task<bool> AddGroupMemberAsync(AddMemberRequest request, CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
             throw new InvalidOperationException("No group is selected.");
 
-        var response = await _groupsClient.AddGroupMemberAsync(SelectedGroup.Id, request, cancellationToken);
+        return _errors.TryAsync(async () =>
+        {
+            var response = await _groupsClient.AddGroupMemberAsync(SelectedGroup.Id, request, cancellationToken);
 
-        UpdateSelectedGroup(response);
-        _snackbar.Add("Member added successfully.", Severity.Success);
+            UpdateSelectedGroup(response);
+            _snackbar.Add("Member added successfully.", Severity.Success);
+        }, "Could not add the member.");
     }
 
-    public async Task RemoveGroupMemberAsync(Guid memberUserId, CancellationToken cancellationToken = default)
+    public Task<bool> RemoveGroupMemberAsync(Guid memberUserId, CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
             throw new InvalidOperationException("No group is selected.");
 
-        var response = await _groupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, memberUserId, cancellationToken);
+        return _errors.TryAsync(async () =>
+        {
+            var response = await _groupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, memberUserId, cancellationToken);
 
-        UpdateSelectedGroup(response);
-        _snackbar.Add("Member removed successfully.", Severity.Success);
+            UpdateSelectedGroup(response);
+            _snackbar.Add("Member removed successfully.", Severity.Success);
+        }, "Could not remove the member.");
     }
 
-    public async Task UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest,
+    public Task<bool> UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest,
         CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
             throw new InvalidOperationException("No group is selected.");
 
-        await _groupsClient.UpdateGroupAsync(SelectedGroup.Id, updateRequest, cancellationToken);
+        return _errors.TryAsync(async () =>
+        {
+            var updatedGroup = await _groupsClient.UpdateGroupAsync(SelectedGroup.Id, updateRequest, cancellationToken);
+            UpdateSelectedGroup(updatedGroup);
 
-        // TODO: Update the selected group in the UI
-        var updatedGroup = await _groupsClient.GetGroupAsync(SelectedGroup.Id, cancellationToken);
-        UpdateSelectedGroup(updatedGroup);
-
-        _snackbar.Add("Group updated successfully.", Severity.Success);
+            _snackbar.Add("Group updated successfully.", Severity.Success);
+        }, "Could not update the group.");
     }
 
-    public async Task CreateTransactionAsync(CreateTransactionRequest request,
+    public Task<bool> CreateTransactionAsync(CreateTransactionRequest request,
         CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
             throw new InvalidOperationException("No group is selected.");
 
-        await _transactionsClient.CreateTransactionAsync(request, cancellationToken);
+        return _errors.TryAsync(async () =>
+        {
+            await _transactionsClient.CreateTransactionAsync(request, cancellationToken);
 
-        await LoadTransactionsAsync(cancellationToken);
-        await LoadGroupBalancesAsync(cancellationToken);
-        _snackbar.Add("Transaction created successfully.", Severity.Success);
+            await LoadTransactionsAsync(cancellationToken);
+            await LoadGroupBalancesAsync(cancellationToken);
+            _snackbar.Add("Transaction created successfully.", Severity.Success);
+        }, "Could not save the expense.");
     }
 
-    public async Task SettleAsync(SettleRequest request, CancellationToken cancellationToken = default)
+    public Task<bool> SettleAsync(SettleRequest request, CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
             throw new InvalidOperationException("No group is selected.");
-        
-        await _groupsClient.SettleGroupDebtsAsync(SelectedGroup.Id, request, cancellationToken);
-        
-        await LoadTransactionsAsync(cancellationToken);
-        await LoadGroupBalancesAsync(cancellationToken);
-        _snackbar.Add("Group debts settled successfully.", Severity.Success);
+
+        return _errors.TryAsync(async () =>
+        {
+            await _groupsClient.SettleGroupDebtsAsync(SelectedGroup.Id, request, cancellationToken);
+
+            await LoadTransactionsAsync(cancellationToken);
+            await LoadGroupBalancesAsync(cancellationToken);
+            _snackbar.Add("Group debts settled successfully.", Severity.Success);
+        }, "Could not record the settlement.");
     }
 
     private void UpdateSelectedGroup(GroupResponse group)
