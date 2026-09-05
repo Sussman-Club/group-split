@@ -322,8 +322,23 @@ html:not([data-gs-ready]) .gs-group-card {
     padding: 28px 28px 72px;
 }
 
-.gs-page {
-    animation: gs-page-in var(--gs-slow) var(--gs-ease) both;
+/*
+ * The entry animation sits on the page's children rather than on .gs-page, and
+ * it fills backwards rather than both. Either alone would leave a transform
+ * applied to .gs-page for good -- `both` keeps the identity matrix after the
+ * animation ends -- and an element with a transform becomes the containing
+ * block for its `position: fixed` descendants. That is what put .gs-fab in the
+ * middle of the page instead of the corner of the viewport: `bottom: 28px` was
+ * measuring from the bottom of the page box, which on a short list lands on top
+ * of the last rows.
+ *
+ * The FAB is left out of the selector for the same reason: it must not carry a
+ * transform of its own either. That does mean it has to stay a direct child of
+ * the page -- nested inside another child it would be back inside a transformed
+ * box.
+ */
+.gs-page > *:not(.gs-fab) {
+    animation: gs-page-in var(--gs-slow) var(--gs-ease) backwards;
 }
 
 @keyframes gs-page-in {
