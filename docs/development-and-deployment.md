@@ -99,10 +99,10 @@ The workflow is not the only way to see what a deploy would ship. The same step 
 can be run from a checkout, minus the pushes:
 
 ```bash
-Parameters__web-hostname=https://groupsplit.example.com Parameters__dashboard-token=anything aspire do prepare-env --environment preview --non-interactive
+Parameters__web-hostname=https://groupsplit.example.com Parameters__dashboard-token=anything aspire do prepare-compose --environment preview --non-interactive
 ```
 
-The step is named after the Compose environment resource, `env`, the way the Docker
+The step is named after the Compose environment resource, `compose`, the way the Docker
 integration always names it: `prepare-{resource name}`. This builds the images locally,
 generates the migration bundle, and writes `docker-compose.yaml`, `.env` and
 `.env.preview` to `src/GroupSplit.AppHost/aspire-output`, which is ignored by git. The Compose file is what Komodo receives; the env file is the
