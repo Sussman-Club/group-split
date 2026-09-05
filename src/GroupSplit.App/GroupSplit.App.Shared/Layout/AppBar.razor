@@ -17,8 +17,15 @@
     @if (UserInfo is not null)
     {
         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense>
+            @* Custom activator content owns its own activation: MudBlazor wires the
+               click only for the default button, and hands anything else the menu's
+               context to call instead. Without this the menu opens from the keyboard
+               -- the wrapper still handles that -- and does nothing on a click. *@
             <ActivatorContent>
-                <button type="button" class="gs-user-btn" aria-label="Account menu">
+                <button type="button"
+                        class="gs-user-btn"
+                        aria-label="Account menu"
+                        @onclick="@context.ToggleAsync">
                     <span class="name">@UserInfo.FirstName</span>
                     <Avatar Name="@UserInfo.FullName" Size="sm" />
                 </button>
