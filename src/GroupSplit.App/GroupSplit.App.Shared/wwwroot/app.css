@@ -238,6 +238,9 @@ h1:focus {
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
     border-bottom: 1px solid transparent;
+    /* Clips the boot sweep below; menus and tooltips render in Mud's popover
+       provider, so nothing the bar owns needs to escape it. */
+    overflow: hidden;
     transition: border-color var(--gs-base) var(--gs-ease), box-shadow var(--gs-base) var(--gs-ease);
 }
 
@@ -283,7 +286,7 @@ html[data-gs-ready] .gs-topbar::after {
 
 @keyframes gs-boot {
     from { transform: translateX(-100%); }
-    to { transform: translateX(calc(100vw)); }
+    to { transform: translateX(340%); }
 }
 
 /* Controls that need the runtime are muted until it is there. */
