@@ -404,6 +404,15 @@ h1, h2, h3,
     border-block-end-width: 0;
 }
 
+/* Edge draws a reveal control of its own inside a password field as soon as
+   there is something to reveal, so the field ends up with two eyes side by
+   side. Keycloak's is the one to keep: it is the one the theme styles, and it
+   is there before anything is typed. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+    display: none;
+}
+
 /* Checkboxes and radios are native controls; one property brands them. */
 .pf-v5-c-check__input,
 input[type="checkbox"],
