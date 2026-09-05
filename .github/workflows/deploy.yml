@@ -97,7 +97,7 @@ jobs:
 
           [ "$missing" -eq 0 ] || exit 1
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Parameters reach the AppHost the way Aspire documents for CI: an environment
       # variable per parameter named Parameters__ plus the parameter name, with the
@@ -120,12 +120,12 @@ jobs:
             ' <<<"$payload" >> "$GITHUB_ENV"
           done
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
@@ -146,7 +146,7 @@ jobs:
       # credentials are absent so the workflow works either way.
       - name: Log in to the container registry
         if: ${{ env.REGISTRY_USERNAME != '' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: registry.sussman.win
           username: ${{ env.REGISTRY_USERNAME }}
@@ -177,7 +177,7 @@ jobs:
       # read access to the repository.
       - name: Keep the generated Compose file
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docker-compose
           path: src/GroupSplit.AppHost/aspire-output/docker-compose.yaml
