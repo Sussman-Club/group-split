@@ -50,6 +50,7 @@ public sealed class KeycloakUserSeeder(
         await keycloak.SignInAsync(ct);
 
         var created = 0;
+        var repaired = 0;
         var skipped = 0;
 
         await foreach (var dto in source.ReadAsync(ct))
@@ -63,26 +64,54 @@ public sealed class KeycloakUserSeeder(
                 continue;
             }
 
-            if (await SeedUserAsync(dto, ct))
-                created++;
-            else
-                skipped++;
+            switch (await SeedUserAsync(dto, ct))
+            {
+                case SeedOutcome.Created: created++; break;
+                case SeedOutcome.Repaired: repaired++; break;
+                default: skipped++; break;
+            }
         }
 
         logger.LogInformation(
-            "Seeded {Created} Keycloak accounts in realm {Realm}, {Skipped} left as they were.",
-            created, keycloak.Realm, skipped);
+            "Seeded {Created} Keycloak accounts in realm {Realm}, repaired the roles of {Repaired}, "
+            + "{Skipped} left as they were.",
+            created, keycloak.Realm, repaired, skipped);
     }
 
-    /// <returns>Whether an account was created.</returns>
-    private async Task<bool> SeedUserAsync(UserSeedDto dto, CancellationToken ct)
+    /// <summary>What a run did about one seed entry.</summary>
+    private enum SeedOutcome
+    {
+        /// <summary>The realm already had it, in the state it should be in.</summary>
+        Skipped,
+
+        /// <summary>The account was created.</summary>
+        Created,
+
+        /// <summary>The account was already there and something about it was put right.</summary>
+        Repaired
+    }
+
+    private async Task<SeedOutcome> SeedUserAsync(UserSeedDto dto, CancellationToken ct)
     {
         // Already seeded: the id is the one the app database points at, so there is nothing
-        // to reconcile whatever else has changed about the account.
+        // to reconcile about the account itself. Its roles are the exception -- accounts
+        // seeded before the default role was granted are still in the realm, and nothing else
+        // will ever put it right, so they are repaired in place rather than left broken.
         if (await keycloak.FindByIdAsync(dto.ExternalUserId, ct) is { } existing)
         {
+            if (await keycloak.EnsureDefaultRoleAsync(existing.Id, ct))
+            {
+                logger.LogInformation(
+                    "Granted the realm's default role to the existing account for {Email}; without it "
+                    + "Keycloak's account console answers 401 to everything it asks for.",
+                    dto.Email);
+
+                return SeedOutcome.Repaired;
+            }
+
             logger.LogDebug("Keycloak already has {Email} under the seeded id {Id}.", dto.Email, existing.Id);
-            return false;
+
+            return SeedOutcome.Skipped;
         }
 
         if (await keycloak.FindByEmailAsync(dto.Email!, ct) is { } conflicting)
@@ -94,7 +123,8 @@ public sealed class KeycloakUserSeeder(
                     + "Signing in as that account will fail against the seeded data. Delete it in the Keycloak "
                     + "console, or turn on Keycloak:ReplaceConflictingUsers to have the seeder replace it.",
                     dto.Email, conflicting.Id, dto.ExternalUserId);
-                return false;
+
+                return SeedOutcome.Skipped;
             }
 
             // Replaced rather than left alone: an account under the wrong id is exactly the
@@ -124,6 +154,6 @@ public sealed class KeycloakUserSeeder(
 
         logger.LogInformation("Created the Keycloak account for {Email} as {Id}.", dto.Email, dto.ExternalUserId);
 
-        return true;
+        return SeedOutcome.Created;
     }
 }

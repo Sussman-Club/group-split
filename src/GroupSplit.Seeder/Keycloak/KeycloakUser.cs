@@ -32,6 +32,15 @@ public sealed record KeycloakUser
     [JsonPropertyName("emailVerified")] public bool EmailVerified { get; init; } = true;
 
     [JsonPropertyName("credentials")] public IReadOnlyList<KeycloakCredential> Credentials { get; init; } = [];
+
+    /// <summary>
+    /// Realm roles the account is created with, by name.
+    /// <para>
+    /// Not something a caller has to fill in: <see cref="KeycloakAdminClient.CreateAsync"/>
+    /// puts the realm's default role here, because partial import grants nothing on its own.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("realmRoles")] public IReadOnlyList<string> RealmRoles { get; init; } = [];
 }
 
 public sealed record KeycloakCredential
@@ -42,6 +51,34 @@ public sealed record KeycloakCredential
 
     /// <summary>Not temporary: a demo account that demands a password change at first sign-in is a nuisance.</summary>
     [JsonPropertyName("temporary")] public bool Temporary { get; init; }
+}
+
+/// <summary>
+/// A role, in the shape Keycloak both returns and expects back when granting one.
+/// </summary>
+/// <remarks>
+/// Granting takes the whole representation rather than a name, so the one the realm hands
+/// back is passed through unchanged.
+/// </remarks>
+public sealed record KeycloakRole
+{
+    [JsonPropertyName("id")] public required string Id { get; init; }
+
+    [JsonPropertyName("name")] public required string Name { get; init; }
+
+    [JsonPropertyName("description")] public string? Description { get; init; }
+
+    [JsonPropertyName("composite")] public bool Composite { get; init; }
+
+    [JsonPropertyName("clientRole")] public bool ClientRole { get; init; }
+
+    [JsonPropertyName("containerId")] public string? ContainerId { get; init; }
+}
+
+/// <summary>The slice of a realm the seeder reads: which role every account starts with.</summary>
+public sealed record KeycloakRealmSummary
+{
+    [JsonPropertyName("defaultRole")] public KeycloakRole? DefaultRole { get; init; }
 }
 
 /// <summary>What a lookup hands back. Only the fields the seeder decides on.</summary>
