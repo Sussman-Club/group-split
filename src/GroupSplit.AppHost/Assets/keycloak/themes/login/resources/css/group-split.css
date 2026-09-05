@@ -7,8 +7,21 @@
  * depend on small, which matters because the markup belongs to Keycloak and
  * changes between releases.
  *
- * Palette is kept in sync with GroupSplit.App.Shared/Services/ThemeService.cs so
- * the hosted login pages and the app read as one product.
+ * The tokens are the ones GroupSplit.App.Shared/wwwroot/app.css declares, under
+ * the same names and with the same values, so the hosted pages and the app read
+ * as one product; ThemeService.cs restates them again for MudBlazor. Change a
+ * colour in one and change it in all three. Only the subset the login pages can
+ * use is repeated here.
+ *
+ * Dark mode is keyed on `.pf-v5-theme-dark`, the class Keycloak puts on <html>
+ * when the visitor's system asks for dark. That is deliberate rather than
+ * `prefers-color-scheme`: PatternFly's own dark values live under
+ * `:where(.pf-v5-theme-dark)`, which `:where()` renders specificity-zero, so a
+ * `:root` block keyed on the media query alone would darken our tokens on a
+ * page PatternFly still believed to be light. Everything below routes through
+ * the --gs-* tokens, and only those are re-declared under
+ * `:root.pf-v5-theme-dark` (0,2,0); globals we never touch keep flipping on
+ * their own.
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Manrope:wght@400..800&display=swap");
@@ -16,66 +29,156 @@
 :root {
     --gs-teal: #22817a;
     --gs-teal-deep: #1a655f;
-    --gs-teal-soft: #e6f0ef;
+    --gs-teal-soft: rgb(34 129 122 / 10%);
+    --gs-teal-glow: rgb(34 129 122 / 22%);
     --gs-clay: #cb6e3a;
-    --gs-cream: #f5f0e6;
-    --gs-surface: #faf7f0;
-    --gs-charcoal: #2a2a2a;
-    --gs-muted: #6b6459;
-    --gs-divider: #e0d5cb;
+    --gs-clay-soft: rgb(203 110 58 / 12%);
 
-    --gs-radius: 14px;
+    --gs-bg: #f5f0e6;
+    --gs-surface: #fbf8f1;
+    --gs-surface-2: #fffdf8;
+    --gs-ink: #23211d;
+    --gs-muted: #6b6459;
+    --gs-line: #e3d9cc;
+    --gs-line-strong: #cfc3b3;
+    --gs-on-accent: #ffffff;
+    --gs-danger: #b3402f;
+    --gs-danger-soft: rgb(179 64 47 / 10%);
+
+    --gs-radius-xl: 24px;
     --gs-radius-sm: 10px;
-    --gs-shadow: 0 1px 2px rgb(42 42 42 / 6%), 0 12px 32px -12px rgb(42 42 42 / 18%);
-    /* Same pair as the app (GroupSplit.App.Shared/wwwroot/app.css). */
-    --gs-font: "Manrope", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --gs-radius-pill: 999px;
+
+    --gs-shadow-sm: 0 1px 2px rgb(42 36 24 / 5%), 0 2px 8px -2px rgb(42 36 24 / 8%);
+    --gs-shadow-md: 0 2px 4px rgb(42 36 24 / 5%), 0 14px 32px -14px rgb(42 36 24 / 22%);
+    --gs-shadow-lg: 0 4px 8px rgb(42 36 24 / 6%), 0 28px 56px -20px rgb(42 36 24 / 30%);
+
+    --gs-focus-ring: 0 0 0 3px rgb(34 129 122 / 18%);
+    --gs-grain-opacity: 0.55;
+    --gs-grain-blend: multiply;
+
+    --gs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --gs-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --gs-fast: 160ms;
+    --gs-base: 260ms;
+    --gs-slow: 520ms;
+
     --gs-font-display: "Bricolage Grotesque", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --gs-font-body: "Manrope", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+    --gs-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+    color-scheme: light;
 
     /* Map PatternFly's globals onto the brand. */
     --pf-v5-global--primary-color--100: var(--gs-teal);
     --pf-v5-global--primary-color--200: var(--gs-teal-deep);
     --pf-v5-global--link--Color: var(--gs-teal);
     --pf-v5-global--link--Color--hover: var(--gs-teal-deep);
-    --pf-v5-global--Color--100: var(--gs-charcoal);
+    --pf-v5-global--Color--100: var(--gs-ink);
     --pf-v5-global--Color--200: var(--gs-muted);
-    --pf-v5-global--BorderColor--100: var(--gs-divider);
-    --pf-v5-global--danger-color--100: #b3402f;
+    --pf-v5-global--BorderColor--100: var(--gs-line);
+    --pf-v5-global--BackgroundColor--100: var(--gs-surface);
+    --pf-v5-global--danger-color--100: var(--gs-danger);
     --pf-v5-global--success-color--100: var(--gs-teal);
-    --pf-v5-global--FontFamily--text: var(--gs-font);
+    --pf-v5-global--FontFamily--text: var(--gs-font-body);
     --pf-v5-global--FontFamily--heading: var(--gs-font-display);
-    --pf-v5-global--FontFamily--redhatfont--sans-serif: var(--gs-font);
+    --pf-v5-global--FontFamily--redhatfont--sans-serif: var(--gs-font-body);
+}
+
+:root.pf-v5-theme-dark {
+    /* Brand teal lightens in the dark scheme so it still clears 4.5:1 on both
+       the page and the card; the deep tint becomes the *lighter* of the pair
+       for the same reason, since hover has to move away from the background. */
+    --gs-teal: #3aa79e;
+    --gs-teal-deep: #5fc4bb;
+    --gs-teal-soft: rgb(58 167 158 / 14%);
+    --gs-teal-glow: rgb(58 167 158 / 26%);
+    --gs-clay: #e08a5a;
+    --gs-clay-soft: rgb(224 138 90 / 14%);
+
+    --gs-bg: #151412;
+    --gs-surface: #1f1d19;
+    --gs-surface-2: #26231f;
+    --gs-ink: #f3ede2;
+    --gs-muted: #a89f92;
+    --gs-line: #312d27;
+    --gs-line-strong: #4a4438;
+    --gs-on-accent: #0f1a19;
+    --gs-danger: #e06a57;
+    --gs-danger-soft: rgb(224 106 87 / 14%);
+
+    --gs-shadow-sm: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 8px -2px rgb(0 0 0 / 40%);
+    --gs-shadow-md: 0 2px 4px rgb(0 0 0 / 30%), 0 14px 32px -14px rgb(0 0 0 / 60%);
+    --gs-shadow-lg: 0 4px 8px rgb(0 0 0 / 35%), 0 28px 56px -20px rgb(0 0 0 / 70%);
+
+    --gs-focus-ring: 0 0 0 3px rgb(58 167 158 / 26%);
+    --gs-grain-opacity: 0.35;
+    --gs-grain-blend: screen;
+
+    color-scheme: dark;
 }
 
 /* ---------------------------------------------------------------- page ---- */
 
 body,
-.pf-v5-c-background-image,
 .pf-v5-c-login {
-    background: var(--gs-cream);
-    font-family: var(--gs-font);
-    color: var(--gs-charcoal);
+    background: var(--gs-bg);
+    font-family: var(--gs-font-body);
+    color: var(--gs-ink);
+    -webkit-font-smoothing: antialiased;
 }
 
-/* keycloak.v2 ships a stock photographic background; replace it with a quiet
-   brand wash so the card stays the only thing competing for attention. */
-.pf-v5-c-background-image {
-    background-image:
-        radial-gradient(circle at 12% 18%, rgb(34 129 122 / 12%), transparent 45%),
-        radial-gradient(circle at 88% 82%, rgb(203 110 58 / 10%), transparent 45%);
-    background-color: var(--gs-cream);
+/* keycloak.v2 paints a stock photograph across the page, as
+   `.login-pf body { background: var(--keycloak-bg-logo-url) ... }`. Two things
+   are needed to be rid of it: the variable, so nothing goes looking for the
+   asset, and a rule at the parent's own specificity (0,1,1), since its
+   `background` shorthand resets the colour to transparent. In its place goes
+   the two-corner wash the app paints behind its own auth screens
+   (.gs-auth-backdrop), so the card stays the only thing competing for
+   attention. */
+:root {
+    --keycloak-bg-logo-url: none;
 }
 
-.pf-v5-c-background-image::before {
-    content: none;
+.login-pf body {
+    background:
+        radial-gradient(900px 500px at 12% 18%, var(--gs-teal-soft), transparent 55%),
+        radial-gradient(800px 500px at 88% 82%, var(--gs-clay-soft), transparent 55%),
+        var(--gs-bg);
+    background-attachment: fixed;
 }
 
+/* Paper grain, as on the app shell. Fixed so it never scrolls, and
+   pointer-events off so it can never intercept a click. */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: var(--gs-grain);
+    opacity: var(--gs-grain-opacity);
+    mix-blend-mode: var(--gs-grain-blend);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Positioned so it stacks above the grain, which is a fixed layer at z-index 0
+   and would otherwise paint over the card. */
 .pf-v5-c-login {
+    position: relative;
+    z-index: 1;
+    background: transparent;
     padding-block: clamp(1.5rem, 6vh, 4rem);
 }
 
 .pf-v5-c-login__container {
     max-width: 27rem;
     gap: 1.5rem;
+}
+
+::selection {
+    background: var(--gs-teal-glow);
+    color: var(--gs-ink);
 }
 
 /* -------------------------------------------------------------- header ---- */
@@ -87,23 +190,26 @@ body,
     gap: 0.75rem;
 }
 
-/* Brand mark. Sits above the realm name that Keycloak renders from the realm's
-   displayNameHtml. */
+/* Brand mark, at the size the app's own hand-off card uses (.gs-auth-mark).
+   Sits above the realm name Keycloak renders from displayNameHtml. */
 .pf-v5-c-login__header::before {
     content: "";
     display: block;
-    width: 52px;
-    height: 52px;
+    width: 64px;
+    height: 64px;
     background-image: url("../img/logo.svg");
     background-repeat: no-repeat;
     background-size: contain;
     background-position: center;
+    animation: gs-mark-in 900ms var(--gs-ease-spring) both;
 }
 
+/* The eyebrow above the title, matching .gs-eyebrow in the app. */
 #kc-header-wrapper,
 .gs-realm-name {
-    font-size: 1.05rem;
-    font-weight: 600;
+    font-family: var(--gs-font-body);
+    font-size: 0.6875rem;
+    font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--gs-teal);
@@ -116,24 +222,27 @@ body,
     position: relative;
     overflow: hidden;
     background: var(--gs-surface);
-    border: 1px solid var(--gs-divider);
-    border-radius: var(--gs-radius);
-    box-shadow: var(--gs-shadow);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-xl);
+    box-shadow: var(--gs-shadow-lg);
+    animation: gs-card-in var(--gs-slow) var(--gs-ease-spring) both;
 }
 
-/* Slim accent rule across the top of the card. */
+/* Accent rule across the top of the card, as on .gs-auth-card. */
 .pf-v5-c-login__main::before {
     content: "";
     position: absolute;
     inset-block-start: 0;
     inset-inline: 0;
-    height: 3px;
+    height: 4px;
     background: linear-gradient(90deg, var(--gs-teal), var(--gs-clay));
+    z-index: 1;
 }
 
 .pf-v5-c-login__main-header,
 .pf-v5-c-login__main-body,
 .pf-v5-c-login__main-footer {
+    background: transparent;
     padding-inline: 2rem;
 }
 
@@ -150,40 +259,62 @@ body,
 }
 
 #kc-page-title {
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-family: var(--gs-font-display);
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1.15;
     letter-spacing: -0.01em;
-    color: var(--gs-charcoal);
+    color: var(--gs-ink);
+}
+
+@keyframes gs-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+    }
+}
+
+@keyframes gs-mark-in {
+    from {
+        opacity: 0;
+        transform: rotate(-40deg) scale(0.6);
+    }
 }
 
 /* -------------------------------------------------------------- fields ---- */
 
 .pf-v5-c-form__label-text {
+    font-family: var(--gs-font-body);
     font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--gs-charcoal);
+    font-weight: 700;
+    color: var(--gs-ink);
 }
 
+/* Outlined and transparent rather than filled: the app reaches for
+   Variant.Outlined on all but three of its fields, and a white fill on the warm
+   surface reads as a different, cooler material sitting on top of the card. */
 .pf-v5-c-form-control {
+    --pf-v5-c-form-control--BackgroundColor: transparent;
     --pf-v5-c-form-control--BorderRadius: var(--gs-radius-sm);
-    --pf-v5-c-form-control--BorderBottomColor: var(--gs-divider);
+    --pf-v5-c-form-control--BorderBottomColor: var(--gs-line);
     --pf-v5-c-form-control--focus--BorderBottomColor: var(--gs-teal);
 
-    background: #fff;
-    border: 1px solid var(--gs-divider);
+    background: transparent;
+    border: 1px solid var(--gs-line);
     border-radius: var(--gs-radius-sm);
+    color: var(--gs-ink);
     padding-block: 0.6rem;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color var(--gs-fast) var(--gs-ease), box-shadow var(--gs-fast) var(--gs-ease);
 }
 
 .pf-v5-c-form-control:hover {
-    border-color: #cbbfb2;
+    border-color: var(--gs-line-strong);
 }
 
 .pf-v5-c-form-control:focus-within,
 .pf-v5-c-form-control:focus {
     border-color: var(--gs-teal);
-    box-shadow: 0 0 0 3px rgb(34 129 122 / 18%);
+    box-shadow: var(--gs-focus-ring);
     outline: none;
 }
 
@@ -211,53 +342,136 @@ body,
     border-bottom-width: 0;
 }
 
-/* PatternFly renders the password field as a wrapper with a reveal button. */
+/* A password field arrives as an input group: the field in one item, the reveal
+   toggle in the next. Left alone that reads as two controls sitting side by
+   side, so the border moves out to the group and the parts inside go bare. */
 .pf-v5-c-input-group,
 .pf-v5-c-input-group__item {
     background: transparent;
 }
 
+/* Each item carries PatternFly's own box border, including the grey underline
+   it gives the field; inside one control they read as seams. */
+.pf-v5-c-input-group__item {
+    border: 0;
+}
+
+.pf-v5-c-input-group {
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    transition: border-color var(--gs-fast) var(--gs-ease), box-shadow var(--gs-fast) var(--gs-ease);
+}
+
+.pf-v5-c-input-group:hover {
+    border-color: var(--gs-line-strong);
+}
+
+.pf-v5-c-input-group:focus-within {
+    border-color: var(--gs-teal);
+    box-shadow: var(--gs-focus-ring);
+}
+
+.pf-v5-c-input-group .pf-v5-c-form-control,
+.pf-v5-c-input-group .pf-v5-c-form-control:hover,
+.pf-v5-c-input-group .pf-v5-c-form-control:focus-within {
+    border: 0;
+    box-shadow: none;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control {
+    background: transparent;
+    border: 0;
+    border-radius: var(--gs-radius-sm);
+    color: var(--gs-muted);
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control:hover {
+    background: transparent;
+    color: var(--gs-ink);
+}
+
+/* Control buttons carry the same ::after underline the fields do. */
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control::after {
+    border-block-end-width: 0;
+}
+
+/* Checkboxes and radios are native controls; one property brands them. */
+.pf-v5-c-check__input,
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--gs-teal);
+}
+
 /* ------------------------------------------------------------- buttons ---- */
 
+/* The app's buttons carry the body font at 700 with no uppercasing
+   (ButtonTypography in ThemeService.cs); its primary actions are pills. */
 .pf-v5-c-button {
+    font-family: var(--gs-font-body);
     border-radius: var(--gs-radius-sm);
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    transition:
+        background-color var(--gs-fast) var(--gs-ease),
+        border-color var(--gs-fast) var(--gs-ease),
+        box-shadow var(--gs-base) var(--gs-ease),
+        transform var(--gs-base) var(--gs-ease-spring);
 }
 
 .pf-v5-c-button.pf-m-primary {
+    position: relative;
+    overflow: hidden;
     background: var(--gs-teal);
-    color: #fff;
+    color: var(--gs-on-accent);
+    border-radius: var(--gs-radius-pill);
     padding-block: 0.7rem;
-    box-shadow: 0 1px 2px rgb(26 101 95 / 30%);
+    padding-inline: 18px;
+    box-shadow: var(--gs-shadow-sm);
+}
+
+/* The light sweep filled buttons get in the app. */
+.pf-v5-c-button.pf-m-primary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 28%) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0s;
+    pointer-events: none;
+}
+
+.pf-v5-c-button.pf-m-primary:hover::after {
+    transform: translateX(120%);
+    transition: transform 650ms var(--gs-ease);
 }
 
 .pf-v5-c-button.pf-m-primary:hover,
 .pf-v5-c-button.pf-m-primary:focus {
     background: var(--gs-teal-deep);
+    color: var(--gs-on-accent);
+    transform: translateY(-1px);
+    box-shadow: var(--gs-shadow-md);
 }
 
 .pf-v5-c-button.pf-m-primary:active {
-    transform: translateY(1px);
+    transform: translateY(0) scale(0.98);
 }
 
-.pf-v5-c-button.pf-m-primary:focus-visible {
-    outline: 3px solid rgb(34 129 122 / 35%);
-    outline-offset: 2px;
-}
-
-/* Social / identity-provider buttons, if any get wired up later. */
+/* Social / identity-provider buttons. */
 .pf-v5-c-button.pf-m-control,
 #kc-social-providers .pf-v5-c-button {
-    background: #fff;
-    border: 1px solid var(--gs-divider);
-    color: var(--gs-charcoal);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    color: var(--gs-ink);
 }
 
-#kc-social-providers .pf-v5-c-button:hover {
+#kc-social-providers .pf-v5-c-button:hover,
+.pf-v5-c-button.pf-m-control:hover {
     border-color: var(--gs-teal);
     background: var(--gs-teal-soft);
+    color: var(--gs-ink);
 }
 
 /*
@@ -277,8 +491,9 @@ body,
 /* Transparent rather than a colour, so it sits correctly on either scheme's card. */
 #kc-register-form #updateProfile {
     background: transparent;
-    border: 1px solid var(--gs-divider);
-    color: var(--gs-charcoal);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-pill);
+    color: var(--gs-ink);
     padding-block: 0.7rem;
 }
 
@@ -292,15 +507,25 @@ body,
 #kc-register-form #linkAccount {
     background: var(--gs-teal);
     border: 1px solid var(--gs-teal);
-    color: #fff;
+    border-radius: var(--gs-radius-pill);
+    color: var(--gs-on-accent);
     padding-block: 0.7rem;
-    box-shadow: 0 1px 2px rgb(26 101 95 / 30%);
+    box-shadow: var(--gs-shadow-sm);
 }
 
 #kc-register-form #linkAccount:hover,
 #kc-register-form #linkAccount:focus {
     background: var(--gs-teal-deep);
     border-color: var(--gs-teal-deep);
+    color: var(--gs-on-accent);
+}
+
+/* Focus is the one affordance that must never be tinted away. */
+.pf-v5-c-button:focus-visible,
+a:focus-visible,
+.pf-v5-c-check__input:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
 }
 
 /* --------------------------------------------------------------- links ---- */
@@ -310,7 +535,7 @@ a,
 #kc-registration a,
 #kc-info a {
     color: var(--gs-teal);
-    font-weight: 600;
+    font-weight: 700;
     text-decoration: none;
 }
 
@@ -329,7 +554,7 @@ a:hover {
     margin-block-start: 0;
     padding-block-start: 0;
     border-block-start: 0;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     color: var(--gs-muted);
     text-align: center;
 }
@@ -337,7 +562,7 @@ a:hover {
 .pf-v5-c-login__main-footer-band {
     margin-block-start: 1.25rem;
     padding-block-start: 1.25rem;
-    border-block-start: 1px solid var(--gs-divider);
+    border-block-start: 1px solid var(--gs-line);
 }
 
 .pf-v5-c-login__main-footer-band .pf-v5-c-login__main-footer-band {
@@ -356,18 +581,23 @@ a:hover {
 
 .pf-v5-c-alert {
     border-radius: var(--gs-radius-sm);
-    border: 1px solid var(--gs-divider);
-    background: #fff;
+    border: 1px solid var(--gs-line);
+    background: var(--gs-surface-2);
+    color: var(--gs-ink);
 }
 
 .pf-v5-c-alert.pf-m-danger {
-    border-color: rgb(179 64 47 / 35%);
-    background: #fdf3f1;
+    border-color: color-mix(in srgb, var(--gs-danger) 35%, transparent);
+    background: var(--gs-danger-soft);
 }
 
 .pf-v5-c-alert.pf-m-success {
-    border-color: rgb(34 129 122 / 35%);
+    border-color: color-mix(in srgb, var(--gs-teal) 35%, transparent);
     background: var(--gs-teal-soft);
+}
+
+.pf-v5-c-alert__title {
+    font-weight: 700;
 }
 
 /* Password-policy hints under the field. */
@@ -377,38 +607,11 @@ a:hover {
     font-size: 0.8125rem;
 }
 
-/* ----------------------------------------------------------- dark mode ---- */
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --gs-cream: #1a1a1a;
-        --gs-surface: #232323;
-        --gs-charcoal: #f5f0e6;
-        --gs-muted: #a89f92;
-        --gs-divider: #3a3a3a;
-        --gs-teal-soft: #17322f;
-
-        --pf-v5-global--Color--100: #f5f0e6;
-        --pf-v5-global--Color--200: #a89f92;
-        --pf-v5-global--BackgroundColor--100: #232323;
-        --pf-v5-global--BorderColor--100: #3a3a3a;
-    }
-
-    .pf-v5-c-form-control {
-        background: #2a2a2a;
-        color: var(--gs-charcoal);
-    }
-
-    .pf-v5-c-alert,
-    #kc-social-providers .pf-v5-c-button,
-    .pf-v5-c-button.pf-m-control {
-        background: #2a2a2a;
-        color: var(--gs-charcoal);
-    }
-
-    .pf-v5-c-alert.pf-m-danger {
-        background: #33201c;
-    }
+/* Field-level errors keep their own colour: the muted rule above would
+   otherwise mute the one message on the page that has to be read. */
+.pf-v5-c-helper-text__item.pf-m-error .pf-v5-c-helper-text__item-text,
+.pf-v5-c-form__helper-text.pf-m-error {
+    color: var(--gs-danger);
 }
 
 /* ---------------------------------------------------------- small screens - */
@@ -418,5 +621,17 @@ a:hover {
     .pf-v5-c-login__main-body,
     .pf-v5-c-login__main-footer {
         padding-inline: 1.25rem;
+    }
+
+    #kc-page-title {
+        font-size: 1.5rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
