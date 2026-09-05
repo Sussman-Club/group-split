@@ -20,6 +20,7 @@ public static class ServiceExtensions
             services.TryAdd<ThemePreference>(sessionLifetime);
             services.TryAddScoped<ApiErrorPresenter>();
             services.TryAddScoped<LoadGuard>();
+            services.TryAddScoped<DataChangeNotifier>();
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();

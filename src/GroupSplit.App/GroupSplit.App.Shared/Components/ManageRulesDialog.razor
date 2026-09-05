@@ -69,6 +69,7 @@
 
     [Parameter] public Guid GroupId { get; set; }
 
+    // Always replaced, never edited in place: the table looks again when the reference changes.
     private ICollection<RuleVersionResponse> _rules = [];
 
     private string? _error;
@@ -135,7 +136,7 @@
         var created = await Run(async () =>
         {
             var response = await RulesClient.CreateRuleAsync(request);
-            _rules.Add(response);
+            _rules = [.._rules, response];
         }, "Could not create the rule.");
 
         if (!created) return;
@@ -223,7 +224,7 @@
         var deleted = await Run(async () =>
         {
             await RulesClient.DeleteRuleAsync(rule.RuleId);
-            _rules.Remove(rule);
+            _rules = _rules.Where(r => r.RuleId != rule.RuleId).ToList();
         }, "Could not delete the rule.");
 
         if (!deleted) return;

@@ -13,14 +13,21 @@ public class GroupsPageStateService : IGroupsPageStateService
     private readonly ITransactionsClient _transactionsClient;
     private readonly LoadGuard _guard;
     private readonly ApiErrorPresenter _errors;
+    private readonly DataChangeNotifier _changes;
 
     public Task IsReadyTask { get; }
     public bool IsLoading { get; private set; }
-    private Task _transactionsLoad = Task.CompletedTask;
-    private Task _balancesLoad = Task.CompletedTask;
+    private Task _selectedLoad = Task.CompletedTask;
+
+    /// <summary>
+    /// The group to land on after the next reload of the list, when it is not the one
+    /// selected now: the group that was just created.
+    /// </summary>
+    private Guid? _selectOnReload;
 
     public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient, ISnackbar snackbar,
-        ITransactionsClient transactionsClient, LoadGuard guard, ApiErrorPresenter errors)
+        ITransactionsClient transactionsClient, LoadGuard guard, ApiErrorPresenter errors,
+        DataChangeNotifier changes)
     {
         _tracker = tracker;
         _groupsClient = groupsClient;
@@ -28,12 +35,19 @@ public class GroupsPageStateService : IGroupsPageStateService
         _transactionsClient = transactionsClient;
         _guard = guard;
         _errors = errors;
+        _changes = changes;
+
+        // Everything here is a copy of the server's, re-read when a write says it changed,
+        // whichever page the write was made from. A group change reloads the list and,
+        // through the selection, the selected group's figures; an expense change reloads
+        // just those figures, which is all an expense can move.
+        _changes.GroupsChanged += RefreshGroupsAsync;
+        _changes.TransactionsChanged += RefreshSelectedAsync;
+
         IsReadyTask = Task.Run(async () =>
         {
             if (tracker.Groups is not null) return;
-            await _guard.RunAsync(() => LoadGroupsAsync(), "your groups");
-            await _transactionsLoad;
-            await _balancesLoad;
+            await RefreshGroupsAsync();
         });
     }
 
@@ -57,8 +71,7 @@ public class GroupsPageStateService : IGroupsPageStateService
 
             _tracker.SelectedGroup = value;
             OnGroupSelected?.Invoke();
-            _transactionsLoad = LoadSelectedAsync();
-            _balancesLoad = _transactionsLoad;
+            _selectedLoad = LoadSelectedAsync();
         }
     }
 
@@ -86,6 +99,28 @@ public class GroupsPageStateService : IGroupsPageStateService
     public event Action? OnTransactionsChanged;
     public event Action? OnGroupsChanged;
 
+    /// <summary>
+    /// Re-reads the list of groups, then the selected group through it. Complete once both
+    /// halves have landed, so a caller that awaits it sees the whole picture.
+    /// </summary>
+    private async Task RefreshGroupsAsync()
+    {
+        await _guard.RunAsync(() => LoadGroupsAsync(), "your groups");
+        await _selectedLoad;
+    }
+
+    /// <summary>
+    /// Re-reads the selected group's expenses and balances in place. Unlike a selection,
+    /// this does not raise the loading flag: what is on screen is the right group, only a
+    /// moment behind, and dimming it would read as a change of subject.
+    /// </summary>
+    private Task RefreshSelectedAsync() =>
+        _guard.RunAsync(async () =>
+        {
+            await LoadTransactionsAsync();
+            await LoadGroupBalancesAsync();
+        }, "this group");
+
     // Both halves of the selected group travel together, under one loading
     // flag, and a failure clears them: stale figures under a fresh name read
     // as the wrong answer, an empty panel reads as "not loaded".
@@ -110,6 +145,10 @@ public class GroupsPageStateService : IGroupsPageStateService
         OnTransactionsChanged?.Invoke();
     }
 
+    // The loads below always assign a new collection, never edit the old one in place: a
+    // component that was handed the previous one only looks again when the reference
+    // changes.
+
     private async Task LoadTransactionsAsync(CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
@@ -131,11 +170,16 @@ public class GroupsPageStateService : IGroupsPageStateService
             .GetGroupsAsAsyncEnumerable(cancellationToken: cancellationToken)
             .ToListAsync(cancellationToken);
 
-        SelectedGroup = Groups.FirstOrDefault(g => g.Id == SelectedGroup?.Id) ??
+        // Stay on the group that was selected -- by id, since the list is new objects --
+        // unless a write asked for another one. The setter re-reads the group's figures.
+        var wanted = _selectOnReload ?? SelectedGroup?.Id;
+        _selectOnReload = null;
+
+        SelectedGroup = Groups.FirstOrDefault(g => g.Id == wanted) ??
                         Groups.FirstOrDefault();
     }
 
-    public async Task LoadGroupBalancesAsync(CancellationToken cancellationToken = default)
+    private async Task LoadGroupBalancesAsync(CancellationToken cancellationToken = default)
     {
         if (SelectedGroup is null)
         {
@@ -149,15 +193,18 @@ public class GroupsPageStateService : IGroupsPageStateService
 
     // Every write below runs through the presenter: a refusal from the API becomes an
     // error snackbar naming the reason, a lost session becomes a sign-in, and the caller
-    // gets false instead of an exception it would have had to catch itself.
+    // gets false instead of an exception it would have had to catch itself. Once the write
+    // has landed it is announced rather than applied here by hand, so this page's copy and
+    // the expenses page's are re-read from the same source and cannot drift apart.
 
     public Task<bool> CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default) =>
         _errors.TryAsync(async () =>
         {
             var newGroup = await _groupsClient.CreateGroupAsync(request, cancellationToken);
-            Groups.Add(newGroup);
-            SelectedGroup = newGroup;
             _snackbar.Add("Group created successfully.", Severity.Success);
+
+            _selectOnReload = newGroup.Id;
+            await _changes.NotifyGroupsChangedAsync();
         }, "Could not create the group.");
 
     public IAsyncEnumerable<UserInfo> GetGroupMembersAsync(CancellationToken cancellationToken = default)
@@ -174,10 +221,9 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         return _errors.TryAsync(async () =>
         {
-            var response = await _groupsClient.AddGroupMemberAsync(SelectedGroup.Id, request, cancellationToken);
-
-            UpdateSelectedGroup(response);
+            await _groupsClient.AddGroupMemberAsync(SelectedGroup.Id, request, cancellationToken);
             _snackbar.Add("Member added successfully.", Severity.Success);
+            await _changes.NotifyGroupsChangedAsync();
         }, "Could not add the member.");
     }
 
@@ -188,10 +234,9 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         return _errors.TryAsync(async () =>
         {
-            var response = await _groupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, memberUserId, cancellationToken);
-
-            UpdateSelectedGroup(response);
+            await _groupsClient.RemoveGroupMemberAsync(SelectedGroup.Id, memberUserId, cancellationToken);
             _snackbar.Add("Member removed successfully.", Severity.Success);
+            await _changes.NotifyGroupsChangedAsync();
         }, "Could not remove the member.");
     }
 
@@ -203,10 +248,9 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         return _errors.TryAsync(async () =>
         {
-            var updatedGroup = await _groupsClient.UpdateGroupAsync(SelectedGroup.Id, updateRequest, cancellationToken);
-            UpdateSelectedGroup(updatedGroup);
-
+            await _groupsClient.UpdateGroupAsync(SelectedGroup.Id, updateRequest, cancellationToken);
             _snackbar.Add("Group updated successfully.", Severity.Success);
+            await _changes.NotifyGroupsChangedAsync();
         }, "Could not update the group.");
     }
 
@@ -219,10 +263,8 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _errors.TryAsync(async () =>
         {
             await _transactionsClient.CreateTransactionAsync(request, cancellationToken);
-
-            await LoadTransactionsAsync(cancellationToken);
-            await LoadGroupBalancesAsync(cancellationToken);
             _snackbar.Add("Transaction created successfully.", Severity.Success);
+            await _changes.NotifyTransactionsChangedAsync();
         }, "Could not save the expense.");
     }
 
@@ -234,22 +276,8 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _errors.TryAsync(async () =>
         {
             await _groupsClient.SettleGroupDebtsAsync(SelectedGroup.Id, request, cancellationToken);
-
-            await LoadTransactionsAsync(cancellationToken);
-            await LoadGroupBalancesAsync(cancellationToken);
             _snackbar.Add("Group debts settled successfully.", Severity.Success);
+            await _changes.NotifyTransactionsChangedAsync();
         }, "Could not record the settlement.");
-    }
-
-    private void UpdateSelectedGroup(GroupResponse group)
-    {
-        var groupList = Groups as List<GroupResponse> ?? Groups.ToList();
-        var index = groupList.FindIndex(g => g.Id == group.Id);
-
-        if (index < 0) return;
-
-        groupList[index] = group;
-        Groups = groupList;
-        SelectedGroup = group;
     }
 }

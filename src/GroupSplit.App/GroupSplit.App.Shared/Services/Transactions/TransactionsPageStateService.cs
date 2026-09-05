@@ -12,6 +12,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     private readonly ISnackbar _snackbar;
     private readonly LoadGuard _guard;
     private readonly ApiErrorPresenter _errors;
+    private readonly DataChangeNotifier _changes;
 
     public Task IsReadyTask { get; }
 
@@ -19,17 +20,26 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         TransactionsTracker tracker,
         ISnackbar snackbar,
         LoadGuard guard,
-        ApiErrorPresenter errors)
+        ApiErrorPresenter errors,
+        DataChangeNotifier changes)
     {
         _client = client;
         _tracker = tracker;
         _snackbar = snackbar;
         _guard = guard;
         _errors = errors;
+        _changes = changes;
+
+        // The list here is a copy of the server's, so it is re-read whenever anything that
+        // shows on it changes: an expense written from any page, or a group renamed, which
+        // changes the group tag on every one of its rows.
+        _changes.TransactionsChanged += RefreshAsync;
+        _changes.GroupsChanged += RefreshAsync;
+
         IsReadyTask = Task.Run(async () =>
         {
             if (tracker.Transactions is not null) return;
-            await _guard.RunAsync(() => LoadAsync(), "your expenses");
+            await RefreshAsync();
         });
     }
 
@@ -45,6 +55,11 @@ public class TransactionsPageStateService : ITransactionsPageStateService
 
     public event Action? OnTransactionsChanged;
 
+    private Task RefreshAsync() => _guard.RunAsync(() => LoadAsync(), "your expenses");
+
+    // Always a new list, never the old one edited in place: a component that was handed
+    // the previous list, the data grid among them, only looks again when the reference
+    // changes.
     private async Task LoadAsync(CancellationToken ct = default)
     {
         Transactions = await _client.GetTransactionsAsAsyncEnumerable(cancellationToken: ct)
@@ -53,65 +68,32 @@ public class TransactionsPageStateService : ITransactionsPageStateService
 
     // Every write below runs through the presenter: a refusal from the API becomes an
     // error snackbar naming the reason, a lost session becomes a sign-in, and the caller
-    // gets false instead of an exception it would have had to catch itself.
+    // gets false instead of an exception it would have had to catch itself. Once the write
+    // has landed it is announced rather than applied here by hand, so this list and the
+    // groups page's are re-read from the same source and cannot drift apart.
 
     public Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
         _errors.TryAsync(async () =>
         {
-            var transaction = await _client.CreateTransactionAsync(request, ct);
-            AddTransaction(transaction);
+            await _client.CreateTransactionAsync(request, ct);
             _snackbar.Add("Transaction created successfully.", Severity.Success);
-            await LoadAsync(ct);
+            await _changes.NotifyTransactionsChangedAsync();
         }, "Could not save the expense.");
 
     public Task<bool> UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
         CancellationToken ct = default) =>
         _errors.TryAsync(async () =>
         {
-            var updated = await _client.UpdateTransactionAsync(transaction.Id, patch, ct);
-
-            if (updated.PaidByUserId != transaction.PaidByUserId)
-            {
-                RemoveTransaction(transaction);
-            }
-            else
-            {
-                UpdateTransaction(updated);
-            }
-
+            await _client.UpdateTransactionAsync(transaction.Id, patch, ct);
             _snackbar.Add("Transaction updated successfully.", Severity.Success);
+            await _changes.NotifyTransactionsChangedAsync();
         }, "Could not update the expense.");
 
     public Task<bool> DeleteAsync(TransactionResponse transaction, CancellationToken ct = default) =>
         _errors.TryAsync(async () =>
         {
             await _client.DeleteTransactionAsync(transaction.Id, ct);
-            RemoveTransaction(transaction);
             _snackbar.Add("Transaction deleted successfully.", Severity.Success);
+            await _changes.NotifyTransactionsChangedAsync();
         }, "Could not delete the expense.");
-
-    private void UpdateTransaction(TransactionResponse transaction)
-    {
-        var transactions = Transactions as List<TransactionResponse> ?? Transactions.ToList();
-        var index = transactions.FindIndex(g => g.Id == transaction.Id);
-
-        if (index < 0) return;
-
-        transactions[index] = transaction;
-        Transactions = transactions;
-    }
-
-    private void AddTransaction(TransactionResponse transaction)
-    {
-        var transactions = Transactions as List<TransactionResponse> ?? Transactions.ToList();
-        transactions.Add(transaction);
-        Transactions = transactions;
-    }
-
-    private void RemoveTransaction(TransactionResponse transaction)
-    {
-        var transactions = Transactions as List<TransactionResponse> ?? Transactions.ToList();
-        transactions.Remove(transaction);
-        Transactions = transactions;
-    }
 }
