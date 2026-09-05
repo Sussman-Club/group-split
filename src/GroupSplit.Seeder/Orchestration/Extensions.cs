@@ -36,6 +36,10 @@ public static class Extensions
             builder.AddSeeder<RuleSeeder>();
             builder.AddSeeder<TransactionSeeder>();
 
+            // Identity provider. Reads the same users.json as UserSeeder but writes to
+            // Keycloak rather than the database, so it depends on none of the above.
+            builder.AddSeeder<KeycloakUserSeeder>();
+
             return builder;
         }
     }
@@ -48,7 +52,6 @@ public static class Extensions
             services.AddJsonSeedSource<UserSeedDto>(opt => opt.Paths.Users);
             services.AddJsonSeedSource<RuleSeedDto>(opt => opt.Paths.Rules);
             services.AddJsonSeedSource<TransactionSeedDto>(opt => opt.Paths.Transactions);
-            services.AddJsonSeedSource<IdentityUserSeedDto>(opt => opt.Paths.IdentityUsers);
             return services;
         }
 
