@@ -1,62 +1,65 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
-@using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.Shared
 @inject IAuthService AuthService
-@inject IUserLogin UserLogin
+@inject NavigationManager Nav
+@implements IDisposable
 
-<MudAppBar Elevation="1" Dense>
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="flex-grow-1">
-        @if (ToggleDrawer.HasDelegate)
-        {
-            <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                           Color="Color.Inherit"
-                           Edge="Edge.Start"
-                           OnClick="@ToggleDrawer" />
-        }
-        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Inherit" />
-        <MudText Typo="Typo.h6" Class="font-weight-bold">Group Split</MudText>
-    </MudStack>
-    <MudSpacer />
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-        <ThemeModeMenu />
-        @if (UserInfo is not null)
-        {
-            <MudMenu Dense AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                <ActivatorContent>
-                    <MudStack Style="height: var(--mud-appbar-height)" Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <MudText Typo="Typo.body2" Class="font-weight-medium d-none d-sm-flex">@UserInfo.FullName</MudText>
-                        <MudAvatar Style="background-color: rgba(255,255,255,0.22); color: #fff;" Size="Size.Small">
-                            @Initials
-                        </MudAvatar>
-                    </MudStack>
-                </ActivatorContent>
-                <ChildContent>
-                    <MudMenuItem Icon="@Icons.Material.Filled.AccountCircle" Label="Account" Href="/account" />
-                    <MudDivider />
-                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" Label="Sign out" OnClick="TryLogout" />
-                </ChildContent>
-            </MudMenu>
-        }
-        else
-        {
-            <MudButton Color="Color.Inherit" Href="/login">Sign in</MudButton>
-        }
-    </MudStack>
-</MudAppBar>
+<header class="gs-topbar">
+    <a class="gs-brand gs-topbar-brand" href="/" aria-label="Home">
+        <BrandMark Size="28" />
+    </a>
+    <h2 class="gs-topbar-title">@Title</h2>
+    <span class="gs-topbar-spacer"></span>
+
+    <ThemeModeMenu />
+
+    @if (UserInfo is not null)
+    {
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense>
+            <ActivatorContent>
+                <button type="button" class="gs-user-btn" aria-label="Account menu">
+                    <span class="name">@UserInfo.FirstName</span>
+                    <Avatar Name="@UserInfo.FullName" Size="sm" />
+                </button>
+            </ActivatorContent>
+            <ChildContent>
+                <div style="padding: 10px 16px 6px; min-width: 200px">
+                    <div style="font-weight: 700; font-size: .875rem">@UserInfo.FullName</div>
+                    <div class="gs-muted" style="font-size: .75rem">@UserInfo.Email</div>
+                </div>
+                <MudDivider Class="my-1" />
+                <MudMenuItem Icon="@Icons.Material.Rounded.AccountCircle" Label="Account" Href="/account" />
+                <MudMenuItem Icon="@Icons.Material.Rounded.Logout" Label="Sign out" OnClick="TryLogout" />
+            </ChildContent>
+        </MudMenu>
+    }
+    else
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill" Href="/login">Sign in</MudButton>
+    }
+</header>
 
 @code {
-    [Parameter] public EventCallback ToggleDrawer { get; set; }
-
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
-    private string Initials => string.Concat(
-        (UserInfo?.FullName ?? string.Empty)
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Take(2)
-            .Select(part => part[0]));
+    private string Title => ("/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/')) switch
+    {
+        "/" => "Home",
+        "/groups" => "Groups",
+        "/transactions" => "Expenses",
+        "/account" => "Account",
+        _ => "Group Split"
+    };
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(StateHasChanged);
 
     // Logout is a full-page navigation to the BFF, which ends the Keycloak
     // session and lands back on "/".
-    private Task TryLogout(MouseEventArgs args) => AuthService.Logout();
+    private Task TryLogout() => AuthService.Logout();
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

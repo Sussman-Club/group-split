@@ -1,4 +1,5 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
@@ -38,7 +39,7 @@
 
                 <MudStack Row="true" Justify="Justify.SpaceBetween">
                     <MudText Typo="Typo.body1">Total Amount</MudText>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">@details.Amount.ToString("C")</MudText>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">@details.Amount.ToMoney()</MudText>
                 </MudStack>
 
                 <MudStack Row="true" Justify="Justify.SpaceBetween">
@@ -64,7 +65,7 @@
                     {
                         <MudStack Row="true" Justify="Justify.SpaceBetween">
                             <MudText Typo="Typo.body2">@split.UserName</MudText>
-                            <MudText Typo="Typo.body2" Class="font-weight-medium">@split.Amount.ToString("C")</MudText>
+                            <MudText Typo="Typo.body2" Class="font-weight-medium">@split.Amount.ToMoney()</MudText>
                         </MudStack>
                     }
                 </MudStack>
@@ -73,7 +74,7 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton OnClick="Close" Color="Color.Secondary">Close</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Close" Color="Color.Secondary">Close</MudButton>
     </DialogActions>
 </MudDialog>
 

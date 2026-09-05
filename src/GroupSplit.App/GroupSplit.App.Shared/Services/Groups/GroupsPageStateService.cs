@@ -10,22 +10,25 @@ public class GroupsPageStateService : IGroupsPageStateService
     private readonly IGroupsClient _groupsClient;
     private readonly ISnackbar _snackbar;
     private readonly ITransactionsClient _transactionsClient;
+    private readonly LoadGuard _guard;
 
     public Task IsReadyTask { get; }
+    public bool IsLoading { get; private set; }
     private Task _transactionsLoad = Task.CompletedTask;
     private Task _balancesLoad = Task.CompletedTask;
 
     public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient, ISnackbar snackbar,
-        ITransactionsClient transactionsClient)
+        ITransactionsClient transactionsClient, LoadGuard guard)
     {
         _tracker = tracker;
         _groupsClient = groupsClient;
         _snackbar = snackbar;
         _transactionsClient = transactionsClient;
+        _guard = guard;
         IsReadyTask = Task.Run(async () =>
         {
             if (tracker.Groups is not null) return;
-            await LoadGroupsAsync();
+            await _guard.RunAsync(() => LoadGroupsAsync(), "your groups");
             await _transactionsLoad;
             await _balancesLoad;
         });
@@ -51,8 +54,8 @@ public class GroupsPageStateService : IGroupsPageStateService
 
             _tracker.SelectedGroup = value;
             OnGroupSelected?.Invoke();
-            _transactionsLoad = LoadTransactionsAsync();
-            _balancesLoad = LoadGroupBalancesAsync();
+            _transactionsLoad = LoadSelectedAsync();
+            _balancesLoad = _transactionsLoad;
         }
     }
 
@@ -79,6 +82,30 @@ public class GroupsPageStateService : IGroupsPageStateService
     public event Action? OnGroupSelected;
     public event Action? OnTransactionsChanged;
     public event Action? OnGroupsChanged;
+
+    // Both halves of the selected group travel together, under one loading
+    // flag, and a failure clears them: stale figures under a fresh name read
+    // as the wrong answer, an empty panel reads as "not loaded".
+    private async Task LoadSelectedAsync()
+    {
+        IsLoading = true;
+        OnTransactionsChanged?.Invoke();
+
+        var loaded = await _guard.RunAsync(async () =>
+        {
+            await LoadTransactionsAsync();
+            await LoadGroupBalancesAsync();
+        }, "this group");
+
+        if (!loaded)
+        {
+            _tracker.Transactions = [];
+            _tracker.Balance = null;
+        }
+
+        IsLoading = false;
+        OnTransactionsChanged?.Invoke();
+    }
 
     private async Task LoadTransactionsAsync(CancellationToken cancellationToken = default)
     {

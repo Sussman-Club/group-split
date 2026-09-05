@@ -1,27 +1,105 @@
-﻿@using GroupSplit.App.Shared.Components
-@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.Shared
 @inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
 
 <AppThemeProvider />
 
-<MudLayout>
-    <AppBar ToggleDrawer="ToggleDrawer" />
-    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Mini" Elevation="2"
-                ClipMode="DrawerClipMode.Always">
-        <NavMenu Mini="!_drawerOpen" />
-    </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Medium" Class="pt-6">
-            @Body
-        </MudContainer>
-    </MudMainContent>
-</MudLayout>
+<div class="gs-shell @(_rail ? "is-rail" : "")">
+    <aside class="gs-sidebar">
+        <a class="gs-brand" href="/">
+            <BrandMark />
+            <span class="gs-brand-name">Group Split<small>Shared expenses</small></span>
+        </a>
+
+        <NavMenu />
+
+        <div class="gs-sidebar-foot">
+            @if (UserInfo is not null)
+            {
+                <a class="gs-nav-item gs-sidebar-user" href="/account" title="@UserInfo.FullName">
+                    <Avatar Name="@UserInfo.FullName" Size="sm" />
+                    <span class="gs-nav-text gs-sidebar-user-text" style="min-width: 0; line-height: 1.2">
+                        <span style="display:block; font-size: .875rem; overflow: hidden; text-overflow: ellipsis">@UserInfo.FullName</span>
+                        <span class="gs-muted" style="display:block; font-size: .75rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis">@UserInfo.Email</span>
+                    </span>
+                </a>
+            }
+            <button type="button" class="gs-sidebar-toggle" @onclick="ToggleRail" aria-label="@(_rail ? "Expand sidebar" : "Collapse sidebar")">
+                <MudIcon Icon="@Icons.Material.Rounded.KeyboardDoubleArrowLeft" />
+                <span>Collapse</span>
+            </button>
+        </div>
+    </aside>
+
+    <div class="gs-main">
+        <AppBar />
+        <main class="gs-content">
+            <div class="gs-page" @key="_path">
+                @Body
+            </div>
+        </main>
+    </div>
+
+    <div class="gs-tabbar">
+        <NavMenu />
+    </div>
+</div>
 
 @code {
-    private bool _drawerOpen = true;
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
-    private void ToggleDrawer()
+    private bool _rail;
+    private string _path = "";
+
+    protected override void OnInitialized()
     {
-        _drawerOpen = !_drawerOpen;
+        _path = Nav.Uri;
+        Nav.LocationChanged += OnLocationChanged;
     }
+
+    // Re-keying the page wrapper on every navigation replays the entrance
+    // animation, which is what makes route changes feel like transitions.
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _path = e.Location;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // The collapse works before the runtime arrives (gs.js), so pick up
+    // whatever the user did in the meantime rather than snapping it back.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            var rail = await JS.InvokeAsync<bool>("gs.rail");
+            if (rail != _rail)
+            {
+                _rail = rail;
+                StateHasChanged();
+            }
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private async Task ToggleRail()
+    {
+        _rail = !_rail;
+        try
+        {
+            await JS.InvokeVoidAsync("gs.setRail", _rail);
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

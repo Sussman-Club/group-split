@@ -1,53 +1,81 @@
 @page "/"
+@using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
 @attribute [AllowAnonymous]
 
 <PageTitle>Group Split</PageTitle>
 
-<MudStack Spacing="6">
-    <MudStack Spacing="1">
-        <MudText Typo="Typo.h4" Class="font-weight-bold">
-            @(UserInfo is null ? "Welcome to Group Split" : $"Welcome back, {UserInfo.FirstName}")
-        </MudText>
-        <MudText Typo="Typo.body1" Class="mud-text-secondary">
-            Track what your group spends, split it by the rules you choose, and settle up.
-        </MudText>
-    </MudStack>
+@if (UserInfo is null)
+{
+    <section class="gs-landing">
+        <div>
+            <div class="gs-eyebrow" style="color: var(--gs-teal)">Shared expenses, settled</div>
+            <h1>Split the bill.<br />Keep the <em>friends</em>.</h1>
+            <p class="lead">
+                Track what your group spends, split it by the rules you choose, and see at a glance
+                who owes whom. No spreadsheets, no awkward maths.
+            </p>
+            <div class="gs-inline">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill"
+                           EndIcon="@Icons.Material.Rounded.ArrowForward" Href="/login">
+                    Sign in to get started
+                </MudButton>
+            </div>
+        </div>
 
-    @if (UserInfo is null)
-    {
-        <MudPaper Elevation="0" Class="gs-surface-card pa-6">
-            <MudStack Spacing="4" AlignItems="AlignItems.Start">
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Sign in to see your groups and balances.
-                </MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">Sign in</MudButton>
-            </MudStack>
-        </MudPaper>
-    }
-    else
-    {
-        <MudGrid Spacing="4">
-            @Shortcut("Groups", "Everyone you split with", Icons.Material.Filled.Groups, "/groups")
-            @Shortcut("Transactions", "What has been spent", Icons.Material.Filled.Receipt, "/transactions")
-            @Shortcut("Account", "Your profile and security", Icons.Material.Filled.AccountCircle, "/account")
-        </MudGrid>
-    }
-</MudStack>
+        <div class="gs-landing-art" aria-hidden="true">
+            <div class="gs-card gs-card-pad" style="padding: 18px 20px">
+                <div class="gs-eyebrow">Weekend in Lisbon</div>
+                <div class="gs-inline" style="margin-top: 8px; justify-content: space-between">
+                    <span class="gs-avatar-stack">
+                        <Avatar Name="Daniel Rivero" Size="sm" Style="--i:0" />
+                        <Avatar Name="Anabel Benítez" Size="sm" Style="--i:1" />
+                        <Avatar Name="Omar Sussman" Size="sm" Style="--i:2" />
+                    </span>
+                    <span class="gs-money" style="font-size: 1.25rem">$1,284.50</span>
+                </div>
+            </div>
+            <div class="gs-card gs-hero" style="padding: 18px 20px">
+                <div class="gs-eyebrow">You are owed</div>
+                <div class="gs-hero-amount" style="font-size: 2.25rem; margin-top: 6px">$214.20</div>
+                <div class="gs-hero-sub">from 2 people</div>
+            </div>
+            <div class="gs-card gs-card-pad" style="padding: 14px 20px">
+                <div class="gs-row" style="margin: 0; padding: 0; cursor: default">
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Restaurant" /></span>
+                    <div>
+                        <div class="title"><span>Dinner at Cervejaria</span> <span class="gs-tag">Food</span></div>
+                        <div class="meta">Paid by Anabel</div>
+                    </div>
+                    <div class="gs-money">$96.00</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="gs-features gs-scroll-reveal">
+        <div class="gs-card gs-feature gs-card-hover">
+            <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Groups" /></span>
+            <h3>Groups that fit real life</h3>
+            <p>Flatmates, trips, the five-a-side team. Members come and go, the history stays put.</p>
+        </div>
+        <div class="gs-card gs-feature gs-card-hover">
+            <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Rule" /></span>
+            <h3>Split by your rules</h3>
+            <p>Equal, by percentage, or a category rule you define once and reuse on every expense.</p>
+        </div>
+        <div class="gs-card gs-feature gs-card-hover">
+            <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+            <h3>Settle in one tap</h3>
+            <p>Balances net out automatically, so you pay the fewest people the smallest amounts.</p>
+        </div>
+    </section>
+}
+else
+{
+    <Dashboard UserInfo="UserInfo" />
+}
 
 @code {
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
-
-    private RenderFragment Shortcut(string title, string description, string icon, string href) =>
-        @<MudItem xs="12" sm="6" md="4">
-            <MudPaper Elevation="0" Class="gs-surface-card gs-shortcut pa-5" Style="height: 100%">
-                <MudLink Href="@href" Underline="Underline.None">
-                    <MudStack Spacing="2">
-                        <MudIcon Icon="@icon" Color="Color.Primary" Size="Size.Large" />
-                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@title</MudText>
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@description</MudText>
-                    </MudStack>
-                </MudLink>
-            </MudPaper>
-        </MudItem>;
 }

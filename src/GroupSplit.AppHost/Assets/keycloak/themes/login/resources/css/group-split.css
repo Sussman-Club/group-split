@@ -11,6 +11,8 @@
  * the hosted login pages and the app read as one product.
  */
 
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Manrope:wght@400..800&display=swap");
+
 :root {
     --gs-teal: #22817a;
     --gs-teal-deep: #1a655f;
@@ -25,7 +27,9 @@
     --gs-radius: 14px;
     --gs-radius-sm: 10px;
     --gs-shadow: 0 1px 2px rgb(42 42 42 / 6%), 0 12px 32px -12px rgb(42 42 42 / 18%);
-    --gs-font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    /* Same pair as the app (GroupSplit.App.Shared/wwwroot/app.css). */
+    --gs-font: "Manrope", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --gs-font-display: "Bricolage Grotesque", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
 
     /* Map PatternFly's globals onto the brand. */
     --pf-v5-global--primary-color--100: var(--gs-teal);
@@ -38,7 +42,7 @@
     --pf-v5-global--danger-color--100: #b3402f;
     --pf-v5-global--success-color--100: var(--gs-teal);
     --pf-v5-global--FontFamily--text: var(--gs-font);
-    --pf-v5-global--FontFamily--heading: var(--gs-font);
+    --pf-v5-global--FontFamily--heading: var(--gs-font-display);
     --pf-v5-global--FontFamily--redhatfont--sans-serif: var(--gs-font);
 }
 
@@ -181,6 +185,30 @@ body,
     border-color: var(--gs-teal);
     box-shadow: 0 0 0 3px rgb(34 129 122 / 18%);
     outline: none;
+}
+
+/* One ring only. PatternFly wraps the <input> in the form-control box, so
+   the browser's own focus outline on the input and PatternFly's ::after
+   underline would otherwise both draw inside the ring above. */
+.pf-v5-c-form-control > input,
+.pf-v5-c-form-control > textarea,
+.pf-v5-c-form-control > select {
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    color: inherit;
+}
+
+.pf-v5-c-form-control > input:focus,
+.pf-v5-c-form-control > input:focus-visible,
+.pf-v5-c-form-control > textarea:focus,
+.pf-v5-c-form-control > select:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.pf-v5-c-form-control::after {
+    border-bottom-width: 0;
 }
 
 /* PatternFly renders the password field as a wrapper with a reveal button. */

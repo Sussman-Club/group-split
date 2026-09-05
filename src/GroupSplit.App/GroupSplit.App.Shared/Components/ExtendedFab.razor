@@ -1,23 +1,18 @@
-@using GroupSplit.App.Shared.Extensions
 @namespace GroupSplit.App.Shared.Components
 
-<div class="fab-extended @(AlwaysExtended ? "fab-always-extended" : "")"
-     style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;"
-     @onclick="OnClick">
-    <MudIconButton Icon="@Icon"
-                   Size="Size.Large"
-                   Style="color: var(--mud-palette-primary-text);"
-                   aria-label="@AriaLabel"
-                   Class="fab-button"/>
-    <span class="fab-text">@Label</span>
-</div>
+<button type="button"
+        class="gs-fab @(AlwaysExtended ? "is-extended" : "")"
+        aria-label="@AriaLabel"
+        @onclick="OnClick">
+    <MudIcon Icon="@Icon" />
+    <span>@Label</span>
+</button>
 
 @code {
     [Parameter] public string Label { get; set; } = "Add";
     [Parameter] public bool AlwaysExtended { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
-    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Add;
+    [Parameter] public string Icon { get; set; } = Icons.Material.Rounded.Add;
 
-    private string AriaLabel => $"Add {Label}";
+    private string AriaLabel => Label;
 }
-
