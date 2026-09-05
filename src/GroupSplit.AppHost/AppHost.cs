@@ -64,6 +64,7 @@ if (builder.ExecutionContext.IsRunMode)
         .AddSeeder<GroupSplit_Seeder>("seeder")
         .WaitFor(db)
         .WithReference(db)
+        .WithKeycloakSeeding(keycloak)
         .WithResetAndSeedCommand()
         .WaitForCompletion(migrations);
 

@@ -20,6 +20,12 @@ internal static class EfCommandNames
 
 public static class SeederResourceBuilderExtensions
 {
+    /// <summary>
+    /// The bootstrap admin Keycloak creates when the app model names none. Matches the
+    /// default behind <c>KC_BOOTSTRAP_ADMIN_USERNAME</c>.
+    /// </summary>
+    private const string DefaultKeycloakAdminUser = "admin";
+
     extension(IDistributedApplicationBuilder builder)
     {
         public IResourceBuilder<SeederResource> AddSeeder<TProject>([ResourceName] string name)
@@ -44,6 +50,40 @@ public static class SeederResourceBuilderExtensions
 
     extension(IResourceBuilder<SeederResource> resourceBuilder)
     {
+        /// <summary>
+        /// Lets the seeder create the demo accounts in the realm as well as in the database.
+        /// <para>
+        /// Both halves come from the same <c>users.json</c> and share one id, which is what
+        /// makes signing in as a demo account land on the seeded data: the API links an
+        /// account by the token's subject, so an account registered by hand -- with a subject
+        /// the seed data has never heard of -- would have the API create a second account and
+        /// collide on the unique email index.
+        /// </para>
+        /// <para>
+        /// The credentials are Keycloak's own admin parameters, passed straight through, so
+        /// nothing new has to be configured and nothing is committed. Run mode only: a
+        /// deployment has no seeder.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<SeederResource> WithKeycloakSeeding(
+            IResourceBuilder<KeycloakResource> keycloak)
+        {
+            var builder = resourceBuilder
+                .WithReference(keycloak)
+                .WaitFor(keycloak)
+                .WithEnvironment("Keycloak__AdminPassword",
+                    ReferenceExpression.Create($"{keycloak.Resource.AdminPasswordParameter}"));
+
+            // The username parameter is null unless one was passed to AddKeycloak, and this
+            // model does not pass one -- so the container takes Keycloak's own default and
+            // the seeder has to be told the same name. The password is always a parameter,
+            // generated when it is not supplied, so it needs no such fallback.
+            return keycloak.Resource.AdminUserNameParameter is { } adminUser
+                ? builder.WithEnvironment("Keycloak__AdminUser",
+                    ReferenceExpression.Create($"{adminUser}"))
+                : builder.WithEnvironment("Keycloak__AdminUser", DefaultKeycloakAdminUser);
+        }
+
         public IResourceBuilder<SeederResource> WithResetAndSeedCommand()
         {
             return resourceBuilder.WithCommand(
