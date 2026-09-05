@@ -121,23 +121,8 @@ else
 
     compose
         .WithContainerRegistry(registry)
-        .WithComposeDefaults();
-
-    // A barrier so the pushes and the Compose generation share one pipeline execution.
-    // Run as separate `aspire do` invocations they each get their own deploy-prereq,
-    // and that stamps a fresh timestamp tag every time: the generated compose file then
-    // points at a tag nothing was ever pushed under, and the pull fails with
-    // "manifest unknown".
-    builder.Pipeline.AddStep(
-        "push-and-prepare-compose",
-        _ => Task.CompletedTask,
-        dependsOn: new[]
-        {
-            "prepare-compose",
-            $"push-{api.Resource.Name}",
-            $"push-{web.Resource.Name}",
-            $"push-{migrations.Resource.Name}",
-        });
+        .WithComposeDefaults()
+        .WithPushAndPrepareStep();
 }
 
 builder.Build().Run();

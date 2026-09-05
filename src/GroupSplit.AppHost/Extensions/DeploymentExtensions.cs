@@ -1,8 +1,11 @@
 using Aspire.Hosting.Docker;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
+using Aspire.Hosting.Pipelines;
 
 namespace GroupSplit.AppHost.Extensions;
+
+#pragma warning disable ASPIREPIPELINES001
 
 /// <summary>
 /// Publish-time wiring for the Docker Compose target. Everything here is deployment shaped and
@@ -100,6 +103,36 @@ public static class DeploymentExtensions
                 .WithForwardedHeaders(enabled: true)
                 .WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
                 .WithEnvironment("Dashboard__Frontend__BrowserToken", token));
+
+        /// <summary>
+        /// Adds <c>push-and-prepare-compose</c>: a barrier so that pushing the images and
+        /// generating the Compose file share one pipeline execution.
+        /// <para>
+        /// Run as separate <c>aspire do</c> invocations they each get their own
+        /// <c>deploy-prereq</c>, and that stamps a fresh timestamp tag every time: the
+        /// generated Compose file then points at a tag nothing was ever pushed under, and
+        /// the pull fails with "manifest unknown". The deploy workflow runs this one step.
+        /// </para>
+        /// <para>
+        /// It depends on Aspire's <see cref="WellKnownPipelineSteps.Push"/> meta-step, which
+        /// every push step is required by, rather than naming the pushes one image at a time,
+        /// so a resource that gains an image tomorrow is pushed without a change here. The
+        /// prepare step is the one the Docker integration names after this environment.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithPushAndPrepareStep()
+        {
+            compose.ApplicationBuilder.Pipeline.AddStep(
+                "push-and-prepare-compose",
+                _ => Task.CompletedTask,
+                dependsOn: new[]
+                {
+                    WellKnownPipelineSteps.Push,
+                    $"prepare-{compose.Resource.Name}",
+                });
+
+            return compose;
+        }
 
         /// <summary>
         /// Applies the Compose defaults Aspire leaves to the operator.
