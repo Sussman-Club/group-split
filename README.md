@@ -69,6 +69,42 @@ tooling (Mailpit, the seeder, Scalar, the Postgres MCP servers) that a deploymen
 differs from what ships, and what a deployment has to be told, is in
 [docs/development-and-deployment.md](docs/development-and-deployment.md).
 
+## Demo accounts
+
+The seeder does not start on its own. Start the `seeder` resource from the dashboard, or use
+its **Reset databases and seed** command to start from scratch, and it fills both the app
+database and the Keycloak realm from
+[`SeedData/users.json`](src/GroupSplit.Seeder/SeedData/users.json). You can then sign in as
+any of them:
+
+| Email | Password |
+| --- | --- |
+| `daniel@test.com` | `GroupSplit123!` |
+| `anabel@test.com` | `GroupSplit123!` |
+| `loraine@test.com` | `GroupSplit123!` |
+| `omar@test.com` | `GroupSplit123!` |
+
+The password comes from `Keycloak:DefaultPassword` in the seeder's
+`appsettings.Development.json`; a seed entry may name its own instead.
+
+Both halves come from the same file and share one id: the seeder creates each Keycloak
+account with the entry's `ExternalUserId`, which is the identity id the database row is
+linked by. That is what makes signing in land on the seeded groups and expenses. It matters
+because the API links an account by the token's subject and provisions a new one for a subject
+it has not seen -- so an account **registered by hand** carries a subject the seed data has
+never heard of, the API tries to create a second account with the same address, and every
+request fails on the unique email index. Meeting that case, the seeder replaces the
+hand-made account and says so in its log; set `Keycloak:ReplaceConflictingUsers` to `false`
+to be warned and left alone instead.
+
+Two things worth knowing:
+
+- Keycloak keeps its users in a data volume, so the accounts outlive a restart and reruns of
+  the seeder leave them alone. Resetting the app database without resetting Keycloak is fine:
+  the ids are fixed in `users.json`, so the two ends still agree.
+- The accounts are created only in local run mode. `realms.json` deliberately holds no users:
+  it ships to deployments, and realm import only runs when the realm does not yet exist.
+
 ## Email
 
 Keycloak sends the password reset and email verification mail, so it needs an SMTP relay.
