@@ -105,31 +105,31 @@ public static class DeploymentExtensions
                 .WithEnvironment("Dashboard__Frontend__BrowserToken", token));
 
         /// <summary>
-        /// Adds <c>push-and-prepare-compose</c>: a barrier so that pushing the images and
-        /// generating the Compose file share one pipeline execution.
+        /// Makes <c>aspire do push</c> also generate the Compose file and env file, so the
+        /// images and the artifacts that reference them come out of one pipeline execution.
         /// <para>
-        /// Run as separate <c>aspire do</c> invocations they each get their own
-        /// <c>deploy-prereq</c>, and that stamps a fresh timestamp tag every time: the
-        /// generated Compose file then points at a tag nothing was ever pushed under, and
-        /// the pull fails with "manifest unknown". The deploy workflow runs this one step.
+        /// Run as separate <c>aspire do</c> invocations, the pushes and the prepare step each
+        /// get their own <c>deploy-prereq</c>, and that stamps a fresh timestamp tag every
+        /// time: the generated Compose file then points at a tag nothing was ever pushed
+        /// under, and the pull fails with "manifest unknown".
         /// </para>
         /// <para>
-        /// It depends on Aspire's <see cref="WellKnownPipelineSteps.Push"/> meta-step, which
-        /// every push step is required by, rather than naming the pushes one image at a time,
-        /// so a resource that gains an image tomorrow is pushed without a change here. The
-        /// prepare step is the one the Docker integration names after this environment.
+        /// Wired the way Aspire extends its own entry points: a step that depends on the
+        /// prepare step the Docker integration names after this environment, and declares
+        /// itself required by <see cref="WellKnownPipelineSteps.Push"/>. The deploy workflow
+        /// therefore calls a documented command and knows neither this step's name nor the
+        /// Compose resource's; renaming either touches nothing outside the AppHost. Every
+        /// image the environment owns is pushed, since <c>push</c> is the step all push
+        /// steps are required by.
         /// </para>
         /// </summary>
-        public IResourceBuilder<DockerComposeEnvironmentResource> WithPushAndPrepareStep()
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithPrepareOnPush()
         {
             compose.ApplicationBuilder.Pipeline.AddStep(
-                "push-and-prepare-compose",
+                $"prepare-{compose.Resource.Name}-on-push",
                 _ => Task.CompletedTask,
-                dependsOn: new[]
-                {
-                    WellKnownPipelineSteps.Push,
-                    $"prepare-{compose.Resource.Name}",
-                });
+                dependsOn: $"prepare-{compose.Resource.Name}",
+                requiredBy: WellKnownPipelineSteps.Push);
 
             return compose;
         }

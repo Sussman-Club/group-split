@@ -30,7 +30,7 @@ each mode carries that shape as a pair of extension methods next to the code tha
 | Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
 | Postgres | `WithPostgresMcp` on each database (Aspire's own) | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
 | API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
-| Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, the `push-and-prepare-compose` pipeline step |
+| Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithPrepareOnPush`, which makes `aspire do push` also write the Compose artifacts |
 
 Only run mode adds the MAUI head, the seeder and its dashboard command, Scalar, and Mailpit
 itself; only publish mode declares the deployment parameters below. `PublishAs*` calls,
@@ -99,12 +99,13 @@ The workflow is not the only way to see what a deploy would ship. The same step 
 can be run from a checkout, minus the pushes:
 
 ```bash
-Parameters__web-hostname=https://groupsplit.example.com Parameters__dashboard-token=anything aspire do prepare-compose --environment preview --non-interactive
+Parameters__web-hostname=https://groupsplit.example.com Parameters__dashboard-token=anything aspire do prepare-env --environment preview --non-interactive
 ```
 
-This builds the images locally, generates the migration bundle, and writes
-`docker-compose.yaml`, `.env` and `.env.preview` to `src/GroupSplit.AppHost/aspire-output`,
-which is ignored by git. The Compose file is what Komodo receives; the env file is the
+The step is named after the Compose environment resource, `env`, the way the Docker
+integration always names it: `prepare-{resource name}`. This builds the images locally,
+generates the migration bundle, and writes `docker-compose.yaml`, `.env` and
+`.env.preview` to `src/GroupSplit.AppHost/aspire-output`, which is ignored by git. The Compose file is what Komodo receives; the env file is the
 values it would be handed alongside.
 
 Two things about that command are easy to trip over:
@@ -132,11 +133,12 @@ A push to `main`, in practice a `dev` to `main` merge, triggers
 1. The required secrets and variables are checked before anything is built, so a missing
    value fails in seconds rather than after the images exist.
 2. Every secret and variable is exported as `Parameters__*`.
-3. `aspire do push-and-prepare-compose --environment production` builds the API, web and
-   migration images, pushes them to `registry.sussman.win/group-split` under one timestamp
-   tag, and generates the Compose file that references that tag. The step is a barrier
-   the AppHost defines so that the pushes and the generation share one pipeline run; run
-   separately they would stamp different tags.
+3. `aspire do push --environment production` builds the API, web and migration images,
+   pushes them to `registry.sussman.win/group-split` under one timestamp tag, and
+   generates the Compose file that references that tag. The generation rides on `push`
+   because the AppHost declares the Compose prepare step as required by it, so the two
+   share one pipeline run; run separately they would stamp different tags. The workflow
+   knows only the documented command, not any step or resource name of the AppHost's.
 4. The Compose file and `.env.production` are handed to Komodo, which owns the stack on
    the Docker host, and the stack is redeployed. The job polls the update and fails if the
    deploy did.

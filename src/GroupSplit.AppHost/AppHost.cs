@@ -77,7 +77,7 @@ else
         .AddParameter("dashboard-token", secret: true)
         .WithDescription("Browser token for the published Aspire dashboard on port 18888.");
 
-    var compose = builder.AddDockerComposeEnvironment("compose")
+    var compose = builder.AddDockerComposeEnvironment("env")
         .WithProtectedDashboard(dashboardToken);
 
     // The stack's single public origin. Has to resolve to the same address from a browser
@@ -122,7 +122,7 @@ else
     compose
         .WithContainerRegistry(registry)
         .WithComposeDefaults()
-        .WithPushAndPrepareStep();
+        .WithPrepareOnPush();
 }
 
 builder.Build().Run();
