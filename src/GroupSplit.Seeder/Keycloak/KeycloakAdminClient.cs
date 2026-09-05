@@ -35,6 +35,9 @@ public sealed class KeycloakAdminClient(
     private string? _token;
     private DateTimeOffset _tokenObtainedAt;
 
+    /// <summary>The realm's default role, read once. It cannot change under a seeding run.</summary>
+    private KeycloakRole? _defaultRole;
+
     public string Realm => _options.Realm;
 
     /// <summary>
@@ -81,16 +84,34 @@ public sealed class KeycloakAdminClient(
     }
 
     /// <summary>
-    /// Creates the account, keeping the id it carries.
+    /// Creates the account, keeping the id it carries and granting the realm's default role.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Through partial import rather than <c>POST /users</c> on purpose: creating a user
     /// discards a supplied id and mints a new one, which would leave the account's subject
     /// with nothing in the app database to match. Partial import keeps the id, the same way
     /// importing a realm export does.
+    /// </para>
+    /// <para>
+    /// The default role is the price of that choice, and it is added here rather than left to
+    /// the caller. <c>POST /users</c> grants <c>default-roles-{realm}</c> as a side effect;
+    /// partial import grants only what the representation lists. That composite is what
+    /// carries the <c>account</c> client roles <c>view-profile</c> and <c>manage-account</c>,
+    /// so an account created without it can sign in to the app perfectly well -- the API
+    /// authorises on the token's subject -- and still meets nothing but 401s on Keycloak's
+    /// own account console.
+    /// </para>
     /// </remarks>
     public async Task CreateAsync(KeycloakUser user, CancellationToken ct = default)
     {
+        var defaultRole = await DefaultRoleAsync(ct);
+
+        if (!user.RealmRoles.Contains(defaultRole.Name, StringComparer.Ordinal))
+        {
+            user = user with { RealmRoles = [defaultRole.Name, .. user.RealmRoles] };
+        }
+
         using var request = await AuthorizedAsync(HttpMethod.Post, $"admin/realms/{Realm}/partialImport", ct);
         request.Content = JsonContent.Create(new KeycloakPartialImport { Users = [user] }, options: Json);
 
@@ -110,6 +131,44 @@ public sealed class KeycloakAdminClient(
         }
     }
 
+    /// <summary>
+    /// Grants the realm's default role to an account that does not already hold it.
+    /// </summary>
+    /// <remarks>
+    /// For accounts this seeder created before it started granting the role: the realm keeps
+    /// its users in a volume, so they outlive the fix, and the seeder leaves an account that
+    /// already carries the seeded id alone. Without this they would stay locked out of the
+    /// account console until somebody deleted the volume.
+    /// </remarks>
+    /// <returns>Whether the role had to be granted.</returns>
+    public async Task<bool> EnsureDefaultRoleAsync(string id, CancellationToken ct = default)
+    {
+        var defaultRole = await DefaultRoleAsync(ct);
+        var mappings = $"admin/realms/{Realm}/users/{id}/role-mappings/realm";
+
+        using (var read = await AuthorizedAsync(HttpMethod.Get, mappings, ct))
+        using (var response = await http.SendAsync(read, ct))
+        {
+            await ThrowOnFailure(response, $"read the roles of user {id}", ct);
+
+            var granted = await response.Content.ReadFromJsonAsync<List<KeycloakRole>>(Json, ct) ?? [];
+
+            if (granted.Any(role => string.Equals(role.Name, defaultRole.Name, StringComparison.Ordinal)))
+            {
+                return false;
+            }
+        }
+
+        using var request = await AuthorizedAsync(HttpMethod.Post, mappings, ct);
+        request.Content = JsonContent.Create<IReadOnlyList<KeycloakRole>>([defaultRole], options: Json);
+
+        using var grant = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(grant, $"grant {defaultRole.Name} to user {id}", ct);
+
+        return true;
+    }
+
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
         using var request = await AuthorizedAsync(HttpMethod.Delete, $"admin/realms/{Realm}/users/{id}", ct);
@@ -118,6 +177,28 @@ public sealed class KeycloakAdminClient(
         if (response.StatusCode == HttpStatusCode.NotFound) return;
 
         await ThrowOnFailure(response, $"delete user {id}", ct);
+    }
+
+    /// <summary>
+    /// The realm's default role. Read from the realm rather than assembled as
+    /// <c>default-roles-{realm}</c>: that is only Keycloak's naming convention, and a realm
+    /// is free to point its default at a role called something else.
+    /// </summary>
+    private async Task<KeycloakRole> DefaultRoleAsync(CancellationToken ct)
+    {
+        if (_defaultRole is not null) return _defaultRole;
+
+        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the realm {Realm}", ct);
+
+        var realm = await response.Content.ReadFromJsonAsync<KeycloakRealmSummary>(Json, ct);
+
+        return _defaultRole = realm?.DefaultRole
+            ?? throw new InvalidOperationException(
+                $"Realm {Realm} names no default role, so a seeded account would have none of the "
+                + "account-console permissions every other account in the realm gets.");
     }
 
     private async Task<HttpRequestMessage> AuthorizedAsync(HttpMethod method, string uri, CancellationToken ct)

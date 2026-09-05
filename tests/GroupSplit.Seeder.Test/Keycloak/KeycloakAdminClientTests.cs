@@ -20,6 +20,11 @@ public class KeycloakAdminClientTests
 
     private const string SeededId = "9F8E7D6C-5B4A-3C2D-1E0F-1234567890AB";
 
+    private const string DefaultRole = "default-roles-group-split";
+
+    private const string RealmWithDefaultRole =
+        """{"realm":"group-split","defaultRole":{"id":"a-role-id","name":"default-roles-group-split","composite":true,"clientRole":false}}""";
+
     private static KeycloakAdminClient ClientFor(StubHandler handler, KeycloakSeedOptions? options = null)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://keycloak.test/") };
@@ -61,6 +66,7 @@ public class KeycloakAdminClientTests
         var handler = new StubHandler();
         handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
         handler.Respond("/admin/realms/group-split/partialImport", """{"added":1,"skipped":0,"overwritten":0}""");
+        handler.Respond("/admin/realms/group-split", RealmWithDefaultRole);
 
         await ClientFor(handler).CreateAsync(AUser(), TestContext.Current.CancellationToken);
 
@@ -89,11 +95,117 @@ public class KeycloakAdminClientTests
         var handler = new StubHandler();
         handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
         handler.Respond("/admin/realms/group-split/partialImport", """{"added":0,"skipped":1,"overwritten":0}""");
+        handler.Respond("/admin/realms/group-split", RealmWithDefaultRole);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             ClientFor(handler).CreateAsync(AUser(), TestContext.Current.CancellationToken));
 
         Assert.Contains("without creating it", exception.Message);
+    }
+
+    /// <summary>
+    /// The other half of the partial-import trade-off, pinned. <c>POST /users</c> grants
+    /// <c>default-roles-{realm}</c> as a side effect and partial import grants only what the
+    /// representation lists, so leaving this out produces an account that signs in to the app
+    /// perfectly well and meets nothing but 401s on Keycloak's own account console.
+    /// </summary>
+    [Fact]
+    public async Task Creating_an_account_grants_the_realms_default_role()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond("/admin/realms/group-split/partialImport", """{"added":1,"skipped":0,"overwritten":0}""");
+        handler.Respond("/admin/realms/group-split", RealmWithDefaultRole);
+
+        await ClientFor(handler).CreateAsync(AUser(), TestContext.Current.CancellationToken);
+
+        using var body = JsonDocument.Parse(handler.Requests.Last().Body);
+        var roles = body.RootElement
+            .GetProperty("users").EnumerateArray().Single()
+            .GetProperty("realmRoles").EnumerateArray()
+            .Select(role => role.GetString());
+
+        Assert.Contains(DefaultRole, roles);
+    }
+
+    /// <summary>
+    /// Read from the realm rather than assembled as <c>default-roles-{realm}</c>: that is only
+    /// Keycloak's naming convention, and a realm may point its default somewhere else.
+    /// </summary>
+    [Fact]
+    public async Task The_default_role_comes_from_the_realm_and_is_read_only_once()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond("/admin/realms/group-split/partialImport", """{"added":1,"skipped":0,"overwritten":0}""");
+        handler.Respond("/admin/realms/group-split",
+            """{"defaultRole":{"id":"a-role-id","name":"a-renamed-default","composite":true}}""");
+
+        var client = ClientFor(handler);
+        await client.CreateAsync(AUser(), TestContext.Current.CancellationToken);
+        await client.CreateAsync(AUser() with { Id = "another-id" }, TestContext.Current.CancellationToken);
+
+        Assert.Contains("a-renamed-default", handler.Requests.Last().Body);
+        Assert.Single(handler.Requests, request => request.Uri.EndsWith("/admin/realms/group-split"));
+    }
+
+    /// <summary>
+    /// For accounts seeded before the role was granted: the realm keeps its users in a volume,
+    /// so they outlive the fix and nothing else would ever put them right.
+    /// </summary>
+    [Fact]
+    public async Task An_account_missing_the_default_role_has_it_granted()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond($"/admin/realms/group-split/users/{SeededId}/role-mappings/realm", "[]");
+        handler.Respond("/admin/realms/group-split", RealmWithDefaultRole);
+
+        var granted = await ClientFor(handler)
+            .EnsureDefaultRoleAsync(SeededId, TestContext.Current.CancellationToken);
+
+        Assert.True(granted);
+
+        var post = handler.Requests.Last();
+        Assert.Equal(HttpMethod.Post, post.Method);
+        Assert.EndsWith($"/admin/realms/group-split/users/{SeededId}/role-mappings/realm", post.Uri);
+
+        // Granting takes the whole representation, not a name.
+        using var body = JsonDocument.Parse(post.Body);
+        var role = body.RootElement.EnumerateArray().Single();
+        Assert.Equal(DefaultRole, role.GetProperty("name").GetString());
+        Assert.Equal("a-role-id", role.GetProperty("id").GetString());
+    }
+
+    /// <summary>The seeder runs on every start of the resource, so reruns must not rewrite.</summary>
+    [Fact]
+    public async Task An_account_already_holding_the_default_role_is_left_alone()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond($"/admin/realms/group-split/users/{SeededId}/role-mappings/realm",
+            """[{"id":"a-role-id","name":"default-roles-group-split"}]""");
+        handler.Respond("/admin/realms/group-split", RealmWithDefaultRole);
+
+        var granted = await ClientFor(handler)
+            .EnsureDefaultRoleAsync(SeededId, TestContext.Current.CancellationToken);
+
+        Assert.False(granted);
+        Assert.DoesNotContain(handler.Requests, request => request.Method == HttpMethod.Post
+            && request.Uri.Contains("role-mappings"));
+    }
+
+    [Fact]
+    public async Task A_realm_naming_no_default_role_is_an_error_rather_than_a_role_less_account()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond("/admin/realms/group-split", """{"realm":"group-split"}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ClientFor(handler).CreateAsync(AUser(), TestContext.Current.CancellationToken));
+
+        Assert.Contains("no default role", exception.Message);
     }
 
     [Fact]
@@ -132,6 +244,7 @@ public class KeycloakAdminClientTests
         handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
         handler.Respond("/admin/realms/group-split/partialImport",
             """{"errorMessage":"Password policy not met"}""", HttpStatusCode.BadRequest);
+        handler.Respond("/admin/realms/group-split", RealmWithDefaultRole);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             ClientFor(handler).CreateAsync(AUser(), TestContext.Current.CancellationToken));

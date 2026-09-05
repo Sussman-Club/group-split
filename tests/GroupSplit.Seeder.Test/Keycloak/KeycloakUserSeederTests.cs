@@ -88,6 +88,40 @@ public class KeycloakUserSeederTests
         Assert.Equal("SomethingElse1!", Assert.Single(Assert.Single(keycloak.Created).Credentials).Value);
     }
 
+    /// <summary>
+    /// The realm keeps its users in a volume, so accounts the seeder created before it started
+    /// granting the default role outlive the fix -- and the branch above would otherwise leave
+    /// them exactly as they are. Without that role Keycloak's own account console answers 401
+    /// to everything it asks for, and nothing else in the system would ever put it right.
+    /// </summary>
+    [Fact]
+    public async Task An_account_seeded_without_the_default_role_has_it_granted_on_the_next_run()
+    {
+        var keycloak = new FakeKeycloak();
+        keycloak.Add(SeededId, Email);
+
+        await SeederFor(keycloak, Configured(), Seed()).SeedAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(SeededId, keycloak.WithDefaultRole);
+        // Repaired in place: nothing about the account itself is worth recreating.
+        Assert.Empty(keycloak.Created);
+        Assert.Empty(keycloak.Deleted);
+    }
+
+    /// <summary>A created account already carries it, so a rerun has nothing to repair.</summary>
+    [Fact]
+    public async Task An_account_that_already_holds_the_default_role_is_not_granted_it_again()
+    {
+        var keycloak = new FakeKeycloak();
+        keycloak.Add(SeededId, Email);
+        keycloak.WithDefaultRole.Add(SeededId);
+
+        await SeederFor(keycloak, Configured(), Seed()).SeedAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(keycloak.Calls, call => call == $"EnsureDefaultRole:{SeededId}");
+        Assert.Empty(keycloak.Created);
+    }
+
     /// <summary>Reruns are ordinary: the seeder runs on every start of the resource.</summary>
     [Fact]
     public async Task An_account_already_under_the_seeded_id_is_left_alone()
@@ -222,6 +256,9 @@ public class KeycloakUserSeederTests
 
         public List<string> Deleted { get; } = [];
 
+        /// <summary>Ids the realm has granted its default role to.</summary>
+        public HashSet<string> WithDefaultRole { get; } = new(StringComparer.Ordinal);
+
         public void Add(string id, string email) =>
             _users[id] = new KeycloakUserSummary { Id = id, Email = email, Username = email };
 
@@ -251,7 +288,15 @@ public class KeycloakUserSeederTests
             Calls.Add($"Create:{user.Id}");
             Created.Add(user);
             Add(user.Id, user.Email);
+            // As the real client does: a created account comes with the realm's default role.
+            WithDefaultRole.Add(user.Id);
             return Task.CompletedTask;
+        }
+
+        public Task<bool> EnsureDefaultRoleAsync(string id, CancellationToken ct = default)
+        {
+            Calls.Add($"EnsureDefaultRole:{id}");
+            return Task.FromResult(WithDefaultRole.Add(id));
         }
 
         public Task DeleteAsync(string id, CancellationToken ct = default)

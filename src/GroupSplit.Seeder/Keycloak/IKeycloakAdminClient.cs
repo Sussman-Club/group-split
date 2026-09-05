@@ -21,8 +21,16 @@ public interface IKeycloakAdminClient
     /// <summary>The user holding this email, or null.</summary>
     Task<KeycloakUserSummary?> FindByEmailAsync(string email, CancellationToken ct = default);
 
-    /// <summary>Creates the account, keeping the id it carries.</summary>
+    /// <summary>
+    /// Creates the account, keeping the id it carries and granting the realm's default role.
+    /// </summary>
     Task CreateAsync(KeycloakUser user, CancellationToken ct = default);
+
+    /// <summary>
+    /// Grants the realm's default role to an account that does not already hold it, and says
+    /// whether it had to. For accounts created before the seeder granted it.
+    /// </summary>
+    Task<bool> EnsureDefaultRoleAsync(string id, CancellationToken ct = default);
 
     Task DeleteAsync(string id, CancellationToken ct = default);
 }
