@@ -1,0 +1,51 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+@* Horizontal strip of group chips. Active groups first, archived ones after a
+   gap, and the "new group" affordance at the end where the eye finishes. *@
+<div class="gs-switcher" role="tablist" aria-label="Your groups">
+    @{ var i = 0; }
+    @foreach (var group in Groups.Where(g => !g.IsArchive))
+    {
+        var g = group;
+        <button type="button"
+                role="tab"
+                class="gs-chip gs-reveal @(IsSelected(g) ? "active" : "")"
+                style="--i: @(i++)"
+                aria-selected="@(IsSelected(g) ? "true" : "false")"
+                @onclick="@(() => SelectedGroupChanged.InvokeAsync(g))">
+            <Avatar Name="@g.Name" />
+            @g.Name
+            <small>· @g.MemberCount</small>
+        </button>
+    }
+
+    @foreach (var group in Groups.Where(g => g.IsArchive))
+    {
+        var g = group;
+        <button type="button"
+                role="tab"
+                class="gs-chip is-archived gs-reveal @(IsSelected(g) ? "active" : "")"
+                style="--i: @(i++)"
+                aria-selected="@(IsSelected(g) ? "true" : "false")"
+                title="Archived"
+                @onclick="@(() => SelectedGroupChanged.InvokeAsync(g))">
+            <MudIcon Icon="@Icons.Material.Rounded.Inventory2" Style="width:18px;height:18px" />
+            @g.Name
+        </button>
+    }
+
+    <button type="button" class="gs-chip is-new gs-reveal" style="--i: @i" @onclick="OnCreateClick">
+        <MudIcon Icon="@Icons.Material.Rounded.Add" Style="width:18px;height:18px" />
+        New group
+    </button>
+</div>
+
+@code {
+    [Parameter] public ICollection<GroupResponse> Groups { get; set; } = [];
+    [Parameter] public GroupResponse? SelectedGroup { get; set; }
+    [Parameter] public EventCallback<GroupResponse> SelectedGroupChanged { get; set; }
+    [Parameter] public EventCallback OnCreateClick { get; set; }
+
+    private bool IsSelected(GroupResponse group) => SelectedGroup?.Id == group.Id;
+}

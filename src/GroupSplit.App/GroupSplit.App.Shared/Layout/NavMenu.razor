@@ -1,84 +1,54 @@
-﻿@using GroupSplit.App.Shared.Models
-@* MudBlazor navigation menu replacing legacy Bootstrap markup *@
-<MudNavMenu>
-    @for (var i = 0; i < _menuSections.Count; i++)
+@using GroupSplit.App.Shared.Models
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* One sliding pill marks the active item; each link only changes colour.
+   The pill's slot is driven by the active index so the same markup lays out
+   vertically in the sidebar and horizontally in the mobile tab bar. *@
+<nav class="gs-nav" aria-label="Primary" style="--gs-pill-top: @(ActiveIndex * ItemPitch)px; --gs-pill-index: @ActiveIndex; --gs-pill-count: @Items.Count">
+    <span class="gs-nav-pill @(ActiveIndex < 0 ? "is-hidden" : "")"></span>
+    @foreach (var item in Items)
     {
-        var menuSection = _menuSections[i];
-
-        // Add divider for all sections except the first one
-        if (i > 0)
-        {
-            <MudDivider Class="my-4"/>
-        }
-
-        @if (!string.IsNullOrWhiteSpace(menuSection.Title))
-        {
-            @if (Mini)
-            {
-                <div class="py-2"></div>
-            }
-            else
-            {
-                <MudText Typo="Typo.subtitle2"
-                         Class="px-4 py-2 text-uppercase"
-                         Color="Color.Primary"
-                         Style="letter-spacing: 0.5px; font-weight: 600; text-transform: uppercase;">
-                    @menuSection.Title
-                </MudText>
-            }
-        }
-
-
-        @foreach (var item in menuSection.Items)
-        {
-            @if (Mini)
-            {
-                <MudTooltip Text="@item.Text" Placement="Placement.Right">
-                    <MudNavLink Href="@item.Href"
-                                Match="@item.Match"
-                                Icon="@item.Icon"
-                                IconColor="Color.Primary"
-                                Class="rounded-lg my-1 hover-slide-right">
-                    </MudNavLink>
-                </MudTooltip>
-            }
-            else
-            {
-                <MudNavLink Href="@item.Href"
-                            Match="@item.Match"
-                            Icon="@item.Icon"
-                            IconColor="Color.Primary"
-                            Class="rounded-lg my-1 hover-slide-right">
-                    <MudText Typo="Typo.body2" Class="font-weight-medium">@item.Text</MudText>
-                </MudNavLink>
-            }
-        }
+        <NavLink class="gs-nav-item" href="@item.Href" Match="@item.Match" title="@item.Text">
+            <MudIcon Icon="@item.Icon" />
+            <span class="gs-nav-text">@item.Text</span>
+        </NavLink>
     }
-</MudNavMenu>
+</nav>
 
 @code {
-    [Parameter] public bool Mini { get; set; }
+    private const int ItemPitch = 50; // 46px item + 4px gap, see .gs-nav in app.css
 
-    private readonly List<MenuSection> _menuSections = new()
+    private static readonly List<MenuItem> Items =
+    [
+        new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
+        new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups },
+        new() { Href = "/transactions", Text = "Expenses", Icon = Icons.Material.Rounded.ReceiptLong },
+        new() { Href = "/account", Text = "Account", Icon = Icons.Material.Rounded.AccountCircle }
+    ];
+
+    private int ActiveIndex { get; set; } = -1;
+
+    protected override void OnInitialized()
     {
-        new MenuSection
-        {
-            Items =
-            {
-                new MenuItem { Href = "/", Text = "Dashboard", Icon = Icons.Material.Filled.Dashboard, Match = NavLinkMatch.All },
-                new MenuItem { Href = "/transactions", Text = "Transactions", Icon = Icons.Material.Filled.Receipt },
-                new MenuItem { Href = "/groups", Text = "Groups", Icon = Icons.Material.Filled.Groups }
-            }
-        },
+        Nav.LocationChanged += OnLocationChanged;
+        Resolve();
+    }
 
-        new MenuSection
-        {
-            Title = "You",
-            Items =
-            {
-                new MenuItem { Href = "/account", Text = "Account", Icon = Icons.Material.Filled.AccountCircle }
-            }
-        }
-    };
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Resolve();
+        InvokeAsync(StateHasChanged);
+    }
 
+    private void Resolve()
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/');
+
+        ActiveIndex = Items.FindIndex(item => item.Match == NavLinkMatch.All
+            ? string.Equals(path, item.Href, StringComparison.OrdinalIgnoreCase)
+            : path.StartsWith(item.Href, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

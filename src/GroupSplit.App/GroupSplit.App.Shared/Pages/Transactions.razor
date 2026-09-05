@@ -7,96 +7,152 @@
 @inject IDialogService DialogService
 @implements IAsyncDisposable
 
-<PageTitle>Transactions</PageTitle>
+<PageTitle>Expenses - Group Split</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center">
-    <MudStack Spacing="1">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@Icons.Material.Outlined.Receipt" Color="Color.Primary" Size="Size.Large"/>
-            <MudText Typo="Typo.h5" Class="font-weight-bold">Transactions</MudText>
-        </MudStack>
-    </MudStack>
-</MudStack>
+<div class="gs-page-head">
+    <div>
+        <div class="gs-eyebrow">Every group</div>
+        <h1>Expenses</h1>
+        <p>Everything you have recorded, searchable and editable in place.</p>
+    </div>
+    <MudTextField @bind-Value="_searchString"
+                  Placeholder="Search by name, group or category"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Rounded.Search"
+                  Immediate="true"
+                  Clearable="true"
+                  Margin="Margin.Dense"
+                  Variant="Variant.Outlined"
+                  Class="gs-search"
+                  Style="min-width: min(360px, 100%)" />
+</div>
 
+<div class="gs-stack">
+    <div class="gs-stats">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 0">
+            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+            <span class="gs-eyebrow">Recorded</span>
+            <span class="gs-stat-value">@All.Count</span>
+            <span class="gs-muted" style="font-size: .8125rem">@(Filtered.Count == All.Count ? "showing all" : $"{Filtered.Count} match")</span>
+        </div>
+        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
+            <span class="gs-eyebrow">This month</span>
+            <span class="gs-stat-value gs-money">@ThisMonth.ToString("C")</span>
+            <span class="gs-muted" style="font-size: .8125rem">@DateTime.Today.ToString("MMMM")</span>
+        </div>
+        <div class="gs-card gs-stat gs-reveal" style="--i: 2">
+            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
+            <span class="gs-eyebrow">Total</span>
+            <span class="gs-stat-value gs-money">@Filtered.Sum(t => t.Amount).ToString("C")</span>
+            <span class="gs-muted" style="font-size: .8125rem">@(string.IsNullOrWhiteSpace(_searchString) ? "all time" : "of the matches")</span>
+        </div>
+    </div>
 
-<MudTextField @bind-Value="_searchString"
-              Placeholder="Search transactions..."
-              Adornment="Adornment.Start"
-              AdornmentIcon="@Icons.Material.Outlined.Search"
-              IconSize="Size.Medium"
-              Immediate="true"
-              Style="background-color: var(--mud-palette-surface);"
-              Variant="Variant.Outlined"
-              Class="flex-grow-1 pa-6"/>
+    <div class="gs-reveal" style="--i: 3">
+        <MudDataGrid T="TransactionResponse"
+                     Items="@All"
+                     QuickFilter="@Matches"
+                     SortMode="SortMode.Single"
+                     Hover="true"
+                     Dense="false"
+                     Bordered="false"
+                     Elevation="0"
+                     Class="gs-grid">
+            <Columns>
+                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
+                    <CellTemplate>
+                        <div class="gs-num" style="font-weight: 700; font-size: .875rem">@context.Item.DateTime.LocalDateTime.ToString("d MMM yyyy")</div>
+                        <div class="gs-muted gs-num" style="font-size: .75rem">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</div>
+                    </CellTemplate>
+                </PropertyColumn>
 
-<MudDataGrid T="TransactionResponse"
-             Items="@TransactionsService.Transactions"
-             Filterable="true"
-             FilterMode="DataGridFilterMode.Simple"
-             Hover="true"
-             Dense="false"
-             Bordered="false"
-             Class="ma-6"
-             Striped="true">
-    <Columns>
-        <PropertyColumn Property="x => x.DateTime" Title="Date" Filterable="false">
-            <CellTemplate>
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.body2">@context.Item.DateTime.LocalDateTime.ToShortDateString()</MudText>
-                    <MudText Typo="Typo.caption">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</MudText>
-                </MudStack>
-            </CellTemplate>
-        </PropertyColumn>
+                <PropertyColumn Property="x => x.Name" Title="Expense">
+                    <CellTemplate>
+                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                            <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
+                            <div style="min-width: 0">
+                                <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
+                                <div class="gs-muted" style="font-size: .75rem">Paid by @context.Item.PaidByUserName</div>
+                            </div>
+                        </div>
+                    </CellTemplate>
+                </PropertyColumn>
 
-        <PropertyColumn Property="x => x.Name" Title="Name" Filterable="true">
-            <CellTemplate>
-                <MudText Typo="Typo.body2">@context.Item.Name</MudText>
-            </CellTemplate>
-        </PropertyColumn>
+                <PropertyColumn Property="x => x.GroupName" Title="Group">
+                    <CellTemplate>
+                        <span class="gs-tag neutral">@context.Item.GroupName</span>
+                    </CellTemplate>
+                </PropertyColumn>
 
-        <PropertyColumn Property="x => x.GroupName" Title="Group" Filterable="true">
-            <CellTemplate>
-                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
-                    @context.Item.GroupName
-                </MudChip>
-            </CellTemplate>
-        </PropertyColumn>
+                <PropertyColumn Property="x => x.Category" Title="Category">
+                    <CellTemplate>
+                        <span class="gs-tag">@context.Item.Category</span>
+                    </CellTemplate>
+                </PropertyColumn>
 
-        <PropertyColumn Property="x => x.Amount" Title="Amount" Filterable="false">
-            <CellTemplate>
-                <MudText Typo="Typo.body1" Class="font-weight-bold" Color="Color.Success">
-                    @context.Item.Amount.ToString("C")
-                </MudText>
-            </CellTemplate>
-        </PropertyColumn>
+                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
+                    <CellTemplate>
+                        <span class="gs-money" style="font-size: 1.0625rem">@context.Item.Amount.ToString("C")</span>
+                    </CellTemplate>
+                </PropertyColumn>
 
-        <TemplateColumn Title="Actions" Filterable="false">
-            <CellTemplate>
-                <MudStack Row="true" Spacing="1">
-                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                   Size="Size.Small"
-                                   Color="Color.Primary"
-                                   OnClick="@(async () => await EditTransactionAsync(context.Item))"/>
-                    <MudIconButton Icon="@Icons.Material.Outlined.Delete"
-                                   Size="Size.Small"
-                                   Color="Color.Primary"
-                                   OnClick="@(async () => await DeleteTransactionAsync(context.Item))"/>
-                </MudStack>
-            </CellTemplate>
-        </TemplateColumn>
-    </Columns>
-    <NoRecordsContent>
-        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-8">
-            <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Class="mud-text-secondary"/>
-            <MudText Typo="Typo.body1" Class="mud-text-secondary">No transactions found</MudText>
-        </MudStack>
-    </NoRecordsContent>
-</MudDataGrid>
+                <TemplateColumn Sortable="false" HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                    <CellTemplate>
+                        <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                               Size="Size.Small"
+                                               aria-label="Edit"
+                                               OnClick="@(async () => await EditTransactionAsync(context.Item))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="Delete"
+                                               OnClick="@(async () => await DeleteTransactionAsync(context.Item))" />
+                            </MudTooltip>
+                        </div>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <NoRecordsContent>
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+                    <h3>@(All.Count == 0 ? "No expenses yet" : "Nothing matches")</h3>
+                    <span>@(All.Count == 0 ? "Record the first one with the button below." : "Try a different name, group or category.")</span>
+                </div>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudDataGridPager T="TransactionResponse" PageSizeOptions="@(new[] { 10, 25, 50 })" />
+            </PagerContent>
+        </MudDataGrid>
+    </div>
+</div>
 
-<ExtendedFab Label="Transaction" OnClick="@AddTransactionAsync"/>
+<ExtendedFab Label="Add expense" OnClick="@AddTransactionAsync" />
 
 @code {
     private string _searchString = "";
+
+    private ICollection<TransactionResponse> All => TransactionsService.Transactions ?? [];
+    private List<TransactionResponse> Filtered => All.Where(Matches).ToList();
+
+    private IEnumerable<TransactionResponse> MonthToDate => All.Where(t =>
+        t.DateTime.LocalDateTime.Year == DateTime.Today.Year && t.DateTime.LocalDateTime.Month == DateTime.Today.Month);
+    private decimal ThisMonth => MonthToDate.Sum(t => t.Amount);
+
+    private bool Matches(TransactionResponse t)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+
+        var q = _searchString.Trim();
+        return t.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
+               || t.GroupName.Contains(q, StringComparison.OrdinalIgnoreCase)
+               || t.Category.Contains(q, StringComparison.OrdinalIgnoreCase)
+               || t.PaidByUserName.Contains(q, StringComparison.OrdinalIgnoreCase);
+    }
 
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
@@ -181,7 +237,7 @@
         var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
 
         var result = await dialogReference.GetReturnValueAsync<bool>();
-        
+
         if (result)
         {
             await TransactionsService.DeleteAsync(transaction, CancellationToken);

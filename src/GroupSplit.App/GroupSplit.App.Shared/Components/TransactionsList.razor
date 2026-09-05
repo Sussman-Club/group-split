@@ -1,45 +1,65 @@
 @using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
 @inject IDialogService DialogService
 
-<MudStack Spacing="3">
-    <MudText Typo="Typo.h6" Class="font-weight-bold">@Title</MudText>
-
-    <MudStack Spacing="2">
-        @foreach (var transaction in Transactions)
+<div class="gs-list">
+    @if (Transactions.Count == 0)
+    {
+        <div class="gs-empty">
+            <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+            <h3>Nothing recorded yet</h3>
+            <span>Add the first expense and it will show up here.</span>
+        </div>
+    }
+    else
+    {
+        var i = 0;
+        foreach (var transaction in Transactions.Take(Limit))
         {
-            <MudCard Elevation="0" Outlined="true" Class="hover-slide-right"
-                     @onclick="() => ViewExpenseDetails(transaction)">
-                <MudCardContent>
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                        <MudStack Spacing="0" Class="flex-grow-1">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                <MudAvatar Color="Color.Primary"
-                                           Size="Size.Small">@transaction.PaidByUserName[0]</MudAvatar>
-                                <MudText Typo="Typo.body2"
-                                         Class="font-weight-medium">@transaction.Name</MudText>
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                         Color="Color.Primary">@transaction.Category</MudChip>
-                            </MudStack>
-                            <MudText Typo="Typo.caption" Class="ml-10">
-                                Paid by <strong>@transaction.PaidByUserName</strong>
-                                on @transaction.DateTime.Date.ToShortDateString()
-                            </MudText>
-                        </MudStack>
-                        <MudStack AlignItems="AlignItems.End" Spacing="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
-                                @transaction.Amount.ToString("C")
-                            </MudText>
-                        </MudStack>
-                    </MudStack>
-                </MudCardContent>
-            </MudCard>
+            var t = transaction;
+            <a class="gs-row gs-reveal" style="--i: @(i++)" role="button" tabindex="0"
+               @onclick="() => ViewExpenseDetails(t)"
+               @onkeydown="@(e => e.Key is "Enter" or " " ? ViewExpenseDetails(t) : Task.CompletedTask)">
+                <Avatar Name="@t.PaidByUserName" />
+                <div style="min-width: 0">
+                    <div class="title">
+                        <span>@t.Name</span>
+                        @if (!string.IsNullOrWhiteSpace(t.Category))
+                        {
+                            <span class="gs-tag">@t.Category</span>
+                        }
+                    </div>
+                    <div class="meta">Paid by @t.PaidByUserName</div>
+                </div>
+                <div>
+                    <div class="gs-money">@t.Amount.ToString("C")</div>
+                    <span class="when">@Relative(t.DateTime)</span>
+                </div>
+            </a>
         }
-    </MudStack>
-</MudStack>
+    }
+</div>
 
 @code {
-    [Parameter] public string Title { get; set; } = "Transactions";
-    [Parameter] public ICollection<TransactionResponse> Transactions { get; set; } = null!;
+    [Parameter] public ICollection<TransactionResponse> Transactions { get; set; } = [];
+
+    /// <summary>How many rows to show; the rest are on the Expenses page.</summary>
+    [Parameter] public int Limit { get; set; } = int.MaxValue;
+
+    private static string Relative(DateTimeOffset when)
+    {
+        var local = when.LocalDateTime;
+        var days = (DateTime.Today - local.Date).Days;
+
+        return days switch
+        {
+            0 => "Today",
+            1 => "Yesterday",
+            < 7 => local.ToString("dddd"),
+            _ when local.Year == DateTime.Today.Year => local.ToString("d MMM"),
+            _ => local.ToString("d MMM yyyy")
+        };
+    }
 
     private async Task ViewExpenseDetails(TransactionResponse transaction)
     {
@@ -51,5 +71,4 @@
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
     }
-
 }

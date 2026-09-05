@@ -2,26 +2,26 @@
 @implements IDisposable
 @inject ThemePreference Preference
 
-<MudTooltip Text="@($"Theme: {Label(Preference.Mode)}")">
-    <MudMenu Icon="@Icon(Preference.Mode)"
-             Color="Color.Inherit"
-             Dense
-             AriaLabel="Change theme"
-             AnchorOrigin="Origin.BottomRight"
-             TransformOrigin="Origin.TopRight">
-        @foreach (var mode in Modes)
-        {
-            <MudMenuItem Icon="@Icon(mode)"
-                         IconColor="@(mode == Preference.Mode ? Color.Primary : Color.Default)"
-                         OnClick="@(() => Preference.Set(mode))">
-                @Label(mode)
-            </MudMenuItem>
-        }
-    </MudMenu>
-</MudTooltip>
+@* Segmented control with a thumb that slides to the chosen mode. *@
+<div class="gs-seg" role="radiogroup" aria-label="Theme" style="--gs-seg-i: @Array.IndexOf(Modes, Preference.Mode)">
+    <span class="gs-seg-thumb" aria-hidden="true"></span>
+    @foreach (var mode in Modes)
+    {
+        <MudTooltip Text="@Label(mode)" Delay="400">
+            <button type="button"
+                    class="gs-seg-btn @(mode == Preference.Mode ? "active" : "")"
+                    role="radio"
+                    aria-checked="@(mode == Preference.Mode ? "true" : "false")"
+                    aria-label="@Label(mode)"
+                    @onclick="@(() => Preference.Set(mode))">
+                <MudIcon Icon="@Icon(mode)" />
+            </button>
+        </MudTooltip>
+    }
+</div>
 
 @code {
-    private static readonly ThemeMode[] Modes = [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
+    private static readonly ThemeMode[] Modes = [ThemeMode.Light, ThemeMode.System, ThemeMode.Dark];
 
     protected override void OnInitialized() => Preference.Changed += OnChanged;
 
@@ -33,13 +33,13 @@
     {
         ThemeMode.Light => "Light",
         ThemeMode.Dark => "Dark",
-        _ => "System"
+        _ => "Match system"
     };
 
     private static string Icon(ThemeMode mode) => mode switch
     {
-        ThemeMode.Light => Icons.Material.Filled.LightMode,
-        ThemeMode.Dark => Icons.Material.Filled.DarkMode,
-        _ => Icons.Material.Filled.Contrast
+        ThemeMode.Light => Icons.Material.Rounded.LightMode,
+        ThemeMode.Dark => Icons.Material.Rounded.DarkMode,
+        _ => Icons.Material.Rounded.Contrast
     };
 }
