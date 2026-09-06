@@ -23,12 +23,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         var group = await groups.CreateGroup(new CreateGroupRequest { Name = name },
             TestContext.Current.CancellationToken);
 
-        await rules.Create(new CreateRuleRequest
-        {
-            GroupId = group.Id,
-            Category = category,
-            Version = new PercentRuleVersionDto { Percentages = new() { [me.Id] = 100m } }
-        }, TestContext.Current.CancellationToken);
+        await CreateCategory(group.Id, category, new PercentSplitRuleDto { Percentages = new() { [me.Id] = 100m } });
 
         return group.Id;
     }
@@ -53,7 +48,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = amount,
             DateTime = when,
             GroupId = groupId,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         }, TestContext.Current.CancellationToken);
 
         return created.Id;

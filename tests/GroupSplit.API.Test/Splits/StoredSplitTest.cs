@@ -33,15 +33,10 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     private async Task<Guid> EvenRule(Guid groupId, Guid a, Guid b) =>
-        (await GetService<IRuleService>().Create(new CreateRuleRequest
-        {
-            GroupId = groupId,
-            Category = "Split",
-            Version = new PercentRuleVersionDto
+        await CreateCategory(groupId, "Split", new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [a] = 50m, [b] = 50m }
-            }
-        }, TestContext.Current.CancellationToken)).Id;
+            });
 
     private Task<List<TransactionSplit>> SplitsOf(Guid transactionId) =>
         DbContext.Set<TransactionSplit>()
@@ -59,7 +54,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Name = "Hotel",
             Amount = 100.00m,
             DateTime = DateTimeOffset.UtcNow,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         }, TestContext.Current.CancellationToken);
 
         var splits = await SplitsOf(created.Id);
@@ -87,7 +82,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Name = "Hotel",
             Amount = 100.00m,
             DateTime = DateTimeOffset.UtcNow,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         }, TestContext.Current.CancellationToken);
 
         await transactions.Update(created.Id, new UpdateTransactionRequest
@@ -96,7 +91,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Amount = 50.00m,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = self,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         }, TestContext.Current.CancellationToken);
 
         var splits = await SplitsOf(created.Id);
@@ -172,7 +167,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 Name = $"Item {amount}",
                 Amount = amount,
                 DateTime = DateTimeOffset.UtcNow,
-                RuleVersionId = ruleVersionId
+                CategoryId = ruleVersionId
             }, TestContext.Current.CancellationToken);
         }
 

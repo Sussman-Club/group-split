@@ -1,5 +1,4 @@
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 
 <MudDialog>
@@ -28,7 +27,7 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public Guid GroupId { get; set; }
-    [Parameter] public UpdateRuleRequest OriginalModel { get; set; } = null!;
+    [Parameter] public RuleEditorForm.RuleEditorModel OriginalModel { get; set; } = null!;
 
     private RuleEditorForm.RuleEditorModel _model = new();
     private RuleEditorForm _form = null!;
@@ -42,21 +41,21 @@
         };
     }
 
-    private static RuleVersionDto CloneVersion(RuleVersionDto source)
+    private static SplitRuleDto CloneVersion(SplitRuleDto source)
     {
         return source switch
         {
-            PercentRuleVersionDto p => new PercentRuleVersionDto
+            PercentSplitRuleDto p => new PercentSplitRuleDto
             {
                 Percentages = p.Percentages.ToDictionary(x => x.Key, x => x.Value)
             },
 
-            SharesRuleVersionDto s => new SharesRuleVersionDto
+            SharesSplitRuleDto s => new SharesSplitRuleDto
             {
                 Shares = s.Shares.ToDictionary(x => x.Key, x => x.Value)
             },
 
-            PersonalRuleVersionDto => new PersonalRuleVersionDto(),
+            PayerSplitRuleDto => new PayerSplitRuleDto(),
 
             _ => throw new NotSupportedException("Unsupported rule version type")
         };
@@ -69,58 +68,12 @@
         if (!_form.IsValid)
             return;
 
-        var patch = new JsonPatchDocument<UpdateRuleRequest>();
-
-        // Track category changes
-        if (!string.Equals(_model.Category, OriginalModel.Category, StringComparison.Ordinal))
-        {
-            patch.Replace(x => x.Category, _model.Category);
-        }
-
-        // Track version changes
-        if (VersionHasChanged(_model.Version, OriginalModel.Version))
-        {
-            patch.Replace(x => x.Version, _model.Version);
-        }
-
-        MudDialog.Close(DialogResult.Ok(patch));
+        // The edited model, whole. Categories and split rules are replaced with PUT
+        // rather than patched, so there is nothing to be gained by working out which half
+        // moved -- and the dialog no longer has to keep a JSON Patch document in step with
+        // the shape of the request.
+        MudDialog.Close(DialogResult.Ok(_model));
     }
 
     private void Cancel() => MudDialog.Cancel();
-
-    private static bool VersionHasChanged(
-        RuleVersionDto current,
-        RuleVersionDto original)
-    {
-        return current switch
-        {
-            PercentRuleVersionDto c when original is PercentRuleVersionDto o
-                => DictionariesAreDifferent(c.Percentages, o.Percentages),
-
-            SharesRuleVersionDto c when original is SharesRuleVersionDto o
-                => DictionariesAreDifferent(c.Shares, o.Shares),
-
-            _ => false
-        };
-    }
-
-    private static bool DictionariesAreDifferent<T>(
-        IDictionary<Guid, T> current,
-        IDictionary<Guid, T> original)
-    {
-        if (current.Count != original.Count)
-            return true;
-
-        foreach (var kv in current)
-        {
-            if (!original.TryGetValue(kv.Key, out var originalValue))
-                return true;
-
-            if (!EqualityComparer<T>.Default.Equals(kv.Value, originalValue))
-                return true;
-        }
-
-        return false;
-    }
-
 }

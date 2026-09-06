@@ -11,6 +11,8 @@ public record TransactionResponse
     public string GroupName { get; set; } = "";
     public Guid PaidByUserId { get; set; }
     public string PaidByUserName { get; set; } = "";
-    public Guid RuleVersionId { get; set; }
-    public string Category { get; set; } = "";
+    /// <summary>What it was filed under, or null for an expense filed under nothing.</summary>
+    public Guid? CategoryId { get; set; }
+
+    public string? Category { get; set; }
 }

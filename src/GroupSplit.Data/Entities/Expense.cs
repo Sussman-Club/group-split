@@ -12,15 +12,21 @@ namespace GroupSplit.Data.Entities;
 public class Expense : Transaction
 {
     /// <summary>
-    /// The rule version this was divided by.
+    /// What it was for, or null for an expense filed under nothing.
     /// </summary>
     /// <remarks>
-    /// Transitional, and on the leaf rather than the base because a transfer never had
-    /// one. The splits are now the record of what each person owed, so this survives only
-    /// to say which category the expense was filed under until <see cref="Category"/>
-    /// takes that over.
+    /// Nullable, and that is the point of the change. The rule this replaces was the
+    /// category and the split at once, so an expense had to name one that carried a
+    /// division or it could not be recorded at all -- which is why a group with no rules
+    /// had four error codes explaining what it could not do. An expense with no category
+    /// divides evenly and is perfectly ordinary.
+    /// <para>
+    /// It says what the expense was filed under, not how it was divided. How it was divided
+    /// is <see cref="Transaction.Splits"/>, decided when it was written, so re-pointing a
+    /// category at a different rule does not restate what anybody owed last March.
+    /// </para>
     /// </remarks>
-    public virtual RuleVersion RuleVersion { get; set; } = null!;
+    public virtual Category? Category { get; set; }
 
-    internal Guid RuleVersionId { get; set; }
+    public Guid? CategoryId { get; set; }
 }

@@ -30,5 +30,9 @@ public class Category : Entity
     /// </remarks>
     public virtual SplitRule? DefaultSplitRule { get; set; }
 
-    internal Guid? DefaultSplitRuleId { get; set; }
+    /// <summary>
+    /// Public, unlike this entity's other foreign key, because which rule a category
+    /// defaults to is a thing services read and write directly.
+    /// </summary>
+    public Guid? DefaultSplitRuleId { get; set; }
 }

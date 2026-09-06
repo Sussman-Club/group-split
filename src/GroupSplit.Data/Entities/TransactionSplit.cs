@@ -19,11 +19,16 @@ public class TransactionSplit : Entity
 {
     public virtual Transaction Transaction { get; set; } = null!;
 
-    internal Guid TransactionId { get; set; }
+    public Guid TransactionId { get; set; }
 
     public virtual User User { get; set; } = null!;
 
-    internal Guid UserId { get; set; }
+    /// <summary>
+    /// Public, like <see cref="TransactionId"/>, because whose share this is belongs to the
+    /// split rather than to how EF indexes it -- and the service that writes splits lives
+    /// outside this assembly.
+    /// </summary>
+    public Guid UserId { get; set; }
 
     /// <summary>
     /// Their share. Negative on a refund, and zero for a member a split deliberately

@@ -1,3 +1,4 @@
+using GroupSplit.Shared;
 ﻿using System.Security.Claims;
 using GroupSplit.API.Services;
 using GroupSplit.Data;
@@ -143,6 +144,37 @@ public class ApiUnitTest : IAsyncLifetime
     /// <summary>
     /// Helper method to get a service from the service provider.
     /// </summary>
+    /// <summary>
+    /// A category with a division of its own, which is what most tests mean by "a rule".
+    /// </summary>
+    /// <remarks>
+    /// Two writes, because they are two rows: the split the group keeps, and the label that
+    /// points at it. Nearly every test wants them together, so the pair lives here rather
+    /// than being spelled out twenty times.
+    /// </remarks>
+    protected async Task<Guid> CreateCategory(Guid groupId, string name, SplitRuleDto definition)
+    {
+        var rule = await GetService<ISplitRuleService>().Create(new CreateSplitRuleRequest
+        {
+            GroupId = groupId,
+            Name = name,
+            Definition = definition
+        }, TestContext.Current.CancellationToken);
+
+        var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
+        {
+            GroupId = groupId,
+            Name = name,
+            DefaultSplitRuleId = rule.Id
+        }, TestContext.Current.CancellationToken);
+
+        return category.Id;
+    }
+
+    /// <summary>An even split between everyone, named after nothing in particular.</summary>
+    protected Task<Guid> CreateEvenCategory(Guid groupId, string name = "Split") =>
+        CreateCategory(groupId, name, new EvenSplitRuleDto());
+
     protected T GetService<T>() where T : notnull
     {
         return ServiceProvider.GetRequiredService<T>();

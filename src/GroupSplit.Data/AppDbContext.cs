@@ -85,6 +85,8 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<WeightedSplitRule>();
         modelBuilder.Entity<EvenSplitRule>();
 
+        modelBuilder.Entity<PayerSplitRule>();
+
         modelBuilder.Entity<PercentSplitRule>();
 
         modelBuilder.Entity<SharesSplitRule>();
@@ -154,79 +156,6 @@ public class AppDbContext : DbContext
             entity.HasIndex(split => split.UserId);
         });
 
-        modelBuilder.Entity<Rule>(entity =>
-        {
-            entity.Property(rule => rule.Category).HasMaxLength(64).IsRequired();
-            
-            entity.HasOne(rule => rule.Group)
-                .WithMany(group => group.Rules)
-                .IsRequired();
-
-            entity.HasMany(rule => rule.Versions)
-                .WithOne(version => version.Rule)
-                .IsRequired();
-            
-            entity.HasIndex(rule => rule.Category);
-            entity.HasIndex(rule => new { rule.GroupId, rule.Category }).IsUnique();
-        });
-
-        modelBuilder.Entity<RuleVersion>(entity =>
-        {
-            entity.Property(ruleVersion => ruleVersion.StartDateTime).IsRequired();
-            
-            entity.Property(ruleVersion => ruleVersion.EndDateTime);
-
-            entity.UseTptMappingStrategy();
-        });
-
-        modelBuilder.Entity<PersonalRuleVersion>();
-
-        modelBuilder.Entity<PercentRuleVersion>();
-        
-        modelBuilder.Entity<SharesRuleVersion>();
-
-        modelBuilder.Entity<SettlementRuleVersion>(entity =>
-        {
-            entity.HasOne(settlement => settlement.OtherUser)
-                .WithMany();
-
-            entity.HasIndex(settlement => settlement.OtherUserId);
-        });
-        
-        modelBuilder.Entity<PercentRuleUser>(entity =>
-        {
-            entity.Property(ruleUser => ruleUser.Percentage).IsRequired();
-
-            entity.HasOne(ruleUser => ruleUser.User)
-                .WithMany()
-                .HasForeignKey(ruleUser => ruleUser.UserId)
-                .IsRequired();
-
-            entity.HasOne(ruleUser => ruleUser.RuleVersion)
-                .WithMany(version => version.RuleUsers)
-                .HasForeignKey(ruleUser => ruleUser.RuleVersionId)
-                .IsRequired();
-
-            entity.HasIndex(ruleUser => new { ruleUser.UserId, ruleUser.RuleVersionId }).IsUnique();
-        });
-        
-        modelBuilder.Entity<SharesRuleUser>(entity =>
-        {
-            entity.Property(ruleUser => ruleUser.Shares).IsRequired();
-
-            entity.HasOne(ruleUser => ruleUser.User)
-                .WithMany()
-                .HasForeignKey(ruleUser => ruleUser.UserId)
-                .IsRequired();
-
-            entity.HasOne(ruleUser => ruleUser.RuleVersion)
-                .WithMany(version => version.SharedRuleUsers)
-                .HasForeignKey(ruleUser => ruleUser.RuleVersionId)
-                .IsRequired();
-
-            entity.HasIndex(ruleUser => new { ruleUser.UserId, ruleUser.RuleVersionId }).IsUnique();
-        });
-
         modelBuilder.Entity<Transaction>(entity =>
         {
             entity.Property(transaction => transaction.Amount).IsRequired().HasPrecision(18, 2);
@@ -265,12 +194,18 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Expense>(entity =>
         {
-            // On the leaf, so the column is nullable in the table -- a transfer has no
-            // rule version and never did.
-            entity.HasOne(expense => expense.RuleVersion)
-                .WithMany(version => version.Transactions)
-                .HasForeignKey(expense => expense.RuleVersionId)
-                .IsRequired();
+            // On the leaf, so the column is nullable in the table -- a transfer is not
+            // filed under anything and never was.
+            //
+            // Restrict, not cascade: deleting a category must not take the group's spending
+            // history with it. Clearing the expenses' category first is the caller's job,
+            // and failing loudly is the right answer if they did not.
+            entity.HasOne(expense => expense.Category)
+                .WithMany()
+                .HasForeignKey(expense => expense.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(expense => expense.CategoryId);
         });
 
         modelBuilder.Entity<Transfer>();

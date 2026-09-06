@@ -1,5 +1,6 @@
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.Splitting;
+using GroupSplit.Shared;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.SplitRuleHandlers;
 using Microsoft.Extensions.DependencyInjection;
@@ -149,6 +150,8 @@ public class SplitRuleHandlerTest
 
         public string? Invalid(FixedThenEvenSplitRule rule) =>
             rule.FixedAmount < 0 ? "A fixed amount cannot be negative." : null;
+
+        public SplitRuleDto ToDto(FixedThenEvenSplitRule rule) => new EvenSplitRuleDto();
     }
 
     [Fact]

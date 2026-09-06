@@ -122,12 +122,7 @@ public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Groups.UpdateGroup(group.Id, new CreateGroupRequest { Name = "Lisbon 2026" }, Ct);
 
         // A rule added, and an expense recorded against it.
-        var version = await GetService<IRuleService>().Create(new CreateRuleRequest
-        {
-            GroupId = group.Id,
-            Category = "Lodging",
-            Version = new PercentRuleVersionDto { Percentages = new() { [me.Id] = 100m } }
-        }, Ct);
+        var version = CreateCategory(group.Id, "Lodging", new PercentSplitRuleDto { Percentages = new() { [me.Id] = 100m } });
 
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
@@ -135,7 +130,7 @@ public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Amount = 100m,
             DateTime = DateTimeOffset.UtcNow,
             GroupId = group.Id,
-            RuleVersionId = version.Id
+            CategoryId = version.Id
         }, Ct);
 
         // A member added, and one removed.

@@ -1,5 +1,6 @@
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.Splitting;
+using GroupSplit.Shared;
 
 namespace GroupSplit.API.Services.SplitRuleHandlers;
 
@@ -7,10 +8,10 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 /// What a split rule does, kept off the rule itself.
 /// </summary>
 /// <remarks>
-/// The entities are data; the behaviour is here, one handler per kind, resolved by the
-/// rule's runtime type -- the same shape the rule-version handlers already use. Adding a
-/// kind is adding an entity and a handler and registering it. Nothing existing is edited,
-/// and there is no switch anywhere to forget a case in.
+/// The entities are data; the behaviour is here, one handler per kind, resolved by type --
+/// the same shape the rule-version handlers use. Adding a kind is adding an entity, a DTO
+/// and a handler, and registering it. Nothing existing is edited, and there is no switch
+/// anywhere to forget a case in.
 /// </remarks>
 public interface ISplitRuleHandler
 {
@@ -27,14 +28,26 @@ public interface ISplitRuleHandler
 
     /// <summary>
     /// What is wrong with the rule, or null when nothing is. A complaint rather than an
-    /// exception, so the data layer needs none of the API's exception types.
+    /// exception, so a handler needs none of the API's exception types.
     /// </summary>
     string? Invalid(SplitRule rule);
+
+    /// <summary>The rule as the client sees it.</summary>
+    SplitRuleDto ToDto(SplitRule rule);
 }
 
 /// <summary>
-/// The handler for one kind of rule. The untyped members below are the bridge from the
-/// dispatcher, and exist so that an implementation only ever writes the typed ones.
+/// Builds a rule from what the client sent. Keyed by the DTO rather than the entity,
+/// because on the way in the DTO is all there is.
+/// </summary>
+public interface ISplitRuleFactory
+{
+    SplitRule FromDto(string name, SplitRuleDto definition);
+}
+
+/// <summary>
+/// The handler for one kind of rule. The untyped members are the bridge from the
+/// dispatcher, and exist so an implementation only ever writes the typed ones.
 /// </summary>
 public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
     where TRule : SplitRule
@@ -44,16 +57,30 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
 
     string? Invalid(TRule rule);
 
+    SplitRuleDto ToDto(TRule rule);
+
     IReadOnlyList<SplitAmount> ISplitRuleHandler.Divide(
         SplitRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
-        rule is not TRule typedRule
-            ? throw new InvalidOperationException(
-                $"Expected {typeof(TRule).Name}, got {rule.GetType().Name}.")
-            : Divide(typedRule, amount, payerId, members);
+        Divide(Expected(rule), amount, payerId, members);
 
-    string? ISplitRuleHandler.Invalid(SplitRule rule) =>
-        rule is not TRule typedRule
+    string? ISplitRuleHandler.Invalid(SplitRule rule) => Invalid(Expected(rule));
+
+    SplitRuleDto ISplitRuleHandler.ToDto(SplitRule rule) => ToDto(Expected(rule));
+
+    private static TRule Expected(SplitRule rule) =>
+        rule as TRule ?? throw new InvalidOperationException(
+            $"Expected {typeof(TRule).Name}, got {rule.GetType().Name}.");
+}
+
+/// <inheritdoc cref="ISplitRuleFactory"/>
+public interface ISplitRuleFactory<in TDto> : ISplitRuleFactory
+    where TDto : SplitRuleDto
+{
+    SplitRule FromDto(string name, TDto definition);
+
+    SplitRule ISplitRuleFactory.FromDto(string name, SplitRuleDto definition) =>
+        definition is not TDto typedDefinition
             ? throw new InvalidOperationException(
-                $"Expected {typeof(TRule).Name}, got {rule.GetType().Name}.")
-            : Invalid(typedRule);
+                $"Expected {typeof(TDto).Name}, got {definition.GetType().Name}.")
+            : FromDto(name, typedDefinition);
 }

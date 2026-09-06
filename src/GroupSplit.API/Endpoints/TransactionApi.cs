@@ -184,8 +184,8 @@ public static class TransactionApi
                     PaidByUserId = transaction.User.Id,
                     PaidByUserName = transaction.User.FirstName +
                                      (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                    RuleVersionId = transaction.RuleVersion.Id,
-                    Category = transaction.RuleVersion.Rule.Category
+                    CategoryId = transaction.CategoryId,
+                    Category = transaction.Category != null ? transaction.Category.Name : null
                 };
         }
 
@@ -209,7 +209,8 @@ public static class TransactionApi
                       (before == null || transaction.DateTime <= before) &&
                       (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
                       (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
-                      (category == null || transaction.RuleVersion.Rule.Category.ToLower() == category) &&
+                      (category == null ||
+                       (transaction.Category != null && transaction.Category.Name.ToLower() == category)) &&
                       // ToLower().Contains rather than EF.Functions.ILike: the same query has
                       // to run on Npgsql and on the in-memory provider the tests use, and
                       // ILike translates only on the first. The names are nullable once an
@@ -217,7 +218,8 @@ public static class TransactionApi
                       (search == null ||
                        transaction.Name.ToLower().Contains(search) ||
                        (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
-                       transaction.RuleVersion.Rule.Category.ToLower().Contains(search) ||
+                       (transaction.Category != null &&
+                        transaction.Category.Name.ToLower().Contains(search)) ||
                        transaction.Group!.Name.ToLower().Contains(search) ||
                        (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
                        (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
@@ -252,7 +254,7 @@ public static class TransactionApi
         .Key("dateTime", transaction => transaction.DateTime, defaultDescending: true)
         .Key("amount", transaction => transaction.Amount, defaultDescending: true)
         .Key("name", transaction => transaction.Name)
-        .Key("category", transaction => transaction.RuleVersion.Rule.Category)
+        .Key("category", transaction => transaction.Category!.Name)
         .Key("group", transaction => transaction.Group!.Name)
         .Key("paidBy", transaction => transaction.User.FirstName)
         .Default("dateTime")

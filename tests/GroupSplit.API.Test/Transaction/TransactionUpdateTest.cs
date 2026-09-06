@@ -34,7 +34,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = 20,
             DateTime = DateTimeOffset.UtcNow.AddHours(1),
             PaidByUserId = transaction.User.Id,
-            RuleVersionId = transaction.RuleVersion.Id
+            CategoryId = transaction.RuleVersion.Id
         };
 
         // Act
@@ -91,7 +91,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = 5,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = currentUser.Id,
-            RuleVersionId = Guid.NewGuid() // nonexistent
+            CategoryId = Guid.NewGuid() // nonexistent
         };
 
         // Act & Assert
@@ -125,7 +125,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = 50,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = otherUser.Id, // not in current user's group
-            RuleVersionId = transaction.RuleVersion.Id
+            CategoryId = transaction.RuleVersion.Id
         };
 
         // Act & Assert
