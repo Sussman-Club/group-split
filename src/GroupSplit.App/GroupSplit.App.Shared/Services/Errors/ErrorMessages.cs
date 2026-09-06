@@ -42,7 +42,12 @@ public static class ErrorMessages
         [ErrorCodes.CategoryNotFound] = "That category no longer exists.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
 
-        [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group.",
+        [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
+        [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
+        [ErrorCodes.GroupInvitationNotYours] = "That invitation was sent to somebody else.",
+        [ErrorCodes.GroupInvitationAlreadySent] = "That person has already been invited.",
+        [ErrorCodes.GroupMemberAlreadyJoined] = "That person is already in this group.",
+        [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
 
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",
@@ -56,6 +61,7 @@ public static class ErrorMessages
 
         [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
         [ErrorCodes.SplitsInvalid] = "The shares are not valid. Each person can appear only once.",
+        [ErrorCodes.SplitOnAPersonalExpense] = "A personal expense is not shared with anybody, so it cannot be split.",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares have to add up to the amount of the expense.",
         [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group."
     };

@@ -1,4 +1,5 @@
 using GroupSplit.App.Shared.Models;
+using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
@@ -10,26 +11,23 @@ public class TransactionsPageStateService : ITransactionsPageStateService
 {
     private readonly ITransactionsClient _client;
     private readonly TransactionsTracker _tracker;
-    private readonly ISnackbar _snackbar;
     private readonly LoadGuard _guard;
-    private readonly ApiErrorPresenter _errors;
     private readonly DataChangeNotifier _changes;
+    private readonly ITransactionCommands _commands;
 
     public Task IsReadyTask { get; }
 
     public TransactionsPageStateService(ITransactionsClient client,
         TransactionsTracker tracker,
-        ISnackbar snackbar,
         LoadGuard guard,
-        ApiErrorPresenter errors,
-        DataChangeNotifier changes)
+        DataChangeNotifier changes,
+        ITransactionCommands commands)
     {
         _client = client;
         _tracker = tracker;
-        _snackbar = snackbar;
         _guard = guard;
-        _errors = errors;
         _changes = changes;
+        _commands = commands;
 
         // What is held here is a copy of the server's, so it is re-read whenever anything
         // that shows on it changes: an expense written from any page, or a group renamed,
@@ -122,6 +120,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         var page = await _client.GetTransactionsAsync(
             from: range.From,
             to: range.To,
+            personal: query.Personal,
             search: query.Search,
             sortBy: query.SortBy,
             sortDescending: query.SortDescending,
@@ -135,10 +134,11 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         // What the page is one of, totalled: the figure beside a narrowed listing has to
         // describe the same narrowing. Only worth a request while something is narrowing
         // it -- otherwise it is the all-time summary, which is already read.
-        MatchesSummary = string.IsNullOrWhiteSpace(query.Search) && range.IsAllTime
+        MatchesSummary = string.IsNullOrWhiteSpace(query.Search) && range.IsAllTime && query.Personal is null
             ? null
             : await _client.GetTransactionsSummaryAsync(
-                from: range.From, to: range.To, search: query.Search, cancellationToken: ct);
+                from: range.From, to: range.To, personal: query.Personal, search: query.Search,
+                cancellationToken: ct);
     }
 
     /// <summary>
@@ -155,34 +155,22 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         MonthSummary = await _client.GetTransactionsSummaryAsync(from: from, to: to, cancellationToken: ct);
     }
 
-    // Every write below runs through the presenter: a refusal from the API becomes an
-    // error snackbar naming the reason, a lost session becomes a sign-in, and the caller
+    // Every write below is one line, because a write is not this class's job: the commands
+    // own the call, the message and the announcement, and a dialog making the same change
+    // makes it exactly the same way. What is left here is the reading. A refusal from the
+    // API becomes an error snackbar naming the reason, a lost session becomes a sign-in,
+    // and the caller
     // gets false instead of an exception it would have had to catch itself. Once the write
     // has landed it is announced rather than applied here by hand, so this page and the
     // groups page's are re-read from the same source and cannot drift apart.
 
     public Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
-        _errors.TryAsync(async () =>
-        {
-            await _client.CreateTransactionAsync(request, ct);
-            _snackbar.Add("Transaction created successfully.", Severity.Success);
-            await _changes.NotifyTransactionsChangedAsync();
-        }, "Could not save the expense.");
+        _commands.CreateAsync(request, ct);
 
     public Task<bool> UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
         CancellationToken ct = default) =>
-        _errors.TryAsync(async () =>
-        {
-            await _client.UpdateTransactionAsync(transaction.Id, patch, ct);
-            _snackbar.Add("Transaction updated successfully.", Severity.Success);
-            await _changes.NotifyTransactionsChangedAsync();
-        }, "Could not update the expense.");
+        _commands.UpdateAsync(transaction.Id, patch, transaction.Name, ct);
 
     public Task<bool> DeleteAsync(TransactionResponse transaction, CancellationToken ct = default) =>
-        _errors.TryAsync(async () =>
-        {
-            await _client.DeleteTransactionAsync(transaction.Id, ct);
-            _snackbar.Add("Transaction deleted successfully.", Severity.Success);
-            await _changes.NotifyTransactionsChangedAsync();
-        }, "Could not delete the expense.");
+        _commands.DeleteAsync(transaction.Id, transaction.Name, ct);
 }

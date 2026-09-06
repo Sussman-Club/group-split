@@ -51,7 +51,8 @@
         {
             <PropertyColumn Property="x => x.GroupName" Title="Group">
                 <CellTemplate>
-                    <span class="gs-tag neutral">@context.Item.GroupName</span>
+                    @* No group is not a missing group: it is an expense of your own. *@
+                    <span class="gs-tag neutral">@(context.Item.GroupName ?? "Personal")</span>
                 </CellTemplate>
             </PropertyColumn>
         }

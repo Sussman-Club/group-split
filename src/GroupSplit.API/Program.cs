@@ -46,6 +46,7 @@ builder.Services.AddCurrentUser();
 builder.Services.AddScoped<IDebtCalculationService, DebtCalculationService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
+builder.Services.AddScoped<IInvitationService, InvitationService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddSplitRuleServices();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
@@ -79,6 +80,7 @@ app.UseAuthorization();
 
 app.MapGroupApi();
 app.MapUserApi();
+app.MapInvitationsApi();
 app.MapTransaction();
 app.MapCategoriesApi();
 app.MapSplitRulesApi();

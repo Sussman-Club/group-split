@@ -73,12 +73,14 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
+| `GROUP_INVITATION_NOT_FOUND` | The invitation does not exist, or has already been answered or withdrawn. |
 
 ### Forbidden (403)
 
 | Code | When |
 | --- | --- |
-| `GROUP_CANNOT_REMOVE_SELF` | The member being removed is the caller. |
+| `GROUP_CANNOT_REMOVE_SELF` | The member being removed is the caller. Leaving is `DELETE /groups/{id}/members/me`. |
+| `GROUP_INVITATION_NOT_YOURS` | The invitation was addressed to a different email than the caller's. A 403 rather than a 404, which would deny it exists. |
 
 ### Conflict (409)
 
@@ -92,6 +94,10 @@ routing, authentication, model binding, an unhandled exception.
 | `SPLIT_RULE_IN_USE` | The split rule is still the default of a category. Point the category elsewhere first. | |
 | `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the group. | |
 | `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is not a member of the group. | |
+| `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
+| `GROUP_INVITATION_ALREADY_SENT` | The address already has a standing invitation to this group. Inviting several people skips the ones already invited rather than raising this. | |
+| `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
+| `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
 
 ### Validation (400)
 
@@ -103,6 +109,7 @@ no `errors` member; the code is the whole message.
 | `SPLIT_RULE_INVALID` | The split rule does not hold together: percentages that do not add up to 100, a share nobody holds, a member named twice. |
 | `SPLITS_INVALID` | The stated shares name nobody, or name somebody twice. Leaving them out entirely is how you ask for the category's division. |
 | `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is not a member of the group. |
+| `SPLIT_ON_A_PERSONAL_EXPENSE` | Shares were stated on an expense with no group. There is nobody to divide it with. |
 
 ### Unprocessable (422)
 

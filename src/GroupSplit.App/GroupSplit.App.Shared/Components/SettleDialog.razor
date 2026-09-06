@@ -1,6 +1,15 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 
+@*
+    Recording a repayment, from either side.
+
+    It used to sit only under "owed to you", so only the creditor could say a debt had been
+    paid -- the person who had actually done the paying had no way to record it and had to
+    ask the other one to. The direction is a parameter now, and the wording follows it: the
+    dialog is the same, the sentence is not.
+*@
+
 <MudDialog>
     <TitleContent>
         <MudText Typo="Typo.h5">
@@ -12,14 +21,12 @@
         <MudForm @ref="_form" Model="_model">
             <MudStack Spacing="3">
 
-                <MudText Typo="Typo.subtitle2">
-                    @Username owes you @TotalDebt.ToMoney()
-                </MudText>
-                
+                <MudText Typo="Typo.subtitle2">@Standing</MudText>
+
                 <MudNumericField
                     @bind-Value="_model.Amount"
                     For="@(() => _model.Amount)"
-                    Label="Amount Paid"
+                    Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
                     Variant="Variant.Outlined"
                     Adornment="Adornment.Start"
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
@@ -49,27 +56,41 @@
 
     [Parameter] public string Username { get; set; } = null!;
     [Parameter] public Guid UserId { get; set; }
+
+    /// <summary>What stands between the two of them, whichever way round it is.</summary>
     [Parameter] public decimal TotalDebt { get; set; }
 
-    private MudForm _form;
+    /// <summary>
+    /// Which way the money went. The caller knows: this dialog opens from under "owed to
+    /// you" or from under "you owe", and those are the two answers.
+    /// </summary>
+    [Parameter] public SettlementDirection Direction { get; set; } = SettlementDirection.TheyPaidYou;
+
+    private MudForm _form = null!;
 
     private SettleRequest _model = new();
+
+    private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
+
+    private string Standing => YouPaid
+        ? $"You owe {Username} {TotalDebt.ToMoney()}"
+        : $"{Username} owes you {TotalDebt.ToMoney()}";
 
     protected override void OnInitialized()
     {
         _model = new SettleRequest
         {
             UserId = UserId,
-            Amount = TotalDebt
+            Amount = TotalDebt,
+            Direction = Direction
         };
     }
-    
+
     IEnumerable<string> ValidateAmount(decimal amount)
     {
        if (amount > TotalDebt)
             yield return $"Amount cannot exceed the total debt ({TotalDebt.ToMoney()})";
     }
-
 
     private async Task Submit()
     {

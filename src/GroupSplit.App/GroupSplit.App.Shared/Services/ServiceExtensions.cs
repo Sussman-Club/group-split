@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
@@ -22,6 +23,11 @@ public static class ServiceExtensions
             services.TryAddScoped<LoadGuard>();
             services.TryAddScoped<DataChangeNotifier>();
 
+            // The one way to write, for pages and dialogs alike. Registered before the page
+            // states, which are now readers that delegate their writes here.
+            services.TryAddScoped<IGroupCommands, GroupCommands>();
+            services.TryAddScoped<ITransactionCommands, TransactionCommands>();
+
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();
 
@@ -34,6 +40,7 @@ public static class ServiceExtensions
             services.AddApiClient<IUsersClient, UsersClient>();
             services.AddApiClient<IGroupsClient, GroupsClient>();
             services.AddApiClient<ITransactionsClient, TransactionsClient>();
+            services.AddApiClient<IInvitationsClient, InvitationsClient>();
             services.AddApiClient<ICategoriesClient, CategoriesClient>();
             services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
             

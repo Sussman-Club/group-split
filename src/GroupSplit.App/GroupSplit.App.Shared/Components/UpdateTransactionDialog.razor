@@ -52,32 +52,45 @@
                 </MudStack>
 
 
-                <MudSelect T="Guid?" Label="Category"
-                           @bind-Value="editModel.CategoryId"
-                           Variant="Variant.Outlined">
-                    @foreach (var c in GroupCategories)
-                    {
-                        <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
-                    }
-                </MudSelect>
+                @* Categories, payers and shares all belong to a group. A personal expense
+                   has none, so the fields that would be about one are absent rather than
+                   present and empty. *@
+                @if (IsShared)
+                {
+                    <MudSelect T="Guid?" Label="Category"
+                               @bind-Value="editModel.CategoryId"
+                               Clearable="true"
+                               Variant="Variant.Outlined">
+                        @foreach (var c in GroupCategories)
+                        {
+                            <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
 
-                <MudSelect T="Guid" Label="Paid By"
-                           Variant="Variant.Outlined"
-                           Disabled="@(!GroupUsers.Any())"
-                           @bind-Value="editModel.PaidByUserId">
-                    @foreach (var u in GroupUsers)
-                    {
-                        <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
-                    }
-                </MudSelect>
+                    <MudSelect T="Guid" Label="Paid By"
+                               Variant="Variant.Outlined"
+                               Disabled="@(!GroupUsers.Any())"
+                               @bind-Value="editModel.PaidByUserId">
+                        @foreach (var u in GroupUsers)
+                        {
+                            <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        }
+                    </MudSelect>
 
-                <MudDivider/>
+                    <MudDivider/>
 
-                <SplitEditor Members="@GroupUsers.ToList()"
-                             Amount="@editModel.Amount"
-                             PayerId="@editModel.PaidByUserId"
-                             Stored="@storedSplits"
-                             @bind-Value="editModel.Splits"/>
+                    <SplitEditor Members="@GroupUsers.ToList()"
+                                 Amount="@editModel.Amount"
+                                 PayerId="@editModel.PaidByUserId"
+                                 Stored="@storedSplits"
+                                 @bind-Value="editModel.Splits"/>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        A personal expense is not shared with anybody, so there is nothing to divide.
+                    </MudAlert>
+                }
 
             </MudStack>
         </MudForm>
@@ -96,7 +109,10 @@
     [Parameter] public TransactionResponse Original { get; set; } = null!;
 
     private bool loading = false;
-    private MudForm form;
+    private MudForm form = null!;
+
+    /// <summary>Whether this expense belongs to a group at all. Null means it is personal.</summary>
+    private bool IsShared => Original.GroupId is not null;
 
     // The editable model (your UpdateTransactionRequest)
     private UpdateTransactionRequest editModel = new();
@@ -135,14 +151,18 @@
         // has said why.
         var loaded = await Errors.TryAsync(async () =>
         {
-            GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(Original.GroupId).Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
+            if (Original.GroupId is { } groupId)
+            {
+                GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(groupId)
+                    .Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
 
-            // A category that has since been deleted still names what this expense was
-            // filed under, so it stays in the list rather than silently reading as none.
-            if (Original.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
-                GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
+                // A category that has since been deleted still names what this expense was
+                // filed under, so it stays in the list rather than silently reading as none.
+                if (Original.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
+                    GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
 
-            GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+                GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
+            }
 
             var details = await TransactionsClient.GetTransactionAsync(Original.Id);
 

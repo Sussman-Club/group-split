@@ -1,0 +1,401 @@
+@page "/groups/{GroupId:guid}"
+@page "/groups/{GroupId:guid}/{Tab}"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.App.Shared.Services.Transactions
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@inject IDialogService DialogService
+@inject IGroupsPageStateService GroupsService
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+@*
+    One group, on its own page.
+
+    Four questions people actually ask about a group, and each of them used to be answered
+    somewhere else or not at all: where we stand (this page, under a switcher), what we have
+    spent (a separate page behind a link), what has happened (nowhere -- settlements were
+    invisible), and who is in it (a pair of icon buttons that opened dialogs). Tabs, and the
+    tab is in the URL, so a group's members page is a place you can be sent to.
+*@
+
+<PageTitle>@(Group?.Name ?? "Group") - Group Split</PageTitle>
+
+@if (Group is { } group)
+{
+    <div class="gs-page-head" @key="@($"head-{group.Id}")">
+        <div class="gs-inline" style="gap: 16px">
+            <MudTooltip Text="All groups">
+                <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" aria-label="All groups" Href="/groups" />
+            </MudTooltip>
+            <Avatar Name="@group.Name" Size="lg" />
+            <div>
+                <div class="gs-eyebrow">@(group.IsArchive ? "Archived group" : "Group")</div>
+                <h1 style="margin-top: 2px">@group.Name</h1>
+                <p style="margin-top: 2px">
+                    @group.MemberCount member@(group.MemberCount == 1 ? "" : "s") · @ExpenseCount expense@(ExpenseCount == 1 ? "" : "s")
+                </p>
+            </div>
+        </div>
+
+        <div class="gs-toolbar" role="toolbar" aria-label="Group actions">
+            <MudTooltip Text="Split rules">
+                <MudIconButton Icon="@Icons.Material.Rounded.Rule" OnClick="@ManageRulesAsync" aria-label="Manage rules" />
+            </MudTooltip>
+            <MudTooltip Text="Rename group">
+                <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@RenameAsync" aria-label="Rename group" />
+            </MudTooltip>
+            <MudTooltip Text="@(group.IsArchive ? "Unarchive group" : "Archive group")">
+                <MudIconButton Icon="@(group.IsArchive ? Icons.Material.Rounded.Unarchive : Icons.Material.Rounded.Archive)"
+                               OnClick="@ToggleArchiveAsync"
+                               aria-label="@(group.IsArchive ? "Unarchive group" : "Archive group")" />
+            </MudTooltip>
+            <span class="sep"></span>
+            <MudTooltip Text="Invite someone">
+                <MudIconButton Icon="@Icons.Material.Rounded.PersonAdd" Color="Color.Primary"
+                               OnClick="@InviteAsync" aria-label="Invite someone" />
+            </MudTooltip>
+        </div>
+    </div>
+
+    <nav class="gs-tabs" aria-label="Group sections">
+        @foreach (var (key, label) in Sections)
+        {
+            <a class="gs-tab @(Current == key ? "is-current" : "")" href="@Href(key)" aria-current="@(Current == key ? "page" : null)">@label</a>
+        }
+    </nav>
+
+    <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
+        @switch (Current)
+        {
+            case "expenses":
+                <GroupExpensesTab GroupId="@group.Id" />
+                break;
+
+            case "activity":
+                <GroupActivityList GroupId="@group.Id" />
+                break;
+
+            case "members":
+                <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
+                break;
+
+            default:
+                <div class="gs-two-col">
+                    <div class="gs-stack">
+                        @if (GroupsService.Balance is { } balance)
+                        {
+                            <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
+                                @if (UserBalance > 0)
+                                {
+                                    <div class="gs-eyebrow">You are owed</div>
+                                    <Money Value="UserBalance" Animate Class="gs-hero-amount" />
+                                    <div class="gs-hero-sub">by @balance.OwedToYou.Count() @(balance.OwedToYou.Count() == 1 ? "person" : "people") in @group.Name</div>
+                                    <div class="gs-hero-list">
+                                        @foreach (var debt in balance.OwedToYou)
+                                        {
+                                            var owed = debt;
+                                            <div class="gs-hero-row">
+                                                <Avatar Name="@owed.UserName" Size="sm" />
+                                                <div class="who">@owed.UserName <small>owes you</small></div>
+                                                <Money Value="owed.Amount" Animate />
+                                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                                           OnClick="@(() => SettleAsync(owed, SettlementDirection.TheyPaidYou))">
+                                                    They paid
+                                                </MudButton>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else if (UserBalance < 0)
+                                {
+                                    <div class="gs-eyebrow">You owe</div>
+                                    <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
+                                    <div class="gs-hero-sub">to @balance.YouOwed.Count() @(balance.YouOwed.Count() == 1 ? "person" : "people") in @group.Name</div>
+                                    <div class="gs-hero-list">
+                                        @* Both sides can record a repayment now. The person who
+                                           actually did the paying had no way to say so, and had
+                                           to ask the other one to do it for them. *@
+                                        @foreach (var debt in balance.YouOwed)
+                                        {
+                                            var owing = debt;
+                                            <div class="gs-hero-row">
+                                                <Avatar Name="@owing.UserName" Size="sm" />
+                                                <div class="who">@owing.UserName <small>is waiting on you</small></div>
+                                                <Money Value="owing.Amount" Animate />
+                                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                                           OnClick="@(() => SettleAsync(owing, SettlementDirection.YouPaidThem))">
+                                                    I paid
+                                                </MudButton>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="gs-eyebrow">Your balance</div>
+                                    <div class="gs-hero-amount">All settled</div>
+                                    <div class="gs-hero-sub">Nothing owed either way in @group.Name. Nice.</div>
+                                }
+                            </section>
+                        }
+
+                        <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+                            <div class="gs-card-title">
+                                <h2>Recent expenses</h2>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                           Href="@Href("expenses")"
+                                           EndIcon="@Icons.Material.Rounded.ArrowForward">All expenses</MudButton>
+                            </div>
+                            <TransactionsList Transactions="GroupsService.Transactions?.Items ?? []" />
+                            @if (ExpenseCount > (GroupsService.Transactions?.Items.Count ?? 0))
+                            {
+                                <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
+                                    Showing the @(GroupsService.Transactions!.Items.Count) most recent of @ExpenseCount.
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="gs-stack">
+                        <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
+                            <div class="gs-card-title">
+                                <h2>Members</h2>
+                                <span class="gs-tag neutral">net balances</span>
+                            </div>
+                            @if (GroupsService.Balance is { } b && b.NetBalances.Any())
+                            {
+                                var max = Math.Max(b.NetBalances.Max(m => Math.Abs(m.Balance)), 0.01m);
+                                var i = 0;
+                                <div class="gs-balances">
+                                    @foreach (var member in b.NetBalances.OrderByDescending(m => m.Balance))
+                                    {
+                                        var w = (double)(Math.Abs(member.Balance) / max);
+                                        <div class="gs-balance-row @(member.Balance < 0 ? "is-neg" : "")" style="--i: @(i++)">
+                                            <Avatar Name="@member.UserName" Size="sm" />
+                                            <div style="min-width: 0">
+                                                <div class="name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                                                    @member.UserName
+                                                    @if (member.UserId == UserInfo?.Id)
+                                                    {
+                                                        <span class="gs-muted" style="font-weight: 500"> (you)</span>
+                                                    }
+                                                </div>
+                                                <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
+                                            </div>
+                                            <Money Value="member.Balance" Signed Animate />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="gs-empty" style="padding: 20px">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Balance" />
+                                    <span>Balances appear once there is an expense.</span>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
+                            <div class="gs-card-title">
+                                <h2>Latest activity</h2>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                           Href="@Href("activity")"
+                                           EndIcon="@Icons.Material.Rounded.ArrowForward">All</MudButton>
+                            </div>
+                            <GroupActivityList GroupId="@group.Id" PageSize="5" />
+                        </div>
+                    </div>
+                </div>
+                break;
+        }
+    </div>
+
+    <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@AddExpenseAsync" />
+}
+else if (_notFound)
+{
+    <div class="gs-card gs-empty" style="padding: 64px 24px">
+        <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+        <h3>That group is not yours</h3>
+        <span>It may have been deleted, or you may have left it.</span>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4" Href="/groups">Back to your groups</MudButton>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid GroupId { get; set; }
+
+    /// <summary>Which section is open, from the URL, so a tab is a place rather than a mode.</summary>
+    [Parameter] public string? Tab { get; set; }
+
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    private static readonly (string Key, string Label)[] Sections =
+    [
+        ("overview", "Overview"),
+        ("expenses", "Expenses"),
+        ("activity", "Activity"),
+        ("members", "Members")
+    ];
+
+    private bool _notFound;
+
+    private string Current => Sections.Any(section => section.Key == Tab) ? Tab! : "overview";
+
+    private string Href(string key) => key == "overview" ? $"/groups/{GroupId}" : $"/groups/{GroupId}/{key}";
+
+    private GroupResponse? Group => GroupsService.SelectedGroup?.Id == GroupId ? GroupsService.SelectedGroup : null;
+
+    private int ExpenseCount => GroupsService.Transactions?.TotalCount ?? 0;
+
+    private decimal UserBalance =>
+        GroupsService.Balance?.NetBalances.FirstOrDefault(x => x.UserId == UserInfo?.Id)?.Balance ?? 0m;
+
+    private string HeroClass => UserBalance switch
+    {
+        > 0 => "",
+        < 0 => "is-neg",
+        _ => "is-zero"
+    };
+
+    private CancellationTokenSource? _loadCts;
+    private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
+
+    private void ReRender() => InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized()
+    {
+        _loadCts = new CancellationTokenSource();
+        GroupsService.OnGroupsChanged += ReRender;
+        GroupsService.OnTransactionsChanged += ReRender;
+        GroupsService.OnGroupSelected += ReRender;
+    }
+
+    /// <summary>
+    /// The URL says which group; the state service holds one at a time and reads its
+    /// figures when it changes. So the route selects, rather than a switcher doing it.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        await GroupsService.IsReadyTask;
+
+        if (GroupsService.SelectedGroup?.Id == GroupId)
+        {
+            _notFound = false;
+            return;
+        }
+
+        var group = GroupsService.Groups.FirstOrDefault(candidate => candidate.Id == GroupId);
+
+        _notFound = group is null;
+
+        if (group is not null)
+            GroupsService.SelectedGroup = group;
+    }
+
+    private async Task ManageRulesAsync()
+    {
+        var parameters = new DialogParameters<ManageRulesDialog> { { x => x.GroupId, GroupId } };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        await DialogService.ShowAsync<ManageRulesDialog>("Manage Rules", parameters, options);
+    }
+
+    private async Task RenameAsync()
+    {
+        if (Group is not { } group) return;
+
+        var parameters = new DialogParameters { { "Group", group } };
+
+        var dialog = await DialogService.ShowAsync<UpdateGroupDialog>("Edit Group", parameters,
+            new DialogOptions { FullWidth = true, CloseButton = true });
+
+        var patch = await dialog.GetReturnValueAsync<JsonPatchDocument<CreateGroupRequest>>();
+
+        if (patch is not null)
+            await GroupsService.UpdateGroupAsync(patch, CancellationToken);
+    }
+
+    private async Task InviteAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        var members = await GroupsService.GetGroupMembersAsync(CancellationToken).ToArrayAsync(CancellationToken);
+
+        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, members } };
+
+        var dialog = await DialogService.ShowAsync<AddGroupMemberDialog>("Invite people", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<AddMemberRequest>();
+
+        if (request is not null)
+            await GroupsService.InviteToGroupAsync(request, CancellationToken);
+    }
+
+    /// <summary>
+    /// One tap, no confirmation: archiving hides the group from this person's own list and
+    /// nothing else, and the same button puts it back.
+    /// </summary>
+    private async Task ToggleArchiveAsync()
+    {
+        if (Group is not { } group) return;
+
+        if (group.IsArchive)
+            await GroupsService.UnarchiveGroupAsync(CancellationToken);
+        else
+            await GroupsService.ArchiveGroupAsync(CancellationToken);
+    }
+
+    private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        var parameters = new DialogParameters<SettleDialog>
+        {
+            { x => x.UserId, debt.UserId },
+            { x => x.Username, debt.UserName },
+            { x => x.TotalDebt, debt.Amount },
+            { x => x.Direction, direction }
+        };
+
+        var dialog = await DialogService.ShowAsync<SettleDialog>($"Settle with {debt.UserName}", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<SettleRequest>();
+
+        if (request is not null)
+            await GroupsService.SettleAsync(request, debt.UserName, CancellationToken);
+    }
+
+    private async Task AddExpenseAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { x => x.SelectedGroupId, GroupId }
+        };
+
+        var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<CreateTransactionRequest>();
+
+        if (request is not null)
+            await GroupsService.CreateTransactionAsync(request, CancellationToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        GroupsService.OnGroupsChanged -= ReRender;
+        GroupsService.OnTransactionsChanged -= ReRender;
+        GroupsService.OnGroupSelected -= ReRender;
+        if (_loadCts is not null) await _loadCts.CancelAsync();
+    }
+}

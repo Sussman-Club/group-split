@@ -27,6 +27,7 @@ public static class TransactionApi
             group.MapGetSummary();
             group.MapGetById();
             group.MapCreate();
+            group.MapPreviewSplits();
             group.MapUpdate();
             group.MapDelete();
 
@@ -119,6 +120,33 @@ public static class TransactionApi
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
+        /// <summary>
+        /// What the expense described would be divided into, without recording it.
+        /// </summary>
+        /// <remarks>
+        /// A POST because it takes the whole expense in a body, not because it writes: it
+        /// writes nothing. The dialog asks it as the amount, the group and the category
+        /// settle down, so the second step shows the division that is actually going to be
+        /// stored rather than a client-side re-derivation of it that has to agree to the
+        /// cent.
+        /// </remarks>
+        private RouteHandlerBuilder MapPreviewSplits()
+        {
+            return group.MapPost("preview", async (
+                    CreateTransactionRequest request,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await transactionService.Preview(request, ct));
+                })
+                .WithName("PreviewTransactionSplits")
+                .Produces<SplitPreviewResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
         private RouteHandlerBuilder MapUpdate()
         {
             return group.MapPatch("{id:guid}", async (
@@ -203,8 +231,8 @@ public static class TransactionApi
                     DateTime = transaction.DateTime,
                     Name = transaction.Name,
                     Description = transaction.Description,
-                    GroupId = transaction.Group!.Id,
-                    GroupName = transaction.Group!.Name,
+                    GroupId = transaction.GroupId,
+                    GroupName = transaction.Group != null ? transaction.Group.Name : null,
                     PaidByUserId = transaction.User.Id,
                     PaidByUserName = transaction.User.FirstName +
                                      (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
@@ -232,6 +260,11 @@ public static class TransactionApi
                 where (after == null || transaction.DateTime >= after) &&
                       (before == null || transaction.DateTime <= before) &&
                       (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
+                      // Personal is the absence of a group rather than a group of its own,
+                      // so it is asked for that way: true keeps only the rows with no group,
+                      // false keeps only the rows with one, and null keeps both.
+                      (filter.Personal == null ||
+                       (filter.Personal.Value ? transaction.GroupId == null : transaction.GroupId != null)) &&
                       (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
                       (category == null ||
                        (transaction.Category != null && transaction.Category.Name.ToLower() == category)) &&
@@ -244,7 +277,7 @@ public static class TransactionApi
                        (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
                        (transaction.Category != null &&
                         transaction.Category.Name.ToLower().Contains(search)) ||
-                       transaction.Group!.Name.ToLower().Contains(search) ||
+                       (transaction.Group != null && transaction.Group.Name.ToLower().Contains(search)) ||
                        (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
                        (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
                 select transaction;
@@ -279,7 +312,9 @@ public static class TransactionApi
         .Key("amount", transaction => transaction.Amount, defaultDescending: true)
         .Key("name", transaction => transaction.Name)
         .Key("category", transaction => transaction.Category!.Name)
-        .Key("group", transaction => transaction.Group!.Name)
+        // Null-safe because a personal expense has no group: the database sorts nulls of
+        // its own accord, but the in-memory provider the tests run on would dereference.
+        .Key("group", transaction => transaction.Group == null ? null : transaction.Group.Name)
         .Key("paidBy", transaction => transaction.User.FirstName)
         .Default("dateTime")
         .TieBreak(transaction => transaction.Id);

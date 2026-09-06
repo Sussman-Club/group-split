@@ -29,9 +29,13 @@ public static class GroupApi
             group.MapUpdateGroup();
             group.MapGetGroupTransactions();
             group.MapGetGroupTransactionsSummary();
+            group.MapGetActivity();
             group.MapGetMembers();
-            group.MapAddMember();
+            group.MapLeave();
             group.MapRemoveMember();
+            group.MapGetInvitations();
+            group.MapInvite();
+            group.MapWithdrawInvitation();
             group.MapGetGroupUserBalance();
             group.MapSettle();
             group.MapArchive();
@@ -185,33 +189,102 @@ public static class GroupApi
                 .Produces<UserInfo[]>();
         }
 
-        private RouteHandlerBuilder MapAddMember()
+        /// <summary>
+        /// Asks people to join, by email. There is no endpoint that puts somebody in a group
+        /// without their say-so any more: the one that did looked the address up and, when
+        /// nothing matched, dropped it and reported success.
+        /// </summary>
+        private RouteHandlerBuilder MapInvite()
         {
-            return group.MapPost("{id:guid}/members", async (
+            return group.MapPost("{id:guid}/invitations", async (
                     Guid id,
                     AddMemberRequest request,
-                    IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
+                    IInvitationService invitations,
                     CancellationToken ct) =>
                 {
-                    var group = await groupService.AddGroupMembers(id, request, ct);
-                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
-
-                    if (groupResponse is null)
-                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
-
-                    return Results.Ok(groupResponse);
+                    var pending = await invitations.Invite(id, request, ct);
+                    return Results.Ok(pending);
                 })
-                .WithName("AddGroupMember")
-                .Produces<GroupResponse>()
+                .WithName("InviteToGroup")
+                .Produces<GroupInvitationResponse[]>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
+        private RouteHandlerBuilder MapGetInvitations()
+        {
+            return group.MapGet("{id:guid}/invitations", async (
+                    Guid id,
+                    IInvitationService invitations,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await invitations.ForGroup(id, ct));
+                })
+                .WithName("GetGroupInvitations")
+                .Produces<GroupInvitationResponse[]>();
+        }
+
+        private RouteHandlerBuilder MapWithdrawInvitation()
+        {
+            return group.MapDelete("{id:guid}/invitations/{invitationId:guid}", async (
+                    Guid id,
+                    Guid invitationId,
+                    IInvitationService invitations,
+                    CancellationToken ct) =>
+                {
+                    await invitations.Withdraw(id, invitationId, ct);
+                    return Results.NoContent();
+                })
+                .WithName("WithdrawGroupInvitation")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// The caller taking themselves out. A separate route from removing a member because
+        /// it is a separate act: that one is done to you, this one by you, and only this one
+        /// is allowed to name yourself.
+        /// </summary>
+        private RouteHandlerBuilder MapLeave()
+        {
+            return group.MapDelete("{id:guid}/members/me", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    await groupService.Leave(id, ct);
+                    return Results.NoContent();
+                })
+                .WithName("LeaveGroup")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        private RouteHandlerBuilder MapGetActivity()
+        {
+            return group.MapGet("{id:guid}/activity", async (
+                    Guid id,
+                    [AsParameters] SortRequest sort,
+                    [AsParameters] PageRequest page,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    var activity = await groupService.GetGroupActivity(id, ct);
+
+                    return Results.Ok(await activity
+                        .ApplySort(sort, ActivitySort)
+                        .SelectActivityDto()
+                        .ToPageAsync(page, ct));
+                })
+                .WithName("GetGroupActivity")
+                .Produces<PagedResponse<GroupActivityResponse>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
+        }
+
         private RouteHandlerBuilder MapRemoveMember()
         {
-            return group.MapDelete("{groupId:guid}/members/{userId}", async (
+            return group.MapDelete("{groupId:guid}/members/{userId:guid}", async (
                     Guid groupId,
                     Guid userId,
                     IGroupService groupService,
@@ -352,4 +425,54 @@ public static class GroupApi
                 select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
         }
     }
+
+    extension(IQueryable<Transaction> activity)
+    {
+        /// <summary>
+        /// One row per thing that happened, whichever kind it was. The kind is read off the
+        /// type rather than a column: EF knows which leaf each row is, and a <c>Kind</c>
+        /// beside the discriminator would be a second answer to the same question.
+        /// </summary>
+        private IQueryable<GroupActivityResponse> SelectActivityDto()
+        {
+            return from transaction in activity
+                select new GroupActivityResponse
+                {
+                    Id = transaction.Id,
+                    Kind = transaction is Transfer ? ActivityKind.Transfer : ActivityKind.Expense,
+                    Name = transaction.Name,
+                    Description = transaction.Description,
+                    Amount = transaction.Amount,
+                    DateTime = transaction.DateTime,
+                    PaidByUserId = transaction.UserId,
+                    PaidByUserName = transaction.User.FirstName +
+                                     (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                    // A transfer has exactly one split, to whoever was paid, and that is
+                    // what makes it a transfer. On an expense the shares say who carried it,
+                    // and there is no single other party to name.
+                    PaidToUserId = transaction is Transfer
+                        ? transaction.Splits.Select(split => (Guid?)split.UserId).FirstOrDefault()
+                        : null,
+                    PaidToUserName = transaction is Transfer
+                        ? transaction.Splits.Select(split =>
+                            split.User.FirstName +
+                            (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
+                        : null,
+                    Category = transaction is Expense && ((Expense)transaction).Category != null
+                        ? ((Expense)transaction).Category!.Name
+                        : null
+                };
+        }
+    }
+
+    /// <summary>
+    /// What a group's history can be ordered by. Date first, because a history is read as
+    /// one, and the id breaks ties so a page does not show a row twice.
+    /// </summary>
+    internal static readonly SortMap<Transaction> ActivitySort = new SortMap<Transaction>()
+        .Key("dateTime", transaction => transaction.DateTime, defaultDescending: true)
+        .Key("amount", transaction => transaction.Amount, defaultDescending: true)
+        .Key("name", transaction => transaction.Name)
+        .Default("dateTime")
+        .TieBreak(transaction => transaction.Id);
 }

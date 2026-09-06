@@ -12,6 +12,19 @@ public interface ITransactionService
     Task<IQueryable<Expense>> List(CancellationToken ct = default);
     Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default);
     ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// What <paramref name="request"/> would be divided into if it were saved, without
+    /// saving it.
+    /// </summary>
+    /// <remarks>
+    /// Runs the same checks and the same splitter the save would, so a preview that comes
+    /// back is a preview of what will actually happen and a preview that cannot be given is
+    /// the refusal the save would have met -- shown at the step where it can still be
+    /// fixed. The dialog could divide evenly itself, and did; a second copy of the money
+    /// arithmetic is exactly what the reshape was for getting rid of.
+    /// </remarks>
+    Task<SplitPreviewResponse> Preview(CreateTransactionRequest request, CancellationToken ct = default);
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
     Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default);
     ValueTask<Expense> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
@@ -38,8 +51,13 @@ public class TransactionService(
 
         var groups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
+        // Two kinds of expense are the caller's: the ones in a group they belong to, and
+        // the ones in no group at all that they recorded. The second used to be the first
+        // -- a hidden group of one -- which is why every list of groups had to remember to
+        // leave it out and every count of them was one too high.
         var query = from expense in dbContext.Set<Expense>()
-                    where groups.Any(@group => @group.Id == expense.GroupId)
+                    where groups.Any(@group => @group.Id == expense.GroupId) ||
+                          (expense.GroupId == null && expense.UserId == currentUser.Id)
                     select expense;
 
         return Task.FromResult(query);
@@ -71,14 +89,16 @@ public class TransactionService(
 
         var payer = await MemberOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                        "The paying user is not a member of the group.");
+                        group is null
+                            ? "A personal expense can only have been paid by you."
+                            : "The paying user is not a member of the group.");
 
         var category = await CategoryFor(group, request.CategoryId, ct);
 
         var expense = new Expense
         {
             Amount = request.Amount,
-            Currency = group.Currency,
+            Currency = group?.Currency ?? Currencies.Default,
             DateTime = request.DateTime,
             Name = request.Name,
             Description = request.Description,
@@ -93,6 +113,69 @@ public class TransactionService(
         await dbContext.SaveChangesAsync(ct);
 
         return expense;
+    }
+
+    public async Task<SplitPreviewResponse> Preview(CreateTransactionRequest request,
+        CancellationToken ct = default)
+    {
+        var currentUser = userContext.User;
+        var paidByUserId = request.PaidByUserId ?? currentUser.Id;
+
+        var group = await GroupFor(request.GroupId, ct);
+
+        var payer = await MemberOf(group, paidByUserId, ct)
+                    ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                        group is null
+                            ? "A personal expense can only have been paid by you."
+                            : "The paying user is not a member of the group.");
+
+        var category = await CategoryFor(group, request.CategoryId, ct);
+
+        // Ids only, and never added to the context: the splitter reads the ids when the
+        // navigations are absent, so nothing here is reachable from a tracked entity and
+        // there is no save on this path to reach it with.
+        var draft = new Expense
+        {
+            Amount = request.Amount,
+            Currency = group?.Currency ?? Currencies.Default,
+            DateTime = request.DateTime,
+            Name = request.Name,
+            GroupId = group?.Id,
+            CategoryId = category?.Id,
+            UserId = payer.Id
+        };
+
+        await splitter.WriteSplitsAsync(draft, request.Splits, ct);
+
+        var named = draft.Splits.Select(split => split.UserId).ToList();
+
+        var names = await dbContext.Set<User>()
+            .Where(user => named.Contains(user.Id))
+            .ToDictionaryAsync(user => user.Id, user => $"{user.FirstName} {user.LastName}".Trim(), ct);
+
+        var splits = draft.Splits
+            .Select(split => new TransactionSplitResponse(
+                split.UserId,
+                names.GetValueOrDefault(split.UserId, string.Empty),
+                split.Amount))
+            .ToList();
+
+        return new SplitPreviewResponse(splits, await RuleNameFor(category, ct));
+    }
+
+    /// <summary>
+    /// The rule the category points at, by name, so the preview can say why the numbers
+    /// came out the way they did. Null when the division was even.
+    /// </summary>
+    private async Task<string?> RuleNameFor(Category? category, CancellationToken ct)
+    {
+        if (category?.DefaultSplitRuleId is not { } ruleId)
+            return null;
+
+        return await dbContext.Set<SplitRule>()
+            .Where(rule => rule.Id == ruleId)
+            .Select(rule => rule.Name)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default)
@@ -128,8 +211,8 @@ public class TransactionService(
             Description = transaction.Description,
             Amount = transaction.Amount,
             DateTime = transaction.DateTime,
-            GroupId = transaction.Group!.Id,
-            GroupName = transaction.Group.Name,
+            GroupId = transaction.GroupId,
+            GroupName = transaction.Group?.Name,
             PaidByUserId = transaction.User.Id,
             PaidByUserName = $"{transaction.User.FirstName} {transaction.User.LastName}",
             CategoryId = transaction.CategoryId,
@@ -172,11 +255,13 @@ public class TransactionService(
         if (expense is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
-        var group = expense.Group!;
+        var group = expense.Group;
 
         var payer = await MemberOf(group, request.PaidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                        "The paying user is not a member of the group.");
+                        group is null
+                            ? "A personal expense can only have been paid by you."
+                            : "The paying user is not a member of the group.");
 
         var category = await CategoryFor(group, request.CategoryId, ct);
 
@@ -212,37 +297,49 @@ public class TransactionService(
     }
 
     /// <summary>
-    /// The group the expense belongs to: the one named, or the caller's personal group when
-    /// none was.
+    /// The group the expense belongs to, or null when it belongs to none -- which is what
+    /// a personal expense is, rather than a hidden group of one.
     /// </summary>
-    private async Task<Group> GroupFor(Guid? groupId, CancellationToken ct)
+    private async Task<Group?> GroupFor(Guid? groupId, CancellationToken ct)
     {
-        var currentUser = userContext.User;
-
         if (groupId is null)
-        {
-            return await dbContext.Entry(currentUser).Reference(u => u.PersonalGroup).Query()
-                       .FirstOrDefaultAsync(ct)
-                   ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-        }
+            return null;
+
+        var currentUser = userContext.User;
 
         return await dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
                    .FirstOrDefaultAsync(@group => @group.Id == groupId, ct)
                ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
     }
 
-    private Task<User?> MemberOf(Group group, Guid userId, CancellationToken ct) =>
-        dbContext.Entry(group).Collection(g => g.Users).Query()
+    /// <summary>
+    /// The member of <paramref name="group"/> with that id, or -- when there is no group --
+    /// the caller themselves, since a personal expense is one only they can have paid.
+    /// </summary>
+    private Task<User?> MemberOf(Group? group, Guid userId, CancellationToken ct)
+    {
+        if (group is null)
+        {
+            var currentUser = userContext.User;
+            return Task.FromResult(userId == currentUser.Id ? currentUser : null);
+        }
+
+        return dbContext.Entry(group).Collection(g => g.Users).Query()
             .FirstOrDefaultAsync(user => user.Id == userId, ct)!;
+    }
 
     /// <summary>
     /// The category, checked to belong to the same group. A category from another group
     /// would file the expense under a label its members cannot see.
     /// </summary>
-    private async Task<Category?> CategoryFor(Group group, Guid? categoryId, CancellationToken ct)
+    private async Task<Category?> CategoryFor(Group? group, Guid? categoryId, CancellationToken ct)
     {
         if (categoryId is null)
             return null;
+
+        // Categories belong to groups, so an expense in no group can be filed under none.
+        if (group is null)
+            throw new NotFoundException(ErrorCodes.CategoryNotFound, "Category not found.");
 
         return await dbContext.Set<Category>()
                    .FirstOrDefaultAsync(category =>

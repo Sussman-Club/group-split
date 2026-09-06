@@ -21,9 +21,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             new CreateGroupRequest { Name = "Trip" }, TestContext.Current.CancellationToken);
 
         var other = await CreateNewUser();
-        await groupService.AddGroupMembers(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]),
-            TestContext.Current.CancellationToken);
+        await JoinGroup(group.Id, other);
 
         return (group.Id, self, other.Id);
     }

@@ -18,20 +18,23 @@ document at build time, so a new endpoint reaches the UI as a typed method.
 
 | | |
 |---|---|
-| API endpoints | 18, across groups, rules, transactions, users |
-| Tests | 289 methods; ~58% line coverage on hand-written code |
-| UI | 4 pages, 12 dialogs; every write refreshes every page state |
-| Absent | currency, pagination, invitations, per-expense splits, bank data |
+| API endpoints | 30, across groups, invitations, categories, split rules, transactions, users |
+| Tests | 451 methods; ~74% line coverage on hand-written code |
+| UI | 5 pages, 11 dialogs; one command layer per aggregate behind every write |
+| Absent | bank data |
 
-What works end to end today: create a group, add members by email, define a split rule
-per category (personal, percent, or shares), record expenses against a rule, see
-per-member net balances and a minimised list of who pays whom, settle a debt as the
-creditor, delete an account once settled. The seeder fills two demo groups.
+What works end to end today: create a group and invite people to it by email, whether or
+not they have an account yet; define split rules and point categories at them; record an
+expense against a category or state its shares yourself, in a group or just for yourself;
+see per-member net balances, a minimised list of who pays whom and the group's whole
+history; settle up from either side; leave a group or archive it; see where you stand
+across every group at once; delete an account once settled. The seeder fills two demo
+groups.
 
-The gap is not polish. It is that the domain was shaped around one question -- *how is
-this category split?* -- and a tracker with imported bank transactions asks different
-ones: *whose money was this, which group does it belong to, and how should this one
-expense be shared?*
+The gap left is bank data. The domain was shaped around one question -- *how is this
+category split?* -- and a tracker with imported bank transactions asks different ones:
+*whose money was this, which group does it belong to, and how should this one expense be
+shared?* Phases 1 and 2 answered those; phase 3 brings the transactions in.
 
 ## What is missing
 
@@ -43,30 +46,43 @@ benefits from.
 | Gap | Today | Needed | Priority |
 |---|---|---|---|
 | ~~Per-expense split~~ **Done** | A split was a `Rule`; every transaction pointed at a rule version. "Split this dinner between three of the five of us" meant creating a rule first. | Each transaction carries its own split, stored as rows. Rules are templates a category may point at, pre-filling the division; an expense may state its own instead, and the dialogs offer both. | Done |
-| Category separate from split | `Rule.Category` is both the label and the split. The expense dialog's "Category" select is actually a rule picker; a group with no rule cannot record anything. | Category is a label on the transaction (Plaid supplies one) that may *default to* a split rule; the split itself is chosen per expense. See [Category and split](#category-and-split). | High, Plaid |
+| ~~Category separate from split~~ **Done** | `Rule.Category` was both the label and the split. | `Category` is a label that may point at a `SplitRule`; the split is chosen per expense. See [Category and split](#category-and-split). | Done |
 | Currency | `decimal(18,2)` with no currency; UI hard-codes `$`. | `Currency` on the transaction, a default on the group, Plaid's `iso_currency_code` mapped straight in. | High, Plaid |
-| Group on the transaction | Group is reached through `RuleVersion -> Rule -> Group`. `CreateTransactionRequest.GroupId` exists only to disambiguate "personal" from "no rule". | `GroupId` (nullable) on the transaction. Null means personal. | High, Plaid |
+| ~~Group on the transaction~~ **Done** | Group was reached through `RuleVersion -> Rule -> Group`. | `GroupId` on the transaction, nullable, and null means personal -- written as null since phase 2 rather than pointing at a hidden group. | Done |
 | External identity and source | Nothing distinguishes a typed expense from an imported one. | A provider-neutral `BankTransaction` staging table holding the imported row (external id, merchant, pending state, account) and a nullable link from `Transaction` to it. The provider stays behind an interface. | High, Plaid |
-| Settlement as its own thing | Two mirrored `Transaction` rows (`+A` and `-A`) under a system rule. They show up as expenses everywhere. | A `Transfer` leaf of the `Transaction` hierarchy: one row, payer = from, one split to the recipient for the full amount. Balances need no special case; expense surfaces query `Set<Expense>()` and never see it. See [Settlements as transfers](#settlements-as-transfers). | High |
+| ~~Settlement as its own thing~~ **Done** | Two mirrored `Transaction` rows (`+A` and `-A`) under a system rule, showing up as expenses everywhere. | A `Transfer` leaf: one row, one split to the recipient. Either member can record one, and the group's Activity tab is where they show. See [Settlements as transfers](#settlements-as-transfers). | Done |
 | ~~Pagination and server filtering~~ **Done for expenses** | Every list was fetched whole, and the grid searched the rows it had been handed. | Offset paging, sorting and filtering on both expense listings, plus a summary endpoint for the figures beside a page. See [Listing contract](#listing-contract). The remaining lists are bounded by group size. | Done |
-| Membership as a record | Implicit many-to-many. `AddGroupMembers` silently drops any email that is not already an account. | `GroupMembership` with status (invited, active, left), an invite-by-email flow and "leave group". The join is now explicit as `GroupMembership`, which is what per-member archiving hangs on; status and invitations are what remain. | Medium |
-| Your share, not just what you paid | `GET /transactions` returns rows where `User == you`. Nothing lists what you owe on others' expenses, nothing totals your position across groups. | A cross-group balance endpoint and a "your share" view; this is the tracker half of the product. | Medium |
+| ~~Membership as a record~~ **Done** | Implicit many-to-many; `AddGroupMembers` silently dropped any email that was not already an account. | `GroupMembership` carries `ArchivedAt` and `JoinedAt`; invitations are a `GroupInvitation` table, since an invited address has no user id to key a membership on. Invite, withdraw, accept, decline and leave are all endpoints. | Done |
+| Your share, not just what you paid | `GET /transactions` returns rows where `User == you`. `GET /users/me/position` now totals the position across groups and the home page leads with it. What is still missing is the listing: what you *owe* on other people's expenses, row by row. | A "your share" listing over `TransactionSplit`, beside the one that lists what you paid. | Medium |
 | Recurring, budgets, receipts | Absent. | Later. Budgets by category become natural once categories are labels. | Later |
 
 ### Behaviour that reads as bugs today
 
-- **Settlements count as expenses.** The `-A` settlement row lands in the Expenses grid
-  as a negative "Settlement" paid by you, and in the Home and Expenses totals ("You
-  paid", "This month"). Group pages list both halves.
-- **The personal group is a group.** `GroupsOf(user)` includes it, so "Personal · 1" is
-  a chip in the switcher and a card on Home.
-- **Only the creditor can settle.** The debtor has no way to record "I paid you back".
+- ~~**Settlements count as expenses.**~~ **Fixed in phase 1.** A settlement is a
+  `Transfer`, and every expense surface reads `Set<Expense>()`, so they are not in the
+  lists or the totals rather than filtered out of them. Phase 2 gave them a listing that
+  *does* show them -- the group's Activity tab -- because a balance moving with nothing to
+  explain it is its own kind of wrong.
+- ~~**The personal group is a group.**~~ **Fixed in phase 2.** A personal expense has
+  `GroupId is null`, the hidden group is deleted, and personal is a filter on the expenses
+  page. Nothing needs hiding because there is nothing there.
+- ~~**Only the creditor can settle.**~~ **Fixed in phase 2.** `SettleRequest.Direction`
+  says which way the money went, and the group page offers "They paid" under *owed to you*
+  and "I paid" under *you owe*. Stated rather than read off the balance, which would get
+  the debtor's case exactly backwards.
+- ~~**Adding a member silently drops an unknown email.**~~ **Fixed in phase 2.** Inviting
+  is `POST /groups/{id}/invitations`, and an address with no account behind it is a
+  standing invitation that is waiting when they sign up.
 - **Even split is non-deterministic.** `RuleEditorForm.SplitPercentEvenly` and
-  `ConvertSharesToPercentages` hand the rounding remainder to a random member.
-- **Mixed clocks.** `DateTime.Now` in `Settle` and `DetachMember`; `UtcNow` everywhere
-  else.
-- **Re-adding a member.** `group.Users.Add(existing)` is not guarded; worth a test -- it
-  likely surfaces as a 500 on the join table's key.
+  `ConvertSharesToPercentages` hand the rounding remainder to a random member. Only the
+  rule editor's pre-fill is affected -- the division that is actually stored has been one
+  function since phase 1 -- so this is now a cosmetic wobble in a form rather than money
+  going to the wrong person.
+- **Mixed clocks.** `DateTime.Now` in `RuleEditorForm`; `UtcNow` everywhere the server
+  writes a time. `Settle` and `DetachMember` are on `UtcNow` as of phase 1.
+- ~~**Re-adding a member.**~~ **Fixed in phase 2.** Joining goes through an invitation,
+  which skips an address already in the group; `Accept` is a no-op for somebody already a
+  member.
 
 ## What is too complex
 
@@ -506,11 +522,34 @@ the row-by-row migration and the decisions the roadmap left open are in
 
 ### Phase 2 -- The product surface (~2 weeks)
 
-- Two-step expense dialog with custom split and preview.
-- `/groups/{id}` with tabs; settle from both sides; activity list.
-- Invitations and pending members; leave and archive.
-- Home net position; Expenses views; personal as a filter.
-- One command layer per aggregate for dialogs.
+**Done.**
+
+- ~~Two-step expense dialog with custom split and preview.~~ **Done.** Step one is what the
+  expense is; step two is how it is carried, and it opens on the division that is actually
+  going to be stored. The preview is `POST /transactions/preview`, which runs the same
+  splitter the save runs -- the dialog used to divide evenly itself, and a preview that
+  disagrees with the save by a cent is worse than no preview.
+- ~~`/groups/{id}` with tabs; settle from both sides; activity list.~~ **Done.** A group has
+  its own page with Overview, Expenses, Activity and Members, and the section is in the URL
+  so a group's members page is somewhere you can be sent to. `/groups` is the list it opens
+  from; the switcher is gone. Activity is `GET /groups/{id}/activity`, the one listing that
+  shows transfers.
+- ~~Invitations and pending members; leave and archive.~~ **Done.** `GroupInvitation` is a
+  table of its own rather than a status on `GroupMembership`: a membership is keyed on
+  (group, user), and the whole point is the address with no account behind it yet. Leaving
+  is `DELETE /groups/{id}/members/me`, blocked by an unsettled balance like being removed
+  is, and refused outright for the last member -- archiving is what they want. Archiving
+  landed in phase 0.
+- ~~Home net position; Expenses views; personal as a filter.~~ **Done.**
+  `GET /users/me/position` answers the question the app could not: where somebody stands
+  across every group. It keeps the two directions apart rather than netting them, because
+  owed 40 in one group and owing 25 in another is not "owed 15" to anybody. Personal is a
+  filter on the expenses page, and the hidden group behind it is deleted.
+- ~~One command layer per aggregate for dialogs.~~ **Done.** `IGroupCommands` and
+  `ITransactionCommands` own the call, the message and the announcement; page states are
+  readers that delegate their writes, and dialogs use the same commands rather than the
+  generated clients. Categories and split rules still write through their dialogs -- see
+  the issues on the repo.
 
 The app is a complete expense-sharing product without bank data.
 

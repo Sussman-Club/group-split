@@ -110,9 +110,16 @@ public class ProblemResponseTest : IAsyncLifetime
 
         var groupId = await CreateGroup("Ski trip");
 
-        var added = await Client.PostAsJsonAsync($"/groups/{groupId}/members",
+        // Two calls, because joining is now something the invitee agrees to: the group asks,
+        // and they accept. There is no route left that puts somebody in a group without it.
+        var invited = await Client.PostAsJsonAsync($"/groups/{groupId}/invitations",
             new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Json, Ct);
-        added.EnsureSuccessStatusCode();
+        invited.EnsureSuccessStatusCode();
+
+        var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
+
+        var accepted = await otherClient.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        accepted.EnsureSuccessStatusCode();
 
         var rule = await CreateSplitRule(groupId, "Lift passes", new PercentSplitRuleDto
         {
