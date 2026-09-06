@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
@@ -112,8 +113,8 @@ public sealed class GroupCommands(
 
             snackbar.Add(
                 request.Direction is SettlementDirection.YouPaidThem
-                    ? $"Recorded: you paid {otherName} {request.Amount:C}."
-                    : $"Recorded: {otherName} paid you {request.Amount:C}.",
+                    ? $"Recorded: you paid {otherName} {request.Amount.ToMoney()}."
+                    : $"Recorded: {otherName} paid you {request.Amount.ToMoney()}.",
                 Severity.Success);
 
             // A transfer moves both balances, and it is a transaction, so it is the

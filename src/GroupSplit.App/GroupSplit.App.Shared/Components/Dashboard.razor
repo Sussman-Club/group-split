@@ -1,3 +1,4 @@
+@using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
@@ -45,7 +46,7 @@
         <div class="gs-hero-sub">
             @if (OwedToYou > 0 && YouOwe > 0)
             {
-                @($"{OwedToYou.ToString("C")} owed to you, {YouOwe.ToString("C")} owed by you. They do not cancel out -- they are different people.")
+                @($"{OwedToYou.ToMoney()} owed to you, {YouOwe.ToMoney()} owed by you. They do not cancel out -- they are different people.")
             }
             else if (OwedToYou > 0)
             {

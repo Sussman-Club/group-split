@@ -142,11 +142,13 @@
         if (request is null)
             return;
 
-        await GroupsService.CreateGroupAsync(request);
+        if (!await GroupsService.CreateGroupAsync(request))
+            return;
 
-        // Straight into the group that was just made: there is nothing on this card yet,
-        // and the first thing anybody does with a new group is invite somebody to it.
-        if (GroupsService.SelectedGroup is { } created && created.Name == request.Name)
+        // Straight into the group that was just made -- the state service selected it, so
+        // this does not have to guess which of the list it was. There is nothing on its
+        // card yet, and the first thing anybody does with a new group is invite somebody.
+        if (GroupsService.SelectedGroup is { } created)
             Nav.NavigateTo($"/groups/{created.Id}");
     }
 

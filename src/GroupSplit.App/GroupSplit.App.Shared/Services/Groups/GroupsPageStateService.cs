@@ -29,12 +29,6 @@ public class GroupsPageStateService : IGroupsPageStateService
     public bool IsLoading { get; private set; }
     private Task _selectedLoad = Task.CompletedTask;
 
-    /// <summary>
-    /// The group to land on after the next reload of the list, when it is not the one
-    /// selected now: the group that was just created.
-    /// </summary>
-    private Guid? _selectOnReload;
-
     public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient,
         IUsersClient usersClient, LoadGuard guard, ApiErrorPresenter errors,
         DataChangeNotifier changes, IGroupCommands groupCommands,
@@ -214,10 +208,9 @@ public class GroupsPageStateService : IGroupsPageStateService
             .GetGroupsAsAsyncEnumerable(cancellationToken: cancellationToken)
             .ToListAsync(cancellationToken);
 
-        // Stay on the group that was selected -- by id, since the list is new objects --
-        // unless a write asked for another one. The setter re-reads the group's figures.
-        var wanted = _selectOnReload ?? SelectedGroup?.Id;
-        _selectOnReload = null;
+        // Stay on the group that was selected -- by id, since the list is new objects.
+        // The setter re-reads the group's figures.
+        var wanted = SelectedGroup?.Id;
 
         SelectedGroup = Groups.FirstOrDefault(g => g.Id == wanted) ??
                         Groups.FirstOrDefault();
@@ -244,19 +237,17 @@ public class GroupsPageStateService : IGroupsPageStateService
     public async Task<bool> CreateGroupAsync(CreateGroupRequest request,
         CancellationToken cancellationToken = default)
     {
-        // The id is wanted before the announcement lands, so that the reload the command
-        // triggers selects the group that was just made rather than the one selected
-        // before. That is this class's business and not the command's, which is why the
-        // command hands the group back rather than doing anything with it.
         var created = await _groupCommands.CreateAsync(request, cancellationToken);
 
         if (created is null) return false;
 
-        _selectOnReload = created.Id;
-
-        // The command has already announced, and that reload chose a group without knowing
-        // about this one. One more, now that it does.
-        await _changes.NotifyGroupsChangedAsync();
+        // Landing on the new group is this class's business rather than the command's,
+        // which is why the command hands the group back instead of doing anything with it.
+        // The announcement it already made reloaded the list, so the group is in hand and
+        // selecting it costs nothing -- a second notify here would re-read the whole list
+        // to learn what this line already knows.
+        if (Groups.FirstOrDefault(group => group.Id == created.Id) is { } landed)
+            SelectedGroup = landed;
 
         return true;
     }
