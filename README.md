@@ -22,7 +22,9 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 
 | Project | Purpose |
 | --- | --- |
-| `src/GroupSplit.API` | ASP.NET Core API for groups, invitations, categories, split rules, transactions, and users |
+| `src/GroupSplit.API` | ASP.NET Core API for groups, invitations, categories, split rules, transactions, users, and bank data |
+| `src/GroupSplit.Jobs` | The background-job seam: `IJobQueue`, `IJobHandler<T>`, `IJobDispatcher`, and nothing that runs them |
+| `src/GroupSplit.Jobs.InProcess` | The default way to run them: an in-memory queue, a pump and a scheduler inside the API. A queue service and a function would be a sibling project, and no handler would change |
 | `src/GroupSplit.Shared` | DTOs and validation shared between the API and the clients |
 
 ### Aspire — orchestration

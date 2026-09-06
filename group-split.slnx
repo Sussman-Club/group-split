@@ -1,9 +1,12 @@
 <Solution>
   <!-- Folders group projects by the role they play. They are virtual: on disk every
        project sits flat under src/ or tests/, at the paths shown below. -->
-  <!-- The HTTP API, and the DTOs and validation it shares with the clients. -->
+  <!-- The HTTP API, the DTOs and validation it shares with the clients, and the
+       background-job seam whose in-process implementation the API runs today. -->
   <Folder Name="/src/">
     <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
+    <Project Path="src/GroupSplit.Jobs/GroupSplit.Jobs.csproj" />
+    <Project Path="src/GroupSplit.Jobs.InProcess/GroupSplit.Jobs.InProcess.csproj" />
     <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
   </Folder>
   <!-- Aspire: the app model that runs everything locally, the seeding worker it
