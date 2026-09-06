@@ -1,7 +1,8 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Splitting;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace GroupSplit.Data.Splitting.Handlers;
+namespace GroupSplit.API.Services.SplitRuleHandlers;
 
 /// <summary>
 /// Finds the handler for whatever rule it is given, and asks it.

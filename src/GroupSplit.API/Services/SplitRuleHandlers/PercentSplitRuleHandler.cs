@@ -1,6 +1,7 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Splitting;
 
-namespace GroupSplit.Data.Splitting.Handlers;
+namespace GroupSplit.API.Services.SplitRuleHandlers;
 
 /// <summary>
 /// In proportion to stated percentages.

@@ -375,11 +375,16 @@ switch, in the API layer, needing an edit every time a kind is added. The patter
 and pointed at `SplitRule` instead: `ISplitRuleHandler<TRule>`, a dispatcher that makes
 the generic interface from the rule's own type, and one handler per kind.
 
-What changes is where it lives and what it costs. The split-rule handlers sit in
-`GroupSplit.Data`, because the seeder divides expenses too and has its own container --
-seed data divided differently from the way the app divides would hand every developer
-balances no sequence of user actions could produce. And they are singletons: dividing
-needs the rule, the amount, the payer and the membership, and nothing else. The
+The split-rule handlers sit in `GroupSplit.API/Services/SplitRuleHandlers`, beside the
+rule-version handlers they are modelled on, and register from `Extensions` beside theirs.
+They started in `GroupSplit.Data` on the theory that the seeder needed them and could not
+reach the API project; the seeder references `GroupSplit.API` directly, so that was simply
+untrue and the split bought nothing. The arithmetic itself -- `SplitCalculator` and the
+two value types -- does stay in `GroupSplit.Data`, because `ExpenseSplitting` uses it
+there and the seeder does divide through that.
+
+What differs from the rule-version handlers is lifetime: these are singletons, because
+dividing needs the rule, the amount, the payer and the membership and nothing else. The
 rule-version handlers are scoped because theirs genuinely query the database.
 
 That last row is worth reading twice. Four error codes and

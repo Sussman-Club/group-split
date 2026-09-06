@@ -1,6 +1,7 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Splitting;
 
-namespace GroupSplit.Data.Splitting.Handlers;
+namespace GroupSplit.API.Services.SplitRuleHandlers;
 
 /// <summary>
 /// The part every proportional rule shares: hand the weights to the division, and refuse a

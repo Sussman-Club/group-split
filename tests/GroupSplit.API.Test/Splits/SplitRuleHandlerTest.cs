@@ -1,6 +1,7 @@
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.Splitting;
-using GroupSplit.Data.Splitting.Handlers;
+using GroupSplit.API.Extensions;
+using GroupSplit.API.Services.SplitRuleHandlers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.API.Test.Splits;

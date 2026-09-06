@@ -1,20 +1,22 @@
+using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace GroupSplit.Data.Splitting.Handlers;
+namespace GroupSplit.API.Extensions;
 
 /// <summary>
 /// Registers the split-rule handlers and the dispatcher that finds them.
 /// </summary>
 /// <remarks>
-/// In the data project rather than the API's, because the seeder divides expenses too and
-/// has its own container. Seed data that divided differently from the way the app divides
-/// would hand every developer balances no sequence of user actions could produce.
+/// Beside <see cref="RuleVersionServiceExtensions"/>, because they are the same thing for
+/// the same reason and there is no sense in one being somewhere else. The seeder reaches
+/// them here as it reaches everything else in this project.
 /// <para>
-/// Singletons: dividing a rule needs the rule, the amount, the payer and the membership,
-/// and nothing else -- no <c>DbContext</c>, no request. The rule-version handlers are
-/// scoped because theirs genuinely do query the database.
+/// Singletons, unlike the rule-version handlers: dividing a rule needs the rule, the
+/// amount, the payer and the membership, and nothing else -- no <c>DbContext</c>, no
+/// request. The rule-version handlers are scoped because theirs genuinely query the
+/// database.
 /// </para>
 /// </remarks>
 public static class SplitRuleServiceExtensions
