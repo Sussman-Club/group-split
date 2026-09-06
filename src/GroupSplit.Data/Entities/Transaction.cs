@@ -7,7 +7,7 @@ namespace GroupSplit.Data.Entities;
 /// <remarks>
 /// One table, one level of inheritance, shared columns here and leaf-only columns on the
 /// leaves -- where they are nullable in the table by construction, which is expected
-/// rather than a smell. What went wrong with <see cref="RuleVersion"/> was TPT: four
+/// rather than a smell. What went wrong with <c>RuleVersion</c> was TPT: four
 /// tables and a join per read, over a three-level chain. This is EF's default mapping and
 /// a single table.
 /// <para>

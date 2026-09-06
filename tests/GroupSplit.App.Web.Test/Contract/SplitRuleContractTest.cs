@@ -5,7 +5,7 @@ using GroupSplit.Shared;
 namespace GroupSplit.App.Web.Test.Contract;
 
 /// <summary>
-/// <see cref="RuleVersionDto"/> is the one polymorphic type that crosses the wire, and the
+/// <see cref="SplitRuleDto"/> is the one polymorphic type that crosses the wire, and the
 /// two ends do not agree on serializer settings: the API is a minimal API, so it uses
 /// <see cref="JsonSerializerDefaults.Web"/>, while the generated client is handed
 /// <c>GroupSplitSerializer.Transform(new JsonSerializerOptions())</c> — plain defaults with
@@ -18,7 +18,7 @@ namespace GroupSplit.App.Web.Test.Contract;
 /// transit does not fail loudly, it comes back as the wrong kind of split.
 /// </para>
 /// </summary>
-public class RuleVersionContractTest
+public class SplitRuleContractTest
 {
     /// <summary>What the API writes with and reads with.</summary>
     private static readonly JsonSerializerOptions Api = new(JsonSerializerDefaults.Web);
@@ -30,19 +30,20 @@ public class RuleVersionContractTest
     private static readonly Guid Alice = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Bob = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
-    public static TheoryData<string, RuleVersionDto> EveryRuleType() => new()
+    public static TheoryData<string, SplitRuleDto> EveryRuleKind() => new()
     {
-        { "personal", new PersonalRuleVersionDto() },
+        { "even", new EvenSplitRuleDto([Alice, Bob]) },
+        { "payer", new PayerSplitRuleDto() },
         {
             "percent",
-            new PercentRuleVersionDto
+            new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [Alice] = 40m, [Bob] = 60m }
             }
         },
         {
             "shares",
-            new SharesRuleVersionDto
+            new SharesSplitRuleDto
             {
                 Shares = new Dictionary<Guid, int> { [Alice] = 2, [Bob] = 3 }
             }
@@ -50,23 +51,25 @@ public class RuleVersionContractTest
     };
 
     /// <summary>
-    /// Compares by content. These records hold dictionaries, and a record's generated
+    /// Compares by content. These records hold collections, and a record's generated
     /// equality compares those by reference, so two identical splits are never "equal".
     /// </summary>
-    private static void AssertSameSplit(RuleVersionDto expected, RuleVersionDto actual)
+    private static void AssertSameSplit(SplitRuleDto expected, SplitRuleDto actual)
     {
         Assert.Equal(expected.GetType(), actual.GetType());
 
         switch (expected)
         {
-            case PercentRuleVersionDto percent:
-                Assert.Equal(percent.Percentages,
-                    ((PercentRuleVersionDto)actual).Percentages);
+            case EvenSplitRuleDto even:
+                Assert.Equal(even.Among, ((EvenSplitRuleDto)actual).Among);
                 break;
-            case SharesRuleVersionDto shares:
-                Assert.Equal(shares.Shares, ((SharesRuleVersionDto)actual).Shares);
+            case PercentSplitRuleDto percent:
+                Assert.Equal(percent.Percentages, ((PercentSplitRuleDto)actual).Percentages);
                 break;
-            case PersonalRuleVersionDto:
+            case SharesSplitRuleDto shares:
+                Assert.Equal(shares.Shares, ((SharesSplitRuleDto)actual).Shares);
+                break;
+            case PayerSplitRuleDto:
                 break;
             default:
                 Assert.Fail($"No comparison written for {expected.GetType().Name}.");
@@ -79,27 +82,27 @@ public class RuleVersionContractTest
     /// the client cannot resolve is where a rule quietly becomes the wrong kind of split.
     /// </summary>
     [Theory]
-    [MemberData(nameof(EveryRuleType))]
-    public void What_the_api_writes_the_client_can_read(string _, RuleVersionDto version)
+    [MemberData(nameof(EveryRuleKind))]
+    public void What_the_api_writes_the_client_can_read(string _, SplitRuleDto definition)
     {
-        var json = JsonSerializer.Serialize(version, Api);
+        var json = JsonSerializer.Serialize(definition, Api);
 
-        var read = JsonSerializer.Deserialize<RuleVersionDto>(json, Client);
+        var read = JsonSerializer.Deserialize<SplitRuleDto>(json, Client);
 
         Assert.NotNull(read);
-        AssertSameSplit(version, read);
+        AssertSameSplit(definition, read);
     }
 
     [Theory]
-    [MemberData(nameof(EveryRuleType))]
-    public void What_the_client_writes_the_api_can_read(string _, RuleVersionDto version)
+    [MemberData(nameof(EveryRuleKind))]
+    public void What_the_client_writes_the_api_can_read(string _, SplitRuleDto definition)
     {
-        var json = JsonSerializer.Serialize(version, Client);
+        var json = JsonSerializer.Serialize(definition, Client);
 
-        var read = JsonSerializer.Deserialize<RuleVersionDto>(json, Api);
+        var read = JsonSerializer.Deserialize<SplitRuleDto>(json, Api);
 
         Assert.NotNull(read);
-        AssertSameSplit(version, read);
+        AssertSameSplit(definition, read);
     }
 
     /// <summary>
@@ -108,11 +111,11 @@ public class RuleVersionContractTest
     /// rather than derived from the attributes that declare them.
     /// </summary>
     [Theory]
-    [MemberData(nameof(EveryRuleType))]
+    [MemberData(nameof(EveryRuleKind))]
     public void The_discriminator_is_the_name_the_wire_expects(
-        string discriminator, RuleVersionDto version)
+        string discriminator, SplitRuleDto definition)
     {
-        using var written = JsonDocument.Parse(JsonSerializer.Serialize(version, Api));
+        using var written = JsonDocument.Parse(JsonSerializer.Serialize(definition, Api));
 
         Assert.True(written.RootElement.TryGetProperty("$type", out var type),
             "the subtype has to travel with the payload or it cannot be reconstructed");
@@ -120,54 +123,71 @@ public class RuleVersionContractTest
     }
 
     /// <summary>
-    /// A rule version never travels alone — it is a property of the request that creates
-    /// one, and polymorphism nested inside another object is resolved separately from
+    /// A definition never travels alone — it is a property of the request that creates a
+    /// rule, and polymorphism nested inside another object is resolved separately from
     /// polymorphism at the root.
     /// </summary>
     [Fact]
-    public void A_rule_version_nested_in_a_create_request_survives_the_round_trip()
+    public void A_definition_nested_in_a_create_request_survives_the_round_trip()
     {
-        var request = new CreateRuleRequest
+        var request = new CreateSplitRuleRequest
         {
             GroupId = Guid.NewGuid(),
-            Category = "Groceries",
-            Version = new PercentRuleVersionDto
+            Name = "Groceries",
+            Definition = new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [Alice] = 100m }
             }
         };
 
-        var read = JsonSerializer.Deserialize<CreateRuleRequest>(
+        var read = JsonSerializer.Deserialize<CreateSplitRuleRequest>(
             JsonSerializer.Serialize(request, Client), Api);
 
         Assert.NotNull(read);
-        var percent = Assert.IsType<PercentRuleVersionDto>(read.Version);
+        var percent = Assert.IsType<PercentSplitRuleDto>(read.Definition);
         Assert.Equal(100m, percent.Percentages[Alice]);
     }
 
     /// <summary>The same nesting on the way back, in the response the details route returns.</summary>
     [Fact]
-    public void A_rule_version_nested_in_a_details_response_survives_the_round_trip()
+    public void A_definition_nested_in_a_details_response_survives_the_round_trip()
     {
-        var response = new RuleDetailsResponse
+        var response = new SplitRuleDetailsResponse
         {
-            RuleId = Guid.NewGuid(),
-            RuleVersionId = Guid.NewGuid(),
-            Category = "Rent",
-            Version = new SharesRuleVersionDto
+            Id = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
+            Name = "Rent",
+            Definition = new SharesSplitRuleDto
             {
                 Shares = new Dictionary<Guid, int> { [Alice] = 1, [Bob] = 2 }
             }
         };
 
-        var read = JsonSerializer.Deserialize<RuleDetailsResponse>(
+        var read = JsonSerializer.Deserialize<SplitRuleDetailsResponse>(
             JsonSerializer.Serialize(response, Api), Client);
 
         Assert.NotNull(read);
-        Assert.Equal("Rent", read.Category);
-        var shares = Assert.IsType<SharesRuleVersionDto>(read.Version);
+        Assert.Equal("Rent", read.Name);
+        var shares = Assert.IsType<SharesSplitRuleDto>(read.Definition);
         Assert.Equal(1, shares.Shares[Alice]);
         Assert.Equal(2, shares.Shares[Bob]);
+    }
+
+    /// <summary>
+    /// An even rule that names nobody is the useful default -- it divides between whoever
+    /// is in the group -- and it has to come back as exactly that, not as null or as a
+    /// missing property the client trips over.
+    /// </summary>
+    [Fact]
+    public void An_even_rule_naming_nobody_round_trips_as_an_empty_list()
+    {
+        SplitRuleDto everyone = new EvenSplitRuleDto();
+
+        var read = Assert.IsType<EvenSplitRuleDto>(
+            JsonSerializer.Deserialize<SplitRuleDto>(JsonSerializer.Serialize(everyone, Api), Client));
+
+        Assert.NotNull(read.Among);
+        Assert.Empty(read.Among);
     }
 
     /// <summary>
@@ -178,14 +198,14 @@ public class RuleVersionContractTest
     [Fact]
     public void The_user_ids_keying_a_split_are_written_verbatim()
     {
-        var version = new PercentRuleVersionDto
+        var definition = new PercentSplitRuleDto
         {
             Percentages = new Dictionary<Guid, decimal> { [Alice] = 100m }
         };
 
         foreach (var options in new[] { Api, Client })
         {
-            using var written = JsonDocument.Parse(JsonSerializer.Serialize(version, options));
+            using var written = JsonDocument.Parse(JsonSerializer.Serialize(definition, options));
 
             var percentages = written.RootElement.GetProperty("percentages");
 
@@ -202,14 +222,14 @@ public class RuleVersionContractTest
     public void A_percentage_keeps_its_precision_across_the_wire()
     {
         // Declared as the base type deliberately -- see the discriminator test below.
-        RuleVersionDto version = new PercentRuleVersionDto
+        SplitRuleDto definition = new PercentSplitRuleDto
         {
             Percentages = new Dictionary<Guid, decimal> { [Alice] = 33.33m, [Bob] = 66.67m }
         };
 
-        var read = Assert.IsType<PercentRuleVersionDto>(
-            JsonSerializer.Deserialize<RuleVersionDto>(
-                JsonSerializer.Serialize(version, Api), Client));
+        var read = Assert.IsType<PercentSplitRuleDto>(
+            JsonSerializer.Deserialize<SplitRuleDto>(
+                JsonSerializer.Serialize(definition, Api), Client));
 
         Assert.Equal(33.33m, read.Percentages[Alice]);
         Assert.Equal(66.67m, read.Percentages[Bob]);
@@ -220,12 +240,12 @@ public class RuleVersionContractTest
     /// which would be a rule with no split at all.
     /// </summary>
     [Fact]
-    public void An_unknown_rule_type_is_rejected_rather_than_silently_dropped()
+    public void An_unknown_rule_kind_is_rejected_rather_than_silently_dropped()
     {
-        const string fromANewerApi = """{"$type":"weighted","weights":{}}""";
+        const string fromANewerApi = """{"$type":"fixed","amounts":{}}""";
 
         Assert.Throws<JsonException>(() =>
-            JsonSerializer.Deserialize<RuleVersionDto>(fromANewerApi, Client));
+            JsonSerializer.Deserialize<SplitRuleDto>(fromANewerApi, Client));
     }
 
     /// <summary>
@@ -233,23 +253,23 @@ public class RuleVersionContractTest
     /// resolving to whichever subtype happens to be listed first.
     /// </summary>
     [Fact]
-    public void A_rule_version_with_no_discriminator_is_rejected()
+    public void A_definition_with_no_discriminator_is_rejected()
     {
         Assert.Throws<NotSupportedException>(() =>
-            JsonSerializer.Deserialize<RuleVersionDto>("""{"percentages":{}}""", Client));
+            JsonSerializer.Deserialize<SplitRuleDto>("""{"percentages":{}}""", Client));
     }
 
     /// <summary>
-    /// The trap, and the reason every DTO that carries a rule version declares it as
-    /// <see cref="RuleVersionDto"/>. System.Text.Json writes the discriminator only when
-    /// the static type is the base: hand it a concrete subtype and the <c>$type</c> is
-    /// simply absent, and the other end then fails to reconstruct it. Nothing in C# marks
-    /// the difference, so it is pinned here.
+    /// The trap, and the reason every DTO that carries a definition declares it as
+    /// <see cref="SplitRuleDto"/>. System.Text.Json writes the discriminator only when the
+    /// static type is the base: hand it a concrete subtype and the <c>$type</c> is simply
+    /// absent, and the other end then fails to reconstruct it. Nothing in C# marks the
+    /// difference, so it is pinned here.
     /// </summary>
     [Fact]
     public void Serializing_through_the_concrete_type_loses_the_discriminator()
     {
-        var concrete = new PercentRuleVersionDto
+        var concrete = new PercentSplitRuleDto
         {
             Percentages = new Dictionary<Guid, decimal> { [Alice] = 100m }
         };
@@ -259,11 +279,11 @@ public class RuleVersionContractTest
 
         // Which is exactly what the reading end cannot cope with.
         Assert.Throws<NotSupportedException>(() =>
-            JsonSerializer.Deserialize<RuleVersionDto>(
+            JsonSerializer.Deserialize<SplitRuleDto>(
                 JsonSerializer.Serialize(concrete, Api), Client));
 
         // Through the base type it is there, and it round-trips.
-        RuleVersionDto asBase = concrete;
+        SplitRuleDto asBase = concrete;
         using var throughBase = JsonDocument.Parse(JsonSerializer.Serialize(asBase, Api));
         Assert.True(throughBase.RootElement.TryGetProperty("$type", out _));
     }

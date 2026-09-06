@@ -86,7 +86,7 @@ public class EndpointTest : IAsyncLifetime
     }
 
     /// <summary>
-    /// /rules answers only on an id, so it is asked for one. Routing rejects an
+    /// The collection routes answer a GET, so the sweep above covers them; a single
     /// unsupported verb before authentication runs, which would otherwise make this look
     /// like an open route.
     /// </summary>
@@ -95,7 +95,7 @@ public class EndpointTest : IAsyncLifetime
     {
         using var anonymous = _host.AnonymousClient();
 
-        var response = await anonymous.GetAsync($"/rules/{Guid.NewGuid()}",
+        var response = await anonymous.GetAsync($"/split-rules/{Guid.NewGuid()}",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -220,7 +220,8 @@ public class EndpointTest : IAsyncLifetime
         foreach (var route in new[]
                  {
                      $"/groups/{groupId}", $"/groups/{groupId}/members",
-                     $"/groups/{groupId}/rules", $"/groups/{groupId}/transactions",
+                     $"/categories?groupId={groupId}", $"/split-rules?groupId={groupId}",
+                     $"/groups/{groupId}/transactions",
                      $"/groups/{groupId}/transactions/summary"
                  })
         {
@@ -429,24 +430,37 @@ public class EndpointTest : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_rule_can_be_created_and_read_back()
+    public async Task A_category_and_the_split_rule_it_defaults_to_can_be_created_and_read_back()
     {
         var groupId = await CreateGroup();
 
-        var response = await Client.PostAsJsonAsync("/rules", new CreateRuleRequest
+        var rule = await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
         {
             GroupId = groupId,
-            Category = "Groceries",
-            Version = new PayerSplitRuleDto()
+            Name = "Household",
+            Definition = new PayerSplitRuleDto()
         }, Json, TestContext.Current.CancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        rule.EnsureSuccessStatusCode();
+
+        var ruleId = (await rule.Content.ReadFromJsonAsync<JsonElement>(
+            Json, TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
+
+        var category = await Client.PostAsJsonAsync("/categories", new CreateCategoryRequest
+        {
+            GroupId = groupId,
+            Name = "Groceries",
+            DefaultSplitRuleId = ruleId
+        }, Json, TestContext.Current.CancellationToken);
+
+        category.EnsureSuccessStatusCode();
 
         var listing = await Client.GetFromJsonAsync<JsonElement>(
-            $"/groups/{groupId}/rules", Json, TestContext.Current.CancellationToken);
+            $"/categories?groupId={groupId}", Json, TestContext.Current.CancellationToken);
 
-        Assert.Contains(listing.EnumerateArray(),
-            element => element.GetProperty("category").GetString() == "Groceries");
+        var groceries = Assert.Single(listing.EnumerateArray(),
+            element => element.GetProperty("name").GetString() == "Groceries");
+        Assert.Equal("Household", groceries.GetProperty("defaultSplitRuleName").GetString());
     }
 
     [Fact]

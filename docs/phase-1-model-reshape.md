@@ -380,8 +380,9 @@ rule-version handlers they are modelled on, and register from `Extensions` besid
 They started in `GroupSplit.Data` on the theory that the seeder needed them and could not
 reach the API project; the seeder references `GroupSplit.API` directly, so that was simply
 untrue and the split bought nothing. The arithmetic itself -- `SplitCalculator` and the
-two value types -- does stay in `GroupSplit.Data`, because `ExpenseSplitting` uses it
-there and the seeder does divide through that.
+two value types -- sits beside them in `Services` for the same reason. It stayed in
+`GroupSplit.Data` only as long as `ExpenseSplitting` divided there, and followed the
+handlers out once that was deleted with the old model.
 
 What differs from the rule-version handlers is lifetime: these are singletons, because
 dividing needs the rule, the amount, the payer and the membership and nothing else. The
@@ -398,10 +399,12 @@ means an even split. The failure disappears with the thing that caused it.
 Three things came out differently once the code was written, and this section is the
 record rather than a revision -- the plan above still reads as it was decided.
 
-**`SplitCalculator` lives in `GroupSplit.Data`, not the API.** The seeder needs the same
-division. Seed data divided even slightly differently from the way the app divides gives
-every developer a set of balances that no sequence of user actions could have produced,
-which is a worse bug than the duplication was.
+**`SplitCalculator` is shared with the seeder, and lives in the API.** The seeder needs
+the same division. Seed data divided even slightly differently from the way the app
+divides gives every developer a set of balances that no sequence of user actions could
+have produced, which is a worse bug than the duplication was. It was first placed in
+`GroupSplit.Data` so the seeder could reach it; the seeder references `GroupSplit.API`
+anyway, so it now sits in `GroupSplit.API/Services` with the handlers that call it.
 
 **`Expense` keeps its `RuleVersion` for now.** Steps 3 and 4 moved the *storage* -- splits
 are rows, balances are sums -- while the wire contract still speaks in
@@ -425,13 +428,25 @@ thirds that do not divide, an amount that truncates on every participant, a pers
 expense and a settlement pair, then compared member by member. Every balance came out
 identical to the cent, five rows became four, and no transaction's splits failed to sum.
 
+**The drop migration renames the column rather than replacing it, and reuses ids.**
+`RuleVersionId` becomes `CategoryId` in place. Each rule outside a personal group becomes a
+category carrying the rule's own id -- which is also the id the seed data names, so the
+seeder recognises what the migration made and does not write it twice -- and its latest
+proportional version becomes the split rule the category defaults to, under the version's
+id. Every expense's value is then re-pointed from the version to the category made from
+its rule. Personal rules become nothing: a personal expense is filed under no category,
+which is what the model means by personal. Reversing it is refused while any expense is
+filed under a category, because the versions it would point back at are gone.
+
 ## Order of work
 
 Each step builds and keeps the suite green. Test counts are the floor, not the target;
 the coverage gate in CI is a ratchet and does not move down.
 
-Steps 1 to 4 are done, in three commits -- the arithmetic, then the new tables, then the
-cut-over. Steps 5 to 7 are not.
+Steps 1 to 6 are done. Steps 1 to 4 took three commits -- the arithmetic, then the new
+tables, then the cut-over. Steps 5 and 6 landed together: deleting the old model is what
+made the categories the only model there was. Step 7 is partly done -- the dialogs speak
+categories and split rules -- and per-expense splits are not on the wire yet.
 
 1. **Entities and mapping, no behaviour.** New types, `AppDbContext` configuration,
    `SplitCalculator` and its unit tests. Nothing reads them yet. The old model still

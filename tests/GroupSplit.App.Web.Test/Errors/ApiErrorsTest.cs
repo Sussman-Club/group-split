@@ -101,13 +101,13 @@ public class ApiErrorsTest
     [Fact]
     public void An_undeclared_status_is_read_from_the_raw_body()
     {
-        var body = $$$"""{"status":422,"title":"x","code":"{{{ErrorCodes.RuleNotEditable}}}","traceId":"{{{TraceId}}}"}""";
+        var body = $$$"""{"status":422,"title":"x","code":"{{{ErrorCodes.SplitRuleInUse}}}","traceId":"{{{TraceId}}}"}""";
 
         var error = ApiErrors.Read(Untyped(422, body));
 
         Assert.Equal(ApiErrorKind.Refused, error.Kind);
-        Assert.Equal(ErrorCodes.RuleNotEditable, error.Code);
-        Assert.Equal(ErrorMessages.For(ErrorCodes.RuleNotEditable), error.Message);
+        Assert.Equal(ErrorCodes.SplitRuleInUse, error.Code);
+        Assert.Equal(ErrorMessages.For(ErrorCodes.SplitRuleInUse), error.Message);
         Assert.Equal(TraceId, error.TraceId);
     }
 

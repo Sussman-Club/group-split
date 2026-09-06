@@ -1,5 +1,5 @@
+using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
-using GroupSplit.Data.Splitting;
 using GroupSplit.Shared;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.SplitRuleHandlers;

@@ -1,5 +1,4 @@
 using GroupSplit.Data.Entities;
-using GroupSplit.Data.Splitting;
 
 namespace GroupSplit.API.Services.SplitRuleHandlers;
 

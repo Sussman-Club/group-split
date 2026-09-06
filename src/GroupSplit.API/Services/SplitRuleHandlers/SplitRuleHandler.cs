@@ -1,5 +1,4 @@
 using GroupSplit.Data.Entities;
-using GroupSplit.Data.Splitting;
 using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
 

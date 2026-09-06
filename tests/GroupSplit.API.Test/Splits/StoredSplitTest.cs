@@ -32,7 +32,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         return (group.Id, self, other.Id);
     }
 
-    private async Task<Guid> EvenRule(Guid groupId, Guid a, Guid b) =>
+    private async Task<Guid> EvenCategory(Guid groupId, Guid a, Guid b) =>
         await CreateCategory(groupId, "Split", new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [a] = 50m, [b] = 50m }
@@ -47,14 +47,15 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Creating_an_expense_stores_a_split_for_every_participant()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var ruleVersionId = await EvenRule(groupId, self, other);
+        var categoryId = await EvenCategory(groupId, self, other);
 
         var created = await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
             Name = "Hotel",
             Amount = 100.00m,
             DateTime = DateTimeOffset.UtcNow,
-            CategoryId = ruleVersionId
+            GroupId = groupId,
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 
         var splits = await SplitsOf(created.Id);
@@ -74,7 +75,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Editing_the_amount_replaces_the_splits_rather_than_adding_to_them()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var ruleVersionId = await EvenRule(groupId, self, other);
+        var categoryId = await EvenCategory(groupId, self, other);
         var transactions = GetService<ITransactionService>();
 
         var created = await transactions.Create(new CreateTransactionRequest
@@ -82,7 +83,8 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Name = "Hotel",
             Amount = 100.00m,
             DateTime = DateTimeOffset.UtcNow,
-            CategoryId = ruleVersionId
+            GroupId = groupId,
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 
         await transactions.Update(created.Id, new UpdateTransactionRequest
@@ -91,7 +93,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Amount = 50.00m,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = self,
-            CategoryId = ruleVersionId
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 
         var splits = await SplitsOf(created.Id);
@@ -157,7 +159,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_groups_balances_sum_to_zero()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var ruleVersionId = await EvenRule(groupId, self, other);
+        var categoryId = await EvenCategory(groupId, self, other);
         var transactions = GetService<ITransactionService>();
 
         foreach (var amount in new[] { 10.01m, 0.01m, 33.33m })
@@ -167,7 +169,8 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 Name = $"Item {amount}",
                 Amount = amount,
                 DateTime = DateTimeOffset.UtcNow,
-                CategoryId = ruleVersionId
+                GroupId = groupId,
+                CategoryId = categoryId
             }, TestContext.Current.CancellationToken);
         }
 

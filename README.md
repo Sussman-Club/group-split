@@ -21,7 +21,7 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 
 | Project | Purpose |
 | --- | --- |
-| `src/GroupSplit.API` | ASP.NET Core API for groups, transactions, rules, and users |
+| `src/GroupSplit.API` | ASP.NET Core API for groups, categories, split rules, transactions, and users |
 | `src/GroupSplit.Shared` | DTOs and validation shared between the API and the clients |
 
 ### Aspire — orchestration

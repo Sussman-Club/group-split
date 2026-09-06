@@ -11,7 +11,7 @@ namespace GroupSplit.App.Web.Test.Contract;
 /// The two ends of the error contract use different types and different serializer settings:
 /// the API writes the framework's <see cref="ApiProblemDetails"/> with web defaults, the
 /// generated client reads <see cref="ProblemDetails"/> with camel-case naming laid over plain
-/// defaults. Like <see cref="RuleVersionContractTest"/>, this pins the gap between them --
+/// defaults. Like <see cref="SplitRuleContractTest"/>, this pins the gap between them --
 /// and the extension members in particular, which a mistake on either side drops silently
 /// rather than loudly.
 /// </summary>

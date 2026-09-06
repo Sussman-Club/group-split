@@ -36,21 +36,15 @@ public class DataTest(AppHostFixture appHost) : IAsyncLifetime
 
         var written = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.FromHours(-8));
 
-        var transaction = new Transaction
+        // A personal expense under no category: the least a transaction can be and still
+        // be stored, which is all this test needs of it.
+        var transaction = new Expense
         {
             Amount = 100,
             DateTime = written,
             Name = "Test",
             User = queryResult.user,
-            RuleVersion = new PersonalRuleVersion
-            {
-                Rule = new Rule
-                {
-                    Category = "Test",
-                    Group = queryResult.personalGroup
-                },
-                StartDateTime = DateTime.UtcNow
-            }
+            Group = queryResult.personalGroup
         };
 
         context.Add(transaction);

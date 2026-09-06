@@ -1,7 +1,6 @@
 using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
-using GroupSplit.Data.Splitting;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
@@ -66,11 +65,19 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
         if (categoryId is null)
             return null;
 
-        return await dbContext.Set<Category>()
+        var ruleId = await dbContext.Set<Category>()
             .Where(category => category.Id == categoryId)
-            .Select(category => category.DefaultSplitRule)
-            .Include(rule => (rule as WeightedSplitRule)!.Participants)
+            .Select(category => category.DefaultSplitRuleId)
             .FirstOrDefaultAsync(ct);
+
+        if (ruleId is null)
+            return null;
+
+        // Loaded as a rule in its own right rather than reached through the category: an
+        // Include cannot follow a Select that changed what the query is about.
+        return await dbContext.Set<SplitRule>()
+            .Include(rule => (rule as WeightedSplitRule)!.Participants)
+            .FirstOrDefaultAsync(rule => rule.Id == ruleId, ct);
     }
 
     /// <summary>

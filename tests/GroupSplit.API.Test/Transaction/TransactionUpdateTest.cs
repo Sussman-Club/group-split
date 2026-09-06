@@ -2,6 +2,7 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 
 namespace GroupSplit.API.Test.Transaction;
 
@@ -34,7 +35,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = 20,
             DateTime = DateTimeOffset.UtcNow.AddHours(1),
             PaidByUserId = transaction.User.Id,
-            CategoryId = transaction.RuleVersion.Id
+            CategoryId = transaction.CategoryId
         };
 
         // Act
@@ -69,14 +70,14 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     }
 
     [Fact]
-    public async Task UpdateTransaction_RuleVersionNotFound_ThrowsException()
+    public async Task UpdateTransaction_CategoryNotFound_ThrowsException()
     {
         // Arrange
         var transactionService = GetService<ITransactionService>();
         var userService = GetService<ICurrentUser>();
         var currentUser = userService.User;
 
-        // Create transaction without any rule version
+        // A personal expense, filed under no category
         var transaction = await transactionService.Create(new CreateTransactionRequest
         {
             Name = "Old",
@@ -97,7 +98,7 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         // Act & Assert
         var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
             await transactionService.Update(transaction.Id, request, TestContext.Current.CancellationToken));
-        Assert.Equal("Rule version not found.", ex.Message);
+        Assert.Equal("Category not found.", ex.Message);
     }
 
     [Fact]
@@ -124,14 +125,14 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Name = "Update",
             Amount = 50,
             DateTime = DateTimeOffset.UtcNow,
-            PaidByUserId = otherUser.Id, // not in current user's group
-            CategoryId = transaction.RuleVersion.Id
+            PaidByUserId = otherUser.Id, // shares no group with the current user
+            CategoryId = transaction.CategoryId
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<NotFoundException>(async () =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(async () =>
             await transactionService.Update(transaction.Id, request, TestContext.Current.CancellationToken));
 
-        Assert.Equal("Paid by user not found.", ex.Message);
+        Assert.Equal(ErrorCodes.TransactionPayerNotInGroup, ex.Code);
     }
 }

@@ -1,5 +1,4 @@
-using GroupSplit.Data.Splitting;
-
+using GroupSplit.API.Services;
 namespace GroupSplit.API.Test.Splits;
 
 /// <summary>

@@ -54,6 +54,7 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Name = "Private dinner",
             Amount = 99.99m,
             DateTime = DateTimeOffset.UtcNow,
+            GroupId = group.Id,
             PaidByUserId = owner.Id,
             CategoryId = category.Id
         }, TestContext.Current.CancellationToken);

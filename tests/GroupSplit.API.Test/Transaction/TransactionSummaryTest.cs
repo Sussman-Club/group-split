@@ -13,10 +13,9 @@ namespace GroupSplit.API.Test.Transaction;
 /// </summary>
 public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
-    private async Task<Guid> GroupWithRule(string name, string category)
+    private async Task<Guid> GroupWithCategory(string name, string category)
     {
         var groups = GetService<IGroupService>();
-        var rules = GetService<IRuleService>();
         var me = GetService<ICurrentUser>().User;
 
         var group = await groups.CreateGroup(new CreateGroupRequest { Name = name },
@@ -31,11 +30,9 @@ public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     {
         var groups = GetService<IGroupService>();
 
-        var ruleVersionId = await (await groups.GetGroupById(groupId, TestContext.Current.CancellationToken))
-            .SelectMany(g => g.Rules)
-            .SelectMany(r => r.Versions)
-            .Where(v => v.EndDateTime == null)
-            .Select(v => v.Id)
+        var categoryId = await (await groups.GetGroupById(groupId, TestContext.Current.CancellationToken))
+            .SelectMany(g => g.Categories)
+            .Select(c => c.Id)
             .FirstAsync(TestContext.Current.CancellationToken);
 
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
@@ -44,7 +41,7 @@ public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             Amount = amount,
             DateTime = when,
             GroupId = groupId,
-            CategoryId = ruleVersionId
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
     }
 
@@ -67,7 +64,7 @@ public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     [Fact]
     public async Task It_counts_and_totals_everything_the_filter_leaves()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
 
         await Expense(home, "Costco", 20.50m, DateTimeOffset.UtcNow);
         await Expense(home, "Publix", 30.25m, DateTimeOffset.UtcNow);
@@ -82,8 +79,8 @@ public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     [Fact]
     public async Task A_filter_narrows_the_summary_the_same_way_it_narrows_the_listing()
     {
-        var home = await GroupWithRule("Home", "Groceries");
-        var trip = await GroupWithRule("Lisbon", "Lodging");
+        var home = await GroupWithCategory("Home", "Groceries");
+        var trip = await GroupWithCategory("Lisbon", "Lodging");
 
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
         await Expense(trip, "Hotel", 300m, DateTimeOffset.UtcNow);
@@ -102,7 +99,7 @@ public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     [Fact]
     public async Task The_count_is_the_same_number_the_page_reports_as_its_total()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
 
         foreach (var i in Enumerable.Range(1, 7))
             await Expense(home, $"Shop {i}", i * 10m, DateTimeOffset.UtcNow.AddDays(-i));

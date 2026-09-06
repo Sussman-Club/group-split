@@ -64,14 +64,16 @@ public class ProblemResponseTest : IAsyncLifetime
         return created!.Id;
     }
 
-    private async Task<Guid> CreateTransaction(decimal amount = 10m, Guid? ruleVersionId = null, Guid? paidBy = null)
+    private async Task<Guid> CreateTransaction(decimal amount = 10m, Guid? categoryId = null, Guid? paidBy = null,
+        Guid? groupId = null)
     {
         var response = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
         {
             Name = "Lunch",
             Amount = amount,
             DateTime = DateTimeOffset.UtcNow,
-            CategoryId = ruleVersionId,
+            GroupId = groupId,
+            CategoryId = categoryId,
             PaidByUserId = paidBy
         }, Json, Ct);
 
@@ -123,7 +125,7 @@ public class ProblemResponseTest : IAsyncLifetime
         category.EnsureSuccessStatusCode();
         var created = await category.Content.ReadFromJsonAsync<CategoryResponse>(Json, Ct);
 
-        await CreateTransaction(100m, created!.Id, me.Id);
+        await CreateTransaction(100m, created!.Id, me.Id, groupId);
 
         return (groupId, me, other);
     }

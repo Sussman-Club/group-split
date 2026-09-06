@@ -10,13 +10,10 @@ namespace GroupSplit.API.Extensions;
 /// Registers the split-rule handlers and the dispatcher that finds them.
 /// </summary>
 /// <remarks>
-/// Beside <see cref="RuleVersionServiceExtensions"/>, because they are the same thing for
-/// the same reason and there is no sense in one being somewhere else. The seeder reaches
-/// them here as it reaches everything else in this project.
+/// The seeder reaches them here as it reaches everything else in this project.
 /// <para>
-/// Singletons, unlike the rule-version handlers: dividing a rule and shaping it for the
-/// wire need the rule and nothing else -- no <c>DbContext</c>, no request. The rule-version
-/// handlers are scoped because theirs genuinely query the database.
+/// Singletons: dividing a rule and shaping it for the wire need the rule and nothing else
+/// -- no <c>DbContext</c>, no request.
 /// </para>
 /// </remarks>
 public static class SplitRuleServiceExtensions

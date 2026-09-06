@@ -1,4 +1,4 @@
-namespace GroupSplit.Data.Splitting;
+namespace GroupSplit.API.Services;
 
 /// <summary>
 /// One participant's weight in a split. What the weight means is the rule's business --
