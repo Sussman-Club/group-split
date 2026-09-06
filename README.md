@@ -76,7 +76,8 @@ containers; `GROUPSPLIT_TOKEN` skips it entirely for CI.
 It installs as a .NET tool from GitHub Packages, private to the org, so it needs a
 `read:packages` token but no checkout: point NuGet at the feed once, then
 `dotnet tool install --global GroupSplit.Cli` and `dotnet tool update --global GroupSplit.Cli`.
-Releases are cut by pushing a `cli-v*` tag. Both are in [docs/cli.md](docs/cli.md).
+Merging to `main` publishes it, the same way that deploys the stack. Both are in
+[docs/cli.md](docs/cli.md).
 
 It renders tables for a person and JSON for anything else, keeps stdout to the result alone,
 and reports failures as an envelope carrying the API's own error `code`. `groupsplit schema`

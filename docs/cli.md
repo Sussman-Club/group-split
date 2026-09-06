@@ -53,35 +53,30 @@ groupsplit --help
 `~/.dotnet/tools` has to be on `PATH`; the installer says so if it is not. Removing it is
 `dotnet tool uninstall --global GroupSplit.Cli`.
 
-### Publishing a release
+### How releases happen
 
-Tag and push. Nothing else -- MinVer turns the tag into the package version, and
-`.github/workflows/release-cli.yml` tests, packs and publishes.
+Nothing. Merging to `main` publishes the CLI, the same way it deploys the stack -- so the
+installed tool cannot quietly lag behind what was merged, and there is no release step anyone
+has to remember.
 
-```bash
-git tag cli-v0.0.1
-git push origin cli-v0.0.1
-```
-
-The tag prefix keeps the CLI's releases independent of any tag the apps want. The workflow
-refuses to publish a prerelease from a release tag, so a mistake that would quietly ship
-`0.0.0-alpha.0.N` fails loudly instead. A published version cannot be replaced -- GitHub
-Packages rejects a re-push -- so a bad release is superseded by a new tag, never overwritten.
+`.github/workflows/release-cli.yml` tests, claims the next version, packs and publishes.
 
 ### What the numbers do
 
-The first release is `0.0.1`, and versions run from the tags after that:
+The first release is `0.0.1` and each push to `main` takes the next patch: `0.0.2`, `0.0.3`,
+and so on. The workflow claims one by creating a `cli-v*` tag, which is what MinVer then reads,
+so every published version points at the commit it was built from.
 
-| | |
-| --- | --- |
-| Before any tag | `0.0.0-alpha.0.<height>` -- a prerelease, needing `--prerelease` to install |
-| At `cli-v0.0.1` | `0.0.1` |
-| Each commit after it | `0.0.2-alpha.0.1`, `0.0.2-alpha.0.2`, ... |
-| At `cli-v0.0.2` | `0.0.2` |
+Two things follow from that, both deliberate:
 
-So the next patch number is claimed as soon as a release is tagged, and every commit toward it
-is installable and ordered. Tag `cli-v0.1.0` instead when the change deserves it -- MinVer
-follows the tag rather than the other way round, and only bumps the patch on its own.
+- **A re-run does not consume a version.** A tag already on the commit is reused, so re-running
+  a failed publish packs the same version and the push is a no-op.
+- **A deliberate bump is a manual tag.** Tag `cli-v0.1.0` yourself and push it before the
+  merge; the workflow reuses it, and the next automatic version is `0.1.1`. That is the only
+  reason to touch a tag by hand.
+
+Versions between tags -- what you get building locally -- are `0.0.<next>-alpha.0.<height>`,
+which is why the local install below needs `--prerelease` and the published one does not.
 
 ### From the checkout instead
 
@@ -103,19 +98,20 @@ dotnet tool update --global GroupSplit.Cli
 ```
 
 That is the whole thing once the feed is configured. `groupsplit --version` prints the
-version and the commit it was built from.
+version and the commit it was built from, so an installed tool can always be traced back to
+what produced it.
 
 ### Why the version is not written by hand
 
 `dotnet tool update` compares versions and does nothing when they match. A hand-written
-`<Version>` is the same on every build, so publishing a change without bumping it would leave
-the **old binary installed** while reporting success -- a stale tool that gives no sign of
-being stale.
+`<Version>` is the same on every build, so publishing a change without remembering to bump it
+would leave the **old binary installed** while reporting success -- a stale tool that gives no
+sign of being stale. Publishing on every merge makes that failure mode routine rather than
+occasional, which is why the version comes from git and the workflow claims a new one every
+time.
 
-MinVer versions the package from git instead: `0.0.0-alpha.0.<commit height>` between tags, so
-every commit is a higher version, and a clean `1.2.3` from a `cli-v1.2.3` tag. Both CI and the
-release workflow check out with `fetch-depth: 0`, because MinVer needs the tags and the
-history to compute that.
+Both CI and the release workflow check out with `fetch-depth: 0`, because MinVer needs the
+tags and the history to derive it.
 
 ### Without installing
 

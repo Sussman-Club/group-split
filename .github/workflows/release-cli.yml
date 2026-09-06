@@ -1,21 +1,20 @@
-# Publishes the groupsplit CLI to GitHub Packages so it can be installed and updated
+# Publishes the groupsplit CLI to GitHub Packages, so it can be installed and updated
 # without a checkout of this repo.
 #
-# Triggered by a tag rather than by a push to a branch: the CLI's releases are deliberately
-# independent of the stack's deploys, which is what the `cli-v` tag prefix is for. MinVer
-# turns the tag into the package version, so `cli-v1.2.3` publishes 1.2.3 and nothing has
-# to be edited to cut a release.
+# Keyed to main, like the deploy: whatever is on main is what `dotnet tool update` gets.
+# There is no separate release step to remember, and no way for the published tool to
+# quietly lag behind what was merged.
 name: Release CLI
 
 on:
   push:
-    tags:
-      - 'cli-v*'
-  # Lets a failed publish be retried without moving the tag.
+    branches: [main]
+  # Lets a failed publish be retried without an empty commit.
   workflow_dispatch:
 
 concurrency:
-  group: release-cli-${{ github.ref }}
+  # Never two publishes at once: they would race to claim the same version number.
+  group: release-cli
   cancel-in-progress: false
 
 jobs:
@@ -25,15 +24,16 @@ jobs:
     timeout-minutes: 15
 
     permissions:
-      contents: read
+      # To push the version tag created below.
+      contents: write
       # The automatic GITHUB_TOKEN can write packages under this repo's owner and nowhere
       # else, which is the scope wanted: no stored secret to mint or rotate. Same
       # arrangement the deploy workflow uses to push images to GHCR.
       packages: write
 
     steps:
-      # Full history: MinVer reads the nearest cli-v tag and the commit height since it.
-      # A shallow clone has neither and would publish 0.0.0-alpha.0.0.
+      # Full history and tags: the version is derived from them, twice over -- the step
+      # below reads the last release tag, and MinVer reads the one it writes.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -55,20 +55,60 @@ jobs:
       - name: Test
         run: dotnet test --project tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release
 
+      # Every push to main has to publish a version no previous push used, and it has to be
+      # a release version: a prerelease would force --prerelease onto every install and
+      # update, which defeats the point of publishing at all. MinVer reads git tags, so the
+      # tag is what this creates.
+      #
+      # A tag already on HEAD is reused rather than added to, which is what makes a re-run
+      # idempotent and lets a human cut a deliberate `cli-v0.1.0` by tagging it themselves --
+      # the next automatic version then follows from theirs.
+      - name: Claim the next version
+        id: version
+        run: |
+          set -euo pipefail
+
+          existing=$(git tag --points-at HEAD --list 'cli-v*' | head -1)
+
+          if [[ -n "$existing" ]]; then
+            echo "HEAD is already tagged $existing; reusing it."
+            echo "tag=$existing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest=$(git tag --list 'cli-v*' --sort=-v:refname | head -1)
+
+          if [[ -z "$latest" ]]; then
+            # The first release. Deliberately 0.0.1 rather than 0.1.0 or 1.0.0.
+            next="0.0.1"
+          else
+            version=${latest#cli-v}
+            IFS=. read -r major minor patch <<< "$version"
+            next="${major}.${minor}.$((patch + 1))"
+          fi
+
+          echo "Last release: ${latest:-none}. Publishing $next."
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "cli-v$next" -m "groupsplit $next"
+          git push origin "cli-v$next"
+
+          echo "tag=cli-v$next" >> "$GITHUB_OUTPUT"
+
       - name: Pack
         run: dotnet pack src/GroupSplit.Cli/GroupSplit.Cli.csproj -c Release -o artifacts/nupkg
 
-      # Refuses to publish a prerelease from a release tag, which is what an untagged or
-      # shallow checkout produces. Without this the failure is silent: a `cli-v1.2.3` tag
-      # quietly publishes 0.0.0-alpha.0.N and the tag appears to have worked.
-      - name: Check the tag produced a release version
+      # Catches the case where MinVer did not see the tag -- a shallow checkout, a renamed
+      # prefix -- which would otherwise publish 0.0.0-alpha.0.N and look like it worked.
+      - name: Check the version is a release version
         run: |
           set -euo pipefail
           package=$(ls artifacts/nupkg/*.nupkg)
           version=$(basename "$package" .nupkg | sed 's/^GroupSplit\.Cli\.//')
           echo "Packed version: $version"
           if [[ "$version" == *-* ]]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} produced prerelease '$version'." \
+            echo "::error::Tag ${{ steps.version.outputs.tag }} produced prerelease '$version'." \
                  "MinVer did not see the tag -- check fetch-depth and the cli-v prefix."
             exit 1
           fi
@@ -76,6 +116,9 @@ jobs:
       # NuGet and the container images published by deploy.yml are both GitHub Packages
       # under this org, so they share one visibility setting: the package inherits this
       # repository's, which is what keeps it private.
+      #
+      # --skip-duplicate so a re-run of an already-published version is a no-op rather
+      # than a red build.
       - name: Publish to GitHub Packages
         run: |
           dotnet nuget push "artifacts/nupkg/*.nupkg" \
@@ -86,7 +129,7 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "### groupsplit ${GITHUB_REF_NAME}"
+            echo "### groupsplit ${{ steps.version.outputs.tag }}"
             echo
             echo '```bash'
             echo "dotnet tool update --global GroupSplit.Cli"
