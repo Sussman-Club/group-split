@@ -3,6 +3,8 @@
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ITransactionsClient TransactionsClient
+@inject ICategoriesClient CategoriesClient
 @inject ApiErrorPresenter Errors
 
 <MudDialog>
@@ -50,12 +52,12 @@
                 </MudStack>
 
 
-                <MudSelect T="Guid" Label="Category"
-                           @bind-Value="editModel.RuleVersionId"
+                <MudSelect T="Guid?" Label="Category"
+                           @bind-Value="editModel.CategoryId"
                            Variant="Variant.Outlined">
                     @foreach (var c in GroupCategories)
                     {
-                        <MudSelectItem T="Guid" Value="@c.RuleVersionId">@c.Category</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -68,6 +70,14 @@
                         <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
                     }
                 </MudSelect>
+
+                <MudDivider/>
+
+                <SplitEditor Members="@GroupUsers.ToList()"
+                             Amount="@editModel.Amount"
+                             PayerId="@editModel.PaidByUserId"
+                             Stored="@storedSplits"
+                             @bind-Value="editModel.Splits"/>
 
             </MudStack>
         </MudForm>
@@ -95,8 +105,14 @@
     private TimeSpan? selectedTime;
 
     // Category & users come from the original transaction's GroupId
-    private ICollection<RuleVersionInfo> GroupCategories = [];
+    private ICollection<CategoryInfo> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
+
+    // What the expense is actually divided into today, which is where the editor starts
+    // from when somebody turns it on. The grid hands this dialog a listing row, which
+    // carries no shares, so they are read rather than passed in -- one path whichever
+    // list the edit was opened from.
+    private IReadOnlyList<SplitInput> storedSplits = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -107,7 +123,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
-            RuleVersionId = Original.RuleVersionId,
+            CategoryId = Original.CategoryId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -119,12 +135,19 @@
         // has said why.
         var loaded = await Errors.TryAsync(async () =>
         {
-            GroupCategories = await GroupsClient.GetGroupRulesAsAsyncEnumerable(Original.GroupId, allowUserTransactions: true).Select(x => new RuleVersionInfo(x.RuleVersionId, x.Category)).ToListAsync();
+            GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(Original.GroupId).Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
 
-            if (GroupCategories.All(x => x.RuleVersionId != Original.RuleVersionId))
-                GroupCategories.Add(new RuleVersionInfo(Original.RuleVersionId, Original.Category));
+            // A category that has since been deleted still names what this expense was
+            // filed under, so it stays in the list rather than silently reading as none.
+            if (Original.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
+                GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
 
             GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+
+            var details = await TransactionsClient.GetTransactionAsync(Original.Id);
+
+            storedSplits = [.. details.Splits.Select(split =>
+                new SplitInput { UserId = split.UserId, Amount = split.Amount })];
         }, "Could not load the group.");
 
         if (!loaded)
@@ -154,7 +177,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
-            RuleVersionId = Original.RuleVersionId,
+            CategoryId = Original.CategoryId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -182,15 +205,22 @@
         if (original.DateTime != updated.DateTime)
             patch.Replace(x => x.DateTime, updated.DateTime);
 
-        if (original.RuleVersionId != updated.RuleVersionId)
-            patch.Replace(x => x.RuleVersionId, updated.RuleVersionId);
+        if (original.CategoryId != updated.CategoryId)
+            patch.Replace(x => x.CategoryId, updated.CategoryId);
 
         if (original.PaidByUserId != updated.PaidByUserId)
             patch.Replace(x => x.PaidByUserId, updated.PaidByUserId);
 
+        // Only when the person stated the division themselves. Saying nothing here is not
+        // the same as sending the shares unchanged: the API reads the operations, and
+        // silence about them means "divide it again the way the category says", which is
+        // what an edit to the amount, the payer or the category should do.
+        if (updated.Splits is not null)
+            patch.Replace(x => x.Splits, updated.Splits);
+
         return patch;
     }
 
-    internal record RuleVersionInfo(Guid RuleVersionId, string Category);
+    internal record CategoryInfo(Guid CategoryId, string Name);
 
 }

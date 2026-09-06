@@ -25,20 +25,28 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var owner = scope.ServiceProvider.GetRequiredService<ICurrentUser>().User;
         var groups = scope.ServiceProvider.GetRequiredService<IGroupService>();
-        var rules = scope.ServiceProvider.GetRequiredService<IRuleService>();
+        var splitRules = scope.ServiceProvider.GetRequiredService<ISplitRuleService>();
+        var categories = scope.ServiceProvider.GetRequiredService<ICategoryService>();
         var transactions = scope.ServiceProvider.GetRequiredService<ITransactionService>();
 
         var group = await groups.CreateGroup(
             new CreateGroupRequest { Name = "Private" }, TestContext.Current.CancellationToken);
 
-        var ruleVersion = await rules.Create(new CreateRuleRequest
+        var splitRule = await splitRules.Create(new CreateSplitRuleRequest
         {
             GroupId = group.Id,
-            Category = "Secret category",
-            Version = new PercentRuleVersionDto
+            Name = "Secret split",
+            Definition = new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [owner.Id] = 100 }
             }
+        }, TestContext.Current.CancellationToken);
+
+        var category = await categories.Create(new CreateCategoryRequest
+        {
+            GroupId = group.Id,
+            Name = "Secret category",
+            DefaultSplitRuleId = splitRule.Id
         }, TestContext.Current.CancellationToken);
 
         var transaction = await transactions.Create(new CreateTransactionRequest
@@ -46,11 +54,12 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Name = "Private dinner",
             Amount = 99.99m,
             DateTime = DateTimeOffset.UtcNow,
+            GroupId = group.Id,
             PaidByUserId = owner.Id,
-            RuleVersionId = ruleVersion.Id
+            CategoryId = category.Id
         }, TestContext.Current.CancellationToken);
 
-        return (ruleVersion.Rule.Id, ruleVersion.Id, transaction.Id, group.Id);
+        return (category.Id, splitRule.Id, transaction.Id, group.Id);
     }
 
     /// <summary>
@@ -105,48 +114,60 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task Another_members_rule_is_not_in_my_list()
+    public async Task Another_members_category_is_not_in_my_list()
     {
-        var (ruleId, _, _, _) = await SomeoneElsesGroup();
+        var (categoryId, _, _, _) = await SomeoneElsesGroup();
 
-        var list = await GetService<IRuleService>().List(TestContext.Current.CancellationToken);
+        var list = await GetService<ICategoryService>().List(null, TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(list, version => version.Rule.Id == ruleId);
+        Assert.DoesNotContain(list, category => category.Id == categoryId);
     }
 
     /// <summary>
-    /// The rule details carry the split itself: the category, and every member's
-    /// percentage or share count against their user id.
+    /// A split rule's details carry the division itself: every member's percentage or share
+    /// count against their user id.
     /// </summary>
     [Fact]
-    public async Task Another_members_rule_details_cannot_be_read()
+    public async Task Another_members_split_rule_cannot_be_read()
     {
-        var (ruleId, _, _, _) = await SomeoneElsesGroup();
+        var (_, splitRuleId, _, _) = await SomeoneElsesGroup();
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
-            GetService<IRuleService>().GetRuleDetails(ruleId, TestContext.Current.CancellationToken));
+            GetService<ISplitRuleService>().GetDetails(splitRuleId, TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task Another_members_rule_cannot_be_updated()
+    public async Task Another_members_category_cannot_be_updated()
     {
-        var (ruleId, _, _, _) = await SomeoneElsesGroup();
+        var (categoryId, _, _, _) = await SomeoneElsesGroup();
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            GetService<IRuleService>().Update(ruleId, new UpdateRuleRequest
+            GetService<ICategoryService>().Update(categoryId, new UpdateCategoryRequest
             {
-                Category = "Hijacked",
-                Version = new PersonalRuleVersionDto()
+                Name = "Hijacked"
             }, TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task Another_members_rule_cannot_be_deleted()
+    public async Task Another_members_split_rule_cannot_be_updated()
     {
-        var (ruleId, _, _, _) = await SomeoneElsesGroup();
+        var (_, splitRuleId, _, _) = await SomeoneElsesGroup();
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            GetService<IRuleService>().Delete(ruleId, TestContext.Current.CancellationToken));
+            GetService<ISplitRuleService>().Update(splitRuleId, new UpdateSplitRuleRequest
+            {
+                Name = "Hijacked",
+                Definition = new PayerSplitRuleDto()
+            }, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Another_members_category_cannot_be_deleted()
+    {
+        var (categoryId, _, _, _) = await SomeoneElsesGroup();
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            GetService<ICategoryService>().Delete(categoryId, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -192,12 +213,7 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (_, _, _, groupId) = await SomeoneElsesGroup();
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            GetService<IRuleService>().Create(new CreateRuleRequest
-            {
-                GroupId = groupId,
-                Category = "Injected",
-                Version = new PersonalRuleVersionDto()
-            }, TestContext.Current.CancellationToken));
+            CreateCategory(groupId, "Injected", new PayerSplitRuleDto()));
     }
 
     [Fact]
@@ -211,7 +227,7 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 Name = "Injected",
                 Amount = 1m,
                 DateTime = DateTimeOffset.UtcNow,
-                RuleVersionId = ruleVersionId
+                CategoryId = ruleVersionId
             }, TestContext.Current.CancellationToken).AsTask());
     }
 }

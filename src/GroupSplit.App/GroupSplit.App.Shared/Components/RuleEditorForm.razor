@@ -2,7 +2,7 @@
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
-@inject IRulesClient RulesClient
+@inject ISplitRulesClient SplitRulesClient
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 
@@ -35,7 +35,7 @@
         </MudSelect>
 
         <MudSelect T="Guid?"
-                   Label="Apply Settings From Rule"
+                   Label="Apply settings from another rule"
                    Variant="Variant.Outlined"
                    @bind-Value="_copySourceRuleId"
                    @bind-Value:after="@OnCopySourceSelected"
@@ -45,12 +45,12 @@
             {
                 @foreach (var r in _groupRules)
                 {
-                    <MudSelectItem T="Guid?" Value="@r.RuleId">@r.Category</MudSelectItem>
+                    <MudSelectItem T="Guid?" Value="@((Guid?)r.Id)">@r.Name</MudSelectItem>
                 }
             }
         </MudSelect>
 
-        @if (Model.Version is PercentRuleVersionDto percent)
+        @if (Model.Version is PercentSplitRuleDto percent)
         {
             <MudPaper Class="pa-4" Elevation="0">
                 <MudGrid>
@@ -85,7 +85,7 @@
                 </MudStack>
             </MudPaper>
         }
-        else if (Model.Version is SharesRuleVersionDto shares)
+        else if (Model.Version is SharesSplitRuleDto shares)
         {
             <MudPaper Class="pa-4" Elevation="0">
                 <MudGrid>
@@ -126,7 +126,7 @@
 
     private RuleType? _ruleType;
     private ICollection<UserInfo> _members = [];
-    private ICollection<RuleVersionResponse> _groupRules = [];
+    private ICollection<SplitRuleResponse> _groupRules = [];
     private Guid? _copySourceRuleId;
 
     // The form is meaningless without the members to split between, so a failed load
@@ -136,7 +136,7 @@
         var loaded = await Errors.TryAsync(async () =>
         {
             _members = await GroupsClient.GetGroupMembersAsync(GroupId);
-            _groupRules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false);
+            _groupRules = await SplitRulesClient.GetSplitRulesAsync(GroupId);
         }, "Could not load the group.");
 
         if (!loaded)
@@ -152,17 +152,17 @@
     {
         _ruleType = Model.Version switch
         {
-            PercentRuleVersionDto => RuleType.Percent,
-            SharesRuleVersionDto => RuleType.Shares,
-            PersonalRuleVersionDto => RuleType.Personal,
+            PercentSplitRuleDto => RuleType.Percent,
+            SharesSplitRuleDto => RuleType.Shares,
+            PayerSplitRuleDto => RuleType.Personal,
             _ => _ruleType
         };
 
         StateHasChanged();
     }
 
-    private decimal PercentTotal => Model.Version is PercentRuleVersionDto percentRuleVersionDto ? Math.Round(percentRuleVersionDto.Percentages.Values.Sum(), 2) : 0;
-    private int SharesTotal => Model.Version is SharesRuleVersionDto sharesRuleVersionDto ? sharesRuleVersionDto.Shares.Values.Sum() : 0;
+    private decimal PercentTotal => Model.Version is PercentSplitRuleDto percentSplitRuleDto ? Math.Round(percentSplitRuleDto.Percentages.Values.Sum(), 2) : 0;
+    private int SharesTotal => Model.Version is SharesSplitRuleDto sharesSplitRuleDto ? sharesSplitRuleDto.Shares.Values.Sum() : 0;
 
     public bool IsValid
     {
@@ -191,15 +191,15 @@
         if (_copySourceRuleId is not { } sourceRuleId)
             return;
 
-        RuleDetailsResponse? details = null;
+        SplitRuleDetailsResponse? details = null;
 
         var loaded = await Errors.TryAsync(
-            async () => details = await RulesClient.GetRuleAsync(sourceRuleId),
+            async () => details = await SplitRulesClient.GetSplitRuleAsync(sourceRuleId),
             "Could not load the rule to copy.");
 
         if (!loaded || details is null) return;
 
-        Model.Version = details.Version;
+        Model.Version = details.Definition;
         OnModelVersionChange();
     }
 
@@ -207,19 +207,19 @@
     {
         Model.Version = _ruleType switch
         {
-            RuleType.Personal => new PersonalRuleVersionDto(),
+            RuleType.Personal => new PayerSplitRuleDto(),
 
-            RuleType.Percent when Model.Version is SharesRuleVersionDto shares => new PercentRuleVersionDto
+            RuleType.Percent when Model.Version is SharesSplitRuleDto shares => new PercentSplitRuleDto
             {
                 Percentages = ConvertSharesToPercentages(shares)
             },
 
-            RuleType.Percent => new PercentRuleVersionDto
+            RuleType.Percent => new PercentSplitRuleDto
             {
                 Percentages = _members.ToDictionary(m => m.Id, _ => 0m)
             },
 
-            RuleType.Shares => new SharesRuleVersionDto
+            RuleType.Shares => new SharesSplitRuleDto
             {
                 Shares = _members.ToDictionary(m => m.Id, _ => 0)
             },
@@ -232,7 +232,7 @@
 
     private void SplitPercentEvenly()
     {
-        if (Model.Version is not PercentRuleVersionDto percent)
+        if (Model.Version is not PercentSplitRuleDto percent)
             return;
 
         if (_members.Count == 0) throw new InvalidOperationException();
@@ -257,7 +257,7 @@
     {
         switch (Model.Version)
         {
-            case PercentRuleVersionDto percent:
+            case PercentSplitRuleDto percent:
                 foreach (var memberId in _members.Select(x => x.Id))
                 {
                     percent.Percentages[memberId] = 0m;
@@ -265,7 +265,7 @@
 
                 break;
 
-            case SharesRuleVersionDto shares:
+            case SharesSplitRuleDto shares:
                 foreach (var memberId in _members.Select(x => x.Id))
                 {
                     shares.Shares[memberId] = 0;
@@ -280,7 +280,7 @@
         StateHasChanged();
     }
 
-    private Dictionary<Guid, decimal> ConvertSharesToPercentages(SharesRuleVersionDto shares)
+    private Dictionary<Guid, decimal> ConvertSharesToPercentages(SharesSplitRuleDto shares)
     {
         if (_members.Count is 0)
             throw new InvalidOperationException();
@@ -311,13 +311,21 @@
         return percentages;
     }
 
+    /// <summary>
+    /// A category and the division it defaults to, edited together.
+    /// </summary>
+    /// <remarks>
+    /// They are two rows now -- a category pointing at a split rule -- but a group still
+    /// thinks of them as one thing ("Groceries is split four ways"), so the form still asks
+    /// for one thing. The dialog around it does the two writes.
+    /// </remarks>
     public record RuleEditorModel
     {
         [Required(ErrorMessage = "Category is required")]
         [StringLength(64, ErrorMessage = "Category must be less than 64 characters.")]
         public string Category { get; set; } = string.Empty;
 
-        [Required] public RuleVersionDto Version { get; set; } = null!;
+        [Required] public SplitRuleDto Version { get; set; } = null!;
     }
 
 }

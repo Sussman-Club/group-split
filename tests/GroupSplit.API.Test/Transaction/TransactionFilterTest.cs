@@ -14,21 +14,15 @@ namespace GroupSplit.API.Test.Transaction;
 /// </summary>
 public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
-    private async Task<Guid> GroupWithRule(string name, string category)
+    private async Task<Guid> GroupWithCategory(string name, string category)
     {
         var groups = GetService<IGroupService>();
-        var rules = GetService<IRuleService>();
         var me = GetService<ICurrentUser>().User;
 
         var group = await groups.CreateGroup(new CreateGroupRequest { Name = name },
             TestContext.Current.CancellationToken);
 
-        await rules.Create(new CreateRuleRequest
-        {
-            GroupId = group.Id,
-            Category = category,
-            Version = new PercentRuleVersionDto { Percentages = new() { [me.Id] = 100m } }
-        }, TestContext.Current.CancellationToken);
+        await CreateCategory(group.Id, category, new PercentSplitRuleDto { Percentages = new() { [me.Id] = 100m } });
 
         return group.Id;
     }
@@ -39,11 +33,9 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         var transactions = GetService<ITransactionService>();
         var groups = GetService<IGroupService>();
 
-        var ruleVersionId = await (await groups.GetGroupById(groupId, TestContext.Current.CancellationToken))
-            .SelectMany(g => g.Rules)
-            .SelectMany(r => r.Versions)
-            .Where(v => v.EndDateTime == null)
-            .Select(v => v.Id)
+        var categoryId = await (await groups.GetGroupById(groupId, TestContext.Current.CancellationToken))
+            .SelectMany(g => g.Categories)
+            .Select(c => c.Id)
             .FirstAsync(TestContext.Current.CancellationToken);
 
         var created = await transactions.Create(new CreateTransactionRequest
@@ -53,7 +45,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             Amount = amount,
             DateTime = when,
             GroupId = groupId,
-            RuleVersionId = ruleVersionId
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 
         return created.Id;
@@ -70,7 +62,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task No_filter_at_all_narrows_nothing()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
         await Expense(home, "Publix", 30m, DateTimeOffset.UtcNow);
 
@@ -80,8 +72,8 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_group_narrows_to_that_group()
     {
-        var home = await GroupWithRule("Home", "Groceries");
-        var trip = await GroupWithRule("Lisbon", "Lodging");
+        var home = await GroupWithCategory("Home", "Groceries");
+        var trip = await GroupWithCategory("Lisbon", "Lodging");
 
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
         await Expense(trip, "Hotel", 300m, DateTimeOffset.UtcNow);
@@ -94,7 +86,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_payer_narrows_to_what_they_paid()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
 
         var me = GetService<ICurrentUser>().User;
@@ -106,8 +98,8 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_category_is_matched_whatever_its_casing()
     {
-        var home = await GroupWithRule("Home", "Groceries");
-        var trip = await GroupWithRule("Lisbon", "Lodging");
+        var home = await GroupWithCategory("Home", "Groceries");
+        var trip = await GroupWithCategory("Lisbon", "Lodging");
 
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
         await Expense(trip, "Hotel", 300m, DateTimeOffset.UtcNow);
@@ -120,7 +112,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_category_matches_the_whole_thing_and_not_a_part_of_it()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
 
         Assert.Empty(await Filtered(new TransactionFilter(Category: "Groc")));
@@ -129,7 +121,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_date_range_takes_both_of_its_ends()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         var march = new DateTimeOffset(2026, 3, 15, 12, 0, 0, TimeSpan.Zero);
 
         await Expense(home, "Before", 10m, march.AddDays(-10));
@@ -149,7 +141,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_range_given_at_some_other_offset_still_means_the_same_moment()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         var noonUtc = new DateTimeOffset(2026, 3, 15, 12, 0, 0, TimeSpan.Zero);
 
         await Expense(home, "Lunch", 20m, noonUtc);
@@ -169,8 +161,8 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [InlineData("hom", "the group's name")]
     public async Task Search_matches_anywhere_it_is_asked_to(string term, string _)
     {
-        var home = await GroupWithRule("Home", "Groceries");
-        var trip = await GroupWithRule("Lisbon", "Lodging");
+        var home = await GroupWithCategory("Home", "Groceries");
+        var trip = await GroupWithCategory("Lisbon", "Lodging");
 
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow, description: "The weekly shop");
         await Expense(trip, "Hotel", 300m, DateTimeOffset.UtcNow);
@@ -183,7 +175,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task Search_matches_the_payer_by_name()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
 
         var me = GetService<ICurrentUser>().User;
@@ -198,7 +190,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task Search_ignores_case_and_surrounding_space()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
 
         Assert.Single(await Filtered(new TransactionFilter(Search: "  CoStCo  ")));
@@ -207,7 +199,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task A_blank_search_narrows_nothing()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
         await Expense(home, "Publix", 30m, DateTimeOffset.UtcNow);
 
@@ -217,7 +209,7 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task Search_that_matches_nothing_finds_nothing()
     {
-        var home = await GroupWithRule("Home", "Groceries");
+        var home = await GroupWithCategory("Home", "Groceries");
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
 
         Assert.Empty(await Filtered(new TransactionFilter(Search: "aldi")));
@@ -226,8 +218,8 @@ public class TransactionFilterTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     [Fact]
     public async Task Filters_narrow_together_rather_than_separately()
     {
-        var home = await GroupWithRule("Home", "Groceries");
-        var trip = await GroupWithRule("Lisbon", "Lodging");
+        var home = await GroupWithCategory("Home", "Groceries");
+        var trip = await GroupWithCategory("Lisbon", "Lodging");
 
         await Expense(home, "Costco", 20m, DateTimeOffset.UtcNow);
         await Expense(trip, "Costco", 40m, DateTimeOffset.UtcNow);

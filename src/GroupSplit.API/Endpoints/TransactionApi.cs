@@ -115,7 +115,8 @@ public static class TransactionApi
                 .Produces<TransactionResponse>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
         private RouteHandlerBuilder MapUpdate()
@@ -130,6 +131,28 @@ public static class TransactionApi
 
                     if (transactionUpdateRequest is null)
                         return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+                    // Read before it is applied, because applying it destroys the
+                    // difference: a patch that said nothing about the shares and one that
+                    // set them to what they already were produce the same model, and they
+                    // mean opposite things. Silence means "divide it again the way the
+                    // category says", which is what an edit to the amount, the payer or the
+                    // category should do; naming them means those amounts, checked against
+                    // the (possibly also patched) total.
+                    //
+                    // Only a patch that says something about them gets them filled in, and
+                    // it needs that: "replace /splits/0/amount" has to have an index 0 to
+                    // replace. The model arrives without them precisely so that silence
+                    // stays silent.
+                    if (patchDocument.Touches("/splits"))
+                    {
+                        var current = await transactionService.GetDetails(id, ct);
+
+                        transactionUpdateRequest.Splits = current is null
+                            ? []
+                            : [.. current.Splits.Select(split =>
+                                new SplitInput { UserId = split.UserId, Amount = split.Amount })];
+                    }
 
                     patchDocument.ApplyTo(transactionUpdateRequest);
 
@@ -148,7 +171,8 @@ public static class TransactionApi
                 .Produces<TransactionResponse>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
         private RouteHandlerBuilder MapDelete()
@@ -167,7 +191,7 @@ public static class TransactionApi
         }
     }
 
-    extension(IQueryable<Transaction> transactions)
+    extension(IQueryable<Expense> transactions)
     {
         internal IQueryable<TransactionResponse> SelectDto()
         {
@@ -179,17 +203,17 @@ public static class TransactionApi
                     DateTime = transaction.DateTime,
                     Name = transaction.Name,
                     Description = transaction.Description,
-                    GroupId = transaction.RuleVersion.Rule.Group.Id,
-                    GroupName = transaction.RuleVersion.Rule.Group.Name,
+                    GroupId = transaction.Group!.Id,
+                    GroupName = transaction.Group!.Name,
                     PaidByUserId = transaction.User.Id,
                     PaidByUserName = transaction.User.FirstName +
                                      (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                    RuleVersionId = transaction.RuleVersion.Id,
-                    Category = transaction.RuleVersion.Rule.Category
+                    CategoryId = transaction.CategoryId,
+                    Category = transaction.Category != null ? transaction.Category.Name : null
                 };
         }
 
-        internal IQueryable<Transaction> ApplyFilter(TransactionFilter? filter)
+        internal IQueryable<Expense> ApplyFilter(TransactionFilter? filter)
         {
             if (filter is null)
                 return transactions;
@@ -207,9 +231,10 @@ public static class TransactionApi
             return from transaction in transactions
                 where (after == null || transaction.DateTime >= after) &&
                       (before == null || transaction.DateTime <= before) &&
-                      (filter.GroupId == null || transaction.RuleVersion.Rule.Group.Id == filter.GroupId) &&
+                      (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
                       (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
-                      (category == null || transaction.RuleVersion.Rule.Category.ToLower() == category) &&
+                      (category == null ||
+                       (transaction.Category != null && transaction.Category.Name.ToLower() == category)) &&
                       // ToLower().Contains rather than EF.Functions.ILike: the same query has
                       // to run on Npgsql and on the in-memory provider the tests use, and
                       // ILike translates only on the first. The names are nullable once an
@@ -217,8 +242,9 @@ public static class TransactionApi
                       (search == null ||
                        transaction.Name.ToLower().Contains(search) ||
                        (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
-                       transaction.RuleVersion.Rule.Category.ToLower().Contains(search) ||
-                       transaction.RuleVersion.Rule.Group.Name.ToLower().Contains(search) ||
+                       (transaction.Category != null &&
+                        transaction.Category.Name.ToLower().Contains(search)) ||
+                       transaction.Group!.Name.ToLower().Contains(search) ||
                        (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
                        (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
                 select transaction;
@@ -248,12 +274,12 @@ public static class TransactionApi
     /// The orders an expense listing offers. Applied to the entity rather than the response,
     /// so a key can reach through a navigation to the group or the payer.
     /// </summary>
-    internal static readonly SortMap<Transaction> Sort = new SortMap<Transaction>()
+    internal static readonly SortMap<Expense> Sort = new SortMap<Expense>()
         .Key("dateTime", transaction => transaction.DateTime, defaultDescending: true)
         .Key("amount", transaction => transaction.Amount, defaultDescending: true)
         .Key("name", transaction => transaction.Name)
-        .Key("category", transaction => transaction.RuleVersion.Rule.Category)
-        .Key("group", transaction => transaction.RuleVersion.Rule.Group.Name)
+        .Key("category", transaction => transaction.Category!.Name)
+        .Key("group", transaction => transaction.Group!.Name)
         .Key("paidBy", transaction => transaction.User.FirstName)
         .Default("dateTime")
         .TieBreak(transaction => transaction.Id);

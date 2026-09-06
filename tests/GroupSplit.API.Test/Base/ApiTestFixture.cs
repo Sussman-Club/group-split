@@ -47,7 +47,9 @@ public class ApiTestFixture : IAsyncLifetime
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IGroupService, GroupService>();
         services.AddScoped<ITransactionService, TransactionService>();
-        services.AddRuleVersionServices();
-        services.AddScoped<IRuleService, RuleService>();
+        services.AddSplitRuleServices();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<ISplitRuleService, SplitRuleService>();
+        services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
     }
 }

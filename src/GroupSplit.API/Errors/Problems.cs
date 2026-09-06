@@ -35,26 +35,25 @@ public static class Problems
         [ErrorCodes.UserNotFound] = "User not found",
         [ErrorCodes.AccountNotFound] = "Account not found",
         [ErrorCodes.TransactionNotFound] = "Transaction not found",
-        [ErrorCodes.RuleNotFound] = "Rule not found",
-        [ErrorCodes.RuleVersionNotFound] = "Rule version not found",
+        [ErrorCodes.CategoryNotFound] = "Category not found",
+        [ErrorCodes.SplitRuleNotFound] = "Split rule not found",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group",
 
         [ErrorCodes.GroupMemberNotSettled] = "Member has an outstanding balance",
         [ErrorCodes.AccountNotSettled] = "Account has outstanding balances",
-        [ErrorCodes.GroupHasNoRule] = "Group has no rule to record against",
-        [ErrorCodes.RuleCategoryTaken] = "Category already in use",
-        [ErrorCodes.RuleNotEditable] = "Rule cannot be edited",
-        [ErrorCodes.RuleNotDeletable] = "Rule cannot be deleted",
-        [ErrorCodes.RuleNoUserTransactions] = "Rule does not accept transactions",
-        [ErrorCodes.RuleVersionHasRemovedMember] = "Rule includes a former member",
         [ErrorCodes.TransactionPayerNotInGroup] = "Payer is not a member of the group",
+        [ErrorCodes.SplitUserNotInGroup] = "A share names someone outside the group",
+        [ErrorCodes.SettlementWithSelf] = "A settlement needs two different people",
+        [ErrorCodes.CategoryNameTaken] = "Category name already in use",
+        [ErrorCodes.CategoryInUse] = "Category still has expenses filed under it",
+        [ErrorCodes.SplitRuleNameTaken] = "Rule name already in use",
+        [ErrorCodes.SplitRuleInUse] = "Rule is still the default for a category",
 
-        [ErrorCodes.TransactionRuleRequired] = "A rule is required",
-        [ErrorCodes.TransactionPayerRequiresRule] = "A rule is required to pay for someone else",
-        [ErrorCodes.RulePercentagesInvalid] = "Percentages must add up to 100",
-        [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group",
-        [ErrorCodes.RuleSharesEmpty] = "Nobody holds a share"
+        [ErrorCodes.SplitRuleInvalid] = "The split rule is not valid",
+        [ErrorCodes.SplitsInvalid] = "The shares are not valid",
+        [ErrorCodes.SplitsDoNotSumToAmount] = "The shares do not add up to the amount",
+        [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group"
     };
 
     /// <summary>The <c>type</c> URI for a code: <c>GROUP_NOT_FOUND</c> becomes <c>.../group-not-found</c>.</summary>

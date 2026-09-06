@@ -71,8 +71,8 @@ routing, authentication, model binding, an unhandled exception.
 | `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. |
 | `ACCOUNT_NOT_FOUND` | The account to delete does not exist. |
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
-| `RULE_NOT_FOUND` | The rule does not exist, has no current version, or is in a group the caller is not in. |
-| `RULE_VERSION_NOT_FOUND` | The rule version named in a transaction does not exist for the caller. |
+| `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
+| `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
 
 ### Forbidden (403)
 
@@ -86,13 +86,12 @@ routing, authentication, model binding, an unhandled exception.
 | --- | --- | --- |
 | `GROUP_MEMBER_NOT_SETTLED` | The member being removed still has a balance in the group. | `balance`: their net balance, negative when they owe. |
 | `ACCOUNT_NOT_SETTLED` | The account being deleted still has a balance in one or more groups. Nothing was changed. | `outstandingBalances`: an array of `{ groupId, groupName, balance }`. |
-| `GROUP_HAS_NO_RULE` | A transaction names a group that has no rule to record it against. | |
-| `RULE_CATEGORY_TAKEN` | The group already has a live rule with that category. | |
-| `RULE_NOT_EDITABLE` | The rule is a system rule and cannot be edited. | |
-| `RULE_NOT_DELETABLE` | The rule is a system rule and cannot be deleted. | |
-| `RULE_NO_USER_TRANSACTIONS` | The rule (a settlement rule, say) does not accept transactions entered by members. | |
-| `RULE_VERSION_HAS_REMOVED_MEMBER` | The rule version splits with someone who has left the group. Update the rule first. | |
-| `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the rule's group. | |
+| `CATEGORY_NAME_TAKEN` | The group already has a category with that name. | |
+| `CATEGORY_IN_USE` | The category still has expenses filed under it. Move them first. | |
+| `SPLIT_RULE_NAME_TAKEN` | The group already has a split rule with that name. | |
+| `SPLIT_RULE_IN_USE` | The split rule is still the default of a category. Point the category elsewhere first. | |
+| `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the group. | |
+| `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is not a member of the group. | |
 
 ### Validation (400)
 
@@ -101,18 +100,26 @@ no `errors` member; the code is the whole message.
 
 | Code | When |
 | --- | --- |
-| `TRANSACTION_RULE_REQUIRED` | The group has rules to pick from and the transaction picked none. |
-| `TRANSACTION_PAYER_REQUIRES_RULE` | A transaction paid by someone other than the caller named no rule version. |
-| `RULE_PERCENTAGES_INVALID` | The percentages of a percent rule do not add up to 100. |
-| `RULE_USERS_NOT_IN_GROUP` | A percent or shares rule names a user who is not a member of the group. |
-| `RULE_SHARES_EMPTY` | A shares rule gives nobody a share. |
+| `SPLIT_RULE_INVALID` | The split rule does not hold together: percentages that do not add up to 100, a share nobody holds, a member named twice. |
+| `SPLITS_INVALID` | The stated shares name nobody, or name somebody twice. Leaving them out entirely is how you ask for the category's division. |
+| `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is not a member of the group. |
+
+### Unprocessable (422)
+
+The request is well formed and internally coherent, and carrying it out would leave the
+data saying something untrue. Distinct from a 400, which says a field is wrong, and from a
+409, which says the stored state refuses it.
+
+| Code | When | Extra members |
+| --- | --- | --- |
+| `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The stated shares do not add up to the expense's amount. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
 
 ## Producing an error in the API
 
 Everything lives under [`src/GroupSplit.API/Errors`](../src/GroupSplit.API/Errors).
 
 - **In a service**, throw one of the four typed exceptions with a code and a sentence for
-  `detail`: `throw new ConflictException(ErrorCodes.RuleNotEditable, "Rule is not editable.")`.
+  `detail`: `throw new ConflictException(ErrorCodes.SplitRuleInUse, "This rule is still the default for a category.")`.
   Attach extension members with `.WithExtension("balance", userBalance)`. Nothing catches these
   in the service layer; the exception handler does.
 - **In an endpoint** that already has the answer in hand, return a problem rather than throw:

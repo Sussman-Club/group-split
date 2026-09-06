@@ -42,7 +42,7 @@ benefits from.
 
 | Gap | Today | Needed | Priority |
 |---|---|---|---|
-| Per-expense split | A split is a `Rule`; every transaction points at a rule version. "Split this dinner between three of the five of us" means creating a rule first. | Each transaction carries its own split. Rules become templates that pre-fill it. | High |
+| ~~Per-expense split~~ **Done** | A split was a `Rule`; every transaction pointed at a rule version. "Split this dinner between three of the five of us" meant creating a rule first. | Each transaction carries its own split, stored as rows. Rules are templates a category may point at, pre-filling the division; an expense may state its own instead, and the dialogs offer both. | Done |
 | Category separate from split | `Rule.Category` is both the label and the split. The expense dialog's "Category" select is actually a rule picker; a group with no rule cannot record anything. | Category is a label on the transaction (Plaid supplies one) that may *default to* a split rule; the split itself is chosen per expense. See [Category and split](#category-and-split). | High, Plaid |
 | Currency | `decimal(18,2)` with no currency; UI hard-codes `$`. | `Currency` on the transaction, a default on the group, Plaid's `iso_currency_code` mapped straight in. | High, Plaid |
 | Group on the transaction | Group is reached through `RuleVersion -> Rule -> Group`. `CreateTransactionRequest.GroupId` exists only to disambiguate "personal" from "no rule". | `GroupId` (nullable) on the transaction. Null means personal. | High, Plaid |
@@ -451,10 +451,21 @@ person, full time, and are estimates.
 
 ### Phase 0 -- Stop the bleeding (~1 week)
 
-- Exclude settlement rows from `GET /transactions`, group expense lists and every total;
-  render them in a separate list on the group page.
-- Hide the personal group from the switcher and Home; UtcNow everywhere; deterministic
-  even split; guard re-adding a member.
+- ~~Exclude settlement rows from `GET /transactions`, group expense lists and every total.~~
+  ~~Hide the personal group from the switcher and Home; deterministic even split.~~
+  **Not done here; absorbed by Phase 1.** Each of these is a patch over a modelling
+  mistake that Phase 1 removes, so doing it now is work thrown away in three weeks.
+  Settlements stop appearing in expense lists once `Transfer` is its own leaf and those
+  lists read `Set<Expense>()`; the personal group stops needing hiding once personal is
+  `GroupId is null` and the rows are gone; the even split becomes deterministic once the
+  arithmetic is one function instead of three. See
+  [Phase 1: reshaping the model](phase-1-model-reshape.md).
+- **Still outstanding, and not absorbed by anything: UtcNow everywhere, and guard
+  re-adding a member.** These two survive the reshape untouched -- they are ordinary bugs
+  rather than consequences of the model -- so striking the bullet above does not strike
+  them. `DateTime.Now` is still read in `GroupService` (the settle timestamp and the
+  rule-version close-out), which stores a local time in a `DateTimeOffset` column and
+  makes a settlement's ordering depend on the server's zone.
 - ~~Remove `IsArchive` or wire it -- pick one.~~ **Done:** wired, and personal.
   Archiving a group hides it from your own list the way archiving a note does -- it is
   `GroupMembership.ArchivedAt`, not a property of the group, so nothing about the group
@@ -478,12 +489,20 @@ The rest ships as a normal fix PR; no schema change beyond the archive column.
 - Data migration from rule versions; drop the TPT hierarchy, handlers, `RuleFlags`,
   `RuleFilter`.
 - Balance query rewritten as sums; `DebtCalculationService` unchanged.
-- `PATCH` -> `PUT`; drop the pinned JSON Patch package.
+- ~~`PATCH` -> `PUT`; drop the pinned JSON Patch package.~~ **Deferred.** JSON Patch
+  stays for now. It is the one verb that can change part of a model, so it lands on the
+  invariant the balances rest on: a patch that changes an amount without mentioning the
+  splits leaves splits that no longer sum to it. Phase 1 handles that explicitly rather
+  than pretending it does not exist -- see
+  [Keeping JSON Patch](phase-1-model-reshape.md#keeping-json-patch) -- and the awkward
+  code it needs is deleted outright when the verb does change.
 - Rewrite the affected tests against behaviour (splits sum to amount, remainder to
   payer, a transfer moves both balances and appears in no expense list, leaving blocked
   by balance). Coverage floor stays.
 
-One breaking schema change, done once, while the only data is seed data.
+One breaking schema change, done once, while the only data is seed data. The build order,
+the row-by-row migration and the decisions the roadmap left open are in
+[Phase 1: reshaping the model](phase-1-model-reshape.md).
 
 ### Phase 2 -- The product surface (~2 weeks)
 

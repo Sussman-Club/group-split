@@ -47,8 +47,10 @@ builder.Services.AddScoped<IDebtCalculationService, DebtCalculationService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
-builder.Services.AddRuleVersionServices();
-builder.Services.AddScoped<IRuleService, RuleService>();
+builder.Services.AddSplitRuleServices();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<ISplitRuleService, SplitRuleService>();
+builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();
@@ -78,6 +80,7 @@ app.UseAuthorization();
 app.MapGroupApi();
 app.MapUserApi();
 app.MapTransaction();
-app.MapRulesApi();
+app.MapCategoriesApi();
+app.MapSplitRulesApi();
 
 app.Run();

@@ -1,9 +1,9 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Services.Errors
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
-@inject IRulesClient RulesClient
+@inject ICategoriesClient CategoriesClient
+@inject ISplitRulesClient SplitRulesClient
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject ApiErrorPresenter Errors
@@ -11,7 +11,7 @@
 <MudDialog>
     <TitleContent>
         <MudText Typo="Typo.h5" Class="font-weight-bold mb-2">
-            Manage rules
+            Manage categories
         </MudText>
     </TitleContent>
 
@@ -22,14 +22,16 @@
                 <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" ShowCloseIcon="true" CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
             }
 
-            <MudTable Items="_rules">
+            <MudTable Items="_categories">
                 <HeaderContent>
                     <MudTh>Category</MudTh>
+                    <MudTh>Split</MudTh>
                     <MudTh class="text-right">Actions</MudTh>
                 </HeaderContent>
 
                 <RowTemplate>
-                    <MudTd>@context.Category</MudTd>
+                    <MudTd>@context.Name</MudTd>
+                    <MudTd>@(context.DefaultSplitRuleName ?? "Even split")</MudTd>
                     <MudTd Class="text-right">
                         <MudStack Row="true" Spacing="1">
                             <MudIconButton Icon="@Icons.Material.Outlined.Edit"
@@ -46,7 +48,7 @@
 
                 <NoRecordsContent>
                     <MudText Typo="Typo.body2" Class="pa-4">
-                        No rules defined for this group yet.
+                        No categories yet. Expenses without one are split evenly.
                     </MudText>
                 </NoRecordsContent>
             </MudTable>
@@ -56,7 +58,7 @@
                        StartIcon="@Icons.Material.Outlined.Add"
                        Class="align-self-end"
                        OnClick="@OpenCreateRuleDialog">
-                Create Rule
+                Create category
             </MudButton>
 
         </MudStack>
@@ -70,15 +72,15 @@
     [Parameter] public Guid GroupId { get; set; }
 
     // Always replaced, never edited in place: the table looks again when the reference changes.
-    private ICollection<RuleVersionResponse> _rules = [];
+    private ICollection<CategoryResponse> _categories = [];
 
     private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
         var loaded = await Run(
-            async () => _rules = await GroupsClient.GetGroupRulesAsync(GroupId, isSystem: false),
-            "Could not load the rules.");
+            async () => _categories = await CategoriesClient.GetCategoriesAsync(GroupId),
+            "Could not load the categories.");
 
         if (!loaded) MudDialog.Cancel();
 
@@ -118,119 +120,158 @@
             { x => x.GroupId, GroupId }
         };
 
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("Create Rule", parameters, options);
-        var request = await dialog.GetReturnValueAsync<CreateRuleRequest>();
+        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("Create category", parameters, options);
+        var model = await dialog.GetReturnValueAsync<RuleEditorForm.RuleEditorModel>();
 
-        if (request is not null)
-            await CreateRule(request);
+        if (model is not null)
+            await CreateCategory(model);
     }
 
-    private async Task CreateRule(CreateRuleRequest request)
+    /// <summary>
+    /// Two writes, because they are two things: the division the group keeps, and the label
+    /// that points at it. The form asks for them as one because that is how a group thinks
+    /// of them, and the rule is named after the category that introduced it -- until
+    /// somebody notices two categories divide alike and points them at one rule.
+    /// </summary>
+    private async Task CreateCategory(RuleEditorForm.RuleEditorModel model)
     {
         var created = await Run(async () =>
         {
-            var response = await RulesClient.CreateRuleAsync(request);
-            _rules = [.._rules, response];
-        }, "Could not create the rule.");
+            var rule = await SplitRulesClient.CreateSplitRuleAsync(new CreateSplitRuleRequest
+            {
+                GroupId = GroupId,
+                Name = model.Category,
+                Definition = model.Version
+            });
+
+            var category = await CategoriesClient.CreateCategoryAsync(new CreateCategoryRequest
+            {
+                GroupId = GroupId,
+                Name = model.Category,
+                DefaultSplitRuleId = rule.Id
+            });
+
+            _categories = [.._categories, category];
+        }, "Could not create the category.");
 
         if (!created) return;
 
-        Snackbar.Add("Rule created successfully.", Severity.Success);
+        Snackbar.Add("Category created.", Severity.Success);
         StateHasChanged();
     }
 
-    private async Task OpenEditRuleDialog(RuleVersionResponse rule)
+    private async Task OpenEditRuleDialog(CategoryResponse category)
     {
-        RuleDetailsResponse? ruleDetails = null;
+        // A category with no rule of its own is edited as an even split, which is what it
+        // already does.
+        SplitRuleDto definition = new EvenSplitRuleDto();
 
-        var loaded = await Run(
-            async () => ruleDetails = await RulesClient.GetRuleAsync(rule.RuleId),
-            "Could not load the rule.");
-
-        if (!loaded || ruleDetails is null) return;
-
-        var ruleToUpdate = new UpdateRuleRequest
+        if (category.DefaultSplitRuleId is { } ruleId)
         {
-            Category = ruleDetails.Category,
-            Version = ruleDetails.Version
+            var loaded = await Run(
+                async () => definition = (await SplitRulesClient.GetSplitRuleAsync(ruleId)).Definition,
+                "Could not load the split.");
+
+            if (!loaded) return;
+        }
+
+        var original = new RuleEditorForm.RuleEditorModel
+        {
+            Category = category.Name,
+            Version = definition
         };
 
         var parameters = new DialogParameters<EditRuleDialog>
         {
             { x => x.GroupId, GroupId },
-            { x => x.OriginalModel, ruleToUpdate }
+            { x => x.OriginalModel, original }
         };
 
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit Rule", parameters, options);
-        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateRuleRequest>>();
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit category", parameters, options);
+        var edited = await dialog.GetReturnValueAsync<RuleEditorForm.RuleEditorModel>();
 
-        if (request is not null)
-            await UpdateRule(rule, request);
+        if (edited is not null)
+            await UpdateCategory(category, edited);
     }
 
-    private async Task UpdateRule(RuleVersionResponse rule, JsonPatchDocument<UpdateRuleRequest> patch)
+    private async Task UpdateCategory(CategoryResponse category, RuleEditorForm.RuleEditorModel model)
     {
         var updated = await Run(async () =>
         {
-            var response = await RulesClient.UpdateRuleAsync(rule.RuleId, patch);
+            var ruleId = category.DefaultSplitRuleId;
 
-            var list = _rules.ToList();
-            var index = list.FindIndex(x => x.RuleId == rule.RuleId);
+            if (ruleId is { } existing)
+            {
+                await SplitRulesClient.UpdateSplitRuleAsync(existing, new UpdateSplitRuleRequest
+                {
+                    Name = model.Category,
+                    Definition = model.Version
+                });
+            }
+            else
+            {
+                // It divided evenly by having no rule; now it has one to name.
+                ruleId = (await SplitRulesClient.CreateSplitRuleAsync(new CreateSplitRuleRequest
+                {
+                    GroupId = GroupId,
+                    Name = model.Category,
+                    Definition = model.Version
+                })).Id;
+            }
+
+            var response = await CategoriesClient.UpdateCategoryAsync(category.Id, new UpdateCategoryRequest
+            {
+                Name = model.Category,
+                DefaultSplitRuleId = ruleId
+            });
+
+            var list = _categories.ToList();
+            var index = list.FindIndex(x => x.Id == category.Id);
 
             if (index != -1)
             {
                 list[index] = response;
-                _rules = list;
+                _categories = list;
             }
-        }, "Could not update the rule.");
+        }, "Could not update the category.");
 
         if (!updated) return;
 
-        Snackbar.Add("Rule updated successfully.", Severity.Success);
+        Snackbar.Add("Category updated.", Severity.Success);
         StateHasChanged();
     }
 
-    private async Task OpenDeleteRuleDialog(RuleVersionResponse rule)
+    private async Task OpenDeleteRuleDialog(CategoryResponse category)
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Are you sure you want to delete rule '{rule.Category}'?" },
+            { x => x.ContentText, $"Are you sure you want to delete the category '{category.Name}'?" },
             { x => x.ButtonText, "Delete" },
             { x => x.Color, Color.Error }
         };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Rule", parameters);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete category", parameters);
         var confirmed = await dialog.GetReturnValueAsync<bool>();
+
         if (confirmed)
-        {
-            await DeleteRule(rule);
-        }
+            await DeleteCategory(category);
     }
 
-    private async Task DeleteRule(RuleVersionResponse rule)
+    private async Task DeleteCategory(CategoryResponse category)
     {
         var deleted = await Run(async () =>
         {
-            await RulesClient.DeleteRuleAsync(rule.RuleId);
-            _rules = _rules.Where(r => r.RuleId != rule.RuleId).ToList();
-        }, "Could not delete the rule.");
+            await CategoriesClient.DeleteCategoryAsync(category.Id);
+            _categories = _categories.Where(c => c.Id != category.Id).ToList();
+        }, "Could not delete the category.");
 
         if (!deleted) return;
 
-        Snackbar.Add("Rule deleted successfully.", Severity.Success);
+        Snackbar.Add("Category deleted.", Severity.Success);
         StateHasChanged();
     }
-
 }

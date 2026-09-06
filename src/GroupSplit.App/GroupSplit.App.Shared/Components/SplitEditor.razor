@@ -1,0 +1,181 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    How one expense is divided, for the two dialogs that write one.
+
+    Off, it sends nothing and the API divides by the category's rule -- which is what
+    nearly every expense wants, and why that is the default rather than a choice the
+    person has to make every time. On, it sends the amounts shown, and they have to add
+    up: the API refuses a set that does not, because nothing else re-derives the division
+    and a set that does not sum makes every balance in the group wrong.
+
+    So the remaining line is the whole of this component's job. It is the only thing
+    standing between someone typing three numbers and a refusal they would otherwise meet
+    at the Save button.
+*@
+
+<MudStack Spacing="2">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Split</MudText>
+        <MudSwitch T="bool"
+                   Value="@Custom"
+                   ValueChanged="@OnCustomChanged"
+                   Color="Color.Primary"
+                   Label="@(Custom ? "Split it myself" : "As the category says")"/>
+    </MudStack>
+
+    @if (Custom)
+    {
+        @if (!Members.Any())
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">
+                Pick a group first, and its members can be given a share.
+            </MudAlert>
+        }
+        else
+        {
+            <MudStack Spacing="1">
+                @foreach (var member in Members)
+                {
+                    <MudNumericField T="decimal"
+                                     Value="@ShareOf(member.Id)"
+                                     ValueChanged="@(share => SetShare(member.Id, share))"
+                                     Label="@member.FullName"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                     HideSpinButtons="true"
+                                     Immediate="true"
+                                     Format="N2"/>
+                }
+            </MudStack>
+
+            <MudAlert Severity="@(Assigned ? Severity.Success : Severity.Warning)" Dense="true">
+                @if (Assigned)
+                {
+                    <text>Every cent of @Amount.ToMoney() is assigned.</text>
+                }
+                else if (Remaining > 0)
+                {
+                    <text>@Remaining.ToMoney() still to assign.</text>
+                }
+                else
+                {
+                    <text>@((-Remaining).ToMoney()) more than the expense comes to.</text>
+                }
+            </MudAlert>
+        }
+    }
+</MudStack>
+
+@code {
+    /// <summary>Everyone who may be given a share: the members of the expense's group.</summary>
+    [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
+
+    /// <summary>What the shares have to add up to.</summary>
+    [Parameter] public decimal Amount { get; set; }
+
+    /// <summary>
+    /// Who paid. Used only to decide who carries the odd cent in the starting point below,
+    /// which is the same person the API's own division would give it to.
+    /// </summary>
+    [Parameter] public Guid? PayerId { get; set; }
+
+    /// <summary>
+    /// The stated division, or null to leave it to the category. Null is not "no shares";
+    /// it is "don't send any", which is a different instruction and the ordinary one.
+    /// </summary>
+    [Parameter] public IReadOnlyList<SplitInput>? Value { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<SplitInput>?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// What to start from when the switch is turned on: the expense's current shares, on
+    /// an edit. Absent on a create, where there is nothing stored yet and the even
+    /// starting point below is used instead.
+    /// </summary>
+    [Parameter] public IReadOnlyList<SplitInput>? Stored { get; set; }
+
+    private bool Custom => Value is not null;
+
+    private decimal Remaining => Amount - (Value?.Sum(split => split.Amount) ?? 0m);
+
+    private bool Assigned => Remaining == 0m;
+
+    private decimal ShareOf(Guid userId) =>
+        Value?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
+
+    private async Task OnCustomChanged(bool custom)
+    {
+        Value = custom ? StartingPoint() : null;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task SetShare(Guid userId, decimal share)
+    {
+        var shares = Members
+            .Select(member => new SplitInput
+            {
+                UserId = member.Id,
+                Amount = member.Id == userId ? share : ShareOf(member.Id)
+            })
+            .ToList();
+
+        Value = shares;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    /// <summary>
+    /// What the fields hold the moment the switch goes on.
+    /// </summary>
+    /// <remarks>
+    /// The expense's own shares when it has some, which is the useful case on an edit:
+    /// they came from the API, so they are already right, and the person is here to change
+    /// one of them rather than all of them. A member who joined since is included at
+    /// nothing, so they can be given a share without the list being wrong about who is in
+    /// the group.
+    /// <para>
+    /// Otherwise an even division, truncated to the cent with the odd pennies going to
+    /// whoever paid. That mirrors what the API does, but it is not relied on to: it is a
+    /// starting point somebody is about to edit, and the only property it actually needs
+    /// is the one the remaining line above checks -- that it adds up.
+    /// </para>
+    /// </remarks>
+    private List<SplitInput> StartingPoint()
+    {
+        if (Stored is { Count: > 0 })
+        {
+            return Members
+                .Select(member => new SplitInput
+                {
+                    UserId = member.Id,
+                    Amount = Stored.FirstOrDefault(split => split.UserId == member.Id)?.Amount ?? 0m
+                })
+                .ToList();
+        }
+
+        if (Members.Count == 0)
+            return [];
+
+        var each = Math.Truncate(Amount / Members.Count * 100m) / 100m;
+
+        // Whoever paid, when they are in the group at all; otherwise the first member, so
+        // that the shares add up either way and nobody has to hunt for a stray cent.
+        var carriesTheRemainder = Members.Any(member => member.Id == PayerId)
+            ? PayerId
+            : Members[0].Id;
+
+        return Members
+            .Select(member => new SplitInput
+            {
+                UserId = member.Id,
+                Amount = member.Id == carriesTheRemainder
+                    ? Amount - each * (Members.Count - 1)
+                    : each
+            })
+            .ToList();
+    }
+}

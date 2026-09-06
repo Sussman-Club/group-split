@@ -29,8 +29,8 @@ public static class ErrorCodes
     public const string UserNotFound = "USER_NOT_FOUND";
     public const string AccountNotFound = "ACCOUNT_NOT_FOUND";
     public const string TransactionNotFound = "TRANSACTION_NOT_FOUND";
-    public const string RuleNotFound = "RULE_NOT_FOUND";
-    public const string RuleVersionNotFound = "RULE_VERSION_NOT_FOUND";
+    public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
+    public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -40,21 +40,24 @@ public static class ErrorCodes
 
     public const string GroupMemberNotSettled = "GROUP_MEMBER_NOT_SETTLED";
     public const string AccountNotSettled = "ACCOUNT_NOT_SETTLED";
-    public const string GroupHasNoRule = "GROUP_HAS_NO_RULE";
-    public const string RuleCategoryTaken = "RULE_CATEGORY_TAKEN";
-    public const string RuleNotEditable = "RULE_NOT_EDITABLE";
-    public const string RuleNotDeletable = "RULE_NOT_DELETABLE";
-    public const string RuleNoUserTransactions = "RULE_NO_USER_TRANSACTIONS";
-    public const string RuleVersionHasRemovedMember = "RULE_VERSION_HAS_REMOVED_MEMBER";
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
+    public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";
+    public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
+    public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
+    public const string CategoryInUse = "CATEGORY_IN_USE";
+    public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";
+    public const string SplitRuleInUse = "SPLIT_RULE_IN_USE";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
-    public const string TransactionRuleRequired = "TRANSACTION_RULE_REQUIRED";
-    public const string TransactionPayerRequiresRule = "TRANSACTION_PAYER_REQUIRES_RULE";
-    public const string RulePercentagesInvalid = "RULE_PERCENTAGES_INVALID";
+    public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";
+    public const string SplitsInvalid = "SPLITS_INVALID";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";
-    public const string RuleSharesEmpty = "RULE_SHARES_EMPTY";
+
+    // ---- Unprocessable (422): the request is understood and coherent, and still cannot --
+    // ---- be carried out, because acting on it would break an invariant ------------------
+
+    public const string SplitsDoNotSumToAmount = "SPLITS_DO_NOT_SUM_TO_AMOUNT";
 
     /// <summary>
     /// The generic code for a status, used when a response was produced by something that
@@ -67,6 +70,7 @@ public static class ErrorCodes
         403 => Forbidden,
         404 => NotFound,
         409 => Conflict,
+        422 => ValidationFailed,
         >= 500 => InternalError,
         _ => $"HTTP_{status}"
     };

@@ -43,22 +43,12 @@ internal sealed class UserProvisioner(AppDbContext context) : IUserProvisioner
             return existingUser;
         }
 
-        var personalGroup = new Group
-        {
-            Name = "Personal",
-            Rules =
-            {
-                new Rule
-                {
-                    Category = Rule.PersonalDefault,
-                    Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable,
-                    Versions =
-                    {
-                        new PersonalRuleVersion { StartDateTime = DateTime.UtcNow }
-                    }
-                }
-            }
-        };
+        // No rule. A personal group used to need one because an expense could only be
+        // recorded against a rule, so every account was provisioned with a "Default" rule
+        // flagged un-editable and un-deletable to stop anybody breaking it. An expense
+        // needs a group and an amount now; a category is optional and a personal one has
+        // nobody to divide with anyway.
+        var personalGroup = new Group { Name = "Personal" };
 
         var user = new User
         {

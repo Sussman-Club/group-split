@@ -28,19 +28,14 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         return (group.Id, self, other.Id);
     }
 
-    private async Task<Guid> PercentRule(Guid groupId, Guid a, decimal aPct, Guid b, decimal bPct)
+    private async Task<Guid> PercentCategory(Guid groupId, Guid a, decimal aPct, Guid b, decimal bPct)
     {
-        var version = await GetService<IRuleService>().Create(new CreateRuleRequest
-        {
-            GroupId = groupId,
-            Category = "Split",
-            Version = new PercentRuleVersionDto
+        var version = await CreateCategory(groupId, "Split", new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [a] = aPct, [b] = bPct }
-            }
-        }, TestContext.Current.CancellationToken);
+            });
 
-        return version.Id;
+        return version;
     }
 
     [Fact]
@@ -85,7 +80,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     public async Task A_percent_transaction_splits_by_the_rule()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var ruleVersionId = await PercentRule(groupId, self, 25m, other, 75m);
+        var categoryId = await PercentCategory(groupId, self, 25m, other, 75m);
         var transactions = GetService<ITransactionService>();
 
         var created = await transactions.Create(new CreateTransactionRequest
@@ -93,8 +88,9 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             Name = "Dinner",
             Amount = 100m,
             DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId,
             PaidByUserId = other,
-            RuleVersionId = ruleVersionId
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 
         var details = await transactions.GetDetails(created.Id, TestContext.Current.CancellationToken);
@@ -115,7 +111,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     public async Task The_payer_absorbs_the_rounding_remainder_so_the_splits_total_the_bill()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var ruleVersionId = await PercentRule(groupId, self, 33.33m, other, 66.67m);
+        var categoryId = await PercentCategory(groupId, self, 33.33m, other, 66.67m);
         var transactions = GetService<ITransactionService>();
 
         var created = await transactions.Create(new CreateTransactionRequest
@@ -123,8 +119,9 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             Name = "Awkward",
             Amount = 10m,
             DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId,
             PaidByUserId = self,
-            RuleVersionId = ruleVersionId
+            CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 
         var details = await transactions.GetDetails(created.Id, TestContext.Current.CancellationToken);
@@ -255,7 +252,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     }
 
     [Fact]
-    public async Task An_update_naming_a_rule_version_that_does_not_exist_is_rejected()
+    public async Task An_update_naming_a_category_that_does_not_exist_is_rejected()
     {
         var transactions = GetService<ITransactionService>();
         var self = GetService<ICurrentUser>().User;
@@ -272,15 +269,15 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            transactions.Update(created.Id, model with { RuleVersionId = Guid.NewGuid() },
+            transactions.Update(created.Id, model with { CategoryId = Guid.NewGuid() },
                 TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact]
-    public async Task A_transaction_can_be_moved_onto_another_rule()
+    public async Task A_transaction_can_be_moved_onto_another_category()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var ruleVersionId = await PercentRule(groupId, self, 50m, other, 50m);
+        var categoryId = await PercentCategory(groupId, self, 50m, other, 50m);
         var transactions = GetService<ITransactionService>();
 
         var created = await transactions.Create(new CreateTransactionRequest
@@ -288,6 +285,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             Name = "Shared",
             Amount = 20m,
             DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId,
             PaidByUserId = self
         }, TestContext.Current.CancellationToken);
 
@@ -295,10 +293,10 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         var updated = await transactions.Update(created.Id,
-            model with { RuleVersionId = ruleVersionId },
+            model with { CategoryId = categoryId },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(ruleVersionId, updated.RuleVersion.Id);
+        Assert.Equal(categoryId, updated.CategoryId);
 
         var details = await transactions.GetDetails(created.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(details);

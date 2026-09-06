@@ -22,7 +22,7 @@ public class PatchedModelTests
         Amount = 12.34m,
         DateTime = DateTimeOffset.UtcNow,
         PaidByUserId = Guid.NewGuid(),
-        RuleVersionId = Guid.NewGuid()
+        CategoryId = Guid.NewGuid()
     };
 
     [Fact]

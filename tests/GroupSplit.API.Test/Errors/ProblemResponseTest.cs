@@ -64,14 +64,16 @@ public class ProblemResponseTest : IAsyncLifetime
         return created!.Id;
     }
 
-    private async Task<Guid> CreateTransaction(decimal amount = 10m, Guid? ruleVersionId = null, Guid? paidBy = null)
+    private async Task<Guid> CreateTransaction(decimal amount = 10m, Guid? categoryId = null, Guid? paidBy = null,
+        Guid? groupId = null)
     {
         var response = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
         {
             Name = "Lunch",
             Amount = amount,
             DateTime = DateTimeOffset.UtcNow,
-            RuleVersionId = ruleVersionId,
+            GroupId = groupId,
+            CategoryId = categoryId,
             PaidByUserId = paidBy
         }, Json, Ct);
 
@@ -80,12 +82,20 @@ public class ProblemResponseTest : IAsyncLifetime
         return created!.Id;
     }
 
-    private async Task<HttpResponseMessage> CreateRule(Guid groupId, string category, RuleVersionDto version) =>
-        await Client.PostAsJsonAsync("/rules", new CreateRuleRequest
+    private async Task<HttpResponseMessage> CreateSplitRule(Guid groupId, string name, SplitRuleDto definition) =>
+        await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
         {
             GroupId = groupId,
-            Category = category,
-            Version = version
+            Name = name,
+            Definition = definition
+        }, Json, Ct);
+
+    private async Task<HttpResponseMessage> CreateCategory(Guid groupId, string name, Guid? splitRuleId = null) =>
+        await Client.PostAsJsonAsync("/categories", new CreateCategoryRequest
+        {
+            GroupId = groupId,
+            Name = name,
+            DefaultSplitRuleId = splitRuleId
         }, Json, Ct);
 
     /// <summary>
@@ -104,14 +114,18 @@ public class ProblemResponseTest : IAsyncLifetime
             new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Json, Ct);
         added.EnsureSuccessStatusCode();
 
-        var rule = await CreateRule(groupId, "Lift passes", new PercentRuleVersionDto
+        var rule = await CreateSplitRule(groupId, "Lift passes", new PercentSplitRuleDto
         {
             Percentages = new Dictionary<Guid, decimal> { [me.Id] = 50m, [other.Id] = 50m }
         });
         rule.EnsureSuccessStatusCode();
-        var ruleVersion = await rule.Content.ReadFromJsonAsync<RuleVersionResponse>(Json, Ct);
+        var splitRule = await rule.Content.ReadFromJsonAsync<SplitRuleDetailsResponse>(Json, Ct);
 
-        await CreateTransaction(100m, ruleVersion!.RuleVersionId, me.Id);
+        var category = await CreateCategory(groupId, "Lift passes", splitRule!.Id);
+        category.EnsureSuccessStatusCode();
+        var created = await category.Content.ReadFromJsonAsync<CategoryResponse>(Json, Ct);
+
+        await CreateTransaction(100m, created!.Id, me.Id, groupId);
 
         return (groupId, me, other);
     }
@@ -171,15 +185,15 @@ public class ProblemResponseTest : IAsyncLifetime
     // ---- Conflict -----------------------------------------------------------------------
 
     [Fact]
-    public async Task A_second_rule_in_the_same_category_is_a_conflict()
+    public async Task A_second_category_of_the_same_name_is_a_conflict()
     {
         var groupId = await CreateGroup();
-        (await CreateRule(groupId, "Groceries", new PersonalRuleVersionDto())).EnsureSuccessStatusCode();
+        (await CreateCategory(groupId, "Groceries")).EnsureSuccessStatusCode();
 
-        var response = await CreateRule(groupId, "Groceries", new PersonalRuleVersionDto());
+        var response = await CreateCategory(groupId, "Groceries");
 
         var problem = await ReadProblem(response, HttpStatusCode.Conflict);
-        Assert.Equal(ErrorCodes.RuleCategoryTaken, problem.Code);
+        Assert.Equal(ErrorCodes.CategoryNameTaken, problem.Code);
     }
 
     [Fact]
@@ -231,13 +245,13 @@ public class ProblemResponseTest : IAsyncLifetime
         var me = await WhoAmI(Client);
         var groupId = await CreateGroup();
 
-        var response = await CreateRule(groupId, "Lopsided", new PercentRuleVersionDto
+        var response = await CreateSplitRule(groupId, "Lopsided", new PercentSplitRuleDto
         {
             Percentages = new Dictionary<Guid, decimal> { [me.Id] = 50m }
         });
 
         var problem = await ReadProblem(response, HttpStatusCode.BadRequest);
-        Assert.Equal(ErrorCodes.RulePercentagesInvalid, problem.Code);
+        Assert.Equal(ErrorCodes.SplitRuleInvalid, problem.Code);
     }
 
     /// <summary>

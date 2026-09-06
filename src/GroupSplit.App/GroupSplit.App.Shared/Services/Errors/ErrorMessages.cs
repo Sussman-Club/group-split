@@ -39,26 +39,25 @@ public static class ErrorMessages
         [ErrorCodes.UserNotFound] = "That person could not be found.",
         [ErrorCodes.AccountNotFound] = "Your account could not be found.",
         [ErrorCodes.TransactionNotFound] = "That expense no longer exists.",
-        [ErrorCodes.RuleNotFound] = "That rule no longer exists.",
-        [ErrorCodes.RuleVersionNotFound] = "That rule is no longer available.",
+        [ErrorCodes.CategoryNotFound] = "That category no longer exists.",
+        [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group.",
 
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",
-        [ErrorCodes.GroupHasNoRule] = "This group has no rule to record an expense against. Add a rule first.",
-        [ErrorCodes.RuleCategoryTaken] = "This group already has a rule with that category.",
-        [ErrorCodes.RuleNotEditable] = "This rule cannot be edited.",
-        [ErrorCodes.RuleNotDeletable] = "This rule cannot be deleted.",
-        [ErrorCodes.RuleNoUserTransactions] = "Expenses cannot be recorded against this rule.",
-        [ErrorCodes.RuleVersionHasRemovedMember] = "This rule includes someone who has left the group. Update the rule first.",
         [ErrorCodes.TransactionPayerNotInGroup] = "The person who paid is not a member of this group.",
+        [ErrorCodes.SplitUserNotInGroup] = "One of the shares names someone who is not in this group.",
+        [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
+        [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
+        [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",
+        [ErrorCodes.SplitRuleNameTaken] = "This group already has a rule with that name.",
+        [ErrorCodes.SplitRuleInUse] = "This rule is still the default for a category. Point the category elsewhere first.",
 
-        [ErrorCodes.TransactionRuleRequired] = "Pick a rule for this expense.",
-        [ErrorCodes.TransactionPayerRequiresRule] = "Pick a rule to record an expense someone else paid.",
-        [ErrorCodes.RulePercentagesInvalid] = "The percentages have to add up to 100.",
-        [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group.",
-        [ErrorCodes.RuleSharesEmpty] = "At least one person needs a share."
+        [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
+        [ErrorCodes.SplitsInvalid] = "The shares are not valid. Each person can appear only once.",
+        [ErrorCodes.SplitsDoNotSumToAmount] = "The shares have to add up to the amount of the expense.",
+        [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group."
     };
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>

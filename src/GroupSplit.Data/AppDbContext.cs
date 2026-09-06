@@ -53,80 +53,107 @@ public class AppDbContext : DbContext
         {
             entity.Property(group => group.Name).HasMaxLength(64).IsRequired();
 
+            entity.Property(group => group.Currency)
+                .HasMaxLength(Currencies.CodeLength)
+                .IsFixedLength()
+                .IsRequired()
+                .HasDefaultValue(Currencies.Default);
+
             entity.HasIndex(group => group.Name);
         });
 
-        modelBuilder.Entity<Rule>(entity =>
+        modelBuilder.Entity<SplitRule>(entity =>
         {
-            entity.Property(rule => rule.Category).HasMaxLength(64).IsRequired();
-            
+            entity.Property(rule => rule.Name).HasMaxLength(64).IsRequired();
+
             entity.HasOne(rule => rule.Group)
-                .WithMany(group => group.Rules)
+                .WithMany(group => group.SplitRules)
+                .HasForeignKey(rule => rule.GroupId)
                 .IsRequired();
 
-            entity.HasMany(rule => rule.Versions)
-                .WithOne(version => version.Rule)
+            // A group's rules are picked from a list by name, so two with the same name
+            // are two the member cannot tell apart.
+            entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
+        });
+
+        // TPH, like Transaction: how a rule divides is which type it is -- answered by the
+        // handler registered for that type, not by a Kind column and a switch. One table,
+        // and the participants are declared once, on the middle layer that has them.
+        //
+        // Declared before the discriminator is indexed, because until EF has been told the
+        // subtypes exist there is no hierarchy and therefore no discriminator to index.
+        modelBuilder.Entity<WeightedSplitRule>();
+        modelBuilder.Entity<EvenSplitRule>();
+
+        modelBuilder.Entity<PayerSplitRule>();
+
+        modelBuilder.Entity<PercentSplitRule>();
+
+        modelBuilder.Entity<SharesSplitRule>();
+
+        modelBuilder.Entity<SplitRule>().HasIndex("Discriminator");
+
+        modelBuilder.Entity<SplitRuleParticipant>(entity =>
+        {
+            entity.Property(participant => participant.Weight).IsRequired();
+
+            entity.HasOne(participant => participant.SplitRule)
+                .WithMany(rule => rule.Participants)
+                .HasForeignKey(participant => participant.SplitRuleId)
                 .IsRequired();
-            
-            entity.HasIndex(rule => rule.Category);
-            entity.HasIndex(rule => new { rule.GroupId, rule.Category }).IsUnique();
-        });
 
-        modelBuilder.Entity<RuleVersion>(entity =>
-        {
-            entity.Property(ruleVersion => ruleVersion.StartDateTime).IsRequired();
-            
-            entity.Property(ruleVersion => ruleVersion.EndDateTime);
-
-            entity.UseTptMappingStrategy();
-        });
-
-        modelBuilder.Entity<PersonalRuleVersion>();
-
-        modelBuilder.Entity<PercentRuleVersion>();
-        
-        modelBuilder.Entity<SharesRuleVersion>();
-
-        modelBuilder.Entity<SettlementRuleVersion>(entity =>
-        {
-            entity.HasOne(settlement => settlement.OtherUser)
-                .WithMany();
-
-            entity.HasIndex(settlement => settlement.OtherUserId);
-        });
-        
-        modelBuilder.Entity<PercentRuleUser>(entity =>
-        {
-            entity.Property(ruleUser => ruleUser.Percentage).IsRequired();
-
-            entity.HasOne(ruleUser => ruleUser.User)
+            entity.HasOne(participant => participant.User)
                 .WithMany()
-                .HasForeignKey(ruleUser => ruleUser.UserId)
+                .HasForeignKey(participant => participant.UserId)
                 .IsRequired();
 
-            entity.HasOne(ruleUser => ruleUser.RuleVersion)
-                .WithMany(version => version.RuleUsers)
-                .HasForeignKey(ruleUser => ruleUser.RuleVersionId)
-                .IsRequired();
-
-            entity.HasIndex(ruleUser => new { ruleUser.UserId, ruleUser.RuleVersionId }).IsUnique();
+            entity.HasIndex(participant => new { participant.SplitRuleId, participant.UserId }).IsUnique();
         });
-        
-        modelBuilder.Entity<SharesRuleUser>(entity =>
+
+        modelBuilder.Entity<Category>(entity =>
         {
-            entity.Property(ruleUser => ruleUser.Shares).IsRequired();
+            entity.Property(category => category.Name).HasMaxLength(64).IsRequired();
 
-            entity.HasOne(ruleUser => ruleUser.User)
+            entity.HasOne(category => category.Group)
+                .WithMany(group => group.Categories)
+                .HasForeignKey(category => category.GroupId)
+                .IsRequired();
+
+            // Restrict rather than cascade or set-null: a rule several categories default
+            // to is exactly the rule somebody will try to delete, and silently emptying
+            // their defaults would change how every future expense in them is split
+            // without saying so.
+            entity.HasOne(category => category.DefaultSplitRule)
                 .WithMany()
-                .HasForeignKey(ruleUser => ruleUser.UserId)
+                .HasForeignKey(category => category.DefaultSplitRuleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Inherited from the constraint Rule carried on (GroupId, Category), which is
+            // the same statement now that the label has a table of its own.
+            entity.HasIndex(category => new { category.GroupId, category.Name }).IsUnique();
+        });
+
+        modelBuilder.Entity<TransactionSplit>(entity =>
+        {
+            entity.Property(split => split.Amount).IsRequired().HasPrecision(18, 2);
+
+            entity.HasOne(split => split.Transaction)
+                .WithMany(transaction => transaction.Splits)
+                .HasForeignKey(split => split.TransactionId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(split => split.User)
+                .WithMany()
+                .HasForeignKey(split => split.UserId)
                 .IsRequired();
 
-            entity.HasOne(ruleUser => ruleUser.RuleVersion)
-                .WithMany(version => version.SharedRuleUsers)
-                .HasForeignKey(ruleUser => ruleUser.RuleVersionId)
-                .IsRequired();
+            // One row per person per transaction: a second would be a second opinion about
+            // what they owed.
+            entity.HasIndex(split => new { split.TransactionId, split.UserId }).IsUnique();
 
-            entity.HasIndex(ruleUser => new { ruleUser.UserId, ruleUser.RuleVersionId }).IsUnique();
+            // The balance query's access path -- every split this person is named in.
+            entity.HasIndex(split => split.UserId);
         });
 
         modelBuilder.Entity<Transaction>(entity =>
@@ -136,18 +163,60 @@ public class AppDbContext : DbContext
             entity.Property(transaction => transaction.DateTime).IsRequired();
             entity.Property(transaction => transaction.Name).HasMaxLength(128).IsRequired();
             entity.Property(transaction => transaction.Description).HasMaxLength(256);
-            
+
+            entity.Property(transaction => transaction.Currency)
+                .HasMaxLength(Currencies.CodeLength)
+                .IsFixedLength()
+                .IsRequired()
+                .HasDefaultValue(Currencies.Default);
+
             entity.HasOne(transaction => transaction.User)
                 .WithMany(user => user.Transactions)
+                .HasForeignKey(transaction => transaction.UserId)
                 .IsRequired();
 
-            entity.HasOne(transaction => transaction.RuleVersion)
-                .WithMany(group => group.Transactions)
-                .IsRequired();
-            
+            entity.HasOne(transaction => transaction.Group)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.GroupId);
+
             entity.HasIndex(transaction => transaction.DateTime);
             entity.HasIndex(transaction => transaction.Name);
+
+            // Every expense listing filters on the group and orders by the date, and EF
+            // adds the discriminator to that predicate itself, so the three travel
+            // together often enough to be worth one index.
+            entity.HasIndex(transaction => new { transaction.GroupId, transaction.DateTime });
+
         });
+
+        modelBuilder.Entity<Expense>(entity =>
+        {
+            // On the leaf, so the column is nullable in the table -- a transfer is not
+            // filed under anything and never was.
+            //
+            // Restrict, not cascade: deleting a category must not take the group's spending
+            // history with it. Clearing the expenses' category first is the caller's job,
+            // and failing loudly is the right answer if they did not.
+            entity.HasOne(expense => expense.Category)
+                .WithMany()
+                .HasForeignKey(expense => expense.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(expense => expense.CategoryId);
+        });
+
+        modelBuilder.Entity<Transfer>();
+
+        // EF does not index the discriminator on its own, and Set<Expense>() filters on
+        // nothing else.
+        //
+        // After the leaves, not inside the base's configuration: until EF has been told
+        // they exist there is no hierarchy, so there is no discriminator to index and
+        // naming one asks for a shadow property with no type. This used to work from
+        // inside the block only by accident -- RuleVersion.Transactions was an
+        // ICollection<Expense>, so configuring it first taught EF the hierarchy on the way
+        // past. Deleting RuleVersion took that accident with it.
+        modelBuilder.Entity<Transaction>().HasIndex("Discriminator");
 
         modelBuilder.Entity<UserIdentity>(entity =>
         {

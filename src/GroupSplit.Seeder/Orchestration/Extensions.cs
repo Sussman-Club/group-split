@@ -1,3 +1,4 @@
+using GroupSplit.API.Services;
 ﻿using GroupSplit.API.Extensions;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.DataSources;
@@ -32,8 +33,13 @@ public static class Extensions
             // App seeders
             builder.AddSeeder<GroupSeeder>();
             builder.AddSeeder<UserSeeder>();
-            builder.Services.AddRuleVersionServices();
-            builder.AddSeeder<RuleSeeder>();
+            builder.Services.AddSplitRuleServices();
+
+            // The transaction seeder divides through the same code the API does, so a
+            // developer's seeded balances are ones the app could have produced. Scoped,
+            // like the API registers it, because it writes through the DbContext.
+            builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+            builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 
             // Identity provider. Reads the same users.json as UserSeeder but writes to
@@ -50,7 +56,7 @@ public static class Extensions
         {
             services.AddJsonSeedSource<GroupSeedDto>(opt => opt.Paths.Groups);
             services.AddJsonSeedSource<UserSeedDto>(opt => opt.Paths.Users);
-            services.AddJsonSeedSource<RuleSeedDto>(opt => opt.Paths.Rules);
+            services.AddJsonSeedSource<CategorySeedDto>(opt => opt.Paths.Categories);
             services.AddJsonSeedSource<TransactionSeedDto>(opt => opt.Paths.Transactions);
             return services;
         }
