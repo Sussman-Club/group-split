@@ -36,14 +36,10 @@
         if (!_form.IsValid)
             return;
 
-        var request = new CreateRuleRequest
-        {
-            GroupId = GroupId,
-            Category = _model.Category,
-            Version = _model.Version
-        };
-
-        MudDialog.Close(request);
+        // The model, not a request: a category and its split are two writes now, and which
+        // two depends on whether the category already had a rule -- which is the calling
+        // dialog's to know, not this form's.
+        MudDialog.Close(DialogResult.Ok(_model));
     }
 
     private void Cancel() => MudDialog.Cancel();

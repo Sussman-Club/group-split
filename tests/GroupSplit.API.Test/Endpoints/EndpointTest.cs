@@ -437,7 +437,7 @@ public class EndpointTest : IAsyncLifetime
         {
             GroupId = groupId,
             Category = "Groceries",
-            Version = new PersonalRuleVersionDto()
+            Version = new PayerSplitRuleDto()
         }, Json, TestContext.Current.CancellationToken);
 
         response.EnsureSuccessStatusCode();

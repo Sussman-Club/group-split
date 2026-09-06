@@ -4,8 +4,6 @@ public class Group : Entity
 {
     public virtual ICollection<User> Users { get; } = [];
 
-    public virtual ICollection<Rule> Rules { get; } = [];
-
     public virtual ICollection<SplitRule> SplitRules { get; } = [];
 
     public virtual ICollection<Category> Categories { get; } = [];

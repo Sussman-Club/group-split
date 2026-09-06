@@ -30,15 +30,10 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
 
     private async Task<Guid> PercentRule(Guid groupId, Guid a, decimal aPct, Guid b, decimal bPct)
     {
-        var version = await GetService<IRuleService>().Create(new CreateRuleRequest
-        {
-            GroupId = groupId,
-            Category = "Split",
-            Version = new PercentRuleVersionDto
+        var version = CreateCategory(groupId, "Split", new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [a] = aPct, [b] = bPct }
-            }
-        }, TestContext.Current.CancellationToken);
+            });
 
         return version.Id;
     }
@@ -94,7 +89,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             Amount = 100m,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = other,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         }, TestContext.Current.CancellationToken);
 
         var details = await transactions.GetDetails(created.Id, TestContext.Current.CancellationToken);
@@ -124,7 +119,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             Amount = 10m,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = self,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         }, TestContext.Current.CancellationToken);
 
         var details = await transactions.GetDetails(created.Id, TestContext.Current.CancellationToken);
@@ -272,7 +267,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            transactions.Update(created.Id, model with { RuleVersionId = Guid.NewGuid() },
+            transactions.Update(created.Id, model with { CategoryId = Guid.NewGuid() },
                 TestContext.Current.CancellationToken).AsTask());
     }
 
@@ -295,7 +290,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         var updated = await transactions.Update(created.Id,
-            model with { RuleVersionId = ruleVersionId },
+            model with { CategoryId = ruleVersionId },
             TestContext.Current.CancellationToken);
 
         Assert.Equal(ruleVersionId, updated.RuleVersion.Id);

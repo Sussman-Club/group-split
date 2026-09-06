@@ -19,7 +19,7 @@ public class SplitRuleParticipant : Entity
 {
     public virtual WeightedSplitRule SplitRule { get; set; } = null!;
 
-    internal Guid SplitRuleId { get; set; }
+    public Guid SplitRuleId { get; set; }
 
     public virtual User User { get; set; } = null!;
 

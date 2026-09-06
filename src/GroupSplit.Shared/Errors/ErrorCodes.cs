@@ -31,6 +31,8 @@ public static class ErrorCodes
     public const string TransactionNotFound = "TRANSACTION_NOT_FOUND";
     public const string RuleNotFound = "RULE_NOT_FOUND";
     public const string RuleVersionNotFound = "RULE_VERSION_NOT_FOUND";
+    public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
+    public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -48,12 +50,17 @@ public static class ErrorCodes
     public const string RuleVersionHasRemovedMember = "RULE_VERSION_HAS_REMOVED_MEMBER";
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
     public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
+    public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
+    public const string CategoryInUse = "CATEGORY_IN_USE";
+    public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";
+    public const string SplitRuleInUse = "SPLIT_RULE_IN_USE";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
     public const string TransactionRuleRequired = "TRANSACTION_RULE_REQUIRED";
     public const string TransactionPayerRequiresRule = "TRANSACTION_PAYER_REQUIRES_RULE";
     public const string RulePercentagesInvalid = "RULE_PERCENTAGES_INVALID";
+    public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";
     public const string RuleSharesEmpty = "RULE_SHARES_EMPTY";
 

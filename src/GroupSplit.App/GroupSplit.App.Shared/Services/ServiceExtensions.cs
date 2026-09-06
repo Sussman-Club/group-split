@@ -34,7 +34,8 @@ public static class ServiceExtensions
             services.AddApiClient<IUsersClient, UsersClient>();
             services.AddApiClient<IGroupsClient, GroupsClient>();
             services.AddApiClient<ITransactionsClient, TransactionsClient>();
-            services.AddApiClient<IRulesClient, RulesClient>();
+            services.AddApiClient<ICategoriesClient, CategoriesClient>();
+            services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
             
             return services;
         }

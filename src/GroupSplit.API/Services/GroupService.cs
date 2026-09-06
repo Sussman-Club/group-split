@@ -48,9 +48,9 @@ public interface IGroupService
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Drops <paramref name="user"/> from <paramref name="group"/> and closes the rule
-    /// versions that still include them, so later transactions stop splitting with
-    /// somebody who has left.
+    /// Drops <paramref name="user"/> from <paramref name="group"/> and out of the split
+    /// rules that name them, so later expenses stop giving a share to somebody who has
+    /// left.
     /// <para>
     /// Deliberately does not save. Callers batch it with their own changes, which is what
     /// lets an account leaving several groups at once apply as one unit instead of
@@ -223,41 +223,38 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         return groupQuery;
     }
 
+    /// <summary>
+    /// Takes a member out of a group, and out of the rules that name them.
+    /// </summary>
+    /// <remarks>
+    /// A rule that still named a departed member would keep giving them a share of every
+    /// later expense -- and for a deleted account that would go on distorting what everyone
+    /// still in the group owes. Removing them is enough on its own: weights are
+    /// proportional and the division normalises by whatever total it is given, so what was
+    /// theirs is redistributed among the rest rather than leaving a hole.
+    /// <para>
+    /// This used to close every affected rule version instead, and needed two queries to do
+    /// it, because a shares version recorded its members in a different collection from the
+    /// percentage version it derived from and the first query never saw them. One
+    /// participants table, one query.
+    /// </para>
+    /// <para>
+    /// Recorded expenses are untouched: they hold the amounts they were divided into, so a
+    /// departure cannot restate what anybody owed last March.
+    /// </para>
+    /// </remarks>
     public async Task DetachMember(Group group, User user, CancellationToken cancellationToken = default)
     {
         group.Users.Remove(user);
 
-        var percentVersions = await (
-                from ruleVersion in context.Set<PercentRuleVersion>()
-                where ruleVersion.Rule.Group == @group &&
-                      ruleVersion.EndDateTime == null &&
-                      ruleVersion.RuleUsers.Any(ruleUser => ruleUser.User == user)
-                select ruleVersion
+        var named = await (
+                from participant in context.Set<SplitRuleParticipant>()
+                where participant.SplitRule.Group == @group && participant.UserId == user.Id
+                select participant
             )
             .ToListAsync(cancellationToken);
 
-        // Needed as a second query, not a wider one. Set<PercentRuleVersion>() already
-        // returns shares versions, since SharesRuleVersion derives from it, but a shares
-        // version records its members in SharedRuleUsers rather than RuleUsers, so the
-        // query above never sees them. Until this was here, a member removed from a
-        // shares rule stayed in it and every later transaction kept splitting them a
-        // share -- which for a deleted account would go on distorting what everyone
-        // still in the group owes.
-        var sharesVersions = await (
-                from ruleVersion in context.Set<SharesRuleVersion>()
-                where ruleVersion.Rule.Group == @group &&
-                      ruleVersion.EndDateTime == null &&
-                      ruleVersion.SharedRuleUsers.Any(ruleUser => ruleUser.User == user)
-                select ruleVersion
-            )
-            .ToListAsync(cancellationToken);
-
-        var now = DateTime.Now;
-
-        foreach (var ruleVersion in percentVersions.Concat<RuleVersion>(sharesVersions))
-        {
-            ruleVersion.EndDateTime = now;
-        }
+        context.RemoveRange(named);
     }
 
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,

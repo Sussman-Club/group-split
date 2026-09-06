@@ -112,8 +112,10 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         builder.Services.AddScoped<IAccountService, AccountService>();
         builder.Services.AddScoped<IGroupService, GroupService>();
         builder.Services.AddScoped<ITransactionService, TransactionService>();
-        builder.Services.AddRuleVersionServices();
-        builder.Services.AddScoped<IRuleService, RuleService>();
+        builder.Services.AddSplitRuleServices();
+        builder.Services.AddScoped<ICategoryService, CategoryService>();
+        builder.Services.AddScoped<ISplitRuleService, SplitRuleService>();
+        builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
         builder.Services.AddValidation();
         builder.Services.AddApiErrorHandling();
 
@@ -130,7 +132,8 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         app.MapGroupApi();
         app.MapUserApi();
         app.MapTransaction();
-        app.MapRulesApi();
+        app.MapCategoriesApi();
+        app.MapSplitRulesApi();
 
         app.MapGet(ThrowingRoute, () => { throw new InvalidOperationException(ThrowingMessage); })
             .RequireAuthorization();

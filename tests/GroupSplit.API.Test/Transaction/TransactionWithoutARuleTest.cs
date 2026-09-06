@@ -21,7 +21,7 @@ public class TransactionWithoutARuleTest(ApiTestFixture fixture) : ApiUnitTest(f
             Amount = 20m,
             DateTime = DateTimeOffset.UtcNow,
             GroupId = groupId,
-            RuleVersionId = ruleVersionId
+            CategoryId = ruleVersionId
         };
 
     [Fact]
@@ -71,12 +71,7 @@ public class TransactionWithoutARuleTest(ApiTestFixture fixture) : ApiUnitTest(f
         var group = await GetService<IGroupService>().CreateGroup(
             new CreateGroupRequest { Name = "Has rules" }, TestContext.Current.CancellationToken);
 
-        await GetService<IRuleService>().Create(new CreateRuleRequest
-        {
-            GroupId = group.Id,
-            Category = "Groceries",
-            Version = new PersonalRuleVersionDto()
-        }, TestContext.Current.CancellationToken);
+        CreateCategory(group.Id, "Groceries", new PayerSplitRuleDto());
 
         var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             GetService<ITransactionService>()
@@ -125,12 +120,7 @@ public class TransactionWithoutARuleTest(ApiTestFixture fixture) : ApiUnitTest(f
         var group = await groupService.CreateGroup(
             new CreateGroupRequest { Name = "Trip" }, TestContext.Current.CancellationToken);
 
-        var ruleVersion = await GetService<IRuleService>().Create(new CreateRuleRequest
-        {
-            GroupId = group.Id,
-            Category = "Food",
-            Version = new PersonalRuleVersionDto()
-        }, TestContext.Current.CancellationToken);
+        var ruleVersion = CreateCategory(group.Id, "Food", new PayerSplitRuleDto());
 
         var created = await GetService<ITransactionService>().Create(
             Request(groupId: group.Id, ruleVersionId: ruleVersion.Id),

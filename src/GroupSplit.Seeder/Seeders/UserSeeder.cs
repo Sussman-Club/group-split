@@ -21,25 +21,9 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
             Identity = new UserIdentity { IdentityId = dto.ExternalUserId },
         };
 
-        var personalGroup = new Group
-        {
-            Name = "Personal",
-            Rules =
-            {
-                new Rule
-                {
-                    Category = Rule.PersonalDefault,
-                    Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable,
-                    Versions =
-                    {
-                        new PersonalRuleVersion
-                        {
-                            StartDateTime = DateTimeOffset.UtcNow
-                        }
-                    }
-                }
-            }
-        };
+        // No rule: a personal group has nobody to divide with, and an expense no longer
+        // needs one to be recorded against.
+        var personalGroup = new Group { Name = "Personal" };
 
         user.PersonalGroup = personalGroup;
         user.Groups.Add(personalGroup);

@@ -24,7 +24,7 @@ public abstract class Transaction : Entity
     /// </summary>
     public virtual User User { get; set; } = null!;
 
-    internal Guid UserId { get; set; }
+    public Guid UserId { get; set; }
 
     /// <summary>
     /// The group this belongs to.

@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ICategoriesClient CategoriesClient
 @inject ApiErrorPresenter Errors
 
 <MudDialog>
@@ -79,13 +80,13 @@
                 <MudSelect T="Guid?"
                            Label="Category"
                            Variant="Variant.Outlined"
-                           @bind-Value="model.RuleVersionId"
+                           @bind-Value="model.CategoryId"
                            Disabled="@(!GroupCategories.Any())"
                            Clearable="false"
                            Placeholder="">
                     @foreach (var c in GroupCategories)
                     {
-                        <MudSelectItem T="Guid?" Value="@c.RuleVersionId">@c.Category</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)c.Id)">@c.Name</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -137,7 +138,7 @@
 
     // Group / categories / users state
     private ICollection<GroupResponse> UserGroups = [];
-    private ICollection<RuleVersionResponse> GroupCategories = [];
+    private ICollection<CategoryResponse> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
 
     // A dialog that cannot load what it offers has nothing to offer, so it closes; the
@@ -174,7 +175,7 @@
             return;
         }
 
-        GroupCategories = await GroupsClient.GetGroupRulesAsync(groupId, allowUserTransactions: true);
+        GroupCategories = await CategoriesClient.GetCategoriesAsync(groupId);
         GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
     }
 
@@ -197,10 +198,11 @@
             TimeZoneInfo.Local.GetUtcOffset(localDateTime)
         );
 
-        // Send the group that was picked, not just the rule. When the group has no rules
-        // the Category select above is empty and disabled, so RuleVersionId stays null --
-        // and without the group the API cannot tell that from a personal expense, and
-        // would file the transaction against the personal group instead.
+        // Send the group that was picked, not just the category. A group with no
+        // categories leaves the select above empty, so CategoryId stays null -- and
+        // without the group the API cannot tell that from a personal expense, and would
+        // file it against the personal group instead. The expense itself is fine either
+        // way now: no category means an even split.
         model.GroupId = SelectedGroupId;
 
         MudDialog.Close(DialogResult.Ok(model));

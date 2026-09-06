@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ICategoriesClient CategoriesClient
 @inject ApiErrorPresenter Errors
 
 <MudDialog>
@@ -50,12 +51,12 @@
                 </MudStack>
 
 
-                <MudSelect T="Guid" Label="Category"
-                           @bind-Value="editModel.RuleVersionId"
+                <MudSelect T="Guid?" Label="Category"
+                           @bind-Value="editModel.CategoryId"
                            Variant="Variant.Outlined">
                     @foreach (var c in GroupCategories)
                     {
-                        <MudSelectItem T="Guid" Value="@c.RuleVersionId">@c.Category</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -95,7 +96,7 @@
     private TimeSpan? selectedTime;
 
     // Category & users come from the original transaction's GroupId
-    private ICollection<RuleVersionInfo> GroupCategories = [];
+    private ICollection<CategoryInfo> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
 
     protected override async Task OnInitializedAsync()
@@ -107,7 +108,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
-            RuleVersionId = Original.RuleVersionId,
+            CategoryId = Original.CategoryId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -119,10 +120,12 @@
         // has said why.
         var loaded = await Errors.TryAsync(async () =>
         {
-            GroupCategories = await GroupsClient.GetGroupRulesAsAsyncEnumerable(Original.GroupId, allowUserTransactions: true).Select(x => new RuleVersionInfo(x.RuleVersionId, x.Category)).ToListAsync();
+            GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(Original.GroupId).Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
 
-            if (GroupCategories.All(x => x.RuleVersionId != Original.RuleVersionId))
-                GroupCategories.Add(new RuleVersionInfo(Original.RuleVersionId, Original.Category));
+            // A category that has since been deleted still names what this expense was
+            // filed under, so it stays in the list rather than silently reading as none.
+            if (Original.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
+                GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
 
             GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
         }, "Could not load the group.");
@@ -154,7 +157,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
-            RuleVersionId = Original.RuleVersionId,
+            CategoryId = Original.CategoryId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -182,8 +185,8 @@
         if (original.DateTime != updated.DateTime)
             patch.Replace(x => x.DateTime, updated.DateTime);
 
-        if (original.RuleVersionId != updated.RuleVersionId)
-            patch.Replace(x => x.RuleVersionId, updated.RuleVersionId);
+        if (original.CategoryId != updated.CategoryId)
+            patch.Replace(x => x.CategoryId, updated.CategoryId);
 
         if (original.PaidByUserId != updated.PaidByUserId)
             patch.Replace(x => x.PaidByUserId, updated.PaidByUserId);
@@ -191,6 +194,6 @@
         return patch;
     }
 
-    internal record RuleVersionInfo(Guid RuleVersionId, string Category);
+    internal record CategoryInfo(Guid CategoryId, string Name);
 
 }

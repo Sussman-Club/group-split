@@ -29,7 +29,6 @@ public static class GroupApi
             group.MapUpdateGroup();
             group.MapGetGroupTransactions();
             group.MapGetGroupTransactionsSummary();
-            group.MapGetGroupRules();
             group.MapGetMembers();
             group.MapAddMember();
             group.MapRemoveMember();
@@ -144,7 +143,7 @@ public static class GroupApi
                 {
                     var transactions = await transactionService.List(ct);
                     return Results.Ok(await transactions
-                        .Where(x => x.RuleVersion.Rule.Group.Id == id)
+                        .Where(x => x.GroupId == id)
                         .ToTransactionPageAsync(filter, sort, page, ct));
                 })
                 .WithName("GetGroupTransactions")
@@ -162,32 +161,11 @@ public static class GroupApi
                 {
                     var transactions = await transactionService.List(ct);
                     return Results.Ok(await transactions
-                        .Where(x => x.RuleVersion.Rule.Group.Id == id)
+                        .Where(x => x.GroupId == id)
                         .ToSummaryAsync(filter, ct));
                 })
                 .WithName("GetGroupTransactionsSummary")
                 .Produces<TransactionSummaryResponse>();
-        }
-
-        private RouteHandlerBuilder MapGetGroupRules()
-        {
-            return group.MapGet("{id:guid}/rules", async (
-                    Guid id,
-                    [AsParameters] RuleFilter filter,
-                    IRuleService transactionService,
-                    CancellationToken ct) =>
-                {
-                    var rules = await transactionService.List(ct);
-                    var ruleResponses = await rules
-                        .Where(x => x.Rule.Group.Id == id)
-                        .Include(x => x.Rule)
-                        .ApplyFilter(filter)
-                        .SelectDto()
-                        .ToListAsync(ct);
-                    return Results.Ok(ruleResponses);
-                })
-                .WithName("GetGroupRules")
-                .Produces<RuleVersionResponse[]>();
         }
 
         // A group the caller is not in answers with an empty list, like the transaction and
