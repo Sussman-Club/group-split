@@ -32,6 +32,8 @@ public static class ErrorCodes
     public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
     public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
     public const string GroupInvitationNotFound = "GROUP_INVITATION_NOT_FOUND";
+    public const string BankConnectionNotFound = "BANK_CONNECTION_NOT_FOUND";
+    public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -53,6 +55,10 @@ public static class ErrorCodes
     public const string CategoryInUse = "CATEGORY_IN_USE";
     public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";
     public const string SplitRuleInUse = "SPLIT_RULE_IN_USE";
+    public const string BankSyncUnavailable = "BANK_SYNC_UNAVAILABLE";
+    public const string BankTransactionAlreadyFiled = "BANK_TRANSACTION_ALREADY_FILED";
+    public const string BankConnectionNeedsAttention = "BANK_CONNECTION_NEEDS_ATTENTION";
+    public const string CurrencyMismatch = "CURRENCY_MISMATCH";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
@@ -65,6 +71,11 @@ public static class ErrorCodes
     // ---- be carried out, because acting on it would break an invariant ------------------
 
     public const string SplitsDoNotSumToAmount = "SPLITS_DO_NOT_SUM_TO_AMOUNT";
+    public const string BankTransactionIsCredit = "BANK_TRANSACTION_IS_CREDIT";
+
+    // ---- Bad gateway (502): somebody else's service is in the path and did not answer ---
+
+    public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
 
     /// <summary>
     /// The generic code for a status, used when a response was produced by something that

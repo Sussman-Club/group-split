@@ -225,14 +225,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // Filing copies, then links. Unlinking a bank deletes its rows, and the
             // expenses they became lose the link and nothing else -- they are history,
             // not an import.
+            // One to one: a bank row files into at most one expense, and an expense came
+            // from at most one row. The unique index EF builds for it lets the nulls
+            // through, which is every typed transaction.
             entity.HasOne(transaction => transaction.BankTransaction)
-                .WithMany()
-                .HasForeignKey(transaction => transaction.BankTransactionId)
+                .WithOne(row => row.FiledAs)
+                .HasForeignKey<Transaction>(transaction => transaction.BankTransactionId)
                 .OnDelete(DeleteBehavior.SetNull);
-
-            // A bank row files into at most one expense. Postgres lets the nulls through,
-            // which is every typed transaction.
-            entity.HasIndex(transaction => transaction.BankTransactionId).IsUnique();
 
             entity.HasIndex(transaction => transaction.DateTime);
             entity.HasIndex(transaction => transaction.Name);

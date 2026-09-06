@@ -3,7 +3,9 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
+using GroupSplit.Data;
 using GroupSplit.Data.PostgreSQL;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +45,14 @@ builder.Services.AddAuthorizationBuilder();
 
 builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddDomainServices();
+
+// The key ring that protects the stored bank access tokens. In the app database, so every
+// instance unprotects what any other protected, and so resetting the database takes the
+// keys and the ciphertext they open together instead of leaving one without the other.
+// Without this the ring is per-process and every restart orphans every stored token.
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<AppDbContext>()
+    .SetApplicationName("GroupSplit");
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();

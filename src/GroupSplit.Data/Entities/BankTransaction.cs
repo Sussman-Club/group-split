@@ -86,6 +86,18 @@ public class BankTransaction : Entity
     public BankTransactionStatus Status { get; set; } = BankTransactionStatus.New;
 
     /// <summary>
+    /// The expense this became, once somebody filed it. At most one, which is what the
+    /// unique index on the other side already says.
+    /// </summary>
+    /// <remarks>
+    /// The inverse of <see cref="Transaction.BankTransaction"/>, and the reason the inbox
+    /// can show a filed row's expense without a second query per row. It goes null rather
+    /// than dangling if the expense is deleted, because deleting an expense is undoing the
+    /// filing, not undoing the import.
+    /// </remarks>
+    public virtual Transaction? FiledAs { get; set; }
+
+    /// <summary>
     /// When the provider withdrew a row that had already been filed. The expense stays --
     /// it is somebody's history -- and the inbox can say what happened. A row nobody had
     /// acted on is simply deleted instead, so this is set on filed rows only.

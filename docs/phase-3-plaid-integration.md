@@ -352,12 +352,18 @@ last-synced-at and its accounts (name, mask, type, currency). Never the token, n
 cursor. `BankTransactionResponse` carries the row's fields plus `categoryLabel`,
 `accountName`, `institutionName`, `isCredit` and, when filed, `transactionId`.
 
-New error codes: `BankConnectionNotFound`, `BankTransactionNotFound` (404);
-`BankSyncDisabled` (409, the switch is off); `BankTransactionAlreadyFiled`,
-`BankTransactionSuperseded` (409); `BankTransactionIsCredit` (422);
-`BankLinkFailed` (502, the provider refused the exchange -- the first 5xx in the catalog,
-because it is the first time somebody else's service is in the path). Each needs its row
-in `Problems.Titles`, `ErrorMessages` and `docs/errors.md`, as the errors doc lays out.
+New error codes, as built: `BankConnectionNotFound` and `BankTransactionNotFound` (404,
+and a superseded row takes the second of those, because it is not the caller's to act on
+either); `BankSyncUnavailable`, `BankTransactionAlreadyFiled`,
+`BankConnectionNeedsAttention` and `CurrencyMismatch` (409);
+`BankTransactionIsCredit` (422); and `BankProviderUnavailable` (502). That last one opens
+the first 5xx category in the catalog, because it is the first time somebody else's
+service is in the path and the first time retrying the identical request later is the
+right advice.
+
+`CurrencyMismatch` is the guard Phase 1 promised and never had a writer for. Filing is
+where it finally gets one: a row in one currency cannot join a group keeping balances in
+another, and the refusal carries both so a dialog can say which is which.
 
 Every scoped read starts from the caller: a connection is `Where(c => c.UserId ==
 me)`, a bank transaction is reached through its account's connection. Another person's

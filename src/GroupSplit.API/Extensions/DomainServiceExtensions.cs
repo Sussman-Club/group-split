@@ -49,6 +49,9 @@ public static class DomainServiceExtensions
             routes.MapTransaction();
             routes.MapCategoriesApi();
             routes.MapSplitRulesApi();
+            routes.MapBankConnectionsApi();
+            routes.MapInboxApi();
+            routes.MapWebhooksApi();
 
             return routes;
         }

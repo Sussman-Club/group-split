@@ -8,7 +8,8 @@ namespace GroupSplit.API.Errors;
 /// it has to be fit for a caller to read. Anything a service throws that is not one of
 /// these is treated as a bug and answered with a 500 that says nothing about it.
 /// </summary>
-public abstract class DomainException(int status, string code, string message) : Exception(message)
+public abstract class DomainException(int status, string code, string message, Exception? inner = null)
+    : Exception(message, inner)
 {
     public int Status { get; } = status;
 
@@ -57,3 +58,16 @@ public sealed class ValidationException(string code, string message)
 /// </remarks>
 public sealed class UnprocessableException(string code, string message)
     : DomainException(StatusCodes.Status422UnprocessableEntity, code, message);
+
+/// <summary>
+/// A service this one depends on refused or could not be reached, and the request cannot be
+/// answered without it.
+/// </summary>
+/// <remarks>
+/// The first code in the catalog that is nobody's fault here and nobody's fault there
+/// either: a bank aggregator having a bad minute. A 5xx rather than a 4xx because retrying
+/// the identical request later is the right thing for a caller to do, which is precisely
+/// what a 4xx tells them not to bother with.
+/// </remarks>
+public sealed class BadGatewayException(string code, string message, Exception? inner = null)
+    : DomainException(StatusCodes.Status502BadGateway, code, message, inner);

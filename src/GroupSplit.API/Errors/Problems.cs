@@ -37,6 +37,8 @@ public static class Problems
         [ErrorCodes.TransactionNotFound] = "Transaction not found",
         [ErrorCodes.CategoryNotFound] = "Category not found",
         [ErrorCodes.SplitRuleNotFound] = "Split rule not found",
+        [ErrorCodes.BankConnectionNotFound] = "Bank connection not found",
+        [ErrorCodes.BankTransactionNotFound] = "Imported transaction not found",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group",
 
@@ -49,11 +51,18 @@ public static class Problems
         [ErrorCodes.CategoryInUse] = "Category still has expenses filed under it",
         [ErrorCodes.SplitRuleNameTaken] = "Rule name already in use",
         [ErrorCodes.SplitRuleInUse] = "Rule is still the default for a category",
+        [ErrorCodes.BankSyncUnavailable] = "Bank sync is not available",
+        [ErrorCodes.BankTransactionAlreadyFiled] = "This row has already been filed",
+        [ErrorCodes.BankConnectionNeedsAttention] = "The bank connection needs signing in again",
+        [ErrorCodes.CurrencyMismatch] = "The currencies do not match",
 
         [ErrorCodes.SplitRuleInvalid] = "The split rule is not valid",
         [ErrorCodes.SplitsInvalid] = "The shares are not valid",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares do not add up to the amount",
-        [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group"
+        [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group",
+        [ErrorCodes.BankTransactionIsCredit] = "Money coming in cannot be filed as an expense",
+
+        [ErrorCodes.BankProviderUnavailable] = "The bank service did not answer"
     };
 
     /// <summary>The <c>type</c> URI for a code: <c>GROUP_NOT_FOUND</c> becomes <c>.../group-not-found</c>.</summary>

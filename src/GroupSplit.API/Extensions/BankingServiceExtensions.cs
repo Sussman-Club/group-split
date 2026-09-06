@@ -6,9 +6,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace GroupSplit.API.Extensions;
 
 /// <summary>
-/// The import side of the seam: the sync engine, the jobs that drive it, and the protector
-/// the access tokens go through. Connectors register separately, one per provider, keyed
-/// by <see cref="IBankConnector.Provider"/>.
+/// The import side of the seam: the sync engine, the jobs that drive it, the services the
+/// endpoints call, and the protector the access tokens go through. Connectors register
+/// separately, one per provider, keyed by <see cref="IBankConnector.Provider"/> -- and
+/// whether one is registered at all is what "bank sync is available" means.
 /// </summary>
 /// <remarks>
 /// The jobs are declared here and run by whoever the host says. Today that is
@@ -38,12 +39,15 @@ public static class BankingServiceExtensions
         public IServiceCollection AddBankingServices()
         {
             services.AddLogging();
+            services.AddOptions<BankingOptions>().BindConfiguration(BankingOptions.SectionName);
             services.AddDataProtection();
             services.TryAddSingleton(TimeProvider.System);
 
             services.AddSingleton<BankSyncLocks>();
             services.AddScoped<IAccessTokenProtector, DataProtectionAccessTokenProtector>();
             services.AddScoped<IBankSyncService, BankSyncService>();
+            services.AddScoped<IBankConnectionService, BankConnectionService>();
+            services.AddScoped<IInboxService, InboxService>();
 
             services.AddJob<SyncBankConnection, SyncBankConnectionHandler>();
             services.AddJob<SweepBankConnections, SweepBankConnectionsHandler>();
