@@ -1,4 +1,6 @@
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
@@ -109,6 +111,9 @@
     /// <summary>What is being searched for, or null. Owned by the host page's search box.</summary>
     [Parameter] public string? Search { get; set; }
 
+    /// <summary>The span to narrow to. Owned by the host page's date filter.</summary>
+    [Parameter] public DateFilter? Range { get; set; }
+
     [Parameter] public bool ShowGroup { get; set; } = true;
 
     [Parameter] public string EmptyTitle { get; set; } = "No expenses yet";
@@ -142,7 +147,8 @@
             PageSize: state.PageSize,
             SortBy: sort is null ? TransactionQuery.DefaultSortBy : Camel(sort.SortBy),
             SortDescending: sort?.Descending ?? true,
-            Search: IsSearching ? Search!.Trim() : null);
+            Search: IsSearching ? Search!.Trim() : null,
+            Range: Range);
 
         var page = await LoadPage(query, cancellationToken);
 

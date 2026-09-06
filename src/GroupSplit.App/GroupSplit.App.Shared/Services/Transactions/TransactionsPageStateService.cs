@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
@@ -116,7 +117,11 @@ public class TransactionsPageStateService : ITransactionsPageStateService
 
     private async Task ReadPageAsync(TransactionQuery query, CancellationToken ct = default)
     {
+        var range = query.EffectiveRange;
+
         var page = await _client.GetTransactionsAsync(
+            from: range.From,
+            to: range.To,
             search: query.Search,
             sortBy: query.SortBy,
             sortDescending: query.SortDescending,
@@ -127,11 +132,13 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         Query = query;
         Page = page;
 
-        // What the search matched, for the total beside it. Only worth a request while
-        // there is a search: without one it is the all-time summary, which is already read.
-        MatchesSummary = string.IsNullOrWhiteSpace(query.Search)
+        // What the page is one of, totalled: the figure beside a narrowed listing has to
+        // describe the same narrowing. Only worth a request while something is narrowing
+        // it -- otherwise it is the all-time summary, which is already read.
+        MatchesSummary = string.IsNullOrWhiteSpace(query.Search) && range.IsAllTime
             ? null
-            : await _client.GetTransactionsSummaryAsync(search: query.Search, cancellationToken: ct);
+            : await _client.GetTransactionsSummaryAsync(
+                from: range.From, to: range.To, search: query.Search, cancellationToken: ct);
     }
 
     /// <summary>

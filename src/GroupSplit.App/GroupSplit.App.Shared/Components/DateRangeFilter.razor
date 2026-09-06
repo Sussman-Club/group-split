@@ -1,0 +1,83 @@
+@using GroupSplit.App.Shared.Models
+@namespace GroupSplit.App.Shared.Components
+
+@* The spans people ask for, one click each, and a picker for the rest. The chips carry
+   the choice rather than the dates it works out to, so "This month" still means this
+   month tomorrow. *@
+
+<div class="gs-inline gs-range" role="group" aria-label="Filter by date">
+    @foreach (var preset in Presets)
+    {
+        var value = preset;
+        <button type="button"
+                class="gs-chip @(Value.Preset == value ? "active" : "")"
+                aria-pressed="@(Value.Preset == value ? "true" : "false")"
+                @onclick="@(() => SelectAsync(value))">
+            @Label(value)
+        </button>
+    }
+
+    <MudDateRangePicker @ref="_picker"
+                        DateRange="@_picked"
+                        DateRangeChanged="OnPickedAsync"
+                        PickerVariant="PickerVariant.Dialog"
+                        Class="gs-range-picker"
+                        Style="display: none" />
+
+    <button type="button"
+            class="gs-chip @(Value.Preset == DateFilterPreset.Custom ? "active" : "")"
+            aria-pressed="@(Value.Preset == DateFilterPreset.Custom ? "true" : "false")"
+            @onclick="OpenPickerAsync">
+        <MudIcon Icon="@Icons.Material.Rounded.DateRange" Style="width:16px;height:16px" />
+        @(Value.Preset == DateFilterPreset.Custom ? Value.Label : "Custom")
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DateFilter Value { get; set; } = DateFilter.AllTime;
+
+    [Parameter] public EventCallback<DateFilter> ValueChanged { get; set; }
+
+    private static readonly DateFilterPreset[] Presets =
+    [
+        DateFilterPreset.AllTime,
+        DateFilterPreset.ThisMonth,
+        DateFilterPreset.LastMonth,
+        DateFilterPreset.LastThreeMonths,
+        DateFilterPreset.ThisYear
+    ];
+
+    private MudDateRangePicker? _picker;
+    private MudBlazor.DateRange? _picked;
+
+    private static string Label(DateFilterPreset preset) => preset switch
+    {
+        DateFilterPreset.ThisMonth => "This month",
+        DateFilterPreset.LastMonth => "Last month",
+        DateFilterPreset.LastThreeMonths => "Last 3 months",
+        DateFilterPreset.ThisYear => "This year",
+        _ => "All time"
+    };
+
+    private Task SelectAsync(DateFilterPreset preset) => ValueChanged.InvokeAsync(new DateFilter(preset));
+
+    private async Task OpenPickerAsync()
+    {
+        if (_picker is not null) await _picker.OpenAsync();
+    }
+
+    private async Task OnPickedAsync(MudBlazor.DateRange? range)
+    {
+        _picked = range;
+
+        // A cleared picker is not a custom range of nothing: it means the person stopped
+        // narrowing, which is what All time already says.
+        if (range?.Start is null && range?.End is null)
+        {
+            await ValueChanged.InvokeAsync(DateFilter.AllTime);
+            return;
+        }
+
+        await ValueChanged.InvokeAsync(new DateFilter(DateFilterPreset.Custom, range?.Start, range?.End));
+    }
+}

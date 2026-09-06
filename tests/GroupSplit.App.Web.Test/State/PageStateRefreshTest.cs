@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
@@ -70,10 +71,10 @@ public class PageStateRefreshTest
     /// than to what they would get from a list handed over whole.
     /// </summary>
     private static PagedResponseOfTransactionResponse Page(
-        IEnumerable<TransactionResponse> scope, string? search, string? sortBy, bool? sortDescending,
-        int? page, int? pageSize)
+        IEnumerable<TransactionResponse> scope, DateTimeOffset? from, DateTimeOffset? to, string? search,
+        string? sortBy, bool? sortDescending, int? page, int? pageSize)
     {
-        var matched = Search(scope, search).ToList();
+        var matched = Within(Search(scope, search), from, to).ToList();
 
         var descending = sortDescending ?? true;
 
@@ -96,6 +97,10 @@ public class PageStateRefreshTest
         return new PagedResponseOfTransactionResponse(items, number, size, matched.Count);
     }
 
+    private static IEnumerable<TransactionResponse> Within(
+        IEnumerable<TransactionResponse> scope, DateTimeOffset? from, DateTimeOffset? to) =>
+        scope.Where(t => (from is null || t.DateTime >= from) && (to is null || t.DateTime <= to));
+
     private static IEnumerable<TransactionResponse> Search(IEnumerable<TransactionResponse> scope, string? search) =>
         string.IsNullOrWhiteSpace(search)
             ? scope
@@ -107,9 +112,7 @@ public class PageStateRefreshTest
     private static TransactionSummaryResponse SummaryOf(
         IEnumerable<TransactionResponse> scope, string? search, DateTimeOffset? from, DateTimeOffset? to)
     {
-        var matched = Search(scope, search)
-            .Where(t => (from is null || t.DateTime >= from) && (to is null || t.DateTime <= to))
-            .ToList();
+        var matched = Within(Search(scope, search), from, to).ToList();
 
         return new TransactionSummaryResponse(matched.Count, matched.Sum(t => t.Amount));
     }
@@ -130,9 +133,10 @@ public class PageStateRefreshTest
                 It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DateTimeOffset? _, DateTimeOffset? _, Guid? _, Guid? _, string? _, string? search,
+            .ReturnsAsync((DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _, string? search,
                     string? sortBy, bool? sortDescending, int? page, int? pageSize, CancellationToken _) =>
-                Page(_transactions.Where(t => t.PaidByUserId == Me), search, sortBy, sortDescending, page, pageSize));
+                Page(_transactions.Where(t => t.PaidByUserId == Me), from, to, search, sortBy, sortDescending,
+                    page, pageSize));
 
         _transactionsClient
             .Setup(c => c.GetTransactionsSummaryAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
@@ -181,9 +185,11 @@ public class PageStateRefreshTest
                 It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id, DateTimeOffset? _, DateTimeOffset? _, Guid? _, Guid? _, string? _, string? search,
-                    string? sortBy, bool? sortDescending, int? page, int? pageSize, CancellationToken _) =>
-                Page(_transactions.Where(t => t.GroupId == id), search, sortBy, sortDescending, page, pageSize));
+            .ReturnsAsync((Guid id, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _,
+                    string? search, string? sortBy, bool? sortDescending, int? page, int? pageSize,
+                    CancellationToken _) =>
+                Page(_transactions.Where(t => t.GroupId == id), from, to, search, sortBy, sortDescending,
+                    page, pageSize));
 
         _groupsClient
             .Setup(c => c.GetGroupTransactionsSummaryAsync(It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(),
@@ -555,6 +561,120 @@ public class PageStateRefreshTest
             It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
             It.IsAny<string?>(), It.IsAny<string?>(), TransactionQuery.DefaultSortBy, true,
             1, GroupsPageStateService.RecentPageSize, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    // ---- Narrowing to a span -----------------------------------------------------------------
+
+    /// <summary>
+    /// The span reaches the server as two instants rather than as the name of a preset:
+    /// only the client knows what "this month" means where the person is sitting.
+    /// </summary>
+    [Fact]
+    public async Task A_span_is_sent_as_the_two_instants_it_works_out_to()
+    {
+        await ReadyAsync();
+
+        var range = new DateFilter(DateFilterPreset.ThisMonth);
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = range });
+
+        _transactionsClient.Verify(c => c.GetTransactionsAsync(
+            range.From, range.To, It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_span_leaves_out_what_falls_outside_it()
+    {
+        await ReadyAsync();
+
+        // Everything seeded is from today, so last month holds none of it.
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = new DateFilter(DateFilterPreset.LastMonth)
+        });
+
+        Assert.Empty(_expensesPage.Page!.Items);
+        Assert.Equal(0, _expensesPage.Page.TotalCount);
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = new DateFilter(DateFilterPreset.ThisMonth)
+        });
+
+        Assert.Equal(3, _expensesPage.Page!.TotalCount);
+    }
+
+    /// <summary>
+    /// The figure beside a narrowed page has to describe the same narrowing, or it is
+    /// answering a question nobody asked.
+    /// </summary>
+    [Fact]
+    public async Task A_span_is_totalled_over_the_span_and_not_over_everything()
+    {
+        await ReadyAsync();
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = new DateFilter(DateFilterPreset.LastMonth)
+        });
+
+        Assert.Equal(0, _expensesPage.MatchesSummary!.Count);
+        Assert.Equal(0m, _expensesPage.MatchesSummary.Total);
+
+        // The all-time figures are untouched: narrowing the page does not narrow the person.
+        Assert.Equal(3, _expensesPage.Summary!.Count);
+        Assert.Equal(160m, _expensesPage.Summary.Total);
+    }
+
+    [Fact]
+    public async Task A_span_and_a_search_narrow_together()
+    {
+        await ReadyAsync();
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Search = "din",
+            Range = new DateFilter(DateFilterPreset.ThisMonth)
+        });
+
+        Assert.Equal("Dinner", Assert.Single(_expensesPage.Page!.Items).Name);
+        Assert.Equal(1, _expensesPage.MatchesSummary!.Count);
+    }
+
+    [Fact]
+    public async Task Without_a_span_or_a_search_there_is_nothing_to_total_separately()
+    {
+        await ReadyAsync();
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = DateFilter.AllTime });
+
+        Assert.Null(_expensesPage.MatchesSummary);
+    }
+
+    /// <summary>
+    /// Two spans chosen the same way are the same value, so asking for the one already on
+    /// screen is answered from what is held rather than by a second request.
+    /// </summary>
+    [Fact]
+    public async Task Asking_again_for_the_span_already_shown_does_not_ask_the_server()
+    {
+        await ReadyAsync();
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = new DateFilter(DateFilterPreset.ThisMonth)
+        });
+
+        var readsBefore = ListingReads;
+
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = new DateFilter(DateFilterPreset.ThisMonth)
+        });
+
+        Assert.Equal(readsBefore, ListingReads);
     }
 
     // ---- Archiving --------------------------------------------------------------------------

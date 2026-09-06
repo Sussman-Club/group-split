@@ -1119,6 +1119,46 @@ html:not([data-gs-ready]) .gs-group-card {
     font-weight: 600;
 }
 
+/* ------------------------------------------------------------- date range -- */
+
+/* The span a listing is narrowed to. Built from .gs-chip, which the group switcher
+   already uses, so the two rows of chips read as the same control in two places --
+   only the padding differs, there being no avatar to make room for here. */
+.gs-range {
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.gs-range .gs-chip {
+    height: 34px;
+    padding: 0 14px;
+    font-size: 0.8125rem;
+}
+
+.gs-range .gs-chip:hover {
+    border-color: var(--gs-line-strong);
+    color: var(--gs-ink);
+}
+
+.gs-range .gs-chip.active {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal-deep);
+}
+
+.gs-range .gs-chip:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .gs-range .gs-chip:active {
+        transform: scale(0.97);
+    }
+}
+
+
 .gs-chip:hover {
     transform: translateY(-2px);
     border-color: var(--gs-line-strong);

@@ -1,5 +1,6 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @inject ITransactionsPageStateService TransactionsService
@@ -32,12 +33,14 @@
 </div>
 
 <div class="gs-stack">
+    <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+
     <div class="gs-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Recorded</span>
             <span class="gs-stat-value gs-num" data-gs-count="@RecordedCount">@RecordedCount</span>
-            <span class="gs-muted" style="font-size: .8125rem">@(IsSearching ? $"{MatchCount} match" : "showing all")</span>
+            <span class="gs-muted" style="font-size: .8125rem">@RecordedSubline</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
@@ -49,12 +52,12 @@
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             <span class="gs-eyebrow">Total</span>
             <Money Value="ShownTotal" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">@(IsSearching ? "of the matches" : "all time")</span>
+            <span class="gs-muted" style="font-size: .8125rem">@TotalSubline</span>
         </div>
     </div>
 
     <div class="gs-reveal" style="--i: 3">
-        <ExpensesGrid @ref="_grid" LoadPage="LoadPageAsync" Search="@_searchString" />
+        <ExpensesGrid @ref="_grid" LoadPage="LoadPageAsync" Search="@_searchString" Range="@_range" />
     </div>
 </div>
 
@@ -62,9 +65,24 @@
 
 @code {
     private string _searchString = "";
+    private DateFilter _range = DateFilter.AllTime;
     private ExpensesGrid? _grid;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
+
+    // Narrowed by anything -- a search, a span, or both -- and the figures beside the page
+    // have to describe that narrowing rather than the whole.
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime;
+
+    private string RecordedSubline => IsNarrowed ? $"{MatchCount} in view" : "showing all";
+
+    private string TotalSubline => (IsSearching, _range.IsAllTime) switch
+    {
+        (true, true) => "of the matches",
+        (true, false) => $"matches in {_range.Label.ToLowerInvariant()}",
+        (false, false) => _range.Label.ToLowerInvariant(),
+        _ => "all time"
+    };
 
     // The tiles read the server's figures rather than adding up the rows on screen: those
     // are one page, and a page cannot say what the whole comes to.
@@ -72,7 +90,7 @@
     private int MatchCount => TransactionsService.Page?.TotalCount ?? 0;
     private decimal ThisMonth => TransactionsService.MonthSummary?.Total ?? 0m;
 
-    private decimal ShownTotal => IsSearching
+    private decimal ShownTotal => IsNarrowed
         ? TransactionsService.MatchesSummary?.Total ?? 0m
         : TransactionsService.Summary?.Total ?? 0m;
 
@@ -85,7 +103,17 @@
         return TransactionsService.Page;
     }
 
-    private Task OnSearchChangedAsync(string _) =>
+    private Task OnSearchChangedAsync(string _) => BackToFirstPageAsync();
+
+    private Task OnRangeChangedAsync(DateFilter range)
+    {
+        _range = range;
+        return BackToFirstPageAsync();
+    }
+
+    // A different span, like a different search, is a different question: page four of the
+    // old answer is an empty grid under a real total.
+    private Task BackToFirstPageAsync() =>
         _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
 
     private CancellationTokenSource? _loadCts;

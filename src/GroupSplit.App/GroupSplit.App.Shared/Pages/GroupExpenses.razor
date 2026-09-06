@@ -1,5 +1,6 @@
 @page "/groups/{GroupId:guid}/expenses"
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
@@ -52,20 +53,24 @@
 </div>
 
 <div class="gs-stack">
+    <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+
     <div class="gs-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Expenses</span>
             <span class="gs-stat-value gs-num" data-gs-count="@(_summary?.Count ?? 0)">@(_summary?.Count ?? 0)</span>
             <span class="gs-muted" style="font-size: .8125rem">
-                @(IsSearching ? $"{_total ?? 0} match" : "in this group")
+                @(IsNarrowed ? $"{_total ?? 0} in view" : "in this group")
             </span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             <span class="gs-eyebrow">Total spent</span>
             <Money Value="@(_summary?.Total ?? 0m)" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">by everyone, all time</span>
+            <span class="gs-muted" style="font-size: .8125rem">
+                by everyone@(_range.IsAllTime ? ", all time" : $", {_range.Label.ToLowerInvariant()}")
+            </span>
         </div>
     </div>
 
@@ -75,6 +80,7 @@
         <ExpensesGrid @ref="_grid"
                       LoadPage="LoadPageAsync"
                       Search="@_searchString"
+                      Range="@_range"
                       ShowGroup="false"
                       EmptyTitle="Nothing recorded yet"
                       EmptyDescription="Expenses anyone in this group records will show up here." />
@@ -85,6 +91,7 @@
     [Parameter] public Guid GroupId { get; set; }
 
     private string _searchString = "";
+    private DateFilter _range = DateFilter.AllTime;
     private ExpensesGrid? _grid;
     private GroupResponse? _group;
     private TransactionSummaryResponse? _summary;
@@ -94,6 +101,8 @@
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime;
+
     private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
         TransactionQuery query, CancellationToken cancellationToken)
     {
@@ -102,6 +111,8 @@
         var page = await ReadAsync<PagedResponseOfTransactionResponse>(() =>
             GroupsClient.GetGroupTransactionsAsync(
                 GroupId,
+                from: query.EffectiveRange.From,
+                to: query.EffectiveRange.To,
                 search: query.Search,
                 sortBy: query.SortBy,
                 sortDescending: query.SortDescending,
@@ -125,16 +136,31 @@
         return result;
     }
 
-    private Task OnSearchChangedAsync(string _) =>
+    private Task OnSearchChangedAsync(string _) => BackToFirstPageAsync();
+
+    private async Task OnRangeChangedAsync(DateFilter range)
+    {
+        _range = range;
+
+        // The tile totals the same span the grid is showing, so it is read again with it.
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private Task BackToFirstPageAsync() =>
         _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
+
+    private async Task ReadSummaryAsync() =>
+        _summary = await ReadAsync<TransactionSummaryResponse>(
+            () => GroupsClient.GetGroupTransactionsSummaryAsync(
+                GroupId, from: _range.From, to: _range.To));
 
     protected override async Task OnParametersSetAsync()
     {
         // The group is read for its name, and the summary for the tiles: the grid holds one
         // page, which cannot say what the group has spent in all.
         _group = await ReadAsync<GroupResponse>(() => GroupsClient.GetGroupAsync(GroupId));
-        _summary = await ReadAsync<TransactionSummaryResponse>(
-            () => GroupsClient.GetGroupTransactionsSummaryAsync(GroupId));
+        await ReadSummaryAsync();
     }
 
     /// <summary>
