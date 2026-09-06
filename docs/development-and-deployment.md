@@ -97,6 +97,40 @@ dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-clien
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-client-secret <secret>
 ```
 
+## Building in a sandbox that has no SDK
+
+CI installs .NET with `actions/setup-dotnet`, which fetches it from
+`builds.dotnet.microsoft.com`. Some sandboxes -- Claude Code's remote environment among
+them -- allow only a narrow set of hosts, and that is not one of them: the download fails
+with a 403 from the egress proxy, and so does `dot.net`, `dotnetcli.azureedge.net` and
+`aka.ms`. There is no need to give up on building there, because Ubuntu ships a .NET 10
+SDK that satisfies `global.json` and `packages.microsoft.com` and `api.nuget.org` are
+usually reachable:
+
+```bash
+apt-get install -y dotnet-sdk-10.0     # 10.0.1xx, which global.json's rollForward accepts
+dotnet tool restore                    # dotnet-ef and nswag, from api.nuget.org
+```
+
+Docker is a likelier casualty: the client is usually present with no daemon behind it, so
+the AppHost, the integration tests and anything using Testcontainers cannot run. The
+three unit test projects in the CI job need none of it. For work that really does need a
+database -- running a migration against real PostgreSQL rather than reasoning about its
+SQL -- a server from the distribution is enough, and needs no daemon:
+
+```bash
+apt-get install -y postgresql
+su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main \
+    -o '-c config_file=/etc/postgresql/16/main/postgresql.conf' -l /tmp/pg.log start"
+su postgres -c "psql -c \"CREATE ROLE my_user LOGIN PASSWORD 'my_password' SUPERUSER;\""
+su postgres -c "psql -c 'CREATE DATABASE my_db OWNER my_user;'"
+```
+
+Those names are not arbitrary: they are the connection string
+`AppContextPostgreSqlFactory` falls back to when none is configured, so
+`dotnet ef database update --project src/GroupSplit.Data.PostgreSQL.Migrations` finds it
+with no further setup.
+
 ## Preview a deployment locally
 
 The workflow is not the only way to see what a deploy would ship. The same step it runs
