@@ -14,7 +14,11 @@ public interface IGroupsPageStateService
 
     GroupResponse? SelectedGroup { get; set; }
 
-    ICollection<TransactionResponse> Transactions { get; }
+    /// <summary>
+    /// The newest expenses in the selected group -- one page of them, which is what the
+    /// card on the page shows -- and, on the page itself, how many there are in all.
+    /// </summary>
+    PagedResponse<TransactionResponse>? Transactions { get; }
 
     UserGroupBalanceResponse? Balance { get; }
 
@@ -35,4 +39,10 @@ public interface IGroupsPageStateService
     Task<bool> UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest, CancellationToken cancellationToken = default);
     Task<bool> CreateTransactionAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
     Task<bool> SettleAsync(SettleRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Puts the selected group down: it keeps everything and accepts nothing new.</summary>
+    Task<bool> ArchiveGroupAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Takes it back up again.</summary>
+    Task<bool> UnarchiveGroupAsync(CancellationToken cancellationToken = default);
 }

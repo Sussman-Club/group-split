@@ -41,7 +41,7 @@
 </div>
 
 @code {
-    [Parameter] public ICollection<TransactionResponse> Transactions { get; set; } = [];
+    [Parameter] public IReadOnlyList<TransactionResponse> Transactions { get; set; } = [];
 
     /// <summary>How many rows to show; the rest are on the Expenses page.</summary>
     [Parameter] public int Limit { get; set; } = int.MaxValue;

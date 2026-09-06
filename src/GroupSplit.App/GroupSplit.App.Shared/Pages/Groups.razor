@@ -22,7 +22,7 @@
             <div>
                 <div class="gs-eyebrow">@(group.IsArchive ? "Archived group" : "Group")</div>
                 <h1 style="margin-top: 2px">@group.Name</h1>
-                <p style="margin-top: 2px">@group.MemberCount member@(group.MemberCount == 1 ? "" : "s") · @GroupsService.Transactions.Count expense@(GroupsService.Transactions.Count == 1 ? "" : "s")</p>
+                <p style="margin-top: 2px">@group.MemberCount member@(group.MemberCount == 1 ? "" : "s") · @ExpenseCount expense@(ExpenseCount == 1 ? "" : "s")</p>
             </div>
         </div>
 
@@ -33,16 +33,22 @@
             <MudTooltip Text="Rename group">
                 <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@OpenUpdateGroupDialog" aria-label="Edit group" />
             </MudTooltip>
-            @if (!group.IsArchive)
-            {
-                <span class="sep"></span>
-                <MudTooltip Text="Add member">
+            <MudTooltip Text="@(group.IsArchive ? "Unarchive group" : "Archive group")">
+                <MudIconButton Icon="@(group.IsArchive ? Icons.Material.Rounded.Unarchive : Icons.Material.Rounded.Archive)"
+                               OnClick="@ToggleArchiveAsync"
+                               aria-label="@(group.IsArchive ? "Unarchive group" : "Archive group")" />
+            </MudTooltip>
+            <span class="sep"></span>
+            @{
+                // Archived means "not in my list", so everything a live group offers, this
+                // one offers too. Opening it is how you get here in the first place.
+            }
+            <MudTooltip Text="Add member">
                     <MudIconButton Icon="@Icons.Material.Rounded.PersonAdd" Color="Color.Primary" OnClick="@OpenAddMemberDialogAsync" aria-label="Add member" />
                 </MudTooltip>
-                <MudTooltip Text="Remove member">
-                    <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove" Color="Color.Error" OnClick="@OpenRemoveMemberDialogAsync" aria-label="Remove member" />
-                </MudTooltip>
-            }
+            <MudTooltip Text="Remove member">
+                <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove" Color="Color.Error" OnClick="@OpenRemoveMemberDialogAsync" aria-label="Remove member" />
+            </MudTooltip>
         </div>
     </div>
 
@@ -98,10 +104,19 @@
             <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
                 <div class="gs-card-title">
                     <h2>Recent expenses</h2>
-                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/transactions"
+                    @* This group's expenses, by everyone. /transactions is the other axis:
+                       what one person has paid, across every group. *@
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                               Href="@($"/groups/{group.Id}/expenses")"
                                EndIcon="@Icons.Material.Rounded.ArrowForward">All expenses</MudButton>
                 </div>
-                <TransactionsList Transactions="GroupsService.Transactions" Limit="8" />
+                <TransactionsList Transactions="GroupsService.Transactions?.Items ?? []" />
+                @if (ExpenseCount > (GroupsService.Transactions?.Items.Count ?? 0))
+                {
+                    <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
+                        Showing the @(GroupsService.Transactions!.Items.Count) most recent of @ExpenseCount.
+                    </div>
+                }
             </div>
         </div>
 
@@ -158,13 +173,16 @@ else
     </div>
 }
 
-@if (GroupsService.SelectedGroup is { IsArchive: false })
+@if (GroupsService.SelectedGroup is not null)
 {
     <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@OpenAddTransactionDialog" />
 }
 
 @code {
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    // The page holds the newest few; how many there are in all is the page's own total.
+    private int ExpenseCount => GroupsService.Transactions?.TotalCount ?? 0;
 
     private decimal UserBalance => GroupsService.Balance?.NetBalances.FirstOrDefault(x => x.UserId == UserInfo?.Id)?.Balance ?? 0m;
 
@@ -311,6 +329,20 @@ else
         {
             await GroupsService.CreateTransactionAsync(request, CancellationToken);
         }
+    }
+
+    /// <summary>
+    /// One tap, no confirmation: archiving hides the group from this person's own list and
+    /// nothing else, and the same button puts it back.
+    /// </summary>
+    private async Task ToggleArchiveAsync()
+    {
+        if (GroupsService.SelectedGroup is not { } group) return;
+
+        if (group.IsArchive)
+            await GroupsService.UnarchiveGroupAsync(CancellationToken);
+        else
+            await GroupsService.ArchiveGroupAsync(CancellationToken);
     }
 
     private async Task OpenSettleDialogAsync(DebtInfo debtInfo)

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
@@ -20,15 +21,30 @@ public static class OpenApiOptionsExtensions
                 {
                     options.CreateSchemaReferenceId = typeInfo =>
                     {
-                        if (typeInfo.Type is not { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
-                            type.GetGenericTypeDefinition() != typeof(JsonPatchDocument<>))
+                        if (typeInfo.Type is not { IsGenericType: true, GenericTypeArguments: [var modelType] } type)
+                        {
+                            return OpenApiOptions.CreateDefaultSchemaReferenceId(typeInfo);
+                        }
+
+                        var definition = type.GetGenericTypeDefinition();
+
+                        if (definition != typeof(JsonPatchDocument<>) && definition != typeof(PagedResponse<>))
                         {
                             return OpenApiOptions.CreateDefaultSchemaReferenceId(typeInfo);
                         }
 
                         var modelTypeInfo = JsonTypeInfo.CreateJsonTypeInfo(modelType, typeInfo.Options);
+                        var argumentName = OpenApiOptions.CreateDefaultSchemaReferenceId(modelTypeInfo);
 
-                        return $"JsonPatchDocumentOf{OpenApiOptions.CreateDefaultSchemaReferenceId(modelTypeInfo)}";
+                        // The name a client compiles against. For the patch documents the
+                        // templates turn it back into a generic; for a page they do not --
+                        // the rewrite they carry is for parameters only -- so the name lands
+                        // in the generated client as written and there is a type of exactly
+                        // this name in GroupSplit.Shared to meet it. Pinned here rather than
+                        // left to the default so the two cannot drift apart.
+                        return definition == typeof(JsonPatchDocument<>)
+                            ? $"JsonPatchDocumentOf{argumentName}"
+                            : $"PagedResponseOf{argumentName}";
                     };
 
                     options.AddSchemaTransformer((schema, context, _) =>

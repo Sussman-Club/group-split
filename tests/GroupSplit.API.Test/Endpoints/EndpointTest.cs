@@ -74,6 +74,7 @@ public class EndpointTest : IAsyncLifetime
     [Theory]
     [InlineData("/groups")]
     [InlineData("/transactions")]
+    [InlineData("/transactions/summary")]
     [InlineData("/users/me")]
     public async Task An_anonymous_request_is_refused(string route)
     {
@@ -98,6 +99,69 @@ public class EndpointTest : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The archive routes are a POST and a DELETE, so the sweep above -- which asks with a
+    /// GET -- cannot reach them.
+    /// </summary>
+    [Fact]
+    public async Task An_anonymous_request_to_archive_is_refused()
+    {
+        using var anonymous = _host.AnonymousClient();
+        var route = $"/groups/{Guid.NewGuid()}/archive";
+
+        var archive = await anonymous.PostAsync(route, content: null, TestContext.Current.CancellationToken);
+        var unarchive = await anonymous.DeleteAsync(route, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, archive.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unarchive.StatusCode);
+    }
+
+    [Fact]
+    public async Task Another_members_group_cannot_be_archived()
+    {
+        var groupId = await CreateGroup("Private");
+
+        using var stranger = _host.ClientForAnotherUser();
+
+        var archive = await stranger.PostAsync($"/groups/{groupId}/archive", content: null,
+            TestContext.Current.CancellationToken);
+        var unarchive = await stranger.DeleteAsync($"/groups/{groupId}/archive",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, archive.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, unarchive.StatusCode);
+    }
+
+    /// <summary>
+    /// Archiving is the caller's own view of the group, so it shows on what they read back
+    /// and on their listing -- and, in the service tests, on nobody else's.
+    /// </summary>
+    [Fact]
+    public async Task Archiving_a_group_shows_on_it_and_unarchiving_takes_it_back()
+    {
+        var groupId = await CreateGroup();
+
+        var archived = await Client.PostAsync($"/groups/{groupId}/archive", content: null,
+            TestContext.Current.CancellationToken);
+        archived.EnsureSuccessStatusCode();
+
+        var afterArchive = await archived.Content.ReadFromJsonAsync<GroupResponse>(
+            Json, TestContext.Current.CancellationToken);
+        Assert.True(afterArchive!.IsArchive);
+
+        var listed = await Client.GetFromJsonAsync<List<GroupResponse>>(
+            "/groups", Json, TestContext.Current.CancellationToken);
+        Assert.True(listed!.Single(g => g.Id == groupId).IsArchive);
+
+        var unarchived = await Client.DeleteAsync($"/groups/{groupId}/archive",
+            TestContext.Current.CancellationToken);
+        unarchived.EnsureSuccessStatusCode();
+
+        var afterUnarchive = await unarchived.Content.ReadFromJsonAsync<GroupResponse>(
+            Json, TestContext.Current.CancellationToken);
+        Assert.False(afterUnarchive!.IsArchive);
     }
 
     [Fact]
@@ -156,7 +220,8 @@ public class EndpointTest : IAsyncLifetime
         foreach (var route in new[]
                  {
                      $"/groups/{groupId}", $"/groups/{groupId}/members",
-                     $"/groups/{groupId}/rules", $"/groups/{groupId}/transactions"
+                     $"/groups/{groupId}/rules", $"/groups/{groupId}/transactions",
+                     $"/groups/{groupId}/transactions/summary"
                  })
         {
             var response = await stranger.GetAsync(route, TestContext.Current.CancellationToken);
@@ -276,8 +341,82 @@ public class EndpointTest : IAsyncLifetime
         var listing = await Client.GetFromJsonAsync<JsonElement>(
             "/transactions", Json, TestContext.Current.CancellationToken);
 
-        Assert.Contains(listing.EnumerateArray(),
+        Assert.Contains(listing.GetProperty("items").EnumerateArray(),
             element => element.GetProperty("id").GetGuid() == transactionId);
+    }
+
+    /// <summary>
+    /// The listing is a page, and says which one: a client that only ever read the rows
+    /// would have no way to know there were more.
+    /// </summary>
+    [Fact]
+    public async Task The_listing_is_a_page_and_says_how_much_there_is_to_page_through()
+    {
+        await CreateTransaction(10m);
+        await CreateTransaction(20m);
+        await CreateTransaction(30m);
+
+        var listing = await Client.GetFromJsonAsync<JsonElement>(
+            "/transactions?Page=1&PageSize=2", Json, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, listing.GetProperty("items").GetArrayLength());
+        Assert.Equal(1, listing.GetProperty("page").GetInt32());
+        Assert.Equal(2, listing.GetProperty("pageSize").GetInt32());
+        Assert.Equal(3, listing.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task The_second_page_holds_what_the_first_one_did_not()
+    {
+        await CreateTransaction(10m);
+        await CreateTransaction(20m);
+        await CreateTransaction(30m);
+
+        var second = await Client.GetFromJsonAsync<JsonElement>(
+            "/transactions?Page=2&PageSize=2", Json, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, second.GetProperty("items").GetArrayLength());
+        Assert.Equal(2, second.GetProperty("page").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_listing_sorts_by_the_key_the_query_names()
+    {
+        await CreateTransaction(30m);
+        await CreateTransaction(10m);
+        await CreateTransaction(20m);
+
+        var listing = await Client.GetFromJsonAsync<JsonElement>(
+            "/transactions?SortBy=amount&SortDescending=false", Json, TestContext.Current.CancellationToken);
+
+        var amounts = listing.GetProperty("items").EnumerateArray()
+            .Select(element => element.GetProperty("amount").GetDecimal()).ToList();
+
+        Assert.Equal([10m, 20m, 30m], amounts);
+    }
+
+    [Fact]
+    public async Task A_sort_key_the_listing_does_not_offer_is_refused()
+    {
+        var response = await Client.GetAsync("/transactions?SortBy=nonsense",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_summary_counts_and_totals_the_whole_match_not_the_page()
+    {
+        await CreateTransaction(10m);
+        await CreateTransaction(20m);
+        await CreateTransaction(30m);
+
+        var summary = await Client.GetFromJsonAsync<TransactionSummaryResponse>(
+            "/transactions/summary", Json, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(summary);
+        Assert.Equal(3, summary.Count);
+        Assert.Equal(60m, summary.Total);
     }
 
     [Fact]

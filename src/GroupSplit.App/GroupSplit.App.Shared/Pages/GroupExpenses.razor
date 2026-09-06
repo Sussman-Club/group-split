@@ -1,0 +1,181 @@
+@page "/groups/{GroupId:guid}/expenses"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.App.Shared.Services.Transactions
+@using GroupSplit.Shared
+@inject IGroupsClient GroupsClient
+@inject IGroupsPageStateService GroupsService
+@inject IDialogService DialogService
+@inject ApiErrorPresenter Errors
+@inject NavigationManager Nav
+
+@* Everything one group has spent, whoever paid. The group page shows the newest few of
+   this and links here for the rest; the expenses page is the other axis -- everything one
+   person has paid, across every group. *@
+
+<PageTitle>@(_group?.Name ?? "Group") expenses - Group Split</PageTitle>
+
+<div class="gs-page-head">
+    <div class="gs-inline" style="gap: 16px">
+        <MudTooltip Text="Back to the group">
+            <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" aria-label="Back to the group"
+                           OnClick="@BackToGroup" />
+        </MudTooltip>
+        <div>
+            <div class="gs-eyebrow">@(_group is null ? "Group" : _group.Name)</div>
+            <h1 style="margin-top: 2px">Expenses</h1>
+            <p style="margin-top: 2px">
+                @if (_total is { } total)
+                {
+                    @($"{total} expense{(total == 1 ? "" : "s")} in this group, by every member.")
+                }
+                else
+                {
+                    @("Everything this group has spent, by every member.")
+                }
+            </p>
+        </div>
+    </div>
+    <MudTextField @bind-Value="_searchString"
+                  Placeholder="Search by name, category or who paid"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Rounded.Search"
+                  Immediate="true"
+                  DebounceInterval="300"
+                  OnDebounceIntervalElapsed="OnSearchChangedAsync"
+                  Clearable="true"
+                  Margin="Margin.Dense"
+                  Variant="Variant.Outlined"
+                  Class="gs-search"
+                  Style="min-width: min(360px, 100%)" />
+</div>
+
+<div class="gs-stack">
+    <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+
+    <div class="gs-stats">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 0">
+            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+            <span class="gs-eyebrow">Expenses</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@(_summary?.Count ?? 0)">@(_summary?.Count ?? 0)</span>
+            <span class="gs-muted" style="font-size: .8125rem">
+                @(IsNarrowed ? $"{_total ?? 0} in view" : "in this group")
+            </span>
+        </div>
+        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
+            <span class="gs-eyebrow">Total spent</span>
+            <Money Value="@(_summary?.Total ?? 0m)" Animate Class="gs-stat-value" />
+            <span class="gs-muted" style="font-size: .8125rem">
+                by everyone@(_range.IsAllTime ? ", all time" : $", {_range.Label.ToLowerInvariant()}")
+            </span>
+        </div>
+    </div>
+
+    <div class="gs-reveal" style="--i: 2">
+        @* No group column: every row here is the same group, so it would be the same tag
+           repeated down the page. *@
+        <ExpensesGrid @ref="_grid"
+                      LoadPage="LoadPageAsync"
+                      IsNarrowed="@IsNarrowed"
+                      ShowGroup="false"
+                      EmptyTitle="Nothing recorded yet"
+                      EmptyDescription="Expenses anyone in this group records will show up here." />
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid GroupId { get; set; }
+
+    private string _searchString = "";
+    private DateFilter _range = DateFilter.AllTime;
+    private ExpensesGrid? _grid;
+    private GroupResponse? _group;
+    private TransactionSummaryResponse? _summary;
+
+    /// <summary>How many the current page is one of, which is the match count while searching.</summary>
+    private int? _total;
+
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
+
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime;
+
+    private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
+        TransactionQuery query, CancellationToken cancellationToken)
+    {
+        // The search box and the chips are this page's, so what they say is read here, as
+        // the request is made, rather than handed to the grid to hold on to.
+        //
+        // The generated client answers with the concrete wire type, and Task is not
+        // covariant, so the page is awaited here and handed back as the base type.
+        var page = await ReadAsync<PagedResponseOfTransactionResponse>(() =>
+            GroupsClient.GetGroupTransactionsAsync(
+                GroupId,
+                from: _range.From,
+                to: _range.To,
+                search: IsSearching ? _searchString.Trim() : null,
+                sortBy: query.SortBy,
+                sortDescending: query.SortDescending,
+                page: query.Page,
+                pageSize: query.PageSize,
+                cancellationToken: cancellationToken));
+
+        _total = page?.TotalCount;
+
+        return page;
+    }
+
+    /// <summary>
+    /// Reads through the presenter, so a refusal is shown once and the caller is handed
+    /// null rather than an exception the grid would have to catch.
+    /// </summary>
+    private async Task<T?> ReadAsync<T>(Func<Task<T>> read) where T : class
+    {
+        T? result = null;
+        await Errors.TryAsync(async () => result = await read(), "Could not load this group's expenses.");
+        return result;
+    }
+
+    private Task OnSearchChangedAsync(string _) => BackToFirstPageAsync();
+
+    private async Task OnRangeChangedAsync(DateFilter range)
+    {
+        _range = range;
+
+        // The tile totals the same span the grid is showing, so it is read again with it.
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private Task BackToFirstPageAsync() =>
+        _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
+
+    private async Task ReadSummaryAsync() =>
+        _summary = await ReadAsync<TransactionSummaryResponse>(
+            () => GroupsClient.GetGroupTransactionsSummaryAsync(
+                GroupId, from: _range.From, to: _range.To));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The group is read for its name, and the summary for the tiles: the grid holds one
+        // page, which cannot say what the group has spent in all.
+        _group = await ReadAsync<GroupResponse>(() => GroupsClient.GetGroupAsync(GroupId));
+        await ReadSummaryAsync();
+    }
+
+    /// <summary>
+    /// Selects the group on the way back, so the group page opens on the one just left
+    /// rather than on whichever was selected before.
+    /// </summary>
+    private void BackToGroup()
+    {
+        var group = GroupsService.Groups.FirstOrDefault(g => g.Id == GroupId);
+
+        if (group is not null)
+            GroupsService.SelectedGroup = group;
+
+        Nav.NavigateTo("/groups");
+    }
+}

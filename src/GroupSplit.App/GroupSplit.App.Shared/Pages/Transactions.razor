@@ -1,8 +1,8 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject ITransactionsPageStateService TransactionsService
 @inject IDialogService DialogService
 @implements IAsyncDisposable
@@ -13,13 +13,18 @@
     <div>
         <div class="gs-eyebrow">Every group</div>
         <h1>Expenses</h1>
-        <p>Everything you have recorded, searchable and editable in place.</p>
+        <p>Everything you have paid for, across all your groups. To see everything a group
+           has spent, open the group and follow through to its expenses.</p>
     </div>
+    @* Searches the server, not the rows on screen: what is on screen is one page. Debounced
+       so a request goes out when typing pauses rather than on every keystroke. *@
     <MudTextField @bind-Value="_searchString"
-                  Placeholder="Search by name, group or category"
+                  Placeholder="Search by name, group, category or who paid"
                   Adornment="Adornment.Start"
                   AdornmentIcon="@Icons.Material.Rounded.Search"
                   Immediate="true"
+                  DebounceInterval="300"
+                  OnDebounceIntervalElapsed="OnSearchChangedAsync"
                   Clearable="true"
                   Margin="Margin.Dense"
                   Variant="Variant.Outlined"
@@ -28,12 +33,14 @@
 </div>
 
 <div class="gs-stack">
+    <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+
     <div class="gs-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Recorded</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@All.Count">@All.Count</span>
-            <span class="gs-muted" style="font-size: .8125rem">@(Filtered.Count == All.Count ? "showing all" : $"{Filtered.Count} match")</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@RecordedCount">@RecordedCount</span>
+            <span class="gs-muted" style="font-size: .8125rem">@RecordedSubline</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
@@ -44,90 +51,13 @@
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             <span class="gs-eyebrow">Total</span>
-            <Money Value="Filtered.Sum(t => t.Amount)" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">@(string.IsNullOrWhiteSpace(_searchString) ? "all time" : "of the matches")</span>
+            <Money Value="ShownTotal" Animate Class="gs-stat-value" />
+            <span class="gs-muted" style="font-size: .8125rem">@TotalSubline</span>
         </div>
     </div>
 
     <div class="gs-reveal" style="--i: 3">
-        <MudDataGrid T="TransactionResponse"
-                     Items="@All"
-                     QuickFilter="@Matches"
-                     SortMode="SortMode.Single"
-                     Hover="true"
-                     Dense="false"
-                     Bordered="false"
-                     Elevation="0"
-                     Class="gs-grid">
-            <Columns>
-                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
-                    <CellTemplate>
-                        <div class="gs-num" style="font-weight: 700; font-size: .875rem">@context.Item.DateTime.LocalDateTime.ToString("d MMM yyyy")</div>
-                        <div class="gs-muted gs-num" style="font-size: .75rem">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</div>
-                    </CellTemplate>
-                </PropertyColumn>
-
-                <PropertyColumn Property="x => x.Name" Title="Expense">
-                    <CellTemplate>
-                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
-                            <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
-                            <div style="min-width: 0">
-                                <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
-                                <div class="gs-muted" style="font-size: .75rem">Paid by @context.Item.PaidByUserName</div>
-                            </div>
-                        </div>
-                    </CellTemplate>
-                </PropertyColumn>
-
-                <PropertyColumn Property="x => x.GroupName" Title="Group">
-                    <CellTemplate>
-                        <span class="gs-tag neutral">@context.Item.GroupName</span>
-                    </CellTemplate>
-                </PropertyColumn>
-
-                <PropertyColumn Property="x => x.Category" Title="Category">
-                    <CellTemplate>
-                        <span class="gs-tag">@context.Item.Category</span>
-                    </CellTemplate>
-                </PropertyColumn>
-
-                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
-                    <CellTemplate>
-                        <Money Value="context.Item.Amount" Class="gs-grid-amount" />
-                    </CellTemplate>
-                </PropertyColumn>
-
-                <TemplateColumn Sortable="false" HeaderStyle="width: 96px" CellStyle="padding: 8px">
-                    <CellTemplate>
-                        <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                            <MudTooltip Text="Edit">
-                                <MudIconButton Icon="@Icons.Material.Rounded.Edit"
-                                               Size="Size.Small"
-                                               aria-label="Edit"
-                                               OnClick="@(async () => await EditTransactionAsync(context.Item))" />
-                            </MudTooltip>
-                            <MudTooltip Text="Delete">
-                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
-                                               Size="Size.Small"
-                                               Color="Color.Error"
-                                               aria-label="Delete"
-                                               OnClick="@(async () => await DeleteTransactionAsync(context.Item))" />
-                            </MudTooltip>
-                        </div>
-                    </CellTemplate>
-                </TemplateColumn>
-            </Columns>
-            <NoRecordsContent>
-                <div class="gs-empty">
-                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(All.Count == 0 ? "No expenses yet" : "Nothing matches")</h3>
-                    <span>@(All.Count == 0 ? "Record the first one with the button below." : "Try a different name, group or category.")</span>
-                </div>
-            </NoRecordsContent>
-            <PagerContent>
-                <MudDataGridPager T="TransactionResponse" PageSizeOptions="@(new[] { 10, 25, 50 })" />
-            </PagerContent>
-        </MudDataGrid>
+        <ExpensesGrid @ref="_grid" LoadPage="LoadPageAsync" IsNarrowed="@IsNarrowed" />
     </div>
 </div>
 
@@ -135,36 +65,75 @@
 
 @code {
     private string _searchString = "";
+    private DateFilter _range = DateFilter.AllTime;
+    private ExpensesGrid? _grid;
 
-    private ICollection<TransactionResponse> All => TransactionsService.Transactions ?? [];
-    private List<TransactionResponse> Filtered => All.Where(Matches).ToList();
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
-    private IEnumerable<TransactionResponse> MonthToDate => All.Where(t =>
-        t.DateTime.LocalDateTime.Year == DateTime.Today.Year && t.DateTime.LocalDateTime.Month == DateTime.Today.Month);
-    private decimal ThisMonth => MonthToDate.Sum(t => t.Amount);
+    // Narrowed by anything -- a search, a span, or both -- and the figures beside the page
+    // have to describe that narrowing rather than the whole.
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime;
 
-    private bool Matches(TransactionResponse t)
+    private string RecordedSubline => IsNarrowed ? $"{MatchCount} in view" : "showing all";
+
+    private string TotalSubline => (IsSearching, _range.IsAllTime) switch
     {
-        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        (true, true) => "of the matches",
+        (true, false) => $"matches in {_range.Label.ToLowerInvariant()}",
+        (false, false) => _range.Label.ToLowerInvariant(),
+        _ => "all time"
+    };
 
-        var q = _searchString.Trim();
-        return t.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || t.GroupName.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || t.Category.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || t.PaidByUserName.Contains(q, StringComparison.OrdinalIgnoreCase);
+    // The tiles read the server's figures rather than adding up the rows on screen: those
+    // are one page, and a page cannot say what the whole comes to.
+    private int RecordedCount => TransactionsService.Summary?.Count ?? 0;
+    private int MatchCount => TransactionsService.Page?.TotalCount ?? 0;
+    private decimal ThisMonth => TransactionsService.MonthSummary?.Total ?? 0m;
+
+    private decimal ShownTotal => IsNarrowed
+        ? TransactionsService.MatchesSummary?.Total ?? 0m
+        : TransactionsService.Summary?.Total ?? 0m;
+
+    // The search box and the chips are this page's, so what they say is read here, as the
+    // request is made, rather than handed to the grid to hold on to. Then through the state
+    // service, which answers from what it holds when the query has not changed.
+    private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
+        TransactionQuery query, CancellationToken cancellationToken)
+    {
+        var narrowed = query with
+        {
+            Search = IsSearching ? _searchString.Trim() : null,
+            Range = _range
+        };
+
+        await TransactionsService.LoadAsync(narrowed, cancellationToken);
+
+        return TransactionsService.Page;
     }
+
+    private Task OnSearchChangedAsync(string _) => BackToFirstPageAsync();
+
+    private Task OnRangeChangedAsync(DateFilter range)
+    {
+        _range = range;
+        return BackToFirstPageAsync();
+    }
+
+    // A different span, like a different search, is a different question: page four of the
+    // old answer is an empty grid under a real total.
+    private Task BackToFirstPageAsync() =>
+        _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
 
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
-    private void ReRender()
-    {
-        InvokeAsync(StateHasChanged);
-    }
+    private void ReRender() => InvokeAsync(StateHasChanged);
 
     protected override void OnInitialized()
     {
         _loadCts = new CancellationTokenSource();
+
+        // Only the tiles here: the grid asks again on its own, off the same announcement.
         TransactionsService.OnTransactionsChanged += ReRender;
     }
 
@@ -192,55 +161,6 @@
         if (request is not null)
         {
             await TransactionsService.CreateAsync(request, CancellationToken);
-        }
-    }
-
-    private async Task EditTransactionAsync(TransactionResponse transaction)
-    {
-        var parameters = new DialogParameters<UpdateTransactionDialog>
-        {
-            { x => x.Original, transaction }
-        };
-
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
-
-        var dialogReference = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
-
-        var request = await dialogReference.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
-
-        if (request is not null)
-        {
-            await TransactionsService.UpdateAsync(transaction, request, CancellationToken);
-        }
-    }
-
-    private async Task DeleteTransactionAsync(TransactionResponse transaction)
-    {
-        var parameters = new DialogParameters<ConfirmationDialog>
-        {
-            { x => x.ContentText, $"Are you sure you want to delete \"{transaction.Name}\"?" },
-            { x => x.ButtonText, "Delete" },
-            { x => x.Color, Color.Error }
-        };
-
-        var options = new DialogOptions
-        {
-            CloseButton = true,
-            MaxWidth = MaxWidth.ExtraSmall,
-            FullWidth = true
-        };
-
-        var dialogReference = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
-
-        var result = await dialogReference.GetReturnValueAsync<bool>();
-
-        if (result)
-        {
-            await TransactionsService.DeleteAsync(transaction, CancellationToken);
         }
     }
 

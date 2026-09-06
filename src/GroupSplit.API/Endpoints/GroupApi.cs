@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
@@ -27,12 +28,15 @@ public static class GroupApi
             group.MapGetGroup();
             group.MapUpdateGroup();
             group.MapGetGroupTransactions();
+            group.MapGetGroupTransactionsSummary();
             group.MapGetGroupRules();
             group.MapGetMembers();
             group.MapAddMember();
             group.MapRemoveMember();
             group.MapGetGroupUserBalance();
             group.MapSettle();
+            group.MapArchive();
+            group.MapUnarchive();
 
             return group;
         }
@@ -60,10 +64,13 @@ public static class GroupApi
         {
             return group.MapGet(string.Empty, async (
                     IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var groups = await groupService.GetAllGroups(ct);
-                    var groupResponses = await groups.SelectDto().ToListAsync(cancellationToken: ct);
+                    var groupResponses = await groups.SelectDto(context, currentUser.User.Id)
+                        .ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupResponses);
                 })
                 .WithName("GetGroups")
@@ -75,10 +82,12 @@ public static class GroupApi
             return group.MapGet("{id:guid}", async (
                     Guid id,
                     IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var group = await groupService.GetGroupById(id, ct);
-                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -96,6 +105,8 @@ public static class GroupApi
                     Guid id,
                     JsonPatchDocument<CreateGroupRequest> patchDocument,
                     IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var groupUpdateRequest = await groupService.GetUpdateModel(id, ct);
@@ -111,7 +122,7 @@ public static class GroupApi
                     await groupService.UpdateGroup(id, groupUpdateRequest, ct);
 
                     var group = await groupService.GetGroupById(id, ct);
-                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
 
                     return Results.Ok(groupResponse);
                 })
@@ -126,17 +137,36 @@ public static class GroupApi
             return group.MapGet("{id:guid}/transactions", async (
                     Guid id,
                     [AsParameters] TransactionFilter filter,
+                    [AsParameters] SortRequest sort,
+                    [AsParameters] PageRequest page,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
                     var transactions = await transactionService.List(ct);
-                    var transactionResponses = await transactions
+                    return Results.Ok(await transactions
                         .Where(x => x.RuleVersion.Rule.Group.Id == id)
-                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
-                    return Results.Ok(transactionResponses);
+                        .ToTransactionPageAsync(filter, sort, page, ct));
                 })
                 .WithName("GetGroupTransactions")
-                .Produces<TransactionResponse[]>();
+                .Produces<PagedResponse<TransactionResponse>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
+        }
+
+        private RouteHandlerBuilder MapGetGroupTransactionsSummary()
+        {
+            return group.MapGet("{id:guid}/transactions/summary", async (
+                    Guid id,
+                    [AsParameters] TransactionFilter filter,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactions = await transactionService.List(ct);
+                    return Results.Ok(await transactions
+                        .Where(x => x.RuleVersion.Rule.Group.Id == id)
+                        .ToSummaryAsync(filter, ct));
+                })
+                .WithName("GetGroupTransactionsSummary")
+                .Produces<TransactionSummaryResponse>();
         }
 
         private RouteHandlerBuilder MapGetGroupRules()
@@ -183,10 +213,12 @@ public static class GroupApi
                     Guid id,
                     AddMemberRequest request,
                     IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var group = await groupService.AddGroupMembers(id, request, ct);
-                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -205,10 +237,12 @@ public static class GroupApi
                     Guid groupId,
                     Guid userId,
                     IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var group = await groupService.RemoveGroupMember(groupId, userId, ct);
-                    var groupResponse = await group.SelectDto().FirstOrDefaultAsync(ct);
+                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -264,14 +298,71 @@ public static class GroupApi
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
         }
+
+        /// <summary>
+        /// Answers with the group, so a client can put the new state straight into the list
+        /// it is already holding rather than reading the whole thing again.
+        /// </summary>
+        private RouteHandlerBuilder MapArchive()
+        {
+            return group.MapPost("{id:guid}/archive", async (
+                    Guid id,
+                    IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
+                    CancellationToken ct) =>
+                {
+                    var archived = await groupService.Archive(id, ct);
+                    var groupResponse = await archived.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+
+                    if (groupResponse is null)
+                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+
+                    return Results.Ok(groupResponse);
+                })
+                .WithName("ArchiveGroup")
+                .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapUnarchive()
+        {
+            return group.MapDelete("{id:guid}/archive", async (
+                    Guid id,
+                    IGroupService groupService,
+                    ICurrentUser currentUser,
+                    AppDbContext context,
+                    CancellationToken ct) =>
+                {
+                    var unarchived = await groupService.Unarchive(id, ct);
+                    var groupResponse = await unarchived.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+
+                    if (groupResponse is null)
+                        return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+
+                    return Results.Ok(groupResponse);
+                })
+                .WithName("UnarchiveGroup")
+                .Produces<GroupResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
     }
 
     extension(IQueryable<Group> groups)
     {
-        private IQueryable<GroupResponse> SelectDto()
+        /// <summary>
+        /// <paramref name="context"/> says whose list this is being read for: archiving is
+        /// personal, so IsArchive is true only when that person archived it. Reading it off
+        /// the group would tell every member what one of them had tidied away.
+        /// </summary>
+        private IQueryable<GroupResponse> SelectDto(AppDbContext context, Guid userId)
         {
             return from @group in groups
-                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count);
+                join membership in context.Set<GroupMembership>()
+                    on new { GroupId = @group.Id, UserId = userId }
+                    equals new { membership.GroupId, membership.UserId }
+                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
+                    membership.ArchivedAt != null);
         }
     }
 
