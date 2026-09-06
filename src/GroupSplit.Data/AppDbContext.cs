@@ -1,9 +1,10 @@
 using GroupSplit.Data.Entities;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IDataProtectionKeyContext
 {
     /// <summary>
     /// Constructor for derived classes.
@@ -16,7 +17,20 @@ public class AppDbContext : DbContext
     public AppDbContext(DbContextOptions<AppDbContext> options) : this((DbContextOptions)options)
     {
     }
-    
+
+    /// <summary>
+    /// The Data Protection key ring, which protects the bank access tokens.
+    /// </summary>
+    /// <remarks>
+    /// The only <c>DbSet</c> property on the context; everything else is reached through
+    /// <c>Set&lt;T&gt;()</c>. <see cref="IDataProtectionKeyContext"/> leaves no choice --
+    /// the framework's key repository reads this member by name -- so it is here and
+    /// nothing else is. The keys live in the app database so that every API instance
+    /// unprotects what any other protected, and so that a database reset takes the keys
+    /// with the ciphertext they open.
+    /// </remarks>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -208,6 +222,18 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(transaction => transaction.GroupId);
 
+            // Filing copies, then links. Unlinking a bank deletes its rows, and the
+            // expenses they became lose the link and nothing else -- they are history,
+            // not an import.
+            entity.HasOne(transaction => transaction.BankTransaction)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.BankTransactionId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // A bank row files into at most one expense. Postgres lets the nulls through,
+            // which is every typed transaction.
+            entity.HasIndex(transaction => transaction.BankTransactionId).IsUnique();
+
             entity.HasIndex(transaction => transaction.DateTime);
             entity.HasIndex(transaction => transaction.Name);
 
@@ -246,6 +272,104 @@ public class AppDbContext : DbContext
         // ICollection<Expense>, so configuring it first taught EF the hierarchy on the way
         // past. Deleting RuleVersion took that accident with it.
         modelBuilder.Entity<Transaction>().HasIndex("Discriminator");
+
+        // The import side of the seam. Nothing below joins the ledger except
+        // Transaction.BankTransactionId above, and that points this way, not back.
+        modelBuilder.Entity<BankConnection>(entity =>
+        {
+            entity.Property(connection => connection.Provider).HasMaxLength(32).IsRequired();
+            entity.Property(connection => connection.ProviderItemId).HasMaxLength(128).IsRequired();
+            entity.Property(connection => connection.InstitutionName).HasMaxLength(128).IsRequired();
+            entity.Property(connection => connection.AccessTokenCiphertext).IsRequired();
+            entity.Property(connection => connection.LinkedAt).IsRequired();
+
+            // By name, not number: the first enum in the schema, and the precedent.
+            entity.Property(connection => connection.Status)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
+            // An item belongs to a person. Deleting the account takes the bank data with
+            // it; there is nobody else it could belong to.
+            entity.HasOne(connection => connection.User)
+                .WithMany()
+                .HasForeignKey(connection => connection.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A bank linked twice is one connection; the exchange finds this row and
+            // answers with it rather than making a second.
+            entity.HasIndex(connection => new { connection.Provider, connection.ProviderItemId }).IsUnique();
+
+            // Every listing's filter.
+            entity.HasIndex(connection => connection.UserId);
+        });
+
+        modelBuilder.Entity<LinkedAccount>(entity =>
+        {
+            entity.Property(account => account.ProviderAccountId).HasMaxLength(128).IsRequired();
+            entity.Property(account => account.Name).HasMaxLength(128).IsRequired();
+            entity.Property(account => account.Mask).HasMaxLength(8);
+            entity.Property(account => account.Type).HasMaxLength(32).IsRequired();
+            entity.Property(account => account.Subtype).HasMaxLength(32);
+
+            entity.Property(account => account.Currency)
+                .HasMaxLength(Currencies.CodeLength)
+                .IsFixedLength()
+                .IsRequired()
+                .HasDefaultValue(Currencies.Default);
+
+            entity.HasOne(account => account.Connection)
+                .WithMany(connection => connection.Accounts)
+                .HasForeignKey(account => account.BankConnectionId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(account => new { account.BankConnectionId, account.ProviderAccountId }).IsUnique();
+        });
+
+        modelBuilder.Entity<BankTransaction>(entity =>
+        {
+            entity.Property(row => row.ProviderTransactionId).HasMaxLength(128).IsRequired();
+            entity.Property(row => row.Date).IsRequired();
+            entity.Property(row => row.Amount).IsRequired().HasPrecision(18, 2);
+            entity.Property(row => row.Description).HasMaxLength(256).IsRequired();
+            entity.Property(row => row.MerchantName).HasMaxLength(128);
+            entity.Property(row => row.ProviderCategory).HasMaxLength(64);
+            entity.Property(row => row.Pending).IsRequired();
+            entity.Property(row => row.RawJson).IsRequired();
+            entity.Property(row => row.ImportedAt).IsRequired();
+
+            entity.Property(row => row.Currency)
+                .HasMaxLength(Currencies.CodeLength)
+                .IsFixedLength()
+                .IsRequired()
+                .HasDefaultValue(Currencies.Default);
+
+            entity.Property(row => row.Status)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
+            entity.HasOne(row => row.Account)
+                .WithMany(account => account.Transactions)
+                .HasForeignKey(row => row.LinkedAccountId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The posted row remembers the pending one it replaced. Both are kept, so this
+            // is a courtesy pointer and losing the old row must not take the new one.
+            entity.HasOne(row => row.Replaces)
+                .WithMany()
+                .HasForeignKey(row => row.ReplacesId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // The dedup key every upsert relies on: the provider's id, within the account.
+            entity.HasIndex(row => new { row.LinkedAccountId, row.ProviderTransactionId }).IsUnique();
+
+            // The inbox: this person's accounts, this status, newest first.
+            entity.HasIndex(row => new { row.LinkedAccountId, row.Status, row.Date });
+        });
 
         modelBuilder.Entity<UserIdentity>(entity =>
         {
