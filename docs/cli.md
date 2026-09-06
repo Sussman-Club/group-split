@@ -59,14 +59,29 @@ Tag and push. Nothing else -- MinVer turns the tag into the package version, and
 `.github/workflows/release-cli.yml` tests, packs and publishes.
 
 ```bash
-git tag cli-v0.1.0
-git push origin cli-v0.1.0
+git tag cli-v0.0.1
+git push origin cli-v0.0.1
 ```
 
 The tag prefix keeps the CLI's releases independent of any tag the apps want. The workflow
 refuses to publish a prerelease from a release tag, so a mistake that would quietly ship
 `0.0.0-alpha.0.N` fails loudly instead. A published version cannot be replaced -- GitHub
 Packages rejects a re-push -- so a bad release is superseded by a new tag, never overwritten.
+
+### What the numbers do
+
+The first release is `0.0.1`, and versions run from the tags after that:
+
+| | |
+| --- | --- |
+| Before any tag | `0.0.0-alpha.0.<height>` -- a prerelease, needing `--prerelease` to install |
+| At `cli-v0.0.1` | `0.0.1` |
+| Each commit after it | `0.0.2-alpha.0.1`, `0.0.2-alpha.0.2`, ... |
+| At `cli-v0.0.2` | `0.0.2` |
+
+So the next patch number is claimed as soon as a release is tagged, and every commit toward it
+is installable and ordered. Tag `cli-v0.1.0` instead when the change deserves it -- MinVer
+follows the tag rather than the other way round, and only bumps the patch on its own.
 
 ### From the checkout instead
 
