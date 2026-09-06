@@ -104,10 +104,19 @@
             <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
                 <div class="gs-card-title">
                     <h2>Recent expenses</h2>
-                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/transactions"
+                    @* This group's expenses, by everyone. /transactions is the other axis:
+                       what one person has paid, across every group. *@
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                               Href="@($"/groups/{group.Id}/expenses")"
                                EndIcon="@Icons.Material.Rounded.ArrowForward">All expenses</MudButton>
                 </div>
                 <TransactionsList Transactions="GroupsService.Transactions?.Items ?? []" />
+                @if (ExpenseCount > (GroupsService.Transactions?.Items.Count ?? 0))
+                {
+                    <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
+                        Showing the @(GroupsService.Transactions!.Items.Count) most recent of @ExpenseCount.
+                    </div>
+                }
             </div>
         </div>
 

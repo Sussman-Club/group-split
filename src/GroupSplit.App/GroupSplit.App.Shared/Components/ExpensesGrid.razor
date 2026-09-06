@@ -1,0 +1,233 @@
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Transactions
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject ITransactionsPageStateService TransactionsService
+@inject IDialogService DialogService
+@inject DataChangeNotifier Changes
+@implements IDisposable
+
+@* The grid of expenses, wherever they come from. The page that hosts it says which
+   listing to read -- everything you have paid, or everything one group has spent -- and
+   this handles the rest: turning what the grid asks for into a query, editing and
+   deleting a row, and asking again when a write lands anywhere in the app. *@
+
+<MudDataGrid T="TransactionResponse"
+             @ref="_grid"
+             ServerData="LoadPageAsync"
+             RowsPerPage="@TransactionQuery.Default.PageSize"
+             SortMode="SortMode.Single"
+             Hover="true"
+             Dense="false"
+             Bordered="false"
+             Elevation="0"
+             Class="gs-grid">
+    <Columns>
+        <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
+            <CellTemplate>
+                <div class="gs-num" style="font-weight: 700; font-size: .875rem">@context.Item.DateTime.LocalDateTime.ToString("d MMM yyyy")</div>
+                <div class="gs-muted gs-num" style="font-size: .75rem">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</div>
+            </CellTemplate>
+        </PropertyColumn>
+
+        <PropertyColumn Property="x => x.Name" Title="Expense">
+            <CellTemplate>
+                <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                    <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
+                    <div style="min-width: 0">
+                        <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
+                        <div class="gs-muted" style="font-size: .75rem">Paid by @context.Item.PaidByUserName</div>
+                    </div>
+                </div>
+            </CellTemplate>
+        </PropertyColumn>
+
+        @* Every row in a group's listing carries the same group, so the column is only
+           worth its width when the listing spans more than one. *@
+        @if (ShowGroup)
+        {
+            <PropertyColumn Property="x => x.GroupName" Title="Group">
+                <CellTemplate>
+                    <span class="gs-tag neutral">@context.Item.GroupName</span>
+                </CellTemplate>
+            </PropertyColumn>
+        }
+
+        <PropertyColumn Property="x => x.Category" Title="Category">
+            <CellTemplate>
+                <span class="gs-tag">@context.Item.Category</span>
+            </CellTemplate>
+        </PropertyColumn>
+
+        <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
+            <CellTemplate>
+                <Money Value="context.Item.Amount" Class="gs-grid-amount" />
+            </CellTemplate>
+        </PropertyColumn>
+
+        <TemplateColumn Sortable="false" HeaderStyle="width: 96px" CellStyle="padding: 8px">
+            <CellTemplate>
+                <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                       Size="Size.Small"
+                                       aria-label="Edit"
+                                       OnClick="@(async () => await EditAsync(context.Item))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                       Size="Size.Small"
+                                       Color="Color.Error"
+                                       aria-label="Delete"
+                                       OnClick="@(async () => await DeleteAsync(context.Item))" />
+                    </MudTooltip>
+                </div>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <div class="gs-empty">
+            <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+            <h3>@(IsSearching ? "Nothing matches" : EmptyTitle)</h3>
+            <span>@(IsSearching ? "Try a different name, group or category." : EmptyDescription)</span>
+        </div>
+    </NoRecordsContent>
+    <PagerContent>
+        <MudDataGridPager T="TransactionResponse" PageSizeOptions="@(new[] { 10, 25, 50 })" />
+    </PagerContent>
+</MudDataGrid>
+
+@code {
+    /// <summary>
+    /// Reads one page of whichever listing this grid is showing. The host page decides
+    /// which; the query says what to read of it.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public Func<TransactionQuery, CancellationToken, Task<PagedResponse<TransactionResponse>?>> LoadPage { get; set; } = null!;
+
+    /// <summary>What is being searched for, or null. Owned by the host page's search box.</summary>
+    [Parameter] public string? Search { get; set; }
+
+    [Parameter] public bool ShowGroup { get; set; } = true;
+
+    [Parameter] public string EmptyTitle { get; set; } = "No expenses yet";
+
+    [Parameter] public string EmptyDescription { get; set; } = "Record the first one with the button below.";
+
+    private MudDataGrid<TransactionResponse>? _grid;
+    private bool _reloading;
+
+    private bool IsSearching => !string.IsNullOrWhiteSpace(Search);
+
+    protected override void OnInitialized()
+    {
+        // A write made anywhere -- this grid, another page, a dialog -- means the rows here
+        // may be wrong. The grid keeps its own copy of them, so it has to be told to ask.
+        Changes.TransactionsChanged += ReloadAsync;
+        Changes.GroupsChanged += ReloadAsync;
+    }
+
+    /// <summary>
+    /// What the grid asks for, translated. Its page is zero-based, and its sort arrives as
+    /// the column's property name, which is the sort key with a capital first letter.
+    /// </summary>
+    private async Task<GridData<TransactionResponse>> LoadPageAsync(
+        GridState<TransactionResponse> state, CancellationToken cancellationToken)
+    {
+        var sort = state.SortDefinitions.FirstOrDefault();
+
+        var query = new TransactionQuery(
+            Page: state.Page + 1,
+            PageSize: state.PageSize,
+            SortBy: sort is null ? TransactionQuery.DefaultSortBy : Camel(sort.SortBy),
+            SortDescending: sort?.Descending ?? true,
+            Search: IsSearching ? Search!.Trim() : null);
+
+        var page = await LoadPage(query, cancellationToken);
+
+        return new GridData<TransactionResponse>
+        {
+            Items = page?.Items ?? [],
+            TotalItems = page?.TotalCount ?? 0
+        };
+    }
+
+    private static string Camel(string propertyName) =>
+        string.IsNullOrEmpty(propertyName)
+            ? propertyName
+            : char.ToLowerInvariant(propertyName[0]) + propertyName[1..];
+
+    /// <summary>
+    /// Asks for the current page again. Guarded against re-entry: a write raises both
+    /// events, and two reloads at once would race over the rows.
+    /// </summary>
+    public async Task ReloadAsync()
+    {
+        if (_grid is null || _reloading) return;
+
+        _reloading = true;
+        try
+        {
+            await InvokeAsync(() => _grid.ReloadServerData());
+        }
+        finally
+        {
+            _reloading = false;
+        }
+    }
+
+    /// <summary>
+    /// Back to the first page and read again. A different search is a different question,
+    /// and page four of the old answer is an empty grid under a real total.
+    /// </summary>
+    public async Task ReloadFromFirstPageAsync()
+    {
+        if (_grid is null) return;
+
+        _grid.NavigateTo(MudBlazor.Page.First);
+        await ReloadAsync();
+    }
+
+    private async Task EditAsync(TransactionResponse transaction)
+    {
+        var parameters = new DialogParameters<UpdateTransactionDialog> { { x => x.Original, transaction } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        if (request is not null)
+        {
+            // Through the expenses state, which announces the write; every listing showing
+            // this expense, this grid included, re-reads itself off the back of it.
+            await TransactionsService.UpdateAsync(transaction, request);
+        }
+    }
+
+    private async Task DeleteAsync(TransactionResponse transaction)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Are you sure you want to delete \"{transaction.Name}\"?" },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
+
+        if (await dialog.GetReturnValueAsync<bool>())
+        {
+            await TransactionsService.DeleteAsync(transaction);
+        }
+    }
+
+    public void Dispose()
+    {
+        Changes.TransactionsChanged -= ReloadAsync;
+        Changes.GroupsChanged -= ReloadAsync;
+    }
+}
