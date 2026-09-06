@@ -1,5 +1,7 @@
 namespace GroupSplit.AppHost.Extensions;
 
+#pragma warning disable ASPIREPERSISTENCE001
+
 public static class KeycloakDevelopmentExtensions
 {
     extension(IResourceBuilder<KeycloakResource> keycloak)
@@ -27,7 +29,8 @@ public static class KeycloakDevelopmentExtensions
                 .WithRealmImport("./Assets/keycloak/realms.json")
                 .WithContainerFiles("/opt/keycloak/themes/group-split", "./Assets/keycloak/themes")
                 .WithSmtp(mailpit)
-                .WithDataVolume();
+                .WithDataVolume()
+                .WithPersistentLifetime();
         }
     }
 }
