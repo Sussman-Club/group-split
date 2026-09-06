@@ -119,7 +119,7 @@ else
 
     // A remote host can only pull images it can reach, so publish tags into the shared
     // registry rather than leaving them tagged on whatever machine ran the deploy.
-    var registry = builder.AddContainerRegistry("registry", "registry.sussman.win", "group-split");
+    var registry = builder.AddContainerRegistry("registry", "ghcr.io", "sussman-club/group-split");
 
     compose
         .WithContainerRegistry(registry)
