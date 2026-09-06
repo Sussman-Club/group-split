@@ -66,8 +66,6 @@ public class AppDbContext : DbContext
         {
             entity.Property(rule => rule.Name).HasMaxLength(64).IsRequired();
 
-            entity.Property(rule => rule.Kind).IsRequired();
-
             entity.HasOne(rule => rule.Group)
                 .WithMany(group => group.SplitRules)
                 .HasForeignKey(rule => rule.GroupId)
@@ -77,6 +75,21 @@ public class AppDbContext : DbContext
             // are two the member cannot tell apart.
             entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
         });
+
+        // TPH, like Transaction: how a rule divides is which type it is -- answered by the
+        // handler registered for that type, not by a Kind column and a switch. One table,
+        // and the participants are declared once, on the middle layer that has them.
+        //
+        // Declared before the discriminator is indexed, because until EF has been told the
+        // subtypes exist there is no hierarchy and therefore no discriminator to index.
+        modelBuilder.Entity<WeightedSplitRule>();
+        modelBuilder.Entity<EvenSplitRule>();
+
+        modelBuilder.Entity<PercentSplitRule>();
+
+        modelBuilder.Entity<SharesSplitRule>();
+
+        modelBuilder.Entity<SplitRule>().HasIndex("Discriminator");
 
         modelBuilder.Entity<SplitRuleParticipant>(entity =>
         {

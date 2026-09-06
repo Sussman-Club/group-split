@@ -124,28 +124,60 @@ public class TransactionSplit : Entity
 
 `SplitRule` is a template and holds no dates:
 
+A rule is data. What it *does* is its handler's, resolved by the rule's runtime type the
+way rule versions already are -- so a `Kind` column and a switch appear nowhere, and
+adding a kind is adding a class rather than editing one.
+
 ```csharp
-public class SplitRule : Entity
+// Nothing here says what shape a split has. "Participants with weights" is one way
+// to answer, and putting it on the base would quietly rule out every rule that is
+// not proportional -- "Omar pays exactly ten and the rest is even" has no weight
+// that expresses it, because weights are normalised by their total and a fixed
+// amount does not scale.
+public abstract class SplitRule : Entity
 {
     public Guid GroupId { get; set; }
     public required string Name { get; set; }
-    public required SplitRuleKind Kind { get; set; }   // Even | Shares | Percent
+}
+
+// The proportional family, which is where participants belong. A middle layer, not
+// a leaf: what went wrong before was Shares : Percent, a leaf inheriting a leaf,
+// carrying its own participants *and* the inherited ones -- the same fact in two
+// units with a conversion between them, which is where the rounding bug lived.
+public abstract class WeightedSplitRule : SplitRule
+{
     public virtual ICollection<SplitRuleParticipant> Participants { get; } = [];
 }
 
-// Weight means shares when Kind is Shares, hundredths of a percent when Percent,
-// and is ignored when Even. One column because one of them is always the answer,
-// and two nullable ones would let both be set.
-//
-// An Even rule stores no participants at all. Storing them would freeze today's
-// membership into weights, so the rule would stop dividing evenly the moment
-// somebody joined -- which is the one thing an even split is for.
+public sealed class EvenSplitRule    : WeightedSplitRule;   // names nobody = everyone
+public sealed class PercentSplitRule : WeightedSplitRule;   // hundredths, summing to 10000
+public sealed class SharesSplitRule  : WeightedSplitRule;   // whole shares
+
+// One weight column, meaning whatever the kind means. Weight is defaulted rather
+// than required because an even rule names people without weighting them.
 public class SplitRuleParticipant : Entity
 {
     public Guid SplitRuleId { get; set; }
     public Guid UserId { get; set; }
-    public required int Weight { get; set; }
+    public int Weight { get; set; } = 1;
 }
+
+// Behaviour, off the entity and dispatched by type.
+public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler where TRule : SplitRule
+{
+    IReadOnlyList<SplitAmount> Divide(TRule rule, decimal amount, Guid payerId,
+        IReadOnlyCollection<Guid> members);
+    string? Invalid(TRule rule);
+}
+```
+
+Two things worth noticing about that. `PercentSplitRule` and `SharesSplitRule` divide
+**identically** -- both hand their stored weights to the calculator, which normalises by
+whatever total it is given. Shares needing no conversion into percentages is exactly what
+removes the old `SharesRuleVersionHandler` drift correction; what is left that is
+genuinely each kind's own is what makes it invalid. And an even rule that names nobody
+divides between the current membership, so it keeps dividing evenly when somebody joins
+instead of freezing today's members into weights; naming people narrows it instead.
 
 public class Category : Entity
 {
@@ -327,12 +359,28 @@ and settling again, which is one action in the UI and avoids a second way to mov
 | `RuleVersion`, `PersonalRuleVersion`, `PercentRuleVersion`, `SharesRuleVersion`, `SettlementRuleVersion` | Splits are on the transaction; the template is `SplitRule` |
 | `PercentRuleUser`, `SharesRuleUser` | `SplitRuleParticipant`, one weight column |
 | `Rule`, `RuleFlags` | `Category` is the label; `SplitRule` is the split; no rule is a pseudo-rule any more |
-| `IRuleVersionHandler` and its four implementations, `RuleVersionHandler` reflection dispatch, `RuleVersionServiceExtensions` | One shape of rule, converted directly |
+| `IRuleVersionHandler` and its four implementations, `RuleVersionHandler` reflection dispatch, `RuleVersionServiceExtensions` | ~~One shape of rule, converted directly~~ **Retained, retargeted** -- see below |
 | `RuleFilter` | Rules are bounded per group and returned whole -- see [Listing contract](roadmap.md#listing-contract) |
 | `TransactionService.GetTransactionSplits` | Splits are rows; read them |
 | `RuleVersionReferencesRemovedMember`, `ErrorCodes.RuleVersionHasRemovedMember` | Replaced by `MemberHasBalance` on removal |
 | `User.PersonalGroup`, the personal `Group` rows, `Rule.PersonalDefault` | Personal is `GroupId is null` |
 | `ErrorCodes.RuleNoUserTransactions`, `TransactionPayerRequiresRule`, `TransactionRuleRequired`, `GroupHasNoRule` | A group with no rules can record an expense: no category, even split |
+
+The handler row is a correction. This plan originally had the handler machinery deleted
+along with the hierarchy it served, on the grounds that one shape of rule needs no
+dispatch. That was wrong twice over: there is not one shape of rule, and even if there
+were, deleting the pattern only moves the problem -- something still has to turn a wire
+DTO into the right subtype, and without a handler resolved by type that something is a
+switch, in the API layer, needing an edit every time a kind is added. The pattern is kept
+and pointed at `SplitRule` instead: `ISplitRuleHandler<TRule>`, a dispatcher that makes
+the generic interface from the rule's own type, and one handler per kind.
+
+What changes is where it lives and what it costs. The split-rule handlers sit in
+`GroupSplit.Data`, because the seeder divides expenses too and has its own container --
+seed data divided differently from the way the app divides would hand every developer
+balances no sequence of user actions could produce. And they are singletons: dividing
+needs the rule, the amount, the payer and the membership, and nothing else. The
+rule-version handlers are scoped because theirs genuinely query the database.
 
 That last row is worth reading twice. Four error codes and
 `RejectGroupTransactionWithoutARule` exist to handle "you picked a group but it has no
