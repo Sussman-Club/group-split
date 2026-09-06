@@ -232,10 +232,40 @@ spans that served them. Start it from the dashboard when you want that.
 For actually working on it, run it directly and let the environment point it at the stack:
 
 ```bash
-export GROUPSPLIT_API_URL=$(aspire describe api --output json | jq -r '.endpoints[0].url')
+# Ports are assigned per run, so read them back rather than writing them down. Select the
+# endpoints by name: Keycloak's first URL is its internal management port, not the one
+# that serves the realm.
+json() { aspire describe "$1" --format Json --nologo 2>/dev/null | sed -n '/^{/,$p'; }
+
+export GROUPSPLIT_API_URL=$(json api | jq -r '.resources[0].urls[]|select(.name=="https")|.url')
+export GROUPSPLIT_AUTHORITY=$(json keycloak | jq -r '.resources[0].urls[]|select(.name=="http")|.url')/realms/group-split
+
 dotnet run --project src/GroupSplit.Cli -- groups list
 ```
 
-The `cli` Keycloak client lives in `src/GroupSplit.AppHost/Assets/keycloak/realms.json`. It is
-public, device-grant only, and carries the same `api` audience mapper as `web-app` -- without
-that mapper the API rejects its tokens for the wrong audience.
+`groupsplit config list` echoes back what it resolved, which is the quickest way to check
+those two before wondering why a request went somewhere unexpected.
+
+### The `cli` Keycloak client
+
+It lives in `src/GroupSplit.AppHost/Assets/keycloak/realms.json`: public, device-grant only,
+and carrying the same `api` audience mapper as `web-app` -- without that mapper the API
+rejects its tokens for the wrong audience.
+
+**A realm that already exists will not pick it up.** Keycloak imports a realm on first start
+only, and both the local Keycloak (`WithDataVolume`) and the deployed one keep theirs, so
+adding a client to this file does nothing for an environment that has already run. Either add
+the client through the admin console, or -- locally, where the data is disposable -- drop the
+volume and let the realm be imported again:
+
+```bash
+aspire stop
+podman volume ls | grep keycloak     # confirm the name before removing anything
+podman volume rm <the keycloak data volume>
+aspire run
+```
+
+That loses locally signed-up accounts; `groupsplit auth login` works afterwards, and the
+seeder's **Reset databases and seed** command puts the demo accounts back.
+
+Until then, `GROUPSPLIT_TOKEN` needs no realm change at all.

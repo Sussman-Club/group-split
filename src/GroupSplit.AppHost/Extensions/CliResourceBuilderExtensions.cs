@@ -35,6 +35,12 @@ public static class CliResourceBuilderExtensions
                 .WithAnnotation(new TProject())
                 .WithProjectDefaults(new ProjectResourceOptions())
                 .WithExplicitStart()
+                // Without arguments the CLI reports "required command was not provided"
+                // and exits 3, which is right for a terminal and useless for a resource.
+                // `auth status` needs no credentials, exits 0, and prints the endpoints it
+                // resolved -- so starting this from the dashboard is a smoke test of the
+                // wiring below rather than a guaranteed red mark.
+                .WithArgs("auth", "status")
                 .WithIconName("WindowConsole");
         }
     }
