@@ -187,9 +187,6 @@ public class AppDbContext : DbContext
             // together often enough to be worth one index.
             entity.HasIndex(transaction => new { transaction.GroupId, transaction.DateTime });
 
-            // EF does not index the discriminator on its own, and Set<Expense>() filters
-            // on nothing else.
-            entity.HasIndex("Discriminator");
         });
 
         modelBuilder.Entity<Expense>(entity =>
@@ -209,6 +206,17 @@ public class AppDbContext : DbContext
         });
 
         modelBuilder.Entity<Transfer>();
+
+        // EF does not index the discriminator on its own, and Set<Expense>() filters on
+        // nothing else.
+        //
+        // After the leaves, not inside the base's configuration: until EF has been told
+        // they exist there is no hierarchy, so there is no discriminator to index and
+        // naming one asks for a shadow property with no type. This used to work from
+        // inside the block only by accident -- RuleVersion.Transactions was an
+        // ICollection<Expense>, so configuring it first taught EF the hierarchy on the way
+        // past. Deleting RuleVersion took that accident with it.
+        modelBuilder.Entity<Transaction>().HasIndex("Discriminator");
 
         modelBuilder.Entity<UserIdentity>(entity =>
         {
