@@ -255,7 +255,7 @@
         };
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete category", parameters);
-        var confirmed = await dialog.GetReturnValueAsync<bool>();
+        var confirmed = await dialog.ConfirmedAsync();
 
         if (confirmed)
             await DeleteCategory(category);
