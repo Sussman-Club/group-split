@@ -18,6 +18,13 @@ public static class WebAppExtensions
     /// </summary>
     private const string KeycloakPrefix = "/idp";
 
+    /// <summary>
+    /// Path bank providers send webhooks to. Matches the API's own <c>WebhooksApi</c> route,
+    /// and is deliberately left on the forwarded path so the API still sees which provider
+    /// is calling.
+    /// </summary>
+    public const string WebhookPrefix = "/webhooks";
+
     extension(IEndpointRouteBuilder app)
     {
         public RouteGroupBuilder MapApiForwarder()
@@ -75,6 +82,30 @@ public static class WebAppExtensions
         /// </summary>
         public IEndpointConventionBuilder MapKeycloakForwarder()
             => app.MapForwarder($"{KeycloakPrefix}/{{*path}}", "http://keycloak")
+                .AllowAnonymous()
+                .DisableAntiforgery();
+
+        /// <summary>
+        /// Carries a bank provider's webhooks through to the API.
+        /// <para>
+        /// The <c>/api</c> forwarder requires authentication, and a provider has no account
+        /// here and no token, so its calls would be answered with a 401 and the app would
+        /// simply never hear that anything had changed. This is the same passthrough
+        /// without that requirement.
+        /// </para>
+        /// <para>
+        /// Anonymous is not unguarded. The API verifies the provider's signature over the
+        /// exact bytes forwarded here before it reads any of them, so what stands in for a
+        /// token is cryptographic rather than absent -- and this hop must not disturb those
+        /// bytes, which is why it is a passthrough and not a transform.
+        /// </para>
+        /// <para>
+        /// Antiforgery is off for the same reason Keycloak's is: the caller is not a browser
+        /// carrying this app's tokens.
+        /// </para>
+        /// </summary>
+        public IEndpointConventionBuilder MapWebhookForwarder()
+            => app.MapForwarder($"{WebhookPrefix}/{{*path}}", "https+http://api")
                 .AllowAnonymous()
                 .DisableAntiforgery();
     }

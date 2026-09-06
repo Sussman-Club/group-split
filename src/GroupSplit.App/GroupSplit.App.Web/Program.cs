@@ -70,6 +70,8 @@ app.MapApiForwarder();
 
 app.MapKeycloakForwarder();
 
+app.MapWebhookForwarder();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -88,7 +90,11 @@ else
 // a 302 to Keycloak that a fetch cannot follow.
 app.UseWhen(
     context => !context.Request.Path.StartsWithSegments("/api")
-               && !context.Request.Path.StartsWithSegments("/idp"),
+               && !context.Request.Path.StartsWithSegments("/idp")
+               // A provider reads the status code and retries on anything but a 2xx, so a
+               // friendly 404 page in place of the API's answer would have it retrying a
+               // webhook that was in fact refused on purpose.
+               && !context.Request.Path.StartsWithSegments(WebAppExtensions.WebhookPrefix),
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseDefaultHttpsRedirection();
 

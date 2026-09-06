@@ -71,6 +71,9 @@ AppHost needs only a GitHub entry of the matching name.
 | `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
+| `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
+| `plaid-client-id`, `plaid-secret` | variable `PLAID_CLIENT_ID`; secret `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
+| `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 
 The optional ones are declared with
 [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
@@ -80,7 +83,7 @@ switched off rather than a prompt. (Aspire reads an empty value in `appsettings.
 missing parameter, which is why the defaults are in code rather than there.) The two
 switches exist so that the AppHost never has to read a parameter's value while it builds
 the model; the rules that span several values run as the `validate-smtp` and
-`validate-google-sign-in` pipeline steps, after Aspire's `process-parameters` step has
+`validate-google-sign-in` and `validate-plaid` pipeline steps, after Aspire's `process-parameters` step has
 resolved the values and before `build-prereq`, which every image build waits on, so a bad
 deployment fails before an image is built.
 
@@ -96,6 +99,24 @@ dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-sign-
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-client-id <id>
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-client-secret <secret>
 ```
+
+Bank sync is the other. Plaid's sandbox needs no approval and opens any institution with
+`user_good` / `pass_good`:
+
+```bash
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:plaid-client-id <id>
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:plaid-secret <sandbox secret>
+```
+
+Whether bank sync is on is not a switch inside the API. The Plaid connector is registered
+when credentials are present, and bank sync is available exactly when a connector answers,
+so `plaid-enabled` exists for the deployment's benefit: off, it sends an empty client id,
+which the API reads as no Plaid at all. The two ends cannot disagree about it.
+
+Webhooks are the one part that does not work locally. Plaid has to reach the app from
+outside, so it is given a webhook address only when the app is served over HTTPS on a
+hostname it can resolve. Locally a sync runs when the app asks for one, on linking or
+through **Sync now**, and the nightly sweep catches whatever a missed webhook would have.
 
 ## Building in a sandbox that has no SDK
 

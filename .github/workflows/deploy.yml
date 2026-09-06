@@ -95,6 +95,11 @@ jobs:
           require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
             || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
 
+          # Bank sync is the same shape. The API starts either way and reports bank sync
+          # as off, so an incomplete setting costs a feature rather than the deployment.
+          require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET \
+            || echo "::notice::PLAID_ENABLED is not true. Nobody can link a bank."
+
           [ "$missing" -eq 0 ] || exit 1
 
       - uses: actions/checkout@v7
