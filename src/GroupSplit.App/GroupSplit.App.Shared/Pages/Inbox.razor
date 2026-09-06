@@ -119,9 +119,12 @@
                         </div>
 
                         <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
-                            <span class="@(row.IsCredit ? "gs-muted" : "")" title="@(row.IsCredit ? "Money in" : "Money out")">
-                                @Money(row)
-                            </span>
+                            @* Through the one money component, like every other figure in
+                               the app. Money coming in is signed and toned rather than
+                               shown as a negative expense, which it is not. *@
+                            <Money Value="@row.Amount" Currency="@row.Currency"
+                                   Signed="@row.IsCredit" Absolute="@row.IsCredit"
+                                   Class="@(row.IsCredit ? "gs-muted" : "")" />
 
                             @if (row.Status == InboxStatus.New)
                             {
@@ -215,15 +218,6 @@
         InboxStatus.Filed => "Transactions you add become expenses and appear here.",
         _ => "Transactions you ignore stay out of the way, and can be put back."
     };
-
-    /// <summary>
-    /// Money out reads as it does everywhere else; money in is shown as a credit rather
-    /// than as a negative expense, because it is not an expense at all.
-    /// </summary>
-    private static string Money(BankTransactionResponse row) =>
-        row.IsCredit
-            ? $"+{Math.Abs(row.Amount).ToMoney(row.Currency)}"
-            : row.Amount.ToMoney(row.Currency);
 
     private Task KeepPersonalAsync(BankTransactionResponse row) =>
         FileAsync(row, new FileBankTransactionRequest(), "your own expenses");

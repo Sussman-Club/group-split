@@ -26,68 +26,77 @@
     <DialogContent>
         <div class="gs-steps" role="list" aria-label="Steps">
             <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
-                <span>1</span> Details
+                <span class="dot">1</span> What
             </span>
+            <span class="gs-step-line"></span>
             <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
-                <span>2</span> Split
+                <span class="dot">2</span> Split
             </span>
         </div>
 
-        <MudStack Spacing="3" Class="mt-4">
-            @* What the bank sent, as a statement rather than a form. *@
-            <div class="gs-card gs-card-pad">
-                <div class="gs-row" style="cursor: default; padding: 0">
-                    <Avatar Name="@Row.Title" />
-                    <div style="min-width: 0">
-                        <div class="title"><span>@Row.Title</span></div>
-                        <div class="meta">
-                            @Row.AccountName · @Row.SpentOn.ToShortDateString()
-                            @if (Row.Context is { Length: > 0 } context)
-                            {
-                                @($" · {context}")
-                            }
-                        </div>
+        <MudStack Spacing="3">
+            @* What the bank sent, in the same summary card the expense dialog uses for its
+               own figures. Shown on both steps because none of it is a field: it is the
+               thing being filed, and it does not change. *@
+            <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                <div class="gs-inline" style="justify-content: space-between">
+                    <div>
+                        <div class="gs-eyebrow">@Row.Title</div>
+                        <div class="gs-muted" style="font-size: .8125rem">@Where</div>
                     </div>
-                    <strong>@Row.Amount.ToMoney(Row.Currency)</strong>
+                    <Money Value="@Row.Amount" Currency="@Row.Currency" Class="gs-money" />
                 </div>
             </div>
 
             @if (Step == 1)
             {
-                <MudSelect T="Guid?" Label="Group" Value="_groupId" ValueChanged="OnGroupChangedAsync"
-                           Variant="Variant.Outlined" Dense="true" Required="true"
-                           HelperText="Which group this belongs to.">
+                <MudSelect T="Guid?"
+                           Label="Group"
+                           Variant="Variant.Outlined"
+                           @bind-Value="_groupId"
+                           @bind-Value:after="OnGroupChangedAsync"
+                           Clearable="false"
+                           Placeholder="">
                     @foreach (var group in _groups)
                     {
                         <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
                     }
                 </MudSelect>
 
-                <MudSelect T="Guid?" Label="Category" @bind-Value="_categoryId"
-                           Variant="Variant.Outlined" Dense="true" Disabled="@(_groupId is null)"
+                <MudSelect T="Guid?"
+                           Label="Category"
+                           Variant="Variant.Outlined"
+                           @bind-Value="_categoryId"
+                           Disabled="@(_categories.Count == 0)"
+                           Clearable="true"
+                           Placeholder=""
                            HelperText="@CategoryHint">
-                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">No category</MudSelectItem>
                     @foreach (var category in _categories)
                     {
-                        <MudSelectItem T="Guid?" Value="@category.Id">@category.Name</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">@category.Name</MudSelectItem>
                     }
                 </MudSelect>
 
-                <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Dense="true"
-                              HelperText="What this is called in the group's expenses." />
+                <MudTextField
+                    @bind-Value="_name"
+                    Label="Name"
+                    Variant="Variant.Outlined"
+                    Immediate="true"/>
 
-                <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined"
-                              Dense="true" Lines="2"
-                              HelperText="Anything the bank's line does not say. Optional." />
+                <MudTextField
+                    @bind-Value="_description"
+                    Label="Description"
+                    Variant="Variant.Outlined"
+                    Immediate="true"
+                    Lines="2"/>
             }
-
-            @if (Step == 2)
+            else
             {
                 <SplitEditor Members="@_members"
                              Amount="@Row.Amount"
                              PayerId="@null"
                              Value="@_splits"
-                             ValueChanged="@OnSplitsChangedAsync" />
+                             ValueChanged="@OnSplitsChangedAsync"/>
 
                 @* What is actually going to be stored, asked of the API rather than worked
                    out here, so the preview cannot disagree with the save. *@
@@ -171,6 +180,21 @@
     private SplitPreviewResponse? _preview;
     private string? _previewError;
 
+    /// <summary>
+    /// The row's own provenance, under its title in the summary card: which account, when
+    /// the money was actually spent, and how it was paid where the bank said.
+    /// </summary>
+    private string Where
+    {
+        get
+        {
+            var parts = new[] { Row.AccountName, Row.SpentOn.ToShortDateString(), Row.Context }
+                .Where(part => !string.IsNullOrWhiteSpace(part));
+
+            return string.Join(" · ", parts);
+        }
+    }
+
     private string CategoryHint => _groupId is null
         ? "Pick a group first."
         : Row.CategoryLabel is { Length: > 0 } label
@@ -190,9 +214,8 @@
             MudDialog.Cancel();
     }
 
-    private async Task OnGroupChangedAsync(Guid? groupId)
+    private async Task OnGroupChangedAsync()
     {
-        _groupId = groupId;
 
         // A stated division names people, and the people just changed.
         _splits = null;
@@ -201,13 +224,13 @@
         _members = [];
         _preview = null;
 
-        if (groupId is null)
+        if (_groupId is not { } groupId)
             return;
 
         await Errors.TryAsync(async () =>
         {
             _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
-            _members = [.. await GroupsClient.GetGroupMembersAsync(groupId.Value)];
+            _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
         }, "Could not load the group.");
 
         // The bank's own category, matched against what this group already uses. Only a
