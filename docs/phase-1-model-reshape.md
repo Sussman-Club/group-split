@@ -330,27 +330,37 @@ place, and it is the place that matters most:
 `PUT` would not have this problem, because a whole model always arrives. So the rule is
 explicit, and it is the reason this exclusion is not free:
 
-None of this bites yet: `Splits` is not on the update model, so an edit always recomputes
-them from the rule, and there is nothing a patch can half-change. It starts mattering the
-moment a per-expense split is editable, which is what Phase 2's expense dialog is for.
-The shape it takes then:
+This is built, and the shape it took differs from the plan in one place worth reading:
 
-- The update model is `UpdateExpenseRequest`, carrying an optional
-  `IReadOnlyList<SplitInput>? Splits`.
-- After the patch is applied and validated, the service recomputes splits **unless the
-  patch document itself touched `/splits`**. Recomputation runs `SplitCalculator` over
-  the expense's category default, or an even split when it has none -- the same path a
-  create takes.
-- When the patch *did* touch `/splits`, the given splits are used verbatim and must sum
-  to the (possibly also patched) amount, or `422 SplitsDoNotSumToAmount`.
-- Detecting "touched `/splits`" reads the operations on the `JsonPatchDocument`, before
-  it is applied. That is a small amount of awkward code that `PUT` deletes outright, and
-  it should be deleted when the verb changes.
+- `UpdateTransactionRequest` and `CreateTransactionRequest` both carry an optional
+  `IReadOnlyList<SplitInput>? Splits`. Null is not "no shares"; it is "don't state any",
+  which is a different instruction and the ordinary one.
+- The service recomputes splits **unless the request states them**. Recomputation runs
+  `SplitCalculator` over the expense's category default, or an even split when it has
+  none -- the same path a create takes.
+- Stated splits are used verbatim and must sum to the (possibly also patched) amount, or
+  `422 SplitsDoNotSumToAmount`, which carries `amount`, `splitTotal` and `difference` so a
+  dialog can name the shortfall instead of making somebody add the column up.
+- Detecting "touched `/splits`" reads the operations on the `JsonPatchDocument` before it
+  is applied, in `PatchDocumentExtensions.Touches`. It matches the member and anything
+  under it, on a segment boundary, so `/splits/0/amount` counts and `/splitsomething` does
+  not. That is a small amount of awkward code that `PUT` deletes outright, and it should be
+  deleted when the verb changes.
 
-Transfers are not patchable in the parts that define them. `Name`, `Description` and
-`Date` may be patched; an operation touching `/amount`, `/paidByUserId` or the splits of a
-`Transfer` is refused with `409 TransferNotEditable`. Correcting a transfer is deleting it
-and settling again, which is one action in the UI and avoids a second way to move money.
+**`GetUpdateModel` leaves the splits out, and the endpoint fills them in.** The plan had
+the model carry them so a patch could address one by index. Built that way it made silence
+mean the opposite of what it should: an ordinary read-change-write through the service --
+raise the amount, save -- came back carrying the old shares, which then failed to add up to
+the new amount, against a division the caller had never asked to keep. So the model arrives
+without them, and the update route fills them in only for a patch that actually addresses
+them, which is the one caller that needs an index to address.
+
+Transfers are not patchable in the parts that define them, and in the end that needed no
+code: every transaction route reads `Set<Expense>()`, so a transfer is not something the
+transactions API can address at all and a patch naming one is a 404. `TransferNotEditable`
+was never added. What that also means is that a transfer cannot be deleted through those
+routes either, so "correcting a transfer is deleting it and settling again" has no path
+yet -- filed as Phase 2 work along with the settlement UI, not done here.
 
 ## What is deleted
 
@@ -443,10 +453,10 @@ filed under a category, because the versions it would point back at are gone.
 Each step builds and keeps the suite green. Test counts are the floor, not the target;
 the coverage gate in CI is a ratchet and does not move down.
 
-Steps 1 to 6 are done. Steps 1 to 4 took three commits -- the arithmetic, then the new
+All seven steps are done. Steps 1 to 4 took three commits -- the arithmetic, then the new
 tables, then the cut-over. Steps 5 and 6 landed together: deleting the old model is what
-made the categories the only model there was. Step 7 is partly done -- the dialogs speak
-categories and split rules -- and per-expense splits are not on the wire yet.
+made the categories the only model there was. Step 7 followed in two parts, the dialogs
+speaking categories and split rules, and then the splits themselves reaching the wire.
 
 1. **Entities and mapping, no behaviour.** New types, `AppDbContext` configuration,
    `SplitCalculator` and its unit tests. Nothing reads them yet. The old model still

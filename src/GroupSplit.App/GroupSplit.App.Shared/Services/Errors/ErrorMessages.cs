@@ -47,6 +47,7 @@ public static class ErrorMessages
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",
         [ErrorCodes.TransactionPayerNotInGroup] = "The person who paid is not a member of this group.",
+        [ErrorCodes.SplitUserNotInGroup] = "One of the shares names someone who is not in this group.",
         [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
         [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",
@@ -54,6 +55,8 @@ public static class ErrorMessages
         [ErrorCodes.SplitRuleInUse] = "This rule is still the default for a category. Point the category elsewhere first.",
 
         [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
+        [ErrorCodes.SplitsInvalid] = "The shares are not valid. Each person can appear only once.",
+        [ErrorCodes.SplitsDoNotSumToAmount] = "The shares have to add up to the amount of the expense.",
         [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group."
     };
 

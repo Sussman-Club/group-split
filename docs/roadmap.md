@@ -42,7 +42,7 @@ benefits from.
 
 | Gap | Today | Needed | Priority |
 |---|---|---|---|
-| Per-expense split | A split is a `Rule`; every transaction points at a rule version. "Split this dinner between three of the five of us" means creating a rule first. | Each transaction carries its own split. Rules become templates that pre-fill it. | High |
+| ~~Per-expense split~~ **Done** | A split was a `Rule`; every transaction pointed at a rule version. "Split this dinner between three of the five of us" meant creating a rule first. | Each transaction carries its own split, stored as rows. Rules are templates a category may point at, pre-filling the division; an expense may state its own instead, and the dialogs offer both. | Done |
 | Category separate from split | `Rule.Category` is both the label and the split. The expense dialog's "Category" select is actually a rule picker; a group with no rule cannot record anything. | Category is a label on the transaction (Plaid supplies one) that may *default to* a split rule; the split itself is chosen per expense. See [Category and split](#category-and-split). | High, Plaid |
 | Currency | `decimal(18,2)` with no currency; UI hard-codes `$`. | `Currency` on the transaction, a default on the group, Plaid's `iso_currency_code` mapped straight in. | High, Plaid |
 | Group on the transaction | Group is reached through `RuleVersion -> Rule -> Group`. `CreateTransactionRequest.GroupId` exists only to disambiguate "personal" from "no rule". | `GroupId` (nullable) on the transaction. Null means personal. | High, Plaid |

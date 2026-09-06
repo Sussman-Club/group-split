@@ -91,6 +91,7 @@ routing, authentication, model binding, an unhandled exception.
 | `SPLIT_RULE_NAME_TAKEN` | The group already has a split rule with that name. | |
 | `SPLIT_RULE_IN_USE` | The split rule is still the default of a category. Point the category elsewhere first. | |
 | `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the group. | |
+| `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is not a member of the group. | |
 
 ### Validation (400)
 
@@ -100,7 +101,18 @@ no `errors` member; the code is the whole message.
 | Code | When |
 | --- | --- |
 | `SPLIT_RULE_INVALID` | The split rule does not hold together: percentages that do not add up to 100, a share nobody holds, a member named twice. |
+| `SPLITS_INVALID` | The stated shares name nobody, or name somebody twice. Leaving them out entirely is how you ask for the category's division. |
 | `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is not a member of the group. |
+
+### Unprocessable (422)
+
+The request is well formed and internally coherent, and carrying it out would leave the
+data saying something untrue. Distinct from a 400, which says a field is wrong, and from a
+409, which says the stored state refuses it.
+
+| Code | When | Extra members |
+| --- | --- | --- |
+| `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The stated shares do not add up to the expense's amount. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
 
 ## Producing an error in the API
 

@@ -106,6 +106,13 @@
                         }
                     </MudSelect>
                 }
+
+                <MudDivider/>
+
+                <SplitEditor Members="@GroupUsers.ToList()"
+                             Amount="@model.Amount"
+                             PayerId="@model.PaidByUserId"
+                             @bind-Value="model.Splits"/>
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -172,11 +179,17 @@
         {
             GroupCategories = [];
             GroupUsers = [];
+            model.Splits = null;
             return;
         }
 
         GroupCategories = await CategoriesClient.GetCategoriesAsync(groupId);
         GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
+
+        // A stated division names people, and the people just changed. Kept, it would
+        // either name somebody who is not in this group -- which the API refuses -- or
+        // quietly leave the new group's members out of their own expense.
+        model.Splits = null;
     }
 
     private async Task Submit()

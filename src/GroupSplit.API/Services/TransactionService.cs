@@ -87,7 +87,7 @@ public class TransactionService(
             User = payer
         };
 
-        await splitter.WriteSplitsAsync(expense, ct);
+        await splitter.WriteSplitsAsync(expense, request.Splits, ct);
 
         dbContext.Add(expense);
         await dbContext.SaveChangesAsync(ct);
@@ -116,6 +116,7 @@ public class TransactionService(
         // summed from, so a detail view that computed its own could disagree with them.
         var splits = transaction.Splits
             .Select(split => new TransactionSplitResponse(
+                split.User.Id,
                 $"{split.User.FirstName} {split.User.LastName}",
                 split.Amount))
             .ToList();
@@ -148,6 +149,12 @@ public class TransactionService(
                 DateTime = t.DateTime,
                 PaidByUserId = t.User.Id,
                 CategoryId = t.CategoryId
+                // Splits are deliberately absent. Null means "divide it again", and that is
+                // the only safe default for a model somebody is about to change the amount
+                // on: filled in here, an ordinary read-change-write would quietly mean
+                // "keep these exact shares" and fail the moment the amount moved. The one
+                // caller that needs them -- a patch addressing a share by index, which
+                // needs an index to address -- fills them in itself.
             })
             .FirstOrDefaultAsync(ct);
 
@@ -183,8 +190,9 @@ public class TransactionService(
 
         // The amount, the payer and the category can all have changed, and each of them
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
-        // edit for which keeping the old split would be right.
-        await splitter.WriteSplitsAsync(expense, ct);
+        // edit for which keeping the old split would be right -- unless the caller stated
+        // the division itself, which is the one case where keeping it is the whole point.
+        await splitter.WriteSplitsAsync(expense, request.Splits, ct);
 
         await dbContext.SaveChangesAsync(ct);
 

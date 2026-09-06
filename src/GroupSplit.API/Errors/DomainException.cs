@@ -43,3 +43,17 @@ public sealed class ForbiddenException(string code, string message)
 /// <summary>The request itself is wrong in a way the annotations on the model cannot express.</summary>
 public sealed class ValidationException(string code, string message)
     : DomainException(StatusCodes.Status400BadRequest, code, message);
+
+/// <summary>
+/// The request is well formed and internally coherent, and carrying it out anyway would
+/// leave the data saying something untrue.
+/// </summary>
+/// <remarks>
+/// Distinct from <see cref="ValidationException"/>, which says a field is wrong, and from
+/// <see cref="ConflictException"/>, which says the stored state refuses it. This one says
+/// the request contradicts itself against what it is being applied to: splits that do not
+/// sum to the amount they divide are the case it exists for, and the difference matters to
+/// a client, which can show the shortfall rather than a field error.
+/// </remarks>
+public sealed class UnprocessableException(string code, string message)
+    : DomainException(StatusCodes.Status422UnprocessableEntity, code, message);

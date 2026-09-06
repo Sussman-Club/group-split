@@ -25,6 +25,17 @@ public record CreateTransactionRequest
     /// </summary>
     public Guid? CategoryId { get; set; }
 
+    /// <summary>
+    /// Exactly how to divide it, or null to divide it the way the category says.
+    /// </summary>
+    /// <remarks>
+    /// Null is the ordinary case and the dialog's default: the category's rule pre-fills
+    /// the division, or an even split does when there is no category or it names no rule.
+    /// Sending them says the person overrode that for this one expense -- "don't charge
+    /// Omar for his own birthday cake" -- and they are stored as given.
+    /// </remarks>
+    public IReadOnlyList<SplitInput>? Splits { get; set; }
+
     [Required(ErrorMessage = "Name is required.")]
     [StringLength(124, ErrorMessage = "Name must be less than 124 characters.")]
     public string Name { get; set; } = null!;

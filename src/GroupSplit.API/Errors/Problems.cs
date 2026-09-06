@@ -43,6 +43,7 @@ public static class Problems
         [ErrorCodes.GroupMemberNotSettled] = "Member has an outstanding balance",
         [ErrorCodes.AccountNotSettled] = "Account has outstanding balances",
         [ErrorCodes.TransactionPayerNotInGroup] = "Payer is not a member of the group",
+        [ErrorCodes.SplitUserNotInGroup] = "A share names someone outside the group",
         [ErrorCodes.SettlementWithSelf] = "A settlement needs two different people",
         [ErrorCodes.CategoryNameTaken] = "Category name already in use",
         [ErrorCodes.CategoryInUse] = "Category still has expenses filed under it",
@@ -50,6 +51,8 @@ public static class Problems
         [ErrorCodes.SplitRuleInUse] = "Rule is still the default for a category",
 
         [ErrorCodes.SplitRuleInvalid] = "The split rule is not valid",
+        [ErrorCodes.SplitsInvalid] = "The shares are not valid",
+        [ErrorCodes.SplitsDoNotSumToAmount] = "The shares do not add up to the amount",
         [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group"
     };
 

@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ITransactionsClient TransactionsClient
 @inject ICategoriesClient CategoriesClient
 @inject ApiErrorPresenter Errors
 
@@ -70,6 +71,14 @@
                     }
                 </MudSelect>
 
+                <MudDivider/>
+
+                <SplitEditor Members="@GroupUsers.ToList()"
+                             Amount="@editModel.Amount"
+                             PayerId="@editModel.PaidByUserId"
+                             Stored="@storedSplits"
+                             @bind-Value="editModel.Splits"/>
+
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -98,6 +107,12 @@
     // Category & users come from the original transaction's GroupId
     private ICollection<CategoryInfo> GroupCategories = [];
     private ICollection<UserInfo> GroupUsers = [];
+
+    // What the expense is actually divided into today, which is where the editor starts
+    // from when somebody turns it on. The grid hands this dialog a listing row, which
+    // carries no shares, so they are read rather than passed in -- one path whichever
+    // list the edit was opened from.
+    private IReadOnlyList<SplitInput> storedSplits = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -128,6 +143,11 @@
                 GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
 
             GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
+
+            var details = await TransactionsClient.GetTransactionAsync(Original.Id);
+
+            storedSplits = [.. details.Splits.Select(split =>
+                new SplitInput { UserId = split.UserId, Amount = split.Amount })];
         }, "Could not load the group.");
 
         if (!loaded)
@@ -190,6 +210,13 @@
 
         if (original.PaidByUserId != updated.PaidByUserId)
             patch.Replace(x => x.PaidByUserId, updated.PaidByUserId);
+
+        // Only when the person stated the division themselves. Saying nothing here is not
+        // the same as sending the shares unchanged: the API reads the operations, and
+        // silence about them means "divide it again the way the category says", which is
+        // what an edit to the amount, the payer or the category should do.
+        if (updated.Splits is not null)
+            patch.Replace(x => x.Splits, updated.Splits);
 
         return patch;
     }

@@ -41,6 +41,7 @@ public static class ErrorCodes
     public const string GroupMemberNotSettled = "GROUP_MEMBER_NOT_SETTLED";
     public const string AccountNotSettled = "ACCOUNT_NOT_SETTLED";
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
+    public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";
     public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";
@@ -50,7 +51,13 @@ public static class ErrorCodes
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
     public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";
+    public const string SplitsInvalid = "SPLITS_INVALID";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";
+
+    // ---- Unprocessable (422): the request is understood and coherent, and still cannot --
+    // ---- be carried out, because acting on it would break an invariant ------------------
+
+    public const string SplitsDoNotSumToAmount = "SPLITS_DO_NOT_SUM_TO_AMOUNT";
 
     /// <summary>
     /// The generic code for a status, used when a response was produced by something that
@@ -63,6 +70,7 @@ public static class ErrorCodes
         403 => Forbidden,
         404 => NotFound,
         409 => Conflict,
+        422 => ValidationFailed,
         >= 500 => InternalError,
         _ => $"HTTP_{status}"
     };

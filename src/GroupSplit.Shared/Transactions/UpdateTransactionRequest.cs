@@ -13,6 +13,19 @@ public record UpdateTransactionRequest
     /// </summary>
     public Guid? CategoryId { get; set; }
 
+    /// <summary>
+    /// Exactly how to divide it, or null to divide it the way the category says.
+    /// </summary>
+    /// <remarks>
+    /// This is the one field a JSON Patch has to be read for rather than merely applied.
+    /// The model handed to a patch carries the splits the expense already has, so an
+    /// operation may address one of them -- but a patch that says nothing about them means
+    /// "recompute", not "keep these", because an edit to the amount, the payer or the
+    /// category changes what everybody owed. The endpoint tells those apart by looking at
+    /// the operations before applying them, and clears this when none touched it.
+    /// </remarks>
+    public IReadOnlyList<SplitInput>? Splits { get; set; }
+
     [Required(ErrorMessage = "Name is required.")]
     [StringLength(124, ErrorMessage = "Name must be less than 124 characters.")]
     public string Name { get; set; } = null!;
