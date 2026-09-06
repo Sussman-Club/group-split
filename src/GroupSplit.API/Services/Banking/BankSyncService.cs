@@ -339,6 +339,11 @@ public sealed class BankSyncService(
         row.Description = Clip(imported.Description, 256);
         row.MerchantName = Clip(imported.MerchantName, 128);
         row.ProviderCategory = Clip(imported.ProviderCategory, 64);
+        row.ProviderCategoryDetailed = Clip(imported.ProviderCategoryDetailed, 96);
+        row.AuthorizedDate = imported.AuthorizedDate;
+        row.PaymentChannel = Clip(imported.PaymentChannel, 32);
+        row.City = Clip(imported.City, 64);
+        row.LogoUrl = Clip(imported.LogoUrl, 512);
         row.Pending = imported.Pending;
         row.RawJson = imported.RawJson;
     }

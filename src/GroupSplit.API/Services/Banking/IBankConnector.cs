@@ -112,6 +112,11 @@ public sealed record ImportedTransaction(
     string Description,
     string? MerchantName,
     string? ProviderCategory,
+    string? ProviderCategoryDetailed,
+    DateOnly? AuthorizedDate,
+    string? PaymentChannel,
+    string? City,
+    string? LogoUrl,
     bool Pending,
     string? ReplacesProviderTransactionId,
     string RawJson);

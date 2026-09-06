@@ -158,6 +158,11 @@ public static class InboxApi
                 row.Description,
                 row.MerchantName,
                 row.ProviderCategory,
+                row.ProviderCategoryDetailed,
+                row.AuthorizedDate,
+                row.PaymentChannel,
+                row.City,
+                row.LogoUrl,
                 row.Pending,
                 row.Status == BankTransactionStatus.Filed
                     ? InboxStatus.Filed

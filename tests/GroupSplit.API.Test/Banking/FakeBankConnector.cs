@@ -98,6 +98,7 @@ internal sealed class FakeBankConnector : IBankConnector
         bool pending = false, string? replaces = null, string description = "LIDL 1234",
         string? merchant = "Lidl", string? category = "FOOD_AND_DRINK", DateOnly? date = null) =>
         new(account, id, date ?? new DateOnly(2026, 9, 1), amount, "USD", description, merchant, category,
+            category is null ? null : category + "_DETAILED", null, "in store", "Lisbon", null,
             pending, replaces, $$$"""{"transaction_id":"{{{id}}}"}""");
 
     public static RemovedTransaction Removed(string id, string account = "acc-1") => new(account, id);

@@ -1,53 +1,150 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
-@inject IGroupsClient Groups
-@inject ICategoriesClient Categories
-@inject LoadGuard Loading
+@inject IGroupsClient GroupsClient
+@inject ICategoriesClient CategoriesClient
+@inject ITransactionCommands Transactions
+@inject ApiErrorPresenter Errors
 
 @*
-    Turning one imported row into a group expense. Only two things are the person's to
-    decide -- which group, and what it was for -- because everything else is what the bank
-    said, and correcting the bank is editing the expense afterwards.
+    Turning one imported row into a group expense, in the same two steps recording one
+    takes: what it is, then how it is divided.
+
+    What the bank said is shown and not asked for. The amount, the date and the currency are
+    facts, not fields -- correcting the bank is editing the expense afterwards, and the row
+    goes on saying what the bank said. Everything below them is the person's.
 *@
 
 <MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
+    </TitleContent>
+
     <DialogContent>
-        <div class="gs-stack">
-            <div class="gs-kv-row">
-                <span class="gs-eyebrow">@Row.Title</span>
-                <strong>@Row.Amount.ToMoney(Row.Currency)</strong>
-            </div>
-            <div class="meta">@Row.AccountName · @Row.Date.ToShortDateString()</div>
-
-            <MudSelect T="Guid?" Label="Group" Value="_groupId" ValueChanged="OnGroupChangedAsync"
-                       Variant="Variant.Outlined" Dense="true" Required="true">
-                @foreach (var group in _groups)
-                {
-                    <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
-                }
-            </MudSelect>
-
-            <MudSelect T="Guid?" Label="Category" @bind-Value="_categoryId"
-                       Variant="Variant.Outlined" Dense="true" Disabled="@(_groupId is null)"
-                       HelperText="@CategoryHint">
-                <MudSelectItem T="Guid?" Value="@((Guid?)null)">No category</MudSelectItem>
-                @foreach (var category in _categories)
-                {
-                    <MudSelectItem T="Guid?" Value="@category.Id">@category.Name</MudSelectItem>
-                }
-            </MudSelect>
-
-            <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Dense="true"
-                          HelperText="What this will be called in the group's expenses." />
+        <div class="gs-steps" role="list" aria-label="Steps">
+            <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
+                <span>1</span> Details
+            </span>
+            <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
+                <span>2</span> Split
+            </span>
         </div>
+
+        <MudStack Spacing="3" Class="mt-4">
+            @* What the bank sent, as a statement rather than a form. *@
+            <div class="gs-card gs-card-pad">
+                <div class="gs-row" style="cursor: default; padding: 0">
+                    <Avatar Name="@Row.Title" />
+                    <div style="min-width: 0">
+                        <div class="title"><span>@Row.Title</span></div>
+                        <div class="meta">
+                            @Row.AccountName · @Row.SpentOn.ToShortDateString()
+                            @if (Row.Context is { Length: > 0 } context)
+                            {
+                                @($" · {context}")
+                            }
+                        </div>
+                    </div>
+                    <strong>@Row.Amount.ToMoney(Row.Currency)</strong>
+                </div>
+            </div>
+
+            @if (Step == 1)
+            {
+                <MudSelect T="Guid?" Label="Group" Value="_groupId" ValueChanged="OnGroupChangedAsync"
+                           Variant="Variant.Outlined" Dense="true" Required="true"
+                           HelperText="Which group this belongs to.">
+                    @foreach (var group in _groups)
+                    {
+                        <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="Guid?" Label="Category" @bind-Value="_categoryId"
+                           Variant="Variant.Outlined" Dense="true" Disabled="@(_groupId is null)"
+                           HelperText="@CategoryHint">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">No category</MudSelectItem>
+                    @foreach (var category in _categories)
+                    {
+                        <MudSelectItem T="Guid?" Value="@category.Id">@category.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Dense="true"
+                              HelperText="What this is called in the group's expenses." />
+
+                <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined"
+                              Dense="true" Lines="2"
+                              HelperText="Anything the bank's line does not say. Optional." />
+            }
+
+            @if (Step == 2)
+            {
+                <SplitEditor Members="@_members"
+                             Amount="@Row.Amount"
+                             PayerId="@null"
+                             Value="@_splits"
+                             ValueChanged="@OnSplitsChangedAsync" />
+
+                @* What is actually going to be stored, asked of the API rather than worked
+                   out here, so the preview cannot disagree with the save. *@
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Everyone's share</MudText>
+
+                    @if (_previewError is { Length: > 0 })
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_previewError</MudAlert>
+                    }
+                    else if (_preview is null)
+                    {
+                        <MudText Typo="Typo.caption">Working it out…</MudText>
+                    }
+                    else
+                    {
+                        @if (_preview.RuleName is { Length: > 0 } rule)
+                        {
+                            <MudText Typo="Typo.caption">Divided by the "@rule" rule.</MudText>
+                        }
+                        else if (_splits is null)
+                        {
+                            <MudText Typo="Typo.caption">Divided evenly.</MudText>
+                        }
+
+                        <div class="gs-list" style="margin-top: 4px">
+                            @foreach (var share in _preview.Splits)
+                            {
+                                <div class="gs-row" style="cursor: default; padding: 8px 4px">
+                                    <Avatar Name="@share.UserName" Size="sm" />
+                                    <div style="min-width: 0">
+                                        <div class="title"><span>@share.UserName</span></div>
+                                    </div>
+                                    <Money Value="share.Amount" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </MudStack>
     </DialogContent>
+
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                   Disabled="@(_groupId is null)" OnClick="Submit">Add expense</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+
+        @if (Step == 2)
+        {
+            <MudButton Variant="Variant.Text" OnClick="Back">Back</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                       OnClick="Submit">Add expense</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                       Disabled="@(_groupId is null)" OnClick="NextAsync">Next</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -55,53 +152,125 @@
     /// <summary>What the dialog answers with: the request, and where it is going, for the snackbar.</summary>
     public sealed record Answer(FileBankTransactionRequest Request, string Destination);
 
-    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
 
+    private int Step { get; set; } = 1;
+
     private IReadOnlyList<GroupResponse> _groups = [];
     private IReadOnlyList<CategoryResponse> _categories = [];
+    private IReadOnlyList<UserInfo> _members = [];
+
     private Guid? _groupId;
     private Guid? _categoryId;
     private string _name = string.Empty;
+    private string? _description;
+    private IReadOnlyList<SplitInput>? _splits;
+
+    private SplitPreviewResponse? _preview;
+    private string? _previewError;
 
     private string CategoryHint => _groupId is null
         ? "Pick a group first."
-        : "A category with a split rule divides the expense for you.";
+        : Row.CategoryLabel is { Length: > 0 } label
+            ? $"Your bank called this \"{label}\"."
+            : "A category with a split rule divides the expense for you.";
 
     protected override async Task OnInitializedAsync()
     {
         _name = Row.Title;
 
-        await Loading.RunAsync(async () =>
+        var loaded = await Errors.TryAsync(async () =>
         {
-            _groups = (await Groups.GetGroupsAsync(CancellationToken.None)).ToList();
-        }, "your groups");
+            _groups = [.. await GroupsClient.GetGroupsAsync()];
+        }, "Could not load your groups.");
+
+        if (!loaded)
+            MudDialog.Cancel();
     }
 
     private async Task OnGroupChangedAsync(Guid? groupId)
     {
         _groupId = groupId;
+
+        // A stated division names people, and the people just changed.
+        _splits = null;
         _categoryId = null;
         _categories = [];
+        _members = [];
+        _preview = null;
 
         if (groupId is null)
             return;
 
-        await Loading.RunAsync(async () =>
+        await Errors.TryAsync(async () =>
         {
-            _categories = (await Categories.GetCategoriesAsync(groupId, CancellationToken.None)).ToList();
-        }, "the group's categories");
+            _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
+            _members = [.. await GroupsClient.GetGroupMembersAsync(groupId.Value)];
+        }, "Could not load the group.");
 
-        // The provider's own category, matched against what the group already uses. Only a
-        // suggestion: whatever is selected when the dialog is submitted is what gets sent.
+        // The bank's own category, matched against what this group already uses. Only a
+        // suggestion, and only when a name happens to line up: whatever is selected when
+        // the button is pressed is what gets sent.
         _categoryId = Suggested()?.Id;
+
+        StateHasChanged();
+    }
+
+    private async Task NextAsync()
+    {
+        if (_groupId is null)
+            return;
+
+        Step = 2;
+
+        await RefreshPreviewAsync();
+    }
+
+    private void Back() => Step = 1;
+
+    private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
+    {
+        _splits = splits;
+
+        await RefreshPreviewAsync();
     }
 
     /// <summary>
-    /// The group's category whose name reads like the provider's label. A plain name match,
-    /// deliberately: a mapping table would be a thing to maintain, and the person can see
-    /// what was chosen and change it before pressing the button.
+    /// Asks the API what this would come to, with the row's own amount and date, so what is
+    /// shown is what filing will store -- including the refusal, which arrives while there
+    /// is still a field on screen to fix it in.
+    /// </summary>
+    private async Task RefreshPreviewAsync()
+    {
+        _preview = null;
+        _previewError = null;
+        StateHasChanged();
+
+        var preview = await Transactions.PreviewAsync(new CreateTransactionRequest
+        {
+            GroupId = _groupId,
+            CategoryId = _categoryId,
+            Splits = _splits,
+            Name = string.IsNullOrWhiteSpace(_name) ? Row.Title : _name,
+            Description = _description,
+            Amount = Row.Amount,
+            DateTime = Row.SpentOn.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
+
+        _preview = preview;
+        _previewError = preview is null
+            ? "These shares do not add up yet, so there is nothing to show."
+            : null;
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The group's category whose name reads like the bank's label. Deliberately plain: a
+    /// synonym table would be a thing to maintain and would still be wrong for somebody,
+    /// and the selection is right there to change.
     /// </summary>
     private CategoryResponse? Suggested()
     {
@@ -115,7 +284,7 @@
                    || category.Name.Contains(label, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void Cancel() => Dialog.Cancel();
+    private void Cancel() => MudDialog.Cancel();
 
     private void Submit()
     {
@@ -126,11 +295,13 @@
         {
             GroupId = groupId,
             CategoryId = _categoryId,
-            Name = string.IsNullOrWhiteSpace(_name) ? null : _name
+            Splits = _splits,
+            Name = string.IsNullOrWhiteSpace(_name) ? null : _name,
+            Description = string.IsNullOrWhiteSpace(_description) ? null : _description
         };
 
         var destination = _groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? "the group";
 
-        Dialog.Close(DialogResult.Ok(new Answer(request, destination)));
+        MudDialog.Close(DialogResult.Ok(new Answer(request, destination)));
     }
 }

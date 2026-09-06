@@ -82,7 +82,17 @@
                 {
                     var row = item;
                     <div class="gs-row" style="cursor: default">
-                        <Avatar Name="@row.Title" />
+                        @if (row.LogoUrl is { Length: > 0 } logo)
+                        {
+                            @* The merchant's own logo where the bank sent one: a row reads
+                               as the place it happened rather than as two initials. *@
+                            <img src="@logo" alt="" width="36" height="36"
+                                 style="border-radius: 50%; object-fit: cover; flex: 0 0 auto" />
+                        }
+                        else
+                        {
+                            <Avatar Name="@row.Title" />
+                        }
                         <div style="min-width: 0">
                             <div class="title">
                                 <span>@row.Title</span>
@@ -96,10 +106,14 @@
                                 }
                             </div>
                             <div class="meta">
-                                @row.AccountName · @row.Date.ToShortDateString()
-                                @if (row.CategoryLabel is not null)
+                                @row.AccountName · @row.SpentOn.ToShortDateString()
+                                @if ((row.DetailedCategoryLabel ?? row.CategoryLabel) is { Length: > 0 } category)
                                 {
-                                    @($" · {row.CategoryLabel}")
+                                    @($" · {category}")
+                                }
+                                @if (row.Context is { Length: > 0 } context)
+                                {
+                                    @($" · {context}")
                                 }
                             </div>
                         </div>

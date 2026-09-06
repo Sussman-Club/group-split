@@ -178,6 +178,13 @@ public sealed class PlaidConnector(
 #pragma warning restore CS0612
                 transaction.MerchantName,
                 transaction.PersonalFinanceCategory?.Primary,
+                transaction.PersonalFinanceCategory?.Detailed,
+                // What the person remembers, where Plaid knows it. Date is the posting
+                // date for a settled row and can be days later.
+                transaction.AuthorizedDate,
+                transaction.PaymentChannel?.ToString().ToLowerInvariant(),
+                transaction.Location?.City,
+                transaction.LogoUrl,
                 transaction.Pending ?? false,
                 transaction.PendingTransactionId,
                 JsonSerializer.Serialize(transaction, SerializerOptions)));

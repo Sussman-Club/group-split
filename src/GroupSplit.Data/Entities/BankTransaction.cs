@@ -70,6 +70,37 @@ public class BankTransaction : Entity
     public string? ProviderCategory { get; set; }
 
     /// <summary>
+    /// The provider's finer category, under <see cref="ProviderCategory"/>:
+    /// <c>FOOD_AND_DRINK_COFFEE</c> where the primary one says only
+    /// <c>FOOD_AND_DRINK</c>. Shown, never matched on -- see
+    /// <see cref="BankCategoryMapping"/> for why the mapping uses the primary one.
+    /// </summary>
+    public string? ProviderCategoryDetailed { get; set; }
+
+    /// <summary>
+    /// When the money was actually spent, where the provider knows it and it differs from
+    /// <see cref="Date"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Date"/> is the posting date for a settled row, which can be days after
+    /// the event and is not the date anybody remembers. This is the one to lead with when
+    /// there is one.
+    /// </remarks>
+    public DateOnly? AuthorizedDate { get; set; }
+
+    /// <summary>How it was paid: <c>in store</c>, <c>online</c>, <c>other</c>.</summary>
+    public string? PaymentChannel { get; set; }
+
+    /// <summary>Where it happened, when the provider knows. A city and nothing finer.</summary>
+    public string? City { get; set; }
+
+    /// <summary>
+    /// The merchant's logo, as the provider hosts it. A row with one reads as the place it
+    /// happened rather than as two initials in a circle.
+    /// </summary>
+    public string? LogoUrl { get; set; }
+
+    /// <summary>
     /// Not yet settled at the bank. A pending row is not a transaction: it may change
     /// amount, or vanish, before it posts. It can still be filed, if the person wants to.
     /// </summary>

@@ -58,6 +58,11 @@ public sealed record BankTransactionResponse(
     string Description,
     string? MerchantName,
     string? ProviderCategory,
+    string? ProviderCategoryDetailed,
+    DateOnly? AuthorizedDate,
+    string? PaymentChannel,
+    string? City,
+    string? LogoUrl,
     bool Pending,
     InboxStatus Status,
     Guid? TransactionId,
@@ -74,6 +79,30 @@ public sealed record BankTransactionResponse(
     /// kind of transaction yet.
     /// </summary>
     public bool IsCredit => Amount < 0;
+
+    /// <summary>
+    /// When the money was actually spent: the authorized date where the provider knows it,
+    /// otherwise the posting date.
+    /// </summary>
+    /// <remarks>
+    /// What a row should lead with. A card charge often posts days after the event, and
+    /// the posting date is not the one anybody remembers spending it on.
+    /// </remarks>
+    public DateOnly SpentOn => AuthorizedDate ?? Date;
+
+    /// <summary>Where and how, in one phrase, or null when the provider said neither.</summary>
+    public string? Context
+    {
+        get
+        {
+            var parts = new[] { PaymentChannel, City }.Where(part => !string.IsNullOrWhiteSpace(part)).ToArray();
+
+            return parts.Length == 0 ? null : string.Join(", ", parts);
+        }
+    }
+
+    /// <summary>The finer category made readable, for the row that wants to be specific.</summary>
+    public string? DetailedCategoryLabel => Readable(ProviderCategoryDetailed);
 
     /// <summary>
     /// The provider's category made readable: <c>FOOD_AND_DRINK</c> becomes
