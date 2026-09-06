@@ -171,6 +171,36 @@ public sealed class BankConnectionService(
     {
         var connection = await Existing(id, ct);
 
+        // The whole graph, so EF deletes it rather than leaving it to the database's own
+        // cascade. One person's one bank is a bounded number of rows, and the alternative
+        // is a delete that behaves differently depending on the provider underneath -- which
+        // is exactly the kind of difference that passes every test and surprises somebody
+        // in production.
+        await dbContext.Entry(connection).Collection(candidate => candidate.Accounts).LoadAsync(ct);
+
+        foreach (var account in connection.Accounts)
+            await dbContext.Entry(account).Collection(candidate => candidate.Transactions).LoadAsync(ct);
+
+        // Expenses filed from those rows keep everything except the link back. Said here
+        // rather than left to the foreign key's own set-null, for the same reason: this is
+        // a promise the app makes to somebody about their spending history, and it should
+        // not depend on which database is underneath.
+        var importedIds = connection.Accounts
+            .SelectMany(account => account.Transactions)
+            .Select(row => row.Id)
+            .ToList();
+
+        var filed = await dbContext.Set<Transaction>()
+            .Where(transaction => transaction.BankTransactionId != null
+                                  && importedIds.Contains(transaction.BankTransactionId.Value))
+            .ToListAsync(ct);
+
+        foreach (var transaction in filed)
+        {
+            transaction.BankTransaction = null;
+            transaction.BankTransactionId = null;
+        }
+
         // Told first, deleted second. A provider that refuses leaves the connection here,
         // which the person can try again; deleting first and failing to tell them would
         // leave an item nobody owns still being billed for and still sending webhooks.

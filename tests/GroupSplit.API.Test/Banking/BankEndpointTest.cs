@@ -149,6 +149,42 @@ public class BankEndpointTest : IAsyncLifetime
         Assert.Equal(connection.Id, connection.Id);
     }
 
+    /// <summary>
+    /// The dialog promises that unlinking leaves the expenses alone. It is a set-null
+    /// relationship rather than a cascade, and this is what says so out loud.
+    /// </summary>
+    [Fact]
+    public async Task Unlinking_takes_the_imported_rows_and_leaves_the_expenses()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        var filed = await _host.Client.PostAsJsonAsync(
+            $"/inbox/{row.Id}/file", new FileBankTransactionRequest(), Json, Ct);
+
+        Assert.Equal(HttpStatusCode.Created, filed.StatusCode);
+
+        var expense = await filed.Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct);
+        Assert.NotNull(expense);
+
+        var unlinked = await _host.Client.DeleteAsync($"/bank-connections/{connection.Id}", Ct);
+        Assert.Equal(HttpStatusCode.NoContent, unlinked.StatusCode);
+
+        using var scope = _host.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // The row and its account went with the connection.
+        Assert.Empty(await dbContext.Set<BankTransaction>().ToListAsync(Ct));
+        Assert.Empty(await dbContext.Set<LinkedAccount>().ToListAsync(Ct));
+
+        // The expense stayed, keeping its amount and losing only the link back.
+        var kept = Assert.Single(await dbContext.Set<Expense>().ToListAsync(Ct));
+
+        Assert.Equal(expense.Id, kept.Id);
+        Assert.Equal(10m, kept.Amount);
+        Assert.Null(kept.BankTransactionId);
+    }
+
     // ---- setup ---------------------------------------------------------------------------
 
     private static HttpContent Body(string json) =>

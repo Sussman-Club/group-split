@@ -42,6 +42,10 @@ public static class Extensions
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 
+            // Demo bank data. Its provider has no connector, so nothing ever tries to
+            // sync it; it exists so the inbox is not empty for anybody without Plaid.
+            builder.AddSeeder<BankConnectionSeeder>();
+
             // Identity provider. Reads the same users.json as UserSeeder but writes to
             // Keycloak rather than the database, so it depends on none of the above.
             builder.AddSeeder<KeycloakUserSeeder>();
@@ -58,6 +62,7 @@ public static class Extensions
             services.AddJsonSeedSource<UserSeedDto>(opt => opt.Paths.Users);
             services.AddJsonSeedSource<CategorySeedDto>(opt => opt.Paths.Categories);
             services.AddJsonSeedSource<TransactionSeedDto>(opt => opt.Paths.Transactions);
+            services.AddJsonSeedSource<BankConnectionSeedDto>(opt => opt.Paths.BankConnections);
             return services;
         }
 

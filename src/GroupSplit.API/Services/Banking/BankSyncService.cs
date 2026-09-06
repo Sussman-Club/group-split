@@ -98,11 +98,38 @@ public sealed class BankSyncService(
             return SyncOutcome.NotSyncable;
         }
 
-        var connector = services.GetKeyedService<IBankConnector>(connection.Provider)
-                        ?? throw new InvalidOperationException(
-                            $"No bank connector is registered for provider \"{connection.Provider}\".");
+        if (services.GetKeyedService<IBankConnector>(connection.Provider) is not { } connector)
+        {
+            // A provider this deployment does not speak: one switched off, one removed, or
+            // the demo data the seeder writes. Not an error to throw on -- the nightly sweep
+            // walks every connection, and one it cannot sync must not stop the ones it can.
+            logger.LogInformation(
+                "Bank connection {ConnectionId} is with {Provider}, which nothing here speaks; not syncing.",
+                connectionId, connection.Provider);
 
-        var accessToken = protector.Unprotect(connection.AccessTokenCiphertext);
+            return SyncOutcome.NotSyncable;
+        }
+
+        string accessToken;
+
+        try
+        {
+            accessToken = protector.Unprotect(connection.AccessTokenCiphertext);
+        }
+        catch (AccessTokenUnreadableException e)
+        {
+            // The key changed, or the row did. Nothing here can recover the token -- that is
+            // what encrypting it means -- so the connection is marked and the person is
+            // asked to link the bank again, which mints a new one. The alternative is a
+            // sweep that throws on this connection every day forever.
+            logger.LogError(e, "Bank connection {ConnectionId}: the stored access token cannot be read.", connectionId);
+
+            connection.Status = BankConnectionStatus.LoginRequired;
+            await dbContext.SaveChangesAsync(ct);
+
+            return SyncOutcome.LoginRequired;
+        }
+
         var accounts = connection.Accounts.ToDictionary(account => account.ProviderAccountId);
 
         var startCursor = connection.Cursor;

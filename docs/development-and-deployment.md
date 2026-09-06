@@ -74,6 +74,7 @@ AppHost needs only a GitHub entry of the matching name.
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
 | `plaid-client-id`, `plaid-secret` | variable `PLAID_CLIENT_ID`; secret `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
+| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
 
 The optional ones are declared with
 [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
@@ -112,6 +113,37 @@ Whether bank sync is on is not a switch inside the API. The Plaid connector is r
 when credentials are present, and bank sync is available exactly when a connector answers,
 so `plaid-enabled` exists for the deployment's benefit: off, it sends an empty client id,
 which the API reads as no Plaid at all. The two ends cannot disagree about it.
+
+## The bank access-token key ring
+
+A Plaid access token is long-lived read access to somebody's bank, so it is the most
+sensitive thing the app stores. Tokens are encrypted with ASP.NET Data Protection, whose
+key ring is kept in the app database: every instance then reads what any other wrote, and
+resetting the database takes the keys and the ciphertext they open together.
+
+On its own that would be close to useless. A database dump would carry the key ring beside
+the ciphertext, which is barely different from storing the tokens in the clear. So the ring
+is itself encrypted with a certificate the deployment holds as a secret and the database
+never sees. Data Protection keeps doing what it is good at, rotating its keys and reading
+what older ones wrote, and the thing that unlocks it lives somewhere else.
+
+Generate one once, with a long life because rotating it is not wired up yet:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 7300 \
+  -subj "/CN=GroupSplit Key Ring" -keyout keyring.key -out keyring.crt
+openssl pkcs12 -export -inkey keyring.key -in keyring.crt -passout pass: -out keyring.pfx
+base64 -w0 keyring.pfx
+```
+
+That last line is the value of `BANK_KEY_CERTIFICATE`. Keep the `.pfx` somewhere safe and
+delete it from the machine you made it on; losing it loses the stored tokens and nothing
+else, and the way back is that everybody links their bank again.
+
+Locally there is usually no certificate and the ring is stored unwrapped, which is the
+ordinary development posture. A deployment is different: the publish refuses to build when
+bank sync is on and the certificate is missing, because a deployment without one looks
+exactly like a deployment with one until somebody reads the database.
 
 Webhooks are the one part that does not work locally. Plaid has to reach the app from
 outside, so it is given a webhook address only when the app is served over HTTPS on a

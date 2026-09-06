@@ -44,8 +44,7 @@ public interface IInboxService
 public sealed class InboxService(
     ICurrentUser userContext,
     AppDbContext dbContext,
-    ITransactionService transactions,
-    TimeProvider clock) : IInboxService
+    ITransactionService transactions) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {

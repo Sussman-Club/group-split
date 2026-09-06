@@ -14,6 +14,12 @@ public interface IInboxStateService
     /// <summary>Which rows the page is asking for.</summary>
     InboxStatus Filter { get; }
 
+    /// <summary>How many rows the filter in force has in total, not how many are loaded.</summary>
+    int TotalCount { get; }
+
+    /// <summary>Whether the server has rows this has not asked for yet.</summary>
+    bool HasMore { get; }
+
     /// <summary>The linked banks, and whether linking one is possible at all here.</summary>
     BankConnectionsResponse? Connections { get; }
 
@@ -39,6 +45,9 @@ public interface IInboxStateService
     /// </summary>
     Task LoadRowsAsync(CancellationToken ct = default);
 
+    /// <summary>Asks for the next page and adds it to what is already shown.</summary>
+    Task LoadMoreAsync(CancellationToken ct = default);
+
     /// <summary>Re-reads everything this holds.</summary>
     Task RefreshAsync(CancellationToken ct = default);
 }
@@ -58,6 +67,11 @@ public interface IInboxStateService
 /// </remarks>
 public sealed class InboxStateService : IInboxStateService, IDisposable
 {
+    /// <summary>
+    /// Rows per page. A bank sends a few a day, so this is a couple of weeks at a time.
+    /// </summary>
+    private const int PageSize = 25;
+
     private readonly IInboxClient _inbox;
     private readonly IBankConnectionsClient _connections;
     private readonly LoadGuard _guard;
@@ -67,6 +81,13 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     private Task? _loaded;
     private bool _rowsWanted;
+
+    /// <summary>
+    /// How many pages the inbox is showing. Re-read as one query rather than kept as a
+    /// list, so a row filed on another tab disappears from what is on screen instead of
+    /// leaving a hole that only a reload closes.
+    /// </summary>
+    private int _pages = 1;
 
     public InboxStateService(
         IInboxClient inbox,
@@ -92,6 +113,10 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     public InboxStatus Filter { get; private set; } = InboxStatus.New;
 
+    public int TotalCount { get; private set; }
+
+    public bool HasMore => Rows.Count < TotalCount;
+
     public BankConnectionsResponse? Connections { get; private set; }
 
     public event Action? OnChanged;
@@ -115,6 +140,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         Filter = status;
         _rowsWanted = true;
 
+        // Back to the first page: the one being shown belongs to the filter being left.
+        _pages = 1;
+
         await RefreshAsync(ct);
     }
 
@@ -125,6 +153,17 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
         lock (_lock)
             _loaded ??= Task.CompletedTask;
+
+        return RefreshAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public Task LoadMoreAsync(CancellationToken ct = default)
+    {
+        if (!HasMore)
+            return Task.CompletedTask;
+
+        _pages++;
 
         return RefreshAsync(ct);
     }
@@ -142,8 +181,10 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
             if (_rowsWanted)
             {
-                var page = await _inbox.GetInboxAsync(Filter, null, null, 1, 100, ct);
+                var page = await _inbox.GetInboxAsync(Filter, null, null, 1, PageSize * _pages, ct);
+
                 Rows = page.Items;
+                TotalCount = page.TotalCount;
             }
 
             Announce();

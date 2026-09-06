@@ -4,9 +4,7 @@ using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
-using GroupSplit.Data;
 using GroupSplit.Data.PostgreSQL;
-using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,13 +45,9 @@ builder.Services.AddAuthorizationBuilder();
 builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddDomainServices();
 
-// The key ring that protects the stored bank access tokens. In the app database, so every
-// instance unprotects what any other protected, and so resetting the database takes the
-// keys and the ciphertext they open together instead of leaving one without the other.
-// Without this the ring is per-process and every restart orphans every stored token.
-builder.Services.AddDataProtection()
-    .PersistKeysToDbContext<AppDbContext>()
-    .SetApplicationName("GroupSplit");
+// The Data Protection key ring the bank access tokens are encrypted with, in the app
+// database and itself encrypted with a certificate the deployment holds as a secret.
+builder.AddBankKeyRing();
 
 // The two pieces of banking that read configuration, which only a real host has.
 builder.Services.AddOptions<BankingOptions>().BindConfiguration(BankingOptions.SectionName);

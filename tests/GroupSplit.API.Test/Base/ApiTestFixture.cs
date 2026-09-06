@@ -1,7 +1,6 @@
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 
 [assembly: AssemblyFixture(typeof(ApiTestFixture))]
@@ -47,8 +46,6 @@ public class ApiTestFixture : IAsyncLifetime
         // The production list, so a test host cannot drift from what actually runs.
         services.AddDomainServices();
 
-        // Where the key ring lives is the host's decision, and this host's is nowhere: a
-        // real ring would write key files under the profile of whoever runs the tests.
-        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+
     }
 }

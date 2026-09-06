@@ -71,15 +71,29 @@ the seam it also asked for means the UI must not change when a second provider a
 and a route named after the first one would. `Provider` travels as a field
 (`"plaid"`), and the webhook route already carries it as a segment.
 
-**Access tokens go through ASP.NET Data Protection with the key ring in the app
-database.** `AppDbContext` implements `IDataProtectionKeyContext`, which forces the one
+**Access tokens go through ASP.NET Data Protection, and the key ring is itself
+encrypted.** `AppDbContext` implements `IDataProtectionKeyContext`, which forces the one
 `DbSet` property the context otherwise avoids; the interface leaves no choice and the
-remark on it says so. What this buys: the token is never in a log, a response, or a
-plain column, and rotating keys is the framework's job. What it does not buy: a copy of
-the whole database carries both the ciphertext and the keys. Protecting the key ring
-with a certificate in publish mode is the step that closes that, and it is listed under
-follow-ons rather than done here because it needs a certificate the deployment does not
-yet have.
+remark on it says so. The ring lives in the app database so every instance reads what any
+other wrote.
+
+On its own that would be close to worthless, and the first version of this shipped exactly
+that: a key ring in plaintext beside the ciphertext it opens, so a database dump carried
+both. What closes it is `ProtectKeysWithCertificate`, with the certificate held as a
+deployment secret the database never sees. Data Protection keeps doing what it is good at,
+rotating keys and reading what older ones wrote, and the thing that unlocks it lives
+somewhere else.
+
+The alternative considered was dropping the key ring and encrypting each token with
+AES-GCM under a passphrase. It was written and then abandoned: it avoided certificate
+handling, which was the weaker argument, at the cost of hand-rolled cryptography guarding
+bank credentials and a rotation story that had to be built by hand. Using the framework
+is worth a one-time certificate.
+
+Locally there is usually no certificate and the ring is unwrapped, which is the ordinary
+development posture; the publish refuses a deployment that has bank sync on and no
+certificate, because that deployment looks exactly like a correct one until somebody reads
+the database.
 
 **Statuses are strings in the database.** The first enums in the data layer, and the
 precedent that gets set. `BankTransactionStatus` and `BankConnectionStatus` are stored
@@ -461,7 +475,6 @@ Each step is a commit that builds and passes; the phase is one PR.
 
 ## Follow-ons filed, not done
 
-- Protect the Data Protection key ring with a certificate in publish mode.
 - A database lock in `BankSyncService` before a second API instance exists.
 - `Income` as a third `Transaction` leaf, and with it filing credits.
 - Merchant rules ("always file X to Y"), with recurring detection.

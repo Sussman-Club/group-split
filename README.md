@@ -203,6 +203,12 @@ Locally, Plaid's sandbox needs no approval and opens any institution with `user_
 that cannot work on a laptop, because Plaid has to reach the app from outside, so a sync
 runs when the app asks for one and a daily sweep catches the rest.
 
+The access tokens are encrypted with ASP.NET Data Protection, whose key ring is itself
+encrypted with a certificate the deployment holds as a secret. A key ring sitting in the
+same database as the ciphertext would protect it from a leak of one table and from nothing
+else, so a deployment with bank sync on and no certificate is refused at publish time. See
+[the key ring](docs/development-and-deployment.md#the-bank-access-token-key-ring).
+
 How it is put together, and what was deliberately left out, is in
 [docs/phase-3-plaid-integration.md](docs/phase-3-plaid-integration.md); the deployment
 parameters are in

@@ -137,6 +137,16 @@
                     </div>
                 }
             </div>
+
+            @if (State.HasMore)
+            {
+                <div class="gs-inline" style="justify-content: center; margin-top: 12px">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_loadingMore"
+                               OnClick="LoadMoreAsync">
+                        Show more (@State.Rows.Count of @State.TotalCount)
+                    </MudButton>
+                </div>
+            }
         </div>
     }
 </div>
@@ -145,6 +155,21 @@
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
     private Guid? _busy;
+    private bool _loadingMore;
+
+    private async Task LoadMoreAsync()
+    {
+        _loadingMore = true;
+
+        try
+        {
+            await State.LoadMoreAsync();
+        }
+        finally
+        {
+            _loadingMore = false;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

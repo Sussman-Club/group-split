@@ -17,9 +17,9 @@ namespace GroupSplit.API.Extensions;
 /// a host that hands jobs to a queue service instead would make these same <c>AddJob</c>
 /// calls and skip that one.
 /// <para>
-/// Data Protection is added without a key ring, which is the framework's default. The host
-/// that means it to persist says where -- <c>Program.cs</c> puts the ring in the app
-/// database; the test hosts make it ephemeral -- and a second <c>AddDataProtection</c> call
+/// Data Protection is added here without a key ring, which is the framework's default and
+/// is all a test host needs. Where the ring lives and what wraps it is the deploying
+/// host's decision, made in <c>AddBankKeyRing</c>; a second <c>AddDataProtection</c> call
 /// configures the same builder, so the order does not matter.
 /// </para>
 /// </remarks>
@@ -46,11 +46,12 @@ public static class BankingServiceExtensions
             // constructed rather than when it is registered.
             services.AddOptions<BankingOptions>();
 
-            services.AddDataProtection();
             services.TryAddSingleton(TimeProvider.System);
 
             services.AddSingleton<BankSyncLocks>();
+            services.AddDataProtection();
             services.AddScoped<IAccessTokenProtector, DataProtectionAccessTokenProtector>();
+
             services.AddScoped<IBankSyncService, BankSyncService>();
             services.AddScoped<IBankConnectionService, BankConnectionService>();
             services.AddScoped<IInboxService, InboxService>();

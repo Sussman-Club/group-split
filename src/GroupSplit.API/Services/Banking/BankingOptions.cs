@@ -19,4 +19,21 @@ public sealed class BankingOptions
     /// them.
     /// </summary>
     public string Provider { get; set; } = "plaid";
+
+    /// <summary>
+    /// A PKCS#12 certificate, base64 encoded, that the Data Protection key ring is
+    /// encrypted with. Absent means the ring is stored unwrapped.
+    /// </summary>
+    /// <remarks>
+    /// The one thing standing between a database dump and the bank access tokens in it,
+    /// which is why it is a deployment secret and must never be stored beside the database.
+    /// Absent is the ordinary case in development and a mistake in a deployment, so the
+    /// publish refuses it when bank sync is on.
+    /// <para>
+    /// Losing it loses the stored tokens and nothing else; everybody links their bank again.
+    /// Rotating it is <c>UnprotectKeysWithAnyCertificate</c> with both, which is not wired
+    /// up yet because there is nothing to rotate away from.
+    /// </para>
+    /// </remarks>
+    public string? KeyRingCertificate { get; set; }
 }

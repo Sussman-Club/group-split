@@ -9,7 +9,6 @@ using GroupSplit.API.Services;
 using GroupSplit.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -118,8 +117,6 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         builder.Services.AddValidation();
         builder.Services.AddApiErrorHandling();
 
-        // No key ring on disk from a test run; see ApiTestFixture.
-        builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 
         configure?.Invoke(builder.Services);
 

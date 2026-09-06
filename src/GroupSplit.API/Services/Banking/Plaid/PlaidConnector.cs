@@ -170,7 +170,12 @@ public sealed class PlaidConnector(
                 // and this comment is the only place that has to say so.
                 amount,
                 Currency(transaction.IsoCurrencyCode, transaction.UnofficialCurrencyCode),
+                // Plaid marks this legacy in favour of merchant_name, which is a different
+                // thing and is read below. This is the raw line the bank wrote, which the
+                // sync endpoint always returns and nothing else provides.
+#pragma warning disable CS0612
                 transaction.Name ?? string.Empty,
+#pragma warning restore CS0612
                 transaction.MerchantName,
                 transaction.PersonalFinanceCategory?.Primary,
                 transaction.Pending ?? false,

@@ -16,6 +16,8 @@ public static class PlaidExtensions
 
     private const string EnvironmentParameterName = "plaid-env";
 
+    private const string KeyRingCertificateParameterName = "bank-key-certificate";
+
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
     {
         /// <summary>
@@ -59,16 +61,29 @@ public static class PlaidExtensions
             var environment = builder.AddOptionalParameter(EnvironmentParameterName, "Sandbox")
                 .WithDescription("Which Plaid environment to talk to: Sandbox or Production.");
 
+            // What the Data Protection key ring is encrypted with. Optional, because
+            // locally there is usually none and an unwrapped ring is the ordinary
+            // development posture; required once bank sync is on, because a deployment
+            // without it stores tokens whose keys sit in the same database.
+            //
+            // Losing it loses the stored tokens and nothing else: everybody links again.
+            var keyCertificate = builder.AddOptionalParameter(
+                    KeyRingCertificateParameterName, string.Empty, secret: true)
+                .WithDescription(
+                    "PKCS#12 certificate, base64 encoded, that the bank access-token key ring is "
+                    + "encrypted with. Generate one with the command in docs/development-and-deployment.md.");
+
             builder.Pipeline.AddStep(
                 "validate-plaid",
-                context => enabled.RequireValuesWhenEnabledAsync(context, [clientId, secret]),
+                context => enabled.RequireValuesWhenEnabledAsync(context, [clientId, secret, keyCertificate]),
                 dependsOn: WellKnownPipelineSteps.ProcessParameters,
                 requiredBy: WellKnownPipelineSteps.BuildPrereq);
 
             return resource
                 .WithEnvironment("Plaid__ClientId", clientId)
                 .WithEnvironment("Plaid__Secret", secret)
-                .WithEnvironment("Plaid__Environment", environment);
+                .WithEnvironment("Plaid__Environment", environment)
+                .WithEnvironment("Banking__KeyRingCertificate", keyCertificate);
         }
     }
 }
