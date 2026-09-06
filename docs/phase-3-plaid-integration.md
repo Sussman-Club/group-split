@@ -47,13 +47,23 @@ Out, deliberately:
 
 ## Decisions taken
 
-**Plaid's API is spoken over `HttpClient`, not through a package.** The connector uses
-seven calls: `/link/token/create`, `/item/public_token/exchange`, `/accounts/get`,
-`/transactions/sync`, `/item/remove`, `/webhook_verification_key/get`, and in the
-sandbox `/sandbox/public_token/create`. A typed client for seven calls is smaller than
-the surface a package would bring in, is tested with a hand-written `HttpMessageHandler`
-exactly as the seeder's `KeycloakAdminClient` is, and never lags a .NET release. It lives
-beside the connector, and nothing else knows its shapes.
+**Plaid's API is spoken through Going.Plaid.** Plaid ships no .NET library of its own;
+its libraries page names [Going.Plaid](https://github.com/viceroypenguin/Going.Plaid)
+as the .NET option and, for anyone writing their own, says to generate it from
+[plaid-openapi](https://github.com/plaid/plaid-openapi). Going.Plaid *is* generated
+from that spec, so it is the spec-driven path with somebody else running the generator:
+MIT, on .NET 10, a release in the week this was written, and registered from a `Plaid`
+configuration section (`ClientId`, `Secret`, `Environment`) through its own
+`AddPlaid`. It returns Plaid's error object rather than throwing, takes an
+`IHttpClientFactory` so the tests can hand it recorded payloads, and covers the seven
+calls the connector needs: `/link/token/create`, `/item/public_token/exchange`,
+`/accounts/get`, `/transactions/sync`, `/item/remove`,
+`/webhook_verification_key/get`, and in the sandbox `/sandbox/public_token/create`.
+A community library is a dependency on one maintainer; the seam is what makes that
+acceptable, because `PlaidConnector` is the only file that references it, and swapping
+it for a generated client later touches that file and its tests. There is no Aspire
+integration for Plaid, so the parameters and the `Plaid__*` environment variables are
+wired by hand next to the SMTP ones.
 
 **Routes are provider-neutral.** `/bank-connections` and `/inbox`, not `/plaid/...`. The
 roadmap sketched the steps with Plaid's names because it was describing Plaid's flow;
@@ -96,12 +106,13 @@ deleted; a `Filed` row is kept and stamped `RemovedAt`, because the expense it b
 somebody's spending history and the inbox needs to be able to say "the bank withdrew
 this". `Superseded` rows are left alone -- the replacement holds the story.
 
-**The cursor is saved after every page.** Plaid's advice on
-`TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION` is to restart from the cursor the sync
-began with. Every write in a page is an upsert keyed on the provider's id, so replaying
-pages is harmless, and saving as we go means a crash mid-sync loses one page, not the
-whole history. The sync remembers its starting cursor and, on that one error, goes back
-to it.
+**Rows are saved per page; the cursor only when the page run is complete.** Plaid's
+guidance is to persist `next_cursor` only once `has_more` is false, and on any error
+during pagination to restart the loop from the cursor the run began with. So each page's
+rows are written as they arrive -- every write is an upsert keyed on the provider's id,
+so a replay changes nothing -- and `Cursor` moves only at the end. A crash mid-run
+leaves the rows and the old cursor, and the next run walks the same pages over the
+same rows and lands in the same place.
 
 **One sync per connection at a time, in process.** A `SemaphoreSlim` per connection id,
 held by a singleton. That is correct for one API instance, which is what runs today and
@@ -277,10 +288,12 @@ meets is a bug and propagates.
    `LoginRequired` too, because the token no longer works and Plaid will say so.
 3. Decrypt the token. Remember `startCursor = connection.Cursor`.
 4. Loop: `page = connector.SyncAsync(token, cursor)`. Apply `Added`, then `Modified`,
-   then `Removed`, in that order, then set `Cursor = page.NextCursor`, `LastSyncedAt =
-   now`, and save. Stop when `HasMore` is false.
+   then `Removed`, in that order, and save the rows. `cursor = page.NextCursor`, in
+   memory. Stop when `HasMore` is false; then set `Cursor = cursor`, `LastSyncedAt =
+   now`, and save.
 5. `RestartFromCursor` resets `cursor = startCursor` and continues; `LoginRequired`
-   marks the connection and stops.
+   marks the connection and stops; anything else propagates and the cursor stays where
+   the run began.
 
 Applying a row:
 
@@ -378,7 +391,8 @@ Above the seam, with `FakeBankConnector` scripting pages:
 - another person's connection and inbox rows are 404 over HTTP; the webhook route is
   reachable anonymously and refuses an unknown provider.
 
-`PlaidConnector` on its own, against recorded sandbox payloads under
+`PlaidConnector` on its own, with Going.Plaid pointed at a hand-written
+`HttpMessageHandler` that answers from recorded sandbox payloads under
 `tests/GroupSplit.API.Test/Banking/Plaid/Payloads`:
 
 - two-page sync pagination with the cursor threaded through;
@@ -405,9 +419,10 @@ Each step is a commit that builds and passes; the phase is one PR.
    `BankSyncService`, the queue and worker, the tests above the seam.
 4. **The API.** Token protection, `BankConnectionService`, `InboxService`, the two
    endpoint groups, the error codes, `docs/errors.md`.
-5. **Plaid.** `PlaidOptions`, `PlaidClient`, `PlaidConnector`, webhook verification, the
-   recorded-payload tests, the webhook route, the BFF forwarder, AppHost parameters and
-   `validate-plaid`, the deploy workflow line and `docs/development-and-deployment.md`.
+5. **Plaid.** Going.Plaid registered from the `Plaid` section, `PlaidConnector`, webhook
+   verification, the recorded-payload tests, the webhook route, the BFF forwarder,
+   AppHost parameters and `validate-plaid`, the deploy workflow line and
+   `docs/development-and-deployment.md`.
 6. **The client.** Commands, Link interop, the inbox page and badge, the linked-banks
    card, page-state tests.
 7. **Postgres.** `QueryTranslationTest` cases; run the stack, link a sandbox bank, watch
