@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>GroupSplit.Cli</RootNamespace>
+        <AssemblyName>groupsplit</AssemblyName>
+        <!-- The command name a user types. Kept in one place because the help text,
+             the completion scripts and the confirmation envelopes all echo it back. -->
+        <ToolCommandName>groupsplit</ToolCommandName>
+        <!-- Not InvariantGlobalization: this prints money, and the invariant culture
+             renders every currency with the generic sign. Not IsAotCompatible either,
+             because the NSwag-generated client binds through reflection-based
+             System.Text.Json, so the analyzer would only produce warnings it cannot act
+             on. Publishing AOT would mean giving that client a JsonSerializerContext. -->
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Spectre.Console" Version="0.57.2" />
+        <PackageReference Include="System.CommandLine" Version="2.0.11" />
+        <!-- Pinned to the same preview as GroupSplit.App.Shared, for a different reason:
+             every released 10.0.x of this package declares a FrameworkReference on
+             Microsoft.AspNetCore.App, which would make this console app require the
+             ASP.NET Core shared runtime just to name JsonPatchDocument in the generated
+             client. This preview is the last build that ships as a plain library. Check
+             the nuspec for that reference before upgrading. -->
+        <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.0-preview.7.25380.108" />
+        <PackageReference Include="NSwag.ApiDescription.Client" Version="14.7.1">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Referenced for its OpenAPI document, not its assembly: the API project writes
+             obj/Generated/GroupSplit.API_api.json during its build, and the OpenApiReference
+             below turns that into typed clients. Same arrangement as GroupSplit.App.Shared. -->
+        <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj"
+                          ReferenceOutputAssembly="false"
+                          PrivateAssets="all" />
+        <ProjectReference Include="..\GroupSplit.Shared\GroupSplit.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Mirrors GroupSplit.App.Shared so both clients bind the same DTOs from
+             GroupSplit.Shared. The templates are a copy rather than a shared item: the
+             only difference is the `using` in File.liquid, which points at this project's
+             GroupSplitSerializer instead of the Blazor one. -->
+        <OpenApiReference Include="..\GroupSplit.API\obj\Generated\GroupSplit.API_api.json">
+            <ClassName>{controller}Client</ClassName>
+            <Namespace>GroupSplit.Cli.Api</Namespace>
+            <Options>/TemplateDirectory:.\ClientTemplates /GenerateClientInterfaces:true /GenerateDtoTypes:false /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
+        </OpenApiReference>
+    </ItemGroup>
+
+</Project>
