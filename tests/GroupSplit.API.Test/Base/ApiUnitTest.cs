@@ -175,6 +175,50 @@ public class ApiUnitTest : IAsyncLifetime
     protected Task<Guid> CreateEvenCategory(Guid groupId, string name = "Split") =>
         CreateCategory(groupId, name, new EvenSplitRuleDto());
 
+    /// <summary>
+    /// Puts people straight into a group, for the many tests whose subject is something
+    /// else and whose setup is "a group with three members in it".
+    /// </summary>
+    /// <remarks>
+    /// Through the context rather than through an invitation each: joining is somebody
+    /// accepting now, so the real flow needs the invitee to be the current user, and a test
+    /// about splitting a dinner would spend four calls saying so. The flow itself is
+    /// covered by <c>GroupInvitationTest</c>, which is about it.
+    /// </remarks>
+    protected async Task JoinGroup(Guid groupId, params Data.Entities.User[] members)
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        var group = await DbContext.Set<Data.Entities.Group>()
+            .Include(candidate => candidate.Users)
+            .FirstAsync(candidate => candidate.Id == groupId, ct);
+
+        foreach (var member in members)
+        {
+            // Re-read: the user was very likely made in another scope, and so belongs to
+            // another context instance than the one about to save.
+            var tracked = await DbContext.Set<Data.Entities.User>()
+                .FirstAsync(candidate => candidate.Id == member.Id, ct);
+
+            if (group.Users.All(existing => existing.Id != tracked.Id))
+                group.Users.Add(tracked);
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+
+        // The store default that fills this in production is not applied by the in-memory
+        // provider, so the rows this helper makes would carry the zero date without it.
+        foreach (var member in members)
+        {
+            var membership = await DbContext.Set<Data.Entities.GroupMembership>()
+                .FirstAsync(row => row.GroupId == groupId && row.UserId == member.Id, ct);
+
+            membership.JoinedAt = DateTimeOffset.UtcNow;
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+    }
+
     protected T GetService<T>() where T : notnull
     {
         return ServiceProvider.GetRequiredService<T>();

@@ -1,6 +1,7 @@
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 @inject IDialogService DialogService
+@inject LocalClock Clock
 
 <div class="gs-list">
     @if (Transactions.Count == 0)
@@ -46,17 +47,20 @@
     /// <summary>How many rows to show; the rest are on the Expenses page.</summary>
     [Parameter] public int Limit { get; set; } = int.MaxValue;
 
-    private static string Relative(DateTimeOffset when)
+    // "Today" and "Yesterday" are the person's days, not the server's: both sides of the
+    // comparison come from the same clock.
+    private string Relative(DateTimeOffset when)
     {
-        var local = when.LocalDateTime;
-        var days = (DateTime.Today - local.Date).Days;
+        var local = Clock.Local(when);
+        var today = Clock.Today;
+        var days = (today - local.Date).Days;
 
         return days switch
         {
             0 => "Today",
             1 => "Yesterday",
             < 7 => local.ToString("dddd"),
-            _ when local.Year == DateTime.Today.Year => local.ToString("d MMM"),
+            _ when local.Year == today.Year => local.ToString("d MMM"),
             _ => local.ToString("d MMM yyyy")
         };
     }

@@ -31,10 +31,12 @@ public static class ErrorCodes
     public const string TransactionNotFound = "TRANSACTION_NOT_FOUND";
     public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
     public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
+    public const string GroupInvitationNotFound = "GROUP_INVITATION_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
     public const string GroupCannotRemoveSelf = "GROUP_CANNOT_REMOVE_SELF";
+    public const string GroupInvitationNotYours = "GROUP_INVITATION_NOT_YOURS";
 
     // ---- Conflict (409): the request is well formed but the current state refuses it -----
 
@@ -43,6 +45,10 @@ public static class ErrorCodes
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
     public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";
     public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
+    public const string GroupInvitationAlreadySent = "GROUP_INVITATION_ALREADY_SENT";
+    public const string GroupMemberAlreadyJoined = "GROUP_MEMBER_ALREADY_JOINED";
+    public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
+    public const string TransactionGroupLeft = "TRANSACTION_GROUP_LEFT";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";
     public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";
@@ -52,6 +58,7 @@ public static class ErrorCodes
 
     public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";
     public const string SplitsInvalid = "SPLITS_INVALID";
+    public const string SplitOnAPersonalExpense = "SPLIT_ON_A_PERSONAL_EXPENSE";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";
 
     // ---- Unprocessable (422): the request is understood and coherent, and still cannot --

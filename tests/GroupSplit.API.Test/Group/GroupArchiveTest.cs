@@ -96,8 +96,7 @@ public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var me = GetService<ICurrentUser>().User;
 
         var other = await CreateNewUser();
-        await Groups.AddGroupMembers(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
+        await JoinGroup(group.Id, other);
 
         await Groups.Archive(group.Id, Ct);
 
@@ -136,8 +135,7 @@ public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // A member added, and one removed.
         var other = await CreateNewUser();
-        await Groups.AddGroupMembers(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
+        await JoinGroup(group.Id, other);
         await Groups.RemoveGroupMember(group.Id, other.Id, Ct);
 
         Assert.Equal("Lisbon 2026",

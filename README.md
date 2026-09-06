@@ -5,10 +5,11 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 
 ## What it does
 
-- Create and manage groups of members
-- Record shared transactions
-- Split costs using multiple rule types
-- Calculate per-member balances and settlement needs
+- Create groups and invite people to them by email
+- Record shared and personal expenses, split however you like
+- Split costs by category default, or state the shares on one expense
+- Calculate per-member balances, and settle up from either side
+- See where you stand across every group at once
 - Support web and mobile clients backed by a single API
 
 ## Project structure
@@ -21,7 +22,7 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 
 | Project | Purpose |
 | --- | --- |
-| `src/GroupSplit.API` | ASP.NET Core API for groups, categories, split rules, transactions, and users |
+| `src/GroupSplit.API` | ASP.NET Core API for groups, invitations, categories, split rules, transactions, and users |
 | `src/GroupSplit.Shared` | DTOs and validation shared between the API and the clients |
 
 ### Aspire — orchestration

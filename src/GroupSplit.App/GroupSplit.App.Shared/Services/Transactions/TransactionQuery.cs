@@ -15,8 +15,17 @@ public sealed record TransactionQuery(
     string SortBy = TransactionQuery.DefaultSortBy,
     bool SortDescending = true,
     string? Search = null,
-    DateFilter? Range = null)
+    DateFilter? Range = null,
+    bool? Personal = null)
 {
+    /// <summary>
+    /// Whose ledger: null for both, true for the expenses in no group at all, false for the
+    /// ones in a group. Personal is the absence of a group rather than a group of its own,
+    /// so it is a filter and not an id -- and asking for it is how somebody sees the
+    /// expenses that used to be filed into a hidden group named "Personal".
+    /// </summary>
+    public bool? Personal { get; init; } = Personal;
+
     /// <summary>The span this asks for, or every day there is.</summary>
     public DateFilter EffectiveRange => Range ?? DateFilter.AllTime;
 

@@ -20,10 +20,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var newMember = await CreateNewUser();
 
-        await groupService.AddGroupMembers(group.Id, new AddMemberRequest
-        (
-            [new UserIdentifier { Email = newMember.Email! }]
-        ), TestContext.Current.CancellationToken);
+        await JoinGroup(group.Id, newMember);
 
         var membersBeforeDelete =
             await (await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken))

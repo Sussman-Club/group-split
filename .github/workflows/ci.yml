@@ -28,13 +28,18 @@ jobs:
       # ratchet against regression rather than a target: raise it when coverage
       # improves, and never lower it to turn a red build green.
       #
-      # Turned up twice on this branch. First for the debt, rules, validation, middleware
+      # Turned up again for phase 2: 74.1/65.3 line/branch measured after the
+      # invitations, the personal ledger, the cross-group position and the command
+      # layer landed with their tests. The floors keep the few points of slack the
+      # earlier pairs had, for the same reason.
+      #
+      # Turned up twice before that. First for the debt, rules, validation, middleware
       # and transaction-detail tests, then again once the endpoints were reachable at all:
       # 45.92/33.40 line/branch at the start, 69.5/58.0 now. The floors keep the few points
       # of slack the original pair had, so an unrelated change in what the in-memory
       # provider happens to execute cannot fail a build on its own.
-      COVERAGE_LINE_FLOOR: 65
-      COVERAGE_BRANCH_FLOOR: 54
+      COVERAGE_LINE_FLOOR: 70
+      COVERAGE_BRANCH_FLOOR: 60
 
     steps:
       - uses: actions/checkout@v7

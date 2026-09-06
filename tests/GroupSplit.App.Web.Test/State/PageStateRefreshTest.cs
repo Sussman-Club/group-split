@@ -1,5 +1,7 @@
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.Services.Commands;
+using Microsoft.JSInterop;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
@@ -121,6 +123,8 @@ public class PageStateRefreshTest
 
     private readonly Mock<ITransactionsClient> _transactionsClient = new();
     private readonly Mock<IGroupsClient> _groupsClient = new();
+    private readonly Mock<IUsersClient> _usersClient = new();
+    private readonly Mock<IInvitationsClient> _invitationsClient = new();
     private readonly Mock<ISnackbar> _snackbar = new();
     private readonly DataChangeNotifier _changes = new();
     private readonly TransactionsPageStateService _expensesPage;
@@ -130,21 +134,22 @@ public class PageStateRefreshTest
     {
         _transactionsClient
             .Setup(c => c.GetTransactionsAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
-                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _, string? search,
-                    string? sortBy, bool? sortDescending, int? page, int? pageSize, CancellationToken _) =>
-                Page(_transactions.Where(t => t.PaidByUserId == Me), from, to, search, sortBy, sortDescending,
-                    page, pageSize));
+            .ReturnsAsync((DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _, bool? personal,
+                    string? search, string? sortBy, bool? sortDescending, int? page, int? pageSize,
+                    CancellationToken _) =>
+                Page(Scoped(_transactions.Where(t => t.PaidByUserId == Me), personal), from, to, search, sortBy,
+                    sortDescending, page, pageSize));
 
         _transactionsClient
             .Setup(c => c.GetTransactionsSummaryAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
-                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _, string? search,
-                    CancellationToken _) =>
-                SummaryOf(_transactions.Where(t => t.PaidByUserId == Me), search, from, to));
+            .ReturnsAsync((DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _, bool? personal,
+                    string? search, CancellationToken _) =>
+                SummaryOf(Scoped(_transactions.Where(t => t.PaidByUserId == Me), personal), search, from, to));
 
         _transactionsClient
             .Setup(c => c.CreateTransactionAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
@@ -176,6 +181,10 @@ public class PageStateRefreshTest
                 return Task.CompletedTask;
             });
 
+        _usersClient
+            .Setup(c => c.GetCurrentUserPositionAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new UserPositionResponse(0m, 0m, 0m, []));
+
         _groupsClient
             .Setup(c => c.GetGroupsAsAsyncEnumerable(It.IsAny<CancellationToken>()))
             .Returns(() => _groups.ToList().ToAsyncEnumerable());
@@ -183,10 +192,10 @@ public class PageStateRefreshTest
         _groupsClient
             .Setup(c => c.GetGroupTransactionsAsync(It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(),
                 It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(),
+                It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid id, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _,
-                    string? search, string? sortBy, bool? sortDescending, int? page, int? pageSize,
+                    bool? _, string? search, string? sortBy, bool? sortDescending, int? page, int? pageSize,
                     CancellationToken _) =>
                 Page(_transactions.Where(t => t.GroupId == id), from, to, search, sortBy, sortDescending,
                     page, pageSize));
@@ -194,9 +203,9 @@ public class PageStateRefreshTest
         _groupsClient
             .Setup(c => c.GetGroupTransactionsSummaryAsync(It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(),
                 It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid id, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _,
-                    string? search, CancellationToken _) =>
+                    bool? _, string? search, CancellationToken _) =>
                 SummaryOf(_transactions.Where(t => t.GroupId == id), search, from, to));
 
         _groupsClient
@@ -241,10 +250,20 @@ public class PageStateRefreshTest
             _snackbar.Object);
         var guard = new LoadGuard(presenter);
 
+        // Real commands over the mocked clients, rather than mocked commands: a write and
+        // the re-read it triggers are the thing under test, and the announcement that joins
+        // them lives in the command.
+        var groupCommands = new GroupCommands(_groupsClient.Object, _invitationsClient.Object, presenter,
+            _snackbar.Object, _changes);
+        var transactionCommands = new TransactionCommands(_transactionsClient.Object, presenter,
+            _snackbar.Object, _changes);
+
+        // No JS behind it, so the clock falls back to the runtime's own offset -- which is
+        // what the "this month" assertion below compares against too.
         _expensesPage = new TransactionsPageStateService(_transactionsClient.Object, new TransactionsTracker(),
-            _snackbar.Object, guard, presenter, _changes);
-        _groupsPage = new GroupsPageStateService(new GroupsTracker(), _groupsClient.Object, _snackbar.Object,
-            _transactionsClient.Object, guard, presenter, _changes);
+            guard, _changes, transactionCommands, new LocalClock(Mock.Of<IJSRuntime>()));
+        _groupsPage = new GroupsPageStateService(new GroupsTracker(), _groupsClient.Object, _usersClient.Object,
+            guard, presenter, _changes, groupCommands, transactionCommands);
     }
 
     private GroupResponse SetArchived(Guid id, bool archived)
@@ -253,6 +272,19 @@ public class PageStateRefreshTest
         _groups[index] = _groups[index] with { IsArchive = archived };
         return _groups[index];
     }
+
+    /// <summary>
+    /// The personal filter, as the fake listing applies it: null keeps everything, true
+    /// keeps what belongs to no group, false keeps what belongs to one.
+    /// </summary>
+    private static IEnumerable<TransactionResponse> Scoped(
+        IEnumerable<TransactionResponse> transactions, bool? personal) =>
+        personal switch
+        {
+            null => transactions,
+            true => transactions.Where(t => t.GroupId is null),
+            false => transactions.Where(t => t.GroupId is not null)
+        };
 
     private Task ReadyAsync() => Task.WhenAll(_expensesPage.IsReadyTask, _groupsPage.IsReadyTask);
 
@@ -431,7 +463,8 @@ public class PageStateRefreshTest
 
         _transactionsClient.Verify(c => c.GetTransactionsAsync(
             It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
-            It.IsAny<string?>(), "din", "amount", true, 2, 1, It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<string?>(), It.IsAny<bool?>(), "din", "amount", true, 2, 1,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -528,13 +561,18 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        var firstOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        // The exact UTC instants the person's month resolves to, from the same clock the
+        // state was built with. Comparing calendar days would not do any more: the bounds
+        // are sent as UTC, so midnight where the person is falls on the previous UTC day
+        // for anyone east of Greenwich -- which is the whole point of sending them that way.
+        var clock = new LocalClock(Mock.Of<IJSRuntime>());
+        var month = new DateFilter(DateFilterPreset.ThisMonth).Bounds(clock.Offset, clock.Today);
 
         _transactionsClient.Verify(c => c.GetTransactionsSummaryAsync(
             // Null-safe: the all-time summary goes through the same method with no dates.
-            It.Is<DateTimeOffset?>(from => from.HasValue && from.Value.Date == firstOfMonth.Date),
-            It.Is<DateTimeOffset?>(to => to.HasValue && to.Value.Date == firstOfMonth.AddMonths(1).AddDays(-1).Date),
-            It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.Is<DateTimeOffset?>(from => from == month.From),
+            It.Is<DateTimeOffset?>(to => to == month.To),
+            It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
             It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 
@@ -559,7 +597,7 @@ public class PageStateRefreshTest
 
         _groupsClient.Verify(c => c.GetGroupTransactionsAsync(Trip,
             It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), TransactionQuery.DefaultSortBy, true,
+            It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<string?>(), TransactionQuery.DefaultSortBy, true,
             1, GroupsPageStateService.RecentPageSize, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 
@@ -578,8 +616,13 @@ public class PageStateRefreshTest
 
         await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = range });
 
+        // Resolved against the same clock the state was built with: no JS behind it, so the
+        // runtime's own offset and day, which is what the state used too.
+        var clock = new LocalClock(Mock.Of<IJSRuntime>());
+        var bounds = range.Bounds(clock.Offset, clock.Today);
+
         _transactionsClient.Verify(c => c.GetTransactionsAsync(
-            range.From, range.To, It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
+            bounds.From, bounds.To, It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(),
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -709,7 +752,9 @@ public class PageStateRefreshTest
 
         Assert.True(done);
         Assert.False(_groupsPage.SelectedGroup!.IsArchive);
-        _snackbar.Verify(sb => sb.Add(It.Is<string>(m => m.StartsWith("Group unarchived.")), Severity.Success,
+        // The message names the group. "Group unarchived." told somebody who had just
+        // pressed a button the one thing they already knew.
+        _snackbar.Verify(sb => sb.Add("Weekend in Lisbon is back in your list.", Severity.Success,
             It.IsAny<Action<SnackbarOptions>?>(), It.IsAny<string?>()), Times.Once);
     }
 
@@ -747,8 +792,8 @@ public class PageStateRefreshTest
         var dinner = _expensesPage.Page!.Items.Single(t => t.Name == "Dinner");
         _transactionsClient
             .Setup(c => c.GetTransactionsAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
-                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("down", 503, "", new Dictionary<string, IEnumerable<string>>(), null));
 

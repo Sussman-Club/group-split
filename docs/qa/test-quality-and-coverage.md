@@ -167,6 +167,15 @@ This is a reasonable trade for fast unit tests. It is not reasonable as the *onl
 database the suite sees, which is what it was while the AppHost tests never ran.
 Getting that job green is the mitigation, not rewriting these tests.
 
+**This happened, in phase 2.** `GET /invitations` ordered by a member of a projected
+record. The in-memory provider sorted the objects it had already built and twelve unit
+tests passed; Npgsql could not translate the constructor call at all, and the endpoint
+500ed on its first real request. The mitigation is now concrete rather than aspirational:
+`QueryTranslationTest` in the Aspire suite runs the real services over real Postgres and
+executes every listing, filter, sort key and projection the app builds. It asserts nothing
+about the rows -- executing the query *is* the assertion, since one that does not
+translate throws before returning anything. Add a case to it whenever a listing is added.
+
 ### 4. No test reaches an HTTP endpoint
 
 All 66 API tests resolve a service from a container and call it directly. Nothing

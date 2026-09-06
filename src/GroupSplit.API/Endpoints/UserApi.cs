@@ -17,6 +17,7 @@ public static class UserApi
             group.WithTags("Users");
 
             group.MapGetCurrentUser();
+            group.MapGetPosition();
             group.MapDeleteCurrentUser();
 
             return group;
@@ -36,6 +37,28 @@ public static class UserApi
                 })
                 .WithName("GetCurrentUser")
                 .Produces<UserInfo>();
+        }
+
+        /// <summary>
+        /// Where the caller stands across every group, which is the figure the home page
+        /// leads with.
+        /// </summary>
+        /// <remarks>
+        /// The one question the app could not answer before. Every balance was read a group
+        /// at a time, so "am I up or down overall" meant opening each group in turn and
+        /// adding up by hand -- and the home page led instead with what the person had paid,
+        /// which is a number nobody is actually asking about.
+        /// </remarks>
+        private RouteHandlerBuilder MapGetPosition()
+        {
+            return group.MapGet("/me/position", async (
+                    IGroupService groups,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await groups.GetPosition(ct));
+                })
+                .WithName("GetCurrentUserPosition")
+                .Produces<UserPositionResponse>();
         }
 
         private RouteHandlerBuilder MapDeleteCurrentUser()

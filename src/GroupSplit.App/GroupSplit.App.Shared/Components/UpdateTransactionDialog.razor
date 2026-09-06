@@ -6,6 +6,8 @@
 @inject ITransactionsClient TransactionsClient
 @inject ICategoriesClient CategoriesClient
 @inject ApiErrorPresenter Errors
+@inject LocalClock Clock
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 
 <MudDialog>
     <TitleContent>
@@ -52,32 +54,71 @@
                 </MudStack>
 
 
-                <MudSelect T="Guid?" Label="Category"
-                           @bind-Value="editModel.CategoryId"
-                           Variant="Variant.Outlined">
-                    @foreach (var c in GroupCategories)
-                    {
-                        <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
-                    }
-                </MudSelect>
-
-                <MudSelect T="Guid" Label="Paid By"
+                @* Where it belongs. Changing this is how an expense moves: a personal one is
+                   shared by giving it a group, a shared one taken back by choosing Personal.
+                   The category, the payer and the shares below all belong to whichever group
+                   this says, so they are reloaded -- and any stated shares dropped -- when it
+                   changes. *@
+                <MudSelect T="Guid?" Label="Group"
                            Variant="Variant.Outlined"
-                           Disabled="@(!GroupUsers.Any())"
-                           @bind-Value="editModel.PaidByUserId">
-                    @foreach (var u in GroupUsers)
+                           @bind-Value="editModel.GroupId"
+                           @bind-Value:after="OnGroupChangedAsync"
+                           Clearable="false">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
+                    @foreach (var group in _groups)
                     {
-                        <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
                     }
                 </MudSelect>
 
-                <MudDivider/>
+                @if (editModel.GroupId != Original.GroupId)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        @(editModel.GroupId is null
+                            ? "This will become your own expense: no category, nothing owed by anybody."
+                            : "This will be divided among the members of the group you picked.")
+                    </MudAlert>
+                }
 
-                <SplitEditor Members="@GroupUsers.ToList()"
-                             Amount="@editModel.Amount"
-                             PayerId="@editModel.PaidByUserId"
-                             Stored="@storedSplits"
-                             @bind-Value="editModel.Splits"/>
+                @* Categories, payers and shares all belong to a group. A personal expense
+                   has none, so the fields that would be about one are absent rather than
+                   present and empty. *@
+                @if (IsShared)
+                {
+                    <MudSelect T="Guid?" Label="Category"
+                               @bind-Value="editModel.CategoryId"
+                               Clearable="true"
+                               Variant="Variant.Outlined">
+                        @foreach (var c in GroupCategories)
+                        {
+                            <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="Guid" Label="Paid By"
+                               Variant="Variant.Outlined"
+                               Disabled="@(!GroupUsers.Any())"
+                               @bind-Value="editModel.PaidByUserId">
+                        @foreach (var u in GroupUsers)
+                        {
+                            <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudDivider/>
+
+                    <SplitEditor Members="@GroupUsers.ToList()"
+                                 Amount="@editModel.Amount"
+                                 PayerId="@editModel.PaidByUserId"
+                                 Stored="@storedSplits"
+                                 @bind-Value="editModel.Splits"/>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        A personal expense is not shared with anybody, so there is nothing to divide.
+                    </MudAlert>
+                }
 
             </MudStack>
         </MudForm>
@@ -96,7 +137,12 @@
     [Parameter] public TransactionResponse Original { get; set; } = null!;
 
     private bool loading = false;
-    private MudForm form;
+    private MudForm form = null!;
+
+    /// <summary>Whether the expense will belong to a group after this edit. Null means personal.</summary>
+    private bool IsShared => editModel.GroupId is not null;
+
+    private ICollection<GroupResponse> _groups = [];
 
     // The editable model (your UpdateTransactionRequest)
     private UpdateTransactionRequest editModel = new();
@@ -123,26 +169,31 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
+            GroupId = Original.GroupId,
             CategoryId = Original.CategoryId,
             PaidByUserId = Original.PaidByUserId
         };
 
-        selectedDate = Original.DateTime.Date;
-        selectedTime = Original.DateTime.TimeOfDay;
+        // In the person's zone. Reading .Date off the stored value gives the wall clock of
+        // whatever offset it arrived with -- UTC -- and re-saving that at the local offset
+        // moved the expense by the zone difference on every edit.
+        var shown = Clock.Local(Original.DateTime);
+        selectedDate = shown.Date;
+        selectedTime = shown.TimeOfDay;
 
         // Load categories + users for the transaction's group. Without them there is
         // nothing to edit against, so a failed load closes the dialog once the presenter
         // has said why.
         var loaded = await Errors.TryAsync(async () =>
         {
-            GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(Original.GroupId).Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
+            _groups = await GroupsClient.GetGroupsAsync();
+
+            await LoadGroupAsync(Original.GroupId);
 
             // A category that has since been deleted still names what this expense was
             // filed under, so it stays in the list rather than silently reading as none.
             if (Original.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
                 GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
-
-            GroupUsers = await GroupsClient.GetGroupMembersAsync(Original.GroupId);
 
             var details = await TransactionsClient.GetTransactionAsync(Original.Id);
 
@@ -159,17 +210,52 @@
         StateHasChanged();
     }
 
+    /// <summary>The categories and members of one group, or none for personal.</summary>
+    private async Task LoadGroupAsync(Guid? groupId)
+    {
+        if (groupId is { } id)
+        {
+            GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(id)
+                .Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
+            GroupUsers = await GroupsClient.GetGroupMembersAsync(id);
+        }
+        else
+        {
+            GroupCategories = [];
+            GroupUsers = [];
+        }
+    }
+
+    /// <summary>
+    /// A different group is a different set of people and labels. The category and the
+    /// stated shares are dropped because they belonged to the old one; the payer is kept
+    /// when they are in the new group and otherwise becomes the caller, which is the only
+    /// payer a personal expense can have and the likeliest for a shared one.
+    /// </summary>
+    private async Task OnGroupChangedAsync()
+    {
+        var loaded = await Errors.TryAsync(() => LoadGroupAsync(editModel.GroupId), "Could not load the group.");
+
+        if (!loaded)
+            return;
+
+        editModel.CategoryId = null;
+        editModel.Splits = null;
+        storedSplits = [];
+
+        if (GroupUsers.All(user => user.Id != editModel.PaidByUserId) && Login.User is { } me)
+            editModel.PaidByUserId = me.Id;
+
+        StateHasChanged();
+    }
+
     private async Task Submit()
     {
         await form.ValidateAsync();
         if (!form.IsValid)
             return;
 
-        var date = selectedDate ?? DateTime.Today;
-        var time = selectedTime ?? TimeSpan.Zero;
-
-        editModel.DateTime = new DateTimeOffset(date + time,
-            TimeZoneInfo.Local.GetUtcOffset(date + time));
+        editModel.DateTime = Clock.At(selectedDate ?? Clock.Today, selectedTime ?? TimeSpan.Zero);
 
         var original = new UpdateTransactionRequest
         {
@@ -177,6 +263,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
+            GroupId = Original.GroupId,
             CategoryId = Original.CategoryId,
             PaidByUserId = Original.PaidByUserId
         };
@@ -204,6 +291,9 @@
 
         if (original.DateTime != updated.DateTime)
             patch.Replace(x => x.DateTime, updated.DateTime);
+
+        if (original.GroupId != updated.GroupId)
+            patch.Replace(x => x.GroupId, updated.GroupId);
 
         if (original.CategoryId != updated.CategoryId)
             patch.Replace(x => x.CategoryId, updated.CategoryId);
