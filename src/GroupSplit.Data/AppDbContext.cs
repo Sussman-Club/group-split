@@ -53,7 +53,92 @@ public class AppDbContext : DbContext
         {
             entity.Property(group => group.Name).HasMaxLength(64).IsRequired();
 
+            entity.Property(group => group.Currency)
+                .HasMaxLength(Currencies.CodeLength)
+                .IsFixedLength()
+                .IsRequired()
+                .HasDefaultValue(Currencies.Default);
+
             entity.HasIndex(group => group.Name);
+        });
+
+        modelBuilder.Entity<SplitRule>(entity =>
+        {
+            entity.Property(rule => rule.Name).HasMaxLength(64).IsRequired();
+
+            entity.Property(rule => rule.Kind).IsRequired();
+
+            entity.HasOne(rule => rule.Group)
+                .WithMany(group => group.SplitRules)
+                .HasForeignKey(rule => rule.GroupId)
+                .IsRequired();
+
+            // A group's rules are picked from a list by name, so two with the same name
+            // are two the member cannot tell apart.
+            entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
+        });
+
+        modelBuilder.Entity<SplitRuleParticipant>(entity =>
+        {
+            entity.Property(participant => participant.Weight).IsRequired();
+
+            entity.HasOne(participant => participant.SplitRule)
+                .WithMany(rule => rule.Participants)
+                .HasForeignKey(participant => participant.SplitRuleId)
+                .IsRequired();
+
+            entity.HasOne(participant => participant.User)
+                .WithMany()
+                .HasForeignKey(participant => participant.UserId)
+                .IsRequired();
+
+            entity.HasIndex(participant => new { participant.SplitRuleId, participant.UserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.Property(category => category.Name).HasMaxLength(64).IsRequired();
+
+            entity.HasOne(category => category.Group)
+                .WithMany(group => group.Categories)
+                .HasForeignKey(category => category.GroupId)
+                .IsRequired();
+
+            // Restrict rather than cascade or set-null: a rule several categories default
+            // to is exactly the rule somebody will try to delete, and silently emptying
+            // their defaults would change how every future expense in them is split
+            // without saying so.
+            entity.HasOne(category => category.DefaultSplitRule)
+                .WithMany()
+                .HasForeignKey(category => category.DefaultSplitRuleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Inherited from the constraint Rule carried on (GroupId, Category), which is
+            // the same statement now that the label has a table of its own.
+            entity.HasIndex(category => new { category.GroupId, category.Name }).IsUnique();
+        });
+
+        modelBuilder.Entity<TransactionSplit>(entity =>
+        {
+            entity.Property(split => split.Amount).IsRequired().HasPrecision(18, 2);
+
+            entity.HasOne(split => split.Transaction)
+                .WithMany(transaction => transaction.Splits)
+                .HasForeignKey(split => split.TransactionId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(split => split.User)
+                .WithMany()
+                .HasForeignKey(split => split.UserId)
+                .IsRequired();
+
+            // One row per person per transaction: a second would be a second opinion about
+            // what they owed.
+            entity.HasIndex(split => new { split.TransactionId, split.UserId }).IsUnique();
+
+            // The balance query's access path -- every split this person is named in.
+            entity.HasIndex(split => split.UserId);
         });
 
         modelBuilder.Entity<Rule>(entity =>

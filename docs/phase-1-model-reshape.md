@@ -136,6 +136,10 @@ public class SplitRule : Entity
 // Weight means shares when Kind is Shares, hundredths of a percent when Percent,
 // and is ignored when Even. One column because one of them is always the answer,
 // and two nullable ones would let both be set.
+//
+// An Even rule stores no participants at all. Storing them would freeze today's
+// membership into weights, so the rule would stop dividing evenly the moment
+// somebody joined -- which is the one thing an even split is for.
 public class SplitRuleParticipant : Entity
 {
     public Guid SplitRuleId { get; set; }
