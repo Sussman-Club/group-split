@@ -73,6 +73,11 @@ URL is compiled in -- `groupsplit config set server <url>`, `--server` or `GROUP
 picks one at runtime. Sign-in is the OAuth 2.0 device flow, so it works over SSH and in
 containers; `GROUPSPLIT_TOKEN` skips it entirely for CI.
 
+It packages as a .NET tool -- `dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg`
+then `dotnet tool install --global --add-source ./artifacts/nupkg GroupSplit.Cli` -- though
+nothing publishes it to a feed yet, so `dotnet run --project src/GroupSplit.Cli --` works just
+as well while the commands are still moving.
+
 It renders tables for a person and JSON for anything else, keeps stdout to the result alone,
 and reports failures as an envelope carrying the API's own error `code`. `groupsplit schema`
 prints the whole command tree as JSON for callers that cannot read help text. The full

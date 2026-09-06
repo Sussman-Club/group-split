@@ -8,6 +8,7 @@ It is designed to be driven by two kinds of caller at once: a person at a termin
 program -- a script, a CI job, or an AI agent shelling out. Everything below that looks like
 a nicety for the second kind is load-bearing.
 
+- [Installing it](#installing-it)
 - [Pointing it at a server](#pointing-it-at-a-server)
 - [Signing in](#signing-in)
 - [Output](#output)
@@ -17,6 +18,59 @@ a nicety for the second kind is load-bearing.
 - [Shell completion](#shell-completion)
 - [For agents](#for-agents)
 - [Running it against the local stack](#running-it-against-the-local-stack)
+
+## Installing it
+
+The project is packable as a .NET tool -- `PackAsTool`, command name `groupsplit`. The
+package carries its whole dependency closure, so installing it needs nothing but the .NET
+runtime.
+
+**Nothing publishes it to a feed.** The repo has no NuGet feed, and choosing one is a
+decision packaging does not have to pre-empt: `dotnet pack` into a folder is already a source
+you can install from.
+
+### From the checkout
+
+```bash
+dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg
+dotnet tool install --global --add-source ./artifacts/nupkg GroupSplit.Cli
+```
+
+`~/.dotnet/tools` has to be on `PATH`; the installer says so if it is not. Then:
+
+```bash
+groupsplit --help
+```
+
+Upgrading is `dotnet tool update` with the same `--add-source`; removing it is
+`dotnet tool uninstall --global GroupSplit.Cli`.
+
+### Without installing
+
+Nothing has to be installed to use it, and this is the right choice while the command surface
+is still moving:
+
+```bash
+dotnet run --project src/GroupSplit.Cli -- groups list
+```
+
+### When it should be installable from elsewhere
+
+Two feeds are plausible, and neither is wired up:
+
+| | Trade |
+| --- | --- |
+| **GitHub Packages** | Private to the org, but every contributor needs a PAT in a `nuget.config` before `dotnet tool restore` works -- new friction on a repo that currently needs only `git clone`. |
+| **nuget.org** | No auth friction, but it puts an internal admin CLI on the public index under a name that has to be claimed. |
+
+A **local tool** in the repo's `dotnet-tools.json`, alongside `nswag` and `dotnet-ef`, is the
+natural home for a team -- one pinned version everyone shares. It needs a feed first: the
+manifest records only the package id and version, never where to get it, so `dotnet tool
+restore` on a fresh clone would fail without a `nuget.config` naming the source.
+
+For standalone binaries instead of a tool package, `dotnet publish -r <rid>` works today.
+Native AOT does not yet -- the generated client binds through reflection-based
+System.Text.Json and would need a `JsonSerializerContext` first.
 
 ## Pointing it at a server
 

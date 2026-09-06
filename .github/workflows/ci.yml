@@ -76,6 +76,12 @@ jobs:
           dotnet build tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
+      # The CLI ships as a .NET tool, and packaging breaks in ways a plain build does
+      # not catch -- a missing ToolCommandName, a dependency that will not travel in the
+      # package. Nothing is published; this only has to prove `dotnet pack` still works.
+      - name: Pack the CLI
+        run: dotnet pack src/GroupSplit.Cli/GroupSplit.Cli.csproj -c Release --no-build -o artifacts/nupkg
+
       # Everything above is Release, but `aspire do` builds Debug, so the deploy
       # workflow was the only thing exercising that configuration -- and some of it
       # is Debug-only. Hot-reload assets are the case that got through: they are

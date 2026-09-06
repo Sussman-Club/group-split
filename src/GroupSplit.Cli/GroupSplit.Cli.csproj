@@ -10,6 +10,18 @@
         <!-- The command name a user types. Kept in one place because the help text,
              the completion scripts and the confirmation envelopes all echo it back. -->
         <ToolCommandName>groupsplit</ToolCommandName>
+        <!-- Packable as a .NET tool, but not published anywhere by CI. The repo has no
+             NuGet feed, and `dotnet pack` into a folder is enough to install from: a feed
+             is a separate decision that this does not pre-empt. See docs/cli.md. -->
+        <PackAsTool>true</PackAsTool>
+        <PackageId>GroupSplit.Cli</PackageId>
+        <Description>Command-line client for GroupSplit.</Description>
+        <Authors>Sussman Club</Authors>
+        <PackageTags>groupsplit;cli</PackageTags>
+        <RepositoryUrl>https://github.com/Sussman-Club/group-split</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <!-- Versioned by hand for now, since nothing stamps this from a tag yet. -->
+        <Version>0.1.0</Version>
         <!-- Not InvariantGlobalization: this prints money, and the invariant culture
              renders every currency with the generic sign. Not IsAotCompatible either,
              because the NSwag-generated client binds through reflection-based
