@@ -65,6 +65,18 @@ public class PageStateRefreshTest
         ]
     };
 
+    /// <summary>
+    /// The listings answer with a page now. These states still ask for one big enough to
+    /// hold everything, so the page is the whole of what was asked for and the count is its
+    /// length -- what changes here is the shape, not yet the paging.
+    /// </summary>
+    private static PagedResponseOfTransactionResponse Page(IEnumerable<TransactionResponse> matches)
+    {
+        var items = matches.ToList();
+
+        return new PagedResponseOfTransactionResponse(items, 1, PageRequest.MaxPageSize, items.Count);
+    }
+
     // ---- The clients, the presenter and the two states over it -----------------------------
 
     private readonly Mock<ITransactionsClient> _transactionsClient = new();
@@ -77,9 +89,11 @@ public class PageStateRefreshTest
     public PageStateRefreshTest()
     {
         _transactionsClient
-            .Setup(c => c.GetTransactionsAsAsyncEnumerable(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
+            .Setup(c => c.GetTransactionsAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .Returns(() => _transactions.Where(t => t.PaidByUserId == Me).ToList().ToAsyncEnumerable());
+            .ReturnsAsync(() => Page(_transactions.Where(t => t.PaidByUserId == Me)));
 
         _transactionsClient
             .Setup(c => c.CreateTransactionAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
@@ -116,10 +130,13 @@ public class PageStateRefreshTest
             .Returns(() => _groups.ToList().ToAsyncEnumerable());
 
         _groupsClient
-            .Setup(c => c.GetGroupTransactionsAsAsyncEnumerable(It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(),
-                It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-            .Returns((Guid id, DateTimeOffset? _, DateTimeOffset? _, CancellationToken _) =>
-                _transactions.Where(t => t.GroupId == id).ToList().ToAsyncEnumerable());
+            .Setup(c => c.GetGroupTransactionsAsync(It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(),
+                It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, DateTimeOffset? _, DateTimeOffset? _, Guid? _, Guid? _, string? _, string? _,
+                    string? _, bool? _, int? _, int? _, CancellationToken _) =>
+                Page(_transactions.Where(t => t.GroupId == id)));
 
         _groupsClient
             .Setup(c => c.GetGroupUserBalanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
@@ -330,9 +347,11 @@ public class PageStateRefreshTest
         await ReadyAsync();
         var dinner = _expensesPage.Transactions.Single(t => t.Name == "Dinner");
         _transactionsClient
-            .Setup(c => c.GetTransactionsAsAsyncEnumerable(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
+            .Setup(c => c.GetTransactionsAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .Returns(() => throw new ApiException("down", 503, "", new Dictionary<string, IEnumerable<string>>(), null));
+            .ThrowsAsync(new ApiException("down", 503, "", new Dictionary<string, IEnumerable<string>>(), null));
 
         var done = await _expensesPage.UpdateAsync(dinner, AmountPatch(120m));
 

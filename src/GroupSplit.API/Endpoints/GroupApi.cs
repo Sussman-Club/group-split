@@ -27,6 +27,7 @@ public static class GroupApi
             group.MapGetGroup();
             group.MapUpdateGroup();
             group.MapGetGroupTransactions();
+            group.MapGetGroupTransactionsSummary();
             group.MapGetGroupRules();
             group.MapGetMembers();
             group.MapAddMember();
@@ -126,17 +127,36 @@ public static class GroupApi
             return group.MapGet("{id:guid}/transactions", async (
                     Guid id,
                     [AsParameters] TransactionFilter filter,
+                    [AsParameters] SortRequest sort,
+                    [AsParameters] PageRequest page,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
                     var transactions = await transactionService.List(ct);
-                    var transactionResponses = await transactions
+                    return Results.Ok(await transactions
                         .Where(x => x.RuleVersion.Rule.Group.Id == id)
-                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
-                    return Results.Ok(transactionResponses);
+                        .ToTransactionPageAsync(filter, sort, page, ct));
                 })
                 .WithName("GetGroupTransactions")
-                .Produces<TransactionResponse[]>();
+                .Produces<PagedResponse<TransactionResponse>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
+        }
+
+        private RouteHandlerBuilder MapGetGroupTransactionsSummary()
+        {
+            return group.MapGet("{id:guid}/transactions/summary", async (
+                    Guid id,
+                    [AsParameters] TransactionFilter filter,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactions = await transactionService.List(ct);
+                    return Results.Ok(await transactions
+                        .Where(x => x.RuleVersion.Rule.Group.Id == id)
+                        .ToSummaryAsync(filter, ct));
+                })
+                .WithName("GetGroupTransactionsSummary")
+                .Produces<TransactionSummaryResponse>();
         }
 
         private RouteHandlerBuilder MapGetGroupRules()

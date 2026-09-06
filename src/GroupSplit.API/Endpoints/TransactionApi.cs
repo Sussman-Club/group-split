@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
@@ -23,6 +24,7 @@ public static class TransactionApi
             group.WithTags("Transactions");
 
             group.MapGetAll();
+            group.MapGetSummary();
             group.MapGetById();
             group.MapCreate();
             group.MapUpdate();
@@ -34,9 +36,37 @@ public static class TransactionApi
 
     extension(RouteGroupBuilder group)
     {
+        // The three parameter records are bound separately rather than gathered into one:
+        // [AsParameters] does not recurse, so a record holding a PageRequest would have the
+        // inner one read as a body.
         private RouteHandlerBuilder MapGetAll()
         {
             return group.MapGet(string.Empty, async (
+                    [AsParameters] TransactionFilter filter,
+                    [AsParameters] SortRequest sort,
+                    [AsParameters] PageRequest page,
+                    ICurrentUser currentUser,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var user = currentUser.User;
+                    var transactions = await transactionService.List(ct);
+                    return Results.Ok(await transactions
+                        .Where(x => x.User.Id == user.Id)
+                        .ToTransactionPageAsync(filter, sort, page, ct));
+                })
+                .WithName("GetTransactions")
+                .Produces<PagedResponse<TransactionResponse>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
+        }
+
+        /// <summary>
+        /// What the same filter adds up to over every match, not just the page in hand: a
+        /// page of 25 beside a total of its own 25 would be a lie the moment there are 26.
+        /// </summary>
+        private RouteHandlerBuilder MapGetSummary()
+        {
+            return group.MapGet("summary", async (
                     [AsParameters] TransactionFilter filter,
                     ICurrentUser currentUser,
                     ITransactionService transactionService,
@@ -44,13 +74,12 @@ public static class TransactionApi
                 {
                     var user = currentUser.User;
                     var transactions = await transactionService.List(ct);
-                    var transactionResponses = await transactions
+                    return Results.Ok(await transactions
                         .Where(x => x.User.Id == user.Id)
-                        .ApplyFilter(filter).SelectDto().ToListAsync(ct);
-                    return Results.Ok(transactionResponses);
+                        .ToSummaryAsync(filter, ct));
                 })
-                .WithName("GetTransactions")
-                .Produces<TransactionResponse[]>();
+                .WithName("GetTransactionsSummary")
+                .Produces<TransactionSummaryResponse>();
         }
 
         private RouteHandlerBuilder MapGetById()
@@ -165,10 +194,67 @@ public static class TransactionApi
             if (filter is null)
                 return transactions;
 
+            // Hoisted out of the expression, and normalised while they are here. Npgsql
+            // writes a DateTimeOffset to a timestamptz column only at offset zero, so a
+            // "+02:00" from a client has to become UTC before it reaches the parameter;
+            // lowering the two strings once keeps the comparison off the database's collation.
+            // Not named from/to: inside a query expression those are keywords.
+            var after = filter.From?.ToUniversalTime();
+            var before = filter.To?.ToUniversalTime();
+            var category = filter.Category?.Trim().ToLowerInvariant();
+            var search = string.IsNullOrWhiteSpace(filter.Search) ? null : filter.Search.Trim().ToLowerInvariant();
+
             return from transaction in transactions
-                where (filter.From == null || transaction.DateTime >= filter.From) &&
-                      (filter.To == null || transaction.DateTime <= filter.To)
+                where (after == null || transaction.DateTime >= after) &&
+                      (before == null || transaction.DateTime <= before) &&
+                      (filter.GroupId == null || transaction.RuleVersion.Rule.Group.Id == filter.GroupId) &&
+                      (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
+                      (category == null || transaction.RuleVersion.Rule.Category.ToLower() == category) &&
+                      // ToLower().Contains rather than EF.Functions.ILike: the same query has
+                      // to run on Npgsql and on the in-memory provider the tests use, and
+                      // ILike translates only on the first. The names are nullable once an
+                      // account has been anonymised.
+                      (search == null ||
+                       transaction.Name.ToLower().Contains(search) ||
+                       (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
+                       transaction.RuleVersion.Rule.Category.ToLower().Contains(search) ||
+                       transaction.RuleVersion.Rule.Group.Name.ToLower().Contains(search) ||
+                       (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
+                       (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
                 select transaction;
         }
+
+        /// <summary>
+        /// The filter, the order and the page, in that order. Both listings go through here
+        /// so neither can drift from the other, or from the summary below.
+        /// </summary>
+        internal Task<PagedResponse<TransactionResponse>> ToTransactionPageAsync(
+            TransactionFilter filter, SortRequest sort, PageRequest page, CancellationToken ct) =>
+            transactions.ApplyFilter(filter).ApplySort(sort, Sort).SelectDto().ToPageAsync(page, ct);
+
+        /// <summary>The same filter, counted and totalled instead of paged.</summary>
+        internal async Task<TransactionSummaryResponse> ToSummaryAsync(
+            TransactionFilter filter, CancellationToken ct)
+        {
+            var matches = transactions.ApplyFilter(filter);
+
+            return new TransactionSummaryResponse(
+                await matches.CountAsync(ct),
+                await matches.SumAsync(transaction => transaction.Amount, ct));
+        }
     }
+
+    /// <summary>
+    /// The orders an expense listing offers. Applied to the entity rather than the response,
+    /// so a key can reach through a navigation to the group or the payer.
+    /// </summary>
+    internal static readonly SortMap<Transaction> Sort = new SortMap<Transaction>()
+        .Key("dateTime", transaction => transaction.DateTime, defaultDescending: true)
+        .Key("amount", transaction => transaction.Amount, defaultDescending: true)
+        .Key("name", transaction => transaction.Name)
+        .Key("category", transaction => transaction.RuleVersion.Rule.Category)
+        .Key("group", transaction => transaction.RuleVersion.Rule.Group.Name)
+        .Key("paidBy", transaction => transaction.User.FirstName)
+        .Default("dateTime")
+        .TieBreak(transaction => transaction.Id);
 }

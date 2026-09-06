@@ -62,8 +62,13 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     // changes.
     private async Task LoadAsync(CancellationToken ct = default)
     {
-        Transactions = await _client.GetTransactionsAsAsyncEnumerable(cancellationToken: ct)
-            .ToListAsync(cancellationToken: ct);
+        // Reads one large page while the page states still keep whole lists. The grid and
+        // the tiles that would use the rest of the contract -- a page the person chose, and
+        // the summary beside it -- come next; this keeps what is on screen correct in the
+        // meantime rather than showing a first page as though it were everything.
+        var page = await _client.GetTransactionsAsync(pageSize: PageRequest.MaxPageSize, cancellationToken: ct);
+
+        Transactions = page.Items.ToList();
     }
 
     // Every write below runs through the presenter: a refusal from the API becomes an

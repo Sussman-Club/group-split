@@ -157,10 +157,14 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
         else
         {
-            Transactions = await _groupsClient
-                .GetGroupTransactionsAsAsyncEnumerable(SelectedGroup.Id, cancellationToken: cancellationToken)
-                .OrderByDescending(t => t.DateTime)
-                .ToListAsync(cancellationToken);
+            // One large page, newest first, until the group page reads a real one. Ordering
+            // is the server's now: it is the only end that can order rows it did not send.
+            var page = await _groupsClient.GetGroupTransactionsAsync(
+                SelectedGroup.Id,
+                pageSize: PageRequest.MaxPageSize,
+                cancellationToken: cancellationToken);
+
+            Transactions = page.Items.ToList();
         }
     }
 
