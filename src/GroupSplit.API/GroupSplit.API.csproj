@@ -18,6 +18,12 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The filters, sort maps and DTO projections that back the endpoints are internal;
+             the tests exercise them directly rather than only through HTTP. -->
+        <InternalsVisibleTo Include="GroupSplit.API.Test" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
         <ProjectReference Include="..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
         <ProjectReference Include="..\GroupSplit.Shared\GroupSplit.Shared.csproj" />
