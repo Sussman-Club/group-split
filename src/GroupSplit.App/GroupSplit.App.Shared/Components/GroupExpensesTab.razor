@@ -5,6 +5,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
+@inject LocalClock Clock
 
 @*
     Everything one group has spent, whoever paid.
@@ -85,11 +86,13 @@
         //
         // The generated client answers with the concrete wire type, and Task is not
         // covariant, so the page is awaited here and handed back as the base type.
+        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+
         var page = await ReadAsync<PagedResponseOfTransactionResponse>(() =>
             GroupsClient.GetGroupTransactionsAsync(
                 GroupId,
-                from: _range.From,
-                to: _range.To,
+                from: bounds.From,
+                to: bounds.To,
                 search: IsSearching ? _searchString.Trim() : null,
                 sortBy: query.SortBy,
                 sortDescending: query.SortDescending,
@@ -127,10 +130,14 @@
     private Task BackToFirstPageAsync() =>
         _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
 
-    private async Task ReadSummaryAsync() =>
+    private async Task ReadSummaryAsync()
+    {
+        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+
         _summary = await ReadAsync<TransactionSummaryResponse>(
             () => GroupsClient.GetGroupTransactionsSummaryAsync(
-                GroupId, from: _range.From, to: _range.To));
+                GroupId, from: bounds.From, to: bounds.To));
+    }
 
     protected override Task OnParametersSetAsync() => ReadSummaryAsync();
 }

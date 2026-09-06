@@ -6,6 +6,7 @@
 @inject IDialogService DialogService
 @inject DataChangeNotifier Changes
 @inject NavigationManager Nav
+@inject LocalClock Clock
 @implements IDisposable
 
 @*
@@ -88,7 +89,7 @@
                         <div style="min-width: 0">
                             <div class="title"><span>@pending.Email</span></div>
                             <div class="meta">
-                                Invited @pending.InvitedAt.LocalDateTime.ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
+                                Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
                             </div>
                         </div>
                         <MudTooltip Text="Withdraw the invitation">
@@ -162,7 +163,7 @@
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, "Leave this group? Your expenses stay in it -- they are half of everybody else's balances -- and you stop seeing it." },
+            { x => x.ContentText, "Leave this group? What you paid stays in your own records, but you will no longer see the group or be able to change anything in it." },
             { x => x.ButtonText, "Leave" },
             { x => x.Color, Color.Error }
         };

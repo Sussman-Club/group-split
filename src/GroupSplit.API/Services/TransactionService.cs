@@ -9,7 +9,22 @@ namespace GroupSplit.API.Services;
 
 public interface ITransactionService
 {
+    /// <summary>
+    /// The expenses the caller may read: everything in a group they are in, and everything
+    /// they paid for wherever it is -- a personal expense, or one in a group they have since
+    /// left. Leaving a flat share does not erase a year of your own spending from your own
+    /// records; what it takes away is the right to change it, which is
+    /// <see cref="Update"/>'s and <see cref="Delete"/>'s concern.
+    /// </summary>
     Task<IQueryable<Expense>> List(CancellationToken ct = default);
+
+    /// <summary>
+    /// A group's expenses, for a member of it. Scoped to membership rather than to
+    /// <see cref="List"/>, so somebody who has left does not see their own rows through the
+    /// group's door: that listing is the group's, not theirs.
+    /// </summary>
+    Task<IQueryable<Expense>> InGroup(Guid groupId, CancellationToken ct = default);
+
     Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default);
     ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
 
@@ -51,16 +66,48 @@ public class TransactionService(
 
         var groups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
-        // Two kinds of expense are the caller's: the ones in a group they belong to, and
-        // the ones in no group at all that they recorded. The second used to be the first
-        // -- a hidden group of one -- which is why every list of groups had to remember to
-        // leave it out and every count of them was one too high.
+        // Two kinds of expense are the caller's to read: the ones in a group they belong
+        // to, and the ones they paid for wherever those are -- personal ones, which have no
+        // group, and ones in a group they have since left. The second clause used to be
+        // "in no group and mine", which made leaving a group erase everything the leaver
+        // had paid in it from their own listing and totals.
         var query = from expense in dbContext.Set<Expense>()
                     where groups.Any(@group => @group.Id == expense.GroupId) ||
-                          (expense.GroupId == null && expense.UserId == currentUser.Id)
+                          expense.UserId == currentUser.Id
                     select expense;
 
         return Task.FromResult(query);
+    }
+
+    public Task<IQueryable<Expense>> InGroup(Guid groupId, CancellationToken ct = default)
+    {
+        var currentUser = userContext.User;
+
+        var groups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
+
+        var query = from expense in dbContext.Set<Expense>()
+                    where expense.GroupId == groupId && groups.Any(@group => @group.Id == groupId)
+                    select expense;
+
+        return Task.FromResult(query);
+    }
+
+    /// <summary>
+    /// Whether the caller is in the expense's group now. Reading is broader than this --
+    /// see <see cref="List"/> -- but a change moves balances for people whose group the
+    /// caller may have left, and that is theirs to refuse.
+    /// </summary>
+    private async Task RefuseIfLeft(Expense expense, CancellationToken ct)
+    {
+        if (expense.GroupId is not { } groupId)
+            return;
+
+        var stillIn = await dbContext.Entry(userContext.User).Collection(u => u.Groups).Query()
+            .AnyAsync(@group => @group.Id == groupId, ct);
+
+        if (!stillIn)
+            throw new ConflictException(ErrorCodes.TransactionGroupLeft,
+                "You are no longer in this expense's group, so it cannot be changed.");
     }
 
     public async Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default)
@@ -99,7 +146,10 @@ public class TransactionService(
         {
             Amount = request.Amount,
             Currency = group?.Currency ?? Currencies.Default,
-            DateTime = request.DateTime,
+            // Stored as UTC, whatever offset the client wrote it with. The column has no
+            // zone, so this only makes explicit what the store does anyway -- and it means
+            // an instant reads back exactly as it was sent, never re-expressed.
+            DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             Description = request.Description,
             Group = group,
@@ -138,7 +188,7 @@ public class TransactionService(
         {
             Amount = request.Amount,
             Currency = group?.Currency ?? Currencies.Default,
-            DateTime = request.DateTime,
+            DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group?.Id,
             CategoryId = category?.Id,
@@ -231,6 +281,7 @@ public class TransactionService(
                 Name = t.Name,
                 DateTime = t.DateTime,
                 PaidByUserId = t.User.Id,
+                GroupId = t.GroupId,
                 CategoryId = t.CategoryId
                 // Splits are deliberately absent. Null means "divide it again", and that is
                 // the only safe default for a model somebody is about to change the amount
@@ -255,7 +306,23 @@ public class TransactionService(
         if (expense is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
-        var group = expense.Group;
+        await RefuseIfLeft(expense, ct);
+
+        // The destination, which is the group it is already in unless the request moves it.
+        // Resolved the way a create resolves its group -- one of the caller's, or none for
+        // personal -- so moving into a group the caller is not in is the same 404 as
+        // creating there would be. The old shares are not carried over: they name the old
+        // group's members, and the splitter below divides afresh among the new one's.
+        var group = request.GroupId == expense.GroupId
+            ? expense.Group
+            : await GroupFor(request.GroupId, ct);
+
+        if (group?.Id != expense.GroupId)
+        {
+            expense.Group = group;
+            expense.GroupId = group?.Id;
+            expense.Currency = group?.Currency ?? Currencies.Default;
+        }
 
         var payer = await MemberOf(group, request.PaidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
@@ -266,7 +333,7 @@ public class TransactionService(
         var category = await CategoryFor(group, request.CategoryId, ct);
 
         expense.Amount = request.Amount;
-        expense.DateTime = request.DateTime;
+        expense.DateTime = request.DateTime.ToUniversalTime();
         expense.Name = request.Name;
         expense.Description = request.Description;
         expense.Category = category;
@@ -290,6 +357,8 @@ public class TransactionService(
 
         if (transaction is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+        await RefuseIfLeft(transaction, ct);
 
         dbContext.Remove(transaction);
 

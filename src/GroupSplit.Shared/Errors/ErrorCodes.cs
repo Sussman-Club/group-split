@@ -48,6 +48,7 @@ public static class ErrorCodes
     public const string GroupInvitationAlreadySent = "GROUP_INVITATION_ALREADY_SENT";
     public const string GroupMemberAlreadyJoined = "GROUP_MEMBER_ALREADY_JOINED";
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
+    public const string TransactionGroupLeft = "TRANSACTION_GROUP_LEFT";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";
     public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";

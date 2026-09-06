@@ -91,6 +91,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Amount = 50.00m,
             DateTime = DateTimeOffset.UtcNow,
             PaidByUserId = self,
+            GroupId = groupId,
             CategoryId = categoryId
         }, TestContext.Current.CancellationToken);
 

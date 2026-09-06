@@ -538,13 +538,22 @@ the row-by-row migration and the decisions the roadmap left open are in
   table of its own rather than a status on `GroupMembership`: a membership is keyed on
   (group, user), and the whole point is the address with no account behind it yet. Leaving
   is `DELETE /groups/{id}/members/me`, blocked by an unsettled balance like being removed
-  is, and refused outright for the last member -- archiving is what they want. Archiving
+  is, and refused outright for the last member -- archiving is what they want. What the
+  leaver paid stays in their own listing and totals -- leaving a flat share does not erase
+  a year of your own spending -- but it can no longer be changed, since a change moves
+  balances for people whose group they have left. Archiving
   landed in phase 0.
 - ~~Home net position; Expenses views; personal as a filter.~~ **Done.**
   `GET /users/me/position` answers the question the app could not: where somebody stands
   across every group. It keeps the two directions apart rather than netting them, because
   owed 40 in one group and owing 25 in another is not "owed 15" to anybody. Personal is a
   filter on the expenses page, and the hidden group behind it is deleted.
+- **Moving an expense between the personal ledger and a group** (and between groups) is
+  an ordinary edit: `UpdateTransactionRequest.GroupId`. The shares are re-derived among the
+  destination's members, the currency follows, a category from elsewhere is refused, and
+  only your own expense can be made personal. This is the primitive the phase 3 review
+  inbox files imported rows with, built now so that inbox is a UI over an edit that
+  already exists.
 - ~~One command layer per aggregate for dialogs.~~ **Done.** `IGroupCommands` and
   `ITransactionCommands` own the call, the message and the announcement; page states are
   readers that delegate their writes, and dialogs use the same commands rather than the

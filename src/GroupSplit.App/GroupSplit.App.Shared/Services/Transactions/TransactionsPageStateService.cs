@@ -14,6 +14,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     private readonly LoadGuard _guard;
     private readonly DataChangeNotifier _changes;
     private readonly ITransactionCommands _commands;
+    private readonly LocalClock _clock;
 
     public Task IsReadyTask { get; }
 
@@ -21,13 +22,15 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         TransactionsTracker tracker,
         LoadGuard guard,
         DataChangeNotifier changes,
-        ITransactionCommands commands)
+        ITransactionCommands commands,
+        LocalClock clock)
     {
         _client = client;
         _tracker = tracker;
         _guard = guard;
         _changes = changes;
         _commands = commands;
+        _clock = clock;
 
         // What is held here is a copy of the server's, so it is re-read whenever anything
         // that shows on it changes: an expense written from any page, or a group renamed,
@@ -116,10 +119,11 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     private async Task ReadPageAsync(TransactionQuery query, CancellationToken ct = default)
     {
         var range = query.EffectiveRange;
+        var bounds = range.Bounds(_clock.Offset, _clock.Today);
 
         var page = await _client.GetTransactionsAsync(
-            from: range.From,
-            to: range.To,
+            from: bounds.From,
+            to: bounds.To,
             personal: query.Personal,
             search: query.Search,
             sortBy: query.SortBy,
@@ -137,7 +141,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         MatchesSummary = string.IsNullOrWhiteSpace(query.Search) && range.IsAllTime && query.Personal is null
             ? null
             : await _client.GetTransactionsSummaryAsync(
-                from: range.From, to: range.To, personal: query.Personal, search: query.Search,
+                from: bounds.From, to: bounds.To, personal: query.Personal, search: query.Search,
                 cancellationToken: ct);
     }
 
@@ -147,12 +151,11 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     /// </summary>
     private async Task ReadSummariesAsync(CancellationToken ct = default)
     {
-        var firstOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        var from = new DateTimeOffset(firstOfMonth, TimeZoneInfo.Local.GetUtcOffset(firstOfMonth));
-        var to = from.AddMonths(1).AddTicks(-1);
+        // "This month" is the person's month, resolved the same way the chips resolve theirs.
+        var month = new DateFilter(DateFilterPreset.ThisMonth).Bounds(_clock.Offset, _clock.Today);
 
         Summary = await _client.GetTransactionsSummaryAsync(cancellationToken: ct);
-        MonthSummary = await _client.GetTransactionsSummaryAsync(from: from, to: to, cancellationToken: ct);
+        MonthSummary = await _client.GetTransactionsSummaryAsync(from: month.From, to: month.To, cancellationToken: ct);
     }
 
     // Every write below is one line, because a write is not this class's job: the commands

@@ -5,6 +5,7 @@
 @using GroupSplit.Shared
 @inject ITransactionsPageStateService TransactionsService
 @inject IDialogService DialogService
+@inject LocalClock Clock
 @implements IAsyncDisposable
 
 <PageTitle>Expenses - Group Split</PageTitle>
@@ -61,7 +62,7 @@
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
             <span class="gs-eyebrow">This month</span>
             <Money Value="ThisMonth" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">@DateTime.Today.ToString("MMMM")</span>
+            <span class="gs-muted" style="font-size: .8125rem">@Clock.Today.ToString("MMMM")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>

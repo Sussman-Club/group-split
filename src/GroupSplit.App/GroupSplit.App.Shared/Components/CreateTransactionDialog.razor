@@ -7,6 +7,7 @@
 @inject ICategoriesClient CategoriesClient
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
+@inject LocalClock Clock
 
 @*
     Recording an expense, in two steps.
@@ -242,11 +243,14 @@
 
     private readonly CreateTransactionRequest _model = new()
     {
-        DateTime = DateTimeOffset.Now
+        DateTime = DateTimeOffset.UtcNow
     };
 
-    private DateTime? _selectedDate = DateTime.Today;
-    private TimeSpan? _selectedTime = DateTime.Now.TimeOfDay;
+    // Set on initialisation from the clock, not here from DateTime.Now: under WebAssembly
+    // that came back as UTC while the offset attached to it below was the browser's, and
+    // an expense recorded at 12:38 in New York was stored eight hours ahead.
+    private DateTime? _selectedDate;
+    private TimeSpan? _selectedTime;
 
     private IReadOnlyList<GroupResponse> _groups = [];
     private IReadOnlyList<CategoryResponse> _categories = [];
@@ -264,6 +268,10 @@
     protected override async Task OnInitializedAsync()
     {
         _groupId = SelectedGroupId;
+
+        var now = Clock.Now;
+        _selectedDate = now.Date;
+        _selectedTime = now.TimeOfDay;
 
         var loaded = await Errors.TryAsync(async () =>
         {
@@ -361,15 +369,12 @@
         StateHasChanged();
     }
 
-    private void ApplyDate()
-    {
-        var date = _selectedDate ?? DateTime.Today;
-        var time = _selectedTime ?? TimeSpan.Zero;
-
-        var local = date.Date + time;
-
-        _model.DateTime = new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
-    }
+    /// <summary>
+    /// The day and time as picked, made into the instant they mean and sent as UTC. The
+    /// clock owns the offset; nothing here asks .NET where the person is.
+    /// </summary>
+    private void ApplyDate() =>
+        _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
 
     /// <summary>
     /// The request as it stands. <c>GroupId</c> is set from the select rather than inferred

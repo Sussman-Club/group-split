@@ -5,6 +5,7 @@
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject DataChangeNotifier Changes
+@inject LocalClock Clock
 @implements IDisposable
 
 @*
@@ -65,7 +66,7 @@
                     </div>
                     <div>
                         <div><Money Value="entry.Amount" /></div>
-                        <span class="when">@entry.DateTime.LocalDateTime.ToString("d MMM yyyy")</span>
+                        <span class="when">@Clock.Local(entry.DateTime).ToString("d MMM yyyy")</span>
                     </div>
                 </div>
             }

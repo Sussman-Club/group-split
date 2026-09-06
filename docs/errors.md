@@ -97,6 +97,7 @@ routing, authentication, model binding, an unhandled exception.
 | `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
 | `GROUP_INVITATION_ALREADY_SENT` | The address already has a standing invitation to this group. Inviting several people skips the ones already invited rather than raising this. | |
 | `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
+| `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
 
 ### Validation (400)

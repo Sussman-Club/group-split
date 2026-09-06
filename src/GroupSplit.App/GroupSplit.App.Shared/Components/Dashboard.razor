@@ -6,6 +6,7 @@
 @inject IGroupsPageStateService GroupsService
 @inject ITransactionsPageStateService TransactionsService
 @inject NavigationManager Nav
+@inject LocalClock Clock
 @implements IDisposable
 
 @* Signed-in home. Lives in its own component so the anonymous landing page
@@ -13,7 +14,7 @@
 
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">@DateTime.Today.ToString("dddd, d MMMM")</div>
+        <div class="gs-eyebrow">@Clock.Today.ToString("dddd, d MMMM")</div>
         <h1>@Greeting, @UserInfo.FirstName.</h1>
         <p>Here is where everything stands across your groups.</p>
     </div>

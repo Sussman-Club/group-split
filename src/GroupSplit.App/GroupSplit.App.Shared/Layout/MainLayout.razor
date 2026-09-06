@@ -4,6 +4,7 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject LocalClock Clock
 @implements IDisposable
 
 <AppThemeProvider />
@@ -106,6 +107,12 @@
         catch (JSException)
         {
         }
+
+        // On WebAssembly the clock already asked the browser synchronously; on the server
+        // this is the first chance to. A changed offset means every date on screen was
+        // drawn a zone off, so the page is drawn again.
+        if (await Clock.InitializeAsync())
+            StateHasChanged();
     }
 
     private async Task ToggleRail()

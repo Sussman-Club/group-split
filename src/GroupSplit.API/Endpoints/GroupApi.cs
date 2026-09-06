@@ -145,10 +145,8 @@ public static class GroupApi
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
-                    var transactions = await transactionService.List(ct);
-                    return Results.Ok(await transactions
-                        .Where(x => x.GroupId == id)
-                        .ToTransactionPageAsync(filter, sort, page, ct));
+                    var transactions = await transactionService.InGroup(id, ct);
+                    return Results.Ok(await transactions.ToTransactionPageAsync(filter, sort, page, ct));
                 })
                 .WithName("GetGroupTransactions")
                 .Produces<PagedResponse<TransactionResponse>>()
@@ -163,10 +161,8 @@ public static class GroupApi
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
-                    var transactions = await transactionService.List(ct);
-                    return Results.Ok(await transactions
-                        .Where(x => x.GroupId == id)
-                        .ToSummaryAsync(filter, ct));
+                    var transactions = await transactionService.InGroup(id, ct);
+                    return Results.Ok(await transactions.ToSummaryAsync(filter, ct));
                 })
                 .WithName("GetGroupTransactionsSummary")
                 .Produces<TransactionSummaryResponse>();

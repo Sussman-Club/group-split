@@ -119,6 +119,17 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     [Fact(Timeout = 120_000)]
+    public async Task A_groups_own_expense_listing_translates()
+    {
+        var expenses = await Service<ITransactionService>().InGroup(await AGroupOfTheirs(), Ct);
+
+        await expenses
+            .ApplyFilter(new TransactionFilter())
+            .ApplySort(new SortRequest(), TransactionApi.Sort)
+            .ToPageAsync(new PageRequest(), Ct);
+    }
+
+    [Fact(Timeout = 120_000)]
     public async Task The_group_balances_translate()
     {
         var balances = await Service<IGroupService>().GetGroupNetBalance(await AGroupOfTheirs(), Ct);

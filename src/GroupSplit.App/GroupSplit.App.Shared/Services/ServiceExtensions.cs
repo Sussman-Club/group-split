@@ -19,6 +19,7 @@ public static class ServiceExtensions
         {
             services.AddMudTheme();
             services.TryAdd<ThemePreference>(sessionLifetime);
+            services.TryAdd<LocalClock>(sessionLifetime);
             services.TryAddScoped<ApiErrorPresenter>();
             services.TryAddScoped<LoadGuard>();
             services.TryAddScoped<DataChangeNotifier>();

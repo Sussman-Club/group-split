@@ -1,6 +1,7 @@
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
+using Microsoft.JSInterop;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
@@ -257,8 +258,10 @@ public class PageStateRefreshTest
         var transactionCommands = new TransactionCommands(_transactionsClient.Object, presenter,
             _snackbar.Object, _changes);
 
+        // No JS behind it, so the clock falls back to the runtime's own offset -- which is
+        // what the "this month" assertion below compares against too.
         _expensesPage = new TransactionsPageStateService(_transactionsClient.Object, new TransactionsTracker(),
-            guard, _changes, transactionCommands);
+            guard, _changes, transactionCommands, new LocalClock(Mock.Of<IJSRuntime>()));
         _groupsPage = new GroupsPageStateService(new GroupsTracker(), _groupsClient.Object, _usersClient.Object,
             guard, presenter, _changes, groupCommands, transactionCommands);
     }
@@ -558,12 +561,17 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        var firstOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        // The exact UTC instants the person's month resolves to, from the same clock the
+        // state was built with. Comparing calendar days would not do any more: the bounds
+        // are sent as UTC, so midnight where the person is falls on the previous UTC day
+        // for anyone east of Greenwich -- which is the whole point of sending them that way.
+        var clock = new LocalClock(Mock.Of<IJSRuntime>());
+        var month = new DateFilter(DateFilterPreset.ThisMonth).Bounds(clock.Offset, clock.Today);
 
         _transactionsClient.Verify(c => c.GetTransactionsSummaryAsync(
             // Null-safe: the all-time summary goes through the same method with no dates.
-            It.Is<DateTimeOffset?>(from => from.HasValue && from.Value.Date == firstOfMonth.Date),
-            It.Is<DateTimeOffset?>(to => to.HasValue && to.Value.Date == firstOfMonth.AddMonths(1).AddDays(-1).Date),
+            It.Is<DateTimeOffset?>(from => from == month.From),
+            It.Is<DateTimeOffset?>(to => to == month.To),
             It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
             It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
@@ -608,8 +616,13 @@ public class PageStateRefreshTest
 
         await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = range });
 
+        // Resolved against the same clock the state was built with: no JS behind it, so the
+        // runtime's own offset and day, which is what the state used too.
+        var clock = new LocalClock(Mock.Of<IJSRuntime>());
+        var bounds = range.Bounds(clock.Offset, clock.Today);
+
         _transactionsClient.Verify(c => c.GetTransactionsAsync(
-            range.From, range.To, It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(),
+            bounds.From, bounds.To, It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<bool?>(),
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Once);
     }
