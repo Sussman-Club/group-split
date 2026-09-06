@@ -57,7 +57,7 @@
     </div>
 
     <div class="gs-reveal" style="--i: 3">
-        <ExpensesGrid @ref="_grid" LoadPage="LoadPageAsync" Search="@_searchString" Range="@_range" />
+        <ExpensesGrid @ref="_grid" LoadPage="LoadPageAsync" IsNarrowed="@IsNarrowed" />
     </div>
 </div>
 
@@ -94,12 +94,20 @@
         ? TransactionsService.MatchesSummary?.Total ?? 0m
         : TransactionsService.Summary?.Total ?? 0m;
 
-    // Through the state service, which holds the page and the figures beside it, and
-    // answers from what it holds when the query has not changed.
+    // The search box and the chips are this page's, so what they say is read here, as the
+    // request is made, rather than handed to the grid to hold on to. Then through the state
+    // service, which answers from what it holds when the query has not changed.
     private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
         TransactionQuery query, CancellationToken cancellationToken)
     {
-        await TransactionsService.LoadAsync(query, cancellationToken);
+        var narrowed = query with
+        {
+            Search = IsSearching ? _searchString.Trim() : null,
+            Range = _range
+        };
+
+        await TransactionsService.LoadAsync(narrowed, cancellationToken);
+
         return TransactionsService.Page;
     }
 

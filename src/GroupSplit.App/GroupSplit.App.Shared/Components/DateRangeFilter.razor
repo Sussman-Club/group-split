@@ -3,7 +3,11 @@
 
 @* The spans people ask for, one click each, and a picker for the rest. The chips carry
    the choice rather than the dates it works out to, so "This month" still means this
-   month tomorrow. *@
+   month tomorrow.
+
+   The picker is a control of its own rather than something a chip opens from behind the
+   scenes: a picker hidden with display:none has no box to anchor its calendar to, and
+   quietly does nothing when told to open. *@
 
 <div class="gs-inline gs-range" role="group" aria-label="Filter by date">
     @foreach (var preset in Presets)
@@ -17,20 +21,17 @@
         </button>
     }
 
-    <MudDateRangePicker @ref="_picker"
-                        DateRange="@_picked"
+    <MudDateRangePicker DateRange="@_picked"
                         DateRangeChanged="OnPickedAsync"
-                        PickerVariant="PickerVariant.Dialog"
+                        PlaceholderText="Custom range"
+                        Variant="Variant.Outlined"
+                        Margin="Margin.Dense"
+                        Clearable="true"
+                        Editable="false"
+                        AdornmentIcon="@Icons.Material.Rounded.DateRange"
+                        AdornmentColor="@(IsCustom ? Color.Primary : Color.Default)"
                         Class="gs-range-picker"
-                        Style="display: none" />
-
-    <button type="button"
-            class="gs-chip @(Value.Preset == DateFilterPreset.Custom ? "active" : "")"
-            aria-pressed="@(Value.Preset == DateFilterPreset.Custom ? "true" : "false")"
-            @onclick="OpenPickerAsync">
-        <MudIcon Icon="@Icons.Material.Rounded.DateRange" Style="width:16px;height:16px" />
-        @(Value.Preset == DateFilterPreset.Custom ? Value.Label : "Custom")
-    </button>
+                        aria-label="Custom date range" />
 </div>
 
 @code {
@@ -47,8 +48,9 @@
         DateFilterPreset.ThisYear
     ];
 
-    private MudDateRangePicker? _picker;
     private MudBlazor.DateRange? _picked;
+
+    private bool IsCustom => Value.Preset == DateFilterPreset.Custom && !Value.IsAllTime;
 
     private static string Label(DateFilterPreset preset) => preset switch
     {
@@ -59,18 +61,24 @@
         _ => "All time"
     };
 
-    private Task SelectAsync(DateFilterPreset preset) => ValueChanged.InvokeAsync(new DateFilter(preset));
-
-    private async Task OpenPickerAsync()
+    /// <summary>
+    /// Keeps the picker showing what the filter says. A preset empties it, so it does not
+    /// sit there displaying a range that is no longer the one in force.
+    /// </summary>
+    protected override void OnParametersSet()
     {
-        if (_picker is not null) await _picker.OpenAsync();
+        _picked = IsCustom
+            ? new MudBlazor.DateRange(Value.CustomFrom, Value.CustomTo)
+            : null;
     }
+
+    private Task SelectAsync(DateFilterPreset preset) => ValueChanged.InvokeAsync(new DateFilter(preset));
 
     private async Task OnPickedAsync(MudBlazor.DateRange? range)
     {
         _picked = range;
 
-        // A cleared picker is not a custom range of nothing: it means the person stopped
+        // Clearing the picker is not a custom range of nothing: it means the person stopped
         // narrowing, which is what All time already says.
         if (range?.Start is null && range?.End is null)
         {

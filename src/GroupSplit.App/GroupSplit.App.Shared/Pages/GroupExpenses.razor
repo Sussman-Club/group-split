@@ -79,8 +79,7 @@
            repeated down the page. *@
         <ExpensesGrid @ref="_grid"
                       LoadPage="LoadPageAsync"
-                      Search="@_searchString"
-                      Range="@_range"
+                      IsNarrowed="@IsNarrowed"
                       ShowGroup="false"
                       EmptyTitle="Nothing recorded yet"
                       EmptyDescription="Expenses anyone in this group records will show up here." />
@@ -106,14 +105,17 @@
     private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
         TransactionQuery query, CancellationToken cancellationToken)
     {
+        // The search box and the chips are this page's, so what they say is read here, as
+        // the request is made, rather than handed to the grid to hold on to.
+        //
         // The generated client answers with the concrete wire type, and Task is not
         // covariant, so the page is awaited here and handed back as the base type.
         var page = await ReadAsync<PagedResponseOfTransactionResponse>(() =>
             GroupsClient.GetGroupTransactionsAsync(
                 GroupId,
-                from: query.EffectiveRange.From,
-                to: query.EffectiveRange.To,
-                search: query.Search,
+                from: _range.From,
+                to: _range.To,
+                search: IsSearching ? _searchString.Trim() : null,
                 sortBy: query.SortBy,
                 sortDescending: query.SortDescending,
                 page: query.Page,
