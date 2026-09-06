@@ -81,6 +81,16 @@ public interface IGroupService
 
     Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves the group out of the caller's own list, the way archiving a note does.
+    /// Nothing about the group changes and no other member is affected: it goes on
+    /// accepting every write it would otherwise accept. Archiving twice is not an error.
+    /// </summary>
+    Task<IQueryable<Group>> Archive(Guid groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>Brings it back into the caller's list. Also idempotent.</summary>
+    Task<IQueryable<Group>> Unarchive(Guid groupId, CancellationToken cancellationToken = default);
 }
 
 public class GroupService(ICurrentUser userContext, AppDbContext context) : IGroupService
@@ -168,6 +178,7 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         var group = await groupQuery.FirstOrDefaultAsync(cancellationToken: cancellationToken);
         if (group is null)
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
         var users = from user in context.Set<User>()
                     where request.UserIdentifiers.Select(ui => ui.Email).Contains(user.Email)
                     select user;
@@ -189,6 +200,9 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         var group = await groupQuery.FirstOrDefaultAsync(cancellationToken);
         if (group is null)
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        // Before the balance check below: "the group is archived" is the more useful thing
+        // to hear, and it is the one the person can act on.
         var user = await context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
         if (user is null)
@@ -394,5 +408,40 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
 
         context.Set<Transaction>().AddRange(transactionFromOther, transactionToOther);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<IQueryable<Group>> Archive(Guid groupId, CancellationToken cancellationToken = default) =>
+        SetArchivedAt(groupId, DateTimeOffset.UtcNow, cancellationToken);
+
+    public Task<IQueryable<Group>> Unarchive(Guid groupId, CancellationToken cancellationToken = default) =>
+        SetArchivedAt(groupId, null, cancellationToken);
+
+    /// <summary>
+    /// Both directions, because they differ only in the value written. It is the caller's
+    /// own membership row that changes, so this says nothing about the group and nothing
+    /// about anybody else in it.
+    /// </summary>
+    private async Task<IQueryable<Group>> SetArchivedAt(Guid groupId, DateTimeOffset? archivedAt,
+        CancellationToken cancellationToken)
+    {
+        var user = userContext.User;
+
+        var groupQuery = await GetGroupById(groupId, cancellationToken);
+
+        // Membership rather than the group: a group the caller is not in has no membership
+        // row for them, and answers the same way a missing one does.
+        var membership = await context.Set<GroupMembership>()
+            .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == user.Id, cancellationToken);
+
+        if (membership is null)
+            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        if (membership.ArchivedAt.HasValue != archivedAt.HasValue)
+        {
+            membership.ArchivedAt = archivedAt;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        return groupQuery;
     }
 }

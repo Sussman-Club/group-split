@@ -6,14 +6,14 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     /// <inheritdoc />
-    public partial class AddGroupArchivedAt : Migration
+    public partial class AddGroupMembershipArchivedAt : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "ArchivedAt",
-                table: "Group",
+                table: "GroupUser",
                 type: "timestamp with time zone",
                 nullable: true);
         }
@@ -23,7 +23,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "ArchivedAt",
-                table: "Group");
+                table: "GroupUser");
         }
     }
 }

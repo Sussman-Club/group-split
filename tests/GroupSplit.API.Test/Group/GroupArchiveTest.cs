@@ -1,4 +1,3 @@
-using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
@@ -10,35 +9,127 @@ using Microsoft.Extensions.DependencyInjection;
 namespace GroupSplit.API.Test.Group;
 
 /// <summary>
-/// Archiving is how a group is put down without being lost: the trip is over, nobody
-/// should be adding to it, but the balances and the history are still worth reading and
-/// someone may want it back. So every write refuses and every read carries on, and these
-/// go through each write in turn -- a guard that covers eight paths and misses the ninth
-/// is worse than none, because the ninth is the one nobody thinks to check.
+/// Archiving a group is like archiving a note: it moves out of your list and nothing else
+/// happens. The group is not closed, the other members are not told, and every write it
+/// would have taken it still takes -- from you as much as from anyone. These are mostly
+/// about what archiving does <em>not</em> do, because that is the part easy to get wrong.
 /// </summary>
 public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     private IGroupService Groups => GetService<IGroupService>();
-    private IRuleService Rules => GetService<IRuleService>();
-    private ITransactionService Transactions => GetService<ITransactionService>();
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    /// <summary>A group with a rule anyone can record against, and one expense already in it.</summary>
-    private async Task<(Guid GroupId, Guid RuleId, Guid RuleVersionId, Guid TransactionId)> AGroup(
-        string name = "Lisbon")
+    private Task<Data.Entities.Group> AGroup(string name = "Lisbon") =>
+        Groups.CreateGroup(new CreateGroupRequest { Name = name }, Ct).AsTask();
+
+    private async Task<bool> IsArchivedFor(Guid groupId, Guid userId) =>
+        await DbContext.Set<Data.Entities.GroupMembership>()
+            .Where(membership => membership.GroupId == groupId && membership.UserId == userId)
+            .Select(membership => membership.ArchivedAt != null)
+            .FirstAsync(Ct);
+
+    [Fact]
+    public async Task Archiving_marks_it_for_the_person_who_archived_it()
     {
+        var group = await AGroup();
         var me = GetService<ICurrentUser>().User;
 
-        var group = await Groups.CreateGroup(new CreateGroupRequest { Name = name }, Ct);
+        await Groups.Archive(group.Id, Ct);
 
-        var version = await Rules.Create(new CreateRuleRequest
+        Assert.True(await IsArchivedFor(group.Id, me.Id));
+    }
+
+    [Fact]
+    public async Task Unarchiving_brings_it_back()
+    {
+        var group = await AGroup();
+        var me = GetService<ICurrentUser>().User;
+
+        await Groups.Archive(group.Id, Ct);
+        await Groups.Unarchive(group.Id, Ct);
+
+        Assert.False(await IsArchivedFor(group.Id, me.Id));
+    }
+
+    [Fact]
+    public async Task Archiving_twice_is_not_an_error_and_does_not_move_the_moment()
+    {
+        var group = await AGroup();
+        var me = GetService<ICurrentUser>().User;
+
+        await Groups.Archive(group.Id, Ct);
+
+        var first = await DbContext.Set<Data.Entities.GroupMembership>()
+            .Where(m => m.GroupId == group.Id && m.UserId == me.Id)
+            .Select(m => m.ArchivedAt)
+            .FirstAsync(Ct);
+
+        await Groups.Archive(group.Id, Ct);
+
+        var second = await DbContext.Set<Data.Entities.GroupMembership>()
+            .Where(m => m.GroupId == group.Id && m.UserId == me.Id)
+            .Select(m => m.ArchivedAt)
+            .FirstAsync(Ct);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public async Task Unarchiving_one_that_was_never_archived_is_not_an_error()
+    {
+        var group = await AGroup();
+        var me = GetService<ICurrentUser>().User;
+
+        await Groups.Unarchive(group.Id, Ct);
+
+        Assert.False(await IsArchivedFor(group.Id, me.Id));
+    }
+
+    /// <summary>
+    /// The whole point of putting the flag on the membership: one member tidying their own
+    /// list must not tidy anybody else's.
+    /// </summary>
+    [Fact]
+    public async Task Archiving_is_mine_alone_and_the_other_members_never_see_it()
+    {
+        var group = await AGroup();
+        var me = GetService<ICurrentUser>().User;
+
+        var other = await CreateNewUser();
+        await Groups.AddGroupMembers(group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
+
+        await Groups.Archive(group.Id, Ct);
+
+        Assert.True(await IsArchivedFor(group.Id, me.Id));
+        Assert.False(await IsArchivedFor(group.Id, other.Id));
+    }
+
+    /// <summary>
+    /// An archived group is hidden, not closed. Every write it took before, it still takes
+    /// -- including from the person who archived it, who may well open it to add the
+    /// expense that made them want it back.
+    /// </summary>
+    [Fact]
+    public async Task An_archived_group_still_takes_every_write_it_took_before()
+    {
+        var group = await AGroup();
+        var me = GetService<ICurrentUser>().User;
+
+        await Groups.Archive(group.Id, Ct);
+
+        // Renamed.
+        await Groups.UpdateGroup(group.Id, new CreateGroupRequest { Name = "Lisbon 2026" }, Ct);
+
+        // A rule added, and an expense recorded against it.
+        var version = await GetService<IRuleService>().Create(new CreateRuleRequest
         {
             GroupId = group.Id,
             Category = "Lodging",
             Version = new PercentRuleVersionDto { Percentages = new() { [me.Id] = 100m } }
         }, Ct);
 
-        var transaction = await Transactions.Create(new CreateTransactionRequest
+        var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
             Name = "Hotel",
             Amount = 100m,
@@ -47,73 +138,30 @@ public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             RuleVersionId = version.Id
         }, Ct);
 
-        return (group.Id, version.Rule.Id, version.Id, transaction.Id);
-    }
+        // A member added, and one removed.
+        var other = await CreateNewUser();
+        await Groups.AddGroupMembers(group.Id,
+            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
+        await Groups.RemoveGroupMember(group.Id, other.Id, Ct);
 
-    private static async Task<ConflictException> Refuses(Func<Task> write)
-    {
-        var failure = await Assert.ThrowsAsync<ConflictException>(write);
+        Assert.Equal("Lisbon 2026",
+            (await (await Groups.GetGroupById(group.Id, Ct)).FirstAsync(Ct)).Name);
+        Assert.NotEqual(Guid.Empty, expense.Id);
 
-        Assert.Equal(ErrorCodes.GroupArchived, failure.Code);
-
-        return failure;
-    }
-
-    // ---- the switch itself ------------------------------------------------------------------
-
-    [Fact]
-    public async Task Archiving_a_group_marks_it_and_shows_on_the_group()
-    {
-        var (groupId, _, _, _) = await AGroup();
-
-        await Groups.Archive(groupId, Ct);
-
-        var group = await (await Groups.GetGroupById(groupId, Ct)).FirstAsync(Ct);
-
-        Assert.True(group.IsArchived);
-        Assert.NotNull(group.ArchivedAt);
-    }
-
-    /// <summary>
-    /// Two members reaching for the same switch: the second one's tap should not become an
-    /// error about the first one's.
-    /// </summary>
-    [Fact]
-    public async Task Archiving_a_group_that_is_already_archived_changes_nothing()
-    {
-        var (groupId, _, _, _) = await AGroup();
-
-        await Groups.Archive(groupId, Ct);
-        var first = await (await Groups.GetGroupById(groupId, Ct)).Select(g => g.ArchivedAt).FirstAsync(Ct);
-
-        await Groups.Archive(groupId, Ct);
-        var second = await (await Groups.GetGroupById(groupId, Ct)).Select(g => g.ArchivedAt).FirstAsync(Ct);
-
-        Assert.Equal(first, second);
+        // And it is still archived through all of that.
+        Assert.True(await IsArchivedFor(group.Id, me.Id));
     }
 
     [Fact]
-    public async Task Unarchiving_puts_it_back()
+    public async Task An_archived_group_is_still_one_of_your_groups()
     {
-        var (groupId, _, _, _) = await AGroup();
+        var group = await AGroup();
 
-        await Groups.Archive(groupId, Ct);
-        await Groups.Unarchive(groupId, Ct);
+        await Groups.Archive(group.Id, Ct);
 
-        var group = await (await Groups.GetGroupById(groupId, Ct)).FirstAsync(Ct);
+        var mine = await (await Groups.GetAllGroups(Ct)).ToListAsync(Ct);
 
-        Assert.False(group.IsArchived);
-        Assert.Null(group.ArchivedAt);
-    }
-
-    [Fact]
-    public async Task Unarchiving_one_that_was_never_archived_is_not_an_error()
-    {
-        var (groupId, _, _, _) = await AGroup();
-
-        await Groups.Unarchive(groupId, Ct);
-
-        Assert.False((await (await Groups.GetGroupById(groupId, Ct)).FirstAsync(Ct)).IsArchived);
+        Assert.Contains(mine, g => g.Id == group.Id);
     }
 
     [Fact]
@@ -132,250 +180,5 @@ public class GroupArchiveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var failure = await Assert.ThrowsAsync<NotFoundException>(() => Groups.Archive(theirGroup, Ct));
 
         Assert.Equal(ErrorCodes.GroupNotFound, failure.Code);
-    }
-
-    // ---- every write in turn ----------------------------------------------------------------
-
-    [Fact]
-    public async Task An_archived_group_cannot_be_renamed()
-    {
-        var (groupId, _, _, _) = await AGroup();
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Groups.UpdateGroup(groupId, new CreateGroupRequest { Name = "New name" }, Ct).AsTask());
-    }
-
-    [Fact]
-    public async Task An_archived_group_cannot_take_a_new_member()
-    {
-        var (groupId, _, _, _) = await AGroup();
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Groups.AddGroupMembers(groupId,
-            new AddMemberRequest([new UserIdentifier { Email = "someone@test.com" }]), Ct));
-    }
-
-    /// <summary>
-    /// The member here has no balance, so an unarchived group would let them go. Archived
-    /// is the reason they cannot, and it is the reason they hear.
-    /// </summary>
-    [Fact]
-    public async Task An_archived_group_cannot_lose_a_member()
-    {
-        var (groupId, _, _, _) = await AGroup();
-
-        var other = await CreateNewUser();
-        await Groups.AddGroupMembers(groupId,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
-
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Groups.RemoveGroupMember(groupId, other.Id, Ct));
-    }
-
-    [Fact]
-    public async Task An_archived_group_cannot_be_settled_up_in()
-    {
-        var (groupId, _, _, _) = await AGroup();
-
-        var other = await CreateNewUser();
-        await Groups.AddGroupMembers(groupId,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
-
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Groups.Settle(groupId, new SettleRequest { UserId = other.Id, Amount = 10m }, Ct));
-    }
-
-    [Fact]
-    public async Task An_archived_group_cannot_gain_a_rule()
-    {
-        var (groupId, _, _, _) = await AGroup();
-        var me = GetService<ICurrentUser>().User;
-
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Rules.Create(new CreateRuleRequest
-        {
-            GroupId = groupId,
-            Category = "Food",
-            Version = new PercentRuleVersionDto { Percentages = new() { [me.Id] = 100m } }
-        }, Ct));
-    }
-
-    [Fact]
-    public async Task A_rule_in_an_archived_group_cannot_be_changed()
-    {
-        var (groupId, ruleId, _, _) = await AGroup();
-        var me = GetService<ICurrentUser>().User;
-
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Rules.Update(ruleId, new UpdateRuleRequest
-        {
-            Category = "Somewhere else",
-            Version = new PercentRuleVersionDto { Percentages = new() { [me.Id] = 100m } }
-        }, Ct));
-    }
-
-    [Fact]
-    public async Task A_rule_in_an_archived_group_cannot_be_deleted()
-    {
-        var (groupId, ruleId, _, _) = await AGroup();
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Rules.Delete(ruleId, Ct));
-    }
-
-    [Fact]
-    public async Task An_archived_group_cannot_take_a_new_expense()
-    {
-        var (groupId, _, ruleVersionId, _) = await AGroup();
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Transactions.Create(new CreateTransactionRequest
-        {
-            Name = "Dinner",
-            Amount = 40m,
-            DateTime = DateTimeOffset.UtcNow,
-            GroupId = groupId,
-            RuleVersionId = ruleVersionId
-        }, Ct).AsTask());
-    }
-
-    [Fact]
-    public async Task An_expense_in_an_archived_group_cannot_be_edited()
-    {
-        var (groupId, _, ruleVersionId, transactionId) = await AGroup();
-        var me = GetService<ICurrentUser>().User;
-
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Transactions.Update(transactionId, new UpdateTransactionRequest
-        {
-            Name = "Hotel, corrected",
-            Amount = 120m,
-            DateTime = DateTimeOffset.UtcNow,
-            PaidByUserId = me.Id,
-            RuleVersionId = ruleVersionId
-        }, Ct).AsTask());
-    }
-
-    [Fact]
-    public async Task An_expense_in_an_archived_group_cannot_be_deleted()
-    {
-        var (groupId, _, _, transactionId) = await AGroup();
-        await Groups.Archive(groupId, Ct);
-
-        await Refuses(() => Transactions.Delete(transactionId, Ct));
-    }
-
-    /// <summary>
-    /// An edit can move an expense from one group to another. Neither end may be archived:
-    /// leaving one would rewrite its balances, joining one would write into a closed ledger.
-    /// </summary>
-    [Fact]
-    public async Task An_expense_cannot_be_moved_into_an_archived_group()
-    {
-        var live = await AGroup("Live");
-        var archived = await AGroup("Archived");
-
-        await Groups.Archive(archived.GroupId, Ct);
-
-        var me = GetService<ICurrentUser>().User;
-
-        await Refuses(() => Transactions.Update(live.TransactionId, new UpdateTransactionRequest
-        {
-            Name = "Hotel",
-            Amount = 100m,
-            DateTime = DateTimeOffset.UtcNow,
-            PaidByUserId = me.Id,
-            RuleVersionId = archived.RuleVersionId
-        }, Ct).AsTask());
-    }
-
-    [Fact]
-    public async Task An_expense_cannot_be_moved_out_of_an_archived_group()
-    {
-        var live = await AGroup("Live");
-        var archived = await AGroup("Archived");
-
-        await Groups.Archive(archived.GroupId, Ct);
-
-        var me = GetService<ICurrentUser>().User;
-
-        await Refuses(() => Transactions.Update(archived.TransactionId, new UpdateTransactionRequest
-        {
-            Name = "Hotel",
-            Amount = 100m,
-            DateTime = DateTimeOffset.UtcNow,
-            PaidByUserId = me.Id,
-            RuleVersionId = live.RuleVersionId
-        }, Ct).AsTask());
-    }
-
-    // ---- and everything that is not a write --------------------------------------------------
-
-    [Fact]
-    public async Task An_archived_group_still_reads()
-    {
-        var (groupId, ruleId, _, transactionId) = await AGroup();
-        await Groups.Archive(groupId, Ct);
-
-        Assert.NotNull(await (await Groups.GetGroupById(groupId, Ct)).FirstOrDefaultAsync(Ct));
-        Assert.Single(await (await Groups.GetGroupMembers(groupId, Ct)).ToListAsync(Ct));
-        Assert.NotNull(await Transactions.GetDetails(transactionId, Ct));
-        Assert.NotNull(await Rules.GetRuleDetails(ruleId, Ct));
-
-        var balances = await (await Groups.GetGroupNetBalance(groupId, Ct)).ToListAsync(Ct);
-        Assert.Single(balances);
-
-        var page = await (await Transactions.List(Ct))
-            .Where(t => t.RuleVersion.Rule.Group.Id == groupId)
-            .ToTransactionPageAsync(new TransactionFilter(), new SortRequest(), new PageRequest(), Ct);
-
-        Assert.Equal(1, page.TotalCount);
-    }
-
-    [Fact]
-    public async Task Unarchiving_lets_the_writes_through_again()
-    {
-        var (groupId, _, ruleVersionId, _) = await AGroup();
-
-        await Groups.Archive(groupId, Ct);
-        await Groups.Unarchive(groupId, Ct);
-
-        var created = await Transactions.Create(new CreateTransactionRequest
-        {
-            Name = "Dinner",
-            Amount = 40m,
-            DateTime = DateTimeOffset.UtcNow,
-            GroupId = groupId,
-            RuleVersionId = ruleVersionId
-        }, Ct);
-
-        Assert.NotEqual(Guid.Empty, created.Id);
-
-        await Groups.UpdateGroup(groupId, new CreateGroupRequest { Name = "Back again" }, Ct);
-    }
-
-    /// <summary>
-    /// Leaving is not a change to the group's ledger, and someone deleting their account
-    /// should not be held by a group nobody is using any more. Archiving does not block it.
-    /// </summary>
-    [Fact]
-    public async Task An_archived_group_does_not_hold_on_to_someone_deleting_their_account()
-    {
-        var (groupId, _, _, _) = await AGroup();
-
-        var other = await CreateNewUser();
-        await Groups.AddGroupMembers(groupId,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Ct);
-
-        await Groups.Archive(groupId, Ct);
-
-        var outstanding = await GetService<IAccountService>().DeleteAccount(other.Id, Ct);
-
-        Assert.Empty(outstanding);
     }
 }

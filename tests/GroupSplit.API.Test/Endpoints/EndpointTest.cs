@@ -101,6 +101,69 @@ public class EndpointTest : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>
+    /// The archive routes are a POST and a DELETE, so the sweep above -- which asks with a
+    /// GET -- cannot reach them.
+    /// </summary>
+    [Fact]
+    public async Task An_anonymous_request_to_archive_is_refused()
+    {
+        using var anonymous = _host.AnonymousClient();
+        var route = $"/groups/{Guid.NewGuid()}/archive";
+
+        var archive = await anonymous.PostAsync(route, content: null, TestContext.Current.CancellationToken);
+        var unarchive = await anonymous.DeleteAsync(route, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, archive.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unarchive.StatusCode);
+    }
+
+    [Fact]
+    public async Task Another_members_group_cannot_be_archived()
+    {
+        var groupId = await CreateGroup("Private");
+
+        using var stranger = _host.ClientForAnotherUser();
+
+        var archive = await stranger.PostAsync($"/groups/{groupId}/archive", content: null,
+            TestContext.Current.CancellationToken);
+        var unarchive = await stranger.DeleteAsync($"/groups/{groupId}/archive",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, archive.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, unarchive.StatusCode);
+    }
+
+    /// <summary>
+    /// Archiving is the caller's own view of the group, so it shows on what they read back
+    /// and on their listing -- and, in the service tests, on nobody else's.
+    /// </summary>
+    [Fact]
+    public async Task Archiving_a_group_shows_on_it_and_unarchiving_takes_it_back()
+    {
+        var groupId = await CreateGroup();
+
+        var archived = await Client.PostAsync($"/groups/{groupId}/archive", content: null,
+            TestContext.Current.CancellationToken);
+        archived.EnsureSuccessStatusCode();
+
+        var afterArchive = await archived.Content.ReadFromJsonAsync<GroupResponse>(
+            Json, TestContext.Current.CancellationToken);
+        Assert.True(afterArchive!.IsArchive);
+
+        var listed = await Client.GetFromJsonAsync<List<GroupResponse>>(
+            "/groups", Json, TestContext.Current.CancellationToken);
+        Assert.True(listed!.Single(g => g.Id == groupId).IsArchive);
+
+        var unarchived = await Client.DeleteAsync($"/groups/{groupId}/archive",
+            TestContext.Current.CancellationToken);
+        unarchived.EnsureSuccessStatusCode();
+
+        var afterUnarchive = await unarchived.Content.ReadFromJsonAsync<GroupResponse>(
+            Json, TestContext.Current.CancellationToken);
+        Assert.False(afterUnarchive!.IsArchive);
+    }
+
     [Fact]
     public async Task An_authenticated_caller_is_provisioned_on_first_sight()
     {
@@ -157,7 +220,8 @@ public class EndpointTest : IAsyncLifetime
         foreach (var route in new[]
                  {
                      $"/groups/{groupId}", $"/groups/{groupId}/members",
-                     $"/groups/{groupId}/rules", $"/groups/{groupId}/transactions"
+                     $"/groups/{groupId}/rules", $"/groups/{groupId}/transactions",
+                     $"/groups/{groupId}/transactions/summary"
                  })
         {
             var response = await stranger.GetAsync(route, TestContext.Current.CancellationToken);

@@ -25,8 +25,21 @@ public class AppDbContext : DbContext
             entity.Property(user => user.LastName).HasMaxLength(64);
             entity.Property(user => user.Email).HasMaxLength(128);
 
+            // The join carries a payload now -- who has archived which group -- so it is a
+            // type rather than one EF keeps to itself. Pinned to the table and column names
+            // EF had already chosen, so this is an added column and not a moved membership.
             entity.HasMany(user => user.Groups)
-                .WithMany(group => group.Users);
+                .WithMany(group => group.Users)
+                .UsingEntity<GroupMembership>(
+                    right => right.HasOne<Group>().WithMany().HasForeignKey(membership => membership.GroupId),
+                    left => left.HasOne<User>().WithMany().HasForeignKey(membership => membership.UserId),
+                    join =>
+                    {
+                        join.ToTable("GroupUser");
+                        join.Property(membership => membership.GroupId).HasColumnName("GroupsId");
+                        join.Property(membership => membership.UserId).HasColumnName("UsersId");
+                        join.HasKey(membership => new { membership.GroupId, membership.UserId });
+                    });
 
             entity.HasOne(user => user.PersonalGroup)
                 .WithOne()

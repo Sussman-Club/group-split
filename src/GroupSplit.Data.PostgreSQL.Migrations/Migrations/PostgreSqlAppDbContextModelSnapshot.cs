@@ -17,7 +17,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -38,6 +38,26 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("Group");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.GroupMembership", b =>
+                {
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("GroupsId");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("UsersId");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("GroupId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("GroupUser", (string)null);
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleUser", b =>
@@ -239,21 +259,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("UserIdentity");
                 });
 
-            modelBuilder.Entity("GroupUser", b =>
-                {
-                    b.Property<Guid>("GroupsId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UsersId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("GroupsId", "UsersId");
-
-                    b.HasIndex("UsersId");
-
-                    b.ToTable("GroupUser");
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleVersion", b =>
                 {
                     b.HasBaseType("GroupSplit.Data.Entities.RuleVersion");
@@ -285,6 +290,21 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasBaseType("GroupSplit.Data.Entities.PercentRuleVersion");
 
                     b.ToTable("SharesRuleVersion");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.GroupMembership", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Group", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleUser", b =>
@@ -386,21 +406,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("GroupUser", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.Group", null)
-                        .WithMany()
-                        .HasForeignKey("GroupsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GroupSplit.Data.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UsersId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.PercentRuleVersion", b =>
