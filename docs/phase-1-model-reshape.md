@@ -298,6 +298,11 @@ place, and it is the place that matters most:
 `PUT` would not have this problem, because a whole model always arrives. So the rule is
 explicit, and it is the reason this exclusion is not free:
 
+None of this bites yet: `Splits` is not on the update model, so an edit always recomputes
+them from the rule, and there is nothing a patch can half-change. It starts mattering the
+moment a per-expense split is editable, which is what Phase 2's expense dialog is for.
+The shape it takes then:
+
 - The update model is `UpdateExpenseRequest`, carrying an optional
   `IReadOnlyList<SplitInput>? Splits`.
 - After the patch is applied and validated, the service recomputes splits **unless the
@@ -335,10 +340,45 @@ rule to record against", a state that only the current model can be in. In the n
 expense needs a group, an amount and a payer; a category is optional and a missing one
 means an even split. The failure disappears with the thing that caused it.
 
+## What the build changed about this plan
+
+Three things came out differently once the code was written, and this section is the
+record rather than a revision -- the plan above still reads as it was decided.
+
+**`SplitCalculator` lives in `GroupSplit.Data`, not the API.** The seeder needs the same
+division. Seed data divided even slightly differently from the way the app divides gives
+every developer a set of balances that no sequence of user actions could have produced,
+which is a worse bug than the duplication was.
+
+**`Expense` keeps its `RuleVersion` for now.** Steps 3 and 4 moved the *storage* -- splits
+are rows, balances are sums -- while the wire contract still speaks in
+`RuleVersionId`, so the client and its tests never had to change in the same commit as
+the balance query. `Category` takes over in step 5, and the column goes with the rest of
+the old model in step 6. The nullability falls out of putting it on the leaf: a transfer
+never had one.
+
+**The migration corrects one thing rather than preserving it.** Balance preservation was
+the stated criterion, and it holds everywhere the payer is a participant. Where they are
+not -- somebody paying for a split they are no part of -- the old query truncated each
+participant's share and left the remaining cents belonging to nobody, so the group's
+balances did not sum to zero. Preserving that faithfully would mean writing splits that
+do not sum to their amount, breaking the one invariant everything else rests on. The
+migration assigns those cents the way the application now does. The better test came out
+of noticing it: **every group's balances sum to zero** is a stronger statement than
+"unchanged", and it is the one the suite asserts.
+
+The migration was run against PostgreSQL 16 rather than reasoned about: seeded with
+thirds that do not divide, an amount that truncates on every participant, a personal
+expense and a settlement pair, then compared member by member. Every balance came out
+identical to the cent, five rows became four, and no transaction's splits failed to sum.
+
 ## Order of work
 
 Each step builds and keeps the suite green. Test counts are the floor, not the target;
 the coverage gate in CI is a ratchet and does not move down.
+
+Steps 1 to 4 are done, in three commits -- the arithmetic, then the new tables, then the
+cut-over. Steps 5 to 7 are not.
 
 1. **Entities and mapping, no behaviour.** New types, `AppDbContext` configuration,
    `SplitCalculator` and its unit tests. Nothing reads them yet. The old model still
