@@ -17,8 +17,17 @@ public interface IInboxStateService
     /// <summary>The linked banks, and whether linking one is possible at all here.</summary>
     BankConnectionsResponse? Connections { get; }
 
-    /// <summary>Completes once the first read has finished, so a page can await it before rendering.</summary>
-    Task IsReadyTask { get; }
+    /// <summary>
+    /// Reads what this holds, once, and completes when that first read is done. Calling it
+    /// again is free.
+    /// </summary>
+    /// <remarks>
+    /// Explicit rather than something the constructor starts, because the nav renders for
+    /// signed-out visitors too and a read on their behalf answers 401 -- which the error
+    /// presenter quite correctly turns into a trip to the sign-in page. Nothing is fetched
+    /// until a caller that knows somebody is signed in asks for it.
+    /// </remarks>
+    Task EnsureLoadedAsync(CancellationToken ct = default);
 
     event Action? OnChanged;
 
@@ -54,6 +63,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     private readonly LoadGuard _guard;
     private readonly DataChangeNotifier _changes;
 
+    private readonly Lock _lock = new();
+
+    private Task? _loaded;
     private bool _rowsWanted;
 
     public InboxStateService(
@@ -72,8 +84,6 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         // An expense deleted elsewhere frees the row it was filed from, so the inbox can
         // disagree with the ledger without this.
         _changes.TransactionsChanged += RefreshAsync;
-
-        IsReadyTask = Task.Run(() => RefreshAsync());
     }
 
     public IReadOnlyList<BankTransactionResponse> Rows { get; private set; } = [];
@@ -84,9 +94,18 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     public BankConnectionsResponse? Connections { get; private set; }
 
-    public Task IsReadyTask { get; }
-
     public event Action? OnChanged;
+
+    /// <inheritdoc />
+    public Task EnsureLoadedAsync(CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            // Two readers -- the sidebar's nav and the mobile tab bar's -- render at once,
+            // so the first read is started once and both await the same task.
+            return _loaded ??= RefreshAsync(ct);
+        }
+    }
 
     public async Task SetFilterAsync(InboxStatus status, CancellationToken ct = default)
     {
@@ -103,6 +122,10 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public Task LoadRowsAsync(CancellationToken ct = default)
     {
         _rowsWanted = true;
+
+        lock (_lock)
+            _loaded ??= Task.CompletedTask;
+
         return RefreshAsync(ct);
     }
 

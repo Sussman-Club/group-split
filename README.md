@@ -10,6 +10,7 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 - Split costs by category default, or state the shares on one expense
 - Calculate per-member balances, and settle up from either side
 - See where you stand across every group at once
+- Link a bank and review what it sends before any of it becomes an expense
 - Support web and mobile clients backed by a single API
 
 ## Project structure
@@ -184,6 +185,28 @@ that is not there yet -- it skips one the database already holds. A realm create
 these settings existed therefore will not pick them up. Either reset the Keycloak database
 so the realm is imported afresh, or set the values once by hand under Realm settings ->
 Email in the admin console, which also has a "Test connection" button worth using.
+
+## Bank sync
+
+People can link a bank and have its transactions arrive in an inbox, where each one is
+added to a group, kept personal, or ignored. Nothing imported becomes an expense on its
+own: an imported row is staging data until somebody files it, and filing copies the bank's
+figures into an ordinary expense and links the two.
+
+The provider sits behind `IBankConnector`, and `PlaidConnector` is the only class that
+speaks Plaid. Bank sync is available exactly when a connector is registered, which happens
+when the deployment has credentials -- so an app with none starts as usual and says bank
+sync is off rather than offering a button that cannot work.
+
+Locally, Plaid's sandbox needs no approval and opens any institution with `user_good` /
+`pass_good`; the credentials go in the AppHost's user secrets. Webhooks are the one part
+that cannot work on a laptop, because Plaid has to reach the app from outside, so a sync
+runs when the app asks for one and a daily sweep catches the rest.
+
+How it is put together, and what was deliberately left out, is in
+[docs/phase-3-plaid-integration.md](docs/phase-3-plaid-integration.md); the deployment
+parameters are in
+[docs/development-and-deployment.md](docs/development-and-deployment.md).
 
 ## Test
 

@@ -60,7 +60,16 @@
         Inbox.OnChanged += OnInboxChanged;
     }
 
-    protected override void OnParametersSet() => Resolve();
+    protected override async Task OnParametersSetAsync()
+    {
+        Resolve();
+
+        // Only once somebody is signed in. Reading the inbox on behalf of a visitor who is
+        // not would answer 401, which the error presenter quite correctly turns into a trip
+        // to the sign-in page -- from the nav, on every page.
+        if (UserInfo is not null)
+            await Inbox.EnsureLoadedAsync();
+    }
 
     private void OnInboxChanged() => InvokeAsync(StateHasChanged);
 

@@ -3,6 +3,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking;
 using GroupSplit.Data;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.AspNetCore.DataProtection;
@@ -53,6 +54,9 @@ builder.Services.AddDomainServices();
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AppDbContext>()
     .SetApplicationName("GroupSplit");
+
+// The two pieces of banking that read configuration, which only a real host has.
+builder.Services.AddOptions<BankingOptions>().BindConfiguration(BankingOptions.SectionName);
 
 // Only when this deployment has Plaid credentials. Without them the API starts as usual and
 // the bank features say bank sync is off, which is the honest answer.

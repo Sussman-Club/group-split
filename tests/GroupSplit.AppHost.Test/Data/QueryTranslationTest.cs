@@ -1,6 +1,7 @@
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking;
 using GroupSplit.AppHost.Test.Base;
 using Aspire.Hosting.Testing;
 using GroupSplit.Data;
@@ -127,6 +128,60 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
             .ApplyFilter(new TransactionFilter())
             .ApplySort(new SortRequest(), TransactionApi.Sort)
             .ToPageAsync(new PageRequest(), Ct);
+    }
+
+    /// <summary>
+    /// The inbox listing, through the endpoint's own sort and projection. It is the only
+    /// read in the app that orders by a <c>DateOnly</c>, projects an enum through a nested
+    /// conditional, and reaches two navigations deep for the account and its institution --
+    /// each of which the in-memory provider would happily evaluate on the client.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_inbox_listing_translates()
+    {
+        var rows = await Service<IInboxService>().List(new InboxFilter(), Ct);
+
+        await rows
+            .ApplySort(new SortRequest(), InboxApi.Sort)
+            .SelectDto()
+            .ToPageAsync(new PageRequest(), Ct);
+    }
+
+    /// <summary>
+    /// Every key the inbox offers, in both directions. A key that does not translate is a
+    /// 500 the moment somebody clicks that column, and nothing else would catch it.
+    /// </summary>
+    [Theory(Timeout = 120_000)]
+    [InlineData("date")]
+    [InlineData("amount")]
+    [InlineData("merchant")]
+    public async Task Every_inbox_sort_key_translates(string key)
+    {
+        var rows = await Service<IInboxService>().List(new InboxFilter(), Ct);
+
+        foreach (var descending in new[] { true, false })
+        {
+            await rows
+                .ApplySort(new SortRequest(key, descending), InboxApi.Sort)
+                .SelectDto()
+                .ToPageAsync(new PageRequest(), Ct);
+        }
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task The_inbox_summary_translates()
+    {
+        await Service<IInboxService>().Summary(Ct);
+    }
+
+    /// <summary>
+    /// The linked banks, which the account page and the inbox both read. Nothing is linked
+    /// in the seed data, so this is purely about the query holding together.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_linked_banks_translate()
+    {
+        await Service<IBankConnectionService>().Mine(Ct);
     }
 
     [Fact(Timeout = 120_000)]

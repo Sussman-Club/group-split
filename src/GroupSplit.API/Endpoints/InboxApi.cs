@@ -17,7 +17,7 @@ public static class InboxApi
     /// <summary>
     /// Newest first, because an inbox is read from the top and the top is what just arrived.
     /// </summary>
-    private static readonly SortMap<BankTransaction> Sorting = new SortMap<BankTransaction>()
+    internal static readonly SortMap<BankTransaction> Sort = new SortMap<BankTransaction>()
         .Key("date", row => row.Date, defaultDescending: true)
         .Key("amount", row => row.Amount, defaultDescending: true)
         .Key("merchant", row => row.MerchantName)
@@ -58,7 +58,7 @@ public static class InboxApi
                     var rows = await inbox.List(filter, ct);
 
                     return Results.Ok(await rows
-                        .ApplySort(sort, Sorting)
+                        .ApplySort(sort, Sort)
                         .SelectDto()
                         .ToPageAsync(page, ct));
                 })

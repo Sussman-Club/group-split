@@ -107,7 +107,7 @@ public class InboxStateRefreshTest
     [Fact]
     public async Task The_badge_counts_what_is_waiting_before_any_page_asks_for_the_rows()
     {
-        await _state.IsReadyTask;
+        await _state.EnsureLoadedAsync(Ct);
 
         Assert.Equal(2, _state.NewCount);
 
@@ -118,7 +118,7 @@ public class InboxStateRefreshTest
     [Fact]
     public async Task Ignoring_a_row_drops_the_badge_and_the_row_without_a_reload()
     {
-        await _state.IsReadyTask;
+        await _state.EnsureLoadedAsync(Ct);
         await _state.LoadRowsAsync(Ct);
 
         var row = _state.Rows.Single(candidate => candidate.Title == "Blue Bottle");
@@ -135,7 +135,7 @@ public class InboxStateRefreshTest
     [Fact]
     public async Task Filing_a_row_tells_the_expenses_pages_as_well_as_the_inbox()
     {
-        await _state.IsReadyTask;
+        await _state.EnsureLoadedAsync(Ct);
         await _state.LoadRowsAsync(Ct);
 
         var row = _state.Rows.Single(candidate => candidate.Title == "Lidl");
@@ -154,7 +154,7 @@ public class InboxStateRefreshTest
     [Fact]
     public async Task A_restored_row_comes_back_to_what_is_waiting()
     {
-        await _state.IsReadyTask;
+        await _state.EnsureLoadedAsync(Ct);
         await _state.LoadRowsAsync(Ct);
 
         var row = _state.Rows.Single(candidate => candidate.Title == "Lidl");
@@ -171,7 +171,7 @@ public class InboxStateRefreshTest
     [Fact]
     public async Task Switching_the_filter_shows_what_that_filter_holds()
     {
-        await _state.IsReadyTask;
+        await _state.EnsureLoadedAsync(Ct);
         await _state.LoadRowsAsync(Ct);
 
         var row = _state.Rows.Single(candidate => candidate.Title == "Lidl");

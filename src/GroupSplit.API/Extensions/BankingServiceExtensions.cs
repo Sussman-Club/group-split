@@ -39,7 +39,13 @@ public static class BankingServiceExtensions
         public IServiceCollection AddBankingServices()
         {
             services.AddLogging();
-            services.AddOptions<BankingOptions>().BindConfiguration(BankingOptions.SectionName);
+
+            // Defaults only. Binding it to configuration is the host's business, because
+            // this list is also used by hosts that have no configuration at all, and a
+            // registration that quietly needs one fails when the first thing to read it is
+            // constructed rather than when it is registered.
+            services.AddOptions<BankingOptions>();
+
             services.AddDataProtection();
             services.TryAddSingleton(TimeProvider.System);
 
