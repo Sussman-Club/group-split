@@ -1,20 +1,26 @@
 # Publishes the groupsplit CLI to GitHub Packages, so it can be installed and updated
 # without a checkout of this repo.
 #
-# Keyed to main, like the deploy: whatever is on main is what `dotnet tool update` gets.
-# There is no separate release step to remember, and no way for the published tool to
-# quietly lag behind what was merged.
+# Both branches publish, and the version says which is which:
+#
+#   main -> 0.0.4          a release. What `dotnet tool update` installs.
+#   dev  -> 0.0.5-dev.213  a prerelease of the next patch. Only --prerelease sees it.
+#
+# Keyed to a branch rather than a tag, like the deploy: whatever is on main is what the
+# installed tool gets, with no release step to remember and no way for it to quietly lag
+# behind what was merged.
 name: Release CLI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   # Lets a failed publish be retried without an empty commit.
   workflow_dispatch:
 
 concurrency:
-  # Never two publishes at once: they would race to claim the same version number.
-  group: release-cli
+  # Never two publishes of one branch at once: on main they would race to claim the same
+  # version number. The branches are independent, so they do not queue behind each other.
+  group: release-cli-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +30,9 @@ jobs:
     timeout-minutes: 15
 
     permissions:
-      # To push the version tag created below.
+      # To push the version tag a main publish creates. A dev publish creates none -- tags
+      # mark releases -- but permissions are per job, and one job with two paths reads
+      # better than two jobs sharing forty lines.
       contents: write
       # The automatic GITHUB_TOKEN can write packages under this repo's owner and nowhere
       # else, which is the scope wanted: no stored secret to mint or rotate. Same
@@ -32,8 +40,7 @@ jobs:
       packages: write
 
     steps:
-      # Full history and tags: the version is derived from them, twice over -- the step
-      # below reads the last release tag, and MinVer reads the one it writes.
+      # Full history and tags: both paths below derive the version from them.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -55,16 +62,14 @@ jobs:
       - name: Test
         run: dotnet test --project tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release
 
-      # Every push to main has to publish a version no previous push used, and it has to be
-      # a release version: a prerelease would force --prerelease onto every install and
-      # update, which defeats the point of publishing at all. MinVer reads git tags, so the
-      # tag is what this creates.
-      #
-      # A tag already on HEAD is reused rather than added to, which is what makes a re-run
-      # idempotent and lets a human cut a deliberate `cli-v0.1.0` by tagging it themselves --
-      # the next automatic version then follows from theirs.
+      # main claims the next patch and writes it as a cli-v tag, which MinVer then reads,
+      # so every released version points at the commit that produced it. A tag already on
+      # the commit is reused rather than added to, which makes a re-run idempotent and lets
+      # a human cut a deliberate `cli-v0.1.0` by tagging before the merge -- the next
+      # automatic version then follows from theirs.
       - name: Claim the next version
-        id: version
+        id: release
+        if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
 
@@ -72,7 +77,7 @@ jobs:
 
           if [[ -n "$existing" ]]; then
             echo "HEAD is already tagged $existing; reusing it."
-            echo "tag=$existing" >> "$GITHUB_OUTPUT"
+            echo "name=$existing" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -94,22 +99,66 @@ jobs:
           git tag -a "cli-v$next" -m "groupsplit $next"
           git push origin "cli-v$next"
 
-          echo "tag=cli-v$next" >> "$GITHUB_OUTPUT"
+          echo "name=cli-v$next" >> "$GITHUB_OUTPUT"
 
+      # dev publishes a prerelease of the patch main will release next, and tags nothing.
+      #
+      # The version is computed rather than left to MinVer because a release tag lives on
+      # main's merge commit, which is not an ancestor of dev: MinVer would never see it, and
+      # every dev build would claim 0.0.0-alpha while main sat at 0.0.5. Reading the tag
+      # list directly ignores reachability and keeps the two lines in step.
+      #
+      # Commit count supplies the increasing part. `0.0.5-dev.213` sorts below `0.0.5` and
+      # above `0.0.5-dev.212`, so dev builds order among themselves and never shadow a
+      # release.
+      - name: Compute the prerelease version
+        id: prerelease
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+
+          latest=$(git tag --list 'cli-v*' --sort=-v:refname | head -1)
+
+          if [[ -z "$latest" ]]; then
+            next="0.0.1"
+          else
+            version=${latest#cli-v}
+            IFS=. read -r major minor patch <<< "$version"
+            next="${major}.${minor}.$((patch + 1))"
+          fi
+
+          version="$next-dev.$(git rev-list --count HEAD)"
+
+          echo "Last release: ${latest:-none}. Publishing prerelease $version."
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+
+      # The override is empty on main, where MinVer reads the tag written above instead.
       - name: Pack
-        run: dotnet pack src/GroupSplit.Cli/GroupSplit.Cli.csproj -c Release -o artifacts/nupkg
+        run: |
+          dotnet pack src/GroupSplit.Cli/GroupSplit.Cli.csproj -c Release -o artifacts/nupkg \
+            -p:MinVerVersionOverride=${{ steps.prerelease.outputs.version }}
 
-      # Catches the case where MinVer did not see the tag -- a shallow checkout, a renamed
-      # prefix -- which would otherwise publish 0.0.0-alpha.0.N and look like it worked.
-      - name: Check the version is a release version
+      # Guards both mistakes, because each is silent. A main publish that lost its tag -- a
+      # shallow checkout, a renamed prefix -- would ship 0.0.0-alpha.0.N and look like it
+      # worked. A dev publish that produced a release version would shadow a real release
+      # and burn a number main can then never use.
+      - name: Check the version suits the branch
         run: |
           set -euo pipefail
           package=$(ls artifacts/nupkg/*.nupkg)
           version=$(basename "$package" .nupkg | sed 's/^GroupSplit\.Cli\.//')
           echo "Packed version: $version"
-          if [[ "$version" == *-* ]]; then
-            echo "::error::Tag ${{ steps.version.outputs.tag }} produced prerelease '$version'." \
+
+          if [[ "${{ github.ref }}" == "refs/heads/main" && "$version" == *-* ]]; then
+            echo "::error::main produced prerelease '$version'." \
                  "MinVer did not see the tag -- check fetch-depth and the cli-v prefix."
+            exit 1
+          fi
+
+          if [[ "${{ github.ref }}" != "refs/heads/main" && "$version" != *-* ]]; then
+            echo "::error::a non-main branch produced release version '$version'," \
+                 "which would shadow a real release."
             exit 1
           fi
 
@@ -117,8 +166,8 @@ jobs:
       # under this org, so they share one visibility setting: the package inherits this
       # repository's, which is what keeps it private.
       #
-      # --skip-duplicate so a re-run of an already-published version is a no-op rather
-      # than a red build.
+      # --skip-duplicate so a re-run of an already-published version is a no-op rather than
+      # a red build.
       - name: Publish to GitHub Packages
         run: |
           dotnet nuget push "artifacts/nupkg/*.nupkg" \
@@ -128,10 +177,16 @@ jobs:
 
       - name: Summary
         run: |
+          set -euo pipefail
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            name="${{ steps.release.outputs.name }}"
+            install="dotnet tool update --global GroupSplit.Cli"
+          else
+            name="${{ steps.prerelease.outputs.name }}"
+            install="dotnet tool update --global GroupSplit.Cli --prerelease"
+          fi
           {
-            echo "### groupsplit ${{ steps.version.outputs.tag }}"
+            echo "### groupsplit $name"
             echo
-            echo '```bash'
-            echo "dotnet tool update --global GroupSplit.Cli"
-            echo '```'
+            printf '```bash\n%s\n```\n' "$install"
           } >> "$GITHUB_STEP_SUMMARY"

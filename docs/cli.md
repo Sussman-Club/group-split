@@ -55,28 +55,53 @@ groupsplit --help
 
 ### How releases happen
 
-Nothing. Merging to `main` publishes the CLI, the same way it deploys the stack -- so the
-installed tool cannot quietly lag behind what was merged, and there is no release step anyone
-has to remember.
+Nothing to do. Merging publishes the CLI, the same way it deploys the stack, so the installed
+tool cannot quietly lag behind what was merged and there is no release step to remember.
 
-`.github/workflows/release-cli.yml` tests, claims the next version, packs and publishes.
+Both branches publish, and the version says which is which:
+
+| Merged to | Publishes | Who gets it |
+| --- | --- | --- |
+| `main` | `0.0.4` | everyone, on `dotnet tool update` |
+| `dev` | `0.0.5-dev.213` | only `--prerelease` |
+
+So `dev` is installable without being what anyone gets by accident:
+
+```bash
+dotnet tool update --global GroupSplit.Cli --prerelease
+```
+
+`.github/workflows/release-cli.yml` runs the tests, works out the version, packs and
+publishes.
 
 ### What the numbers do
 
-The first release is `0.0.1` and each push to `main` takes the next patch: `0.0.2`, `0.0.3`,
-and so on. The workflow claims one by creating a `cli-v*` tag, which is what MinVer then reads,
-so every published version points at the commit it was built from.
+The first release is `0.0.1` and each push to `main` takes the next patch. The workflow claims
+one by creating a `cli-v*` tag, which MinVer then reads, so every released version points at
+the commit that produced it.
 
-Two things follow from that, both deliberate:
+A `dev` build is a prerelease of the patch `main` will release next -- `0.0.5-dev.213` where
+213 is the commit count. It sorts below `0.0.5` and above `0.0.5-dev.212`, so dev builds order
+among themselves and can never shadow a release.
 
-- **A re-run does not consume a version.** A tag already on the commit is reused, so re-running
-  a failed publish packs the same version and the push is a no-op.
+That version is computed rather than left to MinVer for a reason worth knowing before changing
+it: a release tag lives on `main`'s merge commit, which is **not an ancestor of `dev`**. MinVer
+would never see it, and every dev build would claim `0.0.0-alpha` while main sat at `0.0.5`.
+Reading the tag list directly ignores reachability and keeps the two lines in step.
+
+Three more consequences, all deliberate:
+
+- **A re-run does not consume a version.** On `main` a tag already on the commit is reused, so
+  re-running a failed publish packs the same version and the push is a no-op.
 - **A deliberate bump is a manual tag.** Tag `cli-v0.1.0` yourself and push it before the
   merge; the workflow reuses it, and the next automatic version is `0.1.1`. That is the only
   reason to touch a tag by hand.
+- **The workflow refuses a version that does not suit its branch** -- a prerelease from `main`,
+  or a release version from `dev`. Both mistakes are otherwise silent, and the second would
+  burn a number `main` could then never use.
 
-Versions between tags -- what you get building locally -- are `0.0.<next>-alpha.0.<height>`,
-which is why the local install below needs `--prerelease` and the published one does not.
+Versions built locally are `0.0.<next>-alpha.0.<height>`, which is why the local install below
+needs `--prerelease` too.
 
 ### From the checkout instead
 
