@@ -1,0 +1,94 @@
+# Publishes the groupsplit CLI to GitHub Packages so it can be installed and updated
+# without a checkout of this repo.
+#
+# Triggered by a tag rather than by a push to a branch: the CLI's releases are deliberately
+# independent of the stack's deploys, which is what the `cli-v` tag prefix is for. MinVer
+# turns the tag into the package version, so `cli-v1.2.3` publishes 1.2.3 and nothing has
+# to be edited to cut a release.
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  # Lets a failed publish be retried without moving the tag.
+  workflow_dispatch:
+
+concurrency:
+  group: release-cli-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      # The automatic GITHUB_TOKEN can write packages under this repo's owner and nowhere
+      # else, which is the scope wanted: no stored secret to mint or rotate. Same
+      # arrangement the deploy workflow uses to push images to GHCR.
+      packages: write
+
+    steps:
+      # Full history: MinVer reads the nearest cli-v tag and the commit height since it.
+      # A shallow clone has neither and would publish 0.0.0-alpha.0.0.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # A published version cannot be replaced -- GitHub Packages refuses a re-push of the
+      # same version -- so the tests run before anything leaves the machine rather than
+      # after, where a failure would already be too late.
+      - name: Test
+        run: dotnet test --project tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release
+
+      - name: Pack
+        run: dotnet pack src/GroupSplit.Cli/GroupSplit.Cli.csproj -c Release -o artifacts/nupkg
+
+      # Refuses to publish a prerelease from a release tag, which is what an untagged or
+      # shallow checkout produces. Without this the failure is silent: a `cli-v1.2.3` tag
+      # quietly publishes 0.0.0-alpha.0.N and the tag appears to have worked.
+      - name: Check the tag produced a release version
+        run: |
+          set -euo pipefail
+          package=$(ls artifacts/nupkg/*.nupkg)
+          version=$(basename "$package" .nupkg | sed 's/^GroupSplit\.Cli\.//')
+          echo "Packed version: $version"
+          if [[ "$version" == *-* ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} produced prerelease '$version'." \
+                 "MinVer did not see the tag -- check fetch-depth and the cli-v prefix."
+            exit 1
+          fi
+
+      # NuGet and the container images published by deploy.yml are both GitHub Packages
+      # under this org, so they share one visibility setting: the package inherits this
+      # repository's, which is what keeps it private.
+      - name: Publish to GitHub Packages
+        run: |
+          dotnet nuget push "artifacts/nupkg/*.nupkg" \
+            --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      - name: Summary
+        run: |
+          {
+            echo "### groupsplit ${GITHUB_REF_NAME}"
+            echo
+            echo '```bash'
+            echo "dotnet tool update --global GroupSplit.Cli"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

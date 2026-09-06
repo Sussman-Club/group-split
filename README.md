@@ -73,10 +73,10 @@ URL is compiled in -- `groupsplit config set server <url>`, `--server` or `GROUP
 picks one at runtime. Sign-in is the OAuth 2.0 device flow, so it works over SSH and in
 containers; `GROUPSPLIT_TOKEN` skips it entirely for CI.
 
-It packages as a .NET tool -- `dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg`
-then `dotnet tool install --global --add-source ./artifacts/nupkg GroupSplit.Cli` -- though
-nothing publishes it to a feed yet, so `dotnet run --project src/GroupSplit.Cli --` works just
-as well while the commands are still moving.
+It installs as a .NET tool from GitHub Packages, private to the org, so it needs a
+`read:packages` token but no checkout: point NuGet at the feed once, then
+`dotnet tool install --global GroupSplit.Cli` and `dotnet tool update --global GroupSplit.Cli`.
+Releases are cut by pushing a `cli-v*` tag. Both are in [docs/cli.md](docs/cli.md).
 
 It renders tables for a person and JSON for anything else, keeps stdout to the result alone,
 and reports failures as an envelope carrying the API's own error `code`. `groupsplit schema`

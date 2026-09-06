@@ -22,84 +22,110 @@ a nicety for the second kind is load-bearing.
 
 ## Installing it
 
-The project is packable as a .NET tool -- `PackAsTool`, command name `groupsplit`. The
-package carries its whole dependency closure, so installing it needs nothing but the .NET
-runtime.
+The CLI is published to **GitHub Packages**, private to the org, so installing it needs a
+token and nothing else -- no checkout, no build, no branch to be on.
 
-**Nothing publishes it to a feed.** The repo has no NuGet feed, and choosing one is a
-decision packaging does not have to pre-empt: `dotnet pack` into a folder is already a source
-you can install from.
+### One-time: point NuGet at the feed
 
-### From the checkout
+You need a GitHub personal access token (classic) with the **`read:packages`** scope, and
+membership of the org.
+
+```bash
+dotnet nuget add source https://nuget.pkg.github.com/Sussman-Club/index.json \
+  --name github-sussman \
+  --username <your-github-username> \
+  --password <token> \
+  --store-password-in-clear-text
+```
+
+`--store-password-in-clear-text` is required on Linux and macOS, which have no NuGet
+encryption provider. It does what it says: the token lands in plain text in
+`~/.nuget/NuGet/NuGet.Config`. Give it `read:packages` and nothing more, and expect to
+replace it when it expires.
+
+### Then
+
+```bash
+dotnet tool install --global GroupSplit.Cli
+groupsplit --help
+```
+
+`~/.dotnet/tools` has to be on `PATH`; the installer says so if it is not. Removing it is
+`dotnet tool uninstall --global GroupSplit.Cli`.
+
+### Publishing a release
+
+Tag and push. Nothing else -- MinVer turns the tag into the package version, and
+`.github/workflows/release-cli.yml` tests, packs and publishes.
+
+```bash
+git tag cli-v0.1.0
+git push origin cli-v0.1.0
+```
+
+The tag prefix keeps the CLI's releases independent of any tag the apps want. The workflow
+refuses to publish a prerelease from a release tag, so a mistake that would quietly ship
+`0.0.0-alpha.0.N` fails loudly instead. A published version cannot be replaced -- GitHub
+Packages rejects a re-push -- so a bad release is superseded by a new tag, never overwritten.
+
+### From the checkout instead
+
+Still works, and is the better option while you are changing the CLI itself, since it skips
+the tag-and-publish round trip:
 
 ```bash
 dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg
 dotnet tool install --global --add-source ./artifacts/nupkg --prerelease GroupSplit.Cli
 ```
 
-`--prerelease` is needed until there is a release tag: an untagged build is versioned
-`0.0.0-alpha.0.<commits>`, which is a prerelease, and the installer skips those by default.
-
-`~/.dotnet/tools` has to be on `PATH`; the installer says so if it is not. Then:
-
-```bash
-groupsplit --help
-```
-
-Removing it is `dotnet tool uninstall --global GroupSplit.Cli`.
+`--prerelease` is needed here because an untagged build is versioned
+`0.0.0-alpha.0.<commits>`, and the installer skips prereleases by default.
 
 ## Keeping it updated
 
 ```bash
-git pull
-dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg
-dotnet tool update --global --add-source ./artifacts/nupkg --prerelease GroupSplit.Cli
+dotnet tool update --global GroupSplit.Cli
 ```
 
-`groupsplit --version` prints the version and the commit it was built from, which is the
-quickest way to tell an installed tool from the checkout it came from.
+That is the whole thing once the feed is configured. `groupsplit --version` prints the
+version and the commit it was built from.
 
 ### Why the version is not written by hand
 
 `dotnet tool update` compares versions and does nothing when they match. A hand-written
-`<Version>` is the same on every build, so repacking after a change and running update would
-report success and leave the **old binary installed** -- a stale tool that gives no sign of
+`<Version>` is the same on every build, so publishing a change without bumping it would leave
+the **old binary installed** while reporting success -- a stale tool that gives no sign of
 being stale.
 
 MinVer versions the package from git instead: `0.0.0-alpha.0.<commit height>` between tags, so
-every commit produces a higher version and an update always takes. Tag `cli-v1.2.3` and the
-same build produces a clean `1.2.3`, no longer a prerelease. The prefix keeps CLI releases
-independent of any tag the apps might want.
-
-CI checks out with `fetch-depth: 0` for the same reason -- MinVer needs the tags and the
+every commit is a higher version, and a clean `1.2.3` from a `cli-v1.2.3` tag. Both CI and the
+release workflow check out with `fetch-depth: 0`, because MinVer needs the tags and the
 history to compute that.
 
 ### Without installing
 
-Nothing has to be installed to use it, and this is the right choice while the command surface
-is still moving:
+Nothing has to be installed to run it:
 
 ```bash
 dotnet run --project src/GroupSplit.Cli -- groups list
 ```
 
-### When it should be installable from elsewhere
+### Why it is not a local tool
 
-Two feeds are plausible, and neither is wired up:
+`dotnet-tools.json`, alongside `nswag` and `dotnet-ef`, looks like the natural home -- one
+pinned version everyone shares. It is deliberately not there.
 
-| | Trade |
-| --- | --- |
-| **GitHub Packages** | Private to the org, but every contributor needs a PAT in a `nuget.config` before `dotnet tool restore` works -- new friction on a repo that currently needs only `git clone`. |
-| **nuget.org** | No auth friction, but it puts an internal admin CLI on the public index under a name that has to be claimed. |
+The manifest records a package id and a version but never where to get them, so
+`dotnet tool restore` resolves against whatever sources the machine has configured. Adding
+this package would make that restore **fail for every contributor without a `read:packages`
+token**, including those who never touch the CLI, turning a working `git clone` into one that
+needs credentials first. A global tool keeps that cost on the people who want the tool.
 
-A **local tool** in the repo's `dotnet-tools.json`, alongside `nswag` and `dotnet-ef`, is the
-natural home for a team -- one pinned version everyone shares. It needs a feed first: the
-manifest records only the package id and version, never where to get it, so `dotnet tool
-restore` on a fresh clone would fail without a `nuget.config` naming the source.
+### Standalone binaries
 
-For standalone binaries instead of a tool package, `dotnet publish -r <rid>` works today.
-Native AOT does not yet -- the generated client binds through reflection-based
-System.Text.Json and would need a `JsonSerializerContext` first.
+`dotnet publish -r <rid>` works today if a tool package is the wrong shape. Native AOT does
+not -- the generated client binds through reflection-based System.Text.Json and would need a
+`JsonSerializerContext` first.
 
 ## Pointing it at a server
 
