@@ -33,6 +33,7 @@ public static class DomainServiceExtensions
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<ISplitRuleService, SplitRuleService>();
             services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+            services.AddBankingServices();
 
             return services;
         }
