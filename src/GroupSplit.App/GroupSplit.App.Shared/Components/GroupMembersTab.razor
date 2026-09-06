@@ -152,7 +152,7 @@
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove member", parameters, options);
 
-        if (await dialog.GetReturnValueAsync<bool>())
+        if (await dialog.ConfirmedAsync())
             await GroupsService.RemoveGroupMemberAsync(member.Id, member.FullName);
     }
 
@@ -172,7 +172,7 @@
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Leave group", parameters, options);
 
-        if (!await dialog.GetReturnValueAsync<bool>())
+        if (!await dialog.ConfirmedAsync())
             return;
 
         if (await GroupsService.LeaveGroupAsync())
