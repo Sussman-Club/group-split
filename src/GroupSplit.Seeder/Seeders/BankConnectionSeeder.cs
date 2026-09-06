@@ -82,6 +82,13 @@ public class BankConnectionSeeder(
                     Description = rowDto.Description,
                     MerchantName = rowDto.MerchantName,
                     ProviderCategory = rowDto.ProviderCategory,
+                    ProviderCategoryDetailed = rowDto.ProviderCategoryDetailed,
+                    AuthorizedDate = rowDto.AuthorizedDaysAgo is { } spent
+                        ? DateOnly.FromDateTime(now.UtcDateTime.AddDays(-spent))
+                        : null,
+                    PaymentChannel = rowDto.PaymentChannel,
+                    City = rowDto.City,
+                    LogoUrl = rowDto.LogoUrl,
                     Pending = rowDto.Pending,
                     RawJson = "{}",
                     ImportedAt = now.AddHours(-1)

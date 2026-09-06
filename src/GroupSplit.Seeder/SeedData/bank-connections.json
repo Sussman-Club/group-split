@@ -17,7 +17,10 @@
             "Amount": 82.14,
             "Description": "LIDL 4412",
             "MerchantName": "Lidl",
-            "ProviderCategory": "FOOD_AND_DRINK"
+            "ProviderCategory": "FOOD_AND_DRINK",
+            "ProviderCategoryDetailed": "FOOD_AND_DRINK_GROCERIES",
+            "PaymentChannel": "in store",
+            "City": "Lisbon"
           },
           {
             "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F611",
@@ -26,6 +29,9 @@
             "Description": "SQ *BLUE BOTTLE",
             "MerchantName": "Blue Bottle Coffee",
             "ProviderCategory": "FOOD_AND_DRINK",
+            "ProviderCategoryDetailed": "FOOD_AND_DRINK_COFFEE",
+            "PaymentChannel": "in store",
+            "City": "Lisbon",
             "Pending": true
           },
           {
@@ -34,7 +40,9 @@
             "Amount": 61.0,
             "Description": "CITY POWER AND LIGHT",
             "MerchantName": "City Power & Light",
-            "ProviderCategory": "RENT_AND_UTILITIES"
+            "ProviderCategory": "RENT_AND_UTILITIES",
+            "ProviderCategoryDetailed": "RENT_AND_UTILITIES_GAS_AND_ELECTRICITY",
+            "PaymentChannel": "online"
           },
           {
             "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F613",
@@ -42,15 +50,21 @@
             "Amount": -19.5,
             "Description": "AMZN MKTP REFUND",
             "MerchantName": "Amazon",
-            "ProviderCategory": "GENERAL_MERCHANDISE"
+            "ProviderCategory": "GENERAL_MERCHANDISE",
+            "ProviderCategoryDetailed": "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES",
+            "PaymentChannel": "online"
           },
           {
             "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F614",
             "DaysAgo": 6,
+            "AuthorizedDaysAgo": 8,
             "Amount": 27.8,
             "Description": "UBER TRIP",
             "MerchantName": "Uber",
-            "ProviderCategory": "TRANSPORTATION"
+            "ProviderCategory": "TRANSPORTATION",
+            "ProviderCategoryDetailed": "TRANSPORTATION_TAXIS_AND_RIDE_SHARES",
+            "PaymentChannel": "online",
+            "City": "Lisbon"
           }
         ]
       },
@@ -67,15 +81,21 @@
             "Amount": 14.99,
             "Description": "NETFLIX.COM",
             "MerchantName": "Netflix",
-            "ProviderCategory": "ENTERTAINMENT"
+            "ProviderCategory": "ENTERTAINMENT",
+            "ProviderCategoryDetailed": "ENTERTAINMENT_STREAMING_SERVICES",
+            "PaymentChannel": "online"
           },
           {
             "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F621",
             "DaysAgo": 5,
+            "AuthorizedDaysAgo": 9,
             "Amount": 46.2,
             "Description": "TRATTORIA DA ENZO",
             "MerchantName": "Trattoria da Enzo",
-            "ProviderCategory": "FOOD_AND_DRINK"
+            "ProviderCategory": "FOOD_AND_DRINK",
+            "ProviderCategoryDetailed": "FOOD_AND_DRINK_RESTAURANT",
+            "PaymentChannel": "in store",
+            "City": "Rome"
           }
         ]
       }
@@ -96,10 +116,14 @@
           {
             "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F640",
             "DaysAgo": 1,
+            "AuthorizedDaysAgo": 3,
             "Amount": 120.0,
             "Description": "IKEA STORE 402",
             "MerchantName": "IKEA",
-            "ProviderCategory": "HOME_IMPROVEMENT"
+            "ProviderCategory": "HOME_IMPROVEMENT",
+            "ProviderCategoryDetailed": "HOME_IMPROVEMENT_FURNITURE",
+            "PaymentChannel": "in store",
+            "City": "Lisbon"
           },
           {
             "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F641",
@@ -107,7 +131,10 @@
             "Amount": 9.35,
             "Description": "PHARMACY 88",
             "MerchantName": "Pharmacy 88",
-            "ProviderCategory": "MEDICAL"
+            "ProviderCategory": "MEDICAL",
+            "ProviderCategoryDetailed": "MEDICAL_PHARMACIES_AND_SUPPLEMENTS",
+            "PaymentChannel": "in store",
+            "City": "Lisbon"
           }
         ]
       }

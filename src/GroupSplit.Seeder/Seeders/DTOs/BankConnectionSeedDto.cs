@@ -58,5 +58,32 @@ public class BankTransactionSeedDto
 
     public string? ProviderCategory { get; init; }
 
+    /// <summary>The provider's finer category, under the primary one.</summary>
+    public string? ProviderCategoryDetailed { get; init; }
+
+    /// <summary>
+    /// Days before the run that the money was actually spent, when that differs from when
+    /// it posted. Null means the two are the same, which is the case for a pending row and
+    /// for anything a bank settles the same day.
+    /// </summary>
+    /// <remarks>
+    /// Seeded on purpose for a few rows: a card charge posting days after the event is the
+    /// ordinary case, and demo data that never showed it would hide the one date somebody
+    /// actually recognises.
+    /// </remarks>
+    public int? AuthorizedDaysAgo { get; init; }
+
+    /// <summary>How it was paid: <c>in store</c>, <c>online</c>, <c>other</c>.</summary>
+    public string? PaymentChannel { get; init; }
+
+    public string? City { get; init; }
+
+    /// <summary>
+    /// The merchant's logo. Left unset in the seed file on purpose: a URL nobody can
+    /// verify renders as a broken image, which is worse than the initials the row falls
+    /// back to. Here so real imported rows and seeded ones take the same path.
+    /// </summary>
+    public string? LogoUrl { get; init; }
+
     public bool Pending { get; init; }
 }
