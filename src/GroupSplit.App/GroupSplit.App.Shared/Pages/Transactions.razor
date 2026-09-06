@@ -15,11 +15,15 @@
         <h1>Expenses</h1>
         <p>Everything you have recorded, searchable and editable in place.</p>
     </div>
+    @* Searches the server, not the rows on screen: what is on screen is one page. Debounced
+       so a request goes out when typing pauses rather than on every keystroke. *@
     <MudTextField @bind-Value="_searchString"
-                  Placeholder="Search by name, group or category"
+                  Placeholder="Search by name, group, category or who paid"
                   Adornment="Adornment.Start"
                   AdornmentIcon="@Icons.Material.Rounded.Search"
                   Immediate="true"
+                  DebounceInterval="300"
+                  OnDebounceIntervalElapsed="OnSearchChangedAsync"
                   Clearable="true"
                   Margin="Margin.Dense"
                   Variant="Variant.Outlined"
@@ -32,8 +36,8 @@
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Recorded</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@All.Count">@All.Count</span>
-            <span class="gs-muted" style="font-size: .8125rem">@(Filtered.Count == All.Count ? "showing all" : $"{Filtered.Count} match")</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@RecordedCount">@RecordedCount</span>
+            <span class="gs-muted" style="font-size: .8125rem">@(IsSearching ? $"{MatchCount} match" : "showing all")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
@@ -44,15 +48,16 @@
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             <span class="gs-eyebrow">Total</span>
-            <Money Value="Filtered.Sum(t => t.Amount)" Animate Class="gs-stat-value" />
+            <Money Value="ShownTotal" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">@(string.IsNullOrWhiteSpace(_searchString) ? "all time" : "of the matches")</span>
         </div>
     </div>
 
     <div class="gs-reveal" style="--i: 3">
         <MudDataGrid T="TransactionResponse"
-                     Items="@All"
-                     QuickFilter="@Matches"
+                     @ref="_grid"
+                     ServerData="LoadPageAsync"
+                     RowsPerPage="@TransactionQuery.Default.PageSize"
                      SortMode="SortMode.Single"
                      Hover="true"
                      Dense="false"
@@ -120,8 +125,8 @@
             <NoRecordsContent>
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(All.Count == 0 ? "No expenses yet" : "Nothing matches")</h3>
-                    <span>@(All.Count == 0 ? "Record the first one with the button below." : "Try a different name, group or category.")</span>
+                    <h3>@(IsSearching ? "Nothing matches" : "No expenses yet")</h3>
+                    <span>@(IsSearching ? "Try a different name, group or category." : "Record the first one with the button below.")</span>
                 </div>
             </NoRecordsContent>
             <PagerContent>
@@ -135,24 +140,83 @@
 
 @code {
     private string _searchString = "";
+    private MudDataGrid<TransactionResponse>? _grid;
 
-    private ICollection<TransactionResponse> All => TransactionsService.Transactions ?? [];
-    private List<TransactionResponse> Filtered => All.Where(Matches).ToList();
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
-    private IEnumerable<TransactionResponse> MonthToDate => All.Where(t =>
-        t.DateTime.LocalDateTime.Year == DateTime.Today.Year && t.DateTime.LocalDateTime.Month == DateTime.Today.Month);
-    private decimal ThisMonth => MonthToDate.Sum(t => t.Amount);
+    // The tiles read the server's figures rather than adding up the rows on screen: those
+    // are one page, and a page cannot say what the whole comes to.
+    private int RecordedCount => TransactionsService.Summary?.Count ?? 0;
+    private int MatchCount => TransactionsService.Page?.TotalCount ?? 0;
+    private decimal ThisMonth => TransactionsService.MonthSummary?.Total ?? 0m;
 
-    private bool Matches(TransactionResponse t)
+    private decimal ShownTotal => IsSearching
+        ? TransactionsService.MatchesSummary?.Total ?? 0m
+        : TransactionsService.Summary?.Total ?? 0m;
+
+    /// <summary>
+    /// What the grid asks for, translated. Its page is zero-based and its sort arrives as
+    /// the column's property name, which is the sort key with a capital first letter.
+    /// </summary>
+    private async Task<GridData<TransactionResponse>> LoadPageAsync(
+        GridState<TransactionResponse> state, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        var sort = state.SortDefinitions.FirstOrDefault();
 
-        var q = _searchString.Trim();
-        return t.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || t.GroupName.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || t.Category.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || t.PaidByUserName.Contains(q, StringComparison.OrdinalIgnoreCase);
+        var query = new TransactionQuery(
+            Page: state.Page + 1,
+            PageSize: state.PageSize,
+            SortBy: sort is null ? TransactionQuery.DefaultSortBy : Camel(sort.SortBy),
+            SortDescending: sort?.Descending ?? true,
+            Search: IsSearching ? _searchString.Trim() : null);
+
+        await TransactionsService.LoadAsync(query, cancellationToken);
+
+        var page = TransactionsService.Page;
+
+        return new GridData<TransactionResponse>
+        {
+            Items = page?.Items ?? [],
+            TotalItems = page?.TotalCount ?? 0
+        };
     }
+
+    private static string Camel(string propertyName) =>
+        string.IsNullOrEmpty(propertyName)
+            ? propertyName
+            : char.ToLowerInvariant(propertyName[0]) + propertyName[1..];
+
+    // A different search is a different question, so it starts again at the first page:
+    // staying on page four of the old answer would show an empty grid over a real total.
+    private async Task OnSearchChangedAsync(string _)
+    {
+        if (_grid is null) return;
+
+        _grid.NavigateTo(MudBlazor.Page.First);
+        await _grid.ReloadServerData();
+    }
+
+    /// <summary>
+    /// A write elsewhere has already re-read the page this is showing; the grid holds its
+    /// own copy of the rows, so it has to be told to ask again. That ask is answered from
+    /// what the state now holds rather than by a second request.
+    /// </summary>
+    private async Task ReloadGridAsync()
+    {
+        if (_grid is null || _reloading) return;
+
+        _reloading = true;
+        try
+        {
+            await InvokeAsync(() => _grid.ReloadServerData());
+        }
+        finally
+        {
+            _reloading = false;
+        }
+    }
+
+    private bool _reloading;
 
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
@@ -162,10 +226,13 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnStateChanged() => _ = ReloadGridAsync();
+
     protected override void OnInitialized()
     {
         _loadCts = new CancellationTokenSource();
         TransactionsService.OnTransactionsChanged += ReRender;
+        TransactionsService.OnTransactionsChanged += OnStateChanged;
     }
 
     protected override async Task OnInitializedAsync()
@@ -247,6 +314,7 @@
     public async ValueTask DisposeAsync()
     {
         TransactionsService.OnTransactionsChanged -= ReRender;
+        TransactionsService.OnTransactionsChanged -= OnStateChanged;
         if (_loadCts is not null) await _loadCts.CancelAsync();
     }
 

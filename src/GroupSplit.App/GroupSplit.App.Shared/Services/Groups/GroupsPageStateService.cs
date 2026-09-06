@@ -1,4 +1,5 @@
 using GroupSplit.App.Shared.Services.Errors;
+using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
@@ -7,6 +8,13 @@ namespace GroupSplit.App.Shared.Services.Groups;
 
 public class GroupsPageStateService : IGroupsPageStateService
 {
+    /// <summary>
+    /// How many of the selected group's expenses to read. The card on the group page shows
+    /// this many, so a larger page would be rows fetched and thrown away, and a smaller one
+    /// would leave a gap; the header's count comes from the page's total, not its length.
+    /// </summary>
+    public const int RecentPageSize = 8;
+
     private readonly GroupsTracker _tracker;
     private readonly IGroupsClient _groupsClient;
     private readonly ISnackbar _snackbar;
@@ -75,7 +83,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
     }
 
-    public ICollection<TransactionResponse> Transactions
+    public PagedResponse<TransactionResponse>? Transactions
     {
         get => _tracker.Transactions;
         private set
@@ -137,7 +145,7 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         if (!loaded)
         {
-            _tracker.Transactions = [];
+            _tracker.Transactions = null;
             _tracker.Balance = null;
         }
 
@@ -153,18 +161,20 @@ public class GroupsPageStateService : IGroupsPageStateService
     {
         if (SelectedGroup is null)
         {
-            Transactions = [];
+            Transactions = null;
         }
         else
         {
-            // One large page, newest first, until the group page reads a real one. Ordering
-            // is the server's now: it is the only end that can order rows it did not send.
-            var page = await _groupsClient.GetGroupTransactionsAsync(
+            // The newest few, which is exactly what the card on the page shows, plus the
+            // count of all of them for the header. Ordering is the server's now: it is the
+            // only end that can order rows it did not send.
+            Transactions = await _groupsClient.GetGroupTransactionsAsync(
                 SelectedGroup.Id,
-                pageSize: PageRequest.MaxPageSize,
+                sortBy: TransactionQuery.DefaultSortBy,
+                sortDescending: true,
+                page: 1,
+                pageSize: RecentPageSize,
                 cancellationToken: cancellationToken);
-
-            Transactions = page.Items.ToList();
         }
     }
 
@@ -270,6 +280,37 @@ public class GroupsPageStateService : IGroupsPageStateService
             _snackbar.Add("Transaction created successfully.", Severity.Success);
             await _changes.NotifyTransactionsChangedAsync();
         }, "Could not save the expense.");
+    }
+
+    public Task<bool> ArchiveGroupAsync(CancellationToken cancellationToken = default) =>
+        SetArchivedAsync(archived: true, cancellationToken);
+
+    public Task<bool> UnarchiveGroupAsync(CancellationToken cancellationToken = default) =>
+        SetArchivedAsync(archived: false, cancellationToken);
+
+    /// <summary>
+    /// Both directions. Archiving is this person's own view of the group -- it hides it
+    /// from their list and touches nothing else -- so the reload that follows re-selects by
+    /// id and the flag arrives the way every other change to a group does.
+    /// </summary>
+    private Task<bool> SetArchivedAsync(bool archived, CancellationToken cancellationToken)
+    {
+        if (SelectedGroup is null)
+            throw new InvalidOperationException("No group is selected.");
+
+        var groupId = SelectedGroup.Id;
+
+        return _errors.TryAsync(async () =>
+        {
+            if (archived)
+                await _groupsClient.ArchiveGroupAsync(groupId, cancellationToken);
+            else
+                await _groupsClient.UnarchiveGroupAsync(groupId, cancellationToken);
+
+            _snackbar.Add(archived ? "Group archived. Only you stop seeing it in your list."
+                : "Group unarchived.", Severity.Success);
+            await _changes.NotifyGroupsChangedAsync();
+        }, archived ? "Could not archive the group." : "Could not unarchive the group.");
     }
 
     public Task<bool> SettleAsync(SettleRequest request, CancellationToken cancellationToken = default)

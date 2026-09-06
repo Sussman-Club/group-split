@@ -9,7 +9,7 @@ public class GroupsTracker
 
     [PersistentState] public GroupResponse? SelectedGroup { get; set; }
 
-    [PersistentState] public ICollection<TransactionResponse> Transactions { get; set; } = [];
+    [PersistentState] public PagedResponse<TransactionResponse>? Transactions { get; set; }
     [PersistentState] public UserGroupBalanceResponse? Balance { get; set; }
 
 }

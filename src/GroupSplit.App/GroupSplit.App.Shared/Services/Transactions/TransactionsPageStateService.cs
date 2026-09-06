@@ -30,51 +30,128 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         _errors = errors;
         _changes = changes;
 
-        // The list here is a copy of the server's, so it is re-read whenever anything that
-        // shows on it changes: an expense written from any page, or a group renamed, which
-        // changes the group tag on every one of its rows.
+        // What is held here is a copy of the server's, so it is re-read whenever anything
+        // that shows on it changes: an expense written from any page, or a group renamed,
+        // which changes the group tag on every one of its rows.
         _changes.TransactionsChanged += RefreshAsync;
         _changes.GroupsChanged += RefreshAsync;
 
         IsReadyTask = Task.Run(async () =>
         {
-            if (tracker.Transactions is not null) return;
+            if (tracker.Page is not null && tracker.Summary is not null) return;
             await RefreshAsync();
         });
     }
 
-    public ICollection<TransactionResponse> Transactions
+    public PagedResponse<TransactionResponse>? Page
     {
-        get => _tracker.Transactions ?? [];
-        private set
-        {
-            _tracker.Transactions = value;
-            OnTransactionsChanged?.Invoke();
-        }
+        get => _tracker.Page;
+        private set => _tracker.Page = value;
+    }
+
+    public TransactionQuery Query
+    {
+        get => _tracker.Query;
+        private set => _tracker.Query = value;
+    }
+
+    public TransactionSummaryResponse? Summary
+    {
+        get => _tracker.Summary;
+        private set => _tracker.Summary = value;
+    }
+
+    public TransactionSummaryResponse? MonthSummary
+    {
+        get => _tracker.MonthSummary;
+        private set => _tracker.MonthSummary = value;
+    }
+
+    public TransactionSummaryResponse? MatchesSummary
+    {
+        get => _tracker.MatchesSummary;
+        private set => _tracker.MatchesSummary = value;
     }
 
     public event Action? OnTransactionsChanged;
 
-    private Task RefreshAsync() => _guard.RunAsync(() => LoadAsync(), "your expenses");
+    /// <summary>
+    /// Announced once a read has finished rather than as each part of it lands. A page and
+    /// the three figures beside it are one answer, and a page told four times would reload
+    /// its rows four times over.
+    /// </summary>
+    private void Announce() => OnTransactionsChanged?.Invoke();
 
-    // Always a new list, never the old one edited in place: a component that was handed
-    // the previous list, the data grid among them, only looks again when the reference
-    // changes.
-    private async Task LoadAsync(CancellationToken ct = default)
+    public Task LoadAsync(TransactionQuery query, CancellationToken cancellationToken = default)
     {
-        // Reads one large page while the page states still keep whole lists. The grid and
-        // the tiles that would use the rest of the contract -- a page the person chose, and
-        // the summary beside it -- come next; this keeps what is on screen correct in the
-        // meantime rather than showing a first page as though it were everything.
-        var page = await _client.GetTransactionsAsync(pageSize: PageRequest.MaxPageSize, cancellationToken: ct);
+        // The grid asks for its state whenever it is rendered, and the first thing it asks
+        // for is what this was built holding. Answering from what is held keeps that from
+        // being a second request for the same page.
+        if (query == Query && Page is not null)
+            return Task.CompletedTask;
 
-        Transactions = page.Items.ToList();
+        return _guard.RunAsync(async () =>
+        {
+            await ReadPageAsync(query, cancellationToken);
+            Announce();
+        }, "your expenses");
+    }
+
+    /// <summary>
+    /// Re-reads the page in hand and the figures beside it. Unlike <see cref="LoadAsync"/>
+    /// this asks again for the query it already answered, because the answer is what
+    /// changed.
+    /// </summary>
+    private Task RefreshAsync() =>
+        _guard.RunAsync(async () =>
+        {
+            await ReadPageAsync(Query);
+            await ReadSummariesAsync();
+            Announce();
+        }, "your expenses");
+
+    // Every read below assigns a new object rather than editing the one held: a component
+    // handed the previous page, the data grid among them, only looks again when the
+    // reference changes.
+
+    private async Task ReadPageAsync(TransactionQuery query, CancellationToken ct = default)
+    {
+        var page = await _client.GetTransactionsAsync(
+            search: query.Search,
+            sortBy: query.SortBy,
+            sortDescending: query.SortDescending,
+            page: query.Page,
+            pageSize: query.PageSize,
+            cancellationToken: ct);
+
+        Query = query;
+        Page = page;
+
+        // What the search matched, for the total beside it. Only worth a request while
+        // there is a search: without one it is the all-time summary, which is already read.
+        MatchesSummary = string.IsNullOrWhiteSpace(query.Search)
+            ? null
+            : await _client.GetTransactionsSummaryAsync(search: query.Search, cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// The figures the tiles show. They come from the server because a page cannot add
+    /// itself up -- twenty-five rows of two hundred total to the wrong number.
+    /// </summary>
+    private async Task ReadSummariesAsync(CancellationToken ct = default)
+    {
+        var firstOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var from = new DateTimeOffset(firstOfMonth, TimeZoneInfo.Local.GetUtcOffset(firstOfMonth));
+        var to = from.AddMonths(1).AddTicks(-1);
+
+        Summary = await _client.GetTransactionsSummaryAsync(cancellationToken: ct);
+        MonthSummary = await _client.GetTransactionsSummaryAsync(from: from, to: to, cancellationToken: ct);
     }
 
     // Every write below runs through the presenter: a refusal from the API becomes an
     // error snackbar naming the reason, a lost session becomes a sign-in, and the caller
     // gets false instead of an exception it would have had to catch itself. Once the write
-    // has landed it is announced rather than applied here by hand, so this list and the
+    // has landed it is announced rather than applied here by hand, so this page and the
     // groups page's are re-read from the same source and cannot drift apart.
 
     public Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
