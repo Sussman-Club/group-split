@@ -57,8 +57,18 @@ public static class ApiErrors
                 code ?? ErrorCodes.Unauthenticated, status, traceId, problem);
 
         if (status >= 500)
-            return new ApiError(ApiErrorKind.Server, ErrorMessages.Server(traceId),
+        {
+            // A 5xx used to mean one thing: a bug on our side, where the trace id is the
+            // only useful thing a person can quote. BANK_PROVIDER_UNAVAILABLE is the first
+            // that is neither a bug nor ours, and it has something better to say than a
+            // reference number -- so a code we have words for wins, and everything else
+            // still gets the reference.
+            var known = code is not null && code != ErrorCodes.InternalError && ErrorMessages.Knows(code);
+
+            return new ApiError(ApiErrorKind.Server,
+                known ? ErrorMessages.For(code, status) : ErrorMessages.Server(traceId),
                 code ?? ErrorCodes.InternalError, status, traceId, problem);
+        }
 
         if (problem is HttpValidationProblemDetails { Errors.Count: > 0 } invalid)
         {
