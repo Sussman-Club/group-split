@@ -167,7 +167,7 @@ public static class TransactionApi
         }
     }
 
-    extension(IQueryable<Transaction> transactions)
+    extension(IQueryable<Expense> transactions)
     {
         internal IQueryable<TransactionResponse> SelectDto()
         {
@@ -179,8 +179,8 @@ public static class TransactionApi
                     DateTime = transaction.DateTime,
                     Name = transaction.Name,
                     Description = transaction.Description,
-                    GroupId = transaction.RuleVersion.Rule.Group.Id,
-                    GroupName = transaction.RuleVersion.Rule.Group.Name,
+                    GroupId = transaction.Group!.Id,
+                    GroupName = transaction.Group!.Name,
                     PaidByUserId = transaction.User.Id,
                     PaidByUserName = transaction.User.FirstName +
                                      (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
@@ -189,7 +189,7 @@ public static class TransactionApi
                 };
         }
 
-        internal IQueryable<Transaction> ApplyFilter(TransactionFilter? filter)
+        internal IQueryable<Expense> ApplyFilter(TransactionFilter? filter)
         {
             if (filter is null)
                 return transactions;
@@ -207,7 +207,7 @@ public static class TransactionApi
             return from transaction in transactions
                 where (after == null || transaction.DateTime >= after) &&
                       (before == null || transaction.DateTime <= before) &&
-                      (filter.GroupId == null || transaction.RuleVersion.Rule.Group.Id == filter.GroupId) &&
+                      (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
                       (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
                       (category == null || transaction.RuleVersion.Rule.Category.ToLower() == category) &&
                       // ToLower().Contains rather than EF.Functions.ILike: the same query has
@@ -218,7 +218,7 @@ public static class TransactionApi
                        transaction.Name.ToLower().Contains(search) ||
                        (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
                        transaction.RuleVersion.Rule.Category.ToLower().Contains(search) ||
-                       transaction.RuleVersion.Rule.Group.Name.ToLower().Contains(search) ||
+                       transaction.Group!.Name.ToLower().Contains(search) ||
                        (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
                        (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
                 select transaction;
@@ -248,12 +248,12 @@ public static class TransactionApi
     /// The orders an expense listing offers. Applied to the entity rather than the response,
     /// so a key can reach through a navigation to the group or the payer.
     /// </summary>
-    internal static readonly SortMap<Transaction> Sort = new SortMap<Transaction>()
+    internal static readonly SortMap<Expense> Sort = new SortMap<Expense>()
         .Key("dateTime", transaction => transaction.DateTime, defaultDescending: true)
         .Key("amount", transaction => transaction.Amount, defaultDescending: true)
         .Key("name", transaction => transaction.Name)
         .Key("category", transaction => transaction.RuleVersion.Rule.Category)
-        .Key("group", transaction => transaction.RuleVersion.Rule.Group.Name)
+        .Key("group", transaction => transaction.Group!.Name)
         .Key("paidBy", transaction => transaction.User.FirstName)
         .Default("dateTime")
         .TieBreak(transaction => transaction.Id);

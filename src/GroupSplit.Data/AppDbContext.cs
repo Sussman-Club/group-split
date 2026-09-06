@@ -221,18 +221,46 @@ public class AppDbContext : DbContext
             entity.Property(transaction => transaction.DateTime).IsRequired();
             entity.Property(transaction => transaction.Name).HasMaxLength(128).IsRequired();
             entity.Property(transaction => transaction.Description).HasMaxLength(256);
-            
+
+            entity.Property(transaction => transaction.Currency)
+                .HasMaxLength(Currencies.CodeLength)
+                .IsFixedLength()
+                .IsRequired()
+                .HasDefaultValue(Currencies.Default);
+
             entity.HasOne(transaction => transaction.User)
                 .WithMany(user => user.Transactions)
+                .HasForeignKey(transaction => transaction.UserId)
                 .IsRequired();
 
-            entity.HasOne(transaction => transaction.RuleVersion)
-                .WithMany(group => group.Transactions)
-                .IsRequired();
-            
+            entity.HasOne(transaction => transaction.Group)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.GroupId);
+
             entity.HasIndex(transaction => transaction.DateTime);
             entity.HasIndex(transaction => transaction.Name);
+
+            // Every expense listing filters on the group and orders by the date, and EF
+            // adds the discriminator to that predicate itself, so the three travel
+            // together often enough to be worth one index.
+            entity.HasIndex(transaction => new { transaction.GroupId, transaction.DateTime });
+
+            // EF does not index the discriminator on its own, and Set<Expense>() filters
+            // on nothing else.
+            entity.HasIndex("Discriminator");
         });
+
+        modelBuilder.Entity<Expense>(entity =>
+        {
+            // On the leaf, so the column is nullable in the table -- a transfer has no
+            // rule version and never did.
+            entity.HasOne(expense => expense.RuleVersion)
+                .WithMany(version => version.Transactions)
+                .HasForeignKey(expense => expense.RuleVersionId)
+                .IsRequired();
+        });
+
+        modelBuilder.Entity<Transfer>();
 
         modelBuilder.Entity<UserIdentity>(entity =>
         {

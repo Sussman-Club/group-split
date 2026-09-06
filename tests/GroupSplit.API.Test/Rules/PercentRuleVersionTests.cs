@@ -202,37 +202,49 @@ public class PercentRuleVersionTests(ApiTestFixture fixture) : ApiUnitTest(fixtu
 }
 
 /// <summary>
-/// The rule types the app creates for itself. A group's settlement rule is not one a
-/// member may edit or delete — settling writes transactions against it, and rewriting it
-/// afterwards would change what a settled balance meant.
+/// A rule flagged as the app's own, which a member may not edit or delete.
 /// </summary>
-public class SettlementRuleTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
+/// <remarks>
+/// These flags used to have exactly one producer: the settlement pseudo-rule, which
+/// settling wrote its transactions against and which therefore could not be rewritten
+/// afterwards without changing what a settled balance meant. A settlement is a
+/// <see cref="Transfer"/> now -- one row, divided by no rule at all -- so that guarantee is
+/// structural and needs no flag to hold it up.
+/// <para>
+/// The flags themselves are still live code with no producer left, so the rule here is
+/// built directly. They go, with <see cref="RuleFlags"/>, in the step that deletes the old
+/// model; until then what still exists stays tested.
+/// </para>
+/// </remarks>
+public class ProtectedRuleTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
-    private async Task<Rule> SettledGroupRule()
+    private async Task<Rule> ProtectedRule()
     {
-        var groupService = GetService<IGroupService>();
-
-        var group = await groupService.CreateGroup(
+        var group = await GetService<IGroupService>().CreateGroup(
             new CreateGroupRequest { Name = "Settle" }, TestContext.Current.CancellationToken);
 
-        var other = await CreateNewUser();
-        await groupService.AddGroupMembers(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]),
-            TestContext.Current.CancellationToken);
+        var rule = new Rule
+        {
+            Category = "Protected",
+            Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable | RuleFlags.NoUserTransactions,
+            Group = await DbContext.Set<Data.Entities.Group>()
+                .FirstAsync(g => g.Id == group.Id, TestContext.Current.CancellationToken)
+        };
 
-        await groupService.Settle(group.Id,
-            new SettleRequest { UserId = other.Id, Amount = 50 },
-            TestContext.Current.CancellationToken);
+        // A rule is reached through its current version, so one without a version is not
+        // found at all and would pass these tests for the wrong reason.
+        rule.Versions.Add(new PersonalRuleVersion { StartDateTime = DateTimeOffset.UtcNow });
 
-        return await DbContext.Set<Rule>()
-            .FirstAsync(rule => rule.Category == Rule.Settlement,
-                TestContext.Current.CancellationToken);
+        DbContext.Add(rule);
+        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return rule;
     }
 
     [Fact]
-    public async Task A_settlement_rule_cannot_be_edited()
+    public async Task A_protected_rule_cannot_be_edited()
     {
-        var rule = await SettledGroupRule();
+        var rule = await ProtectedRule();
 
         var exception = await Assert.ThrowsAsync<ConflictException>(() =>
             GetService<IRuleService>().Update(rule.Id, new UpdateRuleRequest
@@ -245,9 +257,9 @@ public class SettlementRuleTests(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task A_settlement_rule_cannot_be_deleted()
+    public async Task A_protected_rule_cannot_be_deleted()
     {
-        var rule = await SettledGroupRule();
+        var rule = await ProtectedRule();
 
         var exception = await Assert.ThrowsAsync<ConflictException>(() =>
             GetService<IRuleService>().Delete(rule.Id, TestContext.Current.CancellationToken));

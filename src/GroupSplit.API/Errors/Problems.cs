@@ -49,6 +49,7 @@ public static class Problems
         [ErrorCodes.RuleNoUserTransactions] = "Rule does not accept transactions",
         [ErrorCodes.RuleVersionHasRemovedMember] = "Rule includes a former member",
         [ErrorCodes.TransactionPayerNotInGroup] = "Payer is not a member of the group",
+        [ErrorCodes.SettlementWithSelf] = "A settlement needs two different people",
 
         [ErrorCodes.TransactionRuleRequired] = "A rule is required",
         [ErrorCodes.TransactionPayerRequiresRule] = "A rule is required to pay for someone else",

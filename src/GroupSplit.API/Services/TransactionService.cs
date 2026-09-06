@@ -3,44 +3,56 @@ using GroupSplit.API.Errors;
 using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using GroupSplit.Data.Splitting;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
 
 public interface ITransactionService
 {
-    Task<IQueryable<Transaction>> List(CancellationToken ct = default);
-    Task<IQueryable<Transaction>> Get(Guid id, CancellationToken ct = default);
-    ValueTask<Transaction> Create(CreateTransactionRequest request, CancellationToken ct = default);
+    Task<IQueryable<Expense>> List(CancellationToken ct = default);
+    Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default);
+    ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
     Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default);
-    ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
+    ValueTask<Expense> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
     Task Delete(Guid id, CancellationToken ct = default);
 }
 
 public class TransactionService(ICurrentUser userContext, AppDbContext dbContext) : ITransactionService
 {
-    public async Task<IQueryable<Transaction>> List(CancellationToken ct = default)
+    /// <summary>
+    /// The caller's expenses, and only their expenses.
+    /// </summary>
+    /// <remarks>
+    /// <c>Set&lt;Expense&gt;()</c> rather than the rule hierarchy walked down to its
+    /// transactions. Two things follow. Settlements are absent because a transfer is a
+    /// different type, not because anybody remembered to filter them out -- EF puts the
+    /// discriminator in the predicate itself. And an expense is found through the group it
+    /// belongs to rather than through the rule that divided it, which is what lets a rule
+    /// stop being the only route to a transaction.
+    /// </remarks>
+    public Task<IQueryable<Expense>> List(CancellationToken ct = default)
     {
         var currentUser = userContext.User;
 
-        var query = from @group in dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
-                    from rule in @group.Rules
-                    from version in rule.Versions
-                    from transaction in version.Transactions
-                    select transaction;
+        var groups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
-        return query;
+        var query = from expense in dbContext.Set<Expense>()
+                    where groups.Any(@group => @group.Id == expense.GroupId)
+                    select expense;
+
+        return Task.FromResult(query);
     }
 
-    public async Task<IQueryable<Transaction>> Get(Guid id, CancellationToken ct = default)
+    public async Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default)
     {
         var transactions = await List(ct);
 
         return transactions.Where(t => t.Id == id);
     }
 
-    public async ValueTask<Transaction> Create(CreateTransactionRequest request,
+    public async ValueTask<Expense> Create(CreateTransactionRequest request,
         CancellationToken ct = default)
     {
         var currentUser = userContext.User;
@@ -65,6 +77,7 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
                             select new
                             {
                                 Version = version,
+                                Group = @group,
                                 RuleAllowsUserTransactions = (rule.Flags & RuleFlags.NoUserTransactions) == 0,
                                 User = currentUser.Id == paidByUserId
                                     ? currentUser
@@ -86,15 +99,19 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         if (await RuleVersionReferencesRemovedMember(result.Version, ct))
             throw new ConflictException(ErrorCodes.RuleVersionHasRemovedMember, "The rule version references a member who was removed from the group.");
 
-        var transaction = new Transaction
+        var transaction = new Expense
         {
             Amount = request.Amount,
+            Currency = result.Group.Currency,
             DateTime = request.DateTime,
             Name = request.Name,
             Description = request.Description,
             RuleVersion = result.Version,
+            Group = result.Group,
             User = result.User
         };
+
+        await dbContext.WriteSplitsAsync(transaction, ct);
 
         dbContext.Add(transaction);
         await dbContext.SaveChangesAsync(ct);
@@ -102,41 +119,6 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         return transaction;
     }
 
-    private async IAsyncEnumerable<TransactionSplitResponse> GetTransactionSplits(Transaction transaction, CancellationToken ct = default)
-    {
-        var ruleVersion = transaction.RuleVersion;
-
-        switch (ruleVersion)
-        {
-            case PercentRuleVersion percentRuleVersion:
-            {
-                var ruleUsers = await dbContext.Entry(percentRuleVersion)
-                    .Collection(rv => rv.RuleUsers)
-                    .Query()
-                    .Include(ru => ru.User)
-                    .ToListAsync(ct);
-
-                foreach (var ru in ruleUsers)
-                {
-                    yield return new TransactionSplitResponse(
-                        $"{ru.User.FirstName} {ru.User.LastName}",
-                        ru.User == transaction.User 
-                            ? transaction.Amount - (from otherUser in ruleUsers where otherUser != ru select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum() 
-                            : Math.Truncate(transaction.Amount * (decimal)ru.Percentage) / 100
-                    );
-                }
-                
-                break;
-            }
-            default:
-                yield return new TransactionSplitResponse(
-                    $"{transaction.User.FirstName} {transaction.User.LastName}",
-                    transaction.Amount
-                );
-                
-                break;
-        }
-    }
 
     public async Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default)
     {
@@ -146,6 +128,8 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         // per-member split — while every other read here is scoped and List never shows it.
         var transaction = await (await Get(id, ct))
             .Include(t => t.User)
+            .Include(t => t.Splits)
+            .ThenInclude(split => split.User)
             .Include(t => t.RuleVersion)
             .ThenInclude(rv => rv.Rule)
             .ThenInclude(r => r.Group)
@@ -154,7 +138,13 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         if (transaction is null)
             return null;
 
-        var splits = await GetTransactionSplits(transaction, ct).ToListAsync(ct);
+        // Read, not re-derived. The amounts below are the ones the group's balances are
+        // summed from, so a detail view that computed its own could disagree with them.
+        var splits = transaction.Splits
+            .Select(split => new TransactionSplitResponse(
+                $"{split.User.FirstName} {split.User.LastName}",
+                split.Amount))
+            .ToList();
 
         return new TransactionDetailsResponse
         {
@@ -190,14 +180,14 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         return transaction;
     }
 
-    public async ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
+    public async ValueTask<Expense> Update(Guid id, UpdateTransactionRequest request,
         CancellationToken ct = default)
     {
         var currentUser = userContext.User;
         var userGroups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
         var query =
-            from transaction in await Get(id, ct)
+            from transaction in (await Get(id, ct)).Include(t => t.Splits)
             from ruleVersion in (from userGroup in userGroups
                                  from rule in userGroup.Rules
                                  from ruleVersion in rule.Versions
@@ -250,6 +240,11 @@ public class TransactionService(ICurrentUser userContext, AppDbContext dbContext
         updatedTransaction.Description = request.Description;
         updatedTransaction.RuleVersion = result.RuleVersion;
         updatedTransaction.User = result.PayingUser;
+
+        // The amount, the payer and the rule can all have changed, and each of them
+        // changes what everybody owed. Recomputed rather than adjusted, because there is
+        // no edit for which keeping the old split would be right.
+        await dbContext.WriteSplitsAsync(updatedTransaction, ct);
 
         await dbContext.SaveChangesAsync(ct);
 

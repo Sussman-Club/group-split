@@ -53,6 +53,7 @@ public static class ErrorMessages
         [ErrorCodes.RuleNoUserTransactions] = "Expenses cannot be recorded against this rule.",
         [ErrorCodes.RuleVersionHasRemovedMember] = "This rule includes someone who has left the group. Update the rule first.",
         [ErrorCodes.TransactionPayerNotInGroup] = "The person who paid is not a member of this group.",
+        [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
 
         [ErrorCodes.TransactionRuleRequired] = "Pick a rule for this expense.",
         [ErrorCodes.TransactionPayerRequiresRule] = "Pick a rule to record an expense someone else paid.",

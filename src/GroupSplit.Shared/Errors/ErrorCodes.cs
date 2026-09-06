@@ -47,6 +47,7 @@ public static class ErrorCodes
     public const string RuleNoUserTransactions = "RULE_NO_USER_TRANSACTIONS";
     public const string RuleVersionHasRemovedMember = "RULE_VERSION_HAS_REMOVED_MEMBER";
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
+    public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 

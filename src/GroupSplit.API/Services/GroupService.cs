@@ -288,26 +288,12 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
                     {
                         UserId = user.Id,
                         UserName = user.FirstName + " " + user.LastName,
-                        AmountPaid = Enumerable.Sum((IEnumerable<decimal>)(from rule in @group.Rules
-                                from ruleVersion in rule.Versions
-                                where !(ruleVersion is PersonalRuleVersion)
-                                from transaction in ruleVersion.Transactions
-                                where transaction.User == user
-                                select transaction.Amount
-                            )),
-                        AmountOwed = (from rule in @group.Rules
-                                      from ruleVersion in rule.Versions
-                                      join percentageRuleVersion in context.Set<PercentRuleVersion>() on ruleVersion.Id equals percentageRuleVersion.Id
-                                      from percentUser in percentageRuleVersion.RuleUsers
-                                      where percentUser.User == user
-                                      from transaction in ruleVersion.Transactions
-                                      select 
-                                           percentUser.User == transaction.User
-                                                  ? transaction.Amount - (from otherUser in percentageRuleVersion.RuleUsers 
-                                                                          where otherUser != percentUser 
-                                                                          select Math.Truncate(transaction.Amount * (decimal)otherUser.Percentage) / 100).Sum()
-                                                  : Math.Truncate(transaction.Amount * (decimal)percentUser.Percentage) / 100
-                                    ).Sum()
+                        AmountPaid = (from transaction in context.Set<Transaction>()
+                                      where transaction.GroupId == @group.Id && transaction.User == user
+                                      select transaction.Amount).Sum(),
+                        AmountOwed = (from split in context.Set<TransactionSplit>()
+                                      where split.Transaction.GroupId == @group.Id && split.User == user
+                                      select split.Amount).Sum()
                     } into balance
                     select new GroupNetBalance
                     {
@@ -330,83 +316,32 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
                          from groupUser in (from groupUser in @group.Users
                                             where groupUser.Id == request.UserId
                                             select groupUser).DefaultIfEmpty()
-                         from rule in (from rule in @group.Rules
-                                       where rule.Category == Rule.Settlement
-                                       select rule).DefaultIfEmpty()
-                         from otherRuleVersion in (from version in context.Set<SettlementRuleVersion>()
-                                                   where version.Rule == rule && version.OtherUser == groupUser
-                                                   select version).Take(1).DefaultIfEmpty()
-                         from currentUserRuleVersion in (from version in context.Set<SettlementRuleVersion>()
-                                                         where version.Rule == rule && version.OtherUser == currentUser
-                                                         select version).Take(1).DefaultIfEmpty()
                          select new
                          {
                              Group = @group,
-                             User = groupUser,
-                             SettlementRule = rule,
-                             SettlementRuleVersion = otherRuleVersion,
-                             CurrentUserRuleVersion = currentUserRuleVersion
+                             User = groupUser
                          };
 
         var result = await groupQuery.FirstOrDefaultAsync(cancellationToken);
 
-        if (result is not
-            {
-                Group: { } resultGroup, User: var user, SettlementRule: var settlementRule,
-                SettlementRuleVersion: var settlementRuleVersion,
-                CurrentUserRuleVersion: var currentUserSettlementRuleVersion
-            })
-        {
+        if (result is not { Group: { } resultGroup, User: var user })
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-        }
 
         if (user is null)
-        {
             throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
-        }
 
-        settlementRule ??= new Rule
-        {
-            Category = Rule.Settlement,
-            Flags = RuleFlags.NonEditable | RuleFlags.NonDeletable | RuleFlags.NoUserTransactions,
-            Group = resultGroup
-        };
+        if (user.Id == currentUser.Id)
+            throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
 
-        settlementRuleVersion ??= new SettlementRuleVersion
-        {
-            OtherUser = user,
-            StartDateTime = DateTime.UtcNow,
-            Rule = settlementRule
-        };
+        // The Settle button sits under "owed to you", so the caller is the creditor
+        // recording that a debtor has paid them: the money moves from the other member to
+        // the caller. One row, where there used to be a matched pair of a positive and a
+        // negative transaction hung off a pseudo-rule -- and a pair is two chances to
+        // write half a settlement.
+        var transfer = Transfer.Between(resultGroup, user, currentUser, request.Amount,
+            DateTimeOffset.UtcNow);
 
-        currentUserSettlementRuleVersion ??= new SettlementRuleVersion
-        {
-            OtherUser = currentUser,
-            StartDateTime = DateTime.UtcNow,
-            Rule = settlementRule
-        };
-
-        var dateTime = DateTime.Now;
-
-        var transactionFromOther = new Transaction
-        {
-            Amount = request.Amount,
-            User = user,
-            RuleVersion = settlementRuleVersion,
-            DateTime = dateTime,
-            Name = "Settlement"
-        };
-
-        var transactionToOther = new Transaction
-        {
-            Amount = -request.Amount,
-            User = currentUser,
-            RuleVersion = currentUserSettlementRuleVersion,
-            DateTime = dateTime,
-            Name = "Settlement"
-        };
-
-        context.Set<Transaction>().AddRange(transactionFromOther, transactionToOther);
+        context.Add(transfer);
         await context.SaveChangesAsync(cancellationToken);
     }
 

@@ -1,0 +1,61 @@
+namespace GroupSplit.Data.Entities;
+
+/// <summary>
+/// One member paying another back.
+/// </summary>
+/// <remarks>
+/// A settlement used to be two rows -- <c>+amount</c> against the other member and
+/// <c>-amount</c> against you -- hung off a pseudo-rule that existed to be excluded from
+/// things, carrying flags that existed to stop anybody recording against it. A transfer is
+/// one row that goes through the same splits, the same balance query and the same delete
+/// path as everything else, and needs no flags because there is nothing to forbid.
+/// <para>
+/// Members had already invented this: the Home group worked around the Settle button by
+/// making a "Daniel pays" rule with one participant at 100% and recording repayments as
+/// ordinary expenses against it. The arithmetic was right; only the modelling was missing.
+/// </para>
+/// </remarks>
+public class Transfer : Transaction
+{
+    /// <summary>
+    /// For EF, and to keep <see cref="Between"/> the only way anybody else can make one.
+    /// </summary>
+    private Transfer()
+    {
+    }
+
+    /// <summary>
+    /// Money moving from one member to another, as a single row with a single split.
+    /// </summary>
+    /// <remarks>
+    /// The one split -- to the recipient, for the whole amount -- is what makes the
+    /// balances come out right: the payer's <c>paid</c> rises by the amount and the
+    /// recipient's <c>owed</c> rises by it, so the payer's net goes up and the
+    /// recipient's goes down, which is exactly what paying somebody back means. It is
+    /// also the invariant that has no second chance, so nothing outside this type is
+    /// allowed to construct a transfer and forget it.
+    /// </remarks>
+    public static Transfer Between(Group group, User from, User to, decimal amount, DateTimeOffset date)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+
+        if (from == to)
+            throw new ArgumentException("A transfer needs two different people.", nameof(to));
+
+        var transfer = new Transfer
+        {
+            Group = group,
+            Amount = amount,
+            Currency = group.Currency,
+            DateTime = date,
+            Name = "Settlement",
+            User = from
+        };
+
+        transfer.Splits.Add(new TransactionSplit { User = to, Amount = amount });
+
+        return transfer;
+    }
+}
