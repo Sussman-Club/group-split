@@ -34,6 +34,11 @@ public static class Extensions
             builder.AddSeeder<GroupSeeder>();
             builder.AddSeeder<UserSeeder>();
             builder.Services.AddSplitRuleServices();
+
+            // The transaction seeder divides through the same code the API does, so a
+            // developer's seeded balances are ones the app could have produced. Scoped,
+            // like the API registers it, because it writes through the DbContext.
+            builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 
