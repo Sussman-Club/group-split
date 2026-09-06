@@ -1,0 +1,521 @@
+# Roadmap: from expense splitting to a financial tracker with bank sync
+
+Read at `e82cd6b` (`fix/stale-ui-after-writes`, 2026-09-05). Covers `src/`, `tests/` and
+`docs/`. Also published as an artifact: [Group Split, next](https://claude.ai/code/artifact/daa694ac-9539-4aed-a7b3-eec90d9c802d).
+
+What stands between the app as it is today and a financial tracker with expense sharing
+and bank sync through Plaid: what is missing, which parts of the model are carrying more
+weight than they need to, and the order to change them in.
+
+## Where it stands
+
+The foundation is in better shape than most projects at this stage. Sign-in is real
+(Keycloak, a BFF that forwards `/api` with a refreshed bearer token, a WASM-or-Server
+render mode), every error is RFC 9457 problem details with a shared code catalog, there
+is one design system carried into Keycloak's own pages, and the Aspire model runs the
+same stack locally and in Compose. The client is generated from the API's OpenAPI
+document at build time, so a new endpoint reaches the UI as a typed method.
+
+| | |
+|---|---|
+| API endpoints | 18, across groups, rules, transactions, users |
+| Tests | 289 methods; ~58% line coverage on hand-written code |
+| UI | 4 pages, 12 dialogs; every write refreshes every page state |
+| Absent | currency, pagination, invitations, per-expense splits, bank data |
+
+What works end to end today: create a group, add members by email, define a split rule
+per category (personal, percent, or shares), record expenses against a rule, see
+per-member net balances and a minimised list of who pays whom, settle a debt as the
+creditor, delete an account once settled. The seeder fills two demo groups.
+
+The gap is not polish. It is that the domain was shaped around one question -- *how is
+this category split?* -- and a tracker with imported bank transactions asks different
+ones: *whose money was this, which group does it belong to, and how should this one
+expense be shared?*
+
+## What is missing
+
+Grouped by what it blocks. **Plaid** marks items the integration depends on, not merely
+benefits from.
+
+### Domain
+
+| Gap | Today | Needed | Priority |
+|---|---|---|---|
+| Per-expense split | A split is a `Rule`; every transaction points at a rule version. "Split this dinner between three of the five of us" means creating a rule first. | Each transaction carries its own split. Rules become templates that pre-fill it. | High |
+| Category separate from split | `Rule.Category` is both the label and the split. The expense dialog's "Category" select is actually a rule picker; a group with no rule cannot record anything. | Category is a label on the transaction (Plaid supplies one) that may *default to* a split rule; the split itself is chosen per expense. See [Category and split](#category-and-split). | High, Plaid |
+| Currency | `decimal(18,2)` with no currency; UI hard-codes `$`. | `Currency` on the transaction, a default on the group, Plaid's `iso_currency_code` mapped straight in. | High, Plaid |
+| Group on the transaction | Group is reached through `RuleVersion -> Rule -> Group`. `CreateTransactionRequest.GroupId` exists only to disambiguate "personal" from "no rule". | `GroupId` (nullable) on the transaction. Null means personal. | High, Plaid |
+| External identity and source | Nothing distinguishes a typed expense from an imported one. | A provider-neutral `BankTransaction` staging table holding the imported row (external id, merchant, pending state, account) and a nullable link from `Transaction` to it. The provider stays behind an interface. | High, Plaid |
+| Settlement as its own thing | Two mirrored `Transaction` rows (`+A` and `-A`) under a system rule. They show up as expenses everywhere. | A `Transfer` leaf of the `Transaction` hierarchy: one row, payer = from, one split to the recipient for the full amount. Balances need no special case; expense surfaces query `Set<Expense>()` and never see it. See [Settlements as transfers](#settlements-as-transfers). | High |
+| Pagination and server filtering | Every list is fetched whole. `TransactionFilter(From, To)` exists but no UI sends it. | Cursor or offset paging on every list, filters by date, group, category, member, source. One month of bank data is hundreds of rows. | High, Plaid |
+| Membership as a record | Implicit many-to-many. `AddGroupMembers` silently drops any email that is not already an account. | `GroupMembership` with status (invited, active, left), an invite-by-email flow, "leave group", and a real archive flag -- `GroupResponse.IsArchive` is read by three components and set by nothing. | Medium |
+| Your share, not just what you paid | `GET /transactions` returns rows where `User == you`. Nothing lists what you owe on others' expenses, nothing totals your position across groups. | A cross-group balance endpoint and a "your share" view; this is the tracker half of the product. | Medium |
+| Recurring, budgets, receipts | Absent. | Later. Budgets by category become natural once categories are labels. | Later |
+
+### Behaviour that reads as bugs today
+
+- **Settlements count as expenses.** The `-A` settlement row lands in the Expenses grid
+  as a negative "Settlement" paid by you, and in the Home and Expenses totals ("You
+  paid", "This month"). Group pages list both halves.
+- **The personal group is a group.** `GroupsOf(user)` includes it, so "Personal · 1" is
+  a chip in the switcher and a card on Home.
+- **Only the creditor can settle.** The debtor has no way to record "I paid you back".
+- **Even split is non-deterministic.** `RuleEditorForm.SplitPercentEvenly` and
+  `ConvertSharesToPercentages` hand the rounding remainder to a random member.
+- **Mixed clocks.** `DateTime.Now` in `Settle` and `DetachMember`; `UtcNow` everywhere
+  else.
+- **Re-adding a member.** `group.Users.Add(existing)` is not guarded; worth a test -- it
+  likely surfaces as a 500 on the join table's key.
+
+## What is too complex
+
+Each of these was a reasonable answer to a real problem. Together they mean a new feature
+has to be threaded through four tables, three handler interfaces and two mirrored
+formulas before it reaches the screen.
+
+### The rule-version hierarchy
+
+`Rule -> RuleVersion` (TPT, four tables) `-> Personal | Percent | Shares | Settlement`,
+where `Shares` derives from `Percent` and writes both `RuleUsers` and `SharedRuleUsers`.
+Editing a rule closes the version and opens a new one so old transactions keep their
+split.
+
+- **Why:** transactions reference the split, so the split must be immutable. Versioning
+  gives that.
+- **Cost:** `IRuleVersionHandler<,>` x3 with a reflection dispatcher, `Equals` to decide
+  whether an edit is "really" a change, `DetachMember` needing two queries because the
+  subtype hides its members, `RuleVersionHasRemovedMember` checks on every write.
+- **Instead:** store the split *on the transaction*. Then the rule is a plain, editable
+  template and history is frozen by construction. The hierarchy, the handlers and the
+  version tables go.
+
+### Balances computed live in SQL, twice
+
+`GroupService.NetBalances` walks every transaction x every rule member and applies
+`Truncate(amount * pct) / 100` with the payer absorbing the remainder.
+`TransactionService.GetTransactionSplits` repeats the same formula in C# for the detail
+dialog.
+
+- **Cost:** O(transactions x members^2) per balance read; two copies of the money
+  arithmetic that must agree to the cent; unreadable EF translation.
+- **Instead:** a `TransactionSplit(TransactionId, UserId, Amount)` row written once.
+  Balance is `SUM(paid) - SUM(split)` over the whole ledger: one `GROUP BY`, indexable, and the
+  detail dialog just reads rows.
+
+### Settlement and Personal as pseudo-rules
+
+A settlement is a system `Rule` with a `SettlementRuleVersion` per counterparty and two
+`Transaction` rows of opposite sign. The personal ledger is a hidden `Group` with a locked
+`"Default"` rule. `RuleFlags`, `RuleFilter(IsSystem, AllowUserTransactions)` and
+`RejectGroupTransactionWithoutARule` exist to keep these from leaking -- and they still
+leak into lists and totals.
+
+- **Instead:** a settlement is a `Transfer`, a sibling of `Expense` under `Transaction`,
+  with one split to the recipient -- the same arithmetic as the "Daniel pays 100%" rule
+  people have already invented as a workaround, without the rule. A personal transaction
+  is one with `GroupId = null` and no splits. `RuleFlags`, `RuleFilter`, the settlement
+  rule and the personal group all disappear.
+
+### Update paths written as one query
+
+`TransactionService.Update` validates payer, rule version, group membership and flags in
+a single LINQ expression with three `DefaultIfEmpty` joins. Correct, and nobody will want
+to touch it.
+
+- **Instead:** load the transaction, load the group with members, check each rule in
+  plain C#. With splits on the transaction the checks shrink to "payer and participants
+  are members".
+
+### JSON Patch for every update
+
+Three `PATCH` endpoints take `JsonPatchDocument<T>`, apply it to a re-read model,
+re-validate through `PatchedModel`, and the client diffs by hand
+(`EditRuleDialog.VersionHasChanged`). The client's patch package is pinned to a preview
+build because every release breaks the WASM restore.
+
+- **Instead:** `PUT` with the full request record. The dialogs already hold the full
+  model; the API already re-validates it. Drops a dependency, a helper, and a class of
+  subtle bugs.
+
+### Two write paths in the client
+
+Pages write through `*PageStateService`, which announces through `DataChangeNotifier`.
+`ManageRulesDialog` and `TransactionDetailsDialog` call the generated clients directly
+and announce themselves -- or, for rules, don't.
+
+- **Instead:** one thin command layer per aggregate that every dialog uses; the notifier
+  stays. Small, but it is the pattern the Plaid review inbox will copy, so fix it before
+  copying it.
+
+## The target model
+
+Fewer tables, and each one answers a question a person would ask.
+
+| Today | Proposed |
+|---|---|
+| `Group` <-> `User` (implicit join) | `Group` (+ `Currency`, `ArchivedAt`) |
+| `Rule` + `RuleFlags` | `GroupMembership` (Role, Status, JoinedAt, LeftAt, InvitedEmail) |
+| `RuleVersion` TPT: Personal, Percent, Shares (: Percent), Settlement | `SplitRule` (GroupId, Name, Kind, participants + weights) -- an editable template |
+| `PercentRuleUser`, `SharesRuleUser` | `Category` (GroupId, Name, DefaultSplitRuleId?) -- a label that may pre-fill a split |
+| `Transaction -> RuleVersion` | `Transaction` (abstract, TPH: GroupId?, PaidBy, Amount, Currency, Date, Name, Description, BankTransactionId?) with leaves `Expense` (+ CategoryId?) and `Transfer` |
+| Personal = hidden group; settlement = +/- transaction pair | `TransactionSplit` (TransactionId, UserId, Amount) |
+| | `BankConnection`, `LinkedAccount`, `BankTransaction` -- import side, provider-neutral; see [Bank data without a provider in the model](#bank-data-without-a-provider-in-the-model) |
+
+```csharp
+// One table, one level. Splits are written once, at create or edit, and sum
+// to the amount; remainder to the payer, as today.
+public abstract class Transaction : Entity
+{
+    public Guid? GroupId { get; init; }            // null = personal
+    public required Guid PaidByUserId { get; init; }
+    public required decimal Amount { get; init; }
+    public required string Currency { get; init; }  // ISO 4217
+    public required DateTimeOffset Date { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+
+    // The only trace of where it came from. Null for a typed entry; otherwise
+    // the imported row it was filed from. Nothing provider-specific lives here.
+    public Guid? BankTransactionId { get; init; }
+
+    public ICollection<TransactionSplit> Splits { get; } = [];
+}
+
+// Something the group spent. Category only makes sense here.
+public sealed class Expense : Transaction
+{
+    public Guid? CategoryId { get; init; }
+}
+
+// Money moving between two members. Exactly one split, to the recipient,
+// for the full amount -- the constructor is the only way to make one.
+public sealed class Transfer : Transaction
+{
+    public Transfer(Guid groupId, Guid from, Guid to, decimal amount, string currency,
+        DateTimeOffset date)
+    {
+        // GroupId = groupId, PaidByUserId = from, ...; Splits.Add(new(to, amount))
+    }
+}
+
+// Balance for a group, one query over Set<Transaction>():
+//   paid(u) = Σ Amount        where PaidByUserId = u
+//   owed(u) = Σ Split.Amount  where Split.UserId = u
+//   net(u)  = paid − owed
+//
+// A transfer from Loraine to Daniel for 3.00: Loraine paid +3, Daniel owed +3.
+// Loraine's net rises, Daniel's falls. No settlement term, no second row.
+```
+
+### Settlements as transfers
+
+The screenshot of the Home group makes the case. Members had already worked around the
+Settle button by creating a "Daniel pays" rule -- one participant, 100% -- and recording
+a settlement as an ordinary expense against it. The arithmetic is right; only the
+modelling was missing. A `Transfer` is that idea made first-class: one row, the payer is
+the person paying back, the single split names who they paid. It goes through the same
+splits, the same balance query, the same edit and delete paths, and an imported bank row
+that is a Venmo or Zelle payment to a member can be filed as a transfer from the review
+inbox -- something a separate settlement table could not do without duplicating the
+import link.
+
+What it costs is one discipline: every surface that means *expenses* -- lists, totals,
+category breakdowns, the "You paid" tiles, the grid -- reads `Set<Expense>()`, and only
+the balance query and the activity feed read `Set<Transaction>()`. EF adds the
+discriminator predicate to `Set<Expense>()` itself, so the filter cannot be forgotten
+the way an extension method can.
+
+#### Why TPH, given what TPT did to rule versions
+
+Inheritance earns its keep when the leaves carry different data, and here they do, if
+only slightly: `CategoryId` belongs to an expense and has no meaning on a transfer. TPH
+puts it on `Expense` alone instead of a nullable column with a "must be null when it is a
+transfer" check, and the `Transfer` constructor makes the one-split invariant
+unbreakable. It also matches the wire contract the client already understands:
+`ExpenseResponse` and `TransferResponse` under `TransactionResponse` with a `$type`
+discriminator, as the rule-version DTOs do today.
+
+What went wrong with `RuleVersion` was TPT -- four tables, a join per read -- and a
+three-level chain (`Shares : Percent : RuleVersion`) with duplicated collections. TPH is
+one table and EF's default. The guardrails:
+
+- **One level.** `abstract Transaction`, `sealed Expense`, `sealed Transfer`. No leaf
+  inherits from a leaf.
+- **Shared columns on the base.** Leaf-only columns are nullable in the table by
+  construction; that is expected, not a smell.
+- **No `Kind` property alongside.** The discriminator is the discriminator; branch with
+  `is Transfer` or `Set<Transfer>()`.
+- **Index the discriminator.** EF does not by default, and every expense query filters
+  on it.
+- **A third kind is a third leaf.** `Income`, for a Plaid deposit in personal tracking,
+  is a sealed class and a DTO -- the same cost as an enum value would have been.
+
+### Category and split
+
+Today the rule *is* the category: `Rule.Category = "Groceries"` and its versions hold
+the split. One thing doing two jobs, which is why the seed data carries Groceries and
+Utilities as two identical shares rules, and why a category with no rule cannot record
+anything.
+
+In the target model the relationship stays but points the other way. A category is a
+label the group owns, and it may name a default split rule:
+
+```
+Group "Home"
+ ├─ SplitRule  "Household 3-way"  { Daniel 100000, Anabel 15000, Loraine 100000, Omar 100000 }
+ ├─ SplitRule  "Even"             { equal among all members }
+ ├─ Category   "Groceries"   -> default: Household 3-way
+ ├─ Category   "Utilities"   -> default: Household 3-way
+ └─ Category   "Dining out"  -> default: none (falls back to Even)
+
+Transaction "Costco" 220.50, Category = Groceries
+ └─ Splits: Daniel 70.00, Anabel 10.50, Loraine 70.00, Omar 70.00   <- copied at write time
+```
+
+Recording a Groceries expense pre-fills the split from Household 3-way and stores the
+result on the transaction. What that buys:
+
+- **Fixed by default, adjustable when it matters.** Every Groceries expense gets the
+  household split without anyone touching it, exactly as today -- but "don't charge Omar
+  for his own birthday cake" is an edit to one expense, not a rule change.
+- **One rule, many categories.** Groceries, Utilities and Cleaning point at the same
+  rule; when a roommate moves out it changes in one place.
+- **Editing a rule never rewrites history.** Existing transactions already hold their
+  splits, so the rule needs no versions.
+- **Imports file themselves.** A Plaid row categorised Groceries and assigned to Home
+  gets Household 3-way applied automatically; the review inbox only needs a person for
+  rows whose category has no default.
+
+A category with no default rule uses an even split among current members. A `Locked`
+flag on the category -- "this split may not be overridden per expense" -- is a later
+addition if a group asks for it; a default covers nearly every case.
+
+### Bank data without a provider in the model
+
+The ledger -- `Transaction` and its leaves, `TransactionSplit` -- knows nothing about
+banks. Imported data lives on its own side of a seam, and the seam is provider-neutral:
+every aggregator (Plaid, Teller, TrueLayer, GoCardless) and a CSV or OFX file all yield
+the same shape, an account with rows that have an external id, a date, an amount, a
+merchant and possibly a pending state.
+
+```
+BankConnection   (UserId, Provider, ProviderItemId, AccessTokenCiphertext, Cursor,
+                  Status, LastSyncedAt)               -- one per linked institution
+LinkedAccount    (BankConnectionId, ProviderAccountId, Name, Mask, Type, Currency)
+BankTransaction  (LinkedAccountId, ProviderTransactionId, Date, Amount, Currency,
+                  MerchantName, Description, ProviderCategory, Pending,
+                  ReplacesId?, Status: New | Filed | Ignored, RawJson)
+                  unique (LinkedAccountId, ProviderTransactionId)
+
+IBankConnector   CreateLinkSession · Exchange · Sync(cursor) · VerifyWebhook
+                  -> PlaidConnector today; a second provider is a second class
+```
+
+Rules of the seam:
+
+- **A pending row is not a transaction.** It stays a `BankTransaction` with
+  `Pending = true` until the provider posts it (`ReplacesId` points the posted row at the
+  pending one) or the person files it anyway. `Transaction` has no pending state.
+- **Filing copies, then links.** "Add to group" creates a `Transaction` from the row's
+  date, amount, currency and merchant, applies the category's default split, and sets
+  `BankTransactionId`. Editing the transaction afterwards never touches the imported row;
+  re-syncing never touches the transaction.
+- **Provider fields stay in `RawJson` and `ProviderCategory`.** The app reads a small
+  normalised set; anything Plaid-specific it needs later is in the raw payload, not in a
+  column.
+- **The webhook route is `/webhooks/{provider}`**, and each connector verifies its own
+  signature scheme.
+
+Migrating away from Plaid, or adding a second provider, is then a new `IBankConnector`
+and a value in `Provider`; the ledger and the UI do not change.
+
+**Migration.** One EF migration adds the new tables; a data step runs today's
+`GetTransactionSplits` once per existing transaction to materialise splits, creates one
+`Category` per existing `Rule` with the rule's current version as its default
+`SplitRule` (identical versions collapse into one rule), converts each
+`SettlementRuleVersion` pair (`+A` paid by the debtor, `-A` paid by the creditor) into
+one `Transfer` from the debtor to the creditor, re-parents personal-group
+transactions to `GroupId = null`, then drops the version tables. The seeder's
+`rules.json` becomes `split-rules.json` plus `categories.json`. The debt-minimisation
+service is untouched -- it already takes net balances and nothing else.
+
+## Plaid integration
+
+Products: `transactions` only, through `/transactions/sync` with a per-item cursor.
+Nothing here moves money. Sandbox in run mode; production credentials as Aspire
+parameters in publish mode, next to the SMTP ones.
+
+| Step | Who | What |
+|---|---|---|
+| Create link token | API | `POST /plaid/link-token` -> `/link/token/create` with `client_user_id`, webhook URL, redirect URI. |
+| Run Link | Browser | Plaid's `link-initialize.js` via JS interop. A person picks a bank and signs in. Returns a `public_token`. |
+| Exchange | API | `POST /plaid/items` -> `/item/public_token/exchange`. Store `PlaidItem` with the access token encrypted; fetch accounts. |
+| Sync | API | `/transactions/sync` until `has_more` is false; upsert added and modified, delete removed, save the cursor. |
+| Webhook | Plaid | `SYNC_UPDATES_AVAILABLE` -> queue a sync. `ITEM_LOGIN_REQUIRED` -> mark the item; Link in update mode from the UI. |
+| Review | Person | Imported rows land in an inbox: assign to a group and split, keep personal, or ignore. Auto-file rules for known merchants. |
+
+### What has to be built
+
+- **Data.** The `BankConnection`, `LinkedAccount` and `BankTransaction` tables above;
+  `PlaidConnector : IBankConnector` is the only code that speaks Plaid's vocabulary.
+  Pending -> posted arrives as a new row whose `pending_transaction_id` sets
+  `ReplacesId`; a `removed` entry deletes the staging row if it is still `New` and
+  flags it if it was already filed.
+- **Secrets.** ASP.NET Data Protection with the key ring in Postgres for the access
+  tokens; never returned by any endpoint. `plaid-client-id`, `plaid-secret`,
+  `plaid-env` as parameters.
+- **The webhook route.** The BFF's `/api` forwarder is `RequireAuthorization()`, so
+  Plaid cannot reach it. Add an anonymous forwarder for `/webhooks/{provider}`; the API
+  hands the request to that provider's connector, which for Plaid verifies the
+  `Plaid-Verification` JWT against `/webhook_verification_key/get`. Reject anything
+  else.
+- **Sync as a background job.** A hosted service with a channel; the webhook enqueues, a
+  nightly sweep enqueues every item, and "Sync now" in the UI enqueues one. Per-item lock
+  so two syncs cannot race on the cursor.
+- **Sign conventions.** Plaid amounts are positive for money out. Map to the app's
+  positive-expense convention at import and keep it in one place.
+- **Categories.** Map `personal_finance_category.primary` to the group's categories at
+  import; the person can override. Once a row has a group and a category with a default
+  split rule, its splits are written without review. This is what makes
+  category-as-label a prerequisite.
+- **Client.** The generated client picks up the new endpoints. Link itself is the one
+  piece of JS interop in the app; in the MAUI WebView use Plaid's Hosted Link with the
+  redirect back into the app, and treat native Link SDKs as a later step.
+- **Tests.** A fake `IBankConnector` for everything above the seam (sync into staging,
+  dedup on re-sync, pending -> posted replacement, filing into a group applies the
+  category's default split, ignored rows stay ignored across syncs); `PlaidConnector`
+  tested on its own against recorded payloads (cursor pagination, `removed`, webhook
+  signature accept and reject); a connection in `ITEM_LOGIN_REQUIRED` surfacing on the
+  accounts page.
+
+> **Order matters.** Importing bank transactions into today's model means every imported
+> row needs a rule version to point at, and every one of them lands as a group expense or
+> a personal one with no way to change its split later. Build Plaid on the target model,
+> not before it.
+
+## UX enhancements
+
+Ordered by how often a person meets them.
+
+### Adding an expense
+
+- One dialog, two steps: amount, description, date and group first; then **Split** --
+  *equally*, *by a saved rule*, or *custom* -- with a live per-person preview computed
+  client-side from the same remainder rule the API applies.
+- Drop the time picker. An expense has a date; the time is noise in a form people fill
+  ten times a week.
+- A group with no saved rule still works: equal split is the default, and the dialog
+  offers to save the custom split as a rule.
+- Category is a select over the group's categories with "add new" inline, never a gate.
+  Choosing one pre-fills the split step from its default rule; the person can still
+  change the split for this expense.
+
+### The group page
+
+- Give each group a route, `/groups/{id}`, so a link to a group can be shared and the
+  browser's back button means something. Tabs: Overview, Expenses (paged, filterable),
+  Members, Settle up.
+- Settle from both sides: "Record a payment" available to the debtor as well; it
+  writes one `Transfer`, shown in an *Activity* list as "Loraine paid Daniel $3.00",
+  never in Expenses.
+- Members tab shows invited-but-not-joined members; adding an email that has no account
+  sends an invitation instead of silently doing nothing.
+- Leave group, archive group, and a clear message when a balance blocks either.
+
+### Home and Expenses
+
+- Home leads with your net position across groups -- "You are owed 214.20 · you owe
+  80.00" -- which needs one new endpoint. The paid-total tiles move down.
+- Expenses gets three views: *Paid by you*, *Your share*, *Everything*; month grouping;
+  a category breakdown for the tracker use.
+- Personal stops being a group chip and becomes a "Personal" filter on Expenses and a
+  tile on Home.
+- The Plaid review inbox lives at `/inbox` with a badge in the nav: each row shows
+  merchant, account, amount, suggested category and a one-click "keep personal / add to
+  group / ignore"; bulk select for the obvious ones.
+- Linked accounts page under Account: institution, last sync, a "needs attention" state
+  for items that need re-login.
+
+### Small things worth doing now
+
+- Deterministic remainder in even split (largest share, or the payer).
+- Snackbar copy says what happened to what: "Groceries added to Home", not "Transaction
+  created successfully".
+- Money formatting through one component that knows the currency; the `$` adornments go.
+
+## Roadmap
+
+Phases are sequential because each one makes the next one smaller. Sizes assume one
+person, full time, and are estimates.
+
+### Phase 0 -- Stop the bleeding (~1 week)
+
+- Exclude settlement rows from `GET /transactions`, group expense lists and every total;
+  render them in a separate list on the group page.
+- Hide the personal group from the switcher and Home; UtcNow everywhere; deterministic
+  even split; guard re-adding a member.
+- Remove `IsArchive` or wire it -- pick one.
+- Paging on the three list endpoints and the grid; send `TransactionFilter` from the UI.
+
+Ships as a normal fix PR; no schema change.
+
+### Phase 1 -- Reshape the model (~3 weeks)
+
+- `Transaction` as a TPH base with `Expense` and `Transfer` leaves; `TransactionSplit`,
+  `GroupMembership`, nullable `GroupId`, `Currency`; `SplitRule` as a template;
+  `Category` with an optional default rule.
+- Data migration from rule versions; drop the TPT hierarchy, handlers, `RuleFlags`,
+  `RuleFilter`.
+- Balance query rewritten as sums; `DebtCalculationService` unchanged.
+- `PATCH` -> `PUT`; drop the pinned JSON Patch package.
+- Rewrite the affected tests against behaviour (splits sum to amount, remainder to
+  payer, a transfer moves both balances and appears in no expense list, leaving blocked
+  by balance). Coverage floor stays.
+
+One breaking schema change, done once, while the only data is seed data.
+
+### Phase 2 -- The product surface (~2 weeks)
+
+- Two-step expense dialog with custom split and preview.
+- `/groups/{id}` with tabs; settle from both sides; activity list.
+- Invitations and pending members; leave and archive.
+- Home net position; Expenses views; personal as a filter.
+- One command layer per aggregate for dialogs.
+
+The app is a complete expense-sharing product without bank data.
+
+### Phase 3 -- Plaid (~3 weeks)
+
+- `BankConnection`, `LinkedAccount`, `BankTransaction`; `IBankConnector` with
+  `PlaidConnector` behind it; Link token, exchange, encrypted storage; Aspire
+  parameters; sandbox in run mode.
+- Sync job into staging, cursor handling, dedup, pending -> posted; `/webhooks/{provider}`
+  and verification.
+- Review inbox, category mapping, auto-file by category default; linked accounts page;
+  re-login flow.
+- Fake connector and the test list above.
+
+Bank transactions arrive, are reviewed, and become shared or personal expenses.
+
+### Phase 4 -- Tracker depth (open)
+
+- Budgets per category; monthly reports; recurring detection from imported data.
+- Notifications (someone added an expense, you were settled with) by mail through the
+  relay that already exists.
+- MAUI: Hosted Link, then native Link SDKs if the WebView flow is rough.
+
+## Decisions to make
+
+- **Keep rule history or not?** The plan drops rule versioning because splits live on
+  the transaction. If you want "what was the Groceries rule in March", keep a lightweight
+  `SplitRuleRevision` log -- but no transaction should point at it.
+- **One currency per group, or per transaction?** Per transaction is what Plaid gives
+  you; per group is what balances need. Proposal: both, with conversion out of scope and
+  a group refusing an expense in another currency until it is in scope.
+- **Who can link a bank?** An item belongs to a person, not a group. Imported
+  transactions are theirs until they share one. That keeps other members from ever
+  seeing an account they do not own.
+- **Invitations before Plaid, or after?** They are in Phase 2 because a shared expense
+  with an unknown email is the first thing a new group hits. They can slip to Phase 4 if
+  bank sync is the priority.
