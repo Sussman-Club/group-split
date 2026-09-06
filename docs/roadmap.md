@@ -48,8 +48,8 @@ benefits from.
 | Group on the transaction | Group is reached through `RuleVersion -> Rule -> Group`. `CreateTransactionRequest.GroupId` exists only to disambiguate "personal" from "no rule". | `GroupId` (nullable) on the transaction. Null means personal. | High, Plaid |
 | External identity and source | Nothing distinguishes a typed expense from an imported one. | A provider-neutral `BankTransaction` staging table holding the imported row (external id, merchant, pending state, account) and a nullable link from `Transaction` to it. The provider stays behind an interface. | High, Plaid |
 | Settlement as its own thing | Two mirrored `Transaction` rows (`+A` and `-A`) under a system rule. They show up as expenses everywhere. | A `Transfer` leaf of the `Transaction` hierarchy: one row, payer = from, one split to the recipient for the full amount. Balances need no special case; expense surfaces query `Set<Expense>()` and never see it. See [Settlements as transfers](#settlements-as-transfers). | High |
-| Pagination and server filtering | Every list is fetched whole. `TransactionFilter(From, To)` exists but no UI sends it. | Cursor or offset paging on every list, filters by date, group, category, member, source. One month of bank data is hundreds of rows. | High, Plaid |
-| Membership as a record | Implicit many-to-many. `AddGroupMembers` silently drops any email that is not already an account. | `GroupMembership` with status (invited, active, left), an invite-by-email flow, "leave group", and a real archive flag -- `GroupResponse.IsArchive` is read by three components and set by nothing. | Medium |
+| ~~Pagination and server filtering~~ **Done for expenses** | Every list was fetched whole, and the grid searched the rows it had been handed. | Offset paging, sorting and filtering on both expense listings, plus a summary endpoint for the figures beside a page. See [Listing contract](#listing-contract). The remaining lists are bounded by group size. | Done |
+| Membership as a record | Implicit many-to-many. `AddGroupMembers` silently drops any email that is not already an account. | `GroupMembership` with status (invited, active, left), an invite-by-email flow and "leave group". The join is now explicit as `GroupMembership`, which is what per-member archiving hangs on; status and invitations are what remain. | Medium |
 | Your share, not just what you paid | `GET /transactions` returns rows where `User == you`. Nothing lists what you owe on others' expenses, nothing totals your position across groups. | A cross-group balance endpoint and a "your share" view; this is the tracker half of the product. | Medium |
 | Recurring, budgets, receipts | Absent. | Later. Budgets by category become natural once categories are labels. | Later |
 
@@ -455,10 +455,20 @@ person, full time, and are estimates.
   render them in a separate list on the group page.
 - Hide the personal group from the switcher and Home; UtcNow everywhere; deterministic
   even split; guard re-adding a member.
-- Remove `IsArchive` or wire it -- pick one.
-- Paging on the three list endpoints and the grid; send `TransactionFilter` from the UI.
+- ~~Remove `IsArchive` or wire it -- pick one.~~ **Done:** wired, and personal.
+  Archiving a group hides it from your own list the way archiving a note does -- it is
+  `GroupMembership.ArchivedAt`, not a property of the group, so nothing about the group
+  changes and no other member is affected. `POST`/`DELETE /groups/{id}/archive` write the
+  caller's own membership row. Closing a group *for everyone* is a different feature and
+  is not built.
+- ~~Paging on the three list endpoints and the grid; send `TransactionFilter` from the
+  UI.~~ **Done, for the two listings that grow without bound:** `GET /transactions` and
+  `GET /groups/{id}/transactions` answer with a page, and the filter grew the fields the
+  grid needs -- group, payer, category and free text -- so searching and sorting are the
+  server's. Groups, rules and members stay whole; they are bounded by group size and feed
+  chips and selects rather than a grid. See [Listing contract](#listing-contract).
 
-Ships as a normal fix PR; no schema change.
+The rest ships as a normal fix PR; no schema change beyond the archive column.
 
 ### Phase 1 -- Reshape the model (~3 weeks)
 
@@ -504,6 +514,45 @@ Bank transactions arrive, are reviewed, and become shared or personal expenses.
 - Notifications (someone added an expense, you were settled with) by mail through the
   relay that already exists.
 - MAUI: Hosted Link, then native Link SDKs if the WebView flow is rough.
+
+## Listing contract
+
+How a listing that pages is asked and answered, so a second one does not invent its own
+shape. `PageRequest`, `SortRequest` and `PagedResponse<T>` live in `GroupSplit.Shared`;
+the mechanism is `IQueryable<T>.ApplySort(sort, map).ToPageAsync(page, ct)` and a
+`SortMap<T>` beside the endpoint that owns it.
+
+| Parameter | Default | Notes |
+| --- | --- | --- |
+| `Page` | 1 | Below 1 is clamped to 1. |
+| `PageSize` | 25 | Clamped to 200. The response says which size was applied. |
+| `SortBy` | the listing's default key | Case-insensitive. A key the listing does not offer is a 400 naming the ones it does. |
+| `SortDescending` | the key's own default | Dates and amounts read largest first. |
+
+The response is `{ items, page, pageSize, totalCount }`. Out-of-range values are clamped
+rather than refused, because `[Range]` on an `[AsParameters]` record only runs inside the
+API's own assembly -- .NET 10 validation is a source-generated interceptor on the
+`AddValidation()` call site -- and one behaviour everywhere beats the stricter of two.
+
+Every map declares a default key and a tiebreak. A page of an unordered query is not a
+page: rows the chosen key cannot separate have to keep an order between requests, or
+paging shows one row twice and another never.
+
+**Expenses** sort by `dateTime` (the default, newest first), `amount`, `name`, `category`,
+`group` or `paidBy`, and filter by `From`, `To`, `GroupId`, `PaidByUserId`, `Category`
+(exact, case-insensitive) and `Search` (anywhere in the name, description, category, group
+name or payer's name). `GET /transactions/summary` and
+`GET /groups/{id}/transactions/summary` take the same filter and answer
+`{ count, total }` -- what the whole match comes to, which is what the figures beside a
+page have to say and what a page cannot work out for itself.
+
+**One thing to know when adding a paged endpoint.** The clients are generated with
+`/GenerateDtoTypes:false`, so a schema id is written into them verbatim as a C# type name,
+and the templates only rewrite a generic name back into a generic for parameters. A new
+`PagedResponse<TSomething>` therefore needs a one-line record named
+`PagedResponseOfTSomething` in `GroupSplit.Shared` beside the existing one, or the app
+stops compiling. The schema id is pinned in `OpenApiOptionsExtensions` so the two cannot
+drift.
 
 ## Decisions to make
 
