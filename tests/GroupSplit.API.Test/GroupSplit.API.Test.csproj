@@ -47,4 +47,9 @@
     <ProjectReference Include="..\..\src\GroupSplit.API\GroupSplit.API.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Recorded Plaid payloads, read at run time by PlaidTestServer. -->
+    <Content Include="Banking/Plaid/Payloads/*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

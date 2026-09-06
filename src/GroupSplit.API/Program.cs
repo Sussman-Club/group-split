@@ -54,6 +54,10 @@ builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AppDbContext>()
     .SetApplicationName("GroupSplit");
 
+// Only when this deployment has Plaid credentials. Without them the API starts as usual and
+// the bank features say bank sync is off, which is the honest answer.
+builder.Services.AddPlaidConnector(builder.Configuration);
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();
 
