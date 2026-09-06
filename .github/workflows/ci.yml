@@ -42,7 +42,12 @@ jobs:
       COVERAGE_BRANCH_FLOOR: 60
 
     steps:
+      # Full history: MinVer versions the CLI package from the nearest cli-v tag and the
+      # commit height since it, and a shallow checkout has neither, so the pack step below
+      # would stamp 0.0.0-alpha.0.0 on every build.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -172,7 +177,12 @@ jobs:
     timeout-minutes: 25
 
     steps:
+      # Full history: MinVer versions the CLI package from the nearest cli-v tag and the
+      # commit height since it, and a shallow checkout has neither, so the pack step below
+      # would stamp 0.0.0-alpha.0.0 on every build.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v6
         with:

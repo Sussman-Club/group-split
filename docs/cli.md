@@ -9,6 +9,7 @@ program -- a script, a CI job, or an AI agent shelling out. Everything below tha
 a nicety for the second kind is load-bearing.
 
 - [Installing it](#installing-it)
+- [Keeping it updated](#keeping-it-updated)
 - [Pointing it at a server](#pointing-it-at-a-server)
 - [Signing in](#signing-in)
 - [Output](#output)
@@ -33,8 +34,11 @@ you can install from.
 
 ```bash
 dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg
-dotnet tool install --global --add-source ./artifacts/nupkg GroupSplit.Cli
+dotnet tool install --global --add-source ./artifacts/nupkg --prerelease GroupSplit.Cli
 ```
+
+`--prerelease` is needed until there is a release tag: an untagged build is versioned
+`0.0.0-alpha.0.<commits>`, which is a prerelease, and the installer skips those by default.
 
 `~/.dotnet/tools` has to be on `PATH`; the installer says so if it is not. Then:
 
@@ -42,8 +46,33 @@ dotnet tool install --global --add-source ./artifacts/nupkg GroupSplit.Cli
 groupsplit --help
 ```
 
-Upgrading is `dotnet tool update` with the same `--add-source`; removing it is
-`dotnet tool uninstall --global GroupSplit.Cli`.
+Removing it is `dotnet tool uninstall --global GroupSplit.Cli`.
+
+## Keeping it updated
+
+```bash
+git pull
+dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg
+dotnet tool update --global --add-source ./artifacts/nupkg --prerelease GroupSplit.Cli
+```
+
+`groupsplit --version` prints the version and the commit it was built from, which is the
+quickest way to tell an installed tool from the checkout it came from.
+
+### Why the version is not written by hand
+
+`dotnet tool update` compares versions and does nothing when they match. A hand-written
+`<Version>` is the same on every build, so repacking after a change and running update would
+report success and leave the **old binary installed** -- a stale tool that gives no sign of
+being stale.
+
+MinVer versions the package from git instead: `0.0.0-alpha.0.<commit height>` between tags, so
+every commit produces a higher version and an update always takes. Tag `cli-v1.2.3` and the
+same build produces a clean `1.2.3`, no longer a prerelease. The prefix keeps CLI releases
+independent of any tag the apps might want.
+
+CI checks out with `fetch-depth: 0` for the same reason -- MinVer needs the tags and the
+history to compute that.
 
 ### Without installing
 

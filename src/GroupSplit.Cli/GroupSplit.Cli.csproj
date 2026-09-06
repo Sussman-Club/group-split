@@ -20,8 +20,13 @@
         <PackageTags>groupsplit;cli</PackageTags>
         <RepositoryUrl>https://github.com/Sussman-Club/group-split</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <!-- Versioned by hand for now, since nothing stamps this from a tag yet. -->
-        <Version>0.1.0</Version>
+        <!-- Versioned by MinVer from git, not by hand. A hand-written version is the same
+             on every build, and `dotnet tool update` compares versions: repacking after a
+             change would leave the installed tool silently stale. Commit height makes each
+             build a higher prerelease, so an update always picks the new one up.
+             Tags are prefixed `cli-v` so releasing the CLI stays independent of any tag
+             the apps might want later. -->
+        <MinVerTagPrefix>cli-v</MinVerTagPrefix>
         <!-- Not InvariantGlobalization: this prints money, and the invariant culture
              renders every currency with the generic sign. Not IsAotCompatible either,
              because the NSwag-generated client binds through reflection-based
@@ -30,6 +35,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="MinVer" Version="8.0.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
         <PackageReference Include="Spectre.Console" Version="0.57.2" />
         <PackageReference Include="System.CommandLine" Version="2.0.11" />
         <!-- Pinned to the same preview as GroupSplit.App.Shared, for a different reason:
