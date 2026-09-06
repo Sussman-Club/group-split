@@ -109,12 +109,14 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
 
         // Scoped to the caller's own groups: who a group is waiting on is a list of
         // addresses, and an address is a person.
+        //
+        // Ordered before the projection, not after -- see the note on Describe.
         return await Describe(
                 from invitation in context.Set<GroupInvitation>()
                 where invitation.GroupId == groupId &&
                       invitation.Group.Users.Any(user => user.Id == userId)
+                orderby invitation.Email
                 select invitation)
-            .OrderBy(invitation => invitation.Email)
             .ToListAsync(ct);
     }
 
@@ -128,8 +130,10 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
             return [];
 
         return await Describe(
-                context.Set<GroupInvitation>().Where(invitation => invitation.Email == email))
-            .OrderByDescending(invitation => invitation.InvitedAt)
+                from invitation in context.Set<GroupInvitation>()
+                where invitation.Email == email
+                orderby invitation.InvitedAt descending
+                select invitation)
             .ToListAsync(ct);
     }
 
@@ -214,6 +218,17 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
                ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
     }
 
+    /// <summary>
+    /// The wire shape, projected from whatever query is handed in.
+    /// </summary>
+    /// <remarks>
+    /// Order the query <em>before</em> it gets here. Ordering the result of this instead
+    /// asks the database to sort by a member of a constructor call it has no way to build,
+    /// and the whole query fails to translate -- which is what
+    /// <c>GET /invitations</c> did on its first run against Postgres. It ran perfectly on
+    /// the in-memory provider the unit tests use, because that one evaluates anything it
+    /// cannot translate rather than refusing.
+    /// </remarks>
     private static IQueryable<GroupInvitationResponse> Describe(IQueryable<GroupInvitation> invitations) =>
         from invitation in invitations
         select new GroupInvitationResponse(

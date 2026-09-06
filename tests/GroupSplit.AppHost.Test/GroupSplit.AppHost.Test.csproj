@@ -43,6 +43,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\GroupSplit.AppHost\GroupSplit.AppHost.csproj" />
     <ProjectReference Include="..\..\src\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
+    <!-- The domain services, so the queries they build can be run against the real
+         provider. The unit suite runs them on the in-memory provider, which evaluates
+         whatever it cannot translate instead of refusing, so a query that Npgsql rejects
+         passes there and 500s in production. -->
+    <ProjectReference Include="..\..\src\GroupSplit.API\GroupSplit.API.csproj" />
   </ItemGroup>
 
 </Project>

@@ -433,7 +433,7 @@ public static class GroupApi
         /// type rather than a column: EF knows which leaf each row is, and a <c>Kind</c>
         /// beside the discriminator would be a second answer to the same question.
         /// </summary>
-        private IQueryable<GroupActivityResponse> SelectActivityDto()
+        internal IQueryable<GroupActivityResponse> SelectActivityDto()
         {
             return from transaction in activity
                 select new GroupActivityResponse

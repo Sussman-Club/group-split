@@ -21,23 +21,30 @@ public class TransactionSeeder(
     {
         var payer = await DbContext.Set<User>().FindAsync([dto.PayerId], ct);
 
-        var category = await DbContext.Set<Category>()
-            .Include(c => c.Group)
-            .FirstOrDefaultAsync(c => c.Id == dto.CategoryId, ct);
+        if (payer is null)
+            return null;
 
-        if (payer is null || category is null)
+        // No category means a personal expense: no group either, since a category is what
+        // says which group an expense is in. It divides to a single share, the payer's own.
+        var category = dto.CategoryId is { } categoryId
+            ? await DbContext.Set<Category>()
+                .Include(c => c.Group)
+                .FirstOrDefaultAsync(c => c.Id == categoryId, ct)
+            : null;
+
+        if (dto.CategoryId is not null && category is null)
             return null;
 
         var expense = new Expense
         {
             Id = dto.Id,
             Amount = dto.Amount,
-            Currency = category.Group.Currency,
+            Currency = category?.Group.Currency ?? Currencies.Default,
             Name = dto.Name,
             Description = dto.Description,
             DateTime = dto.DateTime,
             User = payer,
-            Group = category.Group,
+            Group = category?.Group,
             Category = category,
         };
 

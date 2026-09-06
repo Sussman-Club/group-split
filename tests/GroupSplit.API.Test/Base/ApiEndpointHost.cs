@@ -107,16 +107,8 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
             options => options.UseInMemoryDatabase(databaseName));
 
         // The same registrations Program.cs makes, minus the ones that need Aspire.
-        builder.Services.AddCurrentUser();
-        builder.Services.AddScoped<IDebtCalculationService, DebtCalculationService>();
-        builder.Services.AddScoped<IAccountService, AccountService>();
-        builder.Services.AddScoped<IGroupService, GroupService>();
-        builder.Services.AddScoped<IInvitationService, InvitationService>();
-        builder.Services.AddScoped<ITransactionService, TransactionService>();
-        builder.Services.AddSplitRuleServices();
-        builder.Services.AddScoped<ICategoryService, CategoryService>();
-        builder.Services.AddScoped<ISplitRuleService, SplitRuleService>();
-        builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+        // The production list, so a test host cannot drift from what actually runs.
+        builder.Services.AddDomainServices();
         builder.Services.AddValidation();
         builder.Services.AddApiErrorHandling();
 
@@ -130,12 +122,7 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         app.UseMiddleware<CurrentUserMiddleware>();
         app.UseAuthorization();
 
-        app.MapGroupApi();
-        app.MapUserApi();
-        app.MapInvitationsApi();
-        app.MapTransaction();
-        app.MapCategoriesApi();
-        app.MapSplitRulesApi();
+        app.MapDomainApi();
 
         app.MapGet(ThrowingRoute, () => { throw new InvalidOperationException(ThrowingMessage); })
             .RequireAuthorization();
