@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace GroupSplit.Shared;
 
 /// <summary>
@@ -7,7 +9,14 @@ namespace GroupSplit.Shared;
 /// Three of the four stored statuses. A superseded row -- a pending one whose posted row
 /// has arrived -- is never listed and never filed, so it is not something a caller can ask
 /// for or receive.
+/// <para>
+/// It travels as its name. A status that reads <c>Ignored</c> on the wire is worth more
+/// than one that reads <c>2</c>, and it means reordering the members cannot silently change
+/// what an older client is asking for -- the same reasoning the error codes follow, and the
+/// same way these are stored.
+/// </para>
 /// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter<InboxStatus>))]
 public enum InboxStatus
 {
     New,

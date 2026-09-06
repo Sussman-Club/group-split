@@ -1,0 +1,136 @@
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient Groups
+@inject ICategoriesClient Categories
+@inject LoadGuard Loading
+
+@*
+    Turning one imported row into a group expense. Only two things are the person's to
+    decide -- which group, and what it was for -- because everything else is what the bank
+    said, and correcting the bank is editing the expense afterwards.
+*@
+
+<MudDialog>
+    <DialogContent>
+        <div class="gs-stack">
+            <div class="gs-kv-row">
+                <span class="gs-eyebrow">@Row.Title</span>
+                <strong>@Row.Amount.ToMoney(Row.Currency)</strong>
+            </div>
+            <div class="meta">@Row.AccountName · @Row.Date.ToShortDateString()</div>
+
+            <MudSelect T="Guid?" Label="Group" Value="_groupId" ValueChanged="OnGroupChangedAsync"
+                       Variant="Variant.Outlined" Dense="true" Required="true">
+                @foreach (var group in _groups)
+                {
+                    <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="Guid?" Label="Category" @bind-Value="_categoryId"
+                       Variant="Variant.Outlined" Dense="true" Disabled="@(_groupId is null)"
+                       HelperText="@CategoryHint">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">No category</MudSelectItem>
+                @foreach (var category in _categories)
+                {
+                    <MudSelectItem T="Guid?" Value="@category.Id">@category.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Dense="true"
+                          HelperText="What this will be called in the group's expenses." />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                   Disabled="@(_groupId is null)" OnClick="Submit">Add expense</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>What the dialog answers with: the request, and where it is going, for the snackbar.</summary>
+    public sealed record Answer(FileBankTransactionRequest Request, string Destination);
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
+
+    private IReadOnlyList<GroupResponse> _groups = [];
+    private IReadOnlyList<CategoryResponse> _categories = [];
+    private Guid? _groupId;
+    private Guid? _categoryId;
+    private string _name = string.Empty;
+
+    private string CategoryHint => _groupId is null
+        ? "Pick a group first."
+        : "A category with a split rule divides the expense for you.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _name = Row.Title;
+
+        await Loading.RunAsync(async () =>
+        {
+            _groups = (await Groups.GetGroupsAsync(CancellationToken.None)).ToList();
+        }, "your groups");
+    }
+
+    private async Task OnGroupChangedAsync(Guid? groupId)
+    {
+        _groupId = groupId;
+        _categoryId = null;
+        _categories = [];
+
+        if (groupId is null)
+            return;
+
+        await Loading.RunAsync(async () =>
+        {
+            _categories = (await Categories.GetCategoriesAsync(groupId, CancellationToken.None)).ToList();
+        }, "the group's categories");
+
+        // The provider's own category, matched against what the group already uses. Only a
+        // suggestion: whatever is selected when the dialog is submitted is what gets sent.
+        _categoryId = Suggested()?.Id;
+    }
+
+    /// <summary>
+    /// The group's category whose name reads like the provider's label. A plain name match,
+    /// deliberately: a mapping table would be a thing to maintain, and the person can see
+    /// what was chosen and change it before pressing the button.
+    /// </summary>
+    private CategoryResponse? Suggested()
+    {
+        if (Row.CategoryLabel is not { Length: > 0 } label)
+            return null;
+
+        return _categories.FirstOrDefault(category =>
+                   string.Equals(category.Name, label, StringComparison.OrdinalIgnoreCase))
+               ?? _categories.FirstOrDefault(category =>
+                   label.Contains(category.Name, StringComparison.OrdinalIgnoreCase)
+                   || category.Name.Contains(label, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void Cancel() => Dialog.Cancel();
+
+    private void Submit()
+    {
+        if (_groupId is not { } groupId)
+            return;
+
+        var request = new FileBankTransactionRequest
+        {
+            GroupId = groupId,
+            CategoryId = _categoryId,
+            Name = string.IsNullOrWhiteSpace(_name) ? null : _name
+        };
+
+        var destination = _groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? "the group";
+
+        Dialog.Close(DialogResult.Ok(new Answer(request, destination)));
+    }
+}

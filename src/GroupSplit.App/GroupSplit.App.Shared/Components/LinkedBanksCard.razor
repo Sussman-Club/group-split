@@ -1,0 +1,207 @@
+@using GroupSplit.App.Shared.Services.Banking
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IInboxStateService Inbox
+@inject IBankCommands Bank
+@inject PlaidLinkLauncher Link
+@inject IDialogService DialogService
+@implements IDisposable
+
+@*
+    The banks somebody has linked. Lives on the account page because a bank belongs to a
+    person and not to a group: nobody else ever sees these, or the rows they bring in.
+*@
+
+<div class="gs-card gs-card-pad gs-reveal" style="--i: @Reveal">
+    <div class="gs-card-title">
+        <h2>Linked banks</h2>
+        @if (Connections.Count > 0)
+        {
+            <span class="gs-tag neutral">@Connections.Count linked</span>
+        }
+    </div>
+
+    @if (Inbox.Connections is { Enabled: false })
+    {
+        <p class="meta">
+            Bank sync is not switched on for this app, so there is nothing to link yet.
+        </p>
+    }
+    else
+    {
+        @if (Connections.Count == 0)
+        {
+            <p class="meta">
+                Link a bank and its transactions arrive in your inbox, where you can add them
+                to a group or keep them to yourself.
+            </p>
+        }
+        else
+        {
+            <div class="gs-list">
+                @foreach (var item in Connections)
+                {
+                    var connection = item;
+                    <div class="gs-row" style="cursor: default">
+                        <Avatar Name="@connection.InstitutionName" />
+                        <div style="min-width: 0">
+                            <div class="title">
+                                <span>@connection.InstitutionName</span>
+                                @if (connection.NeedsAttention)
+                                {
+                                    <span class="gs-tag">Needs attention</span>
+                                }
+                            </div>
+                            <div class="meta">@Describe(connection)</div>
+                        </div>
+                        <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                            @if (connection.NeedsAttention)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           Class="gs-btn-pill" Disabled="@_busy"
+                                           OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
+                                           OnClick="@(() => SyncAsync(connection))">Sync now</MudButton>
+                            }
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                                       Disabled="@_busy"
+                                       OnClick="@(() => UnlinkAsync(connection))">Unlink</MudButton>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="gs-btn-pill mt-4"
+                   StartIcon="@Icons.Material.Rounded.AddLink" Disabled="@_busy"
+                   OnClick="LinkAsync">
+            Link a bank
+        </MudButton>
+    }
+</div>
+
+@code {
+    /// <summary>Where this sits in the page's entrance sequence.</summary>
+    [Parameter] public int Reveal { get; set; }
+
+    private bool _busy;
+
+    private IReadOnlyList<BankConnectionResponse> Connections =>
+        Inbox.Connections?.Connections ?? [];
+
+    protected override void OnInitialized() => Inbox.OnChanged += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private static string Describe(BankConnectionResponse connection)
+    {
+        var accounts = connection.Accounts.Count == 1
+            ? connection.Accounts[0].Name
+            : $"{connection.Accounts.Count} accounts";
+
+        return connection.Status switch
+        {
+            BankConnectionState.Revoked => $"{accounts} · access was withdrawn at the bank",
+            BankConnectionState.LoginRequired => $"{accounts} · your bank wants you to sign in again",
+            _ => connection.LastSyncedAt is { } synced
+                ? $"{accounts} · last checked {synced.LocalDateTime.ToShortDateString()}"
+                : $"{accounts} · not checked yet"
+        };
+    }
+
+    /// <summary>
+    /// Link, then exchange. The token is short-lived and the browser is the only thing that
+    /// may see the person's bank credentials, so the whole middle of this happens in Plaid's
+    /// own frame and comes back as one public token.
+    /// </summary>
+    private Task LinkAsync() => RunLinkAsync(connectionId: null);
+
+    /// <summary>
+    /// The same flow in update mode, which repairs the connection somebody already has
+    /// rather than adding a second copy of it.
+    /// </summary>
+    private Task RepairAsync(BankConnectionResponse connection) => RunLinkAsync(connection.Id);
+
+    private async Task RunLinkAsync(Guid? connectionId)
+    {
+        _busy = true;
+
+        try
+        {
+            var token = await Bank.CreateLinkTokenAsync(connectionId);
+
+            if (token is null)
+                return;
+
+            var publicToken = await Link.OpenAsync(token.Token);
+
+            // Null means they closed it, which is an ordinary way out and says nothing.
+            if (publicToken is null)
+                return;
+
+            if (connectionId is null)
+            {
+                await Bank.LinkAsync(publicToken);
+            }
+            else
+            {
+                // Update mode returns no usable public token; the repair is the sign-in
+                // itself, so all that is left is to ask for the sync it was blocking.
+                await Bank.SyncAsync(connectionId.Value, "your bank");
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SyncAsync(BankConnectionResponse connection)
+    {
+        _busy = true;
+
+        try
+        {
+            await Bank.SyncAsync(connection.Id, connection.InstitutionName);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UnlinkAsync(BankConnectionResponse connection)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { dialog => dialog.ContentText,
+                $"Unlink {connection.InstitutionName}? Transactions still waiting in your inbox go with it. "
+                + "Expenses you already added stay exactly as they are." },
+            { dialog => dialog.ButtonText, "Unlink" },
+            { dialog => dialog.Color, Color.Error }
+        };
+
+        var reference = await DialogService.ShowAsync<ConfirmationDialog>(
+            "Unlink bank", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+
+        if (await reference.GetReturnValueAsync<bool>() is not true)
+            return;
+
+        _busy = true;
+
+        try
+        {
+            await Bank.UnlinkAsync(connection.Id, connection.InstitutionName);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose() => Inbox.OnChanged -= OnChanged;
+}

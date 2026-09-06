@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace GroupSplit.Shared;
 
 /// <summary>
@@ -8,6 +10,7 @@ namespace GroupSplit.Shared;
 /// <c>GroupSplit.Shared</c> is what the clients compile against and it knows nothing about
 /// the database. <c>BankConnectionStateTest</c> keeps the two in step.
 /// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter<BankConnectionState>))]
 public enum BankConnectionState
 {
     Active,

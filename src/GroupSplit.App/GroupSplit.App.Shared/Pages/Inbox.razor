@@ -1,0 +1,257 @@
+@page "/inbox"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Banking
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.Shared
+@inject IInboxStateService State
+@inject IBankCommands Bank
+@inject IDialogService DialogService
+@implements IDisposable
+
+@*
+    What the bank sent, waiting to be dealt with. Each row is one decision with three
+    answers, and the whole page is that decision repeated -- so the row leads with who was
+    paid and how much, and everything else is secondary.
+*@
+
+<PageTitle>Inbox - Group Split</PageTitle>
+
+<div class="gs-page-head">
+    <div>
+        <div class="gs-eyebrow">Bank</div>
+        <h1>Inbox</h1>
+        <p>
+            @if (State.NewCount > 0)
+            {
+                @($"{State.NewCount} transaction{(State.NewCount == 1 ? "" : "s")} to sort out.")
+            }
+            else
+            {
+                @("Everything your bank sent has been dealt with.")
+            }
+        </p>
+    </div>
+</div>
+
+<div class="gs-stack">
+    <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
+        @foreach (var status in Filters)
+        {
+            var choice = status;
+            <MudButton Variant="@(State.Filter == choice ? Variant.Filled : Variant.Text)"
+                       Color="@(State.Filter == choice ? Color.Primary : Color.Default)"
+                       Size="Size.Small" Class="gs-btn-pill"
+                       OnClick="@(() => State.SetFilterAsync(choice))">
+                @Label(choice)
+            </MudButton>
+        }
+    </div>
+
+    @if (State.Connections is { Enabled: false })
+    {
+        <div class="gs-card gs-empty" style="padding: 48px 24px">
+            <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />
+            <h3>Bank sync is not switched on</h3>
+            <span>This copy of the app has no bank provider configured, so there is nothing to import.</span>
+        </div>
+    }
+    else if (State.Connections is { Connections.Count: 0 })
+    {
+        <div class="gs-card gs-empty" style="padding: 48px 24px">
+            <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />
+            <h3>No bank linked yet</h3>
+            <span>Link a bank and your transactions will start arriving here.</span>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+                       Href="/account">Link a bank</MudButton>
+        </div>
+    }
+    else if (State.Rows.Count == 0)
+    {
+        <div class="gs-card gs-empty" style="padding: 48px 24px">
+            <MudIcon Icon="@Icons.Material.Rounded.DoneAll" />
+            <h3>@EmptyTitle</h3>
+            <span>@EmptyHint</span>
+        </div>
+    }
+    else
+    {
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
+            <div class="gs-list">
+                @foreach (var item in State.Rows)
+                {
+                    var row = item;
+                    <div class="gs-row" style="cursor: default">
+                        <Avatar Name="@row.Title" />
+                        <div style="min-width: 0">
+                            <div class="title">
+                                <span>@row.Title</span>
+                                @if (row.Pending)
+                                {
+                                    <span class="gs-tag neutral">Pending</span>
+                                }
+                                @if (row.RemovedAt is not null)
+                                {
+                                    <span class="gs-tag">Withdrawn by the bank</span>
+                                }
+                            </div>
+                            <div class="meta">
+                                @row.AccountName · @row.Date.ToShortDateString()
+                                @if (row.CategoryLabel is not null)
+                                {
+                                    @($" · {row.CategoryLabel}")
+                                }
+                            </div>
+                        </div>
+
+                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                            <span class="@(row.IsCredit ? "gs-muted" : "")" title="@(row.IsCredit ? "Money in" : "Money out")">
+                                @Money(row)
+                            </span>
+
+                            @if (row.Status == InboxStatus.New)
+                            {
+                                <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               Disabled="@(_busy == row.Id)"
+                                               OnClick="@(() => IgnoreAsync(row))">Ignore</MudButton>
+                                    @if (!row.IsCredit)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                                   Disabled="@(_busy == row.Id)"
+                                                   OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudButton>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                   Class="gs-btn-pill"
+                                                   Disabled="@(_busy == row.Id)"
+                                                   OnClick="@(() => AddToGroupAsync(row))">Add to group</MudButton>
+                                    }
+                                </div>
+                            }
+                            else if (row.Status == InboxStatus.Ignored)
+                            {
+                                <MudButton Variant="Variant.Text" Size="Size.Small"
+                                           Disabled="@(_busy == row.Id)"
+                                           OnClick="@(() => RestoreAsync(row))">Put back</MudButton>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
+
+    private Guid? _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.OnChanged += OnChanged;
+
+        await State.IsReadyTask;
+        await State.LoadRowsAsync();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private static string Label(InboxStatus status) => status switch
+    {
+        InboxStatus.New => "Waiting",
+        InboxStatus.Filed => "Added",
+        _ => "Ignored"
+    };
+
+    private string EmptyTitle => State.Filter switch
+    {
+        InboxStatus.New => "Nothing waiting",
+        InboxStatus.Filed => "Nothing added yet",
+        _ => "Nothing ignored"
+    };
+
+    private string EmptyHint => State.Filter switch
+    {
+        InboxStatus.New => "New transactions from your bank will show up here.",
+        InboxStatus.Filed => "Transactions you add become expenses and appear here.",
+        _ => "Transactions you ignore stay out of the way, and can be put back."
+    };
+
+    /// <summary>
+    /// Money out reads as it does everywhere else; money in is shown as a credit rather
+    /// than as a negative expense, because it is not an expense at all.
+    /// </summary>
+    private static string Money(BankTransactionResponse row) =>
+        row.IsCredit
+            ? $"+{Math.Abs(row.Amount).ToMoney(row.Currency)}"
+            : row.Amount.ToMoney(row.Currency);
+
+    private Task KeepPersonalAsync(BankTransactionResponse row) =>
+        FileAsync(row, new FileBankTransactionRequest(), "your own expenses");
+
+    /// <summary>
+    /// Opens the ordinary expense dialog, filled in from the row. The amount and the date
+    /// come from the bank and are not the person's to change here: correcting the bank is
+    /// editing the expense afterwards, and the row keeps saying what the bank said.
+    /// </summary>
+    private async Task AddToGroupAsync(BankTransactionResponse row)
+    {
+        var parameters = new DialogParameters<FileBankTransactionDialog>
+        {
+            { dialog => dialog.Row, row }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var reference = await DialogService.ShowAsync<FileBankTransactionDialog>("Add to a group", parameters, options);
+        var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
+
+        if (answer is null)
+            return;
+
+        await FileAsync(row, answer.Request, answer.Destination);
+    }
+
+    private async Task FileAsync(BankTransactionResponse row, FileBankTransactionRequest request, string destination)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            await Bank.FileAsync(row.Id, request, destination);
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private async Task IgnoreAsync(BankTransactionResponse row)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            await Bank.IgnoreAsync(row.Id, row.Title);
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private async Task RestoreAsync(BankTransactionResponse row)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            await Bank.RestoreAsync(row.Id, row.Title);
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    public void Dispose() => State.OnChanged -= OnChanged;
+}

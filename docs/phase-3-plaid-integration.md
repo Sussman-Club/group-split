@@ -381,11 +381,21 @@ row is a 404, never a 403, matching the rest of the API.
   `onExit` to `[JSInvokable]` methods on a `PlaidLinkSession` object the page owns. The
   first `DotNetObjectReference` in the app; it is disposed with the page.
 - `/inbox`, an entry in the nav before Account with a count from `GetInboxSummary`
-  rendered as a small pill inside the 46px item so the sliding highlight is undisturbed.
-  Each row: merchant, account, amount (credits in a muted colour with "money in"),
-  date, suggested label, and three buttons -- **Add to group** opens the existing expense
-  dialog prefilled and locked on amount and date, **Keep personal** files with no group,
-  **Ignore**. A filter chip shows ignored rows so they can be restored.
+  rendered as a small pill positioned absolutely inside the 46px item, so it cannot change
+  the item's height and put the sliding highlight out of step. Each row: merchant,
+  account, amount (credits muted and signed the other way), date, suggested label, and
+  three buttons -- **Add to group**, **Keep personal**, **Ignore**. Filter buttons switch
+  between waiting, added and ignored, so an ignored row can be put back.
+- Filing into a group opens `FileBankTransactionDialog` rather than the existing expense
+  dialog. The plan had it reuse that one, prefilled and locked; built, that meant a dialog
+  whose amount, date and currency were all inert, which reads as a form somebody disabled
+  rather than as facts the bank supplied. The dedicated one shows those as text and asks
+  the only two questions that are the person's: which group, and what it was for.
+- The badge and the page read one `InboxStateService`, not two of their own, so opening
+  the app costs one summary call rather than one per reader. The rows are not fetched
+  until a page asks for them.
+- `ToMoney` gained a currency overload. Imported rows carry their own currency, and a euro
+  charge shown with a dollar sign is a different number rather than a formatting quibble.
 - Account page: a "Linked banks" card listing connections with institution, last sync,
   and a **Needs attention** state on `LoginRequired` that opens Link in update mode.
   **Link a bank** when the switch is on; a sentence saying bank sync is off when it is
