@@ -1,5 +1,6 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
@@ -7,6 +8,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject ApiErrorPresenter Errors
+@inject DataChangeNotifier Changes
 
 <MudDialog>
     <TitleContent>
@@ -99,6 +101,10 @@
 
     private void Close() => MudDialog.Close();
 
+    // This dialog opens from lists on more than one page, so it writes through the client
+    // and announces the change; every page state that shows the expense re-reads itself.
+    // The dialog closes first: the person made their change, the lists catch up behind it.
+
     private async Task EditTransaction()
     {
         var parameters = new DialogParameters<UpdateTransactionDialog>
@@ -126,6 +132,7 @@
         {
             Snackbar.Add("Transaction updated.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
+            await Changes.NotifyTransactionsChangedAsync();
         }
     }
 
@@ -146,6 +153,7 @@
         {
             Snackbar.Add("Transaction deleted.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
+            await Changes.NotifyTransactionsChangedAsync();
         }
     }
 }
