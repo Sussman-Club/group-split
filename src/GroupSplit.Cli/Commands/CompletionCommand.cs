@@ -30,7 +30,7 @@ public static class CompletionCommand
         {
             // Straight to stdout, unformatted: the output of this command is meant to be
             // evaluated by a shell, so a table or a JSON envelope would be unusable.
-            Console.Out.WriteLine(context.ParseResult.GetValue(shell) switch
+            context.RawOutput.WriteLine(context.ParseResult.GetValue(shell) switch
             {
                 Shell.Bash => Bash,
                 Shell.Zsh => Zsh,

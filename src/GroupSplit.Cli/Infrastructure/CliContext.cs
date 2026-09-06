@@ -22,10 +22,11 @@ public sealed class CliContext : IDisposable
     private readonly Lazy<HttpClient> _apiClient;
     private readonly HttpClient _authClient = new();
 
-    public CliContext(ParseResult parseResult, IOutputWriter output)
+    public CliContext(ParseResult parseResult, IOutputWriter output, TextWriter rawOutput)
     {
         _parseResult = parseResult;
         Output = output;
+        RawOutput = rawOutput;
         Config = new ConfigStore();
         Tokens = new TokenStore();
         Discovery = new OidcDiscovery(_authClient);
@@ -59,6 +60,13 @@ public sealed class CliContext : IDisposable
     public ParseResult ParseResult => _parseResult;
 
     public IOutputWriter Output { get; }
+
+    /// <summary>
+    /// stdout with no formatting applied, for the two commands whose output is not a
+    /// rendering of a result: a token to be pasted into another command, and a shell script
+    /// to be evaluated. A table or a JSON envelope would make either unusable.
+    /// </summary>
+    public TextWriter RawOutput { get; }
 
     public ConfigStore Config { get; }
 

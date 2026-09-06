@@ -181,7 +181,7 @@ public static class AuthCommands
 
             // Raw on stdout even in text mode: the whole point is `--header "Authorization:
             // Bearer $(groupsplit auth token)"`, and a table would break that.
-            Console.Out.WriteLine(token);
+            context.RawOutput.WriteLine(token);
 
             return ExitCodes.Success;
         });

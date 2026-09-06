@@ -18,11 +18,16 @@ public static class CommandExtensions
         {
             var settings = GlobalOptions.ReadOutputSettings(parseResult);
 
-            IOutputWriter output = settings.IsJson
-                ? new JsonOutputWriter(settings, Console.Out, Console.Error)
-                : new TextOutputWriter(settings, Console.Out, Console.Error);
+            // From the invocation, not from Console: it is what makes the output contract
+            // assertable, and it is what --help and --version already write through.
+            var stdout = parseResult.InvocationConfiguration.Output;
+            var stderr = parseResult.InvocationConfiguration.Error;
 
-            using var context = new CliContext(parseResult, output);
+            IOutputWriter output = settings.IsJson
+                ? new JsonOutputWriter(settings, stdout, stderr)
+                : new TextOutputWriter(settings, stdout, stderr);
+
+            using var context = new CliContext(parseResult, output, stdout);
 
             try
             {
