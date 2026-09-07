@@ -706,6 +706,65 @@ public sealed class MutationCommandTests : IDisposable
     /// name is computed and JsonIgnore'd, so a stub that sends it leaves every name blank
     /// and every confirmation nameless.
     /// </summary>
+    /// <summary>
+    /// The point of settle-between: both ends named, and the caller on neither of them.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_between_sends_both_ends_it_was_given()
+    {
+        var id = Guid.NewGuid();
+        var loraine = Guid.NewGuid();
+        var daniel = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members",
+            new[] { Member(loraine, "Loraine"), Member(daniel, "Daniel") });
+
+        _api.Returns($"/api/groups/{id}/repayments", new
+        {
+            fromUserId = loraine, fromUserName = "Loraine Haddad",
+            toUserId = daniel, toUserName = "Daniel Haddad", amount = 43544.61m
+        });
+
+        var result = await Cli.RunAsync(
+            "groups", "settle-between", id.ToString(), loraine.ToString(), daniel.ToString(),
+            "43544.61", "--date", "2024-08-31", "--note", "Settle up August 2024", "--yes");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/repayments").Json;
+
+        Assert.Equal(loraine, body.GetProperty("fromUserId").GetGuid());
+        Assert.Equal(daniel, body.GetProperty("toUserId").GetGuid());
+        Assert.Equal(43544.61m, body.GetProperty("amount").GetDecimal());
+        Assert.Equal("Settle up August 2024", body.GetProperty("description").GetString());
+        // The date is the whole reason a migration can use this: the repayment that closed
+        // August 2024 belongs in August 2024, not on the day somebody typed it in.
+        Assert.Equal(
+            new DateTimeOffset(2024, 8, 31, 0, 0, 0, TimeSpan.Zero).Date,
+            body.GetProperty("date").GetDateTimeOffset().Date);
+    }
+
+    /// <summary>
+    /// It writes about two other people, so it stops for a confirmation like every other
+    /// destructive change rather than going through on the strength of being asked once.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_between_without_yes_asks_first_and_writes_nothing()
+    {
+        var id = Guid.NewGuid();
+        var loraine = Guid.NewGuid();
+        var daniel = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members",
+            new[] { Member(loraine, "Loraine"), Member(daniel, "Daniel") });
+
+        var result = await Cli.RunAsync(
+            "groups", "settle-between", id.ToString(), loraine.ToString(), daniel.ToString(), "40.00");
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/groups/{id}/repayments");
+    }
+
     private static object Member(Guid id, string name) => new
     {
         id, firstName = name, lastName = "Haddad", email = $"{name.ToLowerInvariant()}@example.com"

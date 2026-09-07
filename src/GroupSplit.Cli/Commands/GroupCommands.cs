@@ -27,6 +27,7 @@ public static class GroupCommands
         groups.Subcommands.Add(RemoveMember());
         groups.Subcommands.Add(Balances());
         groups.Subcommands.Add(Settle());
+        groups.Subcommands.Add(SettleBetween());
         groups.Subcommands.Add(SettleUp());
         groups.Subcommands.Add(Activity());
         groups.Subcommands.Add(Archive());
@@ -345,6 +346,104 @@ public static class GroupCommands
                 new { status = "settled", groupId = id, userId = other, amount = paid, direction = side },
                 value => new Markup(
                     $"[green]Settled[/] {value.amount:N2} with {Markup.Escape(name)}.\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Records one repayment between two named members, whichever of them you are --
+    /// including neither.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <c>settle</c> and <c>settle-up</c> because both of those put you on one
+    /// end, and saying something about two other people should have to be asked for by name.
+    /// <para>
+    /// What it is for is a ledger the group already agreed on: months closed in a spreadsheet
+    /// years ago, moving in. Their repayments have to be written for the imbalance their
+    /// expenses carry to ever clear, and whoever is doing the moving is on neither end of
+    /// most of them.
+    /// </para>
+    /// </remarks>
+    private static Command SettleBetween()
+    {
+        var fromUserId = new Argument<Guid>("from-user-id") { Description = "The member who paid." };
+        var toUserId = new Argument<Guid>("to-user-id") { Description = "The member who was paid." };
+
+        var amount = new Argument<decimal>("amount")
+        {
+            Description = "How much changed hands, to two decimal places."
+        };
+
+        var date = new Option<DateTimeOffset?>("--date")
+        {
+            Description = "When the money moved, e.g. 2026-09-30. Defaults to now."
+        };
+
+        var note = new Option<string?>("--note")
+        {
+            Description = "What to remember about it, e.g. \"end of September 2024\"."
+        };
+
+        var command = new Command("settle-between",
+            "Record a repayment between two members, whoever you are.")
+        {
+            GroupId, fromUserId, toUserId, amount, date, note
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var id = parse.GetValue(GroupId);
+            var payer = parse.GetValue(fromUserId);
+            var payee = parse.GetValue(toUserId);
+            var paid = parse.GetValue(amount);
+
+            var members = await context.Groups.GetGroupMembersAsync(id, ct);
+
+            string NameOf(Guid who) =>
+                members.FirstOrDefault(candidate => candidate.Id == who)?.FullName ?? who.ToString();
+
+            var payerName = NameOf(payer);
+            var payeeName = NameOf(payee);
+
+            Confirmation.Require(
+                context,
+                action: "groups.settle-between",
+                summary: $"Record that {payerName} paid {payeeName} {paid:N2}?",
+                changes:
+                [
+                    $"A transfer of {paid:N2} is written from {payerName} to {payeeName}.",
+                    "Both of their balances move by it, and neither of them recorded it."
+                ],
+                confirmCommand: $"groupsplit groups settle-between {id} {payer} {payee} {paid} --yes");
+
+            var recorded = await context.Groups.RecordRepaymentAsync(
+                id,
+                new RecordRepaymentRequest
+                {
+                    FromUserId = payer,
+                    ToUserId = payee,
+                    Amount = paid,
+                    Date = parse.GetValue(date),
+                    Description = parse.GetValue(note)
+                },
+                ct);
+
+            context.Output.Write(
+                new
+                {
+                    status = "settled",
+                    groupId = id,
+                    fromUserId = payer,
+                    toUserId = payee,
+                    amount = recorded.Amount
+                },
+                value => new Markup(
+                    $"[green]Recorded[/] {value.amount:N2} from {Markup.Escape(payerName)} "
+                    + $"to {Markup.Escape(payeeName)}.\n"));
 
             return ExitCodes.Success;
         });

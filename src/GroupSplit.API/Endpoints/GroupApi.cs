@@ -42,6 +42,7 @@ public static class GroupApi
             group.MapGetGroupUserBalance();
             group.MapSettle();
             group.MapSettleUp();
+            group.MapRecordRepayment();
             group.MapArchive();
             group.MapUnarchive();
 
@@ -424,6 +425,30 @@ public static class GroupApi
                 Results.Ok(await settlements.SettleUp(groupId, request, ct)))
                 .WithName("SettleUp")
                 .Produces<SettleUpResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        /// <summary>
+        /// Records one repayment between two named members, whichever of them the caller is
+        /// -- including neither.
+        /// </summary>
+        /// <remarks>
+        /// Separate from settle and settle-up on purpose: both of those put the caller on one
+        /// end, and a member saying something about two other people should have to ask for
+        /// that by name.
+        /// </remarks>
+        private RouteHandlerBuilder MapRecordRepayment()
+        {
+            return group.MapPost("{groupId:guid}/repayments", async (
+                    Guid groupId,
+                    RecordRepaymentRequest request,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.RecordRepayment(groupId, request, ct)))
+                .WithName("RecordRepayment")
+                .Produces<SettlementPayment>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict);
