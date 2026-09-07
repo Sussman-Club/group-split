@@ -69,13 +69,6 @@ public interface IGroupCommands
     Task<bool> SettleAsync(Guid groupId, SettleRequest request, string otherName,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Records every repayment between the caller and the rest of a group at once. Null when
-    /// it did not go through, so the caller can leave its dialog open.
-    /// </summary>
-    Task<SettleUpResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
-        CancellationToken ct = default);
-
     Task<GroupResponse?> AcceptInvitationAsync(Guid invitationId, string groupName,
         CancellationToken ct = default);
 

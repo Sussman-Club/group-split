@@ -172,29 +172,6 @@ public sealed class GroupCommands(
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not record the settlement.");
 
-    public async Task<SettleUpResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
-        CancellationToken ct = default)
-    {
-        SettleUpResponse? settled = null;
-
-        var done = await errors.TryAsync(async () =>
-        {
-            settled = await groups.SettleUpAsync(groupId, request, ct);
-
-            snackbar.Add(
-                $"Settled up: {settled.Payments.Count} "
-                + $"{(settled.Payments.Count is 1 ? "repayment" : "repayments")}, "
-                + $"{settled.Total.ToMoney()} in all.",
-                Severity.Success);
-
-            // Transfers are transactions, so this is the announcement the group page's
-            // figures listen to -- the same one recording a single repayment makes.
-            await changes.NotifyTransactionsChangedAsync();
-        }, "Could not settle up.");
-
-        return done ? settled : null;
-    }
-
     public async Task<GroupResponse?> AcceptInvitationAsync(Guid invitationId, string groupName,
         CancellationToken ct = default)
     {
