@@ -21,16 +21,7 @@
     <div>
         <div class="gs-eyebrow">Bank</div>
         <h1>Inbox</h1>
-        <p>
-            @if (State.NewCount > 0)
-            {
-                @($"{State.NewCount} transaction{(State.NewCount == 1 ? "" : "s")} to sort out.")
-            }
-            else
-            {
-                @("Everything your bank sent has been dealt with.")
-            }
-        </p>
+        <p>@Headline</p>
     </div>
 </div>
 
@@ -47,6 +38,11 @@
             </MudButton>
         }
     </div>
+
+    @* The same spans the expense listings offer, so narrowing by date is the one control
+       wherever you meet it. A bank sends months at a time and the answer to a backlog is
+       to take one month of it. *@
+    <DateRangeFilter Value="@State.Range" ValueChanged="@(range => State.SetRangeAsync(range))" />
 
     @if (State.Connections is { Enabled: false })
     {
@@ -205,19 +201,48 @@
         _ => "Ignored"
     };
 
-    private string EmptyTitle => State.Filter switch
+    /// <summary>
+    /// What the page says it is showing. The badge count is everything waiting, whenever it
+    /// is from; once a span has been chosen that is no longer what is on screen, and a
+    /// heading that disagrees with the list under it is worth less than no heading.
+    /// </summary>
+    private string Headline
     {
-        InboxStatus.New => "Nothing waiting",
-        InboxStatus.Filed => "Nothing added yet",
-        _ => "Nothing ignored"
-    };
+        get
+        {
+            if (!State.Range.IsAllTime)
+                return $"{Counted(State.TotalCount)} {State.Range.Label.ToLowerInvariant()}.";
 
-    private string EmptyHint => State.Filter switch
-    {
-        InboxStatus.New => "New transactions from your bank will show up here.",
-        InboxStatus.Filed => "Transactions you add become expenses and appear here.",
-        _ => "Transactions you ignore stay out of the way, and can be put back."
-    };
+            return State.NewCount > 0
+                ? $"{Counted(State.NewCount)} to sort out."
+                : "Everything your bank sent has been dealt with.";
+        }
+    }
+
+    private static string Counted(int rows) => $"{rows} transaction{(rows == 1 ? "" : "s")}";
+
+    /// <summary>
+    /// Narrowed and empty is not the same as empty: the rows exist, they are just not in the
+    /// span being asked for, and telling somebody their bank has sent nothing when it has
+    /// sends them looking for a fault that is not there.
+    /// </summary>
+    private string EmptyTitle => !State.Range.IsAllTime
+        ? "Nothing in this range"
+        : State.Filter switch
+        {
+            InboxStatus.New => "Nothing waiting",
+            InboxStatus.Filed => "Nothing added yet",
+            _ => "Nothing ignored"
+        };
+
+    private string EmptyHint => !State.Range.IsAllTime
+        ? $"Nothing {State.Range.Label.ToLowerInvariant()}. Widen the range to see more."
+        : State.Filter switch
+        {
+            InboxStatus.New => "New transactions from your bank will show up here.",
+            InboxStatus.Filed => "Transactions you add become expenses and appear here.",
+            _ => "Transactions you ignore stay out of the way, and can be put back."
+        };
 
     private Task KeepPersonalAsync(BankTransactionResponse row) =>
         FileAsync(row, new FileBankTransactionRequest(), "your own expenses");

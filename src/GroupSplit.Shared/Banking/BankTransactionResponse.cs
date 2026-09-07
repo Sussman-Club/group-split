@@ -25,9 +25,20 @@ public enum InboxStatus
 }
 
 /// <summary>
-/// Which rows the inbox should show. Defaults to what is waiting.
+/// Which rows the inbox should show: what has been done with them, and the days they fall
+/// between. Defaults to everything waiting, whenever it is from.
 /// </summary>
-public record InboxFilter(InboxStatus Status = InboxStatus.New);
+/// <param name="From">Inclusive first day. Null for no bound that side.</param>
+/// <param name="To">Inclusive last day. Null for no bound that side.</param>
+/// <remarks>
+/// Days rather than instants, unlike <see cref="TransactionFilter"/>. An expense is recorded
+/// at a moment somebody was somewhere; an imported row carries the calendar date its bank
+/// put on it, which is not a moment and means the same day everywhere.
+/// </remarks>
+public record InboxFilter(
+    InboxStatus Status = InboxStatus.New,
+    DateOnly? From = null,
+    DateOnly? To = null);
 
 /// <summary>
 /// How many rows are waiting, for the badge in the nav.

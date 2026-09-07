@@ -1,9 +1,11 @@
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Moq;
 using MudBlazor;
 
@@ -33,6 +35,9 @@ public class InboxStateRefreshTest
 
     private int _transactionsAnnounced;
 
+    /// <summary>The span the last read asked the server for.</summary>
+    private DayBounds _asked;
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     public InboxStateRefreshTest()
@@ -48,11 +53,22 @@ public class InboxStateRefreshTest
             .ReturnsAsync(() => new InboxSummaryResponse(_rows.Count(row => row.Status == InboxStatus.New)));
 
         _inboxClient
-            .Setup(client => client.GetInboxAsync(It.IsAny<InboxStatus?>(), It.IsAny<string>(), It.IsAny<bool?>(),
+            .Setup(client => client.GetInboxAsync(It.IsAny<InboxStatus?>(), It.IsAny<DateOnly?>(),
+                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<bool?>(),
                 It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((InboxStatus? status, string _, bool? _, int? _, int? _, CancellationToken _) =>
+            .Callback((InboxStatus? _, DateOnly? from, DateOnly? to, string _, bool? _, int? _, int? _,
+                CancellationToken _) => _asked = new DayBounds(from, to))
+            .ReturnsAsync((InboxStatus? status, DateOnly? from, DateOnly? to, string _, bool? _, int? _, int? _,
+                CancellationToken _) =>
             {
-                var matching = _rows.Where(row => row.Status == (status ?? InboxStatus.New)).ToList();
+                // The server narrows by the day the row shows, so the fake does too --
+                // otherwise a test could pass against a filter the API would not apply.
+                var matching = _rows
+                    .Where(row => row.Status == (status ?? InboxStatus.New))
+                    .Where(row => from is null || row.SpentOn >= from)
+                    .Where(row => to is null || row.SpentOn <= to)
+                    .ToList();
+
                 return new PagedResponseOfBankTransactionResponse(matching, 1, 100, matching.Count);
             });
 
@@ -95,7 +111,7 @@ public class InboxStateRefreshTest
             _snackbar.Object, _changes);
 
         _state = new InboxStateService(_inboxClient.Object, _connectionsClient.Object,
-            new LoadGuard(presenter), _changes);
+            new LoadGuard(presenter), _changes, new LocalClock(Mock.Of<IJSRuntime>()));
 
         _changes.TransactionsChanged += () =>
         {
@@ -191,6 +207,82 @@ public class InboxStateRefreshTest
         var index = _rows.FindIndex(row => row.Id == id);
         _rows[index] = _rows[index] with { Status = status };
     }
+
+    // ---- Narrowing to a span of days ---------------------------------------------------
+    //
+    // Pinned to a custom span rather than a preset: "this month" is whichever month the
+    // suite happens to run in, and a test that passes in September and fails in October is
+    // worse than no test. Which days a preset resolves to is DateFilterTest's job.
+
+    /// <summary>
+    /// The span goes to the server. A client narrowing the rows it was handed could only
+    /// ever narrow the page in front of it, which is the same mistake the expenses search
+    /// box was written against.
+    /// </summary>
+    [Fact]
+    public async Task Narrowing_to_a_span_asks_the_server_for_that_span()
+    {
+        await _state.LoadRowsAsync(Ct);
+
+        Assert.Equal(2, _state.Rows.Count);
+        Assert.Equal(new DayBounds(null, null), _asked);
+
+        await _state.SetRangeAsync(Custom(new DateTime(2026, 9, 1), new DateTime(2026, 9, 30)), Ct);
+
+        Assert.Equal(new DayBounds(new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30)), _asked);
+        Assert.Equal(2, _state.Rows.Count);
+    }
+
+    [Fact]
+    public async Task A_span_the_rows_fall_outside_shows_none_of_them()
+    {
+        await _state.LoadRowsAsync(Ct);
+
+        await _state.SetRangeAsync(Custom(new DateTime(2026, 8, 1), new DateTime(2026, 8, 31)), Ct);
+
+        Assert.Empty(_state.Rows);
+        Assert.Equal(0, _state.TotalCount);
+
+        // The badge is not the page: it counts everything waiting, whenever it is from, and
+        // narrowing what is on screen does not mean the rest stopped waiting.
+        Assert.Equal(2, _state.NewCount);
+    }
+
+    /// <summary>Widening back is the same move in reverse, and must leave no span behind.</summary>
+    [Fact]
+    public async Task Going_back_to_all_time_asks_for_everything_again()
+    {
+        await _state.LoadRowsAsync(Ct);
+        await _state.SetRangeAsync(Custom(new DateTime(2026, 8, 1), new DateTime(2026, 8, 31)), Ct);
+
+        Assert.Empty(_state.Rows);
+
+        await _state.SetRangeAsync(DateFilter.AllTime, Ct);
+
+        Assert.Equal(new DayBounds(null, null), _asked);
+        Assert.Equal(2, _state.Rows.Count);
+    }
+
+    /// <summary>
+    /// The span survives a write. Filing one row of a month being worked through must not
+    /// quietly put the other months back on screen.
+    /// </summary>
+    [Fact]
+    public async Task A_write_re_reads_within_the_span_being_shown()
+    {
+        await _state.LoadRowsAsync(Ct);
+        await _state.SetRangeAsync(Custom(new DateTime(2026, 9, 1), new DateTime(2026, 9, 30)), Ct);
+
+        var row = _state.Rows[0];
+
+        await _commands.IgnoreAsync(row.Id, row.Title, Ct);
+
+        Assert.Equal(new DayBounds(new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30)), _asked);
+        Assert.Single(_state.Rows);
+    }
+
+    private static DateFilter Custom(DateTime from, DateTime to) =>
+        new(DateFilterPreset.Custom, from, to);
 
     private static BankTransactionResponse Row(string merchant, decimal amount) =>
         new(Guid.NewGuid(),

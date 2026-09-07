@@ -23,6 +23,7 @@ public static class CliApplication
         root.Subcommands.Add(AuthCommands.Build());
         root.Subcommands.Add(GroupCommands.Build());
         root.Subcommands.Add(TransactionCommands.Build());
+        root.Subcommands.Add(InboxCommands.Build());
         root.Subcommands.Add(UserCommands.Build());
         root.Subcommands.Add(CategoryCommands.Build());
         root.Subcommands.Add(SplitRuleCommands.Build());

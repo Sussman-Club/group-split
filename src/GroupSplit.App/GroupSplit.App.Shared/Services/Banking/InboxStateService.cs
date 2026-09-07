@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 
@@ -13,6 +14,13 @@ public interface IInboxStateService
 
     /// <summary>Which rows the page is asking for.</summary>
     InboxStatus Filter { get; }
+
+    /// <summary>
+    /// The span of days the page is asking for, as the person chose it. All time until they
+    /// narrow it: a bank sends months of rows, and sorting them out a month at a time is how
+    /// anybody actually gets through a backlog.
+    /// </summary>
+    DateFilter Range { get; }
 
     /// <summary>How many rows the filter in force has in total, not how many are loaded.</summary>
     int TotalCount { get; }
@@ -38,6 +46,9 @@ public interface IInboxStateService
     event Action? OnChanged;
 
     Task SetFilterAsync(InboxStatus status, CancellationToken ct = default);
+
+    /// <summary>Narrows the rows to a span of days, or widens them back to all of them.</summary>
+    Task SetRangeAsync(DateFilter range, CancellationToken ct = default);
 
     /// <summary>
     /// Asks for the rows as well as the count, from here on. The nav badge needs only the
@@ -76,6 +87,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     private readonly IBankConnectionsClient _connections;
     private readonly LoadGuard _guard;
     private readonly DataChangeNotifier _changes;
+    private readonly LocalClock _clock;
 
     private readonly Lock _lock = new();
 
@@ -93,12 +105,14 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         IInboxClient inbox,
         IBankConnectionsClient connections,
         LoadGuard guard,
-        DataChangeNotifier changes)
+        DataChangeNotifier changes,
+        LocalClock clock)
     {
         _inbox = inbox;
         _connections = connections;
         _guard = guard;
         _changes = changes;
+        _clock = clock;
 
         _changes.BankDataChanged += RefreshAsync;
 
@@ -112,6 +126,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public int NewCount { get; private set; }
 
     public InboxStatus Filter { get; private set; } = InboxStatus.New;
+
+    public DateFilter Range { get; private set; } = DateFilter.AllTime;
 
     public int TotalCount { get; private set; }
 
@@ -141,6 +157,21 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         _rowsWanted = true;
 
         // Back to the first page: the one being shown belongs to the filter being left.
+        _pages = 1;
+
+        await RefreshAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task SetRangeAsync(DateFilter range, CancellationToken ct = default)
+    {
+        if (Range == range)
+            return;
+
+        Range = range;
+        _rowsWanted = true;
+
+        // As above: pages three and four of a wider span are not pages of a narrower one.
         _pages = 1;
 
         await RefreshAsync(ct);
@@ -181,7 +212,20 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
             if (_rowsWanted)
             {
-                var page = await _inbox.GetInboxAsync(Filter, null, null, 1, PageSize * _pages, ct);
+                // A bank row is dated by the day the bank put on it, so the span is asked
+                // for as days. Which month "this month" is remains the person's question,
+                // which is what the clock is for.
+                var days = Range.Days(_clock.Today);
+
+                var page = await _inbox.GetInboxAsync(
+                    status: Filter,
+                    from: days.From,
+                    to: days.To,
+                    sortBy: null,
+                    sortDescending: null,
+                    page: 1,
+                    pageSize: PageSize * _pages,
+                    cancellationToken: ct);
 
                 Rows = page.Items;
                 TotalCount = page.TotalCount;
