@@ -54,12 +54,19 @@ public static class Suggestions
         var line = args.Length > 1 ? args[1] : string.Empty;
 
         // The shells report the cursor, which can sit past what they chose to send.
-        position = Math.Clamp(position ?? line.Length, 0, line.Length);
+        var cursor = Math.Clamp(position ?? line.Length, 0, line.Length);
+
+        (line, cursor) = WithoutProgramName(line, cursor);
 
         var parseResult = root.Parse(line);
         var word = parseResult.GetCompletionContext().WordToComplete;
 
-        var candidates = parseResult.GetCompletions(position)
+        if (HasTokenTheParserCouldNotPlace(parseResult, word))
+        {
+            return true;
+        }
+
+        var candidates = parseResult.GetCompletions(cursor)
             .Where(item => IsWorthShowing(item.Label, word))
             .Select(item => (item.Label, Description: Flatten(item.Detail)))
             .DistinctBy(item => item.Label)
@@ -92,6 +99,77 @@ public static class Suggestions
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Drops the program name from the front of the line, and moves the cursor with it.
+    /// <para>
+    /// The payload of the directive is a whole command line, and its first word is this
+    /// program under whatever name it was reached by -- <c>groupsplit</c>, but equally
+    /// <c>./groupsplit</c>, an absolute path, or a symlink someone named <c>gs</c>. Left
+    /// in place it is a token the parser can only match when that name happens to equal
+    /// the root command's, so removing it is what makes everything downstream -- the
+    /// completions, and above all <see cref="HasTokenTheParserCouldNotPlace"/> -- depend
+    /// on what was typed rather than on what the binary is called.
+    /// </para>
+    /// </summary>
+    private static (string Line, int Cursor) WithoutProgramName(string line, int cursor)
+    {
+        var end = 0;
+
+        while (end < line.Length && char.IsWhiteSpace(line[end]))
+        {
+            end++;
+        }
+
+        // A path with a space in it arrives quoted, and the closing quote ends the word.
+        if (end < line.Length && line[end] is '"' or '\'')
+        {
+            var quote = line[end++];
+
+            while (end < line.Length && line[end] != quote)
+            {
+                end++;
+            }
+
+            if (end < line.Length)
+            {
+                end++;
+            }
+        }
+        else
+        {
+            while (end < line.Length && !char.IsWhiteSpace(line[end]))
+            {
+                end++;
+            }
+        }
+
+        return (line[end..], Math.Clamp(cursor - end, 0, line.Length - end));
+    }
+
+    /// <summary>
+    /// Whether the line holds a word the parser could not place -- which makes every
+    /// suggestion misleading, so the answer becomes nothing at all.
+    /// <para>
+    /// <c>groupsplit blablabla &lt;TAB&gt;</c> otherwise offers the ten root commands, the
+    /// same answer as <c>groupsplit &lt;TAB&gt;</c>: System.CommandLine leaves an
+    /// unrecognised token where it lies rather than descending, so the cursor still counts
+    /// as being at the root. Offering <c>groups</c> there suggests <c>blablabla groups</c>
+    /// is a command line, and it is not.
+    /// </para>
+    /// <para>
+    /// The word being completed is itself unplaced until it is finished, so it is excluded
+    /// -- without that, <c>groupsplit gr&lt;TAB&gt;</c> would stop offering <c>groups</c>.
+    /// </para>
+    /// </summary>
+    private static bool HasTokenTheParserCouldNotPlace(ParseResult parseResult, string word)
+    {
+        var unplaced = parseResult.UnmatchedTokens;
+
+        var stillBeingTyped = word.Length > 0 && unplaced.Count > 0 && unplaced[^1] == word;
+
+        return unplaced.Count - (stillBeingTyped ? 1 : 0) > 0;
     }
 
     /// <summary>

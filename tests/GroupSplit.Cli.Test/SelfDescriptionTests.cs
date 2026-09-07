@@ -257,6 +257,26 @@ public sealed class SelfDescriptionTests
     }
 
     [Fact]
+    public async Task A_word_the_parser_could_not_place_ends_the_suggestions()
+    {
+        // Offering the root commands here would say `blablabla groups` is a command line.
+        Assert.Empty(await SuggestLinesAsync("groupsplit blablabla "));
+        Assert.Empty(await SuggestLinesAsync("groupsplit groups blah "));
+        Assert.Empty(await SuggestLinesAsync("groupsplit transactions create a 1 extra "));
+    }
+
+    [Fact]
+    public async Task A_word_still_being_typed_is_not_one_the_parser_failed_to_place()
+    {
+        // Half a word is unplaced for as long as it is half a word, and completing it is
+        // the whole point -- so only what comes before the cursor can end the suggestions.
+        Assert.StartsWith("groups\t", (await SuggestLinesAsync("groupsplit gr"))[0]);
+        Assert.StartsWith("show\t", (await SuggestLinesAsync("groupsplit groups sh"))[0]);
+
+        Assert.Empty(await SuggestLinesAsync("groupsplit blablabla gr"));
+    }
+
+    [Fact]
     public async Task A_suggest_request_without_a_position_completes_the_end_of_the_line()
     {
         var result = await Cli.RunAsync("[suggest]", "groupsplit gr");
