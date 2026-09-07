@@ -140,7 +140,7 @@ else
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete account", parameters);
 
-        if (await dialog.GetReturnValueAsync<bool>())
+        if (await dialog.ConfirmedAsync())
         {
             await DeleteAsync();
         }
