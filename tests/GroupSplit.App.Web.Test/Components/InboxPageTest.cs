@@ -95,9 +95,11 @@ public class InboxPageTest : ComponentTest
 
         Assert.Contains(page.FindAll(".gs-chip"), chip => chip.TextContent.Contains("Last month"));
 
-        // Nothing narrowed yet, so the request carried no span and the heading is the badge's.
+        // Nothing narrowed yet, so the request carried no span -- and the heading says
+        // nothing, because on all time the count is the badge's and only the badge's.
         Assert.Equal((null, null), Assert.Single(_asks));
-        Assert.Contains("1 transaction to sort out.", page.Markup);
+        Assert.DoesNotContain("to sort out", page.Markup);
+        Assert.DoesNotContain("1 transaction", page.Markup);
     }
 
     [Fact]
@@ -151,7 +153,11 @@ public class InboxPageTest : ComponentTest
         await PickAsync(page, "All time");
 
         Assert.Equal((null, null), _asks.Last());
-        Assert.Contains("1 transaction to sort out.", page.Markup);
+
+        // The span's heading goes with the span: back on all time there is no count under
+        // the title, rather than last month's left standing.
+        Assert.DoesNotContain("last month.", page.Markup);
+        Assert.DoesNotContain("to sort out", page.Markup);
     }
 
     private static BankTransactionResponse Row(string merchant, decimal amount, DateOnly date) =>

@@ -2,6 +2,7 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +56,11 @@ public class RuleEditorFormTest : ComponentTest
 
         Services.AddSingleton(groups.Object);
         Services.AddSingleton(rules.Object);
+
+        // The real command over the mocked client, rather than a mocked command: what the
+        // form reads through it is the same call it used to make itself, and the error
+        // handling around it is the command's now.
+        Services.AddSingleton<ISplitRuleCommands, SplitRuleCommands>();
     }
 
     private IRenderedComponent<RuleEditorForm> Render(SplitRuleDto version)

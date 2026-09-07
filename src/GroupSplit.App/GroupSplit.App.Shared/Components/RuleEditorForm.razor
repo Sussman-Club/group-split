@@ -3,7 +3,8 @@
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Services
-@inject ISplitRulesClient SplitRulesClient
+@using GroupSplit.App.Shared.Services.Commands
+@inject ISplitRuleCommands Rules
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject IRemainderPolicy Remainder
@@ -128,24 +129,33 @@
 
     private RuleType? _ruleType;
     private ICollection<UserInfo> _members = [];
-    private ICollection<SplitRuleResponse> _groupRules = [];
+    private IReadOnlyList<SplitRuleResponse> _groupRules = [];
     private Guid? _copySourceRuleId;
 
     // The form is meaningless without the members to split between, so a failed load
-    // closes the dialog it sits in once the presenter has said why.
+    // closes the dialog it sits in once the presenter has said why. Two reads and two
+    // failures, because they fail for different reasons and each says which it was.
     protected override async Task OnInitializedAsync()
     {
-        var loaded = await Errors.TryAsync(async () =>
-        {
-            _members = await GroupsClient.GetGroupMembersAsync(GroupId);
-            _groupRules = await SplitRulesClient.GetSplitRulesAsync(GroupId);
-        }, "Could not load the group.");
+        var members = await Errors.TryAsync(
+            async () => _members = await GroupsClient.GetGroupMembersAsync(GroupId),
+            "Could not load the group.");
 
-        if (!loaded)
+        if (!members)
         {
             MudDialog.Cancel();
             return;
         }
+
+        var rules = await Rules.ForGroupAsync(GroupId);
+
+        if (rules is null)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        _groupRules = rules;
 
         OnModelVersionChange();
     }
@@ -193,13 +203,9 @@
         if (_copySourceRuleId is not { } sourceRuleId)
             return;
 
-        SplitRuleDetailsResponse? details = null;
+        var details = await Rules.GetAsync(sourceRuleId);
 
-        var loaded = await Errors.TryAsync(
-            async () => details = await SplitRulesClient.GetSplitRuleAsync(sourceRuleId),
-            "Could not load the rule to copy.");
-
-        if (!loaded || details is null) return;
+        if (details is null) return;
 
         Model.Version = details.Definition;
         OnModelVersionChange();

@@ -554,11 +554,12 @@ the row-by-row migration and the decisions the roadmap left open are in
   only your own expense can be made personal. This is the primitive the phase 3 review
   inbox files imported rows with, built now so that inbox is a UI over an edit that
   already exists.
-- ~~One command layer per aggregate for dialogs.~~ **Done.** `IGroupCommands` and
-  `ITransactionCommands` own the call, the message and the announcement; page states are
-  readers that delegate their writes, and dialogs use the same commands rather than the
-  generated clients. Categories and split rules still write through their dialogs -- see
-  the issues on the repo.
+- ~~One command layer per aggregate for dialogs.~~ **Done.** `IGroupCommands`,
+  `ITransactionCommands`, `ICategoryCommands` and `ISplitRuleCommands` own the call, the
+  message and the announcement; page states are readers that delegate their writes, and
+  dialogs use the same commands rather than the generated clients. The categories dialog
+  was the last one writing on its own, and the announcement it never made is why renaming
+  a category left every listing showing the old label until it was reloaded.
 
 The app is a complete expense-sharing product without bank data.
 

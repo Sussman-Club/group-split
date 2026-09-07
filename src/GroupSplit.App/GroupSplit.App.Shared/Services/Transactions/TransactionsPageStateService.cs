@@ -84,19 +84,39 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     /// </summary>
     private void Announce() => OnTransactionsChanged?.Invoke();
 
-    public Task LoadAsync(TransactionQuery query, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// What was last asked for, which is not what is held until the answer arrives.
+    /// </summary>
+    /// <remarks>
+    /// Two spans picked in quick succession are two requests, and the second can be
+    /// answered first: the reported symptom was the right figures appearing and then the
+    /// previous ones coming back over them, which is the older answer being written down as
+    /// though it were the current one. Kept so an answer can be checked against the
+    /// question in force before it is shown, the way the group's tab already does.
+    /// </remarks>
+    private TransactionQuery? _asked;
+
+    public async Task LoadAsync(TransactionQuery query, CancellationToken cancellationToken = default)
     {
         // The grid asks for its state whenever it is rendered, and the first thing it asks
         // for is what this was built holding. Answering from what is held keeps that from
-        // being a second request for the same page.
-        if (query == Query && Page is not null)
-            return Task.CompletedTask;
+        // being a second request for the same page -- and from what is on its way, so a
+        // second render mid-flight does not ask again either.
+        if (Page is not null && (query == Query || query == _asked))
+            return;
 
-        return _guard.RunAsync(async () =>
+        _asked = query;
+
+        var done = await _guard.RunAsync(async () =>
         {
             await ReadPageAsync(query, cancellationToken);
             Announce();
         }, "your expenses");
+
+        // A failure is not an answer, so the same question has to be askable again --
+        // otherwise the retry would be taken for the one already in flight.
+        if (!done && _asked == query)
+            _asked = Query;
     }
 
     /// <summary>
@@ -132,17 +152,27 @@ public class TransactionsPageStateService : ITransactionsPageStateService
             pageSize: query.PageSize,
             cancellationToken: ct);
 
-        Query = query;
-        Page = page;
-
         // What the page is one of, totalled: the figure beside a narrowed listing has to
         // describe the same narrowing. Only worth a request while something is narrowing
         // it -- otherwise it is the all-time summary, which is already read.
-        MatchesSummary = string.IsNullOrWhiteSpace(query.Search) && range.IsAllTime && query.Personal is null
+        var matches = string.IsNullOrWhiteSpace(query.Search) && range.IsAllTime && query.Personal is null
             ? null
             : await _client.GetTransactionsSummaryAsync(
                 from: bounds.From, to: bounds.To, personal: query.Personal, search: query.Search,
                 cancellationToken: ct);
+
+        // Something has been asked for since this went out. That answer is the one the page
+        // is waiting for, and this one is about a span nobody is looking at any more --
+        // written down here it would put the previous figures back over the current ones.
+        //
+        // The three go down together, and only here: a page and the summary beside it that
+        // came from two different questions are worse than either answer on its own.
+        if (_asked is not null && _asked != query)
+            return;
+
+        Query = query;
+        Page = page;
+        MatchesSummary = matches;
     }
 
     /// <summary>

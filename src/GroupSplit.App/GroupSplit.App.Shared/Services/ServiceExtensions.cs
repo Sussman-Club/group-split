@@ -37,6 +37,11 @@ public static class ServiceExtensions
             services.TryAddScoped<ITransactionCommands, TransactionCommands>();
             services.TryAddScoped<IBankCommands, BankCommands>();
 
+            // A category and the split behind it are two aggregates and two commands, and
+            // the dialog that edits them together writes to both.
+            services.TryAddScoped<ICategoryCommands, CategoryCommands>();
+            services.TryAddScoped<ISplitRuleCommands, SplitRuleCommands>();
+
             // Read by the inbox page and by the nav badge, so one service rather than two
             // that would each fetch the count.
             services.TryAddScoped<InboxStateService>();

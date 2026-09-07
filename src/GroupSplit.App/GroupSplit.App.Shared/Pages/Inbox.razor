@@ -22,7 +22,10 @@
     <div>
         <div class="gs-eyebrow">Bank</div>
         <h1>Inbox</h1>
-        <p>@Headline</p>
+        @if (Headline is { Length: > 0 } headline)
+        {
+            <p>@headline</p>
+        }
     </div>
 </div>
 
@@ -234,20 +237,23 @@
     };
 
     /// <summary>
-    /// What the page says it is showing. The badge count is everything waiting, whenever it
-    /// is from; once a span has been chosen that is no longer what is on screen, and a
-    /// heading that disagrees with the list under it is worth less than no heading.
+    /// What the page says it is showing, when that is not already on screen.
     /// </summary>
-    private string Headline
+    /// <remarks>
+    /// A chosen span is worth saying: the list under it holds that span and the badge beside
+    /// the nav does not, so the heading says which. All time is not -- the badge counts
+    /// everything waiting, and a line under the title counting it again was the same number
+    /// twice. Nothing left to sort out still gets a sentence, because an empty page with no
+    /// heading reads as one that failed to load.
+    /// </remarks>
+    private string? Headline
     {
         get
         {
             if (!State.Range.IsAllTime)
                 return $"{Counted(State.TotalCount)} {State.Range.Label.ToLowerInvariant()}.";
 
-            return State.NewCount > 0
-                ? $"{Counted(State.NewCount)} to sort out."
-                : "Everything your bank sent has been dealt with.";
+            return State.NewCount > 0 ? null : "Everything your bank sent has been dealt with.";
         }
     }
 
