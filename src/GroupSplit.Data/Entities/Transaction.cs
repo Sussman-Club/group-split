@@ -67,24 +67,6 @@ public abstract class Transaction : Entity
     public Guid? BankTransactionId { get; set; }
 
     /// <summary>
-    /// The settling-up that swept this, or null while it is still outstanding.
-    /// </summary>
-    /// <remarks>
-    /// Nullable because most rows most of the time genuinely are outstanding -- this is a
-    /// live state and not a column older rows predate. It is also the whole of the
-    /// bookkeeping: a run selects from the rows where this is null, and sets it on every
-    /// row it settles, so nothing can be swept twice and a settled month needs no marker
-    /// of its own.
-    /// <para>
-    /// Balances do not read it. They cannot need to: a run's own transfers carry it too,
-    /// so the net of everything and the net of what is outstanding are the same number.
-    /// </para>
-    /// </remarks>
-    public virtual SettlementRun? SettlementRun { get; set; }
-
-    public Guid? SettlementRunId { get; set; }
-
-    /// <summary>
     /// What each person owed on this. Sums to <see cref="Amount"/>, always.
     /// </summary>
     public virtual ICollection<TransactionSplit> Splits { get; } = [];

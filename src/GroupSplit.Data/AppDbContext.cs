@@ -202,29 +202,6 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(category => new { category.GroupId, category.Name }).IsUnique();
         });
 
-        modelBuilder.Entity<SettlementRun>(entity =>
-        {
-            entity.Property(run => run.Label).HasMaxLength(64).IsRequired();
-            entity.Property(run => run.RanAt).IsRequired();
-            entity.Property(run => run.EffectiveDate).IsRequired();
-
-            entity.HasOne(run => run.Group)
-                .WithMany()
-                .HasForeignKey(run => run.GroupId)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // The person is a courtesy on the row -- "Daniel settled up in September" --
-            // so their account going away must not take the group's history with it.
-            entity.HasOne(run => run.RanBy)
-                .WithMany()
-                .HasForeignKey(run => run.RanByUserId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            // A group's own list, newest first.
-            entity.HasIndex(run => new { run.GroupId, run.EffectiveDate });
-        });
-
         modelBuilder.Entity<TransactionSplit>(entity =>
         {
             entity.Property(split => split.Amount).IsRequired().HasPrecision(18, 2);
@@ -282,20 +259,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey<Transaction>(transaction => transaction.BankTransactionId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Restrict, not cascade and not set-null. Deleting a run would either take the
-            // group's history with it or quietly un-settle a month somebody has already
-            // paid; nothing deletes one, and if anything ever tries it should say so.
-            entity.HasOne(transaction => transaction.SettlementRun)
-                .WithMany(run => run.Transactions)
-                .HasForeignKey(transaction => transaction.SettlementRunId)
-                .OnDelete(DeleteBehavior.Restrict);
-
             entity.HasIndex(transaction => transaction.DateTime);
             entity.HasIndex(transaction => transaction.Name);
-
-            // What every settling-up selects: this group's outstanding rows. The nulls are
-            // the interesting half here, which is the other way round from most indexes.
-            entity.HasIndex(transaction => new { transaction.GroupId, transaction.SettlementRunId });
 
             // Every expense listing filters on the group and orders by the date, and EF
             // adds the discriminator to that predicate itself, so the three travel
@@ -320,17 +285,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(expense => expense.CategoryId);
         });
 
-        modelBuilder.Entity<Transfer>(entity =>
-        {
-            // On the leaf, so the column is nullable in the table -- an expense is not a
-            // payment and never was. Restrict for the same reason the sweep marker is:
-            // nothing deletes a run, and a delete that took the payments with it would take
-            // money out of the ledger that really moved.
-            entity.HasOne(transfer => transfer.WrittenByRun)
-                .WithMany(run => run.Payments)
-                .HasForeignKey(transfer => transfer.WrittenByRunId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
+        modelBuilder.Entity<Transfer>();
 
         // EF does not index the discriminator on its own, and Set<Expense>() filters on
         // nothing else.

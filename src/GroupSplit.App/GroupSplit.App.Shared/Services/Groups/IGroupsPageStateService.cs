@@ -82,22 +82,10 @@ public interface IGroupsPageStateService
     Task<bool> SettleAsync(SettleRequest request, string otherName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// What settling the selected group up would do, worked out and handed back without
-    /// recording any of it.
+    /// Settles the caller's own position in the selected group: every repayment between them
+    /// and the rest of it, recorded together.
     /// </summary>
-    Task<SettleUpPreviewResponse?> PreviewSettleUpAsync(SettleUpRequest request,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>Squares the selected group up in one action.</summary>
-    Task<SettlementRunResponse?> SettleUpAsync(SettleUpRequest request,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>The settlings-up the selected group has had, newest first.</summary>
-    Task<IReadOnlyList<SettlementRunResponse>> SettlementsAsync(
-        CancellationToken cancellationToken = default);
-
-    /// <summary>Undoes one, which is what makes the expenses in it editable again.</summary>
-    Task<bool> ReopenSettlementAsync(Guid runId, string label,
+    Task<SettleUpResponse?> SettleUpAsync(SettleUpRequest request,
         CancellationToken cancellationToken = default);
 
     /// <summary>Puts the selected group down: it keeps everything and accepts nothing new.</summary>

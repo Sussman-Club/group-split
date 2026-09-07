@@ -70,18 +70,10 @@ public interface IGroupCommands
         CancellationToken ct = default);
 
     /// <summary>
-    /// Squares the whole group up: sweeps what the scope names and records the payments
-    /// that zero it. Null when it did not go through, so the caller can leave its dialog
-    /// open.
+    /// Records every repayment between the caller and the rest of a group at once. Null when
+    /// it did not go through, so the caller can leave its dialog open.
     /// </summary>
-    Task<SettlementRunResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
-        CancellationToken ct = default);
-
-    /// <summary>
-    /// Undoes one, putting everything it settled back to outstanding. The payments it wrote
-    /// stay: that money moved, and the next settling-up counts it.
-    /// </summary>
-    Task<bool> ReopenSettlementAsync(Guid groupId, Guid runId, string label,
+    Task<SettleUpResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
         CancellationToken ct = default);
 
     Task<GroupResponse?> AcceptInvitationAsync(Guid invitationId, string groupName,

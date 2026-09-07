@@ -1,4 +1,5 @@
 using GroupSplit.API.Endpoints;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
@@ -325,56 +326,22 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Every scope a settling-up can be narrowed by, over the real database.
+    /// Squaring up, on the real database. The unit suite runs on EF's in-memory provider,
+    /// which evaluates on the client whatever it cannot translate rather than refusing.
     /// </summary>
-    /// <remarks>
-    /// The one that needs this most is the category. A settling-up selects over
-    /// <c>Transaction</c>, because it has to sweep the repayments in its reach as well as the
-    /// spending, and only an expense has a category -- so narrowing by one reaches through a
-    /// cast to the leaf of a TPH hierarchy. The in-memory provider the unit suite runs on is
-    /// happy to do that in memory whatever Npgsql thinks of it.
-    /// </remarks>
     [Fact(Timeout = 120_000)]
-    public async Task Every_settlement_scope_translates()
+    public async Task Settling_up_translates()
     {
-        var settlements = Service<ISettlementService>();
         var group = await AGroupOfTheirs();
 
-        var scopes = new TransactionFilter?[]
+        // Whether there is anything to settle depends on the seed, and either answer is a
+        // query that ran: the conflict is raised after the balances have been read.
+        try
         {
-            null,
-            new TransactionFilter(To: DateTimeOffset.UtcNow),
-            new TransactionFilter(From: DateTimeOffset.UtcNow.AddYears(-1), To: DateTimeOffset.UtcNow),
-            new TransactionFilter(Category: "groceries"),
-            new TransactionFilter(Search: "co"),
-            new TransactionFilter(PaidByUserId: Guid.NewGuid())
-        };
-
-        foreach (var scope in scopes)
-            await settlements.Preview(group, scope, Ct);
-    }
-
-    /// <summary>
-    /// Settling up, listing what has been settled, and undoing it -- the writes and the reads
-    /// around them, on the real database.
-    /// </summary>
-    /// <remarks>
-    /// The listing is the shape worth watching: a run reaches its swept transactions, their
-    /// splits and the people on both ends of every payment it wrote, which is several
-    /// navigations deep and a second relationship to the same table.
-    /// </remarks>
-    [Fact(Timeout = 120_000)]
-    public async Task Settling_up_and_undoing_it_translate()
-    {
-        var settlements = Service<ISettlementService>();
-        var group = await AGroupOfTheirs();
-
-        var run = await settlements.SettleUp(group, new SettleUpRequest { Label = "Translation" }, Ct);
-
-        await settlements.List(group, Ct);
-
-        await settlements.Reopen(group, run.Id, Ct);
-
-        await settlements.List(group, Ct);
+            await Service<ISettlementService>().SettleUp(group, new SettleUpRequest(), Ct);
+        }
+        catch (ConflictException)
+        {
+        }
     }
 }

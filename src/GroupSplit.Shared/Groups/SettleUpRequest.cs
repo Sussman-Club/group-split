@@ -3,45 +3,41 @@ using System.ComponentModel.DataAnnotations;
 namespace GroupSplit.Shared;
 
 /// <summary>
-/// Square a group up in one action: sweep everything still outstanding -- or the part of it
-/// the scope names -- and record the fewest payments that bring it to zero.
+/// Settle your own position in a group in one action: record every repayment between you and
+/// the rest of the group at once, instead of one dialog at a time.
 /// </summary>
 /// <remarks>
-/// The scope is a <see cref="TransactionFilter"/>, the same one the expense listings take,
-/// because narrowing a settling-up is the same question as narrowing a list and there is no
-/// reason for two vocabularies. That is also what keeps this open-ended: settling by
-/// category or by payer is already expressible, and whatever the filter grows next will be
-/// too, without a new endpoint or a new column.
+/// Your position, not the group's. Every payment it writes has you on one end, because what
+/// you paid and what you were paid are things you were there for, and money moving between
+/// two other members is not yours to record.
+/// <para>
+/// It settles the whole of what you owe and are owed, which is why it takes no dates to
+/// narrow it by. A balance is cumulative: whatever a group's habits are about when they
+/// square up, what is outstanding at the moment somebody presses this is what settling up
+/// means.
+/// </para>
 /// </remarks>
 public record SettleUpRequest
 {
     /// <summary>
-    /// What to settle, or null for everything outstanding -- which is the ordinary case and
-    /// therefore the one that takes no arguments.
+    /// When the money moved. Null means now.
     /// </summary>
     /// <remarks>
-    /// <see cref="TransactionFilter.GroupId"/> and <see cref="TransactionFilter.Personal"/>
-    /// are ignored: the group is the one in the route, and a settling-up is between members
-    /// of a group, so there is nothing personal to include or leave out.
+    /// The same field a single repayment takes, applied to all of them. A group that squares
+    /// up on the 3rd for a month that ended on the 30th wants these dated the 30th, so the
+    /// month they are closing contains the payments that closed it.
     /// </remarks>
-    public TransactionFilter? Scope { get; set; }
+    public DateTimeOffset? Date { get; set; }
 
     /// <summary>
-    /// What to call it -- "September", "Lisbon trip". Null takes the name the preview
-    /// suggested, derived from what is actually being swept.
-    /// </summary>
-    [StringLength(64, ErrorMessage = "Label must be 64 characters or fewer.")]
-    public string? Label { get; set; }
-
-    /// <summary>
-    /// The date the payments it writes carry. Null takes the scope's end date, and failing
-    /// that, now.
+    /// What to remember about it -- "end of September", "bank transfer". Written onto every
+    /// payment it records, so the group's activity says which settling-up a transfer belongs
+    /// to.
     /// </summary>
     /// <remarks>
-    /// A group closing September on 3 October wants those payments dated 30 September, or
-    /// the month they are closing does not contain the payments that closed it. Since they
-    /// have already said 30 September once -- as the end of the scope -- they do not have to
-    /// say it again.
+    /// Optional, and deliberately so. This has to stay one tap, and a note nobody can skip is
+    /// the thing that would stop it being one.
     /// </remarks>
-    public DateTimeOffset? EffectiveDate { get; set; }
+    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    public string? Description { get; set; }
 }

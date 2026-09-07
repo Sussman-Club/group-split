@@ -374,40 +374,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         CancellationToken cancellationToken = default) =>
         _groupCommands.SettleAsync(Selected().Id, request, otherName, cancellationToken);
 
-    /// <summary>
-    /// A read, so it goes to the client directly rather than through the command layer --
-    /// there is nothing to announce and nothing to undo. Null when the call failed, which
-    /// the presenter has already said out loud.
-    /// </summary>
-    public async Task<SettleUpPreviewResponse?> PreviewSettleUpAsync(SettleUpRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        SettleUpPreviewResponse? preview = null;
-
-        await _errors.TryAsync(
-            async () => preview = await _groupsClient.PreviewSettleUpAsync(Selected().Id, request, cancellationToken),
-            "Could not work out what there is to settle.");
-
-        return preview;
-    }
-
-    public Task<SettlementRunResponse?> SettleUpAsync(SettleUpRequest request,
+    public Task<SettleUpResponse?> SettleUpAsync(SettleUpRequest request,
         CancellationToken cancellationToken = default) =>
         _groupCommands.SettleUpAsync(Selected().Id, request, cancellationToken);
-
-    public async Task<IReadOnlyList<SettlementRunResponse>> SettlementsAsync(
-        CancellationToken cancellationToken = default)
-    {
-        IReadOnlyList<SettlementRunResponse> runs = [];
-
-        await _errors.TryAsync(
-            async () => runs = [.. await _groupsClient.GetSettlementsAsync(Selected().Id, cancellationToken)],
-            "Could not load the settlings-up.");
-
-        return runs;
-    }
-
-    public Task<bool> ReopenSettlementAsync(Guid runId, string label,
-        CancellationToken cancellationToken = default) =>
-        _groupCommands.ReopenSettlementAsync(Selected().Id, runId, label, cancellationToken);
 }

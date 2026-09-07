@@ -41,7 +41,6 @@ public static class ErrorMessages
         [ErrorCodes.TransactionNotFound] = "That expense no longer exists.",
         [ErrorCodes.CategoryNotFound] = "That category no longer exists.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
-        [ErrorCodes.SettlementRunNotFound] = "That settling-up no longer exists.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
         [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
@@ -59,9 +58,7 @@ public static class ErrorMessages
         [ErrorCodes.TransactionPayerNotInGroup] = "The person who paid is not a member of this group.",
         [ErrorCodes.SplitUserNotInGroup] = "One of the shares names someone who is not in this group.",
         [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
-        [ErrorCodes.SettlementNothingToSettle] = "There is nothing outstanding to settle.",
-        [ErrorCodes.SettlementRunAlreadyReopened] = "This settling-up has already been undone.",
-        [ErrorCodes.TransactionSettled] = "This was settled up. Undo the settling-up to change it.",
+        [ErrorCodes.SettlementNothingToSettle] = "You are already square with everybody in this group.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
         [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",
         [ErrorCodes.SplitRuleNameTaken] = "This group already has a rule with that name.",

@@ -204,120 +204,57 @@ public sealed class MutationCommandTests : IDisposable
     // ---- groups settle-up ------------------------------------------------------------
 
     /// <summary>
-    /// The end-of-the-month case. The scope goes up as a filter, which is what keeps a new
-    /// way of narrowing a settling-up from needing a new command.
+    /// Reads the balances first, so the confirmation lists the repayments it is about to
+    /// write rather than describing them -- and so a client cannot decide the amounts.
     /// </summary>
     [Fact]
-    public async Task Groups_settle_up_sends_the_scope_it_was_given()
+    public async Task Groups_settle_up_records_the_date_and_the_note()
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
-        _api.Returns($"/api/groups/{id}/settle-up", Run());
+        _api.Returns($"/api/groups/{id}/balances", Balance());
+        _api.Returns($"/api/groups/{id}/settle-up", Settled());
 
         var result = await Cli.RunAsync(
-            "groups", "settle-up", id.ToString(),
-            "--to", "2026-09-30", "--label", "September", "--yes");
+            "groups", "settle-up", id.ToString(), "--date", "2026-09-30", "--note", "cash", "--yes");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
 
         var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle-up").Json;
 
-        Assert.Equal(
-            new DateTime(2026, 9, 30),
-            body.GetProperty("scope").GetProperty("to").GetDateTimeOffset().Date);
-
-        Assert.Equal("September", body.GetProperty("label").GetString());
+        Assert.Equal(new DateTime(2026, 9, 30), body.GetProperty("date").GetDateTimeOffset().Date);
+        Assert.Equal("cash", body.GetProperty("description").GetString());
     }
 
     /// <summary>
-    /// With nothing said, it settles everything outstanding -- the one-tap case, which has
-    /// to reach the server as a scope that narrows nothing rather than as no request at all.
-    /// </summary>
-    [Fact]
-    public async Task Groups_settle_up_with_no_scope_settles_everything()
-    {
-        var id = Guid.NewGuid();
-
-        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
-        _api.Returns($"/api/groups/{id}/settle-up", Run());
-
-        await Cli.RunAsync("groups", "settle-up", id.ToString(), "--yes");
-
-        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle-up").Json;
-        var scope = body.GetProperty("scope");
-
-        Assert.Equal(JsonValueKind.Null, scope.GetProperty("to").ValueKind);
-        Assert.Equal(JsonValueKind.Null, scope.GetProperty("from").ValueKind);
-        Assert.Equal(JsonValueKind.Null, scope.GetProperty("category").ValueKind);
-    }
-
-    /// <summary>
-    /// A dry run previews and stops. Nothing may reach the endpoint that records one.
+    /// A dry run reads and stops. Nothing may reach the endpoint that records one.
     /// </summary>
     [Fact]
     public async Task Groups_settle_up_dry_run_writes_nothing()
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
-        _api.Returns($"/api/groups/{id}/settle-up", Run());
+        _api.Returns($"/api/groups/{id}/balances", Balance());
+        _api.Returns($"/api/groups/{id}/settle-up", Settled());
 
         var result = await Cli.RunAsync("groups", "settle-up", id.ToString(), "--dry-run");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-
-        Assert.Contains(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up/preview");
         Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up");
     }
 
     /// <summary>
-    /// Previewed before it is confirmed, so what somebody agrees to is the payments
-    /// themselves. Without the preview the confirmation could only describe them.
+    /// Every line names the caller on one end. Squaring up is personal: money moving between
+    /// two other members is not theirs to record.
     /// </summary>
     [Fact]
-    public async Task Groups_settle_up_without_a_terminal_lists_the_payments_it_would_write()
+    public async Task Groups_settle_up_without_a_terminal_lists_both_directions()
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
+        _api.Returns($"/api/groups/{id}/balances", Balance());
 
         var result = await Cli.RunAsync("groups", "settle-up", id.ToString());
-
-        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
-
-        var changes = result.Json.GetProperty("changes").EnumerateArray()
-            .Select(change => change.GetString())
-            .ToList();
-
-        Assert.Contains("Omar pays Daniel 40.00.", changes);
-    }
-
-    /// <summary>
-    /// Undoing is what makes a settled expense editable again, so the confirmation has to be
-    /// clear that it is not a refund: the payments stay where they are.
-    /// </summary>
-    [Fact]
-    public async Task Groups_undo_settle_up_reopens_the_run_it_was_given()
-    {
-        var id = Guid.NewGuid();
-        var run = Guid.NewGuid();
-
-        _api.Returns($"/api/groups/{id}/settlements/{run}/reopen", Run());
-
-        var result = await Cli.RunAsync("groups", "undo-settle-up", id.ToString(), run.ToString(), "--yes");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains(_api.Requests, r => r.Path == $"/api/groups/{id}/settlements/{run}/reopen");
-    }
-
-    [Fact]
-    public async Task Groups_undo_settle_up_without_a_terminal_says_no_money_moves()
-    {
-        var id = Guid.NewGuid();
-        var run = Guid.NewGuid();
-
-        var result = await Cli.RunAsync("groups", "undo-settle-up", id.ToString(), run.ToString());
 
         Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
 
@@ -325,50 +262,50 @@ public sealed class MutationCommandTests : IDisposable
             .Select(change => change.GetString() ?? "")
             .ToList();
 
-        Assert.Contains(changes, change => change.Contains("No money moves"));
-        Assert.Empty(_api.Requests);
+        Assert.Contains("You pay Daniel 40.00.", changes);
+        Assert.Contains("Omar pays you 25.00.", changes);
     }
 
-    private static object Preview() => new
+    [Fact]
+    public async Task Groups_settle_up_when_already_square_says_so_and_writes_nothing()
     {
-        payments = new[]
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/balances", new
         {
-            new
-            {
-                fromUserId = Guid.NewGuid(),
-                fromUserName = "Omar",
-                toUserId = Guid.NewGuid(),
-                toUserName = "Daniel",
-                amount = 40.00m
-            }
-        },
-        balances = Array.Empty<object>(),
-        transactionCount = 3,
-        total = 120.00m,
-        coversFrom = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
-        coversTo = new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
-        suggestedLabel = "September 2026"
+            netBalances = Array.Empty<object>(),
+            owedToYou = Array.Empty<object>(),
+            youOwed = Array.Empty<object>()
+        });
+
+        var result = await Cli.RunAsync("groups", "settle-up", id.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up");
+    }
+
+    private static object Balance() => new
+    {
+        netBalances = Array.Empty<object>(),
+        owedToYou = new[] { new { userId = Guid.NewGuid(), userName = "Omar", amount = 25.00m } },
+        youOwed = new[] { new { userId = Guid.NewGuid(), userName = "Daniel", amount = 40.00m } }
     };
 
-    private static object Run() => new
+    private static object Settled() => new
     {
-        id = Guid.NewGuid(),
-        label = "September 2026",
-        ranAt = DateTimeOffset.UtcNow,
-        effectiveDate = new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
         payments = new[]
         {
             new
             {
                 fromUserId = Guid.NewGuid(),
-                fromUserName = "Omar",
+                fromUserName = "",
                 toUserId = Guid.NewGuid(),
                 toUserName = "Daniel",
                 amount = 40.00m
             }
         },
-        transactionCount = 4,
-        total = 120.00m
+        date = new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
+        description = "cash"
     };
 
     [Fact]

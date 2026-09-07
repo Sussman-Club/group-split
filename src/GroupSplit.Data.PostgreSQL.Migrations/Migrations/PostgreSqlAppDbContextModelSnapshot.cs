@@ -389,41 +389,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("LinkedAccount");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRun", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("EffectiveDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("GroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTimeOffset>("RanAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("RanByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ReopenedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RanByUserId");
-
-                    b.HasIndex("GroupId", "EffectiveDate");
-
-                    b.ToTable("SettlementRun");
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -523,9 +488,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("SettlementRunId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
@@ -540,13 +502,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("Name");
 
-                    b.HasIndex("SettlementRunId");
-
                     b.HasIndex("UserId");
 
                     b.HasIndex("GroupId", "DateTime");
-
-                    b.HasIndex("GroupId", "SettlementRunId");
 
                     b.ToTable("Transaction");
 
@@ -680,11 +638,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.Transfer", b =>
                 {
                     b.HasBaseType("GroupSplit.Data.Entities.Transaction");
-
-                    b.Property<Guid?>("WrittenByRunId")
-                        .HasColumnType("uuid");
-
-                    b.HasIndex("WrittenByRunId");
 
                     b.HasDiscriminator().HasValue("Transfer");
                 });
@@ -838,24 +791,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Connection");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRun", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.Group", "Group")
-                        .WithMany()
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GroupSplit.Data.Entities.User", "RanBy")
-                        .WithMany()
-                        .HasForeignKey("RanByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Group");
-
-                    b.Navigation("RanBy");
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
@@ -897,11 +832,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId");
 
-                    b.HasOne("GroupSplit.Data.Entities.SettlementRun", "SettlementRun")
-                        .WithMany("Transactions")
-                        .HasForeignKey("SettlementRunId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("GroupSplit.Data.Entities.User", "User")
                         .WithMany("Transactions")
                         .HasForeignKey("UserId")
@@ -911,8 +841,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("BankTransaction");
 
                     b.Navigation("Group");
-
-                    b.Navigation("SettlementRun");
 
                     b.Navigation("User");
                 });
@@ -957,16 +885,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.Transfer", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.SettlementRun", "WrittenByRun")
-                        .WithMany("Payments")
-                        .HasForeignKey("WrittenByRunId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("WrittenByRun");
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.BankConnection", b =>
                 {
                     b.Navigation("Accounts");
@@ -990,13 +908,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.LinkedAccount", b =>
                 {
-                    b.Navigation("Transactions");
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRun", b =>
-                {
-                    b.Navigation("Payments");
-
                     b.Navigation("Transactions");
                 });
 

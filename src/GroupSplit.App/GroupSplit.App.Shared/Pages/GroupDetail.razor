@@ -56,9 +56,9 @@
                                aria-label="@(group.IsArchive ? "Unarchive group" : "Archive group")" />
             </MudTooltip>
             <span class="sep"></span>
-            @* Squares the whole group at once, where the buttons in the hero settle with one
-               person for one amount. It is the end-of-the-month action, so it is a button
-               with a word on it rather than another icon to guess at. *@
+            @* Records every repayment between you and the group at once, where the buttons
+               in the hero settle with one person for one amount. It is the end-of-the-month
+               action, so it is a button with a word on it rather than another icon. *@
             <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
                        StartIcon="@Icons.Material.Rounded.Handshake"
                        OnClick="@SettleUpAsync">
@@ -219,10 +219,6 @@
                             </div>
                             <GroupActivityList GroupId="@group.Id" PageSize="5" />
                         </div>
-
-                        @* Shows itself only once the group has settled up at least once, and
-                           is where an expense that refuses to be edited sends somebody. *@
-                        <SettlementRunsCard GroupId="@group.Id" />
                     </div>
                 </div>
                 break;
@@ -387,8 +383,8 @@ else if (_notFound)
     }
 
     /// <summary>
-    /// Squares the whole group up. The dialog asks the server what there is to settle before
-    /// it offers to do it, so what somebody agrees to is the payments themselves rather than
+    /// Records every repayment between you and the rest of the group at once. The dialog
+    /// lists them first, so what somebody agrees to is the repayments themselves rather than
     /// a promise about them.
     /// </summary>
     private async Task SettleUpAsync()
@@ -397,7 +393,8 @@ else if (_notFound)
 
         var parameters = new DialogParameters<SettleUpDialog>
         {
-            { x => x.Preview, request => GroupsService.PreviewSettleUpAsync(request, CancellationToken) }
+            { x => x.Owing, GroupsService.Balance?.YouOwed.ToList() ?? [] },
+            { x => x.Owed, GroupsService.Balance?.OwedToYou.ToList() ?? [] }
         };
 
         var dialog = await DialogService.ShowAsync<SettleUpDialog>("Settle up", parameters, options);
