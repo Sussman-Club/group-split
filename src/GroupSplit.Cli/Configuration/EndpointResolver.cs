@@ -69,22 +69,52 @@ public sealed class EndpointResolver(ConfigStore store)
 
         var origin = server is null ? null : ParseAbsolute(server, "--server");
 
+        var api = apiOverride is not null
+            ? ParseAbsolute(apiOverride, EnvironmentVariables.ApiUrl)
+            : Combine(origin!, ApiPath);
+
+        var authority = authorityOverride is not null
+            ? ParseAbsolute(authorityOverride, EnvironmentVariables.Authority)
+            : origin is null
+                ? null
+                : Combine(origin, RealmPath);
+
         return new Endpoints
         {
-            Api = apiOverride is not null
-                ? ParseAbsolute(apiOverride, EnvironmentVariables.ApiUrl)
-                : Combine(origin!, ApiPath),
-            AuthorityOrNull = authorityOverride is not null
-                ? ParseAbsolute(authorityOverride, EnvironmentVariables.Authority)
-                : origin is null
-                    ? null
-                    : Combine(origin, RealmPath),
+            Api = api,
+            AuthorityOrNull = authority,
+            Warnings = InsecureTransportWarnings(api, authority),
             ClientId = Environment.GetEnvironmentVariable(EnvironmentVariables.ClientId)
                        ?? profile?.ClientId
                        ?? DefaultClientId,
             ProfileName = profileName,
             Source = server is null ? EnvironmentVariables.ApiUrl : source!
         };
+    }
+
+    /// <summary>
+    /// Plain http is accepted rather than rejected, because it has to be: the local Aspire
+    /// Keycloak is http and cannot be otherwise. But over http a bearer token, and on the
+    /// authority a refresh token, cross the network in the clear, so anything that is not
+    /// loopback says so once. Loopback is exempt because it never leaves the machine.
+    /// </summary>
+    private static List<string> InsecureTransportWarnings(Uri api, Uri? authority)
+    {
+        var warnings = new List<string>();
+
+        foreach (var (uri, what) in new[] { (api, "API"), (authority, "identity server") })
+        {
+            if (uri is null || uri.Scheme != Uri.UriSchemeHttp || uri.IsLoopback)
+            {
+                continue;
+            }
+
+            warnings.Add(
+                $"The {what} at {uri.GetLeftPart(UriPartial.Authority)} is plain http, so "
+                + "credentials are sent unencrypted. Use https for anything but a local server.");
+        }
+
+        return warnings;
     }
 
     private static (string? Value, string? Source) FirstSet(params (string? Value, string Source)[] candidates)

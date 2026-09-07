@@ -19,6 +19,7 @@ public sealed class StubApi : IDisposable
     private readonly HttpListener _listener = new();
     private readonly List<(string Method, string Path, string? Authorization)> _requests = [];
     private readonly Dictionary<string, (int Status, string Body)> _routes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _html = new(StringComparer.OrdinalIgnoreCase);
 
     public StubApi()
     {
@@ -42,6 +43,19 @@ public sealed class StubApi : IDisposable
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         }));
+
+        return this;
+    }
+
+    /// <summary>
+    /// Answers with HTML, which is what a proxy in front of the real server does when it
+    /// answers instead of it. Content type included, since that is what makes the JSON
+    /// reader throw the exception this exists to cover.
+    /// </summary>
+    public StubApi Html(string path, int status, string body)
+    {
+        _html.Add(path);
+        _routes[path] = (status, body);
 
         return this;
     }
@@ -95,7 +109,7 @@ public sealed class StubApi : IDisposable
 
             var bytes = Encoding.UTF8.GetBytes(body);
             context.Response.StatusCode = status;
-            context.Response.ContentType = "application/json";
+            context.Response.ContentType = _html.Contains(path) ? "text/html" : "application/json";
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes);
             context.Response.Close();

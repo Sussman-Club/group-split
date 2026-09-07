@@ -20,11 +20,27 @@ public sealed class TokenProvider(
 {
     private string? _cached;
 
+    /// <summary>
+    /// The token supplied by the environment, or null when there is none worth using.
+    /// <para>
+    /// Blank counts as absent, and every caller has to agree on that: a workflow whose
+    /// secret did not resolve exports an empty string, and a reader that only checks for
+    /// null would report a session that no request can actually use.
+    /// </para>
+    /// </summary>
+    public static string? TokenFromEnvironment
+    {
+        get
+        {
+            var value = Environment.GetEnvironmentVariable(EnvironmentVariables.Token);
+
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+    }
+
     public async Task<string> GetAccessTokenAsync(CancellationToken ct)
     {
-        var fromEnvironment = Environment.GetEnvironmentVariable(EnvironmentVariables.Token);
-
-        if (!string.IsNullOrWhiteSpace(fromEnvironment))
+        if (TokenFromEnvironment is { } fromEnvironment)
         {
             return fromEnvironment;
         }
@@ -67,20 +83,32 @@ public sealed class TokenProvider(
                 ErrorCodes.AuthExpired);
         }
 
-        store.Save(endpoints.Authority, endpoints.ClientId, Persist(refreshed));
+        store.Save(
+            endpoints.Authority,
+            endpoints.ClientId,
+            Persist(refreshed, previousRefreshToken: credential.RefreshToken));
 
         return _cached = refreshed.AccessToken;
     }
 
-    /// <summary>Turns a token response into what goes on disk, including the claims shown by `auth status`.</summary>
-    public static StoredCredential Persist(TokenResponse token)
+    /// <summary>
+    /// Turns a token response into what goes on disk, including the claims shown by
+    /// `auth status`.
+    /// <para>
+    /// <paramref name="previousRefreshToken"/> is kept when the response carries none.
+    /// Keycloak always returns one today, so this never fires; if realm rotation settings
+    /// ever change, without it the symptom is a browser sign-in appearing from nowhere at
+    /// the next expiry, with nothing to point at.
+    /// </para>
+    /// </summary>
+    public static StoredCredential Persist(TokenResponse token, string? previousRefreshToken = null)
     {
         var (username, subject, expiresAt) = JwtClaims.Read(token.AccessToken);
 
         return new StoredCredential
         {
             AccessToken = token.AccessToken,
-            RefreshToken = token.RefreshToken,
+            RefreshToken = token.RefreshToken ?? previousRefreshToken,
             // Prefer the token's own exp over expires_in: it is what the API will enforce,
             // and it does not drift with however long the response took to arrive.
             ExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn),

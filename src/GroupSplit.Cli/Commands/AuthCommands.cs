@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Diagnostics;
 using GroupSplit.Cli.Auth;
 using GroupSplit.Cli.Configuration;
 using GroupSplit.Cli.Infrastructure;
@@ -89,12 +88,25 @@ public static class AuthCommands
 
             context.Tokens.Remove(endpoints.Authority, endpoints.ClientId);
 
-            // Local state is gone either way; ending the Keycloak session is best effort
-            // so an unreachable server cannot leave the machine still logged in.
+            // Local state is gone either way; ending the Keycloak session is best effort so
+            // an unreachable server cannot leave the machine still logged in.
+            //
+            // The whole pair is guarded, not just the revoke: discovery runs first and throws
+            // its own CliException when the server cannot be reached, so catching inside
+            // RevokeAsync alone never saw that case and the command reported a failure for
+            // work it had already done.
             if (credential?.RefreshToken is { } refreshToken)
             {
-                var oidc = await context.Discovery.GetAsync(endpoints.Authority, ct);
-                await context.DeviceFlow.RevokeAsync(oidc, endpoints.ClientId, refreshToken, ct);
+                try
+                {
+                    var oidc = await context.Discovery.GetAsync(endpoints.Authority, ct);
+                    await context.DeviceFlow.RevokeAsync(oidc, endpoints.ClientId, refreshToken, ct);
+                }
+                catch (CliException failure)
+                {
+                    context.Output.Warn(
+                        $"Signed out locally, but the server session could not be ended: {failure.Message}");
+                }
             }
 
             context.Output.Write(
@@ -114,7 +126,7 @@ public static class AuthCommands
         command.SetHandler((context, _) =>
         {
             var endpoints = context.Endpoints;
-            var fromEnvironment = Environment.GetEnvironmentVariable(EnvironmentVariables.Token);
+            var fromEnvironment = TokenProvider.TokenFromEnvironment;
 
             // Reading stored credentials needs an authority to key on; with a token from
             // the environment there is nothing to look up, and status must still answer.
@@ -203,17 +215,22 @@ public static class AuthCommands
             return false;
         }
 
-        try
+        if (!BrowserLauncher.TryResolve(url, out var target))
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            context.Output.Note("Opened your browser. Waiting for approval...");
-            return true;
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or PlatformNotSupportedException)
-        {
-            // No desktop session, or nothing registered for http. Not worth failing over:
-            // the URL is already on screen and can be opened anywhere.
+            context.Output.Warn(
+                "The identity server returned a verification address that is not an http or "
+                + $"https URL, so it was not opened: {url}");
+
             return false;
         }
+
+        if (!BrowserLauncher.TryOpen(target!))
+        {
+            return false;
+        }
+
+        context.Output.Note("Opened your browser. Waiting for approval...");
+
+        return true;
     }
 }

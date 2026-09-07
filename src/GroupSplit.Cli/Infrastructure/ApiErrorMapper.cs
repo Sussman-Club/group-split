@@ -94,7 +94,7 @@ public static class ApiErrorMapper
 
         try
         {
-            return JsonSerializer.Deserialize<ProblemDetails>(body, Api.GroupSplitSerializer.Options);
+            return JsonSerializer.Deserialize<ProblemDetails>(body, GroupSplitSerializer.Options);
         }
         catch (JsonException)
         {
@@ -120,7 +120,7 @@ public static class ApiErrorMapper
         try
         {
             var parsed = JsonSerializer.Deserialize<HttpValidationProblemDetails>(
-                body, Api.GroupSplitSerializer.Options);
+                body, GroupSplitSerializer.Options);
 
             return parsed?.Errors is { Count: > 0 } errors ? Flatten(errors) : null;
         }

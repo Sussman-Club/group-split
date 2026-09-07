@@ -25,6 +25,13 @@ public sealed record Endpoints
     /// <summary>Human-readable provenance, e.g. "--server" or "GROUPSPLIT_SERVER" or the config path.</summary>
     public required string Source { get; init; }
 
+    /// <summary>
+    /// Things worth saying about this configuration once, when it is first used. Carried
+    /// rather than printed here because resolution happens before there is anywhere to
+    /// print to, and because a command that never touches the network should stay silent.
+    /// </summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     /// <summary>The identity server, or a usable error naming the two ways to supply one.</summary>
     public Uri Authority => AuthorityOrNull ?? throw CliException.Input(
         "No identity server configured.",

@@ -134,6 +134,34 @@ public sealed class ConfigCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Plain_http_to_somewhere_that_is_not_loopback_warns_once()
+    {
+        // Accepted, because the local Aspire Keycloak is http and cannot be otherwise. But
+        // over http the bearer token crosses the network in the clear, and saying nothing
+        // about that is how it goes unnoticed.
+        var result = await Cli.RunAsync("groups", "list", "--server", "http://staging.internal");
+
+        Assert.Contains("plain http", result.Stderr);
+        Assert.Contains("credentials are sent unencrypted", result.Stderr);
+    }
+
+    [Fact]
+    public async Task Loopback_over_http_says_nothing_because_it_never_leaves_the_machine()
+    {
+        var result = await Cli.RunAsync("groups", "list", "--server", "http://localhost:5001");
+
+        Assert.DoesNotContain("plain http", result.Stderr);
+    }
+
+    [Fact]
+    public async Task Https_says_nothing_either()
+    {
+        var result = await Cli.RunAsync("groups", "list", "--server", "https://groupsplit.example.com");
+
+        Assert.DoesNotContain("plain http", result.Stderr);
+    }
+
+    [Fact]
     public async Task A_server_that_is_not_a_url_is_rejected_before_any_request()
     {
         var result = await Cli.RunAsync("groups", "list", "--server", "not-a-url");

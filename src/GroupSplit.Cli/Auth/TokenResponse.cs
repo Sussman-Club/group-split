@@ -36,8 +36,12 @@ public sealed record DeviceAuthorizationResponse
     [JsonPropertyName("verification_uri_complete")]
     public string? VerificationUriComplete { get; init; }
 
+    /// <summary>
+    /// Seconds the code stays valid. Nullable so an absent value and an explicit zero stay
+    /// distinguishable: absent takes a default, zero means the code is already dead.
+    /// </summary>
     [JsonPropertyName("expires_in")]
-    public int ExpiresIn { get; init; }
+    public int? ExpiresIn { get; init; }
 
     /// <summary>Seconds the server wants between polls. Absent means 5, per the RFC.</summary>
     [JsonPropertyName("interval")]

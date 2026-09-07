@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using GroupSplit.Cli.Infrastructure;
 
 namespace GroupSplit.Cli.Auth;
@@ -15,6 +16,9 @@ namespace GroupSplit.Cli.Auth;
 public sealed class DeviceCodeFlow(HttpClient http)
 {
     private const string GrantType = "urn:ietf:params:oauth:grant-type:device_code";
+
+    /// <summary>The shortest gap between polls, whatever the server asks for.</summary>
+    private const int MinimumPollSeconds = 1;
 
     /// <summary>
     /// offline_access asks Keycloak for a refresh token that outlives the SSO session's
@@ -50,8 +54,7 @@ public sealed class DeviceCodeFlow(HttpClient http)
                 ErrorCodes.AuthFailed);
         }
 
-        return await response.Content.ReadFromJsonAsync<DeviceAuthorizationResponse>(ct)
-               ?? throw CliException.Auth("The identity server returned an empty device authorization response.");
+        return await ReadAsync<DeviceAuthorizationResponse>(response, "device authorization", ct);
     }
 
     /// <summary>
@@ -65,8 +68,11 @@ public sealed class DeviceCodeFlow(HttpClient http)
         DeviceAuthorizationResponse device,
         CancellationToken ct)
     {
-        var interval = TimeSpan.FromSeconds(device.Interval ?? 5);
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(device.ExpiresIn > 0 ? device.ExpiresIn : 600);
+        // Floored at a second. The RFC's default is five when the server names none, but a
+        // server that names zero -- broken, or hostile -- would otherwise turn this into a
+        // tight loop hammering it for the whole lifetime of the code.
+        var interval = TimeSpan.FromSeconds(Math.Max(MinimumPollSeconds, device.Interval ?? 5));
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(device.ExpiresIn ?? 600);
 
         while (DateTimeOffset.UtcNow < deadline)
         {
@@ -157,7 +163,34 @@ public sealed class DeviceCodeFlow(HttpClient http)
 
         // The error cases are carried in the body as much as in the status, so both the
         // 200 and the 400 are parsed the same way.
-        return await response.Content.ReadFromJsonAsync<TokenResponse>(ct)
-               ?? throw CliException.Auth("The identity server returned an empty token response.");
+        return await ReadAsync<TokenResponse>(response, "token", ct);
+    }
+
+    /// <summary>
+    /// Reads a JSON body, or fails with something a reader can act on.
+    /// <para>
+    /// ReadFromJsonAsync throws NotSupportedException when the content type is not JSON, and
+    /// a proxy in front of Keycloak answering with an HTML error page is an ordinary
+    /// production event. Left alone it escapes to the catch-all and tells the user the CLI
+    /// has a bug, which sends them looking in the wrong place entirely.
+    /// </para>
+    /// </summary>
+    private static async Task<T> ReadAsync<T>(
+        HttpResponseMessage response, string what, CancellationToken ct)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<T>(ct)
+                   ?? throw CliException.Auth($"The identity server returned an empty {what} response.");
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw CliException.Auth(
+                $"The identity server's {what} response was not JSON "
+                + $"({(int)response.StatusCode} {response.StatusCode}).",
+                "Check that the authority points at a Keycloak realm and that nothing in "
+                + "front of it is answering instead.",
+                ErrorCodes.AuthFailed);
+        }
     }
 }

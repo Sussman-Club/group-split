@@ -33,9 +33,19 @@ public sealed class CliContext : IDisposable
         DeviceFlow = new DeviceCodeFlow(_authClient);
 
         _endpoints = new Lazy<Endpoints>(() =>
-            new EndpointResolver(Config).Resolve(
+        {
+            var resolved = new EndpointResolver(Config).Resolve(
                 parseResult.GetValue(GlobalOptions.Server),
-                parseResult.GetValue(GlobalOptions.Profile)));
+                parseResult.GetValue(GlobalOptions.Profile));
+
+            // Once per invocation, and only for a command that needed the endpoints at all.
+            foreach (var warning in resolved.Warnings)
+            {
+                Output.Warn(warning);
+            }
+
+            return resolved;
+        });
 
         _apiClient = new Lazy<HttpClient>(() =>
         {

@@ -65,14 +65,16 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- Mirrors GroupSplit.App.Shared so both clients bind the same DTOs from
-             GroupSplit.Shared. The templates are a copy rather than a shared item: the
-             only difference is the `using` in File.liquid, which points at this project's
-             GroupSplitSerializer instead of the Blazor one. -->
+        <!-- Generated the same way, and from the same templates, as GroupSplit.App.Shared:
+             they live in GroupSplit.Shared beside the DTOs and the serializer they name.
+             Those templates are patches against NSwag internals rather than configuration
+             (a JsonPatchDocument substitution, a streaming overload, deletions), so a copy
+             per client would have to be fixed twice, and nothing in the build would notice
+             if it were not. -->
         <OpenApiReference Include="..\GroupSplit.API\obj\Generated\GroupSplit.API_api.json">
             <ClassName>{controller}Client</ClassName>
             <Namespace>GroupSplit.Cli.Api</Namespace>
-            <Options>/TemplateDirectory:.\ClientTemplates /GenerateClientInterfaces:true /GenerateDtoTypes:false /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
+            <Options>/TemplateDirectory:../GroupSplit.Shared/ClientTemplates /GenerateClientInterfaces:true /GenerateDtoTypes:false /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
         </OpenApiReference>
     </ItemGroup>
 

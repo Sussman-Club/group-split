@@ -201,6 +201,12 @@ export GROUPSPLIT_AUTHORITY=http://localhost:8080/realms/group-split
 set: nothing contacts the identity server on that path, so nothing needs its URL. The
 authority is only demanded by the commands that actually sign in.
 
+### Plain http
+
+Accepted, and necessarily so -- the local Aspire Keycloak is http and cannot be otherwise.
+A server that is not loopback warns once on stderr, because over http the bearer token, and on
+the authority the refresh token, cross the network in the clear.
+
 ### Profiles
 
 A profile is one named deployment. `--profile` selects one for a single command;
@@ -227,8 +233,22 @@ no browser can be opened and no port can be listened on -- over SSH, in a contai
 build agent. It degrades to "here is a URL and a code", and the browser that approves it need
 not be on the same machine.
 
-Credentials are written to `~/.local/share/groupsplit/credentials.json`, mode `0600`, keyed by
-realm and client so several servers can be signed in at once. Expired access tokens are
+Two things the sign-in refuses to do, both because the identity server names the addresses this
+CLI would otherwise trust with a device code and a refresh token:
+
+- **It will not send credentials off the authority's origin.** Every endpoint in the realm's
+  discovery document -- issuer, token, device authorization, logout -- has to sit on the same
+  origin as the authority you configured, which also rules out an https authority whose
+  document names an http endpoint. Nothing legitimate is turned away: Keycloak serves its
+  endpoints under its own origin.
+- **It will not open a verification address that is not an http or https URL.** Opening one
+  goes through the desktop's handler, which will just as happily run an executable or a UNC
+  path, and that address came off the wire.
+
+Credentials are written to `~/.local/share/groupsplit/credentials.json`, keyed by realm and
+client so several servers can be signed in at once. On Unix the file is narrowed to `0600`
+before anything is written to it; on Windows it inherits the permissions of `%APPDATA%`, which
+is already user-scoped. Expired access tokens are
 refreshed silently; a spent refresh token is discarded so the next command says "sign in"
 rather than failing the same way twice.
 
