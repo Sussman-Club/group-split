@@ -27,6 +27,7 @@ public static class GroupCommands
         groups.Subcommands.Add(RemoveMember());
         groups.Subcommands.Add(Balances());
         groups.Subcommands.Add(Settle());
+        groups.Subcommands.Add(SettleUp());
         groups.Subcommands.Add(Activity());
         groups.Subcommands.Add(Archive());
         groups.Subcommands.Add(Unarchive());
@@ -352,18 +353,115 @@ public static class GroupCommands
     }
 
     /// <summary>
-    /// Squares the whole group up at once, over whatever part of it is being settled.
+    /// Squares up everything between you and the rest of the group at once.
     /// </summary>
     /// <remarks>
-    /// With no options it settles everything outstanding, which is what most groups want
-    /// most of the time and so is what it costs nothing to ask for. The scope options narrow
-    /// it -- <c>--to</c> closes a month, <c>--category</c> settles one kind of spending --
-    /// and every one of them is a field of the same filter <c>transactions list</c> takes.
+    /// Your own position, not the group's: every repayment it writes has you on one end,
+    /// because what you paid and what you were paid are things you were there for and money
+    /// moving between two other members is not yours to record.
     /// <para>
-    /// Always previews first, so the confirmation shows the payments it is about to write
-    /// rather than a description of them.
+    /// Reads the balances first, so the confirmation lists the repayments it is about to
+    /// write rather than describing them.
     /// </para>
     /// </remarks>
+    private static Command SettleUp()
+    {
+        var date = new Option<DateTimeOffset?>("--date")
+        {
+            Description = "When the money moved, e.g. 2026-09-30. Defaults to now."
+        };
+
+        var note = new Option<string?>("--note")
+        {
+            Description = "What to remember about it, written onto every repayment."
+        };
+
+        var dryRun = new Option<bool>("--dry-run")
+        {
+            Description = "Show what would be recorded and stop."
+        };
+
+        var command = new Command("settle-up", "Square up with everybody in a group at once.")
+        {
+            GroupId, date, note, dryRun
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var id = parse.GetValue(GroupId);
+
+            var balance = await context.Groups.GetGroupUserBalanceAsync(id, ct);
+
+            var payments = new List<(string Line, decimal Amount)>();
+
+            payments.AddRange(balance.YouOwed.Select(debt =>
+                ($"You pay {debt.UserName} {debt.Amount:N2}.", debt.Amount)));
+
+            payments.AddRange(balance.OwedToYou.Select(credit =>
+                ($"{credit.UserName} pays you {credit.Amount:N2}.", credit.Amount)));
+
+            if (payments.Count == 0)
+            {
+                context.Output.Write(
+                    new { status = "already-square", groupId = id },
+                    _ => new Markup("You are already square with everybody in this group.\n"));
+
+                return ExitCodes.Success;
+            }
+
+            if (parse.GetValue(dryRun))
+            {
+                context.Output.Write(
+                    new { groupId = id, payments = payments.Select(payment => payment.Line) },
+                    _ => new Rows(
+                        new Markup($"[bold]{payments.Count}[/] repayments, "
+                                   + $"{payments.Sum(payment => payment.Amount):N2} in all.\n"),
+                        Lines(payments)));
+
+                return ExitCodes.Success;
+            }
+
+            Confirmation.Require(
+                context,
+                action: "groups.settle-up",
+                summary: $"Record {payments.Count} "
+                         + $"{(payments.Count == 1 ? "repayment" : "repayments")} and square up?",
+                changes: [.. payments.Select(payment => payment.Line)],
+                confirmCommand: $"groupsplit groups settle-up {id} --yes");
+
+            var settled = await context.Groups.SettleUpAsync(
+                id,
+                new SettleUpRequest
+                {
+                    Date = parse.GetValue(date),
+                    Description = parse.GetValue(note)
+                },
+                ct);
+
+            context.Output.Write(settled, value => new Markup(
+                $"[green]Settled up[/] -- {value.Payments.Count} "
+                + $"{(value.Payments.Count == 1 ? "repayment" : "repayments")}, "
+                + $"{value.Total:N2} in all.\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static IRenderable Lines(IEnumerable<(string Line, decimal Amount)> payments)
+    {
+        var table = Tables.Grid("Repayment");
+
+        foreach (var payment in payments)
+        {
+            table.AddRow(Markup.Escape(payment.Line));
+        }
+
+        return table;
+    }
+
     /// <summary>
     /// The one listing that shows transfers as well as expenses, which is why it is not
     /// <c>transactions list --group</c>: "Omar paid you 40" is the row people look for when

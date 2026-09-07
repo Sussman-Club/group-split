@@ -1,4 +1,5 @@
 using GroupSplit.API.Endpoints;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
@@ -321,6 +322,26 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
             await expenses
                 .ApplySort(new SortRequest(key), TransactionApi.Sort)
                 .ToListAsync(Ct);
+        }
+    }
+
+    /// <summary>
+    /// Squaring up, on the real database. The unit suite runs on EF's in-memory provider,
+    /// which evaluates on the client whatever it cannot translate rather than refusing.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task Settling_up_translates()
+    {
+        var group = await AGroupOfTheirs();
+
+        // Whether there is anything to settle depends on the seed, and either answer is a
+        // query that ran: the conflict is raised after the balances have been read.
+        try
+        {
+            await Service<ISettlementService>().SettleUp(group, new SettleUpRequest(), Ct);
+        }
+        catch (ConflictException)
+        {
         }
     }
 }

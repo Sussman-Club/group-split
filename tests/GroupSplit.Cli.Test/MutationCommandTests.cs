@@ -201,6 +201,113 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal("cash", body.GetProperty("description").GetString());
     }
 
+    // ---- groups settle-up ------------------------------------------------------------
+
+    /// <summary>
+    /// Reads the balances first, so the confirmation lists the repayments it is about to
+    /// write rather than describing them -- and so a client cannot decide the amounts.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_records_the_date_and_the_note()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/balances", Balance());
+        _api.Returns($"/api/groups/{id}/settle-up", Settled());
+
+        var result = await Cli.RunAsync(
+            "groups", "settle-up", id.ToString(), "--date", "2026-09-30", "--note", "cash", "--yes");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle-up").Json;
+
+        Assert.Equal(new DateTime(2026, 9, 30), body.GetProperty("date").GetDateTimeOffset().Date);
+        Assert.Equal("cash", body.GetProperty("description").GetString());
+    }
+
+    /// <summary>
+    /// A dry run reads and stops. Nothing may reach the endpoint that records one.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_dry_run_writes_nothing()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/balances", Balance());
+        _api.Returns($"/api/groups/{id}/settle-up", Settled());
+
+        var result = await Cli.RunAsync("groups", "settle-up", id.ToString(), "--dry-run");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up");
+    }
+
+    /// <summary>
+    /// Every line names the caller on one end. Squaring up is personal: money moving between
+    /// two other members is not theirs to record.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_without_a_terminal_lists_both_directions()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/balances", Balance());
+
+        var result = await Cli.RunAsync("groups", "settle-up", id.ToString());
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+
+        var changes = result.Json.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString() ?? "")
+            .ToList();
+
+        Assert.Contains("You pay Daniel 40.00.", changes);
+        Assert.Contains("Omar pays you 25.00.", changes);
+    }
+
+    [Fact]
+    public async Task Groups_settle_up_when_already_square_says_so_and_writes_nothing()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/balances", new
+        {
+            netBalances = Array.Empty<object>(),
+            owedToYou = Array.Empty<object>(),
+            youOwed = Array.Empty<object>()
+        });
+
+        var result = await Cli.RunAsync("groups", "settle-up", id.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up");
+    }
+
+    private static object Balance() => new
+    {
+        netBalances = Array.Empty<object>(),
+        owedToYou = new[] { new { userId = Guid.NewGuid(), userName = "Omar", amount = 25.00m } },
+        youOwed = new[] { new { userId = Guid.NewGuid(), userName = "Daniel", amount = 40.00m } }
+    };
+
+    private static object Settled() => new
+    {
+        payments = new[]
+        {
+            new
+            {
+                fromUserId = Guid.NewGuid(),
+                fromUserName = "",
+                toUserId = Guid.NewGuid(),
+                toUserName = "Daniel",
+                amount = 40.00m
+            }
+        },
+        date = new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
+        description = "cash"
+    };
+
     [Fact]
     public async Task Groups_settle_without_a_terminal_names_the_member_in_the_confirmation()
     {

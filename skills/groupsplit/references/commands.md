@@ -61,6 +61,7 @@ Groups you belong to, their members and their balances.
 | `groups remove-member <group-id> <user-id>` | Remove a member from a group. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
+| `groups settle-up <group-id>` | Record every repayment between you and the rest of the group at once. |
 | `groups activity <group-id>` | List everything that happened in a group, newest first. |
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
@@ -272,6 +273,18 @@ it off. On the receiving side, `invitations link <link>` says which group a link
 <amount>` records a repayment; `--direction` defaults to `theypaidyou`, the creditor's side,
 so pass `--direction youpaidthem` when the user is the one who handed over the money. It is
 confirmation-gated: it moves money in the ledger.
+
+`groups settle-up <group-id>` records all of them in one go -- everything the user owes and
+is owed in that group, each repayment exactly what `groups settle` would have written for
+that pair. It settles the user's own position and nothing narrower, so it takes no amounts
+and no way to narrow it; `--date` and `--note` go onto every repayment it writes. It reads
+the balances first, so the confirmation lists the repayments themselves, and `--dry-run`
+shows that list without writing anything. Being already square is success, not a refusal:
+it says so and writes nothing.
+
+It never records money moving between two other members. The user can say what they paid
+and what they were paid, because they were there for both; a payment between two other
+people is not theirs to state.
 
 A settlement recorded wrongly is taken back with `transactions delete <transaction-id>`,
 which balances the ledger back to what it read before. Its id comes from `groups activity`:

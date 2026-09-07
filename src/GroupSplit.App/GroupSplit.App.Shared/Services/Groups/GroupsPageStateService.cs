@@ -373,4 +373,8 @@ public class GroupsPageStateService : IGroupsPageStateService
     public Task<bool> SettleAsync(SettleRequest request, string otherName,
         CancellationToken cancellationToken = default) =>
         _groupCommands.SettleAsync(Selected().Id, request, otherName, cancellationToken);
+
+    public Task<SettleUpResponse?> SettleUpAsync(SettleUpRequest request,
+        CancellationToken cancellationToken = default) =>
+        _groupCommands.SettleUpAsync(Selected().Id, request, cancellationToken);
 }

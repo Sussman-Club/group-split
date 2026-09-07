@@ -58,6 +58,7 @@ public static class ErrorMessages
         [ErrorCodes.TransactionPayerNotInGroup] = "The person who paid is not a member of this group.",
         [ErrorCodes.SplitUserNotInGroup] = "One of the shares names someone who is not in this group.",
         [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
+        [ErrorCodes.SettlementNothingToSettle] = "You are already square with everybody in this group.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
         [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",
         [ErrorCodes.SplitRuleNameTaken] = "This group already has a rule with that name.",

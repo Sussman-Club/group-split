@@ -78,10 +78,10 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 
 ## Confirming a destructive change
 
-Ten actions stop unless confirmed: `groups.remove-member`, `groups.settle`, `groups.leave`,
-`groups.link.create` (when a link already exists), `groups.link.revoke`,
-`transactions.delete`, `categories.delete`, `split-rules.delete`, `bank.unlink` and
-`users.delete`.
+Eleven actions stop unless confirmed: `groups.remove-member`, `groups.settle`,
+`groups.settle-up`, `groups.leave`, `groups.link.create` (when a link already exists),
+`groups.link.revoke`, `transactions.delete`, `categories.delete`, `split-rules.delete`,
+`bank.unlink` and `users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 

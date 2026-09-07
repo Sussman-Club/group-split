@@ -81,6 +81,13 @@ public interface IGroupsPageStateService
     /// </summary>
     Task<bool> SettleAsync(SettleRequest request, string otherName, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Settles the caller's own position in the selected group: every repayment between them
+    /// and the rest of it, recorded together.
+    /// </summary>
+    Task<SettleUpResponse?> SettleUpAsync(SettleUpRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Puts the selected group down: it keeps everything and accepts nothing new.</summary>
     Task<bool> ArchiveGroupAsync(CancellationToken cancellationToken = default);
 
