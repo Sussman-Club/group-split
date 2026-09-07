@@ -104,12 +104,32 @@ public static class ApiErrorMapper
         }
     }
 
-    /// <summary>Flattens the per-field messages of a validation problem into one line each.</summary>
+    /// <summary>
+    /// The per-field messages of a validation problem, or -- for the one refusal that names
+    /// rows instead of fields -- the groups standing in the way of deleting an account.
+    /// </summary>
+    /// <remarks>
+    /// Both land in <c>details</c> because that is where a caller already looks for "what
+    /// exactly was wrong". Without this the refusal reads "Settle up in every group" with no
+    /// way to learn which ones, and the list is right there on the problem.
+    /// </remarks>
     private static IReadOnlyList<string>? ValidationMessages(ProblemDetails? problem, string? body)
     {
         if (problem is HttpValidationProblemDetails { Errors.Count: > 0 } typed)
         {
             return Flatten(typed.Errors);
+        }
+
+        if (problem?.Code == Shared.Errors.ErrorCodes.AccountNotSettled
+            && problem.GetExtension<List<OutstandingBalance>>(
+                ProblemDetails.OutstandingBalancesExtension, GroupSplitSerializer.Options)
+                is { Count: > 0 } outstanding)
+        {
+            return outstanding
+                .Select(balance => balance.Balance < 0
+                    ? $"{balance.GroupName}: you owe {-balance.Balance:N2}"
+                    : $"{balance.GroupName}: you are owed {balance.Balance:N2}")
+                .ToList();
         }
 
         if (string.IsNullOrWhiteSpace(body))

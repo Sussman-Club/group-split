@@ -2,6 +2,7 @@ using System.CommandLine;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -34,6 +35,13 @@ public static class TransactionCommands
         Description = "Only transactions in this category."
     };
 
+    private static readonly Option<string?> SortBy = new("--sort-by")
+    {
+        Description = "dateTime, amount, name, category, group or paidBy. Defaults to dateTime."
+    };
+
+    private static readonly Option<SortOrder?> Order = Sorting.Order();
+
     private static readonly Option<int?> Page = new("--page") { Description = "1-based page number." };
 
     private static readonly Option<int?> PageSize = new("--page-size")
@@ -54,6 +62,7 @@ public static class TransactionCommands
         transactions.Subcommands.Add(List());
         transactions.Subcommands.Add(Show());
         transactions.Subcommands.Add(Create());
+        transactions.Subcommands.Add(Update());
         transactions.Subcommands.Add(Summary());
         transactions.Subcommands.Add(Delete());
 
@@ -64,7 +73,7 @@ public static class TransactionCommands
     {
         var command = new Command("list", "List transactions, newest first.")
         {
-            Group, From, To, Search, Category, Page, PageSize
+            Group, From, To, Search, Category, SortBy, Order, Page, PageSize
         };
 
         command.SetHandler(async (context, ct) =>
@@ -79,8 +88,8 @@ public static class TransactionCommands
                 category: parse.GetValue(Category),
                 personal: null,
                 search: parse.GetValue(Search),
-                sortBy: null,
-                sortDescending: null,
+                sortBy: parse.GetValue(SortBy),
+                sortDescending: parse.GetValue(Order).Descending(),
                 page: parse.GetValue(Page),
                 pageSize: parse.GetValue(PageSize),
                 cancellationToken: ct);
@@ -105,12 +114,7 @@ public static class TransactionCommands
                         Markup.Escape(transaction.GroupName ?? "-"));
                 }
 
-                return new Rows(
-                    table,
-                    new Markup(
-                        $"[grey]Page {value.Page} of "
-                        + $"{Math.Max(1, (int)Math.Ceiling(value.TotalCount / (double)Math.Max(1, value.PageSize)))}, "
-                        + $"{value.TotalCount} total.[/]\n"));
+                return new Rows(table, Tables.PageFooter(value));
             });
 
             return ExitCodes.Success;
@@ -216,6 +220,108 @@ public static class TransactionCommands
             context.Output.Write(created, value => new Markup(
                 $"[green]Created[/] {Markup.Escape(value.Name)} "
                 + $"({value.Amount:N2}) [grey]{value.Id}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// An edit, sent as a JSON Patch of only what was named.
+    /// </summary>
+    /// <remarks>
+    /// Only what was named, because the endpoint reads the patch as well as applying it:
+    /// silence about the shares means "divide it again the way the category says", which is
+    /// what an edit to the amount, the payer or the category should do. Sending every field
+    /// every time would make <c>--name</c> quietly recompute the division -- so a flag that
+    /// was not passed contributes no operation at all.
+    /// </remarks>
+    private static Command Update()
+    {
+        var name = new Option<string?>("--name") { Description = "Rename the expense." };
+        var amount = new Option<decimal?>("--amount") { Description = "Change the total." };
+        var date = new Option<DateTimeOffset?>("--date") { Description = "Change when it happened." };
+        var description = new Option<string?>("--description") { Description = "Change the note." };
+        var group = new Option<Guid?>("--group")
+        {
+            Description = "Move it into this group. The division is re-derived among its members."
+        };
+        var personal = new Option<bool>("--personal")
+        {
+            Description = "Take it out of its group and back onto your own ledger."
+        };
+        var category = new Option<Guid?>("--category-id") { Description = "File it under this category." };
+        var noCategory = new Option<bool>("--no-category")
+        {
+            Description = "File it under nothing, so it divides evenly."
+        };
+        var paidBy = new Option<Guid?>("--paid-by") { Description = "Change who paid." };
+        var splits = new Option<string[]>("--split")
+        {
+            Description = "Set the exact shares as <user-id>=<amount>, repeatable. "
+                          + "Without this the division is re-derived.",
+            AllowMultipleArgumentsPerToken = true
+        };
+
+        var command = new Command("update", "Change an expense. Only what you name is sent.")
+        {
+            TransactionId, name, amount, date, description,
+            group, personal, category, noCategory, paidBy, splits
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+
+            if (parse.GetResult(group) is not null && parse.GetValue(personal))
+            {
+                throw CliException.Input(
+                    "--group and --personal contradict each other.",
+                    "Pass one or the other.");
+            }
+
+            if (parse.GetResult(category) is not null && parse.GetValue(noCategory))
+            {
+                throw CliException.Input(
+                    "--category-id and --no-category contradict each other.",
+                    "Pass one or the other.");
+            }
+
+            if (parse.GetValue(name) is { } newName) patch.Replace(request => request.Name, newName);
+            if (parse.GetValue(amount) is { } newAmount) patch.Replace(request => request.Amount, newAmount);
+            if (parse.GetValue(date) is { } newDate) patch.Replace(request => request.DateTime, newDate);
+            if (parse.GetValue(paidBy) is { } payer) patch.Replace(request => request.PaidByUserId, payer);
+
+            // Read through GetResult, not the value: --description "" is a caller clearing
+            // the note, and it arrives indistinguishable from absent otherwise.
+            if (parse.GetResult(description) is not null)
+                patch.Replace(request => request.Description, parse.GetValue(description));
+
+            if (parse.GetValue(personal)) patch.Replace(request => request.GroupId, null);
+            else if (parse.GetValue(group) is { } newGroup) patch.Replace(request => request.GroupId, newGroup);
+
+            if (parse.GetValue(noCategory)) patch.Replace(request => request.CategoryId, null);
+            else if (parse.GetValue(category) is { } newCategory)
+                patch.Replace(request => request.CategoryId, newCategory);
+
+            if (parse.GetValue(splits) is { Length: > 0 } given)
+                patch.Replace(request => request.Splits, Pairs.Splits("--split", given));
+
+            if (patch.Operations.Count == 0)
+            {
+                throw CliException.Input(
+                    "Nothing to change.",
+                    "Name at least one field, e.g. --name or --amount. "
+                    + "See: groupsplit transactions update --help");
+            }
+
+            var updated = await context.Transactions.UpdateTransactionAsync(
+                parse.GetValue(TransactionId), patch, ct);
+
+            context.Output.Write(updated, value => new Markup(
+                $"[green]Updated[/] {Markup.Escape(value.Name)} ({value.Amount:N2}).\n"));
 
             return ExitCodes.Success;
         });

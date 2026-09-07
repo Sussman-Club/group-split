@@ -394,6 +394,19 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Transactions_list_sends_the_sort_it_was_asked_for()
+    {
+        _api.Returns("/api/transactions", Page());
+
+        await Cli.RunAsync("transactions", "list", "--sort-by", "amount", "--order", "asc");
+
+        var request = _api.Requests.Single(r => r.Path == "/api/transactions");
+
+        Assert.Equal("amount", request.Parameter("sortBy"));
+        Assert.Equal("false", request.Parameter("sortDescending"));
+    }
+
+    [Fact]
     public async Task Filters_that_were_not_given_are_not_sent_at_all()
     {
         _api.Returns("/api/transactions", Page());

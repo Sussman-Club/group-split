@@ -27,6 +27,8 @@ public static class CliApplication
         root.Subcommands.Add(CategoryCommands.Build());
         root.Subcommands.Add(SplitRuleCommands.Build());
         root.Subcommands.Add(InvitationCommands.Build());
+        root.Subcommands.Add(BankCommands.Build());
+        root.Subcommands.Add(InboxCommands.Build());
         root.Subcommands.Add(ConfigCommands.Build());
         root.Subcommands.Add(CompletionCommand.Build());
         root.Subcommands.Add(SchemaCommand.Build());

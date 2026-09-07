@@ -14,6 +14,7 @@ public static class UserCommands
 
         users.Subcommands.Add(Me());
         users.Subcommands.Add(Position());
+        users.Subcommands.Add(Delete());
 
         return users;
     }
@@ -61,6 +62,54 @@ public static class UserCommands
 
                 return rows;
             });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Deletes the signed-in account. The one command here that cannot be undone, so the
+    /// confirmation names the account rather than describing it in the abstract, and the
+    /// stored credentials go with it -- leaving them would make the next command fail
+    /// against an identity that no longer exists.
+    /// </summary>
+    private static Command Delete()
+    {
+        var command = new Command("delete", "Delete the account you are signed in as. Permanent.");
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var user = await context.Users.GetCurrentUserAsync(ct);
+
+            Confirmation.Require(
+                context,
+                action: "users.delete",
+                summary: $"Permanently delete the account {user.Email ?? user.FullName}?",
+                changes:
+                [
+                    $"{user.FullName} is removed from every group.",
+                    "Your own expenses and their history go with it. This cannot be undone.",
+                    "Refused while you still owe money or are owed it in any group."
+                ],
+                confirmCommand: "groupsplit users delete --yes");
+
+            await context.Users.DeleteCurrentUserAsync(ct);
+
+            // The account is gone, so credentials for it can only produce failures. Cleared
+            // after the call, never before: a refusal -- an unsettled balance is one -- has
+            // to leave the session it arrived on intact. AuthorityOrNull rather than
+            // Authority, because GROUPSPLIT_TOKEN is a complete configuration with no
+            // identity server named, and there is nothing on disk to clear in that case.
+            if (context.Endpoints.AuthorityOrNull is { } authority)
+            {
+                context.Tokens.Remove(authority, context.Endpoints.ClientId);
+            }
+
+            context.Output.Write(
+                new { status = "deleted", userId = user.Id },
+                _ => new Markup("[green]Account deleted.[/] Signed out.\n"));
 
             return ExitCodes.Success;
         });
