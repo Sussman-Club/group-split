@@ -17,7 +17,7 @@ namespace GroupSplit.Cli.Test;
 public sealed class StubApi : IDisposable
 {
     private readonly HttpListener _listener = new();
-    private readonly List<(string Method, string Path, string? Authorization)> _requests = [];
+    private readonly List<Recorded> _requests = [];
     private readonly Dictionary<string, (int Status, string Body)> _routes = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _html = new(StringComparer.OrdinalIgnoreCase);
 
@@ -34,7 +34,22 @@ public sealed class StubApi : IDisposable
 
     public string BaseAddress { get; }
 
-    public IReadOnlyList<(string Method, string Path, string? Authorization)> Requests => _requests;
+    public IReadOnlyList<Recorded> Requests => _requests;
+
+    /// <summary>
+    /// One request as the server saw it. The query string is recorded because that is where
+    /// a filter either arrived or silently did not: a command can look like it worked while
+    /// sending none of what it was asked to.
+    /// </summary>
+    public sealed record Recorded(string Method, string Path, string Query, string? Authorization, string Body)
+    {
+        /// <summary>The request body parsed as JSON, for asserting what a write actually sent.</summary>
+        public JsonElement Json => JsonDocument.Parse(Body).RootElement;
+
+        /// <summary>The value of one query parameter, or null when it was not sent at all.</summary>
+        public string? Parameter(string name)
+            => System.Web.HttpUtility.ParseQueryString(Query)[name];
+    }
 
     /// <summary>Answers <paramref name="path"/> with a JSON body serialized from <paramref name="body"/>.</summary>
     public StubApi Returns(string path, object body, int status = 200)
@@ -101,7 +116,14 @@ public sealed class StubApi : IDisposable
             }
 
             var path = context.Request.Url!.AbsolutePath;
-            _requests.Add((context.Request.HttpMethod, path, context.Request.Headers["Authorization"]));
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            _requests.Add(new Recorded(
+                context.Request.HttpMethod,
+                path,
+                context.Request.Url!.Query,
+                context.Request.Headers["Authorization"],
+                await reader.ReadToEndAsync()));
 
             var (status, body) = _routes.TryGetValue(path, out var route)
                 ? route

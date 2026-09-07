@@ -249,26 +249,208 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Groups_create_posts_and_returns_the_new_group()
+    public async Task Groups_create_sends_the_name_it_was_given()
     {
         _api.Returns("/api/groups", Group("New"));
 
-        var result = await Cli.RunAsync("groups", "create", "New");
+        var result = await Cli.RunAsync("groups", "create", "Trip to Lisbon");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains(_api.Requests, r => r.Method == "POST" && r.Path == "/api/groups");
+
+        // Asserted on the body, not just that a POST happened: the stub answers the same
+        // either way, so a name that never left would look exactly like success.
+        var request = _api.Requests.Single(r => r.Method == "POST" && r.Path == "/api/groups");
+        Assert.Equal("Trip to Lisbon", request.Json.GetProperty("name").GetString());
     }
 
     [Fact]
-    public async Task Transactions_list_carries_the_filters_through_as_query_parameters()
+    public async Task Transactions_create_sends_every_field_it_was_given()
     {
-        _api.Returns("/api/transactions", new { items = Array.Empty<object>(), page = 1, pageSize = 20, totalCount = 0 });
-
         var groupId = Guid.NewGuid();
-        var result = await Cli.RunAsync("transactions", "list", "--group", groupId.ToString(), "--search", "pizza");
+        var payer = Guid.NewGuid();
+        var category = Guid.NewGuid();
+
+        _api.Returns("/api/transactions", Transaction("Dinner", 42.50m, groupId, "Trip"));
+
+        var result = await Cli.RunAsync(
+            "transactions", "create", "Dinner", "42.50",
+            "--group", groupId.ToString(),
+            "--paid-by", payer.ToString(),
+            "--category-id", category.ToString(),
+            "--description", "Birthday",
+            "--date", "2026-03-04T18:30:00Z");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Equal(0, result.Json.GetProperty("totalCount").GetInt32());
+
+        var body = _api.Requests.Single(r => r.Method == "POST" && r.Path == "/api/transactions").Json;
+
+        Assert.Equal("Dinner", body.GetProperty("name").GetString());
+        Assert.Equal(42.50m, body.GetProperty("amount").GetDecimal());
+        Assert.Equal(groupId, body.GetProperty("groupId").GetGuid());
+        Assert.Equal(payer, body.GetProperty("paidByUserId").GetGuid());
+        Assert.Equal(category, body.GetProperty("categoryId").GetGuid());
+        Assert.Equal("Birthday", body.GetProperty("description").GetString());
+        Assert.StartsWith("2026-03-04", body.GetProperty("dateTime").GetString());
+    }
+
+    [Fact]
+    public async Task Transactions_create_defaults_the_date_rather_than_sending_nothing()
+    {
+        _api.Returns("/api/transactions", Transaction("Coffee", 3m, Guid.NewGuid(), "Trip"));
+
+        await Cli.RunAsync("transactions", "create", "Coffee", "3.00");
+
+        var body = _api.Requests.Single(r => r.Method == "POST").Json;
+
+        // The API requires a date; omitting it would be a validation failure the user did
+        // nothing to cause.
+        Assert.NotEqual(default, body.GetProperty("dateTime").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task Transactions_preview_does_not_create_anything()
+    {
+        _api.Returns("/api/transactions/preview", new
+        {
+            ruleName = "Evenly",
+            splits = new[] { new { userId = Guid.NewGuid(), userName = "Anabel", amount = 21.25m } }
+        });
+
+        var result = await Cli.RunAsync(
+            "transactions", "create", "Dinner", "42.50", "--preview", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("Evenly", result.Stdout);
+        Assert.Contains("21.25", result.Stdout);
+        Assert.DoesNotContain(_api.Requests, r => r.Path == "/api/transactions");
+    }
+
+    [Fact]
+    public async Task Transactions_list_returns_the_rows_it_was_given()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns("/api/transactions", Page(
+            Transaction("Dinner", 42.50m, groupId, "Trip"),
+            Transaction("Taxi", 18m, groupId, "Trip")));
+
+        var result = await Cli.RunAsync("transactions", "list");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var items = result.Json.GetProperty("items");
+        Assert.Equal(2, items.GetArrayLength());
+        Assert.Equal("Dinner", items[0].GetProperty("name").GetString());
+        Assert.Equal(42.50m, items[0].GetProperty("amount").GetDecimal());
+        Assert.Equal("Anabel", items[0].GetProperty("paidByUserName").GetString());
+        Assert.Equal("Trip", items[0].GetProperty("groupName").GetString());
+        Assert.Equal(2, result.Json.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task Transactions_list_renders_a_table_with_the_totals_underneath()
+    {
+        _api.Returns("/api/transactions", Page(
+            Transaction("Dinner", 42.50m, Guid.NewGuid(), "Trip")));
+
+        var result = await Cli.RunAsync("transactions", "list", "--output", "text");
+
+        Assert.Contains("Dinner", result.Stdout);
+        Assert.Contains("42.50", result.Stdout);
+        Assert.Contains("Anabel", result.Stdout);
+        Assert.Contains("Trip", result.Stdout);
+        // The paging footer: without it a truncated list looks like the whole of it.
+        Assert.Contains("1 total", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Transactions_list_actually_sends_every_filter_it_was_given()
+    {
+        _api.Returns("/api/transactions", Page());
+
+        var groupId = Guid.NewGuid();
+
+        await Cli.RunAsync(
+            "transactions", "list",
+            "--group", groupId.ToString(),
+            "--search", "pizza",
+            "--category", "Food",
+            "--from", "2026-01-01",
+            "--to", "2026-02-01",
+            "--page", "2",
+            "--page-size", "5");
+
+        // Asserted on the wire, because a filter that never leaves is indistinguishable
+        // from one the server ignored: the command succeeds and returns the wrong rows.
+        var request = _api.Requests.Single(r => r.Path == "/api/transactions");
+
+        Assert.Equal(groupId.ToString(), request.Parameter("groupId"));
+        Assert.Equal("pizza", request.Parameter("search"));
+        Assert.Equal("Food", request.Parameter("category"));
+        Assert.Equal("2", request.Parameter("page"));
+        Assert.Equal("5", request.Parameter("pageSize"));
+        Assert.StartsWith("2026-01-01", request.Parameter("from"));
+        Assert.StartsWith("2026-02-01", request.Parameter("to"));
+    }
+
+    [Fact]
+    public async Task Filters_that_were_not_given_are_not_sent_at_all()
+    {
+        _api.Returns("/api/transactions", Page());
+
+        await Cli.RunAsync("transactions", "list", "--search", "pizza");
+
+        var request = _api.Requests.Single(r => r.Path == "/api/transactions");
+
+        // Null rather than empty: an empty `category=` is a filter on the empty string as
+        // far as the API is concerned, and would match nothing.
+        Assert.Null(request.Parameter("category"));
+        Assert.Null(request.Parameter("groupId"));
+        Assert.Null(request.Parameter("from"));
+    }
+
+    [Fact]
+    public async Task Transactions_show_lists_the_split()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id, name = "Dinner", description = "Birthday", amount = 42.50m,
+            dateTime = DateTimeOffset.UtcNow, groupId = Guid.NewGuid(), groupName = "Trip",
+            paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
+            categoryId = (Guid?)null, category = "Food",
+            splits = new[]
+            {
+                new { userId = Guid.NewGuid(), userName = "Anabel", amount = 21.25m },
+                new { userId = Guid.NewGuid(), userName = "Daniel", amount = 21.25m }
+            }
+        });
+
+        var result = await Cli.RunAsync("transactions", "show", id.ToString(), "--output", "text");
+
+        Assert.Contains("Dinner", result.Stdout);
+        Assert.Contains("Daniel", result.Stdout);
+        Assert.Contains("21.25", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Transactions_summary_totals_what_it_was_given()
+    {
+        _api.Returns("/api/transactions/summary", new { count = 7, total = 123.45m });
+
+        var result = await Cli.RunAsync("transactions", "summary", "--output", "text");
+
+        Assert.Contains("7", result.Stdout);
+        Assert.Contains("123.45", result.Stdout);
+    }
+
+    [Fact]
+    public async Task The_alias_tx_is_the_same_command()
+    {
+        _api.Returns("/api/transactions", Page(Transaction("Dinner", 42.50m, Guid.NewGuid(), "Trip")));
+
+        Assert.Equal(1, (await Cli.RunAsync("tx", "list")).Json.GetProperty("items").GetArrayLength());
     }
 
     [Fact]
@@ -312,6 +494,19 @@ public sealed class CommandTests : IDisposable
     private static object Group(string name) => new
     {
         id = Guid.NewGuid(), name, memberCount = 3, isArchive = false
+    };
+
+    private static object Page(params object[] items) => new
+    {
+        items, page = 1, pageSize = 20, totalCount = items.Length
+    };
+
+    private static object Transaction(string name, decimal amount, Guid groupId, string groupName) => new
+    {
+        id = Guid.NewGuid(), name, description = (string?)null, amount,
+        dateTime = DateTimeOffset.UtcNow, groupId, groupName,
+        paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
+        categoryId = (Guid?)null, category = (string?)null
     };
 
     private static object Transaction(string name) => new
