@@ -131,6 +131,19 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public async Task A_bad_output_format_is_reported_rather_than_thrown()
+    {
+        // The reporting path reads --output to decide how to print the error, so the option
+        // that failed used to be read while failing, and the process died with exit 134
+        // instead of saying what was wrong.
+        var result = await Cli.RunAsync("-o", "bogus", "config", "path");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal(ErrorCodes.Usage, result.Error.GetProperty("code").GetString());
+        Assert.Contains("bogus", result.Error.GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task An_unreachable_server_is_reported_rather_than_thrown()
     {
         _environment.Set(EnvironmentVariables.ApiUrl, "http://127.0.0.1:1/api");

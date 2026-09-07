@@ -8,6 +8,7 @@
 @inject ICategoriesClient CategoriesClient
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
+@inject LocalClock Clock
 
 @*
     Turning one imported row into a group expense, in the same two steps recording one
@@ -47,6 +48,30 @@
                     <Money Value="@Row.Amount" Currency="@Row.Currency" Class="gs-money" />
                 </div>
             </div>
+
+            @* Carried on both steps, because it is the reason to stop, and stopping is
+               still an option on the second one. Nothing is decided by showing it: the
+               person either goes on, and files a second expense on purpose, or attaches the
+               row to the one that is already there. *@
+            @if (Match is { } match)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    <div class="gs-stack" style="gap: 8px">
+                        <span>
+                            You may already have recorded this:
+                            <strong>@match.Name</strong>,
+                            <Money Value="@match.Amount" Currency="@match.Currency" />
+                            in @match.Where on @Clock.Local(match.DateTime).ToString("d").
+                        </span>
+                        <div>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       Class="gs-btn-pill" OnClick="@(() => Attach(match))">
+                                That is the same payment
+                            </MudButton>
+                        </div>
+                    </div>
+                </MudAlert>
+            }
 
             @if (Step == 1)
             {
@@ -158,8 +183,18 @@
 </MudDialog>
 
 @code {
-    /// <summary>What the dialog answers with: the request, and where it is going, for the snackbar.</summary>
-    public sealed record Answer(FileBankTransactionRequest Request, string Destination);
+    /// <summary>
+    /// What the dialog answers with: one of the two things a person can decide.
+    /// </summary>
+    /// <param name="Request">
+    /// File it as a new expense, and where it is going for the snackbar. Null when the
+    /// answer was that it is a payment already recorded.
+    /// </param>
+    /// <param name="AttachTo">
+    /// The expense this row is the same money as. Set only when the person said so, and
+    /// then nothing new is recorded: the row is attached to that one.
+    /// </param>
+    public sealed record Answer(FileBankTransactionRequest? Request, string Destination, Guid? AttachTo = null);
 
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
@@ -307,7 +342,20 @@
                    || category.Name.Contains(label, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// The closest expense this row could already be, or null when there is nothing to
+    /// raise. Read from the row rather than asked for again: the listing that opened this
+    /// dialog already carries it.
+    /// </summary>
+    private ExpenseMatchResponse? Match => Row.PossibleDuplicates.Count > 0 ? Row.PossibleDuplicates[0] : null;
+
     private void Cancel() => MudDialog.Cancel();
+
+    /// <summary>
+    /// The other answer: this is the expense, so attach the row to it and record nothing.
+    /// </summary>
+    private void Attach(ExpenseMatchResponse match) =>
+        MudDialog.Close(DialogResult.Ok(new Answer(null, match.Where, match.TransactionId)));
 
     private void Submit()
     {
@@ -320,7 +368,11 @@
             CategoryId = _categoryId,
             Splits = _splits,
             Name = string.IsNullOrWhiteSpace(_name) ? null : _name,
-            Description = string.IsNullOrWhiteSpace(_description) ? null : _description
+            Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
+            // The suggestion was on screen throughout, so pressing this is the person
+            // saying they really did pay twice. Without it the API refuses, which is what
+            // stops a duplicate reaching the ledger through a client that never asked.
+            FileAnyway = Match is not null
         };
 
         var destination = _groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? "the group";

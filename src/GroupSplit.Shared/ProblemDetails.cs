@@ -32,6 +32,13 @@ public record ProblemDetails
     /// </summary>
     public const string OutstandingBalancesExtension = "outstandingBalances";
 
+    /// <summary>
+    /// Extension member on an <see cref="Errors.ErrorCodes.PossibleDuplicateExpense"/>
+    /// problem: the <see cref="ExpenseMatchResponse"/> list naming the expenses already
+    /// recorded that the imported row could be, closest first.
+    /// </summary>
+    public const string MatchesExtension = "matches";
+
     public string? Type { get; init; }
 
     public string? Title { get; init; }

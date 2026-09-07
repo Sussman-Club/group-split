@@ -477,3 +477,11 @@ Each step is a commit that builds and passes; the phase is one PR.
 - `Income` as a third `Transaction` leaf, and with it filing credits.
 - Merchant rules ("always file X to Y"), with recurring detection.
 - Hosted Link for MAUI.
+
+## Done since
+
+- **An imported row and a typed expense being the same money.** Nothing connected the two
+  paths into the ledger, so filing a card charge for a dinner somebody had already recorded
+  made a second expense and a wrong balance. See
+  [The same expense arriving twice](duplicate-detection.md); it is a suggestion with two
+  answers, and it does not reuse pending -> posted, which is a different problem.

@@ -56,6 +56,7 @@ public static class BankingServiceExtensions
 
             services.AddScoped<IBankSyncService, BankSyncService>();
             services.AddScoped<IBankConnectionService, BankConnectionService>();
+            services.AddScoped<IDuplicateMatcher, DuplicateMatcher>();
             services.AddScoped<IInboxService, InboxService>();
 
             services.AddJobs()

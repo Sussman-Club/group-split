@@ -104,6 +104,269 @@ public sealed class SelfDescriptionTests
         Assert.ThrowsAny<JsonException>(() => JsonDocument.Parse(result.Stdout));
     }
 
+    /// <summary>
+    /// What a shell asks for on Tab. The directive is answered before the parse, so these
+    /// drive it exactly as the completion scripts do.
+    /// </summary>
+    private static async Task<List<(string Label, string Description)>> SuggestAsync(string line)
+    {
+        var result = await Cli.RunAsync($"[suggest:{line.Length}]", line);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        return result.Stdout
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(suggestion => suggestion.Split('\t', 2))
+            .Select(parts => (parts[0], parts.Length > 1 ? parts[1] : string.Empty))
+            .ToList();
+    }
+
+    [Fact]
+    public async Task Suggestions_at_a_command_position_are_commands_only()
+    {
+        var labels = (await SuggestAsync("groupsplit ")).Select(s => s.Label).ToList();
+
+        Assert.Contains("groups", labels);
+        Assert.Contains("transactions", labels);
+        // The alias is a real way to type the command, so it completes like one.
+        Assert.Contains("tx", labels);
+        // A recursive option is valid here too, but nobody reaching for a command wants it.
+        Assert.DoesNotContain(labels, label => label.StartsWith('-'));
+    }
+
+    [Fact]
+    public async Task Suggestions_become_options_once_a_dash_is_typed()
+    {
+        var labels = (await SuggestAsync("groupsplit -")).Select(s => s.Label).ToList();
+
+        Assert.Contains("--json", labels);
+        Assert.Contains("-o", labels);
+        Assert.DoesNotContain("groups", labels);
+    }
+
+    [Fact]
+    public async Task Suggestions_never_offer_the_aliases_meant_for_cmd_exe()
+    {
+        var labels = (await SuggestAsync("groupsplit ")).Concat(await SuggestAsync("groupsplit -"))
+            .Select(s => s.Label).ToList();
+
+        Assert.DoesNotContain("/?", labels);
+        Assert.DoesNotContain("/h", labels);
+        Assert.DoesNotContain("-?", labels);
+    }
+
+    [Fact]
+    public async Task Suggestions_carry_the_description_the_help_already_has()
+    {
+        var groups = Assert.Single(await SuggestAsync("groupsplit "), s => s.Label == "groups");
+
+        Assert.Equal("Groups you belong to, their members and their balances.", groups.Description);
+    }
+
+    [Fact]
+    public async Task Suggestions_reach_into_a_subcommand_and_its_argument_values()
+    {
+        var nested = (await SuggestAsync("groupsplit groups ")).Select(s => s.Label).ToList();
+        Assert.Contains("balances", nested);
+        Assert.DoesNotContain("groups", nested);
+
+        // An enum argument is a closed set, so it completes where a free value cannot.
+        var shells = (await SuggestAsync("groupsplit completion ")).Select(s => s.Label).ToList();
+        Assert.Equal(["Bash", "Fish", "Pwsh", "Zsh"], shells);
+    }
+
+    [Fact]
+    public async Task Suggested_values_are_described_like_everything_else()
+    {
+        var formats = await SuggestAsync("groupsplit -o ");
+
+        Assert.Equal(["Auto", "Json", "Text"], formats.Select(s => s.Label));
+        Assert.Equal(
+            "Text when stdout is a terminal, JSON when it is not.",
+            Assert.Single(formats, s => s.Label == "Auto").Description);
+
+        // Every value carries one, and none is offered twice now that the framework's own
+        // undescribed source has been replaced rather than added to.
+        var shells = await SuggestAsync("groupsplit completion ");
+        Assert.Equal(["Bash", "Fish", "Pwsh", "Zsh"], shells.Select(s => s.Label));
+        Assert.All(shells, shell => Assert.NotEqual(string.Empty, shell.Description));
+    }
+
+    /// <summary>
+    /// The lines exactly as a shell reads them. <see cref="SuggestAsync"/> trims, and the
+    /// leading tab of a hint -- the empty label that marks one -- is the thing under test.
+    /// </summary>
+    private static async Task<List<string>> SuggestLinesAsync(string line)
+    {
+        var result = await Cli.RunAsync($"[suggest:{line.Length}]", line);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        return result.Stdout
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(suggestion => suggestion.TrimEnd('\r'))
+            .ToList();
+    }
+
+    [Fact]
+    public async Task A_positional_nobody_can_complete_is_hinted_rather_than_left_silent()
+    {
+        // Free text has no candidate list, so the answer used to be nothing at all --
+        // which at the prompt reads as a completion that was never installed.
+        var lines = await SuggestLinesAsync("groupsplit transactions create ");
+
+        Assert.Equal("\t<name>  What the expense was for.", lines[0]);
+    }
+
+    [Fact]
+    public async Task A_hint_names_the_argument_the_cursor_is_actually_on()
+    {
+        var lines = await SuggestLinesAsync("groupsplit transactions create dinner ");
+
+        Assert.Equal("\t<amount>  Total amount, to two decimal places.", lines[0]);
+    }
+
+    [Theory]
+    // The only command carrying options of its own, and the shape the other sixteen have.
+    [InlineData("groupsplit transactions create ")]
+    [InlineData("groupsplit groups show ")]
+    [InlineData("groupsplit config set server ")]
+    public async Task A_hint_never_stands_alone(string line)
+    {
+        // fish completes a sole candidate without asking, and a sole empty one lands on
+        // the command line as a literal ''. Options are what keep it company.
+        var lines = await SuggestLinesAsync(line);
+
+        Assert.StartsWith("\t<", lines[0]);
+        Assert.NotEmpty(lines.Skip(1));
+        Assert.All(lines.Skip(1), suggestion => Assert.StartsWith("-", suggestion));
+    }
+
+    [Fact]
+    public async Task An_argument_with_values_of_its_own_is_completed_rather_than_hinted()
+    {
+        // A hint beside the values it describes would only repeat them.
+        var lines = await SuggestLinesAsync("groupsplit completion ");
+
+        Assert.Equal(["Bash", "Fish", "Pwsh", "Zsh"], lines.Select(l => l.Split('\t')[0]));
+    }
+
+    [Fact]
+    public async Task A_hint_waits_for_an_empty_word_so_it_cannot_become_the_only_match()
+    {
+        // Half a word matches no candidate, and the hint would be alone in the pager again.
+        Assert.Empty(await SuggestLinesAsync("groupsplit transactions create din"));
+    }
+
+    [Fact]
+    public async Task The_zsh_script_installs_either_way_it_says_it_does()
+    {
+        var zsh = (await Cli.RunAsync("completion", "zsh")).Stdout;
+
+        // compinit binds a file to a command by the tag on its first line. Without it the
+        // fpath install -- the first one the script itself suggests -- completes filenames.
+        Assert.StartsWith("#compdef groupsplit", zsh);
+
+        // Autoloaded out of fpath the file is the function and has to run; sourced from a
+        // config it only has to register.
+        Assert.Contains("if [[ ${funcstack[1]} == _groupsplit ]]", zsh);
+        Assert.Contains("compdef _groupsplit groupsplit", zsh);
+    }
+
+    [Fact]
+    public async Task The_zsh_script_lists_a_hint_rather_than_inserting_the_shared_dash()
+    {
+        var zsh = (await Cli.RunAsync("completion", "zsh")).Stdout;
+
+        // Every option beside a hint starts with a dash, and zsh would insert that much
+        // and stop -- leaving half a flag where a value was wanted, and no listing at all,
+        // which is also the only place a message shows.
+        Assert.Contains("compstate[insert]=''", zsh);
+        Assert.Contains("compstate[list]='list force'", zsh);
+    }
+
+    [Fact]
+    public async Task The_pwsh_script_restores_the_space_the_ast_drops()
+    {
+        var pwsh = (await Cli.RunAsync("completion", "pwsh")).Stdout;
+
+        // An ast stringifies without its trailing space while the cursor still counts it,
+        // so the two disagree by one and every position past it completes the word before.
+        Assert.Contains("$cursorPosition - $commandAst.Extent.StartOffset", pwsh);
+        Assert.Contains("PadRight($point)", pwsh);
+    }
+
+    [Fact]
+    public async Task Each_script_handles_a_hint_the_way_its_shell_can()
+    {
+        var bash = (await Cli.RunAsync("completion", "bash")).Stdout;
+        var zsh = (await Cli.RunAsync("completion", "zsh")).Stdout;
+        var fish = (await Cli.RunAsync("completion", "fish")).Stdout;
+        var pwsh = (await Cli.RunAsync("completion", "pwsh")).Stdout;
+
+        // fish reads the empty label natively, so its script needs nothing for one; zsh
+        // has _message, which shows a note without offering it.
+        Assert.Contains("(__groupsplit_complete)", fish);
+        Assert.Contains("_message -r", zsh);
+
+        // The other two have nowhere to show one, and pwsh would throw on the empty label.
+        Assert.Contains("$1 != \"\"", bash);
+        Assert.Contains("if (-not $parts[0]) { return }", pwsh);
+    }
+
+    [Fact]
+    public async Task An_argument_holding_its_value_stops_offering_the_others()
+    {
+        // The set stays on offer after the argument is filled, and typing a second shell
+        // makes the line unparseable -- so proposing one says something untrue.
+        Assert.Empty(await SuggestLinesAsync("groupsplit completion bash "));
+    }
+
+    [Fact]
+    public async Task A_value_still_being_typed_is_not_a_value_the_argument_holds()
+    {
+        // The parser binds `b` to shell the moment it is typed, and counting that as
+        // supplied would stop the completion that is the entire point of typing it.
+        Assert.StartsWith("Bash\t", Assert.Single(await SuggestLinesAsync("groupsplit completion b")));
+    }
+
+    [Fact]
+    public async Task An_option_s_value_is_not_withdrawn_along_with_the_arguments()
+    {
+        // The parser bounds this one correctly on its own, and always did.
+        Assert.Contains(await SuggestLinesAsync("groupsplit -o Json "), l => l.StartsWith("groups\t"));
+        Assert.StartsWith("Json\t", Assert.Single(await SuggestLinesAsync("groupsplit -o J")));
+    }
+
+    [Fact]
+    public async Task A_word_the_parser_could_not_place_ends_the_suggestions()
+    {
+        // Offering the root commands here would say `blablabla groups` is a command line.
+        Assert.Empty(await SuggestLinesAsync("groupsplit blablabla "));
+        Assert.Empty(await SuggestLinesAsync("groupsplit groups blah "));
+        Assert.Empty(await SuggestLinesAsync("groupsplit transactions create a 1 extra "));
+    }
+
+    [Fact]
+    public async Task A_word_still_being_typed_is_not_one_the_parser_failed_to_place()
+    {
+        // Half a word is unplaced for as long as it is half a word, and completing it is
+        // the whole point -- so only what comes before the cursor can end the suggestions.
+        Assert.StartsWith("groups\t", (await SuggestLinesAsync("groupsplit gr"))[0]);
+        Assert.StartsWith("show\t", (await SuggestLinesAsync("groupsplit groups sh"))[0]);
+
+        Assert.Empty(await SuggestLinesAsync("groupsplit blablabla gr"));
+    }
+
+    [Fact]
+    public async Task A_suggest_request_without_a_position_completes_the_end_of_the_line()
+    {
+        var result = await Cli.RunAsync("[suggest]", "groupsplit gr");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.StartsWith("groups\t", result.Stdout);
+    }
+
     [Fact]
     public async Task An_unknown_shell_is_a_usage_error()
     {
