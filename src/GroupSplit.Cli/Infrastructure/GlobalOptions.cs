@@ -81,7 +81,15 @@ public static class GlobalOptions
     /// </summary>
     public static OutputSettings ReadOutputSettings(ParseResult parseResult)
     {
-        var format = parseResult.GetValue(Json) ? OutputFormat.Json : parseResult.GetValue(Output);
+        var format = parseResult.GetValue(Json) ? OutputFormat.Json
+            : Parsed(Output) ? parseResult.GetValue(Output)
+            : OutputFormat.Auto;
+
+        // A value is only read once its own token parsed. This method also runs while a
+        // usage error is being reported, and the option that failed may be this very one:
+        // reading it then throws, and the CLI would crash on its way to telling the caller
+        // what they mistyped. `groupsplit -o bogus` did exactly that.
+        bool Parsed(Option option) => parseResult.GetResult(option)?.Errors.Any() != true;
 
         // Accept both --fields a,b and --fields a b, since callers assume one or the other.
         var fields = parseResult.GetValue(Fields)?
