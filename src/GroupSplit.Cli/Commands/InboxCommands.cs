@@ -8,50 +8,31 @@ using Spectre.Console.Rendering;
 namespace GroupSplit.Cli.Commands;
 
 /// <summary>
-/// The rows a bank sync brought in, and what a person does with them.
+/// The rows a bank sync brought in, and what a person does with them: file one as an
+/// expense, ignore it, put it back.
 /// </summary>
-/// <remarks>
-/// The same four decisions the inbox page offers -- look, add, ignore, put back -- because
-/// the CLI is not a subset of the app. The span options exist for the reason the page's
-/// chips do: a bank sends months at a time, and the way through a backlog is a month of it
-/// at a time. Dates are days rather than instants here, since that is what a bank puts on a
-/// row: a statement date is a calendar date, not a moment in somebody's zone.
-/// </remarks>
 public static class InboxCommands
 {
-    private static readonly Option<InboxStatus?> Status = new("--status")
-    {
-        Description = "Which rows to show: New, Filed or Ignored. Defaults to New."
-    };
-
-    private static readonly Option<DateOnly?> From = new("--from")
-    {
-        Description = "Only rows on or after this day, e.g. 2026-01-01."
-    };
-
-    private static readonly Option<DateOnly?> To = new("--to")
-    {
-        Description = "Only rows on or before this day."
-    };
-
-    private static readonly Option<int?> Page = new("--page") { Description = "1-based page number." };
-
-    private static readonly Option<int?> PageSize = new("--page-size")
-    {
-        Description = "Rows per page. The server caps this."
-    };
-
     private static readonly Argument<Guid> RowId = new("row-id")
     {
-        Description = "The imported row's id."
+        Description = "The imported row's id, as shown by `groupsplit inbox list`."
+    };
+
+    private static readonly Argument<Guid> TransactionId = new("transaction-id")
+    {
+        Description = "The expense's id, as shown by `groupsplit inbox matches`."
     };
 
     public static Command Build()
     {
-        var inbox = new Command("inbox", "Transactions your bank sent, waiting to be dealt with.");
+        var inbox = new Command("inbox", "Imported bank rows waiting to be filed.");
 
         inbox.Subcommands.Add(List());
-        inbox.Subcommands.Add(Add());
+        inbox.Subcommands.Add(Summary());
+        inbox.Subcommands.Add(Matches());
+        inbox.Subcommands.Add(File());
+        inbox.Subcommands.Add(Link());
+        inbox.Subcommands.Add(DismissMatch());
         inbox.Subcommands.Add(Ignore());
         inbox.Subcommands.Add(Restore());
 
@@ -60,52 +41,91 @@ public static class InboxCommands
 
     private static Command List()
     {
+        var status = new Option<InboxStatus?>("--status")
+        {
+            Description = "Which rows to show. Defaults to what is waiting."
+        }.WithDescribedValues();
+
+        // Days rather than instants, because that is what a bank puts on a row: a statement
+        // date is a calendar date the bank decided on, not a moment in anybody's zone. A
+        // sync brings in months at a time, and the way through a backlog is a month of it.
+        var from = new Option<DateOnly?>("--from")
+        {
+            Description = "Only rows on or after this day, e.g. 2026-01-01."
+        };
+
+        var to = new Option<DateOnly?>("--to")
+        {
+            Description = "Only rows on or before this day."
+        };
+
+        var sortBy = new Option<string?>("--sort-by")
+        {
+            Description = "date, amount or merchant. Defaults to date."
+        };
+
+        var order = Sorting.Order();
+
+        var page = new Option<int?>("--page") { Description = "1-based page number." };
+        var pageSize = new Option<int?>("--page-size")
+        {
+            Description = "Rows per page. The server caps this."
+        };
+
         var command = new Command("list", "List imported rows, newest first.")
         {
-            Status, From, To, Page, PageSize
+            status, from, to, sortBy, order, page, pageSize
         };
 
         command.SetHandler(async (context, ct) =>
         {
             var parse = context.ParseResult;
 
-            var page = await new Api.InboxClient(context.ApiHttpClient).GetInboxAsync(
-                status: parse.GetValue(Status),
-                from: parse.GetValue(From),
-                to: parse.GetValue(To),
-                sortBy: null,
-                sortDescending: null,
-                page: parse.GetValue(Page),
-                pageSize: parse.GetValue(PageSize),
+            var rows = await new Api.InboxClient(context.ApiHttpClient).GetInboxAsync(
+                status: parse.GetValue(status),
+                from: parse.GetValue(from),
+                to: parse.GetValue(to),
+                sortBy: parse.GetValue(sortBy),
+                sortDescending: parse.GetValue(order).Descending(),
+                page: parse.GetValue(page),
+                pageSize: parse.GetValue(pageSize),
                 cancellationToken: ct);
 
-            context.Output.Write(page, value =>
+            context.Output.Write(rows, value =>
             {
                 if (value.Items.Count == 0)
                 {
-                    return new Markup(Tables.Empty("imported transactions") + "\n");
+                    return new Markup(Tables.Empty("imported rows") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Date", "Description", "Amount", "Account", "Status");
+                // No status column: every row on a page shares one, because the status is
+                // what the listing was filtered by. It would be 10 columns of nothing on a
+                // table already wide enough to wrap around a row id.
+                var table = Tables.Grid("Id", "Spent on", "Title", "Amount", "Account");
 
                 foreach (var row in value.Items)
                 {
                     table.AddRow(
                         row.Id.ToString(),
                         row.SpentOn.ToString("yyyy-MM-dd"),
-                        Markup.Escape(row.Title),
-                        // Money coming in is signed, so a refund does not read as a charge.
-                        (row.IsCredit ? "+" : "") + Math.Abs(row.Amount).ToString("N2") + " " + row.Currency,
-                        Markup.Escape(row.AccountName),
-                        row.Status.ToString());
+                        Title(row),
+                        Tables.Money(row.Amount),
+                        Markup.Escape($"{row.InstitutionName} · {row.AccountName}"));
                 }
+
+                // The listing already carries the suggestions, so saying so costs nothing
+                // here -- and filing one of these without an answer would be refused, which
+                // is a worse way to find out.
+                var duplicates = value.Items.Count(row => row.PossibleDuplicates.Count > 0);
 
                 return new Rows(
                     table,
-                    new Markup(
-                        $"[grey]Page {value.Page} of "
-                        + $"{Math.Max(1, (int)Math.Ceiling(value.TotalCount / (double)Math.Max(1, value.PageSize)))}, "
-                        + $"{value.TotalCount} total.[/]\n"));
+                    duplicates == 0
+                        ? new Markup(string.Empty)
+                        : new Markup(
+                            $"[yellow]{duplicates}[/] may already be recorded.\n"
+                            + "[grey]  groupsplit inbox matches <row-id>[/]\n"),
+                    Tables.PageFooter(value));
             });
 
             return ExitCodes.Success;
@@ -115,56 +135,264 @@ public static class InboxCommands
     }
 
     /// <summary>
-    /// Turns a row into an expense. Named "add" rather than "file" to match what the page's
-    /// button says, since they are the same decision.
+    /// What the row is, and the two things about it that change what to do next: a pending
+    /// row will be replaced by its posted one, and a row a suggestion hangs on cannot be
+    /// filed without answering the suggestion first.
     /// </summary>
-    private static Command Add()
+    /// <remarks>
+    /// Marked on the title rather than in a column of its own, because that is where the
+    /// eye already is and because this table is wide enough as it is -- text mode is 80
+    /// columns whenever stdout is not a terminal, which is every redirected run.
+    /// </remarks>
+    private static string Title(BankTransactionResponse row)
+        => Markup.Escape(row.Title)
+           + (row.Pending ? " [grey](pending)[/]" : string.Empty)
+           + (row.PossibleDuplicates.Count > 0 ? " [yellow](duplicate?)[/]" : string.Empty);
+
+    private static Command Summary()
+    {
+        var command = new Command("summary", "Count the rows still waiting to be filed.");
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var summary = await new Api.InboxClient(context.ApiHttpClient).GetInboxSummaryAsync(ct);
+
+            context.Output.Write(summary, value => new Markup(
+                $"[bold]{value.NewCount}[/] rows waiting.\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// The expenses already recorded that a row could be the same money as.
+    /// </summary>
+    /// <remarks>
+    /// A suggestion and nothing more: nothing here merges, hides, files or ignores
+    /// anything. It exists because both answers to the refusal need an expense id, and the
+    /// refusal is the only other place they appear.
+    /// </remarks>
+    private static Command Matches()
+    {
+        var command = new Command(
+            "matches",
+            "List the expenses already recorded that an imported row could be.")
+        {
+            RowId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var matches = await new Api.InboxClient(context.ApiHttpClient)
+                .GetBankTransactionMatchesAsync(context.ParseResult.GetValue(RowId), ct);
+
+            var rowId = context.ParseResult.GetValue(RowId);
+
+            context.Output.Write(matches, value =>
+            {
+                if (value.Count == 0)
+                {
+                    return new Markup(
+                        "[grey]Nothing already recorded looks like this row.[/]\n"
+                        + $"[grey]  groupsplit inbox file {rowId}[/]\n");
+                }
+
+                // A block each rather than a table: there are at most three of these, the
+                // id is 36 characters, and a table wide enough to hold it wraps the id in
+                // half at 80 columns -- which is the one thing here that has to be
+                // copyable.
+                var blocks = new List<IRenderable>();
+
+                foreach (var match in value)
+                {
+                    blocks.Add(new Markup(
+                        $"[bold]{Markup.Escape(match.Name)}[/] {match.Amount:N2} "
+                        + $"{Markup.Escape(match.Currency)} in {Markup.Escape(match.Where)}\n"
+                        + $"  [grey]paid by {Markup.Escape(match.PaidByUserName)}, "
+                        + $"{Markup.Escape(Apart(match))}[/]\n"
+                        + $"  [cyan]{match.TransactionId}[/]\n\n"));
+                }
+
+                // Placeholders rather than this row's id interpolated in: an id is 36
+                // characters, and a label plus a command plus one of them is past 80. The
+                // id was just typed to get here, and the expense ids are listed above.
+                blocks.Add(new Markup(
+                    "[grey]Same payment:[/] groupsplit inbox link <row-id> <transaction-id>\n"
+                    + "[grey]Paid twice:[/]   groupsplit inbox file <row-id> --file-anyway\n"
+                    + "[grey]Not a match:[/]  groupsplit inbox dismiss-match <row-id> <transaction-id>\n"));
+
+                return new Rows(blocks);
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// How far apart the two are on the axes that decided the suggestion, so a person can
+    /// see why it was offered rather than take it on trust.
+    /// </summary>
+    private static string Apart(ExpenseMatchResponse match)
+    {
+        var days = match.DaysApart == 1 ? "1 day" : $"{match.DaysApart} days";
+
+        return match.AmountDifference == 0
+            ? $"{days}, same amount"
+            : $"{days}, {match.AmountDifference:N2} apart";
+    }
+
+    /// <summary>
+    /// Turns a row into an expense. What the bank already said -- the date, the amount, the
+    /// currency -- has no flag here, because filing copies it; correcting the bank is
+    /// <c>transactions update</c> afterwards.
+    /// </summary>
+    private static Command File()
     {
         var group = new Option<Guid?>("--group")
         {
-            Description = "The group to add it to. Left out, it becomes one of your own expenses."
+            Description = "Group to file it in. Omit to keep it personal."
         };
 
-        var category = new Option<Guid?>("--category") { Description = "The category to file it under." };
+        var category = new Option<Guid?>("--category-id")
+        {
+            Description = "Category to file it under. Its rule divides the expense."
+        };
 
         var paidBy = new Option<Guid?>("--paid-by")
         {
-            Description = "Who paid. Defaults to you."
+            Description = "Member who paid, when it was not you. Only meaningful in a group."
+        };
+
+        var splits = new Option<string[]>("--split")
+        {
+            Description = "Exact shares as <user-id>=<amount>, repeatable. "
+                          + "Omit to divide it the way the category says.",
+            AllowMultipleArgumentsPerToken = true
         };
 
         var name = new Option<string?>("--name")
         {
-            Description = "Override the expense's name. Defaults to what the bank called it."
+            Description = "What to call the expense. Defaults to the merchant the bank named."
         };
 
-        var description = new Option<string?>("--description") { Description = "A note on the expense." };
+        var description = new Option<string?>("--description") { Description = "Free-text note." };
 
-        var command = new Command("add", "Add an imported row to a group as an expense.")
+        var fileAnyway = new Option<bool>("--file-anyway")
         {
-            RowId, group, category, paidBy, name, description
+            Description = "Record it even though an expense already there looks like the "
+                          + "same payment. You really did pay twice."
+        };
+
+        var command = new Command("file", "File an imported row as an expense.")
+        {
+            RowId, group, category, paidBy, splits, name, description, fileAnyway
         };
 
         command.SetHandler(async (context, ct) =>
         {
             var parse = context.ParseResult;
-            var id = parse.GetValue(RowId);
+            var given = parse.GetValue(splits) ?? [];
 
-            var expense = await new Api.InboxClient(context.ApiHttpClient).FileBankTransactionAsync(
-                id,
-                new FileBankTransactionRequest
-                {
-                    GroupId = parse.GetValue(group),
-                    CategoryId = parse.GetValue(category),
-                    PaidByUserId = parse.GetValue(paidBy),
-                    Name = parse.GetValue(name),
-                    Description = parse.GetValue(description)
-                },
+            var request = new FileBankTransactionRequest
+            {
+                GroupId = parse.GetValue(group),
+                CategoryId = parse.GetValue(category),
+                PaidByUserId = parse.GetValue(paidBy),
+                // Null, not empty: an empty list is "divide it between nobody", which the
+                // API refuses, while null is "divide it the way the category says".
+                Splits = given.Length == 0 ? null : Pairs.Splits("--split", given),
+                Name = parse.GetValue(name),
+                Description = parse.GetValue(description),
+                // Never defaulted true for convenience: the refusal is what stops a second
+                // expense coming into being before anybody has been told about the first,
+                // and this flag is the person saying they were told.
+                FileAnyway = parse.GetValue(fileAnyway)
+            };
+
+            var expense = await new Api.InboxClient(context.ApiHttpClient)
+                .FileBankTransactionAsync(parse.GetValue(RowId), request, ct);
+
+            context.Output.Write(expense, value => new Markup(
+                $"[green]Filed[/] {Markup.Escape(value.Name)} ({value.Amount:N2}) "
+                + $"in {Markup.Escape(value.GroupName ?? "your own ledger")} [grey]{value.Id}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Attaches the row to an expense that is already there, rather than making a second
+    /// one for the same money.
+    /// </summary>
+    /// <remarks>
+    /// What comes back is that expense, now carrying the bank's row: the amount, the date
+    /// and the division are untouched. A card settling for six more than the receipt is not
+    /// a correction anybody asked for, so this does not make one.
+    /// </remarks>
+    private static Command Link()
+    {
+        var command = new Command(
+            "link",
+            "Attach an imported row to an expense already recorded, instead of filing a second one.")
+        {
+            RowId, TransactionId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var transactionId = parse.GetValue(TransactionId);
+
+            var expense = await new Api.InboxClient(context.ApiHttpClient).LinkBankTransactionAsync(
+                parse.GetValue(RowId),
+                new LinkBankTransactionRequest { TransactionId = transactionId },
                 ct);
 
+            context.Output.Write(expense, value => new Markup(
+                $"[green]Attached[/] to {Markup.Escape(value.Name)} ({value.Amount:N2}).\n"
+                + "[grey]Nothing about the expense changed.[/]\n"
+                + $"[grey]{value.Id}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Says the two are not the same money after all. The pair is then never suggested
+    /// again -- a suggestion nobody can get rid of being worse than none.
+    /// </summary>
+    private static Command DismissMatch()
+    {
+        var command = new Command(
+            "dismiss-match",
+            "Say an imported row and a suggested expense are not the same money.")
+        {
+            RowId, TransactionId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var rowId = parse.GetValue(RowId);
+            var transactionId = parse.GetValue(TransactionId);
+
+            // No confirmation: it removes a suggestion, not a record, and the row is still
+            // there to file or ignore afterwards.
+            await new Api.InboxClient(context.ApiHttpClient).DismissBankTransactionMatchAsync(
+                rowId, new DismissBankMatchRequest { TransactionId = transactionId }, ct);
+
             context.Output.Write(
-                new { status = "added", rowId = id, transactionId = expense.Id, name = expense.Name },
-                value => new Markup(
-                    $"[green]Added[/] {Markup.Escape(value.name)} as expense {value.transactionId}.\n"));
+                new { status = "dismissed", rowId, transactionId },
+                _ => new Markup(
+                    "[green]Dismissed.[/] [grey]That pair will not be suggested again.[/]\n"));
 
             return ExitCodes.Success;
         });
@@ -174,7 +402,7 @@ public static class InboxCommands
 
     private static Command Ignore()
     {
-        var command = new Command("ignore", "Take a row out of the inbox without making anything of it.")
+        var command = new Command("ignore", "Keep a row out of the inbox without filing it.")
         {
             RowId
         };
@@ -183,22 +411,12 @@ public static class InboxCommands
         {
             var id = context.ParseResult.GetValue(RowId);
 
-            Confirmation.Require(
-                context,
-                action: "inbox.ignore",
-                summary: $"Ignore imported row {id}?",
-                changes:
-                [
-                    "The row leaves the inbox and becomes no expense.",
-                    "It can be put back with 'groupsplit inbox restore'."
-                ],
-                confirmCommand: $"groupsplit inbox ignore {id} --yes");
-
+            // No confirmation: ignoring is undone by `inbox restore`, so nothing is lost.
             await new Api.InboxClient(context.ApiHttpClient).IgnoreBankTransactionAsync(id, ct);
 
             context.Output.Write(
                 new { status = "ignored", rowId = id },
-                value => new Markup($"[green]Ignored[/] row {value.rowId}.\n"));
+                _ => new Markup("[green]Ignored.[/] [grey]Undo with: groupsplit inbox restore[/]\n"));
 
             return ExitCodes.Success;
         });
@@ -218,7 +436,7 @@ public static class InboxCommands
 
             context.Output.Write(
                 new { status = "restored", rowId = id },
-                value => new Markup($"[green]Put back[/] row {value.rowId}.\n"));
+                _ => new Markup("[green]Restored.[/]\n"));
 
             return ExitCodes.Success;
         });

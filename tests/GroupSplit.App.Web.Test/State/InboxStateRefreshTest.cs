@@ -44,7 +44,16 @@ public class InboxStateRefreshTest
     {
         _rows =
         [
-            Row("Lidl", 30m),
+            // The first one is showing a suggestion: an expense already recorded that it
+            // could be. The second is an ordinary row with nothing to ask about.
+            Row("Lidl", 30m) with
+            {
+                PossibleDuplicates =
+                [
+                    new ExpenseMatchResponse(Guid.NewGuid(), "Shopping", 28m, "USD",
+                        new DateTimeOffset(2026, 9, 1, 18, 0, 0, TimeSpan.Zero), null, null, "Me", 2m, 0)
+                ]
+            },
             Row("Blue Bottle", 4.5m)
         ];
 
@@ -99,6 +108,31 @@ public class InboxStateRefreshTest
                     GroupId = request.GroupId
                 };
             });
+
+        _inboxClient
+            .Setup(client => client.LinkBankTransactionAsync(It.IsAny<Guid>(),
+                It.IsAny<LinkBankTransactionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, LinkBankTransactionRequest request, CancellationToken _) =>
+            {
+                // The expense that was already there, now carrying the row. Nothing new is
+                // recorded, which is the whole point of this answer.
+                var row = _rows.Single(candidate => candidate.Id == id);
+                SetStatus(id, InboxStatus.Filed);
+
+                return new TransactionResponse
+                {
+                    Id = request.TransactionId,
+                    Name = "Dinner",
+                    Amount = row.Amount,
+                    DateTime = DateTimeOffset.UtcNow
+                };
+            });
+
+        _inboxClient
+            .Setup(client => client.DismissBankTransactionMatchAsync(It.IsAny<Guid>(),
+                It.IsAny<DismissBankMatchRequest>(), It.IsAny<CancellationToken>()))
+            .Callback((Guid id, DismissBankMatchRequest _, CancellationToken _) => ClearMatches(id))
+            .Returns(Task.CompletedTask);
 
         _connectionsClient
             .Setup(client => client.GetBankConnectionsAsync(It.IsAny<CancellationToken>()))
@@ -202,6 +236,50 @@ public class InboxStateRefreshTest
         Assert.Equal(1, _state.NewCount);
     }
 
+    [Fact]
+    public async Task Attaching_a_row_to_an_expense_takes_it_out_of_the_inbox_and_records_nothing_new()
+    {
+        await _state.EnsureLoadedAsync(Ct);
+        await _state.LoadRowsAsync(Ct);
+
+        var row = _state.Rows.Single(candidate => candidate.Title == "Lidl");
+        var already = Guid.NewGuid();
+
+        var expense = await _commands.AttachAsync(row.Id, already, Ct);
+
+        // The expense that came back is the one that was already there.
+        Assert.NotNull(expense);
+        Assert.Equal(already, expense.Id);
+
+        Assert.Equal(1, _state.NewCount);
+        Assert.DoesNotContain(_state.Rows, candidate => candidate.Id == row.Id);
+
+        // A row leaving the inbox and an expense gaining a bank row are both changes the
+        // expense pages are showing, so both announcements go out.
+        Assert.Equal(1, _transactionsAnnounced);
+    }
+
+    [Fact]
+    public async Task Saying_a_pair_is_not_the_same_money_leaves_the_row_alone_and_drops_the_suggestion()
+    {
+        await _state.EnsureLoadedAsync(Ct);
+        await _state.LoadRowsAsync(Ct);
+
+        var row = _state.Rows.Single(candidate => candidate.Title == "Lidl");
+
+        Assert.NotEmpty(row.PossibleDuplicates);
+
+        await _commands.DismissMatchAsync(row.Id, row.PossibleDuplicates[0].TransactionId, row.Title, Ct);
+
+        var still = _state.Rows.Single(candidate => candidate.Id == row.Id);
+
+        // Still waiting, still the caller's to file or ignore -- and no longer asking.
+        Assert.Equal(InboxStatus.New, still.Status);
+        Assert.Empty(still.PossibleDuplicates);
+        Assert.Equal(2, _state.NewCount);
+        Assert.Equal(0, _transactionsAnnounced);
+    }
+
     private void SetStatus(Guid id, InboxStatus status)
     {
         var index = _rows.FindIndex(row => row.Id == id);
@@ -283,6 +361,16 @@ public class InboxStateRefreshTest
 
     private static DateFilter Custom(DateTime from, DateTime to) =>
         new(DateFilterPreset.Custom, from, to);
+
+    /// <summary>
+    /// What the API does after a dismissal: the pair is remembered, so the row comes back
+    /// from the next listing with nothing left to suggest.
+    /// </summary>
+    private void ClearMatches(Guid id)
+    {
+        var index = _rows.FindIndex(row => row.Id == id);
+        _rows[index] = _rows[index] with { PossibleDuplicates = [] };
+    }
 
     private static BankTransactionResponse Row(string merchant, decimal amount) =>
         new(Guid.NewGuid(),

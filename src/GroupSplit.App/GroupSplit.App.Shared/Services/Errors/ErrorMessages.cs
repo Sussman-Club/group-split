@@ -45,6 +45,9 @@ public static class ErrorMessages
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
         [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
         [ErrorCodes.GroupInvitationNotYours] = "That invitation was sent to somebody else.",
+        [ErrorCodes.GroupJoinLinkNotFound] = "That join link is not one of ours. Check you copied the whole of it.",
+        [ErrorCodes.GroupJoinLinkExpired] = "That join link has expired. Ask someone in the group for a new one.",
+        [ErrorCodes.GroupJoinLinkRevoked] = "That join link has been withdrawn. Ask someone in the group for a new one.",
         [ErrorCodes.GroupInvitationAlreadySent] = "That person has already been invited.",
         [ErrorCodes.GroupMemberAlreadyJoined] = "That person is already in this group.",
         [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
@@ -73,7 +76,9 @@ public static class ErrorMessages
         [ErrorCodes.BankConnectionNeedsAttention] = "Your bank needs you to sign in again before this can be synced.",
         [ErrorCodes.BankTransactionIsCredit] = "This is money coming in, so it cannot be added as an expense. You can ignore it instead.",
         [ErrorCodes.BankProviderUnavailable] = "We could not reach your bank just now. Please try again in a few minutes.",
-        [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead."
+        [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead.",
+        [ErrorCodes.PossibleDuplicateExpense] = "This looks like an expense you have already recorded. Check the suggestion on the row before adding it again.",
+        [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction."
     };
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>

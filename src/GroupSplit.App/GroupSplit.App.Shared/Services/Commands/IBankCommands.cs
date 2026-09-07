@@ -33,6 +33,17 @@ public interface IBankCommands
     Task<TransactionResponse?> FileAsync(Guid rowId, FileBankTransactionRequest request, string destination,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Points an imported row at an expense that is already recorded, instead of filing it
+    /// as a second one. One expense is left, carrying the bank's row.
+    /// </summary>
+    Task<TransactionResponse?> AttachAsync(Guid rowId, Guid transactionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Says a suggested pair is not the same money, so it is not suggested again.
+    /// </summary>
+    Task<bool> DismissMatchAsync(Guid rowId, Guid transactionId, string title, CancellationToken ct = default);
+
     Task<bool> IgnoreAsync(Guid rowId, string title, CancellationToken ct = default);
 
     Task<bool> RestoreAsync(Guid rowId, string title, CancellationToken ct = default);

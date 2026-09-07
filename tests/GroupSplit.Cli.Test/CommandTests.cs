@@ -132,6 +132,19 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public async Task A_bad_output_format_is_reported_rather_than_thrown()
+    {
+        // The reporting path reads --output to decide how to print the error, so the option
+        // that failed used to be read while failing, and the process died with exit 134
+        // instead of saying what was wrong.
+        var result = await Cli.RunAsync("-o", "bogus", "config", "path");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal(ErrorCodes.Usage, result.Error.GetProperty("code").GetString());
+        Assert.Contains("bogus", result.Error.GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task An_unreachable_server_is_reported_rather_than_thrown()
     {
         _environment.Set(EnvironmentVariables.ApiUrl, "http://127.0.0.1:1/api");
@@ -395,6 +408,19 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Transactions_list_sends_the_sort_it_was_asked_for()
+    {
+        _api.Returns("/api/transactions", Page());
+
+        await Cli.RunAsync("transactions", "list", "--sort-by", "amount", "--order", "asc");
+
+        var request = _api.Requests.Single(r => r.Path == "/api/transactions");
+
+        Assert.Equal("amount", request.Parameter("sortBy"));
+        Assert.Equal("false", request.Parameter("sortDescending"));
+    }
+
+    [Fact]
     public async Task Filters_that_were_not_given_are_not_sent_at_all()
     {
         _api.Returns("/api/transactions", Page());
@@ -554,23 +580,19 @@ public sealed class CommandTests : IDisposable
     }
 
     /// <summary>
-    /// Ignoring is a mutation, so it takes the same confirmation every other mutation does
-    /// rather than going through because it happens to be a small one.
+    /// Ignoring goes through without asking, unlike the mutations that destroy something:
+    /// `inbox restore` puts the row straight back, so there is nothing to lose and nothing
+    /// worth stopping a scripted run for. This pins that decision rather than assuming it.
     /// </summary>
     [Fact]
-    public async Task Ignoring_a_row_asks_first_and_goes_through_with_yes()
+    public async Task Ignoring_a_row_needs_no_confirmation_because_restore_undoes_it()
     {
         var id = Guid.NewGuid();
         _api.Returns($"/api/inbox/{id}/ignore", new { }, 204);
 
-        var refused = await Cli.RunAsync("inbox", "ignore", id.ToString());
+        var result = await Cli.RunAsync("inbox", "ignore", id.ToString());
 
-        Assert.Equal(ExitCodes.ConfirmationRequired, refused.ExitCode);
-        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/inbox/{id}/ignore");
-
-        var confirmed = await Cli.RunAsync("inbox", "ignore", id.ToString(), "--yes");
-
-        Assert.Equal(ExitCodes.Success, confirmed.ExitCode);
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
         Assert.Contains(_api.Requests, r => r.Path == $"/api/inbox/{id}/ignore");
     }
 

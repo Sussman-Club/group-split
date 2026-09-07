@@ -81,6 +81,16 @@ public sealed record BankTransactionResponse(
     string AccountName,
     string InstitutionName)
 {
+    /// <summary>
+    /// Expenses already recorded that could be this same payment.
+    /// </summary>
+    /// <remarks>
+    /// Only ever filled in for a row still waiting, and only ever a suggestion: filing it
+    /// anyway is one of the two answers, and pointing it at the expense that is already
+    /// there is the other. A pair somebody has said no to is not offered again.
+    /// </remarks>
+    public IReadOnlyList<ExpenseMatchResponse> PossibleDuplicates { get; init; } = [];
+
     /// <summary>What to lead the row with: who was paid, falling back to the bank's line.</summary>
     public string Title => string.IsNullOrWhiteSpace(MerchantName) ? Description : MerchantName;
 

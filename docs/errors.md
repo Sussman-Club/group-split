@@ -74,6 +74,7 @@ routing, authentication, model binding, an unhandled exception.
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
 | `GROUP_INVITATION_NOT_FOUND` | The invitation does not exist, or has already been answered or withdrawn. |
+| `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
 
@@ -101,10 +102,14 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
+| `GROUP_JOIN_LINK_EXPIRED` | The join link is past its expiry. Somebody in the group makes a new one. | |
+| `GROUP_JOIN_LINK_REVOKED` | The join link was withdrawn by the group before it expired. Kept apart from expiry because they are different things to have happened to the person holding the link. | |
 | `BANK_SYNC_UNAVAILABLE` | This deployment has no bank provider configured, so there is nothing to link through. `GET /bank-connections` says the same thing without failing, through `enabled`. | |
 | `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment; deleting the expense is how you undo it. | |
 | `BANK_CONNECTION_NEEDS_ATTENTION` | The bank wants the person to sign in again, so a sync would only be told so. Link in update mode is the way out. | |
-| `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency` and `groupCurrency`. |
+| `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another -- or, when attaching an imported row to an expense already recorded, in a different one from that expense. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency`, and `groupCurrency` or `expenseCurrency` depending on what it was compared against. |
+| `POSSIBLE_DUPLICATE_EXPENSE` | The imported row looks like an expense already recorded: same payer, close enough in amount, within a few days. Nothing is refused permanently -- the caller either files it anyway, because they really did pay twice, or points the row at the expense that is already there with `POST /inbox/{id}/link`. Raised before the second expense exists, because a duplicate found afterwards is a wrong balance somebody has to notice. | `matches`: an array of `{ transactionId, name, amount, currency, dateTime, groupId, groupName, paidByUserName, amountDifference, daysApart }`, closest first. |
+| `TRANSACTION_ALREADY_IMPORTED` | The expense an imported row is being attached to already came from one. An expense carries at most one bank row, which is what the unique index says. | |
 
 ### Validation (400)
 

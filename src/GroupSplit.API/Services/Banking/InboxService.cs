@@ -24,6 +24,30 @@ public interface IInboxService
     /// </summary>
     Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Expenses already recorded that this row could be, best first. A suggestion, and
+    /// nothing happens on the strength of it.
+    /// </summary>
+    Task<IReadOnlyList<DuplicateMatch>> Matches(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// The same question for several rows at once, keyed by row id, for a listing that has
+    /// to say it on every row it shows.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<DuplicateMatch>>> Matches(
+        IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
+
+    /// <summary>
+    /// Attaches the row to an expense that is already there, instead of making a second one.
+    /// </summary>
+    Task<Expense> Link(Guid id, LinkBankTransactionRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records that the row and that expense are not the same money, so the pair is not
+    /// suggested again.
+    /// </summary>
+    Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default);
+
     /// <summary>Takes a row out of the inbox without making anything of it.</summary>
     Task Ignore(Guid id, CancellationToken ct = default);
 
@@ -38,13 +62,21 @@ public interface IInboxService
 /// Filing goes through <see cref="ITransactionService.Create"/> rather than building an
 /// expense here, so the category default, the even fallback, the membership checks and the
 /// splits-must-sum rule are the ones a typed expense already meets. What this adds is the
-/// link back and the row's new status, and the two guards that only make sense for imported
-/// money: a credit is not an expense, and a row already filed must not become a second one.
+/// link back and the row's new status, and the guards that only make sense for imported
+/// money: a credit is not an expense, a row already filed must not become a second one, and
+/// a row that looks like an expense somebody has already recorded is not filed until they
+/// have been told and have said which it is.
+/// <para>
+/// What counts as looking like one is <see cref="IDuplicateMatcher"/>'s and not this
+/// class's. Everything here does with a match is raise it, act on the answer, or remember
+/// that the answer was no.
+/// </para>
 /// </remarks>
 public sealed class InboxService(
     ICurrentUser userContext,
     AppDbContext dbContext,
-    ITransactionService transactions) : IInboxService
+    ITransactionService transactions,
+    IDuplicateMatcher matcher) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {
@@ -96,6 +128,22 @@ public sealed class InboxService(
 
         await RefuseCurrencyMismatch(row, request.GroupId, ct);
 
+        // Before the expense exists, not after: a duplicate discovered afterwards is a
+        // wrong balance somebody has to notice and undo. The refusal names what it matched,
+        // and the person answers it -- by filing anyway, because they really did pay twice,
+        // or by pointing the row at the expense that is already there through Link.
+        if (!request.FileAnyway)
+        {
+            var matches = await matcher.ExpensesLike(row, ct);
+
+            if (matches.Count > 0)
+            {
+                throw new ConflictException(ErrorCodes.PossibleDuplicateExpense,
+                        "This looks like an expense you have already recorded.")
+                    .WithExtension(ProblemDetails.MatchesExtension, matches.ToResponses());
+            }
+        }
+
         var expense = await transactions.Create(new CreateTransactionRequest
         {
             GroupId = request.GroupId,
@@ -117,6 +165,79 @@ public sealed class InboxService(
         await dbContext.SaveChangesAsync(ct);
 
         return expense;
+    }
+
+    public async Task<IReadOnlyList<DuplicateMatch>> Matches(Guid id, CancellationToken ct = default)
+    {
+        var row = await Existing(id, ct);
+
+        return await matcher.ExpensesLike(row, ct);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<DuplicateMatch>>> Matches(
+        IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+    {
+        if (ids.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<DuplicateMatch>>();
+
+        // Through the caller's own rows, like every other read here: ids that are not
+        // theirs simply do not come back, and nothing says whether they exist.
+        var rows = await Owned().Where(row => ids.Contains(row.Id)).ToListAsync(ct);
+
+        return await matcher.ExpensesLike(rows, ct);
+    }
+
+    public async Task<Expense> Link(Guid id, LinkBankTransactionRequest request, CancellationToken ct = default)
+    {
+        var row = await Existing(id, ct);
+
+        if (row.Status == BankTransactionStatus.Filed)
+        {
+            throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled,
+                "This imported transaction has already been added as an expense.");
+        }
+
+        if (row.Amount < 0)
+        {
+            throw new UnprocessableException(ErrorCodes.BankTransactionIsCredit,
+                    "This is money coming in, so it is not an expense to attach to one.")
+                .WithExtension("amount", row.Amount);
+        }
+
+        var expense = await Mine(request.TransactionId, ct);
+
+        if (expense.BankTransactionId is not null)
+        {
+            throw new ConflictException(ErrorCodes.TransactionAlreadyImported,
+                "That expense already came from a bank transaction.");
+        }
+
+        if (!string.Equals(expense.Currency, row.Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ConflictException(ErrorCodes.CurrencyMismatch,
+                    $"This is in {row.Currency} and that expense is in {expense.Currency}.")
+                .WithExtension("transactionCurrency", row.Currency)
+                .WithExtension("expenseCurrency", expense.Currency);
+        }
+
+        // The same link filing makes, and nothing else. The expense keeps the amount, the
+        // date and the division it was recorded with: the person wrote those down, and the
+        // bank settling for a different figure is not a correction anybody asked for.
+        expense.BankTransaction = row;
+        expense.BankTransactionId = row.Id;
+        row.Status = BankTransactionStatus.Filed;
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return expense;
+    }
+
+    public async Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default)
+    {
+        var row = await Existing(id, ct);
+        var expense = await Mine(request.TransactionId, ct);
+
+        await matcher.Dismiss(row, expense, ct);
     }
 
     public async Task Ignore(Guid id, CancellationToken ct = default)
@@ -158,6 +279,21 @@ public sealed class InboxService(
         // Somebody else's row, and a superseded one, take this path too: both say the same
         // thing, which is that it is not the caller's to act on.
         ?? throw new NotFoundException(ErrorCodes.BankTransactionNotFound, "Imported transaction not found.");
+
+    /// <summary>
+    /// The caller's own expense, by id: one they paid for, wherever it sits.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than what they may read. A bank row is one person's card charge, so the
+    /// only expense it can be the same money as is one they are down as having paid --
+    /// anything else is somebody else's, and a 404 says that the way the rest of the API
+    /// says it.
+    /// </remarks>
+    private async Task<Expense> Mine(Guid transactionId, CancellationToken ct) =>
+        await dbContext.Set<Expense>()
+            .FirstOrDefaultAsync(expense => expense.Id == transactionId
+                                            && expense.UserId == userContext.User.Id, ct)
+        ?? throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
     /// <summary>
     /// A group's balances are one currency, and conversion is out of scope, so a row in

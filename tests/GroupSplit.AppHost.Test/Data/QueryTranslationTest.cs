@@ -100,6 +100,27 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         await Service<IInvitationService>().ForGroup(await AGroupOfTheirs(), Ct);
     }
 
+    /// <summary>
+    /// Both join-link projections, and the write between them: the group's own view of its
+    /// link, and the view somebody following one gets. Each is a constructor call reaching
+    /// through two navigations, which is the shape that does not translate.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_join_link_projections_translate()
+    {
+        var links = Service<IJoinLinkService>();
+        var group = await AGroupOfTheirs();
+
+        await links.ForGroup(group, Ct);
+
+        var made = await links.Create(group, Ct);
+
+        await links.ForGroup(group, Ct);
+        await links.Describe(made.Token, Ct);
+
+        await links.Revoke(group, Ct);
+    }
+
     [Fact(Timeout = 120_000)]
     public async Task The_cross_group_position_translates()
     {
@@ -172,6 +193,47 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     public async Task The_inbox_summary_translates()
     {
         await Service<IInboxService>().Summary(Ct);
+    }
+
+    /// <summary>
+    /// The candidates behind a duplicate suggestion: the caller's own expenses over a window
+    /// of days, and the pairs they have already said no to.
+    /// </summary>
+    /// <remarks>
+    /// The row is never saved. What is being asked is whether the two reads the matcher
+    /// makes translate, and they are the same reads whether the row is in the database or
+    /// held in a hand.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task The_expenses_a_bank_row_could_already_be_translate()
+    {
+        var row = new BankTransaction
+        {
+            ProviderTransactionId = "translation-check",
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
+            Amount = 20m,
+            Description = "LIDL 1234",
+            RawJson = "{}",
+            ImportedAt = DateTimeOffset.UtcNow
+        };
+
+        await Service<IDuplicateMatcher>().ExpensesLike([row], Ct);
+    }
+
+    /// <summary>
+    /// The other direction, which reads the imported rows still waiting. It compares the
+    /// authorised date falling back to the posting one, so the predicate is a coalesce
+    /// against a <c>date</c> column rather than a plain column comparison.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_waiting_rows_an_expense_could_already_be_translate()
+    {
+        var expense = await Service<AppDbContext>().Set<Expense>()
+            .Where(candidate => candidate.UserId == Service<ICurrentUser>().User.Id)
+            .OrderBy(candidate => candidate.Id)
+            .FirstAsync(Ct);
+
+        await Service<IDuplicateMatcher>().RowsLike(expense, Ct);
     }
 
     /// <summary>

@@ -37,4 +37,16 @@ public record FileBankTransactionRequest
 
     [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Record it even though an expense already there looks like the same payment.
+    /// </summary>
+    /// <remarks>
+    /// Filing is refused with <c>POSSIBLE_DUPLICATE_EXPENSE</c> while this is false and
+    /// there is something to say, so the second expense cannot come into being before
+    /// somebody has been told. Setting it is that person answering: they really did pay
+    /// twice. Pointing the row at the expense that is already there is <c>POST
+    /// /inbox/{id}/link</c> instead.
+    /// </remarks>
+    public bool FileAnyway { get; set; }
 }

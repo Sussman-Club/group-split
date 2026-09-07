@@ -6,6 +6,7 @@
 @inject IBankCommands Bank
 @inject PlaidLinkLauncher Link
 @inject IDialogService DialogService
+@inject LocalClock Clock
 @implements IDisposable
 
 @*
@@ -97,7 +98,19 @@
 
     private void OnChanged() => InvokeAsync(StateHasChanged);
 
-    private static string Describe(BankConnectionResponse connection)
+    /// <summary>
+    /// The one line under the institution's name: which accounts, and where the connection
+    /// stands.
+    /// </summary>
+    /// <remarks>
+    /// An instance method because of the clock. It used to be static and read
+    /// <c>LastSyncedAt.LocalDateTime</c>, which resolves against whatever zone the runtime
+    /// is in -- the browser's under WebAssembly and the server's under interactive server
+    /// rendering, so the same connection read "last checked" a day apart depending on which
+    /// mode the deployment runs. <see cref="LocalClock"/> is the one thing that knows the
+    /// person's own offset, and it answers the same in both.
+    /// </remarks>
+    private string Describe(BankConnectionResponse connection)
     {
         var accounts = connection.Accounts.Count == 1
             ? connection.Accounts[0].Name
@@ -108,7 +121,7 @@
             BankConnectionState.Revoked => $"{accounts} · access was withdrawn at the bank",
             BankConnectionState.LoginRequired => $"{accounts} · your bank wants you to sign in again",
             _ => connection.LastSyncedAt is { } synced
-                ? $"{accounts} · last checked {synced.LocalDateTime.ToShortDateString()}"
+                ? $"{accounts} · last checked {Clock.Local(synced):d}"
                 : $"{accounts} · not checked yet"
         };
     }
