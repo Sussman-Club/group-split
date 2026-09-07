@@ -172,6 +172,44 @@ public sealed class GroupCommands(
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not record the settlement.");
 
+    public async Task<SettlementRunResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
+        CancellationToken ct = default)
+    {
+        SettlementRunResponse? run = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            run = await groups.SettleUpAsync(groupId, request, ct);
+
+            snackbar.Add(
+                run.Payments.Count is 0
+                    ? $"{run.Label} settled. Everybody was already square."
+                    : $"{run.Label} settled in {run.Payments.Count} "
+                      + $"{(run.Payments.Count is 1 ? "payment" : "payments")}.",
+                Severity.Success);
+
+            // Transfers are transactions, so this is the announcement the group page's
+            // figures listen to -- the same one recording a single repayment makes.
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not settle the group up.");
+
+        return done ? run : null;
+    }
+
+    public Task<bool> ReopenSettlementAsync(Guid groupId, Guid runId, string label,
+        CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await groups.ReopenSettlementAsync(groupId, runId, ct);
+
+            snackbar.Add($"{label} reopened. Its expenses can be edited again.", Severity.Success);
+
+            // No balance moves -- the payments stay, so the figures are already right. What
+            // changes is which rows are outstanding, and the page reads that on the same
+            // announcement every other figure listens to.
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not undo the settling-up.");
+
     public async Task<GroupResponse?> AcceptInvitationAsync(Guid invitationId, string groupName,
         CancellationToken ct = default)
     {

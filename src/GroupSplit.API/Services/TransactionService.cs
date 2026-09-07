@@ -339,6 +339,7 @@ public class TransactionService(
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
         await RefuseIfLeft(expense, ct);
+        await RefuseIfSettled(expense, ct);
 
         // The destination, which is the group it is already in unless the request moves it.
         // Resolved the way a create resolves its group -- one of the caller's, or none for
@@ -391,10 +392,47 @@ public class TransactionService(
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
         await RefuseIfLeft(transaction, ct);
+        await RefuseIfSettled(transaction, ct);
 
         dbContext.Remove(transaction);
 
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Refuses to touch a transaction a settling-up has already settled.
+    /// </summary>
+    /// <remarks>
+    /// A run says a set of transactions nets to zero and records the payments that made it
+    /// so. Change one of them behind its back and that stops being true in the one way this
+    /// model can go quietly wrong: the balances would show the difference -- they read every
+    /// row, settled or not -- while settling up said there was nothing left to settle,
+    /// because everything that could have paid it off was already marked done.
+    /// <para>
+    /// Undoing the settling-up first is the answer, and it is a decision rather than a side
+    /// effect: reopening a month puts every payment in it back to outstanding, and that is
+    /// far too large a thing to happen quietly because somebody corrected a hotel bill. The
+    /// run is named in the problem's extensions so the client can offer to undo the one it
+    /// means instead of sending anybody looking.
+    /// </para>
+    /// </remarks>
+    private async Task RefuseIfSettled(Transaction transaction, CancellationToken ct)
+    {
+        if (transaction.SettlementRunId is not { } runId)
+            return;
+
+        var run = await dbContext.Set<SettlementRun>()
+            .Where(candidate => candidate.Id == runId)
+            .Select(candidate => new { candidate.Id, candidate.Label })
+            .FirstOrDefaultAsync(ct);
+
+        if (run is null)
+            return;
+
+        throw new ConflictException(ErrorCodes.TransactionSettled,
+                $"This was settled in \"{run.Label}\". Undo that settling-up to change it.")
+            .WithExtension("settlementRunId", run.Id)
+            .WithExtension("settlementRunLabel", run.Label);
     }
 
     /// <summary>

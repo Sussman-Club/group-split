@@ -99,9 +99,14 @@
             ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
             : entry.Name;
 
+    /// <summary>
+    /// A transfer's note, when it has one -- "cash", or the name of the settling-up that
+    /// wrote it. The column has always been on the row and nothing ever put anything in it,
+    /// so every repayment read the same: "Settling up", and no way to tell one from another.
+    /// </summary>
     private static string Detail(GroupActivityResponse entry) =>
         entry.Kind is ActivityKind.Transfer
-            ? "Settling up"
+            ? entry.Description is { Length: > 0 } note ? note : "Settling up"
             : $"Paid by {entry.PaidByUserName}";
 
     protected override void OnInitialized() => Changes.TransactionsChanged += ReloadAsync;

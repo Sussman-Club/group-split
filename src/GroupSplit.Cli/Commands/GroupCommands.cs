@@ -27,6 +27,9 @@ public static class GroupCommands
         groups.Subcommands.Add(RemoveMember());
         groups.Subcommands.Add(Balances());
         groups.Subcommands.Add(Settle());
+        groups.Subcommands.Add(SettleUp());
+        groups.Subcommands.Add(Settlements());
+        groups.Subcommands.Add(UndoSettleUp());
         groups.Subcommands.Add(Activity());
         groups.Subcommands.Add(Archive());
         groups.Subcommands.Add(Unarchive());
@@ -289,9 +292,19 @@ public static class GroupCommands
             DefaultValueFactory = _ => SettlementDirection.TheyPaidYou
         };
 
+        var date = new Option<DateTimeOffset?>("--date")
+        {
+            Description = "When the money moved, e.g. 2026-09-30. Defaults to now."
+        };
+
+        var note = new Option<string?>("--note")
+        {
+            Description = "What to remember about it, e.g. \"cash\" or a transfer reference."
+        };
+
         var command = new Command("settle", "Record a repayment between you and another member.")
         {
-            GroupId, userId, amount, direction
+            GroupId, userId, amount, direction, date, note
         };
 
         command.SetHandler(async (context, ct) =>
@@ -301,6 +314,8 @@ public static class GroupCommands
             var other = parse.GetValue(userId);
             var paid = parse.GetValue(amount);
             var side = parse.GetValue(direction);
+            var when = parse.GetValue(date);
+            var description = parse.GetValue(note);
 
             var members = await context.Groups.GetGroupMembersAsync(id, ct);
             var name = members.FirstOrDefault(candidate => candidate.Id == other)?.FullName
@@ -317,7 +332,16 @@ public static class GroupCommands
                                 + $"--direction {side.ToString().ToLowerInvariant()} --yes");
 
             await context.Groups.SettleGroupDebtsAsync(
-                id, new SettleRequest { UserId = other, Amount = paid, Direction = side }, ct);
+                id,
+                new SettleRequest
+                {
+                    UserId = other,
+                    Amount = paid,
+                    Direction = side,
+                    Date = when,
+                    Description = description
+                },
+                ct);
 
             context.Output.Write(
                 new { status = "settled", groupId = id, userId = other, amount = paid, direction = side },
@@ -328,6 +352,257 @@ public static class GroupCommands
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// Squares the whole group up at once, over whatever part of it is being settled.
+    /// </summary>
+    /// <remarks>
+    /// With no options it settles everything outstanding, which is what most groups want
+    /// most of the time and so is what it costs nothing to ask for. The scope options narrow
+    /// it -- <c>--to</c> closes a month, <c>--category</c> settles one kind of spending --
+    /// and every one of them is a field of the same filter <c>transactions list</c> takes.
+    /// <para>
+    /// Always previews first, so the confirmation shows the payments it is about to write
+    /// rather than a description of them.
+    /// </para>
+    /// </remarks>
+    private static Command SettleUp()
+    {
+        var from = new Option<DateTimeOffset?>("--from")
+        {
+            Description = "Only settle transactions on or after this date, e.g. 2026-09-01."
+        };
+
+        var to = new Option<DateTimeOffset?>("--to")
+        {
+            Description = "Only settle transactions on or before this date. Dates the payments too."
+        };
+
+        var category = new Option<string?>("--category")
+        {
+            Description = "Only settle expenses in this category."
+        };
+
+        var paidBy = new Option<Guid?>("--paid-by")
+        {
+            Description = "Only settle transactions this member paid for."
+        };
+
+        var search = new Option<string?>("--search")
+        {
+            Description = "Only settle transactions matching this text."
+        };
+
+        var label = new Option<string?>("--label")
+        {
+            Description = "What to call it, e.g. \"September\". Defaults to the dates it covers."
+        };
+
+        var effectiveDate = new Option<DateTimeOffset?>("--effective-date")
+        {
+            Description = "The date the payments carry. Defaults to --to, or now."
+        };
+
+        var dryRun = new Option<bool>("--dry-run")
+        {
+            Description = "Show what would be settled and stop."
+        };
+
+        var command = new Command("settle-up", "Square the group up in one go.")
+        {
+            GroupId, from, to, category, paidBy, search, label, effectiveDate, dryRun
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var id = parse.GetValue(GroupId);
+
+            var scope = new TransactionFilter(
+                From: parse.GetValue(from),
+                To: parse.GetValue(to),
+                PaidByUserId: parse.GetValue(paidBy),
+                Category: parse.GetValue(category),
+                Search: parse.GetValue(search));
+
+            var request = new SettleUpRequest
+            {
+                Scope = scope,
+                Label = parse.GetValue(label),
+                EffectiveDate = parse.GetValue(effectiveDate)
+            };
+
+            var preview = await context.Groups.PreviewSettleUpAsync(id, request, ct);
+
+            if (parse.GetValue(dryRun))
+            {
+                context.Output.Write(preview, Render);
+                return ExitCodes.Success;
+            }
+
+            if (preview.TransactionCount == 0)
+            {
+                context.Output.Write(
+                    new { status = "nothing-to-settle", groupId = id },
+                    _ => new Markup("Nothing outstanding to settle.\n"));
+
+                return ExitCodes.Success;
+            }
+
+            Confirmation.Require(
+                context,
+                action: "groups.settle-up",
+                summary: $"Settle up \"{preview.SuggestedLabel}\" -- "
+                         + $"{preview.TransactionCount} transactions, {preview.Payments.Count} payments?",
+                changes:
+                [
+                    .. preview.Payments.Select(payment =>
+                        $"{payment.FromUserName} pays {payment.ToUserName} {payment.Amount:N2}."),
+                    $"{preview.TransactionCount} transactions are marked settled and stop being offered again."
+                ],
+                confirmCommand: $"groupsplit groups settle-up {id} --yes");
+
+            var run = await context.Groups.SettleUpAsync(id, request, ct);
+
+            context.Output.Write(run, value => new Rows(
+                new Markup(
+                    $"[green]Settled up[/] {Markup.Escape(value.Label)} -- "
+                    + $"{value.Payments.Count} payments, {value.TransactionCount} transactions.\n"),
+                Payments(value.Payments)));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+
+        static IRenderable Render(SettleUpPreviewResponse preview)
+        {
+            if (preview.TransactionCount == 0)
+            {
+                return new Markup("Nothing outstanding to settle.\n");
+            }
+
+            var covers = preview.CoversFrom is { } start && preview.CoversTo is { } end
+                ? $"{start:yyyy-MM-dd} to {end:yyyy-MM-dd}"
+                : "—";
+
+            return new Rows(
+                new Markup(
+                    $"[bold]{Markup.Escape(preview.SuggestedLabel)}[/] -- "
+                    + $"{preview.TransactionCount} transactions totalling {preview.Total:N2}, "
+                    + $"{Markup.Escape(covers)}.\n"),
+                Payments(preview.Payments));
+        }
+    }
+
+    /// <summary>
+    /// The group's settlings-up, which is where an id to undo comes from.
+    /// </summary>
+    private static Command Settlements()
+    {
+        var command = new Command("settlements", "The settlings-up this group has had.") { GroupId };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var runs = await context.Groups.GetSettlementsAsync(
+                context.ParseResult.GetValue(GroupId), ct);
+
+            context.Output.Write(runs, value =>
+            {
+                if (value.Count == 0)
+                {
+                    return new Markup("This group has not been settled up yet.\n");
+                }
+
+                var table = Tables.Grid("Id", "Label", "Effective", "Payments", "Settled", "State");
+
+                foreach (var run in value)
+                {
+                    table.AddRow(
+                        run.Id.ToString(),
+                        Markup.Escape(run.Label),
+                        $"{run.EffectiveDate:yyyy-MM-dd}",
+                        run.Payments.Count.ToString(),
+                        run.Total.ToString("N2"),
+                        run.ReopenedAt is null ? "settled" : "reopened");
+                }
+
+                return table;
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Undoes a settling-up, which is what makes the expenses in it editable again.
+    /// </summary>
+    /// <remarks>
+    /// It does not take the money back. The payments stay in the ledger, become outstanding
+    /// again, and the next settling-up counts them -- so somebody who has already paid 50
+    /// towards a bill that turned out to be 120 is asked for the difference.
+    /// </remarks>
+    private static Command UndoSettleUp()
+    {
+        var runId = new Argument<Guid>("settlement-id")
+        {
+            Description = "The settling-up's id, as shown by `groupsplit groups settlements`."
+        };
+
+        var command = new Command("undo-settle-up", "Undo a settling-up.") { GroupId, runId };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var id = parse.GetValue(GroupId);
+            var run = parse.GetValue(runId);
+
+            Confirmation.Require(
+                context,
+                action: "groups.undo-settle-up",
+                summary: "Undo this settling-up?",
+                changes:
+                [
+                    "Everything it settled goes back to outstanding, so it can be edited again.",
+                    "No money moves: the payments it wrote stay, and count towards the next one."
+                ],
+                confirmCommand: $"groupsplit groups undo-settle-up {id} {run} --yes");
+
+            var reopened = await context.Groups.ReopenSettlementAsync(id, run, ct);
+
+            context.Output.Write(reopened, value => new Markup(
+                $"[green]Reopened[/] {Markup.Escape(value.Label)}. "
+                + "Its expenses can be edited again.\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static IRenderable Payments(IEnumerable<SettlementPayment> payments)
+    {
+        var list = payments.ToList();
+
+        if (list.Count == 0)
+        {
+            return new Markup("\nAlready square -- nothing to pay.\n");
+        }
+
+        var table = Tables.Grid("From", "To", "Amount");
+
+        foreach (var payment in list)
+        {
+            table.AddRow(
+                Markup.Escape(payment.FromUserName),
+                Markup.Escape(payment.ToUserName),
+                payment.Amount.ToString("N2"));
+        }
+
+        return new Rows(new Markup("\n[bold]Payments[/]\n"), table);
     }
 
     /// <summary>

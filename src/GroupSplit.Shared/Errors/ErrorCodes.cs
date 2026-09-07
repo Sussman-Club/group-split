@@ -1,4 +1,4 @@
-namespace GroupSplit.Shared.Errors;
+﻿namespace GroupSplit.Shared.Errors;
 
 /// <summary>
 /// The error codes the API puts in the <c>code</c> member of every problem response, and the
@@ -35,6 +35,7 @@ public static class ErrorCodes
     public const string GroupJoinLinkNotFound = "GROUP_JOIN_LINK_NOT_FOUND";
     public const string BankConnectionNotFound = "BANK_CONNECTION_NOT_FOUND";
     public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
+    public const string SettlementRunNotFound = "SETTLEMENT_RUN_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -48,6 +49,9 @@ public static class ErrorCodes
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
     public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";
     public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
+    public const string SettlementNothingToSettle = "SETTLEMENT_NOTHING_TO_SETTLE";
+    public const string SettlementRunAlreadyReopened = "SETTLEMENT_RUN_ALREADY_REOPENED";
+    public const string TransactionSettled = "TRANSACTION_SETTLED";
     public const string GroupInvitationAlreadySent = "GROUP_INVITATION_ALREADY_SENT";
     public const string GroupMemberAlreadyJoined = "GROUP_MEMBER_ALREADY_JOINED";
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";

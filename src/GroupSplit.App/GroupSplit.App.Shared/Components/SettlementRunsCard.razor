@@ -1,0 +1,117 @@
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsPageStateService GroupsService
+@inject DataChangeNotifier Changes
+@inject IDialogService DialogService
+@implements IDisposable
+
+@*
+    The settlings-up a group has had, and the way to undo one.
+
+    It has to be somewhere: settling up marks what it settled, and a settled expense refuses
+    to be edited until the settling-up that holds it is undone. Without a list, the only way
+    to find the one to undo would be the id in an error message.
+
+    Undoing does not take the money back. The payments stay in the ledger and become
+    outstanding again, so the next settling-up counts them and asks anybody who has already
+    paid only for the difference.
+*@
+
+@if (_runs.Count > 0)
+{
+    <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
+        <div class="gs-card-title">
+            <h2>Settled up</h2>
+            <span class="gs-tag neutral">@_runs.Count</span>
+        </div>
+
+        <MudList T="string" Dense="true">
+            @foreach (var run in _runs)
+            {
+                var settlement = run;
+                <MudListItem T="string">
+                    <div class="gs-inline" style="justify-content: space-between; gap: 12px">
+                        <div style="min-width: 0">
+                            <div class="name">
+                                @settlement.Label
+                                @if (settlement.ReopenedAt is not null)
+                                {
+                                    <span class="gs-tag neutral" style="margin-left: 6px">reopened</span>
+                                }
+                            </div>
+                            <div class="gs-muted" style="font-size: .8125rem">
+                                @settlement.EffectiveDate.ToLocalTime().ToString("d MMM yyyy")
+                                · @settlement.Payments.Count
+                                @(settlement.Payments.Count == 1 ? "payment" : "payments")
+                                @if (settlement.Total > 0)
+                                {
+                                    <text> · @settlement.Total.ToMoney() settled</text>
+                                }
+                            </div>
+                        </div>
+
+                        @if (settlement.ReopenedAt is null)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small"
+                                       OnClick="@(() => UndoAsync(settlement))">
+                                Undo
+                            </MudButton>
+                        }
+                    </div>
+                </MudListItem>
+            }
+        </MudList>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid GroupId { get; set; }
+
+    private IReadOnlyList<SettlementRunResponse> _runs = [];
+    private Guid _loadedFor;
+
+    protected override void OnInitialized() => Changes.TransactionsChanged += ReloadAsync;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == GroupId) return;
+
+        _loadedFor = GroupId;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _runs = await GroupsService.SettlementsAsync();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Asked for out loud. Undoing moves every balance in the period, which is a good deal
+    /// more than the one word on the button suggests.
+    /// </summary>
+    private async Task UndoAsync(SettlementRunResponse run)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            $"Undo {run.Label}?",
+            "Everything it settled goes back to outstanding, so it can be edited again. "
+            + "No money moves: the payments it recorded stay, and count towards the next "
+            + "settling-up.",
+            yesText: "Undo it",
+            cancelText: "Keep it");
+
+        if (confirmed is not true)
+            return;
+
+        await GroupsService.ReopenSettlementAsync(run.Id, run.Label);
+    }
+
+    private Task ReloadAsync() => _loadedFor == Guid.Empty ? Task.CompletedTask : LoadAsync();
+
+    public void Dispose() => Changes.TransactionsChanged -= ReloadAsync;
+}

@@ -1,0 +1,150 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+
+@*
+    Squaring the whole group up at once.
+
+    The one-at-a-time dialog beside this one records a payment somebody has already made.
+    This one proposes the whole set: it asks the server what there is to settle, shows the
+    fewest payments that would zero it, and writes them together.
+
+    It opens with no scope, because settling everything outstanding is what most groups want
+    most of the time and it should cost nothing to ask for. The end date narrows it -- that
+    is the end-of-the-month case -- and dates the payments it writes, so a group closing
+    September on the 3rd of October does not file September's settlement in October.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5">Settle up</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            <MudDatePicker Date="_through" DateChanged="@ThroughChanged"
+                           Label="Settle everything up to"
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           HelperText="Leave empty to settle everything outstanding."/>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+            }
+            else if (_preview is null)
+            {
+                <MudText Typo="Typo.body2">Could not work out what there is to settle.</MudText>
+            }
+            else if (_preview.TransactionCount == 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Nothing outstanding to settle@(_through is null ? "" : " up to that date").
+                </MudAlert>
+            }
+            else
+            {
+                <MudTextField @bind-Value="_label"
+                              Label="Call it"
+                              Variant="Variant.Outlined"
+                              Placeholder="@_preview.SuggestedLabel"
+                              HelperText="@($"Defaults to \"{_preview.SuggestedLabel}\".")"/>
+
+                <MudText Typo="Typo.subtitle2">
+                    @_preview.TransactionCount @(_preview.TransactionCount == 1 ? "transaction" : "transactions"),
+                    @_preview.Total.ToMoney() in all@(Covers)
+                </MudText>
+
+                @if (_preview.Payments.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true">
+                        Everybody is already square. Settling closes these off without moving any money.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var payment in _preview.Payments)
+                        {
+                            <MudListItem T="string" Icon="@Icons.Material.Rounded.ArrowForward">
+                                @payment.FromUserName pays @payment.ToUserName
+                                <b>@payment.Amount.ToMoney()</b>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            }
+
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@(_loading || _preview is null || _preview.TransactionCount == 0)"
+                   OnClick="@Submit">
+            Settle up
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>
+    /// Asks the server what the scope would sweep. Handed in rather than reached for, so the
+    /// dialog stays a dialog and the page keeps saying who it talks to.
+    /// </summary>
+    [Parameter] public Func<SettleUpRequest, Task<SettleUpPreviewResponse?>> Preview { get; set; } = null!;
+
+    private SettleUpPreviewResponse? _preview;
+    private DateTime? _through;
+    private string? _label;
+    private bool _loading = true;
+
+    private string Covers => _preview is { CoversFrom: { } from, CoversTo: { } to }
+        ? $", {from:d MMM yyyy} to {to:d MMM yyyy}"
+        : string.Empty;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    /// <summary>
+    /// Narrowing the scope changes what there is to settle, so the proposal is asked for
+    /// again rather than left showing the answer to the previous question.
+    /// </summary>
+    private async Task ThroughChanged(DateTime? through)
+    {
+        _through = through;
+
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+
+        // The await below hands control back before the spinner would otherwise be drawn,
+        // and a dialog that looks unchanged while it re-reads reads as a dialog ignoring you.
+        StateHasChanged();
+
+        _preview = await Preview(Request());
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// The end of the chosen day, not its start: "settle up to 30 September" means the
+    /// whole of the 30th, and midnight would drop everything anybody spent that day.
+    /// </summary>
+    private SettleUpRequest Request() => new()
+    {
+        Scope = _through is { } through
+            ? new TransactionFilter(To: new DateTimeOffset(through.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero))
+            : null,
+        Label = string.IsNullOrWhiteSpace(_label) ? null : _label.Trim()
+    };
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(Request()));
+
+    private void Cancel() => MudDialog.Cancel();
+}

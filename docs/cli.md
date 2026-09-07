@@ -32,7 +32,7 @@ has to reach for `curl` and a bearer token to do.
 | | |
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
-| `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
+| `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `settlements`, `undo-settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
@@ -48,7 +48,9 @@ arguments, so this table can go stale and that one cannot.
 
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
-`groups settle`. `bank unlink`, `categories delete` and `split-rules delete` do the same.
+`groups settle`. `groups settle-up` reads for the same reason and goes further: it previews
+the settling-up first, so the confirmation lists the payments it is about to write rather
+than describing them. `bank unlink`, `categories delete` and `split-rules delete` do the same.
 `groups link create` reads for a further reason: it only asks when the group already has a
 link to lose, and making a group's first one destroys nothing.
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GroupSplit.Cli.Configuration;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Shared;
@@ -180,6 +181,195 @@ public sealed class MutationCommandTests : IDisposable
             SettlementDirection.TheyPaidYou,
             (SettlementDirection)body.GetProperty("direction").GetInt32());
     }
+
+    [Fact]
+    public async Task Groups_settle_sends_the_date_and_the_note()
+    {
+        var id = Guid.NewGuid();
+        var omar = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members", new[] { Member(omar, "Omar") });
+        _api.NoContent($"/api/groups/{id}/settle");
+
+        await Cli.RunAsync(
+            "groups", "settle", id.ToString(), omar.ToString(), "40.00",
+            "--date", "2026-09-30", "--note", "cash", "--yes");
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle").Json;
+
+        Assert.Equal(new DateTime(2026, 9, 30), body.GetProperty("date").GetDateTimeOffset().Date);
+        Assert.Equal("cash", body.GetProperty("description").GetString());
+    }
+
+    // ---- groups settle-up ------------------------------------------------------------
+
+    /// <summary>
+    /// The end-of-the-month case. The scope goes up as a filter, which is what keeps a new
+    /// way of narrowing a settling-up from needing a new command.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_sends_the_scope_it_was_given()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
+        _api.Returns($"/api/groups/{id}/settle-up", Run());
+
+        var result = await Cli.RunAsync(
+            "groups", "settle-up", id.ToString(),
+            "--to", "2026-09-30", "--label", "September", "--yes");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle-up").Json;
+
+        Assert.Equal(
+            new DateTime(2026, 9, 30),
+            body.GetProperty("scope").GetProperty("to").GetDateTimeOffset().Date);
+
+        Assert.Equal("September", body.GetProperty("label").GetString());
+    }
+
+    /// <summary>
+    /// With nothing said, it settles everything outstanding -- the one-tap case, which has
+    /// to reach the server as a scope that narrows nothing rather than as no request at all.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_with_no_scope_settles_everything()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
+        _api.Returns($"/api/groups/{id}/settle-up", Run());
+
+        await Cli.RunAsync("groups", "settle-up", id.ToString(), "--yes");
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle-up").Json;
+        var scope = body.GetProperty("scope");
+
+        Assert.Equal(JsonValueKind.Null, scope.GetProperty("to").ValueKind);
+        Assert.Equal(JsonValueKind.Null, scope.GetProperty("from").ValueKind);
+        Assert.Equal(JsonValueKind.Null, scope.GetProperty("category").ValueKind);
+    }
+
+    /// <summary>
+    /// A dry run previews and stops. Nothing may reach the endpoint that records one.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_dry_run_writes_nothing()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
+        _api.Returns($"/api/groups/{id}/settle-up", Run());
+
+        var result = await Cli.RunAsync("groups", "settle-up", id.ToString(), "--dry-run");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        Assert.Contains(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up/preview");
+        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/groups/{id}/settle-up");
+    }
+
+    /// <summary>
+    /// Previewed before it is confirmed, so what somebody agrees to is the payments
+    /// themselves. Without the preview the confirmation could only describe them.
+    /// </summary>
+    [Fact]
+    public async Task Groups_settle_up_without_a_terminal_lists_the_payments_it_would_write()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/settle-up/preview", Preview());
+
+        var result = await Cli.RunAsync("groups", "settle-up", id.ToString());
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+
+        var changes = result.Json.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString())
+            .ToList();
+
+        Assert.Contains("Omar pays Daniel 40.00.", changes);
+    }
+
+    /// <summary>
+    /// Undoing is what makes a settled expense editable again, so the confirmation has to be
+    /// clear that it is not a refund: the payments stay where they are.
+    /// </summary>
+    [Fact]
+    public async Task Groups_undo_settle_up_reopens_the_run_it_was_given()
+    {
+        var id = Guid.NewGuid();
+        var run = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/settlements/{run}/reopen", Run());
+
+        var result = await Cli.RunAsync("groups", "undo-settle-up", id.ToString(), run.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(_api.Requests, r => r.Path == $"/api/groups/{id}/settlements/{run}/reopen");
+    }
+
+    [Fact]
+    public async Task Groups_undo_settle_up_without_a_terminal_says_no_money_moves()
+    {
+        var id = Guid.NewGuid();
+        var run = Guid.NewGuid();
+
+        var result = await Cli.RunAsync("groups", "undo-settle-up", id.ToString(), run.ToString());
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+
+        var changes = result.Json.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString() ?? "")
+            .ToList();
+
+        Assert.Contains(changes, change => change.Contains("No money moves"));
+        Assert.Empty(_api.Requests);
+    }
+
+    private static object Preview() => new
+    {
+        payments = new[]
+        {
+            new
+            {
+                fromUserId = Guid.NewGuid(),
+                fromUserName = "Omar",
+                toUserId = Guid.NewGuid(),
+                toUserName = "Daniel",
+                amount = 40.00m
+            }
+        },
+        balances = Array.Empty<object>(),
+        transactionCount = 3,
+        total = 120.00m,
+        coversFrom = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+        coversTo = new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
+        suggestedLabel = "September 2026"
+    };
+
+    private static object Run() => new
+    {
+        id = Guid.NewGuid(),
+        label = "September 2026",
+        ranAt = DateTimeOffset.UtcNow,
+        effectiveDate = new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
+        payments = new[]
+        {
+            new
+            {
+                fromUserId = Guid.NewGuid(),
+                fromUserName = "Omar",
+                toUserId = Guid.NewGuid(),
+                toUserName = "Daniel",
+                amount = 40.00m
+            }
+        },
+        transactionCount = 4,
+        total = 120.00m
+    };
 
     [Fact]
     public async Task Groups_settle_without_a_terminal_names_the_member_in_the_confirmation()

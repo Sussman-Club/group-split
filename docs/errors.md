@@ -73,6 +73,7 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
+| `SETTLEMENT_RUN_NOT_FOUND` | The settling-up does not exist, or belongs to another group. |
 | `GROUP_INVITATION_NOT_FOUND` | The invitation does not exist, or has already been answered or withdrawn. |
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
@@ -98,6 +99,9 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the group. | |
 | `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is not a member of the group. | |
 | `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
+| `SETTLEMENT_NOTHING_TO_SETTLE` | Settling up matched nothing still outstanding. A scope whose transactions are already square is not this: it has a period to close and goes through. | |
+| `SETTLEMENT_RUN_ALREADY_REOPENED` | The settling-up has already been undone. | |
+| `TRANSACTION_SETTLED` | The transaction was settled by a settling-up, which has to be undone before it can be changed or deleted. Carries `settlementRunId` and `settlementRunLabel`, so a client can offer to undo the one it means. | |
 | `GROUP_INVITATION_ALREADY_SENT` | The address already has a standing invitation to this group. Inviting several people skips the ones already invited rather than raising this. | |
 | `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |

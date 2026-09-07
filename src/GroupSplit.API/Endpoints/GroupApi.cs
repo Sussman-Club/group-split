@@ -41,6 +41,10 @@ public static class GroupApi
             group.MapRevokeJoinLinks();
             group.MapGetGroupUserBalance();
             group.MapSettle();
+            group.MapPreviewSettleUp();
+            group.MapSettleUp();
+            group.MapGetSettlements();
+            group.MapReopenSettlement();
             group.MapArchive();
             group.MapUnarchive();
 
@@ -407,6 +411,84 @@ public static class GroupApi
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// What settling up would do. Records nothing.
+        /// </summary>
+        /// <remarks>
+        /// A POST rather than a GET because the scope is a filter with a shape of its own,
+        /// and one that is expected to grow: putting it in a body keeps every future way of
+        /// narrowing a settling-up from having to survive a query string. It is safe and
+        /// repeatable all the same.
+        /// </remarks>
+        private RouteHandlerBuilder MapPreviewSettleUp()
+        {
+            return group.MapPost("{groupId:guid}/settle-up/preview", async (
+                    Guid groupId,
+                    SettleUpRequest request,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.Preview(groupId, request.Scope, ct)))
+                .WithName("PreviewSettleUp")
+                .Produces<SettleUpPreviewResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Settles the group up: the payments, and the sweep that says what they settled.
+        /// </summary>
+        private RouteHandlerBuilder MapSettleUp()
+        {
+            return group.MapPost("{groupId:guid}/settle-up", async (
+                    Guid groupId,
+                    SettleUpRequest request,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.SettleUp(groupId, request, ct)))
+                .WithName("SettleUp")
+                .Produces<SettlementRunResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        /// <summary>
+        /// The settlings-up this group has had, newest first.
+        /// </summary>
+        private RouteHandlerBuilder MapGetSettlements()
+        {
+            return group.MapGet("{groupId:guid}/settlements", async (
+                    Guid groupId,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.List(groupId, ct)))
+                .WithName("GetSettlements")
+                .Produces<IReadOnlyList<SettlementRunResponse>>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Undoes one, putting everything it settled back to outstanding.
+        /// </summary>
+        /// <remarks>
+        /// A POST to a sub-resource rather than a DELETE of the run: the run is not going
+        /// anywhere. It happened, its payments stand, and what is being withdrawn is the
+        /// claim it made about what they settled.
+        /// </remarks>
+        private RouteHandlerBuilder MapReopenSettlement()
+        {
+            return group.MapPost("{groupId:guid}/settlements/{runId:guid}/reopen", async (
+                    Guid groupId,
+                    Guid runId,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.Reopen(groupId, runId, ct)))
+                .WithName("ReopenSettlement")
+                .Produces<SettlementRunResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         /// <summary>
