@@ -64,7 +64,16 @@ public static class ErrorMessages
         [ErrorCodes.SplitsInvalid] = "The shares are not valid. Each person can appear only once.",
         [ErrorCodes.SplitOnAPersonalExpense] = "A personal expense is not shared with anybody, so it cannot be split.",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares have to add up to the amount of the expense.",
-        [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group."
+        [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group.",
+
+        [ErrorCodes.BankConnectionNotFound] = "That linked bank no longer exists.",
+        [ErrorCodes.BankTransactionNotFound] = "That imported transaction is no longer in your inbox.",
+        [ErrorCodes.BankSyncUnavailable] = "Bank sync is not switched on for this app yet.",
+        [ErrorCodes.BankTransactionAlreadyFiled] = "This one has already been added.",
+        [ErrorCodes.BankConnectionNeedsAttention] = "Your bank needs you to sign in again before this can be synced.",
+        [ErrorCodes.BankTransactionIsCredit] = "This is money coming in, so it cannot be added as an expense. You can ignore it instead.",
+        [ErrorCodes.BankProviderUnavailable] = "We could not reach your bank just now. Please try again in a few minutes.",
+        [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead."
     };
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>

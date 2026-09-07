@@ -1,0 +1,8 @@
+{
+  "error_type": "ITEM_ERROR",
+  "error_code": "ITEM_LOGIN_REQUIRED",
+  "error_message": "the login details of this item have changed",
+  "display_message": "The credentials were updated.",
+  "request_id": "req-error",
+  "status": 400
+}

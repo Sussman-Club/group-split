@@ -23,11 +23,18 @@
     /// <summary>Count up from zero when the figure appears or changes.</summary>
     [Parameter] public bool Animate { get; set; }
 
+    /// <summary>
+    /// The currency this amount is in, when it is not the app's own. Imported bank rows
+    /// carry theirs, and a euro charge shown with a dollar sign is a different number
+    /// rather than a formatting quibble.
+    /// </summary>
+    [Parameter] public string? Currency { get; set; }
+
     [Parameter] public string? Class { get; set; }
 
     private decimal Shown => Absolute ? Math.Abs(Value) : Value;
 
-    private string Text => Signed && Shown > 0 ? "+" + Shown.ToMoney() : Shown.ToMoney();
+    private string Text => Signed && Shown > 0 ? "+" + Shown.ToMoney(Currency) : Shown.ToMoney(Currency);
 
     private string Tone => !Signed ? "" : Value > 0 ? "gs-pos" : Value < 0 ? "gs-neg" : "gs-muted";
 }

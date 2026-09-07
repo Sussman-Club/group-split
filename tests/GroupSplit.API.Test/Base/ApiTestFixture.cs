@@ -45,5 +45,7 @@ public class ApiTestFixture : IAsyncLifetime
         // Register your API services
         // The production list, so a test host cannot drift from what actually runs.
         services.AddDomainServices();
+
+
     }
 }

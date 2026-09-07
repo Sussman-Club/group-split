@@ -33,6 +33,7 @@ public static class DomainServiceExtensions
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<ISplitRuleService, SplitRuleService>();
             services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+            services.AddBankingServices();
 
             return services;
         }
@@ -48,6 +49,9 @@ public static class DomainServiceExtensions
             routes.MapTransaction();
             routes.MapCategoriesApi();
             routes.MapSplitRulesApi();
+            routes.MapBankConnectionsApi();
+            routes.MapInboxApi();
+            routes.MapWebhooksApi();
 
             return routes;
         }

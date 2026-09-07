@@ -36,7 +36,10 @@ var api = builder.AddProject<GroupSplit_API>("api")
     .WithReference(keycloak)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)
-    .WithHealthEndpoints();
+    .WithHealthEndpoints()
+    // In both modes: locally the credentials come from user secrets and default to nothing,
+    // which leaves the API running with bank sync reported as off.
+    .WithPlaid();
 
 var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)

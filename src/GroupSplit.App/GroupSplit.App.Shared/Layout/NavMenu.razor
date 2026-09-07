@@ -1,6 +1,8 @@
 @using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services.Banking
 @using GroupSplit.Shared
 @inject NavigationManager Nav
+@inject IInboxStateService Inbox
 @implements IDisposable
 
 @* One sliding pill marks the active item; each link only changes colour.
@@ -13,6 +15,12 @@
         <NavLink class="gs-nav-item" href="@item.Href" Match="@item.Match" title="@item.Text">
             <MudIcon Icon="@item.Icon" />
             <span class="gs-nav-text">@item.Text</span>
+            @if (item.ShowsInboxCount && Inbox.NewCount > 0)
+            {
+                @* Absolutely positioned, so it cannot change the item's height and put the
+                   sliding pill out of step with the items it slides between. *@
+                <span class="gs-nav-badge" aria-label="@Inbox.NewCount waiting">@Badge(Inbox.NewCount)</span>
+            }
         </NavLink>
     }
 </nav>
@@ -27,6 +35,7 @@
         new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
         new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups },
         new() { Href = "/transactions", Text = "Expenses", Icon = Icons.Material.Rounded.ReceiptLong },
+        new() { Href = "/inbox", Text = "Inbox", Icon = Icons.Material.Rounded.Inbox, ShowsInboxCount = true },
         new() { Href = "/account", Text = "Account", Icon = Icons.Material.Rounded.AccountCircle }
     ];
 
@@ -42,9 +51,27 @@
 
     private int ActiveIndex { get; set; } = -1;
 
-    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+    /// <summary>Two digits at most, so a long number cannot stretch the item.</summary>
+    private static string Badge(int count) => count > 99 ? "99+" : count.ToString();
 
-    protected override void OnParametersSet() => Resolve();
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        Inbox.OnChanged += OnInboxChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Resolve();
+
+        // Only once somebody is signed in. Reading the inbox on behalf of a visitor who is
+        // not would answer 401, which the error presenter quite correctly turns into a trip
+        // to the sign-in page -- from the nav, on every page.
+        if (UserInfo is not null)
+            await Inbox.EnsureLoadedAsync();
+    }
+
+    private void OnInboxChanged() => InvokeAsync(StateHasChanged);
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
@@ -61,5 +88,9 @@
             : path.StartsWith(item.Href, StringComparison.OrdinalIgnoreCase));
     }
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        Inbox.OnChanged -= OnInboxChanged;
+    }
 }

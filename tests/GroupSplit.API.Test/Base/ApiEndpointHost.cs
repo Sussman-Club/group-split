@@ -80,7 +80,12 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
     /// <summary>A client with no credentials at all.</summary>
     public HttpClient AnonymousClient() => _app.GetTestServer().CreateClient();
 
-    public static async Task<ApiEndpointHost> StartAsync()
+    /// <param name="configure">
+    /// Extra registrations for this host, applied after the production list so they can
+    /// replace what is in it. For the things a test genuinely has to stand in for -- a bank
+    /// provider, say -- and not for narrowing what exists.
+    /// </param>
+    public static async Task<ApiEndpointHost> StartAsync(Action<IServiceCollection>? configure = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -111,6 +116,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         builder.Services.AddDomainServices();
         builder.Services.AddValidation();
         builder.Services.AddApiErrorHandling();
+
+
+        configure?.Invoke(builder.Services);
 
         var app = builder.Build();
 

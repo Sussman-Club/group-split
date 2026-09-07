@@ -53,6 +53,20 @@ public abstract class Transaction : Entity
     public string? Description { get; set; }
 
     /// <summary>
+    /// The imported row this was filed from, when it was. The one trace on the ledger of
+    /// where a transaction came from; null for one somebody typed in.
+    /// </summary>
+    /// <remarks>
+    /// Set by filing and by nothing else: a sync that later modifies the bank row does
+    /// not follow this link, and an edit to this transaction does not follow it back.
+    /// Unlinking a bank sets it to null and leaves everything else as it was. Deferred
+    /// from Phase 1, where it would have been a column with no writer.
+    /// </remarks>
+    public virtual BankTransaction? BankTransaction { get; set; }
+
+    public Guid? BankTransactionId { get; set; }
+
+    /// <summary>
     /// What each person owed on this. Sums to <see cref="Amount"/>, always.
     /// </summary>
     public virtual ICollection<TransactionSplit> Splits { get; } = [];

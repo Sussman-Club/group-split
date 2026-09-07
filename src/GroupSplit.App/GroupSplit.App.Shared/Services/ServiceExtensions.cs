@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
@@ -28,6 +29,13 @@ public static class ServiceExtensions
             // states, which are now readers that delegate their writes here.
             services.TryAddScoped<IGroupCommands, GroupCommands>();
             services.TryAddScoped<ITransactionCommands, TransactionCommands>();
+            services.TryAddScoped<IBankCommands, BankCommands>();
+
+            // Read by the inbox page and by the nav badge, so one service rather than two
+            // that would each fetch the count.
+            services.TryAddScoped<InboxStateService>();
+            services.TryAddScoped<IInboxStateService>(sp => sp.GetRequiredService<InboxStateService>());
+            services.TryAddScoped<PlaidLinkLauncher>();
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();
@@ -44,6 +52,8 @@ public static class ServiceExtensions
             services.AddApiClient<IInvitationsClient, InvitationsClient>();
             services.AddApiClient<ICategoriesClient, CategoriesClient>();
             services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
+            services.AddApiClient<IBankConnectionsClient, BankConnectionsClient>();
+            services.AddApiClient<IInboxClient, InboxClient>();
             
             return services;
         }
