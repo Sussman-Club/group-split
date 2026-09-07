@@ -371,8 +371,14 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
             ? (currentUser, user)
             : (user, currentUser);
 
-        var transfer = Transfer.Between(resultGroup, from, to, request.Amount,
-            DateTimeOffset.UtcNow);
+        // The stated date, or now. A payment made on the 30th and typed in on the 3rd
+        // belongs to the month it settled: without this the recorded moment was the only
+        // moment available, so a group closing September could not put September's payments
+        // in September.
+        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
+
+        var transfer = Transfer.Between(resultGroup, from, to, request.Amount, date,
+            request.Description?.Trim() is { Length: > 0 } note ? note : null);
 
         context.Add(transfer);
         await context.SaveChangesAsync(cancellationToken);

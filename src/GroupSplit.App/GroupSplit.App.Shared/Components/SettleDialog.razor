@@ -39,6 +39,22 @@
                     Remaining balance: @((TotalDebt - _model.Amount).ToMoney())
                 </MudText>
 
+                @* Both optional, and deliberately: recording a repayment has to stay quick.
+                   The date is what lets a payment made on the 30th and typed in on the 3rd
+                   land in the month it settled, instead of the month somebody got round
+                   to it. *@
+                <MudDatePicker Date="_date" DateChanged="@DateChanged"
+                               Label="When"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               HelperText="Defaults to now."/>
+
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Note"
+                              Variant="Variant.Outlined"
+                              Placeholder="Cash, bank transfer, a reference…"/>
+
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -70,6 +86,8 @@
 
     private SettleRequest _model = new();
 
+    private DateTime? _date;
+
     private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
 
     private string Standing => YouPaid
@@ -84,6 +102,20 @@
             Amount = TotalDebt,
             Direction = Direction
         };
+    }
+
+    /// <summary>
+    /// Midday rather than midnight, and stated as UTC. The picker hands back a date with no
+    /// time on it; midnight is the moment most likely to fall out of the day somebody meant
+    /// once a zone is applied to it, and the day is all they were choosing.
+    /// </summary>
+    private void DateChanged(DateTime? date)
+    {
+        _date = date;
+
+        _model.Date = date is { } chosen
+            ? new DateTimeOffset(chosen.Date.AddHours(12), TimeSpan.Zero)
+            : null;
     }
 
     IEnumerable<string> ValidateAmount(decimal amount)

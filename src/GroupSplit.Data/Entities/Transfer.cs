@@ -35,7 +35,13 @@ public class Transfer : Transaction
     /// also the invariant that has no second chance, so nothing outside this type is
     /// allowed to construct a transfer and forget it.
     /// </remarks>
-    public static Transfer Between(Group group, User from, User to, decimal amount, DateTimeOffset date)
+    /// <param name="description">
+    /// What the payer wants remembered about it -- "cash", "bank transfer, ref 4821". The
+    /// column was always here and nothing ever set it, so a group's activity could say that
+    /// Loraine paid Daniel 40 and never how.
+    /// </param>
+    public static Transfer Between(Group group, User from, User to, decimal amount, DateTimeOffset date,
+        string? description = null)
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(from);
@@ -51,6 +57,7 @@ public class Transfer : Transaction
             Currency = group.Currency,
             DateTime = date,
             Name = "Settlement",
+            Description = description,
             User = from
         };
 

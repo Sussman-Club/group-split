@@ -33,4 +33,26 @@ public record SettleRequest
     /// record before this and therefore what an unstated direction has always meant.
     /// </summary>
     public SettlementDirection Direction { get; set; } = SettlementDirection.TheyPaidYou;
+
+    /// <summary>
+    /// When the money actually moved. Null means now, which is what recording one has
+    /// always meant and so is what an unstated date goes on meaning.
+    /// </summary>
+    /// <remarks>
+    /// Stating it matters at the end of a month: a payment made on the 30th and typed in on
+    /// the 3rd belongs to the month it settled, not the one somebody got round to it in.
+    /// Until this existed the recorded moment was the only moment available, so a group
+    /// closing September could not put September's payments in September.
+    /// </remarks>
+    public DateTimeOffset? Date { get; set; }
+
+    /// <summary>
+    /// What the payer wants remembered -- "cash", "bank transfer, ref 4821".
+    /// </summary>
+    /// <remarks>
+    /// Optional, and deliberately so. A settling-up has to stay one tap, and a note nobody
+    /// can skip is the thing that would stop it being one.
+    /// </remarks>
+    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    public string? Description { get; set; }
 }

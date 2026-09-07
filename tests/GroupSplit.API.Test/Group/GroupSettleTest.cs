@@ -74,6 +74,75 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
+    /// A repayment can say when it happened and what it was. Until it could, the recorded
+    /// moment was the only moment available, so a payment made on the 30th and typed in on
+    /// the 3rd landed in the wrong month -- and every transfer read "Settling up", with no
+    /// way to tell a bank transfer from a handful of notes.
+    /// </summary>
+    [Fact]
+    public async Task Settle_WithADateAndANote_RecordsBoth()
+    {
+        var groupService = GetService<IGroupService>();
+
+        var group = await groupService.CreateGroup(
+            new CreateGroupRequest { Name = "Settle Group" },
+            TestContext.Current.CancellationToken);
+
+        var otherUser = await CreateNewUser();
+
+        await JoinGroup(group.Id, otherUser);
+
+        var endOfSeptember = new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+
+        await groupService.Settle(
+            group.Id,
+            new SettleRequest
+            {
+                UserId = otherUser.Id,
+                Amount = 50,
+                Date = endOfSeptember,
+                Description = "  bank transfer, ref 4821  "
+            },
+            TestContext.Current.CancellationToken);
+
+        var transfer = await DbContext.Set<Transfer>()
+            .SingleAsync(row => row.GroupId == group.Id, TestContext.Current.CancellationToken);
+
+        Assert.Equal(endOfSeptember, transfer.DateTime);
+        Assert.Equal("bank transfer, ref 4821", transfer.Description);
+    }
+
+    /// <summary>
+    /// An unstated date still means now, which is what recording one has always meant.
+    /// </summary>
+    [Fact]
+    public async Task Settle_WithNoDate_IsRecordedNow()
+    {
+        var groupService = GetService<IGroupService>();
+
+        var group = await groupService.CreateGroup(
+            new CreateGroupRequest { Name = "Settle Group" },
+            TestContext.Current.CancellationToken);
+
+        var otherUser = await CreateNewUser();
+
+        await JoinGroup(group.Id, otherUser);
+
+        var before = DateTimeOffset.UtcNow;
+
+        await groupService.Settle(
+            group.Id,
+            new SettleRequest { UserId = otherUser.Id, Amount = 50 },
+            TestContext.Current.CancellationToken);
+
+        var transfer = await DbContext.Set<Transfer>()
+            .SingleAsync(row => row.GroupId == group.Id, TestContext.Current.CancellationToken);
+
+        Assert.InRange(transfer.DateTime, before, DateTimeOffset.UtcNow);
+        Assert.Null(transfer.Description);
+    }
+
+    /// <summary>
     /// A transfer needs two people. The old pair quietly accepted this and wrote a
     /// <c>+50</c> and a <c>-50</c> against the same member, which cancelled out and left
     /// two rows saying nothing.

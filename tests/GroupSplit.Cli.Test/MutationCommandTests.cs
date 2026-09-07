@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GroupSplit.Cli.Configuration;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Shared;
@@ -179,6 +180,25 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal(
             SettlementDirection.TheyPaidYou,
             (SettlementDirection)body.GetProperty("direction").GetInt32());
+    }
+
+    [Fact]
+    public async Task Groups_settle_sends_the_date_and_the_note()
+    {
+        var id = Guid.NewGuid();
+        var omar = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members", new[] { Member(omar, "Omar") });
+        _api.NoContent($"/api/groups/{id}/settle");
+
+        await Cli.RunAsync(
+            "groups", "settle", id.ToString(), omar.ToString(), "40.00",
+            "--date", "2026-09-30", "--note", "cash", "--yes");
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/groups/{id}/settle").Json;
+
+        Assert.Equal(new DateTime(2026, 9, 30), body.GetProperty("date").GetDateTimeOffset().Date);
+        Assert.Equal("cash", body.GetProperty("description").GetString());
     }
 
     [Fact]

@@ -289,9 +289,19 @@ public static class GroupCommands
             DefaultValueFactory = _ => SettlementDirection.TheyPaidYou
         };
 
+        var date = new Option<DateTimeOffset?>("--date")
+        {
+            Description = "When the money moved, e.g. 2026-09-30. Defaults to now."
+        };
+
+        var note = new Option<string?>("--note")
+        {
+            Description = "What to remember about it, e.g. \"cash\" or a transfer reference."
+        };
+
         var command = new Command("settle", "Record a repayment between you and another member.")
         {
-            GroupId, userId, amount, direction
+            GroupId, userId, amount, direction, date, note
         };
 
         command.SetHandler(async (context, ct) =>
@@ -301,6 +311,8 @@ public static class GroupCommands
             var other = parse.GetValue(userId);
             var paid = parse.GetValue(amount);
             var side = parse.GetValue(direction);
+            var when = parse.GetValue(date);
+            var description = parse.GetValue(note);
 
             var members = await context.Groups.GetGroupMembersAsync(id, ct);
             var name = members.FirstOrDefault(candidate => candidate.Id == other)?.FullName
@@ -317,7 +329,16 @@ public static class GroupCommands
                                 + $"--direction {side.ToString().ToLowerInvariant()} --yes");
 
             await context.Groups.SettleGroupDebtsAsync(
-                id, new SettleRequest { UserId = other, Amount = paid, Direction = side }, ct);
+                id,
+                new SettleRequest
+                {
+                    UserId = other,
+                    Amount = paid,
+                    Direction = side,
+                    Date = when,
+                    Description = description
+                },
+                ct);
 
             context.Output.Write(
                 new { status = "settled", groupId = id, userId = other, amount = paid, direction = side },
@@ -330,6 +351,19 @@ public static class GroupCommands
         return command;
     }
 
+    /// <summary>
+    /// Squares the whole group up at once, over whatever part of it is being settled.
+    /// </summary>
+    /// <remarks>
+    /// With no options it settles everything outstanding, which is what most groups want
+    /// most of the time and so is what it costs nothing to ask for. The scope options narrow
+    /// it -- <c>--to</c> closes a month, <c>--category</c> settles one kind of spending --
+    /// and every one of them is a field of the same filter <c>transactions list</c> takes.
+    /// <para>
+    /// Always previews first, so the confirmation shows the payments it is about to write
+    /// rather than a description of them.
+    /// </para>
+    /// </remarks>
     /// <summary>
     /// The one listing that shows transfers as well as expenses, which is why it is not
     /// <c>transactions list --group</c>: "Omar paid you 40" is the row people look for when
