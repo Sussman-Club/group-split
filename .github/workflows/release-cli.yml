@@ -14,7 +14,17 @@ name: Release CLI
 on:
   push:
     branches: [main, dev]
-  # Lets a failed publish be retried without an empty commit.
+    # Only a push that touches the CLI publishes one; most commits here leave the packed
+    # tool byte-identical. What is on the list and what it costs: docs/cli.md, "When
+    # nothing is published".
+    paths:
+      - 'src/GroupSplit.Cli/**'
+      - 'src/GroupSplit.Shared/**'
+      - 'src/GroupSplit.API/**'
+      - 'global.json'
+      - '.github/workflows/release-cli.yml'
+  # Lets a failed publish be retried without an empty commit -- and, since a manual run
+  # ignores the paths filter above, republishes after a skip that should not have been.
   workflow_dispatch:
 
 concurrency:
