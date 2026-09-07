@@ -56,6 +56,13 @@ the *sets* rather than on the pair:
 Money in another currency is not the same money, and money coming in -- a refund, a deposit
 -- has no expense to be a duplicate of.
 
+The two directions ask about different rows, and deliberately so. Filing is checked for any
+row that can still be filed, which includes an **ignored** one: filing refuses only a row
+that is already an expense, so a guard that asked about waiting rows alone would let an
+ignored row through it. The other direction offers only rows that are **waiting** -- a row
+somebody put away is not waiting for anything, and handing it back unasked is the suggestion
+nobody can get rid of.
+
 **The bank's merchant text is deliberately not a condition.** "Dinner" against
 `SQ *TRATTORIA 4421` is the ordinary case, so a name test would refuse most real duplicates.
 It is a tiebreak between two otherwise equally close candidates and nothing more.

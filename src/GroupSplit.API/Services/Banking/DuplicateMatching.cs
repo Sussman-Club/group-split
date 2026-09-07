@@ -2,6 +2,7 @@ using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GroupSplit.API.Services.Banking;
 
@@ -149,9 +150,16 @@ public sealed class DuplicateMatcher(
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<DuplicateMatch>>> ExpensesLike(
         IReadOnlyCollection<BankTransaction> rows, CancellationToken ct = default)
     {
-        // Money coming in has no expense to be a duplicate of, and a row already dealt with
-        // is not about to become a second expense.
-        var asking = rows.Where(row => row.Amount > 0 && row.Status == BankTransactionStatus.New).ToList();
+        // Money coming in has no expense to be a duplicate of, and a row that is already an
+        // expense is not about to become a second one.
+        //
+        // Not "waiting", deliberately. What matters here is whether the row can still be
+        // filed, and an ignored one can: filing is refused only for a row that is already
+        // Filed, so asking only about New rows would let an ignored row through the guard
+        // and into a second expense with nothing said.
+        var asking = rows
+            .Where(row => row.Amount > 0 && row.Status is BankTransactionStatus.New or BankTransactionStatus.Ignored)
+            .ToList();
 
         if (asking.Count == 0)
             return new Dictionary<Guid, IReadOnlyList<DuplicateMatch>>();
@@ -211,14 +219,28 @@ public sealed class DuplicateMatcher(
         if (already)
             return;
 
-        dbContext.Add(new BankMatchDismissal
+        var dismissal = new BankMatchDismissal
         {
             BankTransactionId = row.Id,
             TransactionId = expense.Id,
             DismissedAt = clock.GetUtcNow()
-        });
+        };
 
-        await dbContext.SaveChangesAsync(ct);
+        dbContext.Add(dismissal);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // The same pair, dismissed twice at once: a double click, or two tabs. The read
+            // above cannot close that window, and it does not need to -- the answer being
+            // given is the answer already recorded, so this is what success looks like.
+            // Detaching the losing row keeps it from being retried by a later save.
+            dbContext.Entry(dismissal).State = EntityState.Detached;
+        }
     }
 
     /// <summary>

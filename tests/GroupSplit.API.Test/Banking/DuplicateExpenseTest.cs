@@ -71,6 +71,34 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(BankTransactionStatus.Filed, (await Reload(row)).Status);
     }
 
+    /// <summary>
+    /// Ignoring a row does not put it beyond the guard.
+    /// </summary>
+    /// <remarks>
+    /// Filing refuses only a row that is already an expense, so an ignored one can still be
+    /// filed -- and if the matcher answered about waiting rows alone, that path would create
+    /// the second expense with nothing said. What decides whether to ask is whether the row
+    /// can still be filed, not whether it is in the inbox.
+    /// </remarks>
+    [Fact]
+    public async Task An_ignored_row_is_still_checked_when_it_is_filed()
+    {
+        var typed = await Expense("Dinner", 40m, Dinner);
+        var row = await Row(40m, on: Dinner);
+
+        await Inbox.Ignore(row.Id, Ct);
+
+        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
+            Inbox.File(row.Id, new FileBankTransactionRequest(), Ct));
+
+        Assert.Equal(ErrorCodes.PossibleDuplicateExpense, refusal.Code);
+
+        var named = Assert.IsAssignableFrom<IReadOnlyList<ExpenseMatchResponse>>(refusal.Extensions["matches"]);
+        Assert.Equal(typed.Id, Assert.Single(named).TransactionId);
+
+        Assert.Equal(1, await DbContext.Set<Expense>().CountAsync(Ct));
+    }
+
     [Fact]
     public async Task Nothing_is_raised_when_there_is_no_expense_it_could_be()
     {
@@ -216,6 +244,13 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(row.Id, waiting.Id);
     }
 
+    /// <summary>
+    /// The other direction asks a different question, so it answers differently about an
+    /// ignored row: "is there something waiting that this could be" is about the inbox, and
+    /// a row somebody put away is not waiting for anything. Offering it back unasked is the
+    /// suggestion nobody can get rid of. Filing that same row is still checked -- see
+    /// <see cref="An_ignored_row_is_still_checked_when_it_is_filed"/>.
+    /// </summary>
     [Fact]
     public async Task A_row_already_dealt_with_is_not_offered_against_a_new_expense()
     {
