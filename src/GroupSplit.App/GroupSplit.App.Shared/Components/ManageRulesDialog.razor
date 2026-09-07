@@ -1,12 +1,9 @@
 @using GroupSplit.Shared
-@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Commands
 @namespace GroupSplit.App.Shared.Components
-@inject IGroupsClient GroupsClient
-@inject ICategoriesClient CategoriesClient
-@inject ISplitRulesClient SplitRulesClient
+@inject ICategoryCommands Categories
+@inject ISplitRuleCommands Rules
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
-@inject ApiErrorPresenter Errors
 
 <MudDialog>
     <TitleContent>
@@ -17,11 +14,6 @@
 
     <DialogContent>
         <MudStack Spacing="4">
-            @if (_error is not null)
-            {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" ShowCloseIcon="true" CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
-            }
-
             <MudTable Items="_categories">
                 <HeaderContent>
                     <MudTh>Category</MudTh>
@@ -72,45 +64,21 @@
     [Parameter] public Guid GroupId { get; set; }
 
     // Always replaced, never edited in place: the table looks again when the reference changes.
-    private ICollection<CategoryResponse> _categories = [];
-
-    private string? _error;
+    private IReadOnlyList<CategoryResponse> _categories = [];
 
     protected override async Task OnInitializedAsync()
     {
-        var loaded = await Run(
-            async () => _categories = await CategoriesClient.GetCategoriesAsync(GroupId),
-            "Could not load the categories.");
+        var loaded = await Categories.ForGroupAsync(GroupId);
 
-        if (!loaded) MudDialog.Cancel();
-
-        StateHasChanged();
-    }
-
-    /// <summary>
-    /// A refusal stays in the dialog, inline, so the list and the buttons remain usable and
-    /// the person can correct course without reopening it. Only a lost session leaves the
-    /// dialog, because only signing in again can fix that.
-    /// </summary>
-    private async Task<bool> Run(Func<Task> action, string context)
-    {
-        var error = await Errors.CaptureAsync(action);
-
-        if (error is null)
+        if (loaded is null)
         {
-            _error = null;
-            return true;
+            MudDialog.Cancel();
+            return;
         }
 
-        if (error.Kind == ApiErrorKind.Unauthenticated || error.Message.Length == 0)
-        {
-            await Errors.ShowAsync(error);
-            return false;
-        }
+        _categories = loaded;
 
-        _error = $"{context} {error.Message}";
         StateHasChanged();
-        return false;
     }
 
     private async Task OpenCreateRuleDialog()
@@ -135,30 +103,33 @@
     /// of them, and the rule is named after the category that introduced it -- until
     /// somebody notices two categories divide alike and points them at one rule.
     /// </summary>
+    /// <remarks>
+    /// Each write is a command, so a refusal has already been shown by the time it answers,
+    /// and it answers with null rather than throwing. Nothing here catches anything; the
+    /// dialog stays open on a refusal and the person can correct what they typed.
+    /// </remarks>
     private async Task CreateCategory(RuleEditorForm.RuleEditorModel model)
     {
-        var created = await Run(async () =>
+        var rule = await Rules.CreateAsync(new CreateSplitRuleRequest
         {
-            var rule = await SplitRulesClient.CreateSplitRuleAsync(new CreateSplitRuleRequest
-            {
-                GroupId = GroupId,
-                Name = model.Category,
-                Definition = model.Version
-            });
+            GroupId = GroupId,
+            Name = model.Category,
+            Definition = model.Version
+        });
 
-            var category = await CategoriesClient.CreateCategoryAsync(new CreateCategoryRequest
-            {
-                GroupId = GroupId,
-                Name = model.Category,
-                DefaultSplitRuleId = rule.Id
-            });
+        if (rule is null) return;
 
-            _categories = [.._categories, category];
-        }, "Could not create the category.");
+        var created = await Categories.CreateAsync(new CreateCategoryRequest
+        {
+            GroupId = GroupId,
+            Name = model.Category,
+            DefaultSplitRuleId = rule.Id
+        });
 
-        if (!created) return;
+        if (created is null) return;
 
-        Snackbar.Add("Category created.", Severity.Success);
+        _categories = [.._categories, created];
+
         StateHasChanged();
     }
 
@@ -170,11 +141,11 @@
 
         if (category.DefaultSplitRuleId is { } ruleId)
         {
-            var loaded = await Run(
-                async () => definition = (await SplitRulesClient.GetSplitRuleAsync(ruleId)).Definition,
-                "Could not load the split.");
+            var rule = await Rules.GetAsync(ruleId);
 
-            if (!loaded) return;
+            if (rule is null) return;
+
+            definition = rule.Definition;
         }
 
         var original = new RuleEditorForm.RuleEditorModel
@@ -200,48 +171,43 @@
 
     private async Task UpdateCategory(CategoryResponse category, RuleEditorForm.RuleEditorModel model)
     {
-        var updated = await Run(async () =>
+        var ruleId = category.DefaultSplitRuleId;
+
+        if (ruleId is { } existing)
         {
-            var ruleId = category.DefaultSplitRuleId;
-
-            if (ruleId is { } existing)
-            {
-                await SplitRulesClient.UpdateSplitRuleAsync(existing, new UpdateSplitRuleRequest
-                {
-                    Name = model.Category,
-                    Definition = model.Version
-                });
-            }
-            else
-            {
-                // It divided evenly by having no rule; now it has one to name.
-                ruleId = (await SplitRulesClient.CreateSplitRuleAsync(new CreateSplitRuleRequest
-                {
-                    GroupId = GroupId,
-                    Name = model.Category,
-                    Definition = model.Version
-                })).Id;
-            }
-
-            var response = await CategoriesClient.UpdateCategoryAsync(category.Id, new UpdateCategoryRequest
+            var saved = await Rules.UpdateAsync(existing, new UpdateSplitRuleRequest
             {
                 Name = model.Category,
-                DefaultSplitRuleId = ruleId
+                Definition = model.Version
             });
 
-            var list = _categories.ToList();
-            var index = list.FindIndex(x => x.Id == category.Id);
-
-            if (index != -1)
+            if (saved is null) return;
+        }
+        else
+        {
+            // It divided evenly by having no rule; now it has one to name.
+            var created = await Rules.CreateAsync(new CreateSplitRuleRequest
             {
-                list[index] = response;
-                _categories = list;
-            }
-        }, "Could not update the category.");
+                GroupId = GroupId,
+                Name = model.Category,
+                Definition = model.Version
+            });
 
-        if (!updated) return;
+            if (created is null) return;
 
-        Snackbar.Add("Category updated.", Severity.Success);
+            ruleId = created.Id;
+        }
+
+        var updated = await Categories.UpdateAsync(category.Id, new UpdateCategoryRequest
+        {
+            Name = model.Category,
+            DefaultSplitRuleId = ruleId
+        });
+
+        if (updated is null) return;
+
+        _categories = [.._categories.Select(row => row.Id == updated.Id ? updated : row)];
+
         StateHasChanged();
     }
 
@@ -263,15 +229,12 @@
 
     private async Task DeleteCategory(CategoryResponse category)
     {
-        var deleted = await Run(async () =>
-        {
-            await CategoriesClient.DeleteCategoryAsync(category.Id);
-            _categories = _categories.Where(c => c.Id != category.Id).ToList();
-        }, "Could not delete the category.");
+        var deleted = await Categories.DeleteAsync(category.Id, category.Name);
 
         if (!deleted) return;
 
-        Snackbar.Add("Category deleted.", Severity.Success);
+        _categories = [.._categories.Where(row => row.Id != category.Id)];
+
         StateHasChanged();
     }
 }
