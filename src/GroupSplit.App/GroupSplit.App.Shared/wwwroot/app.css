@@ -149,33 +149,13 @@ h1:focus {
 .gs-neg { color: var(--gs-clay); }
 .gs-muted { color: var(--gs-muted); }
 
-/* A figure worth noticing when it lands or changes. The components that carry this
-   class key the element on the figure itself, so a new figure is a new element and
-   this plays again -- which is how it re-triggers with nothing watching the DOM.
-
-   It replaced a count-up that interpolated the digits from JavaScript. That script wrote
-   part-way figures into elements Blazor owns, and its two edits for one figure -- the
-   target attribute and the text -- did not have to arrive together: when the attribute
-   came first the run took the *previous* figure for its target and pasted it back up to
-   900ms later, over the one the app had since rendered. Above a filtered list that read
-   as the all-time count and total returning to the cards and staying there, which was
-   issue #193. Animating the change rather than the number leaves the figure itself
-   Blazor's alone, so there is no second writer to get out of order.
-
-   inline-block so the transform applies to the figures that are inline spans; the ones
-   already declaring `display: block` -- the stat and hero amounts -- keep it. The
-   global prefers-reduced-motion rule below cuts this to nothing. */
-.gs-figure {
-    display: inline-block;
-    animation: gs-figure-in var(--gs-base) var(--gs-ease) both;
-}
-
-@keyframes gs-figure-in {
-    from {
-        opacity: 0;
-        transform: translateY(0.22em);
-    }
-}
+/* `gs-figure` has no style of its own: it marks a figure for the count-up in gs.js,
+   which rises it from zero to the figure it is showing. Kept named here because that
+   is where anyone looking for it will look first, and because the count cannot be done
+   in CSS -- `counter()` renders integers, so it cannot produce "$1,234.56" at all, and
+   what it does render lands in generated content, which is neither selectable nor
+   reliably announced. The components pair the class with a key on the figure, and the
+   note in gs.js says why that pairing is what makes the count safe. */
 
 .gs-eyebrow {
     font-size: 0.6875rem;

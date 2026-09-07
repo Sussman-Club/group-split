@@ -16,6 +16,11 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The shell script CountUpScriptTest drives, copied beside the test assembly so the
+         browser loads it off disk. A copy of the file the app serves, rather than a second
+         copy to keep in step: the test is only worth anything if it runs the real one. -->
+    <Content Include="..\..\src\GroupSplit.App\GroupSplit.App.Shared\wwwroot\gs.js"
+             Link="gs.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

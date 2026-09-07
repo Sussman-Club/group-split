@@ -3,6 +3,7 @@
 (function () {
     const storageKey = "groupsplit.theme";
     const root = document.documentElement;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 
     // ------------------------------------------------------------ theme --
 
@@ -22,6 +23,120 @@
     }
 
     root.dataset.theme = resolve(stored) ? "dark" : "light";
+
+    // --------------------------------------------------------- counters --
+
+    // A figure marked `gs-figure` rises from zero to the figure it is showing.
+    //
+    // The number it counts to is read from the element's own text, and that text
+    // is the whole of its input: there is no attribute alongside it that could
+    // disagree with what was rendered. The components keep it that way -- each
+    // keys its element on the figure, so a figure that *changes* arrives as a new
+    // element rather than as new text in the old one. A node's text therefore
+    // never changes for as long as the node lives, and reading it once, at the
+    // start, is reading the figure of record.
+    //
+    // That invariant is the fix for #193 (and #174 before it). This used to take
+    // its target from a `data-gs-count` attribute, which made one figure two
+    // edits to one element -- and the two did not have to arrive together. When
+    // the attribute came first, the run read the *previous* figure as the text to
+    // land on and pasted it back up to 900ms later, over the figure the app had
+    // since rendered: above a filtered list, the all-time total returning to the
+    // card and staying there. There is no second edit to get out of order now,
+    // and a run that finds itself on a detached node simply stops, because the
+    // figure it was counting belongs to an element that no longer exists.
+    const counted = new WeakSet();
+
+    const duration = 800;
+
+    function countUp(el) {
+        // One run per element, for the lifetime of the element. Re-scanning one --
+        // an ancestor re-inserted, a row moved -- must not restart the count.
+        if (counted.has(el)) return;
+        counted.add(el);
+
+        // The text as rendered is the figure of record: what the count lands on,
+        // and what it is counting towards.
+        const final = el.textContent;
+        const match = final.match(/\d[\d,.]*/);
+        if (match === null || reduced.matches) return;
+
+        const digits = match[0];
+        const target = parseFloat(digits.replace(/,/g, ""));
+
+        // Nothing to count: zero is already on screen, and a figure that does not
+        // parse is not a number this should be touching.
+        if (!isFinite(target) || target === 0) return;
+
+        // Everything around the digits is kept and put back on every frame, so a
+        // count runs inside "$1,234.56" or "($5.00)" without losing the currency,
+        // the sign or the brackets a negative is rendered in.
+        const head = final.slice(0, match.index);
+        const tail = final.slice(match.index + digits.length);
+        const fraction = digits.match(/\.(\d+)$/);
+        const decimals = fraction ? Math.min(fraction[1].length, 2) : 0;
+
+        // Grouped if the final figure is. Below a thousand there is no separator
+        // to place, and asking for one would render "1,0" on the way to "999".
+        const grouped = digits.includes(",");
+
+        // en-US to match MoneyExtensions, which pins the culture for the same
+        // reason: the browser's own locale would flip the separators on hydration.
+        const shown = value => head + value.toLocaleString("en-US", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+            useGrouping: grouped
+        }) + tail;
+
+        const start = performance.now();
+
+        function frame(now) {
+            // Detached: the figure changed, so Blazor replaced this element with
+            // one holding the new figure, and that element is counting itself.
+            // There is nothing to put back on a node that is no longer anywhere.
+            if (!el.isConnected) return;
+
+            const t = Math.min(1, (now - start) / duration);
+
+            if (t >= 1) {
+                el.textContent = final;
+                return;
+            }
+
+            el.textContent = shown(target * (1 - Math.pow(1 - t, 4)));
+
+            requestAnimationFrame(frame);
+        }
+
+        requestAnimationFrame(frame);
+
+        // requestAnimationFrame is not a promise that the last frame arrives: a
+        // backgrounded tab stops it outright and a phone throttles it, both of
+        // which would strand the count part-way. The figure is the point and the
+        // count is decoration, so the figure lands whether or not the frames do.
+        setTimeout(function () {
+            if (el.isConnected) el.textContent = final;
+        }, duration + 100);
+    }
+
+    function scan(node) {
+        if (!(node instanceof Element)) return;
+        if (node.classList.contains("gs-figure")) countUp(node);
+        for (const el of node.querySelectorAll(".gs-figure")) countUp(el);
+    }
+
+    // Insertions only. A figure never changes in place -- see the note above --
+    // so there is no attribute or text mutation left worth watching for.
+    new MutationObserver(function (records) {
+        for (const record of records)
+            for (const node of record.addedNodes) scan(node);
+    }).observe(root, { childList: true, subtree: true });
+
+    if (document.body) {
+        scan(document.body);
+    } else {
+        document.addEventListener("DOMContentLoaded", () => scan(document.body));
+    }
 
     // -------------------------------------------------- before the runtime --
 

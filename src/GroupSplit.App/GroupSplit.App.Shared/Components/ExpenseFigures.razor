@@ -13,21 +13,29 @@
     So there is one summary behind both cards rather than one per card, which is what makes
     them agree by construction, and one subline naming what was counted rather than a
     sentence per card guessing at it.
+
+    Neither figure animates, which is the one place in the app where that is deliberate.
+    The count-up elsewhere is an entrance: a figure lands once when a page opens and rolls
+    up to itself. These two are not that. They are answers to a question the person is
+    still asking -- every chip and every keystroke in the search box is a new pair of them
+    -- and a figure that spends most of a second on its way to the truth is worst exactly
+    where somebody is reading it to compare. It also keeps the two cards this issue was
+    about (#193, and #174 before it) as plain rendered text, with nothing that writes to
+    them after Blazor has.
 *@
 
 <div class="gs-stats">
     <div class="gs-card gs-stat gs-reveal" style="--i: 0">
         <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
         <span class="gs-eyebrow">@CountLabel</span>
-        @* Keyed on the count so a new one is a new element, which is what replays
-           `gs-figure` -- the same trick <Money Animate> uses for the total beside it. *@
-        <span class="gs-stat-value gs-num gs-figure" @key="Count">@Count</span>
+        @* Plain, and deliberately: see the note on the pair of them above. *@
+        <span class="gs-stat-value gs-num">@Count</span>
         <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
     </div>
     <div class="gs-card gs-stat gs-reveal" style="--i: 1">
         <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
         <span class="gs-eyebrow">@TotalLabel</span>
-        <Money Value="Total" Animate Class="gs-stat-value" />
+        <Money Value="Total" Class="gs-stat-value" />
         <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
     </div>
 </div>
