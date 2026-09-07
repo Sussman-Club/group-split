@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.Jobs.DependencyInjection;
 
-public interface IJobHandlersBuilder : IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>
+public interface IJobHandlersBuilder : IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>
 {
     IJobHandlersBuilder Add<TJob>(Func<IServiceProvider, IJobHandler<TJob>> handlerFactory)
         where TJob : IJob;
@@ -11,10 +11,10 @@ public interface IJobHandlersBuilder : IJobHandlersBuilderBase<IJobsBuilder, IJo
     IJobHandlersBuilder Add<TJob, TResult>(Func<IServiceProvider, IJobHandler<TJob, TResult>> handlerFactory)
         where TJob : IJob<TResult>;
 
-    IJobHandlersBuilder IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>.Add<TJob, THandler>(THandler handler) =>
+    IJobHandlersBuilder IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>.Add<TJob, THandler>(THandler handler) =>
         Add<TJob>(_ => handler);
 
-    IJobHandlersBuilder IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>.Add<TJob, TResult, THandler>(THandler handler) =>
+    IJobHandlersBuilder IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>.Add<TJob, TResult, THandler>(THandler handler) =>
         Add<TJob, TResult>(_ => handler);
 }
 

@@ -1,7 +1,6 @@
 using GroupSplit.API.Services.Banking;
 using GroupSplit.Jobs;
 using GroupSplit.Jobs.DependencyInjection;
-using GroupSplit.Jobs.Recurring;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.API.Extensions;
@@ -27,14 +26,8 @@ namespace GroupSplit.API.Extensions;
 /// </remarks>
 public static class BankingServiceExtensions
 {
-    /// <summary>
-    /// How long after start before the first sweep, and then how often. Half a minute so a
-    /// restart does not hit every bank at once; a day because the webhooks carry the load
-    /// and the sweep only catches what they dropped.
-    /// </summary>
-    internal static readonly TimeSpan SweepDelay = TimeSpan.FromSeconds(30);
-
-    internal static readonly TimeSpan SweepPeriod = TimeSpan.FromDays(1);
+    /// <summary>The daily sweep runs at midnight UTC, independently of application startup.</summary>
+    internal static readonly JobSchedule.CronSchedule SweepSchedule = JobSchedule.Cron(CronExpression.Daily(), TimeZoneInfo.Utc);
 
     extension(IServiceCollection services)
     {
@@ -64,7 +57,8 @@ public static class BankingServiceExtensions
                     .AddJobHandler<SyncBankConnection, SyncBankConnectionHandler>()
                     .AddJobHandler<SweepBankConnections, SweepBankConnectionsHandler>()
                 .JobsBuilder
-                    .AddRecurringJob<SweepBankConnections>(SweepPeriod, SweepDelay);
+                    .Scheduler.Add(new SweepBankConnections(),
+                        SweepSchedule);
 
             return services;
         }

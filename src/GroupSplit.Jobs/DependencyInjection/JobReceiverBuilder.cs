@@ -16,7 +16,7 @@ public class JobReceiverBuilder(IJobsBuilder jobs) : IJobReceiverBuilder
         return this;
     }
 
-    IJobReceiver IJobReceiverBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>.BuildReceiver(
+    IJobReceiver IJobReceiverBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>.BuildReceiver(
         IServiceProvider serviceProvider) =>
         (_factory is not null
             ? _factory(serviceProvider)

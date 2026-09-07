@@ -16,7 +16,7 @@ internal class JobDispatcherBuilder(IJobsBuilder jobsBuilder) : IJobDispatcherBu
         return this;
     }
 
-    IJobDispatcher IJobDispatcherBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>.BuildDispatcher(
+    IJobDispatcher IJobDispatcherBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>.BuildDispatcher(
         IServiceProvider serviceProvider) =>
         (_factory is not null
             ? _factory(serviceProvider)

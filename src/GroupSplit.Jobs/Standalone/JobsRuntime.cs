@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 namespace GroupSplit.Jobs.Standalone;
 
 /// <summary>Owns the internal host, but not caller-supplied handlers or transports.</summary>
-public sealed class JobsRuntime : IJobDispatcher, IAsyncDisposable
+public sealed class JobsRuntime : IJobDispatcher, IJobScheduler, IAsyncDisposable
 {
     private readonly IHost _host;
     private readonly IJobDispatcher _dispatcher;
@@ -31,6 +31,19 @@ public sealed class JobsRuntime : IJobDispatcher, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _dispatcher.DispatchAsync(job, cancellationToken);
+    }
+
+    public ValueTask<IScheduledJob> ScheduleAsync(
+        IJob job, JobSchedule schedule, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _host.Services.GetRequiredService<IJobScheduler>().ScheduleAsync(job, schedule, cancellationToken);
+    }
+
+    public ValueTask<IReadOnlyList<IScheduledJob>> GetScheduledJobsAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _host.Services.GetRequiredService<IJobScheduler>().GetScheduledJobsAsync(cancellationToken);
     }
 
     public async ValueTask DisposeAsync()

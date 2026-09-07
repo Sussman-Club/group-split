@@ -6,7 +6,7 @@ namespace GroupSplit.Jobs.Standalone;
 
 /// <summary>Configures one internally hosted jobs system using caller-owned instances.</summary>
 public sealed class JobsBuilder
-    : IJobsBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    : IJobsBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
 {
     private readonly IServiceCollection _services = new ServiceCollection();
     private bool _built;
@@ -14,6 +14,7 @@ public sealed class JobsBuilder
     public DispatcherBuilder Dispatcher { get; }
     public HandlersBuilder Handlers { get; }
     public ReceiverBuilder Receiver { get; }
+    public SchedulerBuilder Scheduler { get; }
 
     public JobsBuilder()
     {
@@ -21,6 +22,7 @@ public sealed class JobsBuilder
         Dispatcher = new(this);
         Handlers = new(this);
         Receiver = new(this);
+        Scheduler = new(this);
     }
 
     public JobsBuilder WithoutDefaults()

@@ -1,7 +1,7 @@
 namespace GroupSplit.Jobs.Standalone;
 
 public sealed class HandlersBuilder(JobsBuilder jobsBuilder)
-    : IJobHandlersBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    : IJobHandlersBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
 {
     public JobsBuilder JobsBuilder { get; } = jobsBuilder;
 
@@ -27,6 +27,6 @@ public sealed class HandlersBuilder(JobsBuilder jobsBuilder)
     public HandlersBuilder Add<TJob, TResult, THandler>(THandler handler)
         where TJob : IJob<TResult> where THandler : IJobHandler<TJob, TResult> => Add<TJob, TResult>(handler);
 
-    IJobExecutor IJobHandlersBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    IJobExecutor IJobHandlersBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
         .BuildExecutor(IServiceProvider serviceProvider) => JobsBuilder.Inner.Handlers.BuildExecutor(serviceProvider);
 }

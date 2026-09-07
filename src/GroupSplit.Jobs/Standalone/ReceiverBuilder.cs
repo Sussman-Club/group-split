@@ -1,7 +1,7 @@
 namespace GroupSplit.Jobs.Standalone;
 
 public sealed class ReceiverBuilder(JobsBuilder jobs)
-    : IJobReceiverBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    : IJobReceiverBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
 {
     public JobsBuilder Jobs { get; } = jobs;
 
@@ -13,7 +13,7 @@ public sealed class ReceiverBuilder(JobsBuilder jobs)
         return this;
     }
 
-    IJobReceiver IJobReceiverBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    IJobReceiver IJobReceiverBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
         .BuildReceiver(IServiceProvider serviceProvider) => Jobs.Inner.Receiver.BuildReceiver(serviceProvider);
 
     private sealed class BorrowedReceiver(IJobReceiver receiver) : IJobReceiver

@@ -2,11 +2,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.Jobs.DependencyInjection;
 
-public interface IJobDispatcherBuilder : IJobDispatcherBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>
+public interface IJobDispatcherBuilder : IJobDispatcherBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>
 {
     IJobDispatcherBuilder Use(Func<IServiceProvider, IJobDispatcher> factory);
 
-    IJobDispatcherBuilder IJobDispatcherBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>.Use(IJobDispatcher dispatcher) =>
+    IJobDispatcherBuilder IJobDispatcherBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>.Use(IJobDispatcher dispatcher) =>
         Use(_ => dispatcher);
 }
 
