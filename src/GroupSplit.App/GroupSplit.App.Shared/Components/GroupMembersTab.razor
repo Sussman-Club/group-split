@@ -65,43 +65,49 @@
         </div>
     </div>
 
-    <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
-        <div class="gs-card-title">
-            <h2>Invited</h2>
-            <span class="gs-tag">@_pending.Count waiting</span>
-        </div>
+    @* The two ways in, stacked beside the members: the link somebody pastes into the
+       group's own chat, and the addresses the group is still waiting on. *@
+    <div class="gs-stack">
+        <GroupJoinLinkCard GroupId="@GroupId" Reveal="1" />
 
-        @if (_pending.Count == 0)
-        {
-            <div class="gs-empty" style="padding: 24px">
-                <MudIcon Icon="@Icons.Material.Rounded.MailOutline" />
-                <span>Nobody is waiting to join. Invite by email and they will see it next time they sign in.</span>
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
+            <div class="gs-card-title">
+                <h2>Invited</h2>
+                <span class="gs-tag">@_pending.Count waiting</span>
             </div>
-        }
-        else
-        {
-            <div class="gs-list">
-                @foreach (var invitation in _pending)
-                {
-                    var pending = invitation;
-                    <div class="gs-row" style="cursor: default">
-                        <Avatar Name="@pending.Email" />
-                        <div style="min-width: 0">
-                            <div class="title"><span>@pending.Email</span></div>
-                            <div class="meta">
-                                Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
+
+            @if (_pending.Count == 0)
+            {
+                <div class="gs-empty" style="padding: 24px">
+                    <MudIcon Icon="@Icons.Material.Rounded.MailOutline" />
+                    <span>Nobody is waiting to join. Invite by email and they will see it next time they sign in.</span>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var invitation in _pending)
+                    {
+                        var pending = invitation;
+                        <div class="gs-row" style="cursor: default">
+                            <Avatar Name="@pending.Email" />
+                            <div style="min-width: 0">
+                                <div class="title"><span>@pending.Email</span></div>
+                                <div class="meta">
+                                    Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
+                                </div>
                             </div>
+                            <MudTooltip Text="Withdraw the invitation">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Close"
+                                               Size="Size.Small"
+                                               aria-label="@($"Withdraw the invitation to {pending.Email}")"
+                                               OnClick="@(() => WithdrawAsync(pending))" />
+                            </MudTooltip>
                         </div>
-                        <MudTooltip Text="Withdraw the invitation">
-                            <MudIconButton Icon="@Icons.Material.Rounded.Close"
-                                           Size="Size.Small"
-                                           aria-label="@($"Withdraw the invitation to {pending.Email}")"
-                                           OnClick="@(() => WithdrawAsync(pending))" />
-                        </MudTooltip>
-                    </div>
-                }
-            </div>
-        }
+                    }
+                </div>
+            }
+        </div>
     </div>
 </div>
 

@@ -27,7 +27,9 @@ public static class DomainServiceExtensions
             services.AddScoped<IDebtCalculationService, DebtCalculationService>();
             services.AddScoped<IAccountService, AccountService>();
             services.AddScoped<IGroupService, GroupService>();
+            services.AddScoped<IGroupJoiner, GroupJoiner>();
             services.AddScoped<IInvitationService, InvitationService>();
+            services.AddScoped<IJoinLinkService, JoinLinkService>();
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddSplitRuleServices();
             services.AddScoped<ICategoryService, CategoryService>();

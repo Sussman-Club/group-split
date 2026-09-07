@@ -288,6 +288,39 @@ public class GroupsPageStateService : IGroupsPageStateService
         CancellationToken cancellationToken = default) =>
         _groupCommands.WithdrawInvitationAsync(Selected().Id, invitationId, email, cancellationToken);
 
+    public Task<GroupJoinLinkResponse?> GetGroupJoinLinkAsync(CancellationToken cancellationToken = default) =>
+        SelectedGroup is null
+            ? Task.FromResult<GroupJoinLinkResponse?>(null)
+            : ReadJoinLinkAsync(SelectedGroup.Id, cancellationToken);
+
+    private async Task<GroupJoinLinkResponse?> ReadJoinLinkAsync(Guid groupId,
+        CancellationToken cancellationToken)
+    {
+        GroupJoinLinkResponse? link = null;
+
+        await _errors.TryAsync(async () =>
+                link = (await _groupsClient.GetGroupJoinLinksAsync(groupId, cancellationToken))
+                    .OrderByDescending(candidate => candidate.CreatedAt)
+                    .FirstOrDefault(),
+            "Could not load the join link.");
+
+        return link;
+    }
+
+    public Task<GroupJoinLinkResponse?> CreateGroupJoinLinkAsync(CancellationToken cancellationToken = default)
+    {
+        var group = Selected();
+
+        return _groupCommands.CreateJoinLinkAsync(group.Id, group.Name, cancellationToken);
+    }
+
+    public Task<bool> RevokeGroupJoinLinkAsync(CancellationToken cancellationToken = default)
+    {
+        var group = Selected();
+
+        return _groupCommands.RevokeJoinLinkAsync(group.Id, group.Name, cancellationToken);
+    }
+
     public Task<bool> RemoveGroupMemberAsync(Guid memberUserId, string memberName,
         CancellationToken cancellationToken = default) =>
         _groupCommands.RemoveMemberAsync(Selected().Id, memberUserId, memberName, cancellationToken);

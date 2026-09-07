@@ -32,11 +32,11 @@ has to reach for `curl` and a bearer token to do.
 | | |
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
-| `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation` |
+| `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
-| `invitations` | `list`, `accept`, `decline` |
+| `invitations` | `list`, `accept`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `sync`, `unlink` |
 | `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
@@ -49,6 +49,8 @@ arguments, so this table can go stale and that one cannot.
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
 `groups settle`. `bank unlink`, `categories delete` and `split-rules delete` do the same.
+`groups link create` reads for a further reason: it only asks when the group already has a
+link to lose, and making a group's first one destroys nothing.
 
 ## Installing it
 
@@ -233,6 +235,12 @@ From that origin the CLI derives:
 | --- | --- |
 | API | `{server}/native/api` |
 | Authority | `{server}/idp/realms/group-split` |
+| Join links | `{server}/join/{token}` |
+
+The last of those is the only place the origin is used for something other than reaching a
+service. A group's join link is a URL somebody opens in a browser, and the API does not know
+where the app is published -- so `groupsplit groups link show` composes it here, and without
+a server origin can only give you the token and say why.
 
 `/native/api` rather than `/api` because they are different doors. `/api` is the browser's:
 it authenticates with the web app's session cookie and swaps in the token held inside it, so

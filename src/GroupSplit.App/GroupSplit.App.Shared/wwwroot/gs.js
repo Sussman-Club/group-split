@@ -175,6 +175,40 @@
             return -new Date().getTimezoneOffset();
         },
 
+        // Puts text on the clipboard, and says whether it got there. The async
+        // API is unavailable outside a secure context and can be refused by
+        // permission, so the old selection-and-execCommand route stays as a
+        // fallback -- a join link nobody can copy is a join link nobody shares.
+        // Answering false rather than throwing lets the caller show the text to
+        // be copied by hand instead of an error about the clipboard.
+        async copy(text) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch {
+                // Fall through: refused, or no permission.
+            }
+
+            try {
+                const el = document.createElement("textarea");
+                el.value = text;
+                el.setAttribute("readonly", "");
+                el.style.position = "fixed";
+                el.style.opacity = "0";
+                document.body.appendChild(el);
+                el.select();
+
+                const copied = document.execCommand("copy");
+                document.body.removeChild(el);
+
+                return copied;
+            } catch {
+                return false;
+            }
+        },
+
         // ------------------------------------------------------- plaid --
 
         // Plaid Link runs in the browser because it has to: the person's bank

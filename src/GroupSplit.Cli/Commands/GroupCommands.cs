@@ -34,6 +34,7 @@ public static class GroupCommands
         groups.Subcommands.Add(Invite());
         groups.Subcommands.Add(Invitations());
         groups.Subcommands.Add(Withdraw());
+        groups.Subcommands.Add(JoinLinkCommands.Build());
 
         return groups;
     }

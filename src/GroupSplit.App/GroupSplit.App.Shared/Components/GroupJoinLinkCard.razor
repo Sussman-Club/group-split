@@ -1,0 +1,163 @@
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsPageStateService GroupsService
+@inject IDialogService DialogService
+@inject DataChangeNotifier Changes
+@inject NavigationManager Nav
+@inject LocalClock Clock
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
+
+@*
+    The link a member pastes into the thread where the group already talks.
+
+    Inviting by email reaches an address, and an invitation is only discoverable by signing
+    in and looking -- so somebody invited before they have an account never learns of it.
+    This is the other way in: whoever holds the link can join, which is how a group actually
+    adds the person who is already in the chat.
+*@
+
+<div class="gs-card gs-card-pad gs-reveal" style="--i: @Reveal">
+    <div class="gs-card-title">
+        <h2>Join link</h2>
+        @if (_link is not null)
+        {
+            <span class="gs-tag">expires @Clock.Local(_link.ExpiresAt).ToString("d MMM")</span>
+        }
+    </div>
+
+    @if (_link is null)
+    {
+        <div class="gs-empty" style="padding: 24px">
+            <MudIcon Icon="@Icons.Material.Rounded.Link" />
+            <span>Anyone with the link can join this group. Make one and paste it wherever your group already talks.</span>
+        </div>
+
+        <div style="padding-top: 12px">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                       StartIcon="@Icons.Material.Rounded.AddLink"
+                       Disabled="@_busy"
+                       OnClick="@CreateAsync">Create a join link</MudButton>
+        </div>
+    }
+    else
+    {
+        @* Read-only and selectable, so somebody whose browser refuses the clipboard can
+           still pick the link up by hand. *@
+        <MudTextField T="string"
+                      Value="@Url"
+                      ReadOnly
+                      Variant="Variant.Outlined"
+                      Label="Anyone with this link can join"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@Icons.Material.Rounded.ContentCopy"
+                      AdornmentAriaLabel="Copy the join link"
+                      OnAdornmentClick="@CopyAsync" />
+
+        <div class="meta" style="padding-top: 8px">
+            Expires @Clock.Local(_link.ExpiresAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(_link.CreatedByUserName) ? "" : $" · made by {_link.CreatedByUserName}")
+        </div>
+
+        <div style="padding-top: 12px; display: flex; gap: 8px; flex-wrap: wrap">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                       StartIcon="@Icons.Material.Rounded.ContentCopy"
+                       Disabled="@_busy"
+                       OnClick="@CopyAsync">Copy link</MudButton>
+            <MudButton Variant="Variant.Text"
+                       StartIcon="@Icons.Material.Rounded.Autorenew"
+                       Disabled="@_busy"
+                       OnClick="@CreateAsync">New link</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error"
+                       StartIcon="@Icons.Material.Rounded.LinkOff"
+                       Disabled="@_busy"
+                       OnClick="@RevokeAsync">Turn it off</MudButton>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Where this sits in the page's entrance sequence.</summary>
+    [Parameter] public int Reveal { get; set; }
+
+    [Parameter, EditorRequired] public Guid GroupId { get; set; }
+
+    private GroupJoinLinkResponse? _link;
+    private bool _busy;
+
+    /// <summary>
+    /// Built here rather than by the API, from the address this browser is already on: the
+    /// app is published at whatever host it is published at, and a server guessing that
+    /// would guess wrong for every deployment but one.
+    /// </summary>
+    private string Url => _link is null ? string.Empty : $"{Nav.BaseUri.TrimEnd('/')}/join/{_link.Token}";
+
+    protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
+
+    protected override Task OnParametersSetAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _link = await GroupsService.GetGroupJoinLinkAsync();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _link = await GroupsService.CreateGroupJoinLinkAsync() ?? _link;
+        _busy = false;
+
+        // Straight onto the clipboard: somebody who pressed this is on their way to paste
+        // it somewhere, and a link they have to reach for again is a step for nothing.
+        if (_link is not null)
+            await CopyAsync();
+    }
+
+    private async Task CopyAsync()
+    {
+        var copied = false;
+
+        try
+        {
+            copied = await JS.InvokeAsync<bool>("gs.copy", Url);
+        }
+        catch (JSException)
+        {
+            // The clipboard is the browser's to refuse. The link is on screen either way.
+        }
+
+        Snackbar.Add(
+            copied ? "Join link copied." : "Could not copy it. Select the link above and copy it by hand.",
+            copied ? Severity.Success : Severity.Warning);
+    }
+
+    private async Task RevokeAsync()
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, "Turn this link off? Anybody you have already sent it to will not be able to join with it. People already in the group stay in." },
+            { x => x.ButtonText, "Turn it off" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Turn off the join link", parameters, options);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        _busy = true;
+
+        if (await GroupsService.RevokeGroupJoinLinkAsync())
+            _link = null;
+
+        _busy = false;
+    }
+
+    public void Dispose() => Changes.GroupsChanged -= ReloadAsync;
+}

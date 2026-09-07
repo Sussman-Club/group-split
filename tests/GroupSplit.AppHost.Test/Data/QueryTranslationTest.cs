@@ -100,6 +100,27 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         await Service<IInvitationService>().ForGroup(await AGroupOfTheirs(), Ct);
     }
 
+    /// <summary>
+    /// Both join-link projections, and the write between them: the group's own view of its
+    /// link, and the view somebody following one gets. Each is a constructor call reaching
+    /// through two navigations, which is the shape that does not translate.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_join_link_projections_translate()
+    {
+        var links = Service<IJoinLinkService>();
+        var group = await AGroupOfTheirs();
+
+        await links.ForGroup(group, Ct);
+
+        var made = await links.Create(group, Ct);
+
+        await links.ForGroup(group, Ct);
+        await links.Describe(made.Token, Ct);
+
+        await links.Revoke(group, Ct);
+    }
+
     [Fact(Timeout = 120_000)]
     public async Task The_cross_group_position_translates()
     {

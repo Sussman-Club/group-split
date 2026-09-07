@@ -92,6 +92,32 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(invitation => invitation.Email);
         });
 
+        modelBuilder.Entity<GroupJoinLink>(entity =>
+        {
+            entity.Property(link => link.Token).HasMaxLength(64).IsRequired();
+            entity.Property(link => link.CreatedAt).IsRequired();
+            entity.Property(link => link.ExpiresAt).IsRequired();
+
+            entity.HasOne(link => link.Group)
+                .WithMany(group => group.JoinLinks)
+                .HasForeignKey(link => link.GroupId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(link => link.CreatedBy)
+                .WithMany()
+                .HasForeignKey(link => link.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // The token is the whole lookup: somebody opens a URL and the only thing in it
+            // is this. Unique because two rows answering to one token would be two groups
+            // one link could let somebody into.
+            entity.HasIndex(link => link.Token).IsUnique();
+
+            // A group's own list, newest first, which is how the current link is found.
+            entity.HasIndex(link => new { link.GroupId, link.CreatedAt });
+        });
+
         modelBuilder.Entity<Group>(entity =>
         {
             entity.Property(group => group.Name).HasMaxLength(64).IsRequired();

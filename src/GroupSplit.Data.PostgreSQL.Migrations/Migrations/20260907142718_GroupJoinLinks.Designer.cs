@@ -3,6 +3,7 @@ using System;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    partial class PostgreSqlAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907142718_GroupJoinLinks")]
+    partial class GroupJoinLinks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -72,31 +75,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsUnique();
 
                     b.ToTable("BankConnection");
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.BankMatchDismissal", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BankTransactionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("DismissedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TransactionId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TransactionId");
-
-                    b.HasIndex("BankTransactionId", "TransactionId")
-                        .IsUnique();
-
-                    b.ToTable("BankMatchDismissal");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.BankTransaction", b =>
@@ -672,25 +650,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.BankMatchDismissal", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
-                        .WithMany()
-                        .HasForeignKey("BankTransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GroupSplit.Data.Entities.Transaction", "Transaction")
-                        .WithMany()
-                        .HasForeignKey("TransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BankTransaction");
-
-                    b.Navigation("Transaction");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.BankTransaction", b =>

@@ -32,6 +32,7 @@ public static class ErrorCodes
     public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
     public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
     public const string GroupInvitationNotFound = "GROUP_INVITATION_NOT_FOUND";
+    public const string GroupJoinLinkNotFound = "GROUP_JOIN_LINK_NOT_FOUND";
     public const string BankConnectionNotFound = "BANK_CONNECTION_NOT_FOUND";
     public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
 
@@ -50,6 +51,8 @@ public static class ErrorCodes
     public const string GroupInvitationAlreadySent = "GROUP_INVITATION_ALREADY_SENT";
     public const string GroupMemberAlreadyJoined = "GROUP_MEMBER_ALREADY_JOINED";
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
+    public const string GroupJoinLinkExpired = "GROUP_JOIN_LINK_EXPIRED";
+    public const string GroupJoinLinkRevoked = "GROUP_JOIN_LINK_REVOKED";
     public const string TransactionGroupLeft = "TRANSACTION_GROUP_LEFT";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";

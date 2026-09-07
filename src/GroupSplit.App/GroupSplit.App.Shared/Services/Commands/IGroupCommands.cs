@@ -37,6 +37,22 @@ public interface IGroupCommands
     Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string email,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Issues a shareable link into the group, putting out whatever link it had. Also how
+    /// one is reset, since there is nothing to say about the old one once it is replaced.
+    /// </summary>
+    Task<GroupJoinLinkResponse?> CreateJoinLinkAsync(Guid groupId, string groupName,
+        CancellationToken ct = default);
+
+    /// <summary>Puts out the group's links, so the URLs already shared stop working.</summary>
+    Task<bool> RevokeJoinLinkAsync(Guid groupId, string groupName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Follows a link somebody was sent. Answers with the group either way, saying whether
+    /// this is what put them in it.
+    /// </summary>
+    Task<JoinedGroupResponse?> JoinByLinkAsync(string token, CancellationToken ct = default);
+
     Task<bool> RemoveMemberAsync(Guid groupId, Guid memberUserId, string memberName,
         CancellationToken ct = default);
 
