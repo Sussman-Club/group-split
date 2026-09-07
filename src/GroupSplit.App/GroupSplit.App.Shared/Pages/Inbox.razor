@@ -7,6 +7,7 @@
 @inject IInboxStateService State
 @inject IBankCommands Bank
 @inject IDialogService DialogService
+@inject LocalClock Clock
 @implements IDisposable
 
 @*
@@ -169,7 +170,7 @@
                                     You may already have recorded this:
                                     <strong>@match.Name</strong>,
                                     <Money Value="@match.Amount" Currency="@match.Currency" />
-                                    in @match.Where on @match.DateTime.LocalDateTime.ToShortDateString().
+                                    in @match.Where on @Clock.Local(match.DateTime).ToString("d").
                                 </span>
                                 <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
                                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"

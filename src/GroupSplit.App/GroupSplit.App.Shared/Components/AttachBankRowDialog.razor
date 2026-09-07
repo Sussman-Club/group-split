@@ -22,13 +22,13 @@
     <DialogContent>
         <MudStack Spacing="3">
             <MudText Typo="Typo.body2">
-                Your bank sent @(Rows.Count == 1 ? "a transaction" : "transactions") that could be
+                Your bank sent @(_rows.Count == 1 ? "a transaction" : "transactions") that could be
                 <strong>@Expense.Name</strong>. Attaching one keeps a single expense and marks the
                 bank's row as dealt with.
             </MudText>
 
             <div class="gs-list">
-                @foreach (var item in Rows)
+                @foreach (var item in _rows)
                 {
                     var row = item;
                     <div class="gs-row" style="cursor: default" @key="row.Id">
@@ -71,7 +71,20 @@
     /// <summary>The imported rows it could be, closest first.</summary>
     [Parameter, EditorRequired] public IReadOnlyList<BankTransactionResponse> Rows { get; set; } = [];
 
+    /// <summary>
+    /// The rows still unanswered, which is what the list actually shows.
+    /// </summary>
+    /// <remarks>
+    /// Copied once rather than edited in place: <see cref="Rows"/> is a parameter, and a
+    /// parameter is re-supplied from the parent's render tree on every re-render of it. A
+    /// row struck off by editing the parameter would come back the next time anything
+    /// re-rendered the dialog host, which reads as the app ignoring an answer it was given.
+    /// </remarks>
+    private List<BankTransactionResponse> _rows = [];
+
     private Guid? _busy;
+
+    protected override void OnInitialized() => _rows = [.. Rows];
 
     private async Task AttachAsync(BankTransactionResponse row)
     {
@@ -98,9 +111,9 @@
                 return;
 
             // The one that was dismissed goes; the rest are still open questions.
-            Rows = [.. Rows.Where(candidate => candidate.Id != row.Id)];
+            _rows.RemoveAll(candidate => candidate.Id == row.Id);
 
-            if (Rows.Count == 0)
+            if (_rows.Count == 0)
                 MudDialog.Close();
         }
         finally

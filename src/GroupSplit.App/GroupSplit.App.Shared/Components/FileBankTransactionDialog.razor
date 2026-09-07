@@ -8,6 +8,7 @@
 @inject ICategoriesClient CategoriesClient
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
+@inject LocalClock Clock
 
 @*
     Turning one imported row into a group expense, in the same two steps recording one
@@ -60,7 +61,7 @@
                             You may already have recorded this:
                             <strong>@match.Name</strong>,
                             <Money Value="@match.Amount" Currency="@match.Currency" />
-                            in @match.Where on @match.DateTime.LocalDateTime.ToShortDateString().
+                            in @match.Where on @Clock.Local(match.DateTime).ToString("d").
                         </span>
                         <div>
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
