@@ -29,12 +29,16 @@
     <Project Path="src/GroupSplit.Data.PostgreSQL/GroupSplit.Data.PostgreSQL.csproj" />
     <Project Path="src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj" />
   </Folder>
+  <Folder Name="/src/Jobs/">
+    <Project Path="src/GroupSplit.Jobs/GroupSplit.Jobs.csproj" />
+  </Folder>
   <!-- One test project per deployable: the API, the Blazor Web host, the app model. -->
   <Folder Name="/tests/">
     <Project Path="tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
     <Project Path="tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj" />
     <Project Path="tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj" />
     <Project Path="tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj" />
+    <Project Path="tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj" />
     <Project Path="tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj" />
   </Folder>
 </Solution>
