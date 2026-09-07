@@ -28,7 +28,7 @@
 
     public void Dispose() => Preference.Changed -= OnChanged;
 
-    private void OnChanged() => InvokeAsync(StateHasChanged);
+    private void OnChanged(ThemeChangeOrigin origin) => InvokeAsync(StateHasChanged);
 
     private static string Label(ThemeMode mode) => mode switch
     {
