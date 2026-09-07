@@ -71,6 +71,7 @@ jobs:
           dotnet restore tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj
           dotnet restore tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj
           dotnet restore tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj
+          dotnet restore tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
       - name: Build
@@ -79,6 +80,7 @@ jobs:
           dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
       # The CLI ships as a .NET tool, and packaging breaks in ways a plain build does
