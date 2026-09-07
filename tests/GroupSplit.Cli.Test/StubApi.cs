@@ -52,12 +52,34 @@ public sealed class StubApi : IDisposable
     }
 
     /// <summary>Answers <paramref name="path"/> with a JSON body serialized from <paramref name="body"/>.</summary>
-    public StubApi Returns(string path, object body, int status = 200)
+    /// <param name="method">
+    /// Restricts this answer to one HTTP method, for a route where two of them differ --
+    /// <c>GET /users/me</c> succeeding while <c>DELETE /users/me</c> is refused. A route
+    /// registered without one answers whichever method arrives, which is what nearly every
+    /// test wants.
+    /// </param>
+    public StubApi Returns(string path, object body, int status = 200, string? method = null)
     {
-        _routes[path] = (status, JsonSerializer.Serialize(body, new JsonSerializerOptions
+        _routes[Key(path, method)] = (status, JsonSerializer.Serialize(body, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         }));
+
+        return this;
+    }
+
+    /// <summary>
+    /// Answers 204, the way every endpoint that returns nothing does.
+    /// </summary>
+    /// <remarks>
+    /// Its own method rather than <c>Returns(path, new { }, 204)</c>, because the generated
+    /// client tests the status exactly -- anything but 204 on one of these throws -- and a
+    /// 204 carrying a body is a response the client is entitled to reject. Nothing is
+    /// written for these at all; see the serve loop.
+    /// </remarks>
+    public StubApi NoContent(string path, string? method = null)
+    {
+        _routes[Key(path, method)] = (204, string.Empty);
 
         return this;
     }
@@ -76,7 +98,8 @@ public sealed class StubApi : IDisposable
     }
 
     /// <summary>Answers with RFC 9457 problem details, the shape every API failure really has.</summary>
-    public StubApi Problem(string path, int status, string code, string detail, object? extra = null)
+    public StubApi Problem(
+        string path, int status, string code, string detail, object? extra = null, string? method = null)
     {
         var problem = new Dictionary<string, object?>
         {
@@ -95,10 +118,13 @@ public sealed class StubApi : IDisposable
             }
         }
 
-        _routes[path] = (status, JsonSerializer.Serialize(problem));
+        _routes[Key(path, method)] = (status, JsonSerializer.Serialize(problem));
 
         return this;
     }
+
+    private static string Key(string path, string? method)
+        => method is null ? path : $"{method} {path}";
 
     private async Task ServeAsync()
     {
@@ -125,12 +151,25 @@ public sealed class StubApi : IDisposable
                 context.Request.Headers["Authorization"],
                 await reader.ReadToEndAsync()));
 
-            var (status, body) = _routes.TryGetValue(path, out var route)
-                ? route
+            // A method-specific route wins over the path-only one, so a test can make GET
+            // and DELETE on the same route answer differently without every other test
+            // having to name a method it does not care about.
+            var (status, body) =
+                _routes.TryGetValue(Key(path, context.Request.HttpMethod), out var specific) ? specific
+                : _routes.TryGetValue(path, out var route) ? route
                 : (404, """{"title":"Not found","status":404,"code":"NOT_FOUND","detail":"No route."}""");
 
-            var bytes = Encoding.UTF8.GetBytes(body);
             context.Response.StatusCode = status;
+
+            // No content type and no length on a 204: those are what turn "nothing to say"
+            // into a zero-length body, which is a different response.
+            if (status == 204)
+            {
+                context.Response.Close();
+                continue;
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(body);
             context.Response.ContentType = _html.Contains(path) ? "text/html" : "application/json";
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes);

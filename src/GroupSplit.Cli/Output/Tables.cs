@@ -1,3 +1,4 @@
+using GroupSplit.Shared;
 using Spectre.Console;
 
 namespace GroupSplit.Cli.Output;
@@ -41,4 +42,18 @@ public static class Tables
     }
 
     public static string Empty(string what) => $"[grey]No {Markup.Escape(what)}.[/]";
+
+    /// <summary>
+    /// The line under a paged table. Every paged listing prints it, because a first page of
+    /// many looks exactly like the whole answer without it -- and the page count is
+    /// arithmetic the wire type deliberately does not carry, so it would otherwise be
+    /// rederived once per command.
+    /// </summary>
+    public static Markup PageFooter<T>(PagedResponse<T> page)
+    {
+        var size = Math.Max(1, page.PageSize);
+        var pages = Math.Max(1, (int)Math.Ceiling(page.TotalCount / (double)size));
+
+        return new Markup($"[grey]Page {page.Page} of {pages}, {page.TotalCount} total.[/]\n");
+    }
 }
