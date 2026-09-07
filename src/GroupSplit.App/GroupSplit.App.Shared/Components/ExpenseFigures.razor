@@ -1,0 +1,85 @@
+@namespace GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
+@using GroupSplit.Shared
+
+@*
+    The two figures that stand over a list of expenses: how many, and how much.
+
+    One component because there are two such lists -- your own expenses and a group's --
+    and they were drifting. Both had cards that described the whole ledger while the list
+    under them described a month (#174, and again on the personal page), and both grew a
+    subline that restated the figure above it: "6" over "6 in view".
+
+    So there is one summary behind both cards rather than one per card, which is what makes
+    them agree by construction, and one subline naming what was counted rather than a
+    sentence per card guessing at it.
+*@
+
+<div class="gs-stats">
+    <div class="gs-card gs-stat gs-reveal" style="--i: 0">
+        <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+        <span class="gs-eyebrow">@CountLabel</span>
+        <span class="gs-stat-value gs-num" data-gs-count="@Count">@Count</span>
+        <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
+    </div>
+    <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+        <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
+        <span class="gs-eyebrow">@TotalLabel</span>
+        <Money Value="Total" Animate Class="gs-stat-value" />
+        <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The count and the total, as the server worked them out over everything the list is
+    /// showing one page of.
+    /// </summary>
+    /// <remarks>
+    /// One parameter rather than two, so a caller cannot hand the count of one set and the
+    /// total of another -- which is the shape both defects had.
+    /// </remarks>
+    [Parameter] public TransactionSummaryResponse? Summary { get; set; }
+
+    /// <summary>The span the list is narrowed to, which is most of what the subline says.</summary>
+    [Parameter] public DateFilter Range { get; set; } = DateFilter.AllTime;
+
+    /// <summary>Whether a search is narrowing it further.</summary>
+    [Parameter] public bool Searching { get; set; }
+
+    /// <summary>
+    /// What else the figures are of, in a word or two: "shared", "personal", "by everyone".
+    /// Each list has its own filters, and this is where they get named.
+    /// </summary>
+    [Parameter] public string? Scope { get; set; }
+
+    [Parameter] public string CountLabel { get; set; } = "Recorded";
+
+    [Parameter] public string TotalLabel { get; set; } = "Total";
+
+    private int Count => Summary?.Count ?? 0;
+
+    private decimal Total => Summary?.Total ?? 0m;
+
+    /// <summary>
+    /// What the two figures are of, joined in the order somebody would say it: the span,
+    /// then whose expenses, then whether a search cut it down again.
+    /// </summary>
+    /// <remarks>
+    /// It names the filters rather than counting anything, because the number is directly
+    /// above it. "6 in view" under a 6 was a subline that agreed with the card and said
+    /// nothing; "last month · shared" says what the 6 is.
+    /// </remarks>
+    private string Describe()
+    {
+        var said = new List<string>(3) { Range.IsAllTime ? "all time" : Range.Label.ToLowerInvariant() };
+
+        if (Scope is { Length: > 0 })
+            said.Add(Scope);
+
+        if (Searching)
+            said.Add("matching your search");
+
+        return string.Join(" · ", said);
+    }
+}

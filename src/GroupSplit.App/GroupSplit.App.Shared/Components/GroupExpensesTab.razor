@@ -34,24 +34,12 @@
                       Style="min-width: min(360px, 100%)" />
     </div>
 
-    <div class="gs-stats">
-        <div class="gs-card gs-stat gs-reveal" style="--i: 0">
-            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
-            <span class="gs-eyebrow">Expenses</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@(_summary?.Count ?? 0)">@(_summary?.Count ?? 0)</span>
-            <span class="gs-muted" style="font-size: .8125rem">
-                @(IsNarrowed ? $"{_total ?? 0} in view" : "in this group")
-            </span>
-        </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
-            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
-            <span class="gs-eyebrow">Total spent</span>
-            <Money Value="@(_summary?.Total ?? 0m)" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">
-                by everyone@(_range.IsAllTime ? ", all time" : $", {_range.Label.ToLowerInvariant()}")
-            </span>
-        </div>
-    </div>
+    <ExpenseFigures Summary="_summary"
+                    Range="_range"
+                    Searching="IsSearching"
+                    Scope="by everyone"
+                    CountLabel="Expenses"
+                    TotalLabel="Total spent" />
 
     <div class="gs-reveal" style="--i: 2">
         @* No group column: every row here is the same group, so it would be the same tag
@@ -72,9 +60,6 @@
     private DateFilter _range = DateFilter.AllTime;
     private ExpensesGrid? _grid;
     private TransactionSummaryResponse? _summary;
-
-    /// <summary>How many the current page is one of, which is the match count while searching.</summary>
-    private int? _total;
 
     /// <summary>
     /// What the cards were last asked about. Both the reason not to ask again for something
@@ -117,8 +102,6 @@
                 page: query.Page,
                 pageSize: query.PageSize,
                 cancellationToken: cancellationToken));
-
-        _total = page?.TotalCount;
 
         return page;
     }

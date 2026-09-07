@@ -44,8 +44,9 @@ public class TransactionsPageTest : ComponentTest
     {
         var values = page.FindAll(".gs-stat-value");
 
-        // Recorded, this month, total.
-        return (values[0].TextContent.Trim(), values[2].TextContent.Trim());
+        // Recorded, total. Two cards: "This month" was a third that did not follow the
+        // filter and duplicated a chip in the date filter beside it.
+        return (values[0].TextContent.Trim(), values[1].TextContent.Trim());
     }
 
     private static Task PickAsync(IRenderedComponent<Transactions> page, string label) =>
@@ -57,7 +58,7 @@ public class TransactionsPageTest : ComponentTest
         var page = Render<Transactions>();
 
         Assert.Equal(("5", "$29.00"), Cards(page));
-        Assert.Contains("showing all", page.Markup);
+        Assert.Contains("all time", page.Markup);
     }
 
     /// <summary>
@@ -88,17 +89,23 @@ public class TransactionsPageTest : ComponentTest
     }
 
     /// <summary>
-    /// "This month" is its own question and says so on the card, so it stays put when the
-    /// span moves. Pinned because the fix above could easily have been applied to all three.
+    /// Both cards carry the same subline, and it names the filters rather than counting
+    /// anything -- the count is the figure directly above it. "6 in view" under a 6 was a
+    /// subline that agreed with its own card and told nobody anything.
     /// </summary>
     [Fact]
-    public async Task This_month_is_not_narrowed_because_it_names_its_own_span()
+    public async Task The_subline_says_which_expenses_the_figures_are_of()
     {
         var page = Render<Transactions>();
 
         await PickAsync(page, "Last month");
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Personal").ClickAsync(new());
 
-        Assert.Equal("$12.00", page.FindAll(".gs-stat-value")[1].TextContent.Trim());
+        var sublines = page.FindAll(".gs-stat .gs-muted").Select(line => line.TextContent.Trim()).ToList();
+
+        Assert.Equal(2, sublines.Count);
+        Assert.All(sublines, line => Assert.Equal("last month · personal", line));
+        Assert.DoesNotContain("in view", page.Markup);
     }
 
     [Fact]
