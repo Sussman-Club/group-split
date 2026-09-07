@@ -257,6 +257,30 @@ public sealed class SelfDescriptionTests
     }
 
     [Fact]
+    public async Task An_argument_holding_its_value_stops_offering_the_others()
+    {
+        // The set stays on offer after the argument is filled, and typing a second shell
+        // makes the line unparseable -- so proposing one says something untrue.
+        Assert.Empty(await SuggestLinesAsync("groupsplit completion bash "));
+    }
+
+    [Fact]
+    public async Task A_value_still_being_typed_is_not_a_value_the_argument_holds()
+    {
+        // The parser binds `b` to shell the moment it is typed, and counting that as
+        // supplied would stop the completion that is the entire point of typing it.
+        Assert.StartsWith("Bash\t", Assert.Single(await SuggestLinesAsync("groupsplit completion b")));
+    }
+
+    [Fact]
+    public async Task An_option_s_value_is_not_withdrawn_along_with_the_arguments()
+    {
+        // The parser bounds this one correctly on its own, and always did.
+        Assert.Contains(await SuggestLinesAsync("groupsplit -o Json "), l => l.StartsWith("groups\t"));
+        Assert.StartsWith("Json\t", Assert.Single(await SuggestLinesAsync("groupsplit -o J")));
+    }
+
+    [Fact]
     public async Task A_word_the_parser_could_not_place_ends_the_suggestions()
     {
         // Offering the root commands here would say `blablabla groups` is a command line.

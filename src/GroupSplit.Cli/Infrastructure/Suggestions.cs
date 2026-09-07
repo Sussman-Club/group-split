@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.CommandLine.Completions;
 
 namespace GroupSplit.Cli.Infrastructure;
 
@@ -72,13 +73,18 @@ public static class Suggestions
             .DistinctBy(item => item.Label)
             .ToList();
 
-        var values = candidates.Where(item => !item.Label.StartsWith('-')).ToList();
+        var supplied = ArgumentsAlreadyGivenAValue(parseResult, word);
+        var stale = ValuesOf(supplied, parseResult.GetCompletionContext());
+
+        var values = candidates
+            .Where(item => !item.Label.StartsWith('-') && !stale.Contains(item.Label))
+            .ToList();
 
         // Only when there is nothing else to say. An argument with a closed set of values
         // -- `completion <TAB>`, `-o <TAB>` -- completes for real, and a hint beside the
         // values it is describing would be repeating them.
         var hint = word.Length == 0 && values.Count == 0
-            ? DescribeNextArgument(parseResult)
+            ? DescribeNextArgument(parseResult, supplied)
             : null;
 
         if (hint is not null)
@@ -204,6 +210,49 @@ public static class Suggestions
     }
 
     /// <summary>
+    /// The arguments of the deepest matched command that already hold a value.
+    /// <para>
+    /// The word under the cursor is not one of them, however far into it the typing got:
+    /// the parser binds a half-written <c>b</c> to <c>shell</c> the moment it is typed, and
+    /// counting that as supplied is what would stop <c>completion b&lt;TAB&gt;</c> from
+    /// ever reaching <c>Bash</c>. Only the last one filled can be the word, so only that
+    /// one is reconsidered.
+    /// </para>
+    /// </summary>
+    private static List<Argument> ArgumentsAlreadyGivenAValue(ParseResult parseResult, string word)
+    {
+        var supplied = parseResult.CommandResult.Command.Arguments
+            .Where(argument => parseResult.GetResult(argument)?.Tokens.Count > 0)
+            .ToList();
+
+        if (word.Length > 0
+            && supplied.Count > 0
+            && parseResult.GetResult(supplied[^1])!.Tokens[^1].Value == word)
+        {
+            supplied.RemoveAt(supplied.Count - 1);
+        }
+
+        return supplied;
+    }
+
+    /// <summary>
+    /// What those arguments would still offer, and the parser would no longer accept.
+    /// <para>
+    /// An argument with a closed set keeps offering that set after it is filled:
+    /// <c>completion bash &lt;TAB&gt;</c> proposes all four shells again, and typing one
+    /// makes the line unparseable. The same library gets this right for an option's value
+    /// -- <c>-o Json &lt;TAB&gt;</c> moves on to the commands -- so the asymmetry is the
+    /// argument's alone, and this closes it. Only values are withdrawn: a subcommand or an
+    /// option is still valid at a position where every argument is satisfied.
+    /// </para>
+    /// </summary>
+    private static HashSet<string> ValuesOf(List<Argument> supplied, CompletionContext context) =>
+        supplied
+            .SelectMany(argument => argument.GetCompletions(context))
+            .Select(item => item.Label)
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
     /// The next argument the deepest matched command still wants, as <c>&lt;name&gt;</c>
     /// and its description, or null when it wants none.
     /// <para>
@@ -221,10 +270,10 @@ public static class Suggestions
     /// only other thing the parser would accept.
     /// </para>
     /// </summary>
-    private static string? DescribeNextArgument(ParseResult parseResult)
+    private static string? DescribeNextArgument(ParseResult parseResult, List<Argument> supplied)
     {
         var argument = parseResult.CommandResult.Command.Arguments
-            .FirstOrDefault(argument => parseResult.GetResult(argument)?.Tokens.Count is null or 0);
+            .FirstOrDefault(argument => !supplied.Contains(argument));
 
         if (argument is null)
         {
