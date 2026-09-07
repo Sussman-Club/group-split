@@ -46,6 +46,19 @@ public static class InboxCommands
             Description = "Which rows to show. Defaults to what is waiting."
         }.WithDescribedValues();
 
+        // Days rather than instants, because that is what a bank puts on a row: a statement
+        // date is a calendar date the bank decided on, not a moment in anybody's zone. A
+        // sync brings in months at a time, and the way through a backlog is a month of it.
+        var from = new Option<DateOnly?>("--from")
+        {
+            Description = "Only rows on or after this day, e.g. 2026-01-01."
+        };
+
+        var to = new Option<DateOnly?>("--to")
+        {
+            Description = "Only rows on or before this day."
+        };
+
         var sortBy = new Option<string?>("--sort-by")
         {
             Description = "date, amount or merchant. Defaults to date."
@@ -61,7 +74,7 @@ public static class InboxCommands
 
         var command = new Command("list", "List imported rows, newest first.")
         {
-            status, sortBy, order, page, pageSize
+            status, from, to, sortBy, order, page, pageSize
         };
 
         command.SetHandler(async (context, ct) =>
@@ -70,6 +83,8 @@ public static class InboxCommands
 
             var rows = await new Api.InboxClient(context.ApiHttpClient).GetInboxAsync(
                 status: parse.GetValue(status),
+                from: parse.GetValue(from),
+                to: parse.GetValue(to),
                 sortBy: parse.GetValue(sortBy),
                 sortDescending: parse.GetValue(order).Descending(),
                 page: parse.GetValue(page),

@@ -204,8 +204,98 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>One imported row on the caller's own connection, waiting in the inbox.</summary>
+    // ---- Narrowing the inbox to a span of days -----------------------------------------
+    //
+    // A bank sends months at a time, and the way through a backlog is a month of it at a
+    // time. The span is days rather than instants because that is what a bank puts on a row.
+
+    [Fact]
+    public async Task Listing_between_two_days_keeps_both_of_them()
+    {
+        await Row(10m, providerId: "before", date: new DateOnly(2026, 8, 31));
+        await Row(20m, providerId: "first", date: new DateOnly(2026, 9, 1));
+        await Row(30m, providerId: "last", date: new DateOnly(2026, 9, 30));
+        await Row(40m, providerId: "after", date: new DateOnly(2026, 10, 1));
+
+        var rows = await Listed(new InboxFilter(
+            From: new DateOnly(2026, 9, 1),
+            To: new DateOnly(2026, 9, 30)));
+
+        Assert.Equal(2, rows.Count);
+        Assert.Contains(rows, row => row.ProviderTransactionId == "first");
+        Assert.Contains(rows, row => row.ProviderTransactionId == "last");
+    }
+
+    [Fact]
+    public async Task A_span_open_at_one_end_bounds_only_the_other()
+    {
+        await Row(10m, providerId: "august", date: new DateOnly(2026, 8, 31));
+        await Row(20m, providerId: "october", date: new DateOnly(2026, 10, 1));
+
+        var since = await Listed(new InboxFilter(From: new DateOnly(2026, 9, 1)));
+        var until = await Listed(new InboxFilter(To: new DateOnly(2026, 9, 1)));
+
+        Assert.Equal("october", Assert.Single(since).ProviderTransactionId);
+        Assert.Equal("august", Assert.Single(until).ProviderTransactionId);
+    }
+
+    [Fact]
+    public async Task No_span_at_all_is_every_row_the_status_matches()
+    {
+        await Row(10m, providerId: "old", date: new DateOnly(2020, 1, 1));
+        await Row(20m, providerId: "new", date: new DateOnly(2030, 1, 1));
+
+        Assert.Equal(2, (await Listed(new InboxFilter())).Count);
+    }
+
+    /// <summary>
+    /// The span narrows what the status already chose rather than replacing it: somebody
+    /// working through last month's backlog is looking at last month's waiting rows.
+    /// </summary>
+    [Fact]
+    public async Task The_span_and_the_status_both_apply()
+    {
+        var ignored = await Row(10m, providerId: "ignored", date: new DateOnly(2026, 9, 10));
+        await Row(20m, providerId: "waiting", date: new DateOnly(2026, 9, 10));
+        await Row(30m, providerId: "elsewhere", date: new DateOnly(2026, 11, 10));
+
+        await SetStatus(ignored, BankTransactionStatus.Ignored);
+
+        var september = new InboxFilter(From: new DateOnly(2026, 9, 1), To: new DateOnly(2026, 9, 30));
+
+        Assert.Equal("waiting", Assert.Single(await Listed(september)).ProviderTransactionId);
+
+        Assert.Equal("ignored",
+            Assert.Single(await Listed(september with { Status = InboxStatus.Ignored })).ProviderTransactionId);
+    }
+
+    /// <summary>
+    /// A card charge often posts days after it was spent, and the row shows the authorized
+    /// date. Matching on the posting date instead would put a row dated the 30th of August
+    /// inside September, under a heading naming a span its own date is outside of.
+    /// </summary>
+    [Fact]
+    public async Task The_span_matches_the_date_the_row_shows()
+    {
+        await Row(10m, providerId: "spent-in-august",
+            date: new DateOnly(2026, 9, 2), authorizedDate: new DateOnly(2026, 8, 30));
+
+        await Row(20m, providerId: "spent-in-september",
+            date: new DateOnly(2026, 10, 2), authorizedDate: new DateOnly(2026, 9, 30));
+
+        var september = await Listed(new InboxFilter(
+            From: new DateOnly(2026, 9, 1),
+            To: new DateOnly(2026, 9, 30)));
+
+        Assert.Equal("spent-in-september", Assert.Single(september).ProviderTransactionId);
+    }
+
+    private async Task<List<BankTransaction>> Listed(InboxFilter filter) =>
+        await (await Inbox.List(filter, Ct)).ToListAsync(Ct);
+
     private async Task<BankTransaction> Row(decimal amount, string? merchant = "Lidl",
-        string description = "LIDL 1234", string currency = "USD", string providerId = "t1")
+        string description = "LIDL 1234", string currency = "USD", string providerId = "t1",
+        DateOnly? date = null, DateOnly? authorizedDate = null)
     {
         var connection = await DbContext.Set<BankConnection>()
             .Include(candidate => candidate.Accounts)
@@ -238,7 +328,8 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         {
             Account = connection.Accounts.First(),
             ProviderTransactionId = providerId,
-            Date = new DateOnly(2026, 9, 1),
+            Date = date ?? new DateOnly(2026, 9, 1),
+            AuthorizedDate = authorizedDate,
             Amount = amount,
             Currency = currency,
             Description = description,

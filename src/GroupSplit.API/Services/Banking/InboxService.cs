@@ -82,7 +82,21 @@ public sealed class InboxService(
     {
         var wanted = Stored(filter?.Status ?? InboxStatus.New);
 
-        return Task.FromResult(Owned().Where(row => row.Status == wanted));
+        // Hoisted out of the expression so the comparison is against a parameter rather than
+        // a property read the provider would have to translate. Both ends are inclusive: a
+        // person narrowing to a month means the whole month, last day included.
+        var after = filter?.From;
+        var before = filter?.To;
+
+        // Against the authorized date where the provider knows it, which is the date the row
+        // shows and therefore the one somebody is filtering by. A card charge often posts
+        // days after it was spent, and matching on the posting date would put a row dated
+        // the 30th of last month inside "this month" -- the row would then sit under a
+        // heading naming a span its own date is outside of.
+        return Task.FromResult(Owned().Where(row =>
+            row.Status == wanted &&
+            (after == null || (row.AuthorizedDate ?? row.Date) >= after) &&
+            (before == null || (row.AuthorizedDate ?? row.Date) <= before)));
     }
 
     public async Task<InboxSummaryResponse> Summary(CancellationToken ct = default)

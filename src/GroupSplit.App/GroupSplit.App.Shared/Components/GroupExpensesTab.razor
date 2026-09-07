@@ -6,6 +6,8 @@
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@inject DataChangeNotifier Changes
+@implements IDisposable
 
 @*
     Everything one group has spent, whoever paid.
@@ -74,9 +76,25 @@
     /// <summary>How many the current page is one of, which is the match count while searching.</summary>
     private int? _total;
 
+    /// <summary>
+    /// What the cards were last asked about. Both the reason not to ask again for something
+    /// already on its way, and the test an answer has to pass before it is shown.
+    /// </summary>
+    private SummaryKey? _asked;
+
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
     private bool IsNarrowed => IsSearching || !_range.IsAllTime;
+
+    private string? Search => IsSearching ? _searchString.Trim() : null;
+
+    /// <summary>
+    /// Everything the figures on the cards depend on, so that two narrowings arrived at the
+    /// same way compare equal and one arrived at differently does not.
+    /// </summary>
+    private sealed record SummaryKey(Guid Group, DateFilter Range, string? Search);
+
+    private SummaryKey CurrentKey => new(GroupId, _range, Search);
 
     private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
         TransactionQuery query, CancellationToken cancellationToken)
@@ -93,7 +111,7 @@
                 GroupId,
                 from: bounds.From,
                 to: bounds.To,
-                search: IsSearching ? _searchString.Trim() : null,
+                search: Search,
                 sortBy: query.SortBy,
                 sortDescending: query.SortDescending,
                 page: query.Page,
@@ -116,7 +134,13 @@
         return result;
     }
 
-    private Task OnSearchChangedAsync(string _) => BackToFirstPageAsync();
+    private async Task OnSearchChangedAsync(string _)
+    {
+        // The cards describe the same narrowing the list is under, and the search box is one
+        // of the two things narrowing it.
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
 
     private async Task OnRangeChangedAsync(DateFilter range)
     {
@@ -130,13 +154,64 @@
     private Task BackToFirstPageAsync() =>
         _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
 
+    /// <summary>
+    /// The figures beside the list, over the narrowing the list is under: a card totalling
+    /// all time above a list showing one month is two answers to the same question, and the
+    /// caption under it attributes the larger one to the month.
+    /// </summary>
+    /// <remarks>
+    /// Asked only when the narrowing changes, and shown only if it is still the narrowing in
+    /// force. The group page re-renders this tab on every announcement about the group -- it
+    /// subscribes to three of them -- and each of those renders used to send a summary
+    /// request of its own. Every one of them was a correct request, but the ones from before
+    /// a chip was clicked asked about all time, and an answer to one of those arriving after
+    /// the filtered one put the all-time figures back on the cards, where they stayed while
+    /// the list underneath showed the month.
+    /// </remarks>
     private async Task ReadSummaryAsync()
     {
-        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+        var key = CurrentKey;
 
-        _summary = await ReadAsync<TransactionSummaryResponse>(
+        if (key == _asked)
+            return;
+
+        _asked = key;
+
+        var bounds = key.Range.Bounds(Clock.Offset, Clock.Today);
+
+        var summary = await ReadAsync<TransactionSummaryResponse>(
             () => GroupsClient.GetGroupTransactionsSummaryAsync(
-                GroupId, from: bounds.From, to: bounds.To));
+                GroupId, from: bounds.From, to: bounds.To, search: key.Search));
+
+        // Something has been asked for since. That answer is the one the cards are waiting
+        // for, and this one is about a narrowing nobody is looking at any more.
+        if (key == _asked)
+            _summary = summary;
+    }
+
+    /// <summary>
+    /// A write moves the figures without moving the narrowing, so the key cannot notice it
+    /// and the cards have to be told. These are the two signals the grid under them reloads
+    /// on, so the figures and the rows they describe are never refreshed by different news.
+    /// </summary>
+    private async Task OnDataChangedAsync()
+    {
+        _asked = null;
+
+        await ReadSummaryAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnInitialized()
+    {
+        Changes.TransactionsChanged += OnDataChangedAsync;
+        Changes.GroupsChanged += OnDataChangedAsync;
+    }
+
+    public void Dispose()
+    {
+        Changes.TransactionsChanged -= OnDataChangedAsync;
+        Changes.GroupsChanged -= OnDataChangedAsync;
     }
 
     protected override Task OnParametersSetAsync() => ReadSummaryAsync();

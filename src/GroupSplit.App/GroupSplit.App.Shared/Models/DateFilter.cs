@@ -15,6 +15,12 @@ public enum DateFilterPreset
 public readonly record struct DateBounds(DateTimeOffset? From, DateTimeOffset? To);
 
 /// <summary>
+/// The two calendar days a span resolves to, both ends included. Either may be null for "no
+/// bound that side".
+/// </summary>
+public readonly record struct DayBounds(DateOnly? From, DateOnly? To);
+
+/// <summary>
 /// A span of days to narrow a listing to, as the person chose it: a preset, or two dates
 /// of their own. Kept as the choice rather than as the two dates it resolves to, so the
 /// chips can show which one is on, and so "this month" still means this month tomorrow.
@@ -55,6 +61,39 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
     /// </summary>
     public DateBounds Bounds(TimeSpan offset, DateTime today)
     {
+        var (from, to) = Span(today);
+
+        return new DateBounds(
+            from is { } start ? StartOfDay(start, offset) : null,
+            to is { } end ? StartOfDay(end.AddDays(1), offset).AddTicks(-1) : null);
+    }
+
+    /// <summary>
+    /// The span as the first and last calendar day it covers, both included.
+    /// </summary>
+    /// <remarks>
+    /// For a listing whose rows are dated by a day rather than by an instant. An imported
+    /// bank row is one: the date on a statement is a calendar date the bank decided on, not
+    /// a moment, so it takes no offset and turning it into one would only invent a time to
+    /// then have to argue about. <paramref name="today"/> is still the person's day, from
+    /// <c>LocalClock</c>, because which month "this month" is remains a local question.
+    /// </remarks>
+    public DayBounds Days(DateTime today)
+    {
+        var (from, to) = Span(today);
+
+        return new DayBounds(
+            from is { } start ? DateOnly.FromDateTime(start) : null,
+            to is { } end ? DateOnly.FromDateTime(end) : null);
+    }
+
+    /// <summary>
+    /// The preset as the two local days it runs between. Both readings above go through
+    /// here, so a preset cannot come to mean one span as instants and a different one as
+    /// days.
+    /// </summary>
+    private (DateTime? From, DateTime? To) Span(DateTime today)
+    {
         var firstOfMonth = new DateTime(today.Year, today.Month, 1);
 
         DateTime? from = Preset switch
@@ -78,9 +117,7 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
             _ => null
         };
 
-        return new DateBounds(
-            from is { } start ? StartOfDay(start, offset) : null,
-            to is { } end ? StartOfDay(end.AddDays(1), offset).AddTicks(-1) : null);
+        return (from, to);
     }
 
     private static DateTimeOffset StartOfDay(DateTime day, TimeSpan offset) =>

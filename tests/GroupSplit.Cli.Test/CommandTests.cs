@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GroupSplit.Cli.Configuration;
 using GroupSplit.Cli.Infrastructure;
+using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Test;
 
@@ -520,6 +521,90 @@ public sealed class CommandTests : IDisposable
     private static object Group(string name) => new
     {
         id = Guid.NewGuid(), name, memberCount = 3, isArchive = false
+    };
+
+    // ---- the inbox -------------------------------------------------------------------
+
+    [Fact]
+    public async Task Inbox_list_sends_the_span_and_the_status_it_was_given()
+    {
+        _api.Returns("/api/inbox", Page());
+
+        await Cli.RunAsync(
+            "inbox", "list",
+            "--status", "Ignored",
+            "--from", "2026-09-01",
+            "--to", "2026-09-30",
+            "--page", "2",
+            "--page-size", "5");
+
+        var request = _api.Requests.Single(r => r.Path == "/api/inbox");
+
+        // Asserted as the value rather than as an exact spelling: the generated client is
+        // what decides whether an enum goes on a query string by name or by number, and
+        // this command's business is that the right member arrives.
+        Assert.Equal(InboxStatus.Ignored, Enum.Parse<InboxStatus>(request.Parameter("status")!, true));
+
+        Assert.Equal("2", request.Parameter("page"));
+        Assert.Equal("5", request.Parameter("pageSize"));
+
+        // Days, with no time and no zone attached: a bank dates a row by the calendar, and
+        // a "T00:00:00Z" here would be this app inventing a moment the bank never gave.
+        Assert.Equal("2026-09-01", request.Parameter("from"));
+        Assert.Equal("2026-09-30", request.Parameter("to"));
+    }
+
+    [Fact]
+    public async Task An_inbox_span_that_was_not_given_is_not_sent_at_all()
+    {
+        _api.Returns("/api/inbox", Page());
+
+        await Cli.RunAsync("inbox", "list");
+
+        var request = _api.Requests.Single(r => r.Path == "/api/inbox");
+
+        Assert.Null(request.Parameter("from"));
+        Assert.Null(request.Parameter("to"));
+        Assert.Null(request.Parameter("status"));
+    }
+
+    [Fact]
+    public async Task Inbox_list_renders_the_rows_it_was_answered_with()
+    {
+        _api.Returns("/api/inbox", Page(ImportedRow("Lidl", 30m)));
+
+        var result = await Cli.RunAsync("inbox", "list", "--output", "text");
+
+        Assert.Contains("Lidl", result.Stdout);
+        Assert.Contains("2026-09-15", result.Stdout);
+    }
+
+    /// <summary>
+    /// Ignoring goes through without asking, unlike the mutations that destroy something:
+    /// `inbox restore` puts the row straight back, so there is nothing to lose and nothing
+    /// worth stopping a scripted run for. This pins that decision rather than assuming it.
+    /// </summary>
+    [Fact]
+    public async Task Ignoring_a_row_needs_no_confirmation_because_restore_undoes_it()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/inbox/{id}/ignore", new { }, 204);
+
+        var result = await Cli.RunAsync("inbox", "ignore", id.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(_api.Requests, r => r.Path == $"/api/inbox/{id}/ignore");
+    }
+
+    private static object ImportedRow(string merchant, decimal amount) => new
+    {
+        id = Guid.NewGuid(), date = "2026-09-15", amount, currency = "USD",
+        description = merchant.ToUpperInvariant(), merchantName = merchant,
+        providerCategory = (string?)null, providerCategoryDetailed = (string?)null,
+        authorizedDate = (string?)null, paymentChannel = (string?)null, city = (string?)null,
+        logoUrl = (string?)null, pending = false, status = "New",
+        transactionId = (Guid?)null, removedAt = (DateTimeOffset?)null,
+        accountName = "Everyday", institutionName = "Fake Bank"
     };
 
     private static object Page(params object[] items) => new

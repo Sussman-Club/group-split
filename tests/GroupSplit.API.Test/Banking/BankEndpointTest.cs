@@ -331,6 +331,37 @@ public class BankEndpointTest : IAsyncLifetime
     }
 
     /// <summary>
+    /// The span the inbox is narrowed by is bound from the query string as two
+    /// <see cref="DateOnly"/>s. That binding is exactly the kind of thing a test calling the
+    /// service directly cannot see, which is what this host is for.
+    /// </summary>
+    [Fact]
+    public async Task The_inbox_narrows_to_a_span_of_days_given_on_the_query_string()
+    {
+        var connection = await LinkAsync();
+
+        await RowAsync(connection, providerId: "august", date: new DateOnly(2026, 8, 15));
+        await RowAsync(connection, providerId: "september", date: new DateOnly(2026, 9, 15));
+
+        var all = await ItemsAsync("/inbox");
+        var september = await ItemsAsync("/inbox?From=2026-09-01&To=2026-09-30");
+
+        Assert.Equal(2, all.Count);
+        Assert.Equal("Lidl", Assert.Single(september).GetProperty("merchantName").GetString());
+        Assert.Equal("2026-09-15", Assert.Single(september).GetProperty("date").GetString());
+    }
+
+    private async Task<List<JsonElement>> ItemsAsync(string route)
+    {
+        var response = await _host.Client.GetAsync(route, Ct);
+        response.EnsureSuccessStatusCode();
+
+        var page = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+
+        return page.GetProperty("items").EnumerateArray().ToList();
+    }
+
+    /// <summary>
     /// An expense the host's own user typed, on the same day the imported rows here fall on.
     /// </summary>
     private async Task<TransactionResponse> ExpenseAsync(string name, decimal amount)
@@ -347,7 +378,8 @@ public class BankEndpointTest : IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct))!;
     }
 
-    private async Task<BankTransaction> RowAsync(BankConnection connection)
+    private async Task<BankTransaction> RowAsync(BankConnection connection,
+        string providerId = "t1", DateOnly? date = null)
     {
         using var scope = _host.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -355,8 +387,8 @@ public class BankEndpointTest : IAsyncLifetime
         var row = new BankTransaction
         {
             LinkedAccountId = connection.Accounts.First().Id,
-            ProviderTransactionId = "t1",
-            Date = new DateOnly(2026, 9, 1),
+            ProviderTransactionId = providerId,
+            Date = date ?? new DateOnly(2026, 9, 1),
             Amount = 10m,
             Description = "LIDL",
             MerchantName = "Lidl",

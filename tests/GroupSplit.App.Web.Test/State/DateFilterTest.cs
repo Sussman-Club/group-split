@@ -163,4 +163,71 @@ public class DateFilterTest
         Assert.Equal(new DateFilter(DateFilterPreset.ThisMonth), new DateFilter(DateFilterPreset.ThisMonth));
         Assert.NotEqual(new DateFilter(DateFilterPreset.ThisMonth), new DateFilter(DateFilterPreset.LastMonth));
     }
+
+    // ---- The same spans as calendar days -----------------------------------------------
+    //
+    // For the inbox, whose rows carry the calendar date a bank put on them rather than an
+    // instant. Both ends are the days themselves, with no offset applied: a statement dated
+    // the 1st is the 1st in Lisbon and the 1st in Los Angeles.
+
+    private static DayBounds Days(DateFilter filter) => filter.Days(Today);
+
+    [Fact]
+    public void All_time_has_no_days_either()
+    {
+        Assert.Equal(new DayBounds(null, null), Days(DateFilter.AllTime));
+    }
+
+    [Fact]
+    public void A_month_runs_from_its_first_day_to_its_last()
+    {
+        Assert.Equal(
+            new DayBounds(new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31)),
+            Days(new DateFilter(DateFilterPreset.ThisMonth)));
+
+        Assert.Equal(
+            new DayBounds(new DateOnly(2026, 2, 1), new DateOnly(2026, 2, 28)),
+            Days(new DateFilter(DateFilterPreset.LastMonth)));
+    }
+
+    [Fact]
+    public void Days_take_no_offset_at_all()
+    {
+        // The instant reading of the same span starts the evening before, in UTC, because
+        // Lisbon is an hour ahead. The day reading must not have moved with it.
+        Assert.Equal(new DateTimeOffset(2026, 2, 28, 23, 0, 0, TimeSpan.Zero),
+            Bounds(new DateFilter(DateFilterPreset.ThisMonth)).From);
+
+        Assert.Equal(new DateOnly(2026, 3, 1), Days(new DateFilter(DateFilterPreset.ThisMonth)).From);
+    }
+
+    [Fact]
+    public void Last_three_months_and_this_year_cover_the_same_days_they_do_as_instants()
+    {
+        Assert.Equal(
+            new DayBounds(new DateOnly(2026, 1, 1), new DateOnly(2026, 3, 31)),
+            Days(new DateFilter(DateFilterPreset.LastThreeMonths)));
+
+        Assert.Equal(
+            new DayBounds(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31)),
+            Days(new DateFilter(DateFilterPreset.ThisYear)));
+    }
+
+    /// <summary>Both ends included, like the instant reading, and open where the person left it.</summary>
+    [Fact]
+    public void A_custom_range_keeps_both_of_its_days()
+    {
+        var from = new DateTime(2026, 3, 2);
+        var to = new DateTime(2026, 3, 9);
+
+        Assert.Equal(
+            new DayBounds(new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 9)),
+            Days(new DateFilter(DateFilterPreset.Custom, from, to)));
+
+        Assert.Equal(
+            new DayBounds(new DateOnly(2026, 3, 2), null),
+            Days(new DateFilter(DateFilterPreset.Custom, from, null)));
+
+        Assert.Equal(new DayBounds(null, null), Days(new DateFilter(DateFilterPreset.Custom)));
+    }
 }

@@ -117,8 +117,18 @@
 
     // The tiles read the server's figures rather than adding up the rows on screen: those
     // are one page, and a page cannot say what the whole comes to.
-    private int RecordedCount => TransactionsService.Summary?.Count ?? 0;
+    //
+    // Both figures follow the narrowing, for the reason above them: a count of everything
+    // beside a total of the matches is two answers to one question, and the subline under
+    // this one names a span the count is not for. That was issue #174 on the group's tab,
+    // and this card had the same shape.
+    private int RecordedCount => IsNarrowed
+        ? TransactionsService.MatchesSummary?.Count ?? 0
+        : TransactionsService.Summary?.Count ?? 0;
+
     private int MatchCount => TransactionsService.Page?.TotalCount ?? 0;
+
+    // Deliberately not narrowed: this one says which month it is on the card.
     private decimal ThisMonth => TransactionsService.MonthSummary?.Total ?? 0m;
 
     private decimal ShownTotal => IsNarrowed

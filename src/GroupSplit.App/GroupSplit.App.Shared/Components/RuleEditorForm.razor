@@ -2,9 +2,11 @@
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services
 @inject ISplitRulesClient SplitRulesClient
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
+@inject IRemainderPolicy Remainder
 
 <MudForm @ref="_form" Model="@Model">
     <MudStack Spacing="3">
@@ -241,17 +243,26 @@
 
         foreach (var memberId in _members.Select(x => x.Id))
         {
-            percent.Percentages[memberId] = Math.Floor(10000m / _members.Count) / 100m;
+            percent.Percentages[memberId] = basePercentage;
         }
 
+        // Three members are 33.33 twice and 33.34 once, and the odd cent has to land on
+        // somebody. Whom is the policy's business; that it is the same somebody every time
+        // is this form's, because these numbers are saved and then divide every expense the
+        // rule touches.
         var remainder = 100m - (basePercentage * (_members.Count - 1));
 
-        var random = new Random();
-        var randomMemberId = _members.ElementAt(random.Next(_members.Count)).Id;
-        percent.Percentages[randomMemberId] = remainder;
+        percent.Percentages[RemainderGoesTo(_ => 1)] = remainder;
 
         StateHasChanged();
     }
+
+    /// <summary>
+    /// Which member carries what the division could not split cleanly. The rule itself is
+    /// <see cref="IRemainderPolicy"/>'s -- this form asks the question and does not answer it.
+    /// </summary>
+    private Guid RemainderGoesTo(Func<UserInfo, decimal> weight) =>
+        Remainder.CarriedBy([.._members], weight);
 
     private void ClearValues()
     {
@@ -297,16 +308,16 @@
             percentages[member.Id] = Math.Round(share * 100m / totalShares, 2);
         }
 
-        // Adjust rounding error
-        var totalPercent = percentages.Values.Sum();
-        var diff = 100m - totalPercent;
+        // What the rounding left over, onto the member the policy names -- weighted by the
+        // shares, so it goes to the largest of them and never to a member holding none.
+        // This used to go to a random member, so converting the same shares twice gave two
+        // different sets of percentages.
+        var diff = 100m - percentages.Values.Sum();
 
         if (Math.Abs(diff) <= 0.001m)
             return percentages;
 
-        var random = new Random();
-        var randomMemberId = _members.ElementAt(random.Next(_members.Count)).Id;
-        percentages[randomMemberId] += diff;
+        percentages[RemainderGoesTo(member => shares.Shares.GetValueOrDefault(member.Id, 0))] += diff;
 
         return percentages;
     }

@@ -22,6 +22,12 @@ public static class ServiceExtensions
             services.TryAdd<ThemePreference>(sessionLifetime);
             services.TryAdd<LocalClock>(sessionLifetime);
             services.TryAddScoped<ApiErrorPresenter>();
+
+            // Stateless, and a decision rather than a dependency: registered so the rule
+            // editor is handed the answer instead of holding it, and so a host that wants a
+            // different one says so here.
+            services.TryAddSingleton<IRemainderPolicy, LargestShareRemainderPolicy>();
+
             services.TryAddScoped<LoadGuard>();
             services.TryAddScoped<DataChangeNotifier>();
 

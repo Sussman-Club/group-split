@@ -423,8 +423,18 @@ Within what is measured, the API assembly is at **86.5%** line, up from 43.9%.
 - **Create-route validation over HTTP**, per the interceptor limitation above. Reaching it
   would mean booting the real `Program` through `WebApplicationFactory`, which needs
   Keycloak and Postgres stubbed at their registration points.
-- **Blazor component tests.** `GroupSplit.App.Shared` and `GroupSplit.App.Web.Client` have
-  none, which is why the former is excluded from the gate above. bUnit is the usual answer.
+- **Blazor component tests.** *Started.* bUnit is now in `GroupSplit.App.Web.Test`, with
+  `Components/ComponentTest.cs` standing up MudBlazor's services and a loose JS runtime,
+  and two components under test: the group's Expenses tab and the bank inbox page. The
+  Expenses tab's suite was written against issue #174 and fails in three places against
+  the component as it was, one of them reproducing the reported symptom exactly — the
+  all-time count and total sitting on cards captioned with the range.
+
+  `GroupSplit.App.Shared` stays excluded from the gate for now, and the exclusion's comment
+  says why: a `.razor` file compiles into `obj/`, which the `Sources` filter drops as
+  generated, so these tests barely register in the report — while removing the exclusion
+  would bring the library's other components in at once and take the build under its floor.
+  `GroupSplit.App.Web.Client` still has none.
 - **The rest of `TokenRefreshService`.** The two decisions it makes on its own are covered;
   the HTTP exchange around them — the refresh request itself, a non-success response, a
   reused refresh token — still is not, and would need a stubbed token endpoint.
