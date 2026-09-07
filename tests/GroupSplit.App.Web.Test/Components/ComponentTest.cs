@@ -34,9 +34,9 @@ public abstract class ComponentTest : BunitContext
     protected ComponentTest()
     {
         // Loose: these tests are about what a component asks the server for and what it
-        // renders, and every JS call in the app is decoration -- the count-up animation,
-        // the theme, the timezone probe. A strict runtime would only make each test
-        // declare the decoration it does not care about.
+        // renders, and what little JS the app has left is chrome -- the theme, the sidebar,
+        // the timezone probe. A strict runtime would only make each test declare the chrome
+        // it does not care about.
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         Services.AddMudServices();

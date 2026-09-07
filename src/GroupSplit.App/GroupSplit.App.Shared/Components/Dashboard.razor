@@ -87,13 +87,13 @@
         <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.Groups" /></span>
             <span class="gs-eyebrow">Groups</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@ActiveGroups.Count">@ActiveGroups.Count</span>
+            <span class="gs-stat-value gs-num gs-figure" @key="ActiveGroups.Count">@ActiveGroups.Count</span>
             <span class="gs-muted" style="font-size: .8125rem">@(ArchivedCount == 0 ? "All active" : $"{ArchivedCount} archived")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Expenses</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@ExpenseCount">@ExpenseCount</span>
+            <span class="gs-stat-value gs-num gs-figure" @key="ExpenseCount">@ExpenseCount</span>
             <span class="gs-muted" style="font-size: .8125rem">recorded by you</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 3">

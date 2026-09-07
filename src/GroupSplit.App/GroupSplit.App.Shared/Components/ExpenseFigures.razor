@@ -19,7 +19,9 @@
     <div class="gs-card gs-stat gs-reveal" style="--i: 0">
         <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
         <span class="gs-eyebrow">@CountLabel</span>
-        <span class="gs-stat-value gs-num" data-gs-count="@Count">@Count</span>
+        @* Keyed on the count so a new one is a new element, which is what replays
+           `gs-figure` -- the same trick <Money Animate> uses for the total beside it. *@
+        <span class="gs-stat-value gs-num gs-figure" @key="Count">@Count</span>
         <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
     </div>
     <div class="gs-card gs-stat gs-reveal" style="--i: 1">

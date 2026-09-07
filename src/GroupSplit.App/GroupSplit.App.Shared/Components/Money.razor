@@ -3,13 +3,18 @@
 
 @*
     Every amount goes through here so figures share one face, tabular digits
-    and one sign convention. The text is final as rendered, so it is correct
-    with scripting off; `data-gs-count` only asks gs.js to roll up to it, and
-    to roll again whenever the value changes underneath.
+    and one sign convention. The text is the figure, rendered once and never
+    written over -- so it is correct with scripting off, and there is nothing
+    that could leave a stale one on screen.
+
+    `Animate` is CSS: the class carries the animation and the key is the value,
+    so a new figure is a new element and the animation plays for it. A script
+    used to interpolate the digits instead, and wrote them into this element;
+    see `.gs-figure` in app.css for what that cost.
 *@
 
-<span class="gs-money @Tone @Class"
-      data-gs-count="@(Animate ? Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : null)">@Text</span>
+<span class="gs-money @Tone @Class @(Animate ? "gs-figure" : null)"
+      @key="@(Animate ? Value : default(decimal?))">@Text</span>
 
 @code {
     [Parameter, EditorRequired] public decimal Value { get; set; }
@@ -20,7 +25,10 @@
     /// <summary>Show the magnitude only, for "you owe X" phrasing where the words carry the sign.</summary>
     [Parameter] public bool Absolute { get; set; }
 
-    /// <summary>Count up from zero when the figure appears or changes.</summary>
+    /// <summary>
+    /// Draw attention to the figure when it appears or changes. For the few that are worth
+    /// it -- a balance, a card's headline total -- not for every amount in a listing.
+    /// </summary>
     [Parameter] public bool Animate { get; set; }
 
     /// <summary>
