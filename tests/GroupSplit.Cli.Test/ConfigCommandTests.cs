@@ -23,7 +23,7 @@ public sealed class ConfigCommandTests : IDisposable
 
         var list = await Cli.RunAsync("config", "list");
 
-        Assert.Equal("https://groupsplit.example.com/api", list.Json.GetProperty("api").GetString());
+        Assert.Equal("https://groupsplit.example.com/native/api", list.Json.GetProperty("api").GetString());
         Assert.Equal(
             "https://groupsplit.example.com/idp/realms/group-split",
             list.Json.GetProperty("authority").GetString());
@@ -36,11 +36,11 @@ public sealed class ConfigCommandTests : IDisposable
         await Cli.RunAsync("config", "set", "server", "https://staging.example.com", "--profile", "staging");
 
         Assert.Equal(
-            "https://prod.example.com/api",
+            "https://prod.example.com/native/api",
             (await Cli.RunAsync("config", "list")).Json.GetProperty("api").GetString());
 
         Assert.Equal(
-            "https://staging.example.com/api",
+            "https://staging.example.com/native/api",
             (await Cli.RunAsync("config", "list", "--profile", "staging")).Json.GetProperty("api").GetString());
     }
 
