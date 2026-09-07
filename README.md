@@ -88,6 +88,11 @@ and reports failures as an envelope carrying the API's own error `code`. `groups
 prints the whole command tree as JSON for callers that cannot read help text. The full
 contract -- output, exit codes, the confirmation protocol -- is in [docs/cli.md](docs/cli.md).
 
+Agents are told that contract before their first command rather than after their first
+mistake: `skills/` holds two agent skills -- the CLI protocol, and the bank-row
+reconciliation loop -- installable with `npx skills add Sussman-Club/group-split` or as a
+Claude Code plugin. See [skills/README.md](skills/README.md).
+
 ## Design system
 
 One palette, one type pair, one set of radii and shadows -- shared by the app, the Keycloak

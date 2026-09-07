@@ -1,0 +1,12 @@
+{
+  "name": "groupsplit",
+  "description": "Drive the GroupSplit CLI from an agent: the JSON contract, the exit codes, the confirmation protocol for destructive changes, and filing imported bank rows without recording the same money twice.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sussman Club"
+  },
+  "homepage": "https://github.com/Sussman-Club/group-split/blob/dev/docs/cli.md",
+  "repository": "https://github.com/Sussman-Club/group-split",
+  "license": "MIT",
+  "keywords": ["groupsplit", "cli", "expenses", "banking"]
+}

@@ -593,6 +593,29 @@ and on 4 surface `summary` and `changes` before re-running `confirmCommand`.
 Set `GROUPSPLIT_DEBUG=1` to attach a stack trace to the envelope of an unexpected error. An
 envelope with code `CLI_INTERNAL_ERROR` is always a defect in the CLI, not a usage mistake.
 
+### The skills
+
+The four points above are the whole contract, but an agent has to be told them before its
+first command rather than after its first mistake. `skills/` carries that as two agent
+skills -- `groupsplit`, the protocol, and `groupsplit-inbox`, the bank-row reconciliation
+loop -- installable into any agent:
+
+```bash
+npx skills add Sussman-Club/group-split
+```
+
+or, for Claude Code as a plugin:
+
+```bash
+claude plugin marketplace add Sussman-Club/group-split
+claude plugin install groupsplit@group-split
+```
+
+They live in this repository, beside the CLI, so that changing the CLI and changing what an
+agent is told about it is one commit rather than two. They describe the protocol and not the
+flag list, because `schema` already prints the flag list and cannot be wrong about it. See
+[skills/README.md](../skills/README.md).
+
 ## Running it against the local stack
 
 The AppHost registers the CLI as an explicit-start resource, so `WithReference` hands it this
