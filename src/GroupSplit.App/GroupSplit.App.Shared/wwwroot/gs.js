@@ -31,17 +31,38 @@
     // inside the text are counted up to it, and if the attribute changes while
     // a run is in flight (a different group was picked) that run stops rather
     // than pasting a stale figure over fresh data.
+    //
+    // What is remembered per element is that identity *and* the final text it
+    // is counting towards, because a count writes part-way figures into the
+    // element and only the last frame writes the real one. Every way out of a
+    // run therefore has to land on the final text: a run that stopped part-way
+    // used to leave the part-way figure on screen for good -- $0.99 where the
+    // data says $1.00 -- and Blazor never corrected it, because as far as
+    // Blazor is concerned it already rendered $1.00 there and nothing changed.
     const running = new WeakMap();
 
     function countUp(el) {
         const token = el.getAttribute("data-gs-count");
-        if (token === null || running.get(el) === token) return;
-        running.set(el, token);
+        if (token === null) return;
+
+        const state = running.get(el);
+
+        // Already counted to this figure. Put the final text back if a stopped
+        // run left something else there; otherwise there is nothing to do.
+        if (state && state.token === token) {
+            if (el.textContent !== state.final) el.textContent = state.final;
+            return;
+        }
+
+        // The text as rendered is the figure of record. Read before the first
+        // frame can overwrite it, and kept, so a later frame or the backstop
+        // below can put it back without having to work it out again.
+        const final = el.textContent;
+        running.set(el, { token: token, final: final });
 
         const target = Math.abs(parseFloat(token));
         if (!isFinite(target) || target === 0 || reduced.matches) return;
 
-        const final = el.textContent;
         const match = final.match(/\d[\d.,]*/);
         if (!match) return;
 
@@ -53,11 +74,21 @@
         const start = performance.now();
         const duration = 800;
 
+        function settle() {
+            if (el.getAttribute("data-gs-count") === token) el.textContent = final;
+        }
+
         function frame(now) {
-            if (el.getAttribute("data-gs-count") !== token || !el.isConnected) return;
+            // A newer figure has taken the element over. That run holds its own
+            // final text and will land on it, so this one just stops.
+            if (el.getAttribute("data-gs-count") !== token) return;
 
             const t = Math.min(1, (now - start) / duration);
-            if (t >= 1) {
+
+            // Done, or detached mid-count. Either way the figure goes back to
+            // the one the data gave, so a node Blazor reuses does not come back
+            // still showing whatever fraction of it this run had reached.
+            if (t >= 1 || !el.isConnected) {
                 el.textContent = final;
                 return;
             }
@@ -73,6 +104,13 @@
         }
 
         requestAnimationFrame(frame);
+
+        // requestAnimationFrame is not a promise that the last frame ever
+        // arrives: a backgrounded tab stops it outright and a phone throttles
+        // it, both of which strand the count wherever it had got to. The figure
+        // is the point and the count is decoration, so this makes sure the
+        // figure lands whether or not the frames do.
+        setTimeout(settle, duration + 100);
     }
 
     function scan(node) {
