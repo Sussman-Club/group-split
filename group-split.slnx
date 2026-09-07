@@ -20,6 +20,7 @@
     <Project Path="src/GroupSplit.App/GroupSplit.App.Shared/GroupSplit.App.Shared.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Web.Client/GroupSplit.App.Web.Client.csproj" />
+    <Project Path="src/GroupSplit.Cli/GroupSplit.Cli.csproj" />
   </Folder>
   <!-- Persistence: provider-agnostic entities and DbContext, the PostgreSQL
        provider, and the EF Core design-time project holding the migrations. -->
@@ -33,6 +34,7 @@
     <Project Path="tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
     <Project Path="tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj" />
     <Project Path="tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj" />
+    <Project Path="tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj" />
     <Project Path="tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj" />
   </Folder>
 </Solution>

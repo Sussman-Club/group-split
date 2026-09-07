@@ -41,6 +41,7 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 | `src/GroupSplit.App/GroupSplit.App.Web` | Blazor Web host |
 | `src/GroupSplit.App/GroupSplit.App.Web.Client` | Blazor WebAssembly client |
 | `src/GroupSplit.App/GroupSplit.App.Shared` | Razor class library with the UI both clients share |
+| `src/GroupSplit.Cli` | `groupsplit`, the terminal client |
 
 ### Data — persistence
 
@@ -57,12 +58,31 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 | `tests/GroupSplit.API.Test` | API endpoint tests |
 | `tests/GroupSplit.App.Web.Test` | Blazor Web host tests |
 | `tests/GroupSplit.AppHost.Test` | Aspire orchestration and integration tests |
+| `tests/GroupSplit.Cli.Test` | CLI configuration, output contract and auth tests |
 
 ## Errors
 
 Every non-2xx API response is RFC 9457 problem details carrying a stable `code`, a `traceId`
 and, where it helps, extension members naming what is in the way. The contract, the code
 catalog and how each side produces and consumes it are in [docs/errors.md](docs/errors.md).
+
+## Command line
+
+`groupsplit` talks to the same API as the apps, from a terminal or from a script. No server
+URL is compiled in -- `groupsplit config set server <url>`, `--server` or `GROUPSPLIT_SERVER`
+picks one at runtime. Sign-in is the OAuth 2.0 device flow, so it works over SSH and in
+containers; `GROUPSPLIT_TOKEN` skips it entirely for CI.
+
+It installs as a .NET tool from GitHub Packages, private to the org, so it needs a
+`read:packages` token but no checkout: point NuGet at the feed once, then
+`dotnet tool install --global GroupSplit.Cli` and `dotnet tool update --global GroupSplit.Cli`.
+Merging to `main` publishes it, the same way that deploys the stack. Both are in
+[docs/cli.md](docs/cli.md).
+
+It renders tables for a person and JSON for anything else, keeps stdout to the result alone,
+and reports failures as an envelope carrying the API's own error `code`. `groupsplit schema`
+prints the whole command tree as JSON for callers that cannot read help text. The full
+contract -- output, exit codes, the confirmation protocol -- is in [docs/cli.md](docs/cli.md).
 
 ## Design system
 
