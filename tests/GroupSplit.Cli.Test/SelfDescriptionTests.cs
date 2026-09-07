@@ -239,6 +239,17 @@ public sealed class SelfDescriptionTests
     }
 
     [Fact]
+    public async Task The_pwsh_script_restores_the_space_the_ast_drops()
+    {
+        var pwsh = (await Cli.RunAsync("completion", "pwsh")).Stdout;
+
+        // An ast stringifies without its trailing space while the cursor still counts it,
+        // so the two disagree by one and every position past it completes the word before.
+        Assert.Contains("$cursorPosition - $commandAst.Extent.StartOffset", pwsh);
+        Assert.Contains("PadRight($point)", pwsh);
+    }
+
+    [Fact]
     public async Task Each_script_handles_a_hint_the_way_its_shell_can()
     {
         var bash = (await Cli.RunAsync("completion", "bash")).Stdout;

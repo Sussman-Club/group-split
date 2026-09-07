@@ -141,7 +141,13 @@ public static class CompletionCommand
         #   groupsplit completion pwsh >> $PROFILE
         Register-ArgumentCompleter -Native -CommandName groupsplit -ScriptBlock {
             param($wordToComplete, $commandAst, $cursorPosition)
-            groupsplit "[suggest:$cursorPosition]" "$commandAst" 2>$null |
+            # An ast stringifies without the trailing space, so `groupsplit create ` arrives
+            # as `groupsplit create` while the cursor still reports the space -- and every
+            # position past it is read one word early. Padding back out to the cursor
+            # restores what was typed, and the offset keeps that right mid-line.
+            $point = $cursorPosition - $commandAst.Extent.StartOffset
+            $line = "$commandAst".PadRight($point)
+            groupsplit "[suggest:$point]" "$line" 2>$null |
                 ForEach-Object {
                     $parts = $_ -split "`t", 2
                     # An empty label is a hint. CompletionResult rejects one, and a native
