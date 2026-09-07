@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="bunit" Version="2.9.0" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
     <!-- Collects coverage under Microsoft.Testing.Platform. Filters live in
          tests/coverage.config, which every run passes on the command line. -->
