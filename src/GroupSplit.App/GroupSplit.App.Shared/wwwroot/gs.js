@@ -32,13 +32,23 @@
     // a run is in flight (a different group was picked) that run stops rather
     // than pasting a stale figure over fresh data.
     //
-    // What is remembered per element is that identity *and* the final text it
-    // is counting towards, because a count writes part-way figures into the
-    // element and only the last frame writes the real one. Every way out of a
-    // run therefore has to land on the final text: a run that stopped part-way
-    // used to leave the part-way figure on screen for good -- $0.99 where the
-    // data says $1.00 -- and Blazor never corrected it, because as far as
-    // Blazor is concerned it already rendered $1.00 there and nothing changed.
+    // What is remembered per element is that identity, the final text it is
+    // counting towards, and the last text this run itself wrote, because a count
+    // writes part-way figures into the element and only the last frame writes the
+    // real one. Every way out of a run therefore has to land on the final text: a
+    // run that stopped part-way used to leave the part-way figure on screen for
+    // good -- $0.99 where the data says $1.00 -- and Blazor never corrected it,
+    // because as far as Blazor is concerned it already rendered $1.00 there and
+    // nothing changed.
+    //
+    // Which is why the run only ever writes over its own part-way figures. It used
+    // to write the text it remembered whatever was there, and the text it
+    // remembered could already be stale: the attribute and the text are two edits,
+    // and if the attribute arrives first the run reads the *previous* figure as its
+    // final one and pastes it back 900ms later, over the figure the app had since
+    // rendered. That is the "right numbers for a moment, then the old ones come
+    // back" this file was reported for. A text change that is not this run's own is
+    // the app rendering a newer figure, and it becomes the one to land on.
     const running = new WeakMap();
 
     function countUp(el) {
@@ -47,18 +57,21 @@
 
         const state = running.get(el);
 
-        // Already counted to this figure. Put the final text back if a stopped
-        // run left something else there; otherwise there is nothing to do.
+        // Already counted to this figure. Put the final text back only if what is
+        // there is this run's own part-way figure; anything else is the app's, and
+        // newer than anything remembered here.
         if (state && state.token === token) {
-            if (el.textContent !== state.final) el.textContent = state.final;
+            if (state.wrote !== null && el.textContent === state.wrote) el.textContent = state.final;
             return;
         }
 
         // The text as rendered is the figure of record. Read before the first
         // frame can overwrite it, and kept, so a later frame or the backstop
-        // below can put it back without having to work it out again.
+        // below can put it back without having to work it out again -- and kept
+        // up to date by `noteText` if the app renders a newer one mid-count.
         const final = el.textContent;
-        running.set(el, { token: token, final: final });
+        const run = { token: token, final: final, wrote: null };
+        running.set(el, run);
 
         const target = Math.abs(parseFloat(token));
         if (!isFinite(target) || target === 0 || reduced.matches) return;
@@ -71,11 +84,29 @@
         const fraction = match[0].match(/[.,](\d+)$/);
         const decimals = fraction && fraction[1].length <= 2 ? fraction[1].length : 0;
         const grouped = /[.,]\d{3}/.test(match[0]);
+
+        // The attribute and the text are two edits for one figure, and they do not
+        // have to arrive together. When they disagree, the text on screen belongs to
+        // the *previous* figure and the one for this attribute has not been rendered
+        // yet -- so counting towards it would mean landing on a figure the app has
+        // already replaced, which is the stale total this run must never leave
+        // behind. The count is decoration and the figure is the point: this update
+        // goes without its animation, and the text the app is about to render stands.
+        const shown = Math.abs(parseFloat(match[0].replace(/,/g, "")));
+        if (!isFinite(shown) || Math.abs(shown - target) > 0.5 / Math.pow(10, decimals)) return;
+
         const start = performance.now();
         const duration = 800;
 
+        // Only ever replaces this run's own part-way figure. `run.final` is
+        // whatever the app last rendered, which is not necessarily what it had
+        // rendered when the run started.
+        function land() {
+            if (run.wrote === null || el.textContent === run.wrote) el.textContent = run.final;
+        }
+
         function settle() {
-            if (el.getAttribute("data-gs-count") === token) el.textContent = final;
+            if (el.getAttribute("data-gs-count") === token) land();
         }
 
         function frame(now) {
@@ -89,16 +120,19 @@
             // the one the data gave, so a node Blazor reuses does not come back
             // still showing whatever fraction of it this run had reached.
             if (t >= 1 || !el.isConnected) {
-                el.textContent = final;
+                land();
                 return;
             }
 
             const eased = 1 - Math.pow(1 - t, 4);
-            el.textContent = head + (target * eased).toLocaleString("en-US", {
+            const text = head + (target * eased).toLocaleString("en-US", {
                 minimumFractionDigits: decimals,
                 maximumFractionDigits: decimals,
                 useGrouping: grouped
             }) + tail;
+
+            el.textContent = text;
+            run.wrote = text;
 
             requestAnimationFrame(frame);
         }
@@ -119,10 +153,28 @@
         for (const el of node.querySelectorAll("[data-gs-count]")) countUp(el);
     }
 
+    // The app rendered a figure into an element a count is running on. The two
+    // edits behind one figure -- the attribute and the text -- do not have to
+    // arrive together, so this is how a run finds out that the text it read at the
+    // start has been overtaken. Its own frames come through here too and are the
+    // one text to ignore.
+    function noteText(node) {
+        const el = node instanceof Element ? node : node.parentElement;
+        if (el === null || !el.hasAttribute("data-gs-count")) return;
+
+        const run = running.get(el);
+        if (run === undefined) return;
+
+        const text = el.textContent;
+        if (text !== run.wrote) run.final = text;
+    }
+
     new MutationObserver(function (records) {
         for (const record of records) {
             if (record.type === "attributes") {
                 countUp(record.target);
+            } else if (record.type === "characterData") {
+                noteText(record.target);
             } else {
                 for (const node of record.addedNodes) scan(node);
             }
@@ -131,7 +183,8 @@
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["data-gs-count"]
+        attributeFilter: ["data-gs-count"],
+        characterData: true
     });
 
     if (document.body) {
