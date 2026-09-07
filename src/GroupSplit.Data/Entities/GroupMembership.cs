@@ -21,6 +21,23 @@ public class GroupMembership
     public Guid UserId { get; init; }
 
     /// <summary>
+    /// When they joined.
+    /// </summary>
+    /// <remarks>
+    /// Not nullable, even though every row that existed before the column did. There are
+    /// few enough of those to give them a date outright -- the migration stamps them with
+    /// the day it ran -- and a nullable column would have made every reader downstream
+    /// carry a case that only ever meant "early".
+    /// <para>
+    /// The database fills it, because EF writes this join row itself when somebody is added
+    /// to <see cref="Group.Users"/> and there is no constructor to run. The services that
+    /// know the moment set it straight after, which is also what keeps it right on the
+    /// in-memory provider the tests use, where a store default does not apply.
+    /// </para>
+    /// </remarks>
+    public DateTimeOffset JoinedAt { get; set; }
+
+    /// <summary>
     /// When this member archived the group, or null while they have not. Nothing about the
     /// group changes: it accepts every write it would otherwise accept, and the other
     /// members never see this. It only moves down their own list.

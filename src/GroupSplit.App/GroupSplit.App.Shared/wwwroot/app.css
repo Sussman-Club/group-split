@@ -2316,3 +2316,108 @@ html:not([data-gs-ready]) .gs-group-card {
         grid-template-columns: 1fr;
     }
 }
+
+/* ----------------------------------------------------------- group tabs ---- */
+
+/* The sections of one group. Links rather than a tab control, because the section is
+   in the URL: a group's members page is somewhere you can be sent to, and the back
+   button moves between sections the way it moves between anything else. */
+.gs-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--gs-line);
+    margin-bottom: 20px;
+}
+
+.gs-tab {
+    position: relative;
+    padding: 10px 14px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--gs-ink-soft);
+    text-decoration: none;
+    border-radius: var(--gs-radius-sm) var(--gs-radius-sm) 0 0;
+    transition: color var(--gs-fast) var(--gs-ease), background var(--gs-fast) var(--gs-ease);
+}
+
+.gs-tab:hover {
+    color: var(--gs-ink);
+    background: var(--gs-surface-2);
+}
+
+.gs-tab.is-current {
+    color: var(--gs-teal-deep);
+}
+
+/* Sits on the container's own border rather than under it, so the two read as one line
+   with a piece of it picked out. */
+.gs-tab.is-current::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--gs-teal);
+}
+
+.gs-tab:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: -2px;
+}
+
+/* ---------------------------------------------------------- dialog steps ---- */
+
+/* Where you are in a two-step dialog. Small, and above the fields rather than beside
+   them, because it is orientation and not a control: the way forward is the button. */
+.gs-steps {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 20px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--gs-ink-soft);
+}
+
+.gs-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.gs-step .dot {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--gs-line-strong);
+    font-size: 0.75rem;
+    color: var(--gs-ink-soft);
+}
+
+.gs-step.is-current {
+    color: var(--gs-teal-deep);
+}
+
+.gs-step.is-current .dot {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal-deep);
+}
+
+.gs-step.is-done .dot {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal);
+    color: var(--gs-bg);
+}
+
+.gs-step-line {
+    flex: 1;
+    height: 1px;
+    background: var(--gs-line);
+}

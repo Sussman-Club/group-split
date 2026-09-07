@@ -42,15 +42,7 @@ builder.Services.AddAuthentication()
 builder.Services.AddAuthorizationBuilder();
 
 builder.AddPostgreSqlAppDbContext("db");
-builder.Services.AddCurrentUser();
-builder.Services.AddScoped<IDebtCalculationService, DebtCalculationService>();
-builder.Services.AddScoped<IAccountService, AccountService>();
-builder.Services.AddScoped<IGroupService, GroupService>();
-builder.Services.AddScoped<ITransactionService, TransactionService>();
-builder.Services.AddSplitRuleServices();
-builder.Services.AddScoped<ICategoryService, CategoryService>();
-builder.Services.AddScoped<ISplitRuleService, SplitRuleService>();
-builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+builder.Services.AddDomainServices();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();
@@ -77,10 +69,6 @@ app.UseAuthentication();
 app.UseMiddleware<CurrentUserMiddleware>();
 app.UseAuthorization();
 
-app.MapGroupApi();
-app.MapUserApi();
-app.MapTransaction();
-app.MapCategoriesApi();
-app.MapSplitRulesApi();
+app.MapDomainApi();
 
 app.Run();

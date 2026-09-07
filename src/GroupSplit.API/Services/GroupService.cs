@@ -35,12 +35,6 @@ public interface IGroupService
     Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default);
 
 
-    /// <summary>
-    /// Adds a member to a gruopy by ID and emails
-    /// </summary>
-    Task<IQueryable<Group>> AddGroupMembers(Guid groupId, AddMemberRequest request,
-        CancellationToken cancellationToken = default);
-
 
     /// <summary>
     /// Removes a member from a group by ID and user ID
@@ -62,6 +56,19 @@ public interface IGroupService
     Task DetachMember(Group group, User user, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Everything that has happened in a group -- what it spent and who has paid whom --
+    /// scoped to a group the caller belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The one read that deliberately sees transfers. Every other surface asks for
+    /// <c>Set&lt;Expense&gt;()</c> and therefore cannot, which is what stopped settlements
+    /// turning up as negative expenses in the lists and the totals. A history is a
+    /// different question from a spending list, though, and "Omar paid you 40" is the row
+    /// somebody looks for when the balance moves.
+    /// </remarks>
+    Task<IQueryable<Transaction>> GetGroupActivity(Guid groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the balance of a group per user
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
@@ -81,6 +88,23 @@ public interface IGroupService
 
     Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes the caller out of a group they are in.
+    /// </summary>
+    /// <remarks>
+    /// The same rule as being removed by somebody else -- settle up first -- applied to the
+    /// one person who could not do it before. Removing a member was somebody else's action
+    /// on you, and the endpoint that did it refused to act on yourself, so the debtor with
+    /// nothing left owing had no way out of a group at all.
+    /// </remarks>
+    Task Leave(Guid groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Where the caller stands across every group they are in, netted per group and then
+    /// added up.
+    /// </summary>
+    Task<UserPositionResponse> GetPosition(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves the group out of the caller's own list, the way archiving a note does.
@@ -110,6 +134,17 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
 
         context.Add(group);
         await context.SaveChangesAsync(cancellationToken);
+
+        // The join row is EF's to write, so the payload on it is set afterwards, on the row
+        // that now exists.
+        var membership = await context.Set<GroupMembership>()
+            .FirstOrDefaultAsync(row => row.GroupId == group.Id && row.UserId == user.Id, cancellationToken);
+
+        if (membership is not null)
+        {
+            membership.JoinedAt = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync(cancellationToken);
+        }
 
         return group;
     }
@@ -169,24 +204,6 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         return from gr in await GetGroupById(groupId, cancellationToken)
                from user in gr.Users
                select user;
-    }
-
-    public async Task<IQueryable<Group>> AddGroupMembers(Guid groupId, AddMemberRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var groupQuery = await GetGroupById(groupId, cancellationToken);
-        var group = await groupQuery.FirstOrDefaultAsync(cancellationToken: cancellationToken);
-        if (group is null)
-            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-
-        var users = from user in context.Set<User>()
-                    where request.UserIdentifiers.Select(ui => ui.Email).Contains(user.Email)
-                    select user;
-        await foreach (var user in users.AsAsyncEnumerable().WithCancellation(cancellationToken))
-            group.Users.Add(user);
-
-        await context.SaveChangesAsync(cancellationToken);
-        return groupQuery;
     }
 
     public async Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId,
@@ -255,6 +272,16 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
             .ToListAsync(cancellationToken);
 
         context.RemoveRange(named);
+    }
+
+    public async Task<IQueryable<Transaction>> GetGroupActivity(Guid groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var groups = await GetGroupById(groupId, cancellationToken);
+
+        return from transaction in context.Set<Transaction>()
+               where groups.Any(@group => @group.Id == transaction.GroupId)
+               select transaction;
     }
 
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
@@ -330,16 +357,91 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         if (user.Id == currentUser.Id)
             throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
 
-        // The Settle button sits under "owed to you", so the caller is the creditor
-        // recording that a debtor has paid them: the money moves from the other member to
-        // the caller. One row, where there used to be a matched pair of a positive and a
-        // negative transaction hung off a pseudo-rule -- and a pair is two chances to
-        // write half a settlement.
-        var transfer = Transfer.Between(resultGroup, user, currentUser, request.Amount,
+        // Both sides can record one now, and which side this is comes from the request
+        // rather than from the balance. Under "owed to you" the caller is the creditor and
+        // the money moves from the other member to them; under "you owe" they are the
+        // debtor saying they have paid, and it moves the other way. Reading the direction
+        // off the balance instead would get the debtor's case exactly backwards -- they are
+        // acting precisely while the balance still says they owe.
+        //
+        // One row either way, where a settlement used to be a matched pair of a positive
+        // and a negative transaction hung off a pseudo-rule; a pair is two chances to write
+        // half a settlement.
+        var (from, to) = request.Direction is SettlementDirection.YouPaidThem
+            ? (currentUser, user)
+            : (user, currentUser);
+
+        var transfer = Transfer.Between(resultGroup, from, to, request.Amount,
             DateTimeOffset.UtcNow);
 
         context.Add(transfer);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task Leave(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        var user = userContext.User;
+
+        var group = await (await GetGroupById(groupId, cancellationToken))
+                        .Include(candidate => candidate.Users)
+                        .FirstOrDefaultAsync(cancellationToken)
+                    ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        // A group with nobody in it is invisible to everybody and still holds the history
+        // its last member is walking away from. Archiving is what they actually want here,
+        // and it is one tap away, so this says so rather than quietly orphaning the rows.
+        if (group.Users.Count <= 1)
+            throw new ConflictException(ErrorCodes.GroupCannotLeaveLastMember,
+                "You are the only member left, so leaving would leave the group with nobody in it. Archive it instead.");
+
+        var balance = await (await GetGroupNetBalance(groupId, cancellationToken))
+            .Where(netBalance => netBalance.UserId == user.Id)
+            .Select(netBalance => netBalance.Balance)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (balance is not 0)
+            throw new ConflictException(ErrorCodes.GroupMemberNotSettled,
+                    "Settle up before leaving the group.")
+                .WithExtension("balance", balance);
+
+        await DetachMember(group, user, cancellationToken);
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<UserPositionResponse> GetPosition(CancellationToken cancellationToken = default)
+    {
+        var user = userContext.User;
+
+        // Per group first, then added up, and the two directions kept apart. Netting them
+        // into one number would say a person owed 25 in one group and owed 40 in another is
+        // owed 15, which is true of nobody: they still have two people to square up with.
+        var groups = await (
+                from @group in GroupsOf(user.Id)
+                join membership in context.Set<GroupMembership>()
+                    on new { GroupId = @group.Id, UserId = user.Id }
+                    equals new { membership.GroupId, membership.UserId }
+                select new GroupPosition(
+                    @group.Id,
+                    @group.Name,
+                    (from transaction in context.Set<Transaction>()
+                        where transaction.GroupId == @group.Id && transaction.UserId == user.Id
+                        select transaction.Amount).Sum() -
+                    (from split in context.Set<TransactionSplit>()
+                        where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
+                        select split.Amount).Sum(),
+                    membership.ArchivedAt != null))
+            .ToListAsync(cancellationToken);
+
+        var owedToYou = groups.Where(position => position.Balance > 0).Sum(position => position.Balance);
+        var youOwe = groups.Where(position => position.Balance < 0).Sum(position => -position.Balance);
+
+        return new UserPositionResponse(
+            owedToYou - youOwe,
+            owedToYou,
+            youOwe,
+            [.. groups.OrderByDescending(position => Math.Abs(position.Balance))
+                .ThenBy(position => position.GroupName)]);
     }
 
     public Task<IQueryable<Group>> Archive(Guid groupId, CancellationToken cancellationToken = default) =>

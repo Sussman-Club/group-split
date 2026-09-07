@@ -55,10 +55,7 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var group = await groups.CreateGroup(new CreateGroupRequest { Name = name }, ct);
         var third = await CreateNewUser();
 
-        await groups.AddGroupMembers(
-            group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = third.Email! }]),
-            ct);
+        await JoinGroup(group.Id, third);
 
         // Settling against a debt that is not there leaves both sides out by the amount.
         await groups.Settle(group.Id, new SettleRequest { UserId = third.Id, Amount = 50 }, ct);
@@ -74,10 +71,7 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var group = await groups.CreateGroup(new CreateGroupRequest { Name = name }, ct);
         var other = await CreateNewUser();
 
-        await groups.AddGroupMembers(
-            group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]),
-            ct);
+        await JoinGroup(group.Id, other);
 
         return group;
     }

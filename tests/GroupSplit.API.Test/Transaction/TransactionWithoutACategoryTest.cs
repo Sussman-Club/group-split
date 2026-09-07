@@ -36,9 +36,7 @@ public class TransactionWithoutACategoryTest(ApiTestFixture fixture) : ApiUnitTe
             TestContext.Current.CancellationToken);
 
         var other = await CreateNewUser();
-        await groups.AddGroupMembers(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]),
-            TestContext.Current.CancellationToken);
+        await JoinGroup(group.Id, other);
 
         return (group.Id, self, other.Id);
     }
@@ -78,13 +76,11 @@ public class TransactionWithoutACategoryTest(ApiTestFixture fixture) : ApiUnitTe
     public async Task Such_an_expense_lands_in_the_group_named_and_not_the_personal_one()
     {
         var (groupId, _, _) = await GroupOfTwo("Ruleless");
-        var personalGroupId = GetService<ICurrentUser>().User.PersonalGroup.Id;
 
         var created = await GetService<ITransactionService>()
             .Create(Request(groupId: groupId), TestContext.Current.CancellationToken);
 
         Assert.Equal(groupId, created.GroupId);
-        Assert.NotEqual(personalGroupId, created.GroupId);
     }
 
     /// <summary>
@@ -161,37 +157,38 @@ public class TransactionWithoutACategoryTest(ApiTestFixture fixture) : ApiUnitTe
     }
 
     /// <summary>
-    /// The personal group is where an expense goes when no group is named, so naming it
-    /// outright is not a mistake either -- a client that always sends the selected group
-    /// still records a personal expense.
-    /// </summary>
-    [Fact]
-    public async Task Naming_the_personal_group_records_a_personal_expense()
-    {
-        var personalGroupId = GetService<ICurrentUser>().User.PersonalGroup.Id;
-
-        var created = await GetService<ITransactionService>()
-            .Create(Request(groupId: personalGroupId), TestContext.Current.CancellationToken);
-
-        var split = Assert.Single(await SplitsOf(created.Id));
-
-        Assert.Equal(personalGroupId, created.GroupId);
-        Assert.Equal(20m, split.Amount);
-    }
-
-    /// <summary>
-    /// The path every existing caller takes: no group, no category, meaning a personal
-    /// expense that nobody else shares.
+    /// No group, no category: a personal expense, which is now literally an expense with no
+    /// group rather than one filed into a hidden group of one.
     /// </summary>
     [Fact]
     public async Task An_expense_with_no_group_at_all_is_a_personal_one()
     {
-        var personalGroupId = GetService<ICurrentUser>().User.PersonalGroup.Id;
-
         var created = await GetService<ITransactionService>()
             .Create(Request(), TestContext.Current.CancellationToken);
 
+        var split = Assert.Single(await SplitsOf(created.Id));
+
         Assert.Equal("Dinner", created.Name);
-        Assert.Equal(personalGroupId, created.GroupId);
+        Assert.Null(created.GroupId);
+        Assert.Equal(20m, split.Amount);
+        Assert.Equal(GetService<ICurrentUser>().User.Id, split.UserId);
+    }
+
+    /// <summary>
+    /// And it is still the caller's own: the listing that answers "everything I have paid"
+    /// has to include the expenses that belong to no group, or they would be recorded and
+    /// then invisible.
+    /// </summary>
+    [Fact]
+    public async Task A_personal_expense_is_still_in_the_callers_listing()
+    {
+        var transactions = GetService<ITransactionService>();
+
+        var created = await transactions.Create(Request(), TestContext.Current.CancellationToken);
+
+        var listed = await (await transactions.List(TestContext.Current.CancellationToken))
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(listed, expense => expense.Id == created.Id);
     }
 }

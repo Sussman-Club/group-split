@@ -165,6 +165,14 @@
 
         setRail(value) {
             write(railKey, value ? "1" : "0");
+        },
+
+        // The browser's offset from UTC, in minutes, with the sign .NET uses: +60 for
+        // Lisbon in summer, -240 for New York. JavaScript's own getTimezoneOffset() is the
+        // other way round (minutes *behind* UTC), hence the negation. This is the one
+        // source of "where is the person" for every date the app shows or sends.
+        tzOffsetMinutes() {
+            return -new Date().getTimezoneOffset();
         }
     };
 })();

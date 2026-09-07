@@ -43,13 +43,7 @@ public class ApiTestFixture : IAsyncLifetime
     protected virtual void RegisterServices(IServiceCollection services)
     {
         // Register your API services
-        services.AddCurrentUser();
-        services.AddScoped<IAccountService, AccountService>();
-        services.AddScoped<IGroupService, GroupService>();
-        services.AddScoped<ITransactionService, TransactionService>();
-        services.AddSplitRuleServices();
-        services.AddScoped<ICategoryService, CategoryService>();
-        services.AddScoped<ISplitRuleService, SplitRuleService>();
-        services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+        // The production list, so a test host cannot drift from what actually runs.
+        services.AddDomainServices();
     }
 }

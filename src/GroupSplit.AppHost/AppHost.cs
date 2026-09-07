@@ -47,7 +47,7 @@ var web = builder.AddProject<GroupSplit_App_Web>("web")
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    dbServer.WithPgAdmin();
+    dbServer.WithPgWeb();
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
 
@@ -68,6 +68,10 @@ if (builder.ExecutionContext.IsRunMode)
         .WithKeycloakSeeding(keycloak)
         .WithResetAndSeedCommand()
         .WaitForCompletion(migrations);
+
+    builder
+        .AddCli<GroupSplit_Cli>("cli")
+        .WithGroupSplitEndpoints(api, keycloak);
 
     builder
         .AddScalarApiReference()

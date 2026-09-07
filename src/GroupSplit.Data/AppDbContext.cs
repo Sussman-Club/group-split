@@ -1,4 +1,4 @@
-﻿using GroupSplit.Data.Entities;
+using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Data;
@@ -39,14 +39,43 @@ public class AppDbContext : DbContext
                         join.Property(membership => membership.GroupId).HasColumnName("GroupsId");
                         join.Property(membership => membership.UserId).HasColumnName("UsersId");
                         join.HasKey(membership => new { membership.GroupId, membership.UserId });
+
+                        // The database's, because EF inserts this row on its own behalf
+                        // when a user is added to a group's members and never sees a
+                        // constructor. Callers that know the moment overwrite it.
+                        join.Property(membership => membership.JoinedAt)
+                            .IsRequired()
+                            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                            .ValueGeneratedOnAdd();
                     });
 
-            entity.HasOne(user => user.PersonalGroup)
-                .WithOne()
-                .HasForeignKey<User>("PersonalGroupId")
-                .IsRequired();
-
             entity.HasIndex(user => user.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<GroupInvitation>(entity =>
+        {
+            entity.Property(invitation => invitation.Email).HasMaxLength(128).IsRequired();
+            entity.Property(invitation => invitation.InvitedAt).IsRequired();
+
+            entity.HasOne(invitation => invitation.Group)
+                .WithMany(group => group.Invitations)
+                .HasForeignKey(invitation => invitation.GroupId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The inviter is a courtesy on the row the invitee reads ("Daniel asked you to
+            // join"), so their account going away must not take the invitation with it.
+            entity.HasOne(invitation => invitation.InvitedBy)
+                .WithMany()
+                .HasForeignKey(invitation => invitation.InvitedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // One standing invitation per address per group. A second would be a second
+            // row in the group's "waiting on" list naming the same person.
+            entity.HasIndex(invitation => new { invitation.GroupId, invitation.Email }).IsUnique();
+
+            // How an invitee finds theirs: every group that has asked this address.
+            entity.HasIndex(invitation => invitation.Email);
         });
 
         modelBuilder.Entity<Group>(entity =>

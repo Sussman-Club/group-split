@@ -47,6 +47,15 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
 
         var payerId = expense.User?.Id ?? expense.UserId;
 
+        // A personal expense has nobody to divide with, so there is nothing a stated
+        // division could say that is not either "all of it, to me" -- which is what it gets
+        // anyway -- or a share for somebody who cannot see the expense at all. Refused by
+        // name rather than left to fall out of the membership check below, which would
+        // report a group the expense does not have.
+        if (given is not null && (expense.Group?.Id ?? expense.GroupId) is null)
+            throw new ValidationException(ErrorCodes.SplitOnAPersonalExpense,
+                "A personal expense is not shared with anybody, so it cannot be split.");
+
         var members = await MembersOf(expense, ct);
 
         var splits = given is null

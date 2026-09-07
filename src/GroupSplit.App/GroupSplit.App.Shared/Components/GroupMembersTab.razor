@@ -1,0 +1,183 @@
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsPageStateService GroupsService
+@inject IDialogService DialogService
+@inject DataChangeNotifier Changes
+@inject NavigationManager Nav
+@inject LocalClock Clock
+@implements IDisposable
+
+@*
+    Who is in the group, who has been asked, and the two ways out.
+
+    Members used to be a pair of icon buttons in the toolbar that opened dialogs, so there
+    was no page anywhere that simply listed them -- and leaving a group was not possible at
+    all: removing a member refused to name yourself, which left the one person who might
+    want to go with nothing to press.
+*@
+
+<div class="gs-two-col">
+    <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
+        <div class="gs-card-title">
+            <h2>Members</h2>
+            <span class="gs-tag neutral">@_members.Count</span>
+        </div>
+
+        <div class="gs-list">
+            @foreach (var member in _members)
+            {
+                var person = member;
+                <div class="gs-row" style="cursor: default">
+                    <Avatar Name="@person.FullName" />
+                    <div style="min-width: 0">
+                        <div class="title">
+                            <span>@person.FullName</span>
+                            @if (person.Id == UserInfo?.Id)
+                            {
+                                <span class="gs-tag neutral">you</span>
+                            }
+                        </div>
+                        <div class="meta">@person.Email</div>
+                    </div>
+                    @if (person.Id != UserInfo?.Id)
+                    {
+                        <MudTooltip Text="Remove from the group">
+                            <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           aria-label="@($"Remove {person.FullName}")"
+                                           OnClick="@(() => RemoveAsync(person))" />
+                        </MudTooltip>
+                    }
+                </div>
+            }
+        </div>
+
+        <div style="padding-top: 12px; display: flex; gap: 8px; flex-wrap: wrap">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                       StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="@InviteAsync">Invite someone</MudButton>
+            @* Leaving needs a settled balance, and the API says so -- the button is not
+               hidden on a hunch about what the balance is. *@
+            <MudButton Variant="Variant.Text" Color="Color.Error"
+                       StartIcon="@Icons.Material.Rounded.Logout" OnClick="@LeaveAsync">Leave group</MudButton>
+        </div>
+    </div>
+
+    <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+        <div class="gs-card-title">
+            <h2>Invited</h2>
+            <span class="gs-tag">@_pending.Count waiting</span>
+        </div>
+
+        @if (_pending.Count == 0)
+        {
+            <div class="gs-empty" style="padding: 24px">
+                <MudIcon Icon="@Icons.Material.Rounded.MailOutline" />
+                <span>Nobody is waiting to join. Invite by email and they will see it next time they sign in.</span>
+            </div>
+        }
+        else
+        {
+            <div class="gs-list">
+                @foreach (var invitation in _pending)
+                {
+                    var pending = invitation;
+                    <div class="gs-row" style="cursor: default">
+                        <Avatar Name="@pending.Email" />
+                        <div style="min-width: 0">
+                            <div class="title"><span>@pending.Email</span></div>
+                            <div class="meta">
+                                Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
+                            </div>
+                        </div>
+                        <MudTooltip Text="Withdraw the invitation">
+                            <MudIconButton Icon="@Icons.Material.Rounded.Close"
+                                           Size="Size.Small"
+                                           aria-label="@($"Withdraw the invitation to {pending.Email}")"
+                                           OnClick="@(() => WithdrawAsync(pending))" />
+                        </MudTooltip>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid GroupId { get; set; }
+
+    [Parameter] public UserInfo? UserInfo { get; set; }
+
+    private List<UserInfo> _members = [];
+    private IReadOnlyList<GroupInvitationResponse> _pending = [];
+
+    protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
+
+    protected override Task OnParametersSetAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _members = await GroupsService.GetGroupMembersAsync().ToListAsync();
+        _pending = await GroupsService.GetGroupInvitationsAsync();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task InviteAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, _members.ToArray() } };
+
+        var dialog = await DialogService.ShowAsync<AddGroupMemberDialog>("Invite people", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<AddMemberRequest>();
+
+        if (request is not null)
+            await GroupsService.InviteToGroupAsync(request);
+    }
+
+    private async Task RemoveAsync(UserInfo member)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first." },
+            { x => x.ButtonText, "Remove" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove member", parameters, options);
+
+        if (await dialog.ConfirmedAsync())
+            await GroupsService.RemoveGroupMemberAsync(member.Id, member.FullName);
+    }
+
+    private async Task WithdrawAsync(GroupInvitationResponse invitation) =>
+        await GroupsService.WithdrawInvitationAsync(invitation.Id, invitation.Email);
+
+    private async Task LeaveAsync()
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, "Leave this group? What you paid stays in your own records, but you will no longer see the group or be able to change anything in it." },
+            { x => x.ButtonText, "Leave" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Leave group", parameters, options);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        if (await GroupsService.LeaveGroupAsync())
+            Nav.NavigateTo("/groups");
+    }
+
+    public void Dispose() => Changes.GroupsChanged -= ReloadAsync;
+}

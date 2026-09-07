@@ -43,18 +43,14 @@ internal sealed class UserProvisioner(AppDbContext context) : IUserProvisioner
             return existingUser;
         }
 
-        // No rule. A personal group used to need one because an expense could only be
-        // recorded against a rule, so every account was provisioned with a "Default" rule
-        // flagged un-editable and un-deletable to stop anybody breaking it. An expense
-        // needs a group and an amount now; a category is optional and a personal one has
-        // nobody to divide with anyway.
-        var personalGroup = new Group { Name = "Personal" };
-
+        // No personal group either. Provisioning used to make one, because an expense had
+        // to belong to a group and to a rule, so every account started with a hidden
+        // "Personal" group holding a locked "Default" rule. Both were scaffolding: a
+        // personal expense is one with no group, and the group that stood in for it is
+        // what put "Personal - 1" in the group switcher and a card on the home page.
         var user = new User
         {
-            Identity = new UserIdentity { IdentityId = identityId },
-            PersonalGroup = personalGroup,
-            Groups = { personalGroup }
+            Identity = new UserIdentity { IdentityId = identityId }
         };
 
         ApplyProfile(user, principal);

@@ -8,7 +8,7 @@ public partial class Dashboard
     /// the start of an expression as the start of a tag, and this failed to compile on
     /// Windows while passing on the CI runner. Plain C# has no such ambiguity.
     /// </summary>
-    private static string Greeting => DateTime.Now.Hour switch
+    private string Greeting => Clock.Now.Hour switch
     {
         < 5 => "Still up",
         < 12 => "Good morning",

@@ -8,6 +8,7 @@
 @inject ITransactionsPageStateService TransactionsService
 @inject IDialogService DialogService
 @inject DataChangeNotifier Changes
+@inject LocalClock Clock
 @implements IDisposable
 
 @* The grid of expenses, wherever they come from. The page that hosts it says which
@@ -28,8 +29,8 @@
     <Columns>
         <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
             <CellTemplate>
-                <div class="gs-num" style="font-weight: 700; font-size: .875rem">@context.Item.DateTime.LocalDateTime.ToString("d MMM yyyy")</div>
-                <div class="gs-muted gs-num" style="font-size: .75rem">@context.Item.DateTime.LocalDateTime.ToShortTimeString()</div>
+                <div class="gs-num" style="font-weight: 700; font-size: .875rem">@Clock.Local(context.Item.DateTime).ToString("d MMM yyyy")</div>
+                <div class="gs-muted gs-num" style="font-size: .75rem">@Clock.Local(context.Item.DateTime).ToString("t")</div>
             </CellTemplate>
         </PropertyColumn>
 
@@ -51,14 +52,20 @@
         {
             <PropertyColumn Property="x => x.GroupName" Title="Group">
                 <CellTemplate>
-                    <span class="gs-tag neutral">@context.Item.GroupName</span>
+                    @* No group is not a missing group: it is an expense of your own. *@
+                    <span class="gs-tag neutral">@(context.Item.GroupName ?? "Personal")</span>
                 </CellTemplate>
             </PropertyColumn>
         }
 
         <PropertyColumn Property="x => x.Category" Title="Category">
             <CellTemplate>
-                <span class="gs-tag">@context.Item.Category</span>
+                @* An expense filed under nothing -- every personal one, and any group one
+                   left uncategorised -- shows nothing here rather than an empty pill. *@
+                @if (!string.IsNullOrWhiteSpace(context.Item.Category))
+                {
+                    <span class="gs-tag">@context.Item.Category</span>
+                }
             </CellTemplate>
         </PropertyColumn>
 
@@ -228,7 +235,7 @@
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
 
-        if (await dialog.GetReturnValueAsync<bool>())
+        if (await dialog.ConfirmedAsync())
         {
             await TransactionsService.DeleteAsync(transaction);
         }

@@ -1,12 +1,12 @@
+@using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Groups
-@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsPageStateService GroupsService
 @inject ITransactionsPageStateService TransactionsService
-@inject IGroupsClient GroupsClient
 @inject NavigationManager Nav
+@inject LocalClock Clock
 @implements IDisposable
 
 @* Signed-in home. Lives in its own component so the anonymous landing page
@@ -14,33 +14,95 @@
 
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">@DateTime.Today.ToString("dddd, d MMMM")</div>
+        <div class="gs-eyebrow">@Clock.Today.ToString("dddd, d MMMM")</div>
         <h1>@Greeting, @UserInfo.FirstName.</h1>
         <p>Here is where everything stands across your groups.</p>
     </div>
 </div>
 
 <div class="gs-stack">
+    @*
+        The figure the page leads with is the position, not what the person has paid.
+        "You paid $1,284 across every group" was true and answered nothing: what somebody
+        opens this app to find out is whether they are up or down, and by how much. It took
+        opening every group in turn and adding up by hand.
+    *@
+    <section class="gs-hero @PositionClass gs-reveal" style="--i: 0" aria-live="polite">
+        @if (Net > 0)
+        {
+            <div class="gs-eyebrow">Overall, you are owed</div>
+            <Money Value="Net" Animate Class="gs-hero-amount" />
+        }
+        else if (Net < 0)
+        {
+            <div class="gs-eyebrow">Overall, you owe</div>
+            <Money Value="Net" Absolute Animate Class="gs-hero-amount" />
+        }
+        else
+        {
+            <div class="gs-eyebrow">Overall</div>
+            <div class="gs-hero-amount">All settled</div>
+        }
+
+        <div class="gs-hero-sub">
+            @if (OwedToYou > 0 && YouOwe > 0)
+            {
+                @($"{OwedToYou.ToMoney()} owed to you, {YouOwe.ToMoney()} owed by you. They do not cancel out -- they are different people.")
+            }
+            else if (OwedToYou > 0)
+            {
+                @($"Across {Owing.Count} group{(Owing.Count == 1 ? "" : "s")}.")
+            }
+            else if (YouOwe > 0)
+            {
+                @($"Across {Owing.Count} group{(Owing.Count == 1 ? "" : "s")}.")
+            }
+            else
+            {
+                @("Nothing outstanding in any of your groups.")
+            }
+        </div>
+
+        @if (Owing.Count > 0)
+        {
+            <div class="gs-hero-list">
+                @foreach (var position in Owing.Take(4))
+                {
+                    var group = position;
+                    <div class="gs-hero-row">
+                        <Avatar Name="@group.GroupName" Size="sm" />
+                        <div class="who">
+                            @group.GroupName <small>@(group.Balance > 0 ? "owes you" : "you owe")</small>
+                        </div>
+                        <Money Value="@Math.Abs(group.Balance)" Animate />
+                        <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                   OnClick="@(() => Open(group.GroupId))">Open</MudButton>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
     <div class="gs-stats">
-        <div class="gs-card gs-stat gs-reveal" style="--i: 0">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.Groups" /></span>
             <span class="gs-eyebrow">Groups</span>
             <span class="gs-stat-value gs-num" data-gs-count="@ActiveGroups.Count">@ActiveGroups.Count</span>
             <span class="gs-muted" style="font-size: .8125rem">@(ArchivedCount == 0 ? "All active" : $"{ArchivedCount} archived")</span>
         </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Expenses</span>
             <span class="gs-stat-value gs-num" data-gs-count="@ExpenseCount">@ExpenseCount</span>
             <span class="gs-muted" style="font-size: .8125rem">recorded by you</span>
         </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 2">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 3">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
             <span class="gs-eyebrow">This month</span>
             <Money Value="ThisMonth" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">@ThisMonthCount expense@(ThisMonthCount == 1 ? "" : "s")</span>
         </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 3">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 4">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             <span class="gs-eyebrow">You paid</span>
             <Money Value="Total" Animate Class="gs-stat-value" />
@@ -48,8 +110,10 @@
         </div>
     </div>
 
+    <InvitationsPanel Reveal="5" />
+
     <div class="gs-two-col">
-        <div class="gs-card gs-card-pad gs-reveal" style="--i: 4">
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 6">
             <div class="gs-card-title">
                 <h2>Your groups</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/groups"
@@ -65,56 +129,30 @@
             }
             else
             {
-                <div class="gs-group-grid">
-                    @{ var i = 0; }
+                <div class="gs-list">
                     @foreach (var group in ActiveGroups)
                     {
                         var g = group;
-                        var paid = _paid.GetValueOrDefault(g.Id);
-                        var members = _members.GetValueOrDefault(g.Id);
-                        <button type="button" class="gs-card gs-card-hover gs-group-card gs-reveal" style="--i: @(5 + i++)"
-                                @onclick="() => OpenGroup(g)">
+                        var balance = BalanceIn(g.Id);
+                        <a class="gs-row" role="button" tabindex="0"
+                           @onclick="@(() => Open(g.Id))"
+                           @onkeydown="@(e => { if (e.Key is "Enter" or " ") Open(g.Id); })">
                             <Avatar Name="@g.Name" />
-                            <div class="head">
-                                <span class="name">@g.Name</span>
-                                <span class="go">Open <MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Style="width:16px;height:16px" /></span>
+                            <div style="min-width: 0">
+                                <div class="title"><span>@g.Name</span></div>
+                                <div class="meta">@g.MemberCount member@(g.MemberCount == 1 ? "" : "s")</div>
                             </div>
-                            <div class="people">
-                                @if (members is { Count: > 1 })
-                                {
-                                    <span class="gs-avatar-stack">
-                                        @{ var j = 0; }
-                                        @foreach (var m in members.Take(4))
-                                        {
-                                            <Avatar Name="@m.FullName" Style="@($"--i: {j++}")" />
-                                        }
-                                        @if (members.Count > 4)
-                                        {
-                                            <span class="more" style="--i: @j">+@(members.Count - 4)</span>
-                                        }
-                                    </span>
-                                    <span>@members.Count members</span>
-                                }
-                                else if (g.MemberCount <= 1)
-                                {
-                                    <span>Just you</span>
-                                }
-                                else
-                                {
-                                    <span>@g.MemberCount members</span>
-                                }
+                            <div>
+                                <div><Money Value="balance" Signed /></div>
+                                <span class="when">@(balance == 0 ? "settled" : balance > 0 ? "owed to you" : "you owe")</span>
                             </div>
-                            <div class="foot">
-                                <span class="gs-eyebrow">@(paid is not { Count: > 0 } ? "Nothing paid yet" : $"You paid · {paid.Count} expense{(paid.Count == 1 ? "" : "s")}")</span>
-                                <Money Value="@(paid?.Total ?? 0m)" Animate />
-                            </div>
-                        </button>
+                        </a>
                     }
                 </div>
             }
         </div>
 
-        <div class="gs-card gs-card-pad gs-reveal" style="--i: 5">
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 7">
             <div class="gs-card-title">
                 <h2>Recent activity</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/transactions"
@@ -128,17 +166,9 @@
 @code {
     [Parameter, EditorRequired] public UserInfo UserInfo { get; set; } = null!;
 
-    private readonly Dictionary<Guid, ICollection<UserInfo>> _members = new();
-
-    /// <summary>
-    /// What the person has paid into each group. Read per group rather than counted out of
-    /// the expenses list, which is now one page: the card would otherwise stop counting at
-    /// whatever the page happened to hold.
-    /// </summary>
-    private readonly Dictionary<Guid, TransactionSummaryResponse> _paid = new();
-
-    private List<GroupResponse> ActiveGroups => GroupsService.Groups.Where(g => !g.IsArchive).ToList();
+    private List<GroupResponse> ActiveGroups => [.. GroupsService.Groups.Where(g => !g.IsArchive)];
     private int ArchivedCount => GroupsService.Groups.Count(g => g.IsArchive);
+
     // The server counts and totals; this holds one page of the newest, which is all the
     // activity list shows. Adding up a page would understate every figure here.
     private IReadOnlyList<TransactionResponse> Recent => TransactionsService.Page?.Items ?? [];
@@ -147,68 +177,48 @@
     private decimal ThisMonth => TransactionsService.MonthSummary?.Total ?? 0m;
     private int ThisMonthCount => TransactionsService.MonthSummary?.Count ?? 0;
 
+    private UserPositionResponse? Position => GroupsService.Position;
+    private decimal Net => Position?.Net ?? 0m;
+    private decimal OwedToYou => Position?.OwedToYou ?? 0m;
+    private decimal YouOwe => Position?.YouOwe ?? 0m;
+
+    /// <summary>
+    /// The groups where something is still outstanding, largest first. An archived group
+    /// stays in this list: archiving tidies a list, it does not forgive a debt.
+    /// </summary>
+    private List<GroupPosition> Owing =>
+        [.. (Position?.Groups ?? []).Where(position => position.Balance != 0)];
+
+    private decimal BalanceIn(Guid groupId) =>
+        Position?.Groups.FirstOrDefault(position => position.GroupId == groupId)?.Balance ?? 0m;
+
+    private string PositionClass => Net switch
+    {
+        > 0 => "",
+        < 0 => "is-neg",
+        _ => "is-zero"
+    };
+
+    private void Open(Guid groupId) => Nav.NavigateTo($"/groups/{groupId}");
+
     // Greeting lives in Dashboard.razor.cs; see the note there.
 
     private void ReRender() => InvokeAsync(StateHasChanged);
 
-    // A write moves the figures on the cards as well as the tiles, so they are read again.
-    private void ReloadCards() => InvokeAsync(LoadCardsAsync);
-
     protected override void OnInitialized()
     {
         GroupsService.OnGroupsChanged += ReRender;
+        GroupsService.OnTransactionsChanged += ReRender;
         TransactionsService.OnTransactionsChanged += ReRender;
-        GroupsService.OnGroupsChanged += ReloadCards;
-        TransactionsService.OnTransactionsChanged += ReloadCards;
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        await Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
-
-        await LoadCardsAsync();
-    }
-
-    /// <summary>
-    /// What each group's card shows beyond its name: the faces of its members, and what
-    /// this person has paid into it. One call each, all at once; a group whose call fails
-    /// falls back to its member count and no figure.
-    /// </summary>
-    private async Task LoadCardsAsync()
-    {
-        await Task.WhenAll(ActiveGroups.Select(async g =>
-        {
-            try
-            {
-                if (g.MemberCount > 1)
-                    _members[g.Id] = await GroupsClient.GetGroupMembersAsync(g.Id);
-
-                _paid[g.Id] = await GroupsClient.GetGroupTransactionsSummaryAsync(
-                    g.Id, paidByUserId: UserInfo.Id);
-            }
-            catch (Exception exception)
-            {
-                // Only an API failure is worth swallowing; a bug is not. (Written as a
-                // rethrow rather than an exception filter, which the Razor parser does not
-                // accept inside this lambda.)
-                if (!ApiErrors.IsApiFailure(exception)) throw;
-            }
-        }));
-
-        StateHasChanged();
-    }
-
-    private void OpenGroup(GroupResponse group)
-    {
-        GroupsService.SelectedGroup = group;
-        Nav.NavigateTo("/groups");
-    }
+    protected override Task OnInitializedAsync() =>
+        Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
 
     public void Dispose()
     {
         GroupsService.OnGroupsChanged -= ReRender;
+        GroupsService.OnTransactionsChanged -= ReRender;
         TransactionsService.OnTransactionsChanged -= ReRender;
-        GroupsService.OnGroupsChanged -= ReloadCards;
-        TransactionsService.OnTransactionsChanged -= ReloadCards;
     }
 }

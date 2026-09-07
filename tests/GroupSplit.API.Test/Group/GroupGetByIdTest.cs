@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Group;
@@ -55,13 +56,16 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var groupService = GetService<IGroupService>();
         var userService = GetService<ICurrentUser>();
 
-        // Ensure current user exists and has at least personal group
+        // A group made by somebody else, which the caller is not in.
+        using var otherScope = GetService<IServiceScopeFactory>().CreateScope();
+        await InitializeCurrentUser(otherScope.ServiceProvider);
 
-        // Create a new user with its own personal group
-        var otherUser = await CreateNewUser();
+        var theirs = await otherScope.ServiceProvider.GetRequiredService<IGroupService>()
+            .CreateGroup(new CreateGroupRequest { Name = "Not yours" },
+                TestContext.Current.CancellationToken);
 
         // Act
-        var result = await groupService.GetGroupById(otherUser.PersonalGroup.Id, TestContext.Current.CancellationToken);
+        var result = await groupService.GetGroupById(theirs.Id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(result);

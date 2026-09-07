@@ -8,6 +8,9 @@ public class Group : Entity
 
     public virtual ICollection<Category> Categories { get; } = [];
 
+    /// <summary>Who has been asked to join and has not answered yet.</summary>
+    public virtual ICollection<GroupInvitation> Invitations { get; } = [];
+
     public required string Name { get; set; }
 
     /// <summary>

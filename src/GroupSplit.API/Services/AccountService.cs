@@ -44,16 +44,14 @@ public sealed class AccountService(
                        .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
                    ?? throw new NotFoundException(ErrorCodes.AccountNotFound, $"No account with id {userId}.");
 
-        await context.Entry(user).Reference(entity => entity.PersonalGroup)
-            .LoadAsync(cancellationToken);
         await context.Entry(user).Collection(entity => entity.Groups)
             .LoadAsync(cancellationToken);
 
-        // The personal group holds only their own records and nobody else can see it, so
-        // it never blocks anything and there is no membership to hand back.
-        var sharedGroups = user.Groups
-            .Where(group => group.Id != user.PersonalGroup.Id)
-            .ToList();
+        // Every group they are in is a shared one now. The hidden "Personal" group that
+        // used to be among them -- and had to be filtered out here, since it holds only
+        // their own records and blocks nothing -- is gone: a personal expense is one with
+        // no group at all.
+        var sharedGroups = user.Groups.ToList();
 
         // Every group is checked before any of them is touched. Settling up first is the
         // same rule that already governs leaving a single group, and applying it group by
@@ -86,6 +84,16 @@ public sealed class AccountService(
         {
             await groups.DetachMember(group, user, cancellationToken);
         }
+
+        // Invitations they sent keep pointing at them until the reference is cleared, which
+        // is the FK's own doing; the ones sent *to* them are found by address, and the
+        // address is about to be cleared, so they are taken out here rather than left
+        // matching nobody.
+        var addressed = await context.Set<GroupInvitation>()
+            .Where(invitation => invitation.Email == user.Email)
+            .ToListAsync(cancellationToken);
+
+        context.RemoveRange(addressed);
 
         // Keycloak keeps the login -- deleting it there is a separate decision -- so
         // dropping the mapping is what stops a later sign-in resurrecting this account.

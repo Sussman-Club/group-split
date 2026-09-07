@@ -36,9 +36,7 @@ public class StatedSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             new CreateGroupRequest { Name = "Trip" }, TestContext.Current.CancellationToken);
 
         var other = await CreateNewUser();
-        await groups.AddGroupMembers(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]),
-            TestContext.Current.CancellationToken);
+        await JoinGroup(group.Id, other);
 
         return (group.Id, self, other.Id);
     }

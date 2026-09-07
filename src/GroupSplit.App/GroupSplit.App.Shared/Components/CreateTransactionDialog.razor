@@ -1,9 +1,23 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
+@inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
+@inject LocalClock Clock
+
+@*
+    Recording an expense, in two steps.
+
+    It was one long form, and the split sat at the bottom of it as a switch nobody reached
+    with the amount still unfilled above. Splitting is the decision the app exists for, so
+    it gets a step of its own -- and the step opens on what the division is actually going
+    to be, asked of the API rather than worked out here, because a preview that disagrees
+    with the save by a cent is worse than no preview.
+*@
 
 <MudDialog>
     <TitleContent>
@@ -13,149 +27,256 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="@form" Model="@model">
-            <MudStack Spacing="3">
+        <div class="gs-steps" role="list" aria-label="Steps">
+            <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
+                <span class="dot">1</span> What
+            </span>
+            <span class="gs-step-line"></span>
+            <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
+                <span class="dot">2</span> Split
+            </span>
+        </div>
 
-                @* Name *@
-                <MudTextField
-                    @bind-Value="model.Name"
-                    For="@(() => model.Name)"
-                    Label="Name"
-                    Variant="Variant.Outlined"
-                    Immediate="true"/>
-
-                @* Description *@
-                <MudTextField
-                    @bind-Value="model.Description"
-                    For="@(() => model.Description)"
-                    Label="Description"
-                    Variant="Variant.Outlined"
-                    Immediate="true"
-                    Lines="3"/>
-
-                @* Amount *@
-                <MudNumericField
-                    @bind-Value="model.Amount"
-                    For="@(() => model.Amount)"
-                    Label="Amount"
-                    Variant="Variant.Outlined"
-                    Adornment="Adornment.Start"
-                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                    AdornmentColor="Color.Primary"
-                    HideSpinButtons="true"
-                    Format="N2"/>
-
-                <MudStack Row="true" Spacing="4">
-
-                    @* Date *@
-                    <MudDatePicker
-                        @bind-Date="selectedDate"
-                        Label="Transaction Date"
-                        Variant="Variant.Outlined"/>
-
-                    @* Time *@
-                    <MudTimePicker
-                        @bind-Time="selectedTime"
-                        Label="Transaction Time"
+        @if (Step == 1)
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudStack Spacing="3">
+                    <MudTextField
+                        @bind-Value="_model.Name"
+                        For="@(() => _model.Name)"
+                        Label="Name"
                         Variant="Variant.Outlined"
-                        AmPm="true"/>
+                        Immediate="true"/>
 
-                </MudStack>
+                    <MudTextField
+                        @bind-Value="_model.Description"
+                        For="@(() => _model.Description)"
+                        Label="Description"
+                        Variant="Variant.Outlined"
+                        Immediate="true"
+                        Lines="2"/>
 
-                @* Group Selection *@
-                <MudSelect T="Guid?"
-                           Label="Group"
-                           Variant="Variant.Outlined"
-                           @bind-Value="SelectedGroupId"
-                           @bind-Value:after="OnGroupChanged"
-                           Clearable="false"
-                           Placeholder="">
-                    @foreach (var g in UserGroups)
-                    {
-                        <MudSelectItem T="Guid?" Value="@g.Id">@g.Name</MudSelectItem>
-                    }
-                </MudSelect>
+                    <MudNumericField
+                        @bind-Value="_model.Amount"
+                        For="@(() => _model.Amount)"
+                        Label="Amount"
+                        Variant="Variant.Outlined"
+                        Adornment="Adornment.Start"
+                        AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                        AdornmentColor="Color.Primary"
+                        HideSpinButtons="true"
+                        Format="N2"/>
 
-                @* Category Selection *@
-                <MudSelect T="Guid?"
-                           Label="Category"
-                           Variant="Variant.Outlined"
-                           @bind-Value="model.CategoryId"
-                           Disabled="@(!GroupCategories.Any())"
-                           Clearable="false"
-                           Placeholder="">
-                    @foreach (var c in GroupCategories)
-                    {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)c.Id)">@c.Name</MudSelectItem>
-                    }
-                </MudSelect>
+                    <MudStack Row="true" Spacing="4">
+                        <MudDatePicker
+                            @bind-Date="_selectedDate"
+                            Label="Date"
+                            Variant="Variant.Outlined"/>
 
-                @if (!DisablePayingUserSelection)
-                {
-                    @* Paying User Selection *@
+                        <MudTimePicker
+                            @bind-Time="_selectedTime"
+                            Label="Time"
+                            Variant="Variant.Outlined"
+                            AmPm="true"/>
+                    </MudStack>
+
+                    @* Personal is the absence of a group, so it is an option in this select
+                       rather than a group in the list. It used to be a real group, hidden
+                       everywhere it would have been embarrassing. *@
                     <MudSelect T="Guid?"
-                               Label="Paid By"
+                               Label="Group"
                                Variant="Variant.Outlined"
-                               @bind-Value="model.PaidByUserId"
-                               Disabled="@(!GroupUsers.Any())"
+                               @bind-Value="_groupId"
+                               @bind-Value:after="OnGroupChangedAsync"
                                Clearable="false"
                                Placeholder="">
-                        @foreach (var u in GroupUsers)
+                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
+                        @foreach (var group in _groups)
                         {
-                            <MudSelectItem T="Guid?" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                            <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
                         }
                     </MudSelect>
+
+                    <MudSelect T="Guid?"
+                               Label="Category"
+                               Variant="Variant.Outlined"
+                               @bind-Value="_model.CategoryId"
+                               Disabled="@(_categories.Count == 0)"
+                               Clearable="true"
+                               Placeholder="">
+                        @foreach (var category in _categories)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">@category.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (!DisablePayingUserSelection && _groupId is not null)
+                    {
+                        <MudSelect T="Guid?"
+                                   Label="Paid by"
+                                   Variant="Variant.Outlined"
+                                   @bind-Value="_model.PaidByUserId"
+                                   Disabled="@(_members.Count == 0)"
+                                   Clearable="false"
+                                   Placeholder="">
+                            @foreach (var member in _members)
+                            {
+                                <MudSelectItem T="Guid?" Value="@member.Id">@member.FullName</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </MudStack>
+            </MudForm>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                    <div class="gs-inline" style="justify-content: space-between">
+                        <div>
+                            <div class="gs-eyebrow">@_model.Name</div>
+                            <div class="gs-muted" style="font-size: .8125rem">@Where</div>
+                        </div>
+                        <Money Value="_model.Amount" Class="gs-money" />
+                    </div>
+                </div>
+
+                @if (_groupId is null)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        A personal expense is not shared with anybody, so there is nothing to divide.
+                    </MudAlert>
                 }
+                else
+                {
+                    <SplitEditor Members="@_members"
+                                 Amount="@_model.Amount"
+                                 PayerId="@_model.PaidByUserId"
+                                 Value="@_model.Splits"
+                                 ValueChanged="@OnSplitsChangedAsync"/>
 
-                <MudDivider/>
+                    @* What is actually going to be stored. Shown for the ordinary case as
+                       well as the stated one, because "as the category says" is exactly the
+                       case where nobody can tell what it says without being told. *@
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Everyone's share</MudText>
+                        @if (_previewError is { Length: > 0 })
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_previewError</MudAlert>
+                        }
+                        else if (_preview is null)
+                        {
+                            <MudText Typo="Typo.caption">Working it out…</MudText>
+                        }
+                        else
+                        {
+                            @if (_preview.RuleName is { Length: > 0 } rule)
+                            {
+                                <MudText Typo="Typo.caption">Divided by the "@rule" rule.</MudText>
+                            }
+                            else if (_model.Splits is null)
+                            {
+                                <MudText Typo="Typo.caption">Divided evenly.</MudText>
+                            }
 
-                <SplitEditor Members="@GroupUsers.ToList()"
-                             Amount="@model.Amount"
-                             PayerId="@model.PaidByUserId"
-                             @bind-Value="model.Splits"/>
+                            <div class="gs-list" style="margin-top: 4px">
+                                @foreach (var share in _preview.Splits)
+                                {
+                                    <div class="gs-row" style="cursor: default; padding: 8px 4px">
+                                        <Avatar Name="@share.UserName" Size="sm" />
+                                        <div style="min-width: 0">
+                                            <div class="title"><span>@share.UserName</span></div>
+                                        </div>
+                                        <Money Value="share.Amount" />
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
             </MudStack>
-        </MudForm>
+        }
     </DialogContent>
 
     <DialogActions>
+        @* Cancel is always the first thing here and is never disabled: the way out of a
+           dialog must not depend on anything inside it being in a good state. *@
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
 
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
-            Submit
-        </MudButton>
+        @if (Step == 2)
+        {
+            <MudButton Variant="Variant.Text" OnClick="@Back">Back</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                       OnClick="@Submit">Save</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                       OnClick="@NextAsync">Next</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Hides "paid by": the expenses page records what the caller paid.</summary>
     [Parameter] public bool DisablePayingUserSelection { get; set; }
+
+    /// <summary>The group to open on, or null for a personal expense.</summary>
     [Parameter] public Guid? SelectedGroupId { get; set; }
 
-    MudForm form;
+    /// <summary>
+    /// The group actually chosen, which starts as <see cref="SelectedGroupId"/> and then
+    /// belongs to the dialog.
+    /// </summary>
+    /// <remarks>
+    /// A field rather than the parameter itself, because a parameter is the caller's value:
+    /// binding the select straight to it meant that any re-render supplying parameters
+    /// again put the original group back underneath whoever had just picked another one.
+    /// </remarks>
+    private Guid? _groupId;
 
-    private bool loading = false;
+    private MudForm _form = null!;
 
-    private CreateTransactionRequest model = new()
+    private int Step { get; set; } = 1;
+
+    private readonly CreateTransactionRequest _model = new()
     {
-        DateTime = DateTimeOffset.Now
+        DateTime = DateTimeOffset.UtcNow
     };
 
-    private DateTime? selectedDate = DateTime.Today;
-    private TimeSpan? selectedTime = DateTime.Now.TimeOfDay;
+    // Set on initialisation from the clock, not here from DateTime.Now: under WebAssembly
+    // that came back as UTC while the offset attached to it below was the browser's, and
+    // an expense recorded at 12:38 in New York was stored eight hours ahead.
+    private DateTime? _selectedDate;
+    private TimeSpan? _selectedTime;
 
-    // Group / categories / users state
-    private ICollection<GroupResponse> UserGroups = [];
-    private ICollection<CategoryResponse> GroupCategories = [];
-    private ICollection<UserInfo> GroupUsers = [];
+    private IReadOnlyList<GroupResponse> _groups = [];
+    private IReadOnlyList<CategoryResponse> _categories = [];
+    private IReadOnlyList<UserInfo> _members = [];
+
+    private SplitPreviewResponse? _preview;
+    private string? _previewError;
+
+    private string Where => _groupId is null
+        ? "Personal"
+        : _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
 
     // A dialog that cannot load what it offers has nothing to offer, so it closes; the
     // presenter has already said why.
     protected override async Task OnInitializedAsync()
     {
+        _groupId = SelectedGroupId;
+
+        var now = Clock.Now;
+        _selectedDate = now.Date;
+        _selectedTime = now.TimeOfDay;
+
         var loaded = await Errors.TryAsync(async () =>
         {
-            UserGroups = await GroupsClient.GetGroupsAsync();
-            await LoadGroupDetails();
+            _groups = [.. await GroupsClient.GetGroupsAsync()];
+            await LoadGroupDetailsAsync();
         }, "Could not load your groups.");
 
         if (!loaded)
@@ -167,63 +288,110 @@
         StateHasChanged();
     }
 
-    private async Task OnGroupChanged()
+    private async Task OnGroupChangedAsync()
     {
-        await Errors.TryAsync(LoadGroupDetails, "Could not load the group.");
+        await Errors.TryAsync(LoadGroupDetailsAsync, "Could not load the group.");
         StateHasChanged();
     }
 
-    private async Task LoadGroupDetails()
+    private async Task LoadGroupDetailsAsync()
     {
-        if (SelectedGroupId is not { } groupId)
-        {
-            GroupCategories = [];
-            GroupUsers = [];
-            model.Splits = null;
-            return;
-        }
-
-        GroupCategories = await CategoriesClient.GetCategoriesAsync(groupId);
-        GroupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
-
         // A stated division names people, and the people just changed. Kept, it would
         // either name somebody who is not in this group -- which the API refuses -- or
         // quietly leave the new group's members out of their own expense.
-        model.Splits = null;
+        _model.Splits = null;
+        _model.CategoryId = null;
+        _preview = null;
+
+        if (_groupId is not { } groupId)
+        {
+            _categories = [];
+            _members = [];
+            return;
+        }
+
+        _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
+        _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
     }
 
-    private async Task Submit()
+    /// <summary>
+    /// Step one is the whole of what makes an expense; step two only decides how it is
+    /// carried. So the form is validated here, on the way through, rather than at the Save
+    /// button two screens later.
+    /// </summary>
+    private async Task NextAsync()
     {
-        await form.ValidateAsync();
+        await _form.ValidateAsync();
 
-        if (!form.IsValid)
+        if (!_form.IsValid)
             return;
 
-        // Combine date + time into a local DateTime
-        var date = selectedDate ?? DateTime.Today;
-        var time = selectedTime ?? TimeSpan.Zero;
+        ApplyDate();
 
-        var localDateTime = date.Date + time;
+        Step = 2;
 
-        // Convert to DateTimeOffset using local timezone offset
-        model.DateTime = new DateTimeOffset(
-            localDateTime,
-            TimeZoneInfo.Local.GetUtcOffset(localDateTime)
-        );
-
-        // Send the group that was picked, not just the category. A group with no
-        // categories leaves the select above empty, so CategoryId stays null -- and
-        // without the group the API cannot tell that from a personal expense, and would
-        // file it against the personal group instead. The expense itself is fine either
-        // way now: no category means an even split.
-        model.GroupId = SelectedGroupId;
-
-        MudDialog.Close(DialogResult.Ok(model));
+        await RefreshPreviewAsync();
     }
 
-    private void Cancel()
+    private void Back() => Step = 1;
+
+    private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
     {
-        MudDialog.Cancel();
+        _model.Splits = splits;
+        await RefreshPreviewAsync();
     }
 
+    /// <summary>
+    /// Asks the API what this would come to. The same call the save makes, so what is shown
+    /// is what will be stored -- including the refusal, which arrives here while there is
+    /// still a field on screen to fix it in.
+    /// </summary>
+    private async Task RefreshPreviewAsync()
+    {
+        if (_groupId is null)
+        {
+            _preview = null;
+            _previewError = null;
+            return;
+        }
+
+        _preview = null;
+        _previewError = null;
+        StateHasChanged();
+
+        var preview = await Transactions.PreviewAsync(Request());
+
+        _preview = preview;
+        _previewError = preview is null
+            ? "These shares do not add up yet, so there is nothing to show."
+            : null;
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The day and time as picked, made into the instant they mean and sent as UTC. The
+    /// clock owns the offset; nothing here asks .NET where the person is.
+    /// </summary>
+    private void ApplyDate() =>
+        _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+
+    /// <summary>
+    /// The request as it stands. <c>GroupId</c> is set from the select rather than inferred
+    /// from the category: null is a personal expense now, and it is the answer for a group
+    /// with no categories too, so the two have to be told apart here.
+    /// </summary>
+    private CreateTransactionRequest Request()
+    {
+        _model.GroupId = _groupId;
+        return _model;
+    }
+
+    private void Submit()
+    {
+        ApplyDate();
+        MudDialog.Close(DialogResult.Ok(Request()));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
 }

@@ -21,13 +21,9 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
             Identity = new UserIdentity { IdentityId = dto.ExternalUserId },
         };
 
-        // No rule: a personal group has nobody to divide with, and an expense no longer
-        // needs one to be recorded against.
-        var personalGroup = new Group { Name = "Personal" };
-
-        user.PersonalGroup = personalGroup;
-        user.Groups.Add(personalGroup);
-
+        // No personal group. An expense of one's own is one with no group at all, so the
+        // hidden group that used to stand in for it -- and appeared in the switcher, on the
+        // home page and in every count of somebody's groups -- is not seeded either.
         foreach (var groupId in dto.GroupIds)
         {
             if (await DbContext.Set<Group>().FindAsync([groupId], ct) is { } group)

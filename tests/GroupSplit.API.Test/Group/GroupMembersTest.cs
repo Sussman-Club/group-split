@@ -10,19 +10,22 @@ namespace GroupSplit.API.Test.Group;
 /// </summary>
 public class GroupMembersTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
+    /// <summary>
+    /// The person who made the group is in it, and is the only one until somebody accepts
+    /// an invitation.
+    /// </summary>
     [Fact]
-    public async Task GetGroupMembers_MembersOfPersonalGroup()
+    public async Task GetGroupMembers_ANewGroupHoldsItsCreatorAndNobodyElse()
     {
-        // Arrange
         var groupService = GetService<IGroupService>();
-        var userService = GetService<ICurrentUser>();
-        // Ensure user exists (creates personal group implicitly)
-        var user = userService.User;
-        var personalGroupId = user.PersonalGroup.Id;
-        // Act
-        var membersQuery = await groupService.GetGroupMembers(personalGroupId, TestContext.Current.CancellationToken);
+        var user = GetService<ICurrentUser>().User;
+
+        var group = await groupService.CreateGroup(new CreateGroupRequest { Name = "Just made" },
+            TestContext.Current.CancellationToken);
+
+        var membersQuery = await groupService.GetGroupMembers(group.Id, TestContext.Current.CancellationToken);
         var members = await membersQuery.ToListAsync(TestContext.Current.CancellationToken);
-        // Assert
+
         Assert.Single(members);
         Assert.Equal(user.Id, members[0].Id);
     }

@@ -5,6 +5,7 @@
 @using GroupSplit.Shared
 @inject ITransactionsPageStateService TransactionsService
 @inject IDialogService DialogService
+@inject LocalClock Clock
 @implements IAsyncDisposable
 
 <PageTitle>Expenses - Group Split</PageTitle>
@@ -33,7 +34,22 @@
 </div>
 
 <div class="gs-stack">
-    <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+    <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
+        <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+
+        @* Personal is the absence of a group, so it is a filter here rather than an entry
+           in a group switcher. It used to be a hidden group called "Personal" that showed
+           up as a chip, a card on the home page and a member count of one. *@
+        <div class="gs-inline gs-range" role="group" aria-label="Which expenses">
+            @foreach (var (label, value) in Scopes)
+            {
+                var scope = value;
+                <button type="button" class="gs-chip @(_personal == scope ? "active" : "")"
+                        aria-pressed="@(_personal == scope ? "true" : "false")"
+                        @onclick="@(() => OnScopeChangedAsync(scope))">@label</button>
+            }
+        </div>
+    </div>
 
     <div class="gs-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
@@ -46,7 +62,7 @@
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
             <span class="gs-eyebrow">This month</span>
             <Money Value="ThisMonth" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">@DateTime.Today.ToString("MMMM")</span>
+            <span class="gs-muted" style="font-size: .8125rem">@Clock.Today.ToString("MMMM")</span>
         </div>
         <div class="gs-card gs-stat gs-reveal" style="--i: 2">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
@@ -68,11 +84,21 @@
     private DateFilter _range = DateFilter.AllTime;
     private ExpensesGrid? _grid;
 
+    /// <summary>Null for everything, true for your own only, false for the shared ones.</summary>
+    private bool? _personal;
+
+    private static readonly (string Label, bool? Value)[] Scopes =
+    [
+        ("Everything", null),
+        ("Shared", false),
+        ("Personal", true)
+    ];
+
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
     // Narrowed by anything -- a search, a span, or both -- and the figures beside the page
     // have to describe that narrowing rather than the whole.
-    private bool IsNarrowed => IsSearching || !_range.IsAllTime;
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime || _personal is not null;
 
     private string RecordedSubline => IsNarrowed ? $"{MatchCount} in view" : "showing all";
 
@@ -81,7 +107,12 @@
         (true, true) => "of the matches",
         (true, false) => $"matches in {_range.Label.ToLowerInvariant()}",
         (false, false) => _range.Label.ToLowerInvariant(),
-        _ => "all time"
+        _ => _personal switch
+        {
+            true => "your own expenses",
+            false => "shared expenses",
+            _ => "all time"
+        }
     };
 
     // The tiles read the server's figures rather than adding up the rows on screen: those
@@ -103,7 +134,8 @@
         var narrowed = query with
         {
             Search = IsSearching ? _searchString.Trim() : null,
-            Range = _range
+            Range = _range,
+            Personal = _personal
         };
 
         await TransactionsService.LoadAsync(narrowed, cancellationToken);
@@ -116,6 +148,12 @@
     private Task OnRangeChangedAsync(DateFilter range)
     {
         _range = range;
+        return BackToFirstPageAsync();
+    }
+
+    private Task OnScopeChangedAsync(bool? personal)
+    {
+        _personal = personal;
         return BackToFirstPageAsync();
     }
 
@@ -151,10 +189,10 @@
             { x => x.DisablePayingUserSelection, true }
         };
 
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
         var dialogReference =
-            await DialogService.ShowAsync<CreateTransactionDialog>("Create a transaction", parameters, options);
+            await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
 
         var request = await dialogReference.GetReturnValueAsync<CreateTransactionRequest>();
 

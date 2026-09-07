@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -21,6 +21,10 @@
         <!-- The filters, sort maps and DTO projections that back the endpoints are internal;
              the tests exercise them directly rather than only through HTTP. -->
         <InternalsVisibleTo Include="GroupSplit.API.Test" />
+        <!-- And to the Aspire suite, which runs the same projections and sort maps against
+             a real Postgres: the in-memory provider the unit tests use cannot tell a query
+             that translates from one that does not. -->
+        <InternalsVisibleTo Include="GroupSplit.AppHost.Test" />
     </ItemGroup>
 
     <ItemGroup>

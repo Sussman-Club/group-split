@@ -33,12 +33,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Add another member
         var otherUser = await CreateNewUser();
 
-        await groupService.AddGroupMembers(
-            group.Id,
-            new AddMemberRequest(
-                [new UserIdentifier { Email = otherUser.Email! }]
-            ),
-            TestContext.Current.CancellationToken);
+        await JoinGroup(group.Id, otherUser);
 
         var request = new SettleRequest
         {
