@@ -73,7 +73,9 @@ public static class ErrorMessages
         [ErrorCodes.BankConnectionNeedsAttention] = "Your bank needs you to sign in again before this can be synced.",
         [ErrorCodes.BankTransactionIsCredit] = "This is money coming in, so it cannot be added as an expense. You can ignore it instead.",
         [ErrorCodes.BankProviderUnavailable] = "We could not reach your bank just now. Please try again in a few minutes.",
-        [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead."
+        [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead.",
+        [ErrorCodes.PossibleDuplicateExpense] = "This looks like an expense you have already recorded. Check the suggestion on the row before adding it again.",
+        [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction."
     };
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>

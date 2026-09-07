@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
@@ -10,6 +11,7 @@ public sealed class TransactionCommands(
     ITransactionsClient transactions,
     ApiErrorPresenter errors,
     ISnackbar snackbar,
+    IDialogService dialogs,
     DataChangeNotifier changes) : ITransactionCommands
 {
     public Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
@@ -26,7 +28,50 @@ public sealed class TransactionCommands(
                 Severity.Success);
 
             await changes.NotifyTransactionsChangedAsync();
+
+            await OfferBankRowsAsync(created, ct);
         }, "Could not save the expense.");
+
+    /// <summary>
+    /// Asks whether what was just recorded is a charge already waiting in the inbox, and
+    /// offers to attach it rather than leave the two to be counted twice.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the dialogs that record expenses, because there are several of
+    /// those and the question is the same from all of them. It runs after the expense is
+    /// saved and after the announcement, so nothing about recording an expense waits on it.
+    /// <para>
+    /// A failure is swallowed. The expense is saved and said so; the same suggestion is
+    /// waiting on the row in the inbox, so the worst a failed read costs is that this
+    /// particular prompt did not appear.
+    /// </para>
+    /// </remarks>
+    private async Task OfferBankRowsAsync(TransactionResponse created, CancellationToken ct)
+    {
+        IReadOnlyList<BankTransactionResponse> rows;
+
+        try
+        {
+            rows = [.. await transactions.GetTransactionBankMatchesAsync(created.Id, ct)];
+        }
+        catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
+        {
+            return;
+        }
+
+        if (rows.Count == 0)
+            return;
+
+        var parameters = new DialogParameters<AttachBankRowDialog>
+        {
+            { dialog => dialog.Expense, created },
+            { dialog => dialog.Rows, rows }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        await dialogs.ShowAsync<AttachBankRowDialog>("Your bank already sent this", parameters, options);
+    }
 
     public Task<bool> UpdateAsync(Guid transactionId, JsonPatchDocument<UpdateTransactionRequest> patch,
         string name, CancellationToken ct = default) =>

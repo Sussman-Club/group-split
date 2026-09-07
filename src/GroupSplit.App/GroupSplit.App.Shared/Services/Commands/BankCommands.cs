@@ -81,6 +81,43 @@ public sealed class BankCommands(
         return done ? expense : null;
     }
 
+    public async Task<TransactionResponse?> AttachAsync(Guid rowId, Guid transactionId,
+        CancellationToken ct = default)
+    {
+        TransactionResponse? expense = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            expense = await inbox.LinkBankTransactionAsync(rowId, new LinkBankTransactionRequest
+            {
+                TransactionId = transactionId
+            }, ct);
+
+            // Worth saying plainly, because the thing being confirmed is that there is
+            // still only one expense.
+            snackbar.Add($"Attached to {expense.Name}. It is still one expense.", Severity.Success);
+
+            await changes.NotifyBankDataChangedAsync();
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not attach it to that expense.");
+
+        return done ? expense : null;
+    }
+
+    public Task<bool> DismissMatchAsync(Guid rowId, Guid transactionId, string title,
+        CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await inbox.DismissBankTransactionMatchAsync(rowId, new DismissBankMatchRequest
+            {
+                TransactionId = transactionId
+            }, ct);
+
+            snackbar.Add($"{title} is a separate payment. We will not suggest that one again.", Severity.Success);
+
+            await changes.NotifyBankDataChangedAsync();
+        }, "Could not put that suggestion away.");
+
     public Task<bool> IgnoreAsync(Guid rowId, string title, CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {

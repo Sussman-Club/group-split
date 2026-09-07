@@ -161,6 +161,13 @@ public class PageStateRefreshTest
                 return created;
             });
 
+        // Nothing is linked to a bank here, so recording an expense finds no imported row
+        // that could be the same money. Set up all the same, because the command asks after
+        // every create and an unconfigured mock answers null.
+        _transactionsClient
+            .Setup(c => c.GetTransactionBankMatchesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
         _transactionsClient
             .Setup(c => c.UpdateTransactionAsync(It.IsAny<Guid>(),
                 It.IsAny<JsonPatchDocument<UpdateTransactionRequest>>(), It.IsAny<CancellationToken>()))
@@ -256,7 +263,7 @@ public class PageStateRefreshTest
         var groupCommands = new GroupCommands(_groupsClient.Object, _invitationsClient.Object, presenter,
             _snackbar.Object, _changes);
         var transactionCommands = new TransactionCommands(_transactionsClient.Object, presenter,
-            _snackbar.Object, _changes);
+            _snackbar.Object, Mock.Of<IDialogService>(), _changes);
 
         // No JS behind it, so the clock falls back to the runtime's own offset -- which is
         // what the "this month" assertion below compares against too.

@@ -1,0 +1,113 @@
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IBankCommands Bank
+
+@*
+    The other order of the duplicate problem. Somebody records the dinner at the table so
+    nobody forgets it; the card charge is already waiting in the inbox, or lands there two
+    days later. Asked here, right after the expense is saved, while they still know what
+    they paid for.
+
+    Two answers, and neither of them happens on its own: attach the bank's row to the
+    expense that was just recorded, or say it is a different payment -- which is remembered,
+    so the pair is not raised again.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2">
+                Your bank sent @(Rows.Count == 1 ? "a transaction" : "transactions") that could be
+                <strong>@Expense.Name</strong>. Attaching one keeps a single expense and marks the
+                bank's row as dealt with.
+            </MudText>
+
+            <div class="gs-list">
+                @foreach (var item in Rows)
+                {
+                    var row = item;
+                    <div class="gs-row" style="cursor: default" @key="row.Id">
+                        <Avatar Name="@row.Title" />
+                        <div style="min-width: 0">
+                            <div class="title"><span>@row.Title</span></div>
+                            <div class="meta">@row.AccountName · @row.SpentOn.ToShortDateString()</div>
+                        </div>
+
+                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                            <Money Value="@row.Amount" Currency="@row.Currency" />
+                            <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           Class="gs-btn-pill" Disabled="@(_busy is not null)"
+                                           OnClick="@(() => AttachAsync(row))">Attach</MudButton>
+                                <MudButton Variant="Variant.Text" Size="Size.Small"
+                                           Disabled="@(_busy is not null)"
+                                           OnClick="@(() => DismissAsync(row))">Not the same</MudButton>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        @* Deciding later is a decision too: the suggestion is on the row in the inbox until
+           somebody answers it, so closing this settles nothing and loses nothing. *@
+        <MudButton Variant="Variant.Text" OnClick="Close">Decide later</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>The expense that has just been recorded.</summary>
+    [Parameter, EditorRequired] public TransactionResponse Expense { get; set; } = null!;
+
+    /// <summary>The imported rows it could be, closest first.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<BankTransactionResponse> Rows { get; set; } = [];
+
+    private Guid? _busy;
+
+    private async Task AttachAsync(BankTransactionResponse row)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            if (await Bank.AttachAsync(row.Id, Expense.Id) is not null)
+                MudDialog.Close();
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private async Task DismissAsync(BankTransactionResponse row)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            if (!await Bank.DismissMatchAsync(row.Id, Expense.Id, row.Title))
+                return;
+
+            // The one that was dismissed goes; the rest are still open questions.
+            Rows = [.. Rows.Where(candidate => candidate.Id != row.Id)];
+
+            if (Rows.Count == 0)
+                MudDialog.Close();
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}
