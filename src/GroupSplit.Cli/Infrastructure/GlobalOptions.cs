@@ -25,12 +25,12 @@ public static class GlobalOptions
         Recursive = true
     };
 
-    public static readonly Option<OutputFormat> Output = new("--output", "-o")
+    public static readonly Option<OutputFormat> Output = new Option<OutputFormat>("--output", "-o")
     {
         Description = "Output format: auto, text or json. auto is text on a terminal, json when piped.",
         DefaultValueFactory = _ => OutputFormat.Auto,
         Recursive = true
-    };
+    }.WithDescribedValues();
 
     public static readonly Option<bool> Json = new("--json")
     {

@@ -37,7 +37,17 @@ public static class CliApplication
     public static async Task<int> RunAsync(
         string[] args, TextWriter stdout, TextWriter stderr, CancellationToken ct = default)
     {
-        var parseResult = CreateRootCommand().Parse(args);
+        var root = CreateRootCommand();
+
+        // Before the parse, because a suggest request carries a command line of its own and
+        // the two arguments a shell passes here are not it. See Suggestions for why this
+        // does not leave the directive to System.CommandLine.
+        if (Suggestions.TryWrite(args, root, stdout))
+        {
+            return ExitCodes.Success;
+        }
+
+        var parseResult = root.Parse(args);
 
         // Parse errors are intercepted rather than left to Invoke, which reports them as
         // prose on stderr and exit code 1. A caller that asked for JSON gets the same
