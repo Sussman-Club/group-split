@@ -11,6 +11,12 @@ public class Group : Entity
     /// <summary>Who has been asked to join and has not answered yet.</summary>
     public virtual ICollection<GroupInvitation> Invitations { get; } = [];
 
+    /// <summary>
+    /// The shareable links into this group, live and dead alike -- a revoked one is kept so
+    /// that opening it can say it was withdrawn.
+    /// </summary>
+    public virtual ICollection<GroupJoinLink> JoinLinks { get; } = [];
+
     public required string Name { get; set; }
 
     /// <summary>

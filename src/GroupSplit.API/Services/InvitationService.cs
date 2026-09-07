@@ -45,7 +45,8 @@ public interface IInvitationService
     Task Withdraw(Guid groupId, Guid invitationId, CancellationToken ct = default);
 }
 
-public sealed class InvitationService(ICurrentUser userContext, AppDbContext context) : IInvitationService
+public sealed class InvitationService(ICurrentUser userContext, AppDbContext context, IGroupJoiner joiner)
+    : IInvitationService
 {
     public async Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId, AddMemberRequest request,
         CancellationToken ct = default)
@@ -148,19 +149,7 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
 
         // Accepting one for a group they are already in is a state the invitation should
         // not have been in; the row goes either way, so asking twice answers the same.
-        if (group.Users.All(member => member.Id != user.Id))
-        {
-            group.Users.Add(user);
-            await context.SaveChangesAsync(ct);
-
-            // After the join, and separately: EF writes the join row itself, so the payload
-            // on it is set on the row that now exists rather than on one built by hand.
-            var membership = await context.Set<GroupMembership>()
-                .FirstOrDefaultAsync(row => row.GroupId == group.Id && row.UserId == user.Id, ct);
-
-            if (membership is not null)
-                membership.JoinedAt = DateTimeOffset.UtcNow;
-        }
+        await joiner.Join(group, user, ct);
 
         context.Remove(invitation);
         await context.SaveChangesAsync(ct);

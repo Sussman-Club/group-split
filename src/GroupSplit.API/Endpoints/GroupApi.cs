@@ -36,6 +36,9 @@ public static class GroupApi
             group.MapGetInvitations();
             group.MapInvite();
             group.MapWithdrawInvitation();
+            group.MapGetJoinLinks();
+            group.MapCreateJoinLink();
+            group.MapRevokeJoinLinks();
             group.MapGetGroupUserBalance();
             group.MapSettle();
             group.MapArchive();
@@ -232,6 +235,66 @@ public static class GroupApi
                     return Results.NoContent();
                 })
                 .WithName("WithdrawGroupInvitation")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// The group's standing join links, which is one or none.
+        /// </summary>
+        /// <remarks>
+        /// A collection, like the invitations beside it, and empty for a group nobody has
+        /// made a link for. That is an ordinary state of a group and not a missing thing:
+        /// the members page renders "make one" from an empty reading, where a 404 -- or a
+        /// 204, which the generated client turns into a thrown exception -- would have it
+        /// treat the commonest case as a failure.
+        /// </remarks>
+        private RouteHandlerBuilder MapGetJoinLinks()
+        {
+            return group.MapGet("{id:guid}/join-links", async (
+                    Guid id,
+                    IJoinLinkService links,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await links.ForGroup(id, ct));
+                })
+                .WithName("GetGroupJoinLinks")
+                .Produces<GroupJoinLinkResponse[]>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Issues a link, putting out whatever the group had. Also how a link is reset:
+        /// there is nothing to say about the old one once it is replaced.
+        /// </summary>
+        private RouteHandlerBuilder MapCreateJoinLink()
+        {
+            return group.MapPost("{id:guid}/join-links", async (
+                    Guid id,
+                    IJoinLinkService links,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await links.Create(id, ct));
+                })
+                .WithName("CreateGroupJoinLink")
+                .Produces<GroupJoinLinkResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Puts out every live link into the group, so the URLs already shared stop working.
+        /// </summary>
+        private RouteHandlerBuilder MapRevokeJoinLinks()
+        {
+            return group.MapDelete("{id:guid}/join-links", async (
+                    Guid id,
+                    IJoinLinkService links,
+                    CancellationToken ct) =>
+                {
+                    await links.Revoke(id, ct);
+                    return Results.NoContent();
+                })
+                .WithName("RevokeGroupJoinLinks")
                 .Produces(StatusCodes.Status204NoContent)
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
