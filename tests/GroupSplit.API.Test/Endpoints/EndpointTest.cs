@@ -75,6 +75,8 @@ public class EndpointTest : IAsyncLifetime
     [InlineData("/groups")]
     [InlineData("/transactions")]
     [InlineData("/transactions/summary")]
+    [InlineData("/transactions/shares")]
+    [InlineData("/transactions/shares/summary")]
     [InlineData("/users/me")]
     public async Task An_anonymous_request_is_refused(string route)
     {
@@ -418,6 +420,64 @@ public class EndpointTest : IAsyncLifetime
         Assert.NotNull(summary);
         Assert.Equal(3, summary.Count);
         Assert.Equal(60m, summary.Total);
+    }
+
+    /// <summary>
+    /// The share listing over the wire, and the routing question it raises: "shares" sits
+    /// where an id goes, and only the guid constraint on the neighbouring route keeps the
+    /// two apart.
+    /// </summary>
+    [Fact]
+    public async Task A_share_listing_is_a_page_of_what_the_caller_owes_a_part_of()
+    {
+        var transactionId = await CreateTransaction(10m);
+
+        var listing = await Client.GetFromJsonAsync<JsonElement>(
+            "/transactions/shares", Json, TestContext.Current.CancellationToken);
+
+        var row = Assert.Single(listing.GetProperty("items").EnumerateArray());
+
+        Assert.Equal(transactionId, row.GetProperty("id").GetGuid());
+        Assert.Equal(10m, row.GetProperty("amount").GetDecimal());
+        // A personal expense is nobody else's to share, so the whole of it is the caller's.
+        Assert.Equal(10m, row.GetProperty("share").GetDecimal());
+        Assert.True(row.GetProperty("paidByYou").GetBoolean());
+        Assert.Equal(1, listing.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_share_listing_sorts_by_the_one_key_only_it_offers()
+    {
+        await CreateTransaction(30m);
+        await CreateTransaction(10m);
+        await CreateTransaction(20m);
+
+        var listing = await Client.GetFromJsonAsync<JsonElement>(
+            "/transactions/shares?SortBy=share&SortDescending=false",
+            Json, TestContext.Current.CancellationToken);
+
+        var shares = listing.GetProperty("items").EnumerateArray()
+            .Select(element => element.GetProperty("share").GetDecimal()).ToList();
+
+        Assert.Equal([10m, 20m, 30m], shares);
+    }
+
+    [Fact]
+    public async Task A_share_summary_keeps_what_is_owed_apart_from_what_was_paid_for()
+    {
+        await CreateTransaction(10m);
+        await CreateTransaction(20m);
+
+        var summary = await Client.GetFromJsonAsync<ExpenseShareSummaryResponse>(
+            "/transactions/shares/summary", Json, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(summary);
+        Assert.Equal(2, summary.Count);
+        Assert.Equal(30m, summary.Total);
+        Assert.Equal(30m, summary.Share);
+        // Both are the caller's own, so none of it is a debt. A single total would have
+        // said they owed thirty pounds to themselves.
+        Assert.Equal(0m, summary.OwedToOthers);
     }
 
     [Fact]

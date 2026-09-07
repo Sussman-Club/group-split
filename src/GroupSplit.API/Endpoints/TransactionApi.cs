@@ -26,6 +26,8 @@ public static class TransactionApi
 
             group.MapGetAll();
             group.MapGetSummary();
+            group.MapGetShares();
+            group.MapGetSharesSummary();
             group.MapGetById();
             group.MapBankMatches();
             group.MapCreate();
@@ -83,6 +85,64 @@ public static class TransactionApi
                 })
                 .WithName("GetTransactionsSummary")
                 .Produces<TransactionSummaryResponse>();
+        }
+
+        /// <summary>
+        /// The other half of the ledger: what the caller owes a share of, expense by
+        /// expense, whoever paid for it.
+        /// </summary>
+        /// <remarks>
+        /// <c>GET /transactions</c> answers "what have I paid" and had no counterpart, so
+        /// the only way to see what you owed was a per-group balance with no rows behind
+        /// it. The rows have existed since splits became their own table -- one per person
+        /// per transaction, indexed on the user -- and this reads them.
+        /// <para>
+        /// The same filter, sort and page as the expense listing, over the same expenses,
+        /// so the two are two views of one set rather than two listings that happen to
+        /// agree.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapGetShares()
+        {
+            return group.MapGet("shares", async (
+                    [AsParameters] TransactionFilter filter,
+                    [AsParameters] SortRequest sort,
+                    [AsParameters] PageRequest page,
+                    ICurrentUser currentUser,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var shares = await transactionService.Shares(ct);
+                    var expenses = await transactionService.List(ct);
+
+                    return Results.Ok(await shares
+                        .ToSharePageAsync(expenses, filter, sort, page, currentUser.User.Id, ct));
+                })
+                .WithName("GetTransactionShares")
+                .Produces<PagedResponse<ExpenseShareResponse>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
+        }
+
+        /// <summary>
+        /// What the share listing adds up to over the whole match, the way
+        /// <c>GET /transactions/summary</c> does for the one beside it.
+        /// </summary>
+        private RouteHandlerBuilder MapGetSharesSummary()
+        {
+            return group.MapGet("shares/summary", async (
+                    [AsParameters] TransactionFilter filter,
+                    ICurrentUser currentUser,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var shares = await transactionService.Shares(ct);
+                    var expenses = await transactionService.List(ct);
+
+                    return Results.Ok(await shares
+                        .ToShareSummaryAsync(expenses, filter, currentUser.User.Id, ct));
+                })
+                .WithName("GetTransactionSharesSummary")
+                .Produces<ExpenseShareSummaryResponse>();
         }
 
         private RouteHandlerBuilder MapGetById()
@@ -359,6 +419,79 @@ public static class TransactionApi
         }
     }
 
+    extension(IQueryable<TransactionSplit> shares)
+    {
+        /// <summary>
+        /// The caller's shares of <paramref name="expenses"/>, one row per expense.
+        /// </summary>
+        /// <remarks>
+        /// A join rather than a walk through <c>split.Transaction</c>, because the join is
+        /// also how the narrowing gets in: hand it the filtered expense query and the
+        /// shares of everything else fall away, with no second copy of the filter to keep
+        /// in step with the first.
+        /// </remarks>
+        private IQueryable<ExpenseShareResponse> SelectDto(IQueryable<Expense> expenses, Guid userId)
+        {
+            return from split in shares
+                join expense in expenses on split.TransactionId equals expense.Id
+                select new ExpenseShareResponse
+                {
+                    Id = expense.Id,
+                    Amount = expense.Amount,
+                    // The stored split, not the amount divided by anything. It is the row
+                    // every balance is summed from, so a listing that re-derived it could
+                    // disagree with the figure the group page shows.
+                    Share = split.Amount,
+                    DateTime = expense.DateTime,
+                    Name = expense.Name,
+                    Description = expense.Description,
+                    GroupId = expense.GroupId,
+                    GroupName = expense.Group != null ? expense.Group.Name : null,
+                    PaidByUserId = expense.User.Id,
+                    PaidByUserName = expense.User.FirstName +
+                                     (expense.User.LastName != null ? " " + expense.User.LastName : ""),
+                    PaidByYou = expense.UserId == userId,
+                    CategoryId = expense.CategoryId,
+                    Category = expense.Category != null ? expense.Category.Name : null
+                };
+        }
+
+        /// <summary>
+        /// The filter, the order and the page, in that order -- the same three the expense
+        /// listing applies, and the same <see cref="ApplyFilter"/> applying the first.
+        /// </summary>
+        internal Task<PagedResponse<ExpenseShareResponse>> ToSharePageAsync(
+            IQueryable<Expense> expenses, TransactionFilter filter, SortRequest sort, PageRequest page,
+            Guid userId, CancellationToken ct) =>
+            shares.SelectDto(expenses.ApplyFilter(filter), userId)
+                .ApplySort(sort, ShareSort)
+                .ToPageAsync(page, ct);
+
+        /// <summary>The same filter, counted and totalled instead of paged.</summary>
+        /// <remarks>
+        /// Four figures and four queries. One <c>GROUP BY</c> would answer them together,
+        /// and a conditional sum inside it is the kind of thing that translates on one
+        /// provider and not the other -- the tests run in memory and production runs on
+        /// Npgsql, so a translation failure would first be seen by a person. Three extra
+        /// aggregates over an indexed join is not worth taking that risk for.
+        /// </remarks>
+        internal async Task<ExpenseShareSummaryResponse> ToShareSummaryAsync(
+            IQueryable<Expense> expenses, TransactionFilter filter, Guid userId, CancellationToken ct)
+        {
+            var matches = shares.SelectDto(expenses.ApplyFilter(filter), userId);
+
+            return new ExpenseShareSummaryResponse(
+                await matches.CountAsync(ct),
+                await matches.SumAsync(row => row.Amount, ct),
+                await matches.SumAsync(row => row.Share, ct),
+                // What is actually owed. A share of an expense the caller paid for is money
+                // they already have -- they are owed the rest of it -- so counting it here
+                // would put every personal expense and every dinner they picked up on the
+                // wrong side of the same figure the home page reads.
+                await matches.Where(row => !row.PaidByYou).SumAsync(row => row.Share, ct));
+        }
+    }
+
     /// <summary>
     /// The orders an expense listing offers. Applied to the entity rather than the response,
     /// so a key can reach through a navigation to the group or the payer.
@@ -374,4 +507,24 @@ public static class TransactionApi
         .Key("paidBy", transaction => transaction.User.FirstName)
         .Default("dateTime")
         .TieBreak(transaction => transaction.Id);
+
+    /// <summary>
+    /// The orders the share listing offers: the expense listing's, plus the one figure
+    /// only this listing has.
+    /// </summary>
+    /// <remarks>
+    /// Applied to the response rather than to the entity, because the join has already
+    /// flattened the group and the payer onto it -- so a key reaches them without a
+    /// navigation, and <c>share</c> is a column here rather than a row on another table.
+    /// </remarks>
+    internal static readonly SortMap<ExpenseShareResponse> ShareSort = new SortMap<ExpenseShareResponse>()
+        .Key("dateTime", share => share.DateTime, defaultDescending: true)
+        .Key("share", share => share.Share, defaultDescending: true)
+        .Key("amount", share => share.Amount, defaultDescending: true)
+        .Key("name", share => share.Name)
+        .Key("category", share => share.Category)
+        .Key("group", share => share.GroupName)
+        .Key("paidBy", share => share.PaidByUserName)
+        .Default("dateTime")
+        .TieBreak(share => share.Id);
 }

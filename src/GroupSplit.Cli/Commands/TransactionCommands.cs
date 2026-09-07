@@ -64,6 +64,7 @@ public static class TransactionCommands
         transactions.Subcommands.Add(Create());
         transactions.Subcommands.Add(Update());
         transactions.Subcommands.Add(Summary());
+        transactions.Subcommands.Add(Shares());
         transactions.Subcommands.Add(BankMatches());
         transactions.Subcommands.Add(Delete());
 
@@ -368,6 +369,127 @@ public static class TransactionCommands
 
             context.Output.Write(summary, value => new Markup(
                 $"[bold]{value.Count}[/] transactions totalling [bold]{value.Total:N2}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// What you owe a share of, rather than what you paid for.
+    /// </summary>
+    /// <remarks>
+    /// Its own group of two commands rather than a flag on <c>list</c>, because the rows
+    /// are a different shape -- each carries the whole expense and your part of it, which
+    /// are two numbers -- and the summary underneath answers four figures rather than two.
+    /// A flag would have had to widen both.
+    /// </remarks>
+    private static Command Shares()
+    {
+        var shares = new Command("shares", "Expenses you owe a share of, whoever paid.");
+
+        shares.Subcommands.Add(SharesList());
+        shares.Subcommands.Add(SharesSummary());
+
+        return shares;
+    }
+
+    private static Command SharesList()
+    {
+        var shareSortBy = new Option<string?>("--sort-by")
+        {
+            Description = "dateTime, share, amount, name, category, group or paidBy. Defaults to dateTime."
+        };
+
+        var command = new Command("list", "List the expenses you owe a share of, newest first.")
+        {
+            Group, From, To, Search, Category, shareSortBy, Order, Page, PageSize
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+
+            var page = await context.Transactions.GetTransactionSharesAsync(
+                from: parse.GetValue(From),
+                to: parse.GetValue(To),
+                groupId: parse.GetValue(Group),
+                paidByUserId: null,
+                category: parse.GetValue(Category),
+                personal: null,
+                search: parse.GetValue(Search),
+                sortBy: parse.GetValue(shareSortBy),
+                sortDescending: parse.GetValue(Order).Descending(),
+                page: parse.GetValue(Page),
+                pageSize: parse.GetValue(PageSize),
+                cancellationToken: ct);
+
+            context.Output.Write(page, value =>
+            {
+                if (value.Items.Count == 0)
+                {
+                    return new Markup(Tables.Empty("shares") + "\n");
+                }
+
+                var table = Tables.Grid("Id", "Date", "Name", "Total", "Your share", "Paid by", "Group");
+
+                foreach (var share in value.Items)
+                {
+                    table.AddRow(
+                        share.Id.ToString(),
+                        share.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
+                        Markup.Escape(share.Name),
+                        share.Amount.ToString("N2"),
+                        share.Share.ToString("N2"),
+                        // Marked rather than left to be worked out from the name: your share
+                        // of something you paid for yourself is the one row here that is not
+                        // a debt, and it is the whole reason the summary has two totals.
+                        share.PaidByYou ? "[grey]you[/]" : Markup.Escape(share.PaidByUserName),
+                        Markup.Escape(share.GroupName ?? "-"));
+                }
+
+                return new Rows(table, Tables.PageFooter(value));
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command SharesSummary()
+    {
+        var command = new Command("summary", "Total the shares matching a filter.")
+        {
+            Group, From, To, Search, Category
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+
+            var summary = await context.Transactions.GetTransactionSharesSummaryAsync(
+                from: parse.GetValue(From),
+                to: parse.GetValue(To),
+                groupId: parse.GetValue(Group),
+                paidByUserId: null,
+                category: parse.GetValue(Category),
+                personal: null,
+                search: parse.GetValue(Search),
+                cancellationToken: ct);
+
+            context.Output.Write(summary, value => new Rows(
+                new Markup(
+                    $"[bold]{value.Count}[/] expenses totalling [bold]{value.Total:N2}[/], "
+                    + $"your share [bold]{value.Share:N2}[/]\n"),
+                // Said separately, and said last, because it is the only one of the four
+                // that is money owed: the rest counts what you paid for yourself, which you
+                // are owed a part of rather than owing.
+                new Markup(
+                    $"[grey]Of that, [/][bold]{value.OwedToOthers:N2}[/][grey] is on expenses "
+                    + "somebody else paid. Settlements are not counted; see "
+                    + "`groupsplit users position`.[/]\n")));
 
             return ExitCodes.Success;
         });

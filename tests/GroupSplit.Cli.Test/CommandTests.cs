@@ -436,6 +436,85 @@ public sealed class CommandTests : IDisposable
         Assert.Null(request.Parameter("from"));
     }
 
+    // ---- the share listing -----------------------------------------------------------
+
+    [Fact]
+    public async Task Shares_list_carries_both_the_whole_expense_and_your_part_of_it()
+    {
+        _api.Returns("/api/transactions/shares", Page(
+            Share("Dinner", 90m, 45m, paidByYou: false),
+            Share("Taxi", 30m, 15m, paidByYou: true)));
+
+        var result = await Cli.RunAsync("transactions", "shares", "list");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var items = result.Json.GetProperty("items");
+        Assert.Equal(90m, items[0].GetProperty("amount").GetDecimal());
+        Assert.Equal(45m, items[0].GetProperty("share").GetDecimal());
+        Assert.False(items[0].GetProperty("paidByYou").GetBoolean());
+        Assert.True(items[1].GetProperty("paidByYou").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Shares_list_marks_the_rows_you_paid_for_yourself()
+    {
+        _api.Returns("/api/transactions/shares", Page(
+            Share("Dinner", 90m, 45m, paidByYou: false),
+            Share("Taxi", 30m, 15m, paidByYou: true)));
+
+        var result = await Cli.RunAsync("transactions", "shares", "list", "--output", "text");
+
+        Assert.Contains("Your share", result.Stdout);
+        Assert.Contains("45.00", result.Stdout);
+        // The payer column says "you" rather than repeating the name, because that row is
+        // the one that is not a debt.
+        Assert.Contains("you", result.Stdout);
+        Assert.Contains("2 total", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Shares_list_sends_the_filter_and_the_share_sort_it_was_given()
+    {
+        _api.Returns("/api/transactions/shares", Page());
+
+        var groupId = Guid.NewGuid();
+
+        await Cli.RunAsync(
+            "transactions", "shares", "list",
+            "--group", groupId.ToString(),
+            "--search", "pizza",
+            "--sort-by", "share",
+            "--order", "desc",
+            "--page-size", "5");
+
+        var request = _api.Requests.Single(r => r.Path == "/api/transactions/shares");
+
+        Assert.Equal(groupId.ToString(), request.Parameter("groupId"));
+        Assert.Equal("pizza", request.Parameter("search"));
+        Assert.Equal("share", request.Parameter("sortBy"));
+        Assert.Equal("true", request.Parameter("sortDescending"));
+        Assert.Equal("5", request.Parameter("pageSize"));
+    }
+
+    [Fact]
+    public async Task Shares_summary_keeps_what_you_owe_apart_from_what_you_paid_for()
+    {
+        _api.Returns("/api/transactions/shares/summary", new
+        {
+            count = 3, total = 124m, share = 64m, owedToOthers = 45m
+        });
+
+        var result = await Cli.RunAsync("transactions", "shares", "summary", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("124.00", result.Stdout);
+        Assert.Contains("64.00", result.Stdout);
+        // The figure that is actually a debt, said separately: 64 is what the caller's
+        // share of everything comes to, and only 45 of it is owed to anybody.
+        Assert.Contains("45.00", result.Stdout);
+    }
+
     [Fact]
     public async Task Transactions_show_lists_the_split()
     {
@@ -617,6 +696,14 @@ public sealed class CommandTests : IDisposable
         id = Guid.NewGuid(), name, description = (string?)null, amount,
         dateTime = DateTimeOffset.UtcNow, groupId, groupName,
         paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
+        categoryId = (Guid?)null, category = (string?)null
+    };
+
+    private static object Share(string name, decimal amount, decimal share, bool paidByYou) => new
+    {
+        id = Guid.NewGuid(), name, description = (string?)null, amount, share, paidByYou,
+        dateTime = DateTimeOffset.UtcNow, groupId = Guid.NewGuid(), groupName = "Trip",
+        paidByUserId = Guid.NewGuid(), paidByUserName = "Omar",
         categoryId = (Guid?)null, category = (string?)null
     };
 

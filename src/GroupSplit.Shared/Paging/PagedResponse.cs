@@ -7,8 +7,8 @@ namespace GroupSplit.Shared;
 /// </summary>
 /// <remarks>
 /// Deliberately no computed members -- no <c>TotalPages</c>, no <c>HasNext</c>. They would
-/// be serialized, land in the OpenAPI schema, and have to be restated in
-/// <see cref="PagedResponseOfTransactionResponse"/>; a caller can divide.
+/// be serialized, land in the OpenAPI schema, and have to be restated in every
+/// <c>PagedResponseOf…</c> below; a caller can divide.
 /// </remarks>
 public record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
 
@@ -35,3 +35,14 @@ public sealed record PagedResponseOfTransactionResponse(
     int PageSize,
     int TotalCount)
     : PagedResponse<TransactionResponse>(Items, Page, PageSize, TotalCount);
+
+/// <summary>
+/// The wire type for a page of the caller's shares. Exists for the same reason
+/// <see cref="PagedResponseOfTransactionResponse"/> does, and nothing else reads it.
+/// </summary>
+public sealed record PagedResponseOfExpenseShareResponse(
+    IReadOnlyList<ExpenseShareResponse> Items,
+    int Page,
+    int PageSize,
+    int TotalCount)
+    : PagedResponse<ExpenseShareResponse>(Items, Page, PageSize, TotalCount);
