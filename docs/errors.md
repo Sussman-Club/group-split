@@ -98,6 +98,7 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the group. | |
 | `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is not a member of the group. | |
 | `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
+| `SETTLEMENT_NOTHING_TO_SETTLE` | Squaring up when the caller owes nobody in the group and is owed by nobody. | |
 | `GROUP_INVITATION_ALREADY_SENT` | The address already has a standing invitation to this group. Inviting several people skips the ones already invited rather than raising this. | |
 | `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |

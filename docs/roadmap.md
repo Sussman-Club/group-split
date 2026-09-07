@@ -27,9 +27,9 @@ What works end to end today: create a group and invite people to it by email, wh
 not they have an account yet; define split rules and point categories at them; record an
 expense against a category or state its shares yourself, in a group or just for yourself;
 see per-member net balances, a minimised list of who pays whom and the group's whole
-history; settle up from either side; leave a group or archive it; see where you stand
-across every group at once; delete an account once settled. The seeder fills two demo
-groups.
+history; settle up from either side, one member at a time or with everybody at once;
+leave a group or archive it; see where you stand across every group at once; delete an
+account once settled. The seeder fills two demo groups.
 
 The gap left is bank data. The domain was shaped around one question -- *how is this
 category split?* -- and a tracker with imported bank transactions asks different ones:

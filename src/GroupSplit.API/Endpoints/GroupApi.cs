@@ -41,6 +41,7 @@ public static class GroupApi
             group.MapRevokeJoinLinks();
             group.MapGetGroupUserBalance();
             group.MapSettle();
+            group.MapSettleUp();
             group.MapArchive();
             group.MapUnarchive();
 
@@ -407,6 +408,25 @@ public static class GroupApi
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Settles the caller's own position in the group: every repayment between them and
+        /// the rest of it, recorded together.
+        /// </summary>
+        private RouteHandlerBuilder MapSettleUp()
+        {
+            return group.MapPost("{groupId:guid}/settle-up", async (
+                    Guid groupId,
+                    SettleUpRequest request,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.SettleUp(groupId, request, ct)))
+                .WithName("SettleUp")
+                .Produces<SettleUpResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         /// <summary>
