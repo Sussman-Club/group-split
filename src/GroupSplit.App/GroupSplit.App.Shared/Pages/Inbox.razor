@@ -7,6 +7,7 @@
 @inject IInboxStateService State
 @inject IBankCommands Bank
 @inject IDialogService DialogService
+@inject LocalClock Clock
 @implements IDisposable
 
 @*
@@ -81,7 +82,7 @@
                 @foreach (var item in State.Rows)
                 {
                     var row = item;
-                    <div class="gs-row" style="cursor: default">
+                    <div class="gs-row" style="cursor: default" @key="row.Id">
                         @if (row.LogoUrl is { Length: > 0 } logo)
                         {
                             @* The merchant's own logo where the bank sent one: a row reads
@@ -152,6 +153,37 @@
                             }
                         </div>
                     </div>
+
+                    @* What is already in the ledger that this could be. Said on the row
+                       itself, before anything is filed: a duplicate found afterwards is a
+                       balance somebody has to notice is wrong and then undo by hand.
+
+                       Both answers are here, and neither happens on its own. *@
+                    @if (row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0)
+                    {
+                        var match = row.PossibleDuplicates[0];
+
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2"
+                                  Style="margin-top: -4px">
+                            <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
+                                <span>
+                                    You may already have recorded this:
+                                    <strong>@match.Name</strong>,
+                                    <Money Value="@match.Amount" Currency="@match.Currency" />
+                                    in @match.Where on @Clock.Local(match.DateTime).ToString("d").
+                                </span>
+                                <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               Class="gs-btn-pill"
+                                               Disabled="@(_busy == row.Id)"
+                                               OnClick="@(() => AttachAsync(row, match.TransactionId))">Same payment</MudButton>
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               Disabled="@(_busy == row.Id)"
+                                               OnClick="@(() => DismissMatchAsync(row, match))">Not the same</MudButton>
+                                </div>
+                            </div>
+                        </MudAlert>
+                    }
                 }
             </div>
 
@@ -219,8 +251,42 @@
         _ => "Transactions you ignore stay out of the way, and can be put back."
     };
 
+    /// <summary>
+    /// Keeps it personal. <c>FileAnyway</c> travels when the row is showing a suggestion,
+    /// because pressing this with one on screen is the person saying it is a second payment
+    /// -- and the API refuses to file over an unseen one, which is what that flag answers.
+    /// </summary>
     private Task KeepPersonalAsync(BankTransactionResponse row) =>
-        FileAsync(row, new FileBankTransactionRequest(), "your own expenses");
+        FileAsync(row, new FileBankTransactionRequest { FileAnyway = row.PossibleDuplicates.Count > 0 },
+            "your own expenses");
+
+    private async Task AttachAsync(BankTransactionResponse row, Guid transactionId)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            await Bank.AttachAsync(row.Id, transactionId);
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private async Task DismissMatchAsync(BankTransactionResponse row, ExpenseMatchResponse match)
+    {
+        _busy = row.Id;
+
+        try
+        {
+            await Bank.DismissMatchAsync(row.Id, match.TransactionId, row.Title);
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
 
     /// <summary>
     /// Opens the ordinary expense dialog, filled in from the row. The amount and the date
@@ -241,7 +307,15 @@
         if (answer is null)
             return;
 
-        await FileAsync(row, answer.Request, answer.Destination);
+        // Two answers come back from that dialog, and only one of them records anything.
+        if (answer.AttachTo is { } transactionId)
+        {
+            await AttachAsync(row, transactionId);
+            return;
+        }
+
+        if (answer.Request is { } request)
+            await FileAsync(row, request, answer.Destination);
     }
 
     private async Task FileAsync(BankTransactionResponse row, FileBankTransactionRequest request, string destination)

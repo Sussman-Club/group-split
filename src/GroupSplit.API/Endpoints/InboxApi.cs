@@ -36,7 +36,10 @@ public static class InboxApi
 
             group.MapList();
             group.MapSummary();
+            group.MapMatches();
             group.MapFile();
+            group.MapLink();
+            group.MapDismissMatch();
             group.MapIgnore();
             group.MapRestore();
 
@@ -57,10 +60,12 @@ public static class InboxApi
                 {
                     var rows = await inbox.List(filter, ct);
 
-                    return Results.Ok(await rows
+                    var found = await rows
                         .ApplySort(sort, Sort)
                         .SelectDto()
-                        .ToPageAsync(page, ct));
+                        .ToPageAsync(page, ct);
+
+                    return Results.Ok(await found.WithDuplicatesAsync(inbox, ct));
                 })
                 .WithName("GetInbox")
                 .Produces<PagedResponse<BankTransactionResponse>>()
@@ -81,6 +86,84 @@ public static class InboxApi
                 })
                 .WithName("GetInboxSummary")
                 .Produces<InboxSummaryResponse>();
+        }
+
+        /// <summary>
+        /// What this row could already be, asked on its own.
+        /// </summary>
+        /// <remarks>
+        /// The listing carries the same answer for every row it shows, so this is for the
+        /// one row a client is holding on its own: a dialog opened from a link, or a second
+        /// look after something changed elsewhere.
+        /// </remarks>
+        private RouteHandlerBuilder MapMatches()
+        {
+            return group.MapGet("{id:guid}/matches", async (
+                    Guid id,
+                    IInboxService inbox,
+                    CancellationToken ct) =>
+                {
+                    var matches = await inbox.Matches(id, ct);
+
+                    return Results.Ok(matches.ToResponses());
+                })
+                .WithName("GetBankTransactionMatches")
+                .Produces<IReadOnlyList<ExpenseMatchResponse>>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Attaches the row to an expense that is already recorded, rather than making a
+        /// second one for the same money.
+        /// </summary>
+        /// <remarks>
+        /// One of the two answers to the refusal filing gives when the two look alike; the
+        /// other is filing anyway. What comes back is the expense that was already there,
+        /// now carrying the bank's row -- the same link filing would have made for a new
+        /// one, and no change to anything else about it.
+        /// </remarks>
+        private RouteHandlerBuilder MapLink()
+        {
+            return group.MapPost("{id:guid}/link", async (
+                    Guid id,
+                    LinkBankTransactionRequest request,
+                    IInboxService inbox,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var expense = await inbox.Link(id, request, ct);
+
+                    var linked = await transactionService.Get(expense.Id, ct);
+                    var response = await linked.SelectDto().FirstOrDefaultAsync(ct);
+
+                    return Results.Ok(response);
+                })
+                .WithName("LinkBankTransaction")
+                .Produces<TransactionResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
+        /// <summary>
+        /// Says the two are not the same money after all, so the pair is never suggested
+        /// again -- a suggestion nobody can get rid of being worse than none.
+        /// </summary>
+        private RouteHandlerBuilder MapDismissMatch()
+        {
+            return group.MapPost("{id:guid}/dismiss-match", async (
+                    Guid id,
+                    DismissBankMatchRequest request,
+                    IInboxService inbox,
+                    CancellationToken ct) =>
+                {
+                    await inbox.DismissMatch(id, request, ct);
+                    return Results.NoContent();
+                })
+                .WithName("DismissBankTransactionMatch")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapFile()
@@ -173,5 +256,38 @@ public static class InboxApi
                 row.RemovedAt,
                 row.Account.Name,
                 row.Account.Connection.InstitutionName));
+    }
+
+    extension(PagedResponse<BankTransactionResponse> page)
+    {
+        /// <summary>
+        /// The same page, with each waiting row carrying the expenses it could already be.
+        /// </summary>
+        /// <remarks>
+        /// After the paging and in one pass, rather than a query per row: the inbox is
+        /// where a person decides what a row is, so the warning has to be on the row they
+        /// are looking at, and twenty-five round trips to say so is a page nobody waits for.
+        /// </remarks>
+        internal async Task<PagedResponse<BankTransactionResponse>> WithDuplicatesAsync(
+            IInboxService inbox, CancellationToken ct)
+        {
+            var waiting = page.Items
+                .Where(row => row.Status == InboxStatus.New && !row.IsCredit)
+                .Select(row => row.Id)
+                .ToList();
+
+            var matches = await inbox.Matches(waiting, ct);
+
+            if (matches.Count == 0)
+                return page;
+
+            var items = page.Items
+                .Select(row => matches.TryGetValue(row.Id, out var found)
+                    ? row with { PossibleDuplicates = found.ToResponses() }
+                    : row)
+                .ToList();
+
+            return new PagedResponse<BankTransactionResponse>(items, page.Page, page.PageSize, page.TotalCount);
+        }
     }
 }

@@ -175,6 +175,47 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
+    /// The candidates behind a duplicate suggestion: the caller's own expenses over a window
+    /// of days, and the pairs they have already said no to.
+    /// </summary>
+    /// <remarks>
+    /// The row is never saved. What is being asked is whether the two reads the matcher
+    /// makes translate, and they are the same reads whether the row is in the database or
+    /// held in a hand.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task The_expenses_a_bank_row_could_already_be_translate()
+    {
+        var row = new BankTransaction
+        {
+            ProviderTransactionId = "translation-check",
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
+            Amount = 20m,
+            Description = "LIDL 1234",
+            RawJson = "{}",
+            ImportedAt = DateTimeOffset.UtcNow
+        };
+
+        await Service<IDuplicateMatcher>().ExpensesLike([row], Ct);
+    }
+
+    /// <summary>
+    /// The other direction, which reads the imported rows still waiting. It compares the
+    /// authorised date falling back to the posting one, so the predicate is a coalesce
+    /// against a <c>date</c> column rather than a plain column comparison.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_waiting_rows_an_expense_could_already_be_translate()
+    {
+        var expense = await Service<AppDbContext>().Set<Expense>()
+            .Where(candidate => candidate.UserId == Service<ICurrentUser>().User.Id)
+            .OrderBy(candidate => candidate.Id)
+            .FirstAsync(Ct);
+
+        await Service<IDuplicateMatcher>().RowsLike(expense, Ct);
+    }
+
+    /// <summary>
     /// The linked banks, which the account page and the inbox both read. Nothing is linked
     /// in the seed data, so this is purely about the query holding together.
     /// </summary>

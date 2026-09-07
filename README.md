@@ -11,6 +11,8 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 - Calculate per-member balances, and settle up from either side
 - See where you stand across every group at once
 - Link a bank and review what it sends before any of it becomes an expense
+- Be told when a bank transaction is an expense somebody already recorded, and attach it to
+  that one instead of counting the money twice
 - Support web and mobile clients backed by a single API
 
 ## Project structure
