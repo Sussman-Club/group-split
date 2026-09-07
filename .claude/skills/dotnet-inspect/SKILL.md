@@ -1,6 +1,10 @@
 ---
 name: dotnet-inspect
 description: Find evidence for .NET packages, platform libraries, assemblies, APIs, dependencies, SourceLink/source, and API version diffs.
+metadata:
+  # Vendored for contributors working in this repository.
+  # Not ours to republish: hidden from `npx skills add` discovery.
+  internal: true
 ---
 
 # dotnet-inspect
