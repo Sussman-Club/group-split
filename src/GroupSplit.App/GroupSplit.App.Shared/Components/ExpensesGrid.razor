@@ -235,7 +235,7 @@
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
 
-        if (await dialog.GetReturnValueAsync<bool>())
+        if (await dialog.ConfirmedAsync())
         {
             await TransactionsService.DeleteAsync(transaction);
         }

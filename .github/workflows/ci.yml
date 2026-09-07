@@ -42,7 +42,12 @@ jobs:
       COVERAGE_BRANCH_FLOOR: 60
 
     steps:
+      # Full history: MinVer versions the CLI package from the nearest cli-v tag and the
+      # commit height since it, and a shallow checkout has neither, so the pack step below
+      # would stamp 0.0.0-alpha.0.0 on every build.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -65,6 +70,7 @@ jobs:
           dotnet restore tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj
           dotnet restore tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj
           dotnet restore tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj
+          dotnet restore tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
       - name: Build
@@ -72,7 +78,14 @@ jobs:
           dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+
+      # The CLI ships as a .NET tool, and packaging breaks in ways a plain build does
+      # not catch -- a missing ToolCommandName, a dependency that will not travel in the
+      # package. Nothing is published; this only has to prove `dotnet pack` still works.
+      - name: Pack the CLI
+        run: dotnet pack src/GroupSplit.Cli/GroupSplit.Cli.csproj -c Release --no-build -o artifacts/nupkg
 
       # Everything above is Release, but `aspire do` builds Debug, so the deploy
       # workflow was the only thing exercising that configuration -- and some of it
@@ -109,6 +122,11 @@ jobs:
             -- --report-trx --report-trx-filename seeder-tests.trx \
                --coverage --coverage-settings tests/coverage.config \
                --coverage-output-format cobertura --coverage-output seeder.cobertura.xml
+          dotnet test --project tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --report-trx --report-trx-filename cli-tests.trx \
+               --coverage --coverage-settings tests/coverage.config \
+               --coverage-output-format cobertura --coverage-output cli.cobertura.xml
 
       # Merges the per-project Cobertura files into one report and renders the
       # summary onto the run's own page, so a reviewer sees the numbers without
@@ -159,7 +177,12 @@ jobs:
     timeout-minutes: 25
 
     steps:
+      # Full history: MinVer versions the CLI package from the nearest cli-v tag and the
+      # commit height since it, and a shallow checkout has neither, so the pack step below
+      # would stamp 0.0.0-alpha.0.0 on every build.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v6
         with:

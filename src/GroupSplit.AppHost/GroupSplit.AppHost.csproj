@@ -12,6 +12,7 @@
     <ItemGroup>
         <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
         <ProjectReference Include="..\GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj" />
+        <ProjectReference Include="..\GroupSplit.Cli\GroupSplit.Cli.csproj" />
         <!-- Load-bearing for the migrations, and easy to mistake for dead weight: AddEFMigrations
              names this project as a path string, so nothing in C# here references its assembly and
              MSBuild has no other reason to build it. Take this out and the migrations resource
