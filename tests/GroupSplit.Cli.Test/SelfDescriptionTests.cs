@@ -239,6 +239,33 @@ public sealed class SelfDescriptionTests
     }
 
     [Fact]
+    public async Task The_zsh_script_installs_either_way_it_says_it_does()
+    {
+        var zsh = (await Cli.RunAsync("completion", "zsh")).Stdout;
+
+        // compinit binds a file to a command by the tag on its first line. Without it the
+        // fpath install -- the first one the script itself suggests -- completes filenames.
+        Assert.StartsWith("#compdef groupsplit", zsh);
+
+        // Autoloaded out of fpath the file is the function and has to run; sourced from a
+        // config it only has to register.
+        Assert.Contains("if [[ ${funcstack[1]} == _groupsplit ]]", zsh);
+        Assert.Contains("compdef _groupsplit groupsplit", zsh);
+    }
+
+    [Fact]
+    public async Task The_zsh_script_lists_a_hint_rather_than_inserting_the_shared_dash()
+    {
+        var zsh = (await Cli.RunAsync("completion", "zsh")).Stdout;
+
+        // Every option beside a hint starts with a dash, and zsh would insert that much
+        // and stop -- leaving half a flag where a value was wanted, and no listing at all,
+        // which is also the only place a message shows.
+        Assert.Contains("compstate[insert]=''", zsh);
+        Assert.Contains("compstate[list]='list force'", zsh);
+    }
+
+    [Fact]
     public async Task The_pwsh_script_restores_the_space_the_ast_drops()
     {
         var pwsh = (await Cli.RunAsync("completion", "pwsh")).Stdout;

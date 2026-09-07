@@ -90,11 +90,15 @@ public static class CompletionCommand
         """;
 
     private const string Zsh = """
+        #compdef groupsplit
         # groupsplit completion. Install with:
         #   groupsplit completion zsh > "${fpath[1]}/_groupsplit"
         # or, for the current user:
         #   echo 'source <(groupsplit completion zsh)' >> ~/.zshrc
-        _groupsplit_complete()
+        #
+        # The #compdef line above has to come first: it is what compinit reads to bind
+        # this file to the command, and without it the fpath install completes filenames.
+        _groupsplit()
         {
             local line="${BUFFER}"
             local point="${CURSOR}"
@@ -113,10 +117,24 @@ public static class CompletionCommand
                 # _describe splits on the first colon, and a description may hold one.
                 suggestions+=("${value}${description:+:${description//:/\\:}}")
             done < <(groupsplit "[suggest:${point}]" "${line}" 2>/dev/null)
-            [[ -n "${hint}" ]] && _message -r "${hint}"
             _describe 'groupsplit' suggestions
+            if [[ -n "${hint}" ]]; then
+                _message -r "${hint}"
+                # A message shows only where a listing happens, and left to itself zsh
+                # would not list: every option shares a leading dash, so it inserts that
+                # much and stops. Someone who reached a positional came to type a value,
+                # and half a flag is not the help they asked for.
+                compstate[insert]=''
+                compstate[list]='list force'
+            fi
         }
-        compdef _groupsplit_complete groupsplit
+        # Autoloaded out of fpath, this file is the function and has to run. Sourced from a
+        # config, it only has to register -- compinit never saw it, so nothing else will.
+        if [[ ${funcstack[1]} == _groupsplit ]]; then
+            _groupsplit "$@"
+        else
+            compdef _groupsplit groupsplit
+        fi
         """;
 
     private const string Fish = """
