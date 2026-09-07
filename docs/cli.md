@@ -179,8 +179,14 @@ From that origin the CLI derives:
 
 | | |
 | --- | --- |
-| API | `{server}/api` |
+| API | `{server}/native/api` |
 | Authority | `{server}/idp/realms/group-split` |
+
+`/native/api` rather than `/api` because they are different doors. `/api` is the browser's:
+it authenticates with the web app's session cookie and swaps in the token held inside it, so
+a request carrying its own token is refused there. `/native/api` forwards to the same API and
+leaves the Authorization header alone, which is what a client holding a token needs -- this
+CLI, and the MAUI app.
 
 Sources are consulted in this order, first one wins:
 

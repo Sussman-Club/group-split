@@ -13,11 +13,18 @@ namespace GroupSplit.Cli.Configuration;
 public sealed class EndpointResolver(ConfigStore store)
 {
     /// <summary>
-    /// The path the web app forwards to the API on. Mirrors the <c>MapGroup("/api")</c>
-    /// forwarder in <c>GroupSplit.App.Web.WebAppExtensions</c>: in a deployment the API
-    /// has no public origin of its own and is only reachable through the web app.
+    /// The path the web app forwards token-bearing clients to the API on. Mirrors
+    /// <c>MapNativeApiForwarder</c> in <c>GroupSplit.App.Web.WebAppExtensions</c>: in a
+    /// deployment the API has no public origin of its own and is only reachable through
+    /// the web app.
+    /// <para>
+    /// Not <c>/api</c>, which is the browser's door. That one authenticates with the web
+    /// app's session cookie and replaces the Authorization header with the token held in
+    /// it, so a request from here is refused and, past that, would have its token thrown
+    /// away.
+    /// </para>
     /// </summary>
-    private const string ApiPath = "/api";
+    private const string ApiPath = "/native/api";
 
     /// <summary>
     /// Mirrors <c>KeycloakDeploymentExtensions.RelativePath</c> and the realm name the API

@@ -68,6 +68,8 @@ app.MapDefaultEndpoints();
 
 app.MapApiForwarder();
 
+app.MapNativeApiForwarder();
+
 app.MapKeycloakForwarder();
 
 // Configure the HTTP request pipeline.
@@ -82,12 +84,14 @@ else
     app.UseHsts();
 }
 
-// Only pages get the friendly 404. The two forwarders must answer with their
-// real status: re-executing an API 401 at /not-found lands on a Blazor page
-// carrying [Authorize], which challenges OpenID Connect and turns the 401 into
-// a 302 to Keycloak that a fetch cannot follow.
+// Only pages get the friendly 404. The forwarders must answer with their real
+// status: re-executing an API 401 at /not-found lands on a Blazor page carrying
+// [Authorize], which challenges OpenID Connect and turns the 401 into a 302 to
+// Keycloak that a fetch cannot follow -- and that a CLI cannot follow either,
+// which is why /native is excluded here as well as /api.
 app.UseWhen(
     context => !context.Request.Path.StartsWithSegments("/api")
+               && !context.Request.Path.StartsWithSegments("/native")
                && !context.Request.Path.StartsWithSegments("/idp"),
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseDefaultHttpsRedirection();
