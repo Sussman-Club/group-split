@@ -90,6 +90,7 @@ public sealed class EndpointResolver(ConfigStore store)
         {
             Api = api,
             AuthorityOrNull = authority,
+            WebOrNull = origin,
             Warnings = InsecureTransportWarnings(api, authority),
             ClientId = Environment.GetEnvironmentVariable(EnvironmentVariables.ClientId)
                        ?? profile?.ClientId

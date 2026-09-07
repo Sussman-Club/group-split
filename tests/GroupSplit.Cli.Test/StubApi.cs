@@ -54,13 +54,27 @@ public sealed class StubApi : IDisposable
     /// <summary>Answers <paramref name="path"/> with a JSON body serialized from <paramref name="body"/>.</summary>
     public StubApi Returns(string path, object body, int status = 200)
     {
-        _routes[path] = (status, JsonSerializer.Serialize(body, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        }));
+        _routes[path] = (status, Serialize(body));
 
         return this;
     }
+
+    /// <summary>
+    /// Answers one method on <paramref name="path"/>, for a route whose verbs mean
+    /// different things -- a collection that is read and posted to at the same address.
+    /// Takes precedence over a path-only answer for the same path.
+    /// </summary>
+    public StubApi Returns(string method, string path, object body, int status = 200)
+    {
+        _routes[$"{method} {path}"] = (status, Serialize(body));
+
+        return this;
+    }
+
+    private static string Serialize(object body) => JsonSerializer.Serialize(body, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    });
 
     /// <summary>
     /// Answers with HTML, which is what a proxy in front of the real server does when it
@@ -125,8 +139,11 @@ public sealed class StubApi : IDisposable
                 context.Request.Headers["Authorization"],
                 await reader.ReadToEndAsync()));
 
-            var (status, body) = _routes.TryGetValue(path, out var route)
-                ? route
+            // A route registered for this verb wins over one registered for the path
+            // alone, so a collection that is read and posted to can answer each properly.
+            var (status, body) =
+                _routes.TryGetValue($"{context.Request.HttpMethod} {path}", out var verb) ? verb
+                : _routes.TryGetValue(path, out var route) ? route
                 : (404, """{"title":"Not found","status":404,"code":"NOT_FOUND","detail":"No route."}""");
 
             var bytes = Encoding.UTF8.GetBytes(body);

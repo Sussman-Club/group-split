@@ -12,6 +12,16 @@ public static class InvitationCommands
         Description = "The invitation's id, as shown by `groupsplit invitations list`."
     };
 
+    /// <summary>
+    /// The random part of a shared URL. Taken as a whole URL too, because what somebody has
+    /// to hand is the link, not the token inside it, and making them cut it up by hand is
+    /// a step for nothing.
+    /// </summary>
+    private static readonly Argument<string> Token = new("link")
+    {
+        Description = "A join link, or just the token at the end of one."
+    };
+
     public static Command Build()
     {
         var invitations = new Command("invitations", "Group invitations addressed to you.");
@@ -19,6 +29,8 @@ public static class InvitationCommands
         invitations.Subcommands.Add(List());
         invitations.Subcommands.Add(Accept());
         invitations.Subcommands.Add(Decline());
+        invitations.Subcommands.Add(ShowLink());
+        invitations.Subcommands.Add(JoinByLink());
 
         return invitations;
     }
@@ -74,6 +86,78 @@ public static class InvitationCommands
         });
 
         return command;
+    }
+
+    private static Command ShowLink()
+    {
+        var command = new Command("link", "Show which group a join link leads to, without joining.")
+        {
+            Token
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var link = await new Api.InvitationsClient(context.ApiHttpClient)
+                .GetJoinLinkAsync(TokenIn(context.ParseResult.GetValue(Token)), ct);
+
+            context.Output.Write(link, value =>
+            {
+                var table = Tables.KeyValue();
+
+                table.AddRow("Group", Markup.Escape(value.GroupName));
+                table.AddRow("Members", value.MemberCount.ToString());
+                table.AddRow("Shared by", Markup.Escape(value.CreatedByUserName ?? "-"));
+                table.AddRow("Expires", value.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+                table.AddRow("You", value.AlreadyAMember ? "already a member" : "not a member yet");
+
+                return table;
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command JoinByLink()
+    {
+        var command = new Command("join", "Join the group a link leads to.") { Token };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var joined = await new Api.InvitationsClient(context.ApiHttpClient)
+                .AcceptJoinLinkAsync(TokenIn(context.ParseResult.GetValue(Token)), ct);
+
+            // Already being in it is a success and reads as one. Following the same link
+            // twice is the ordinary thing to do with a URL somebody was sent, and there is
+            // one membership at the end of it either way.
+            context.Output.Write(joined, value => new Markup(
+                value.AlreadyAMember
+                    ? $"[green]Already in[/] {Markup.Escape(value.GroupName)} [grey]{value.GroupId}[/]\n"
+                    : $"[green]Joined[/] {Markup.Escape(value.GroupName)} [grey]{value.GroupId}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// The token out of whatever was pasted: the last path segment of a URL, or the value
+    /// itself when it is already just the token.
+    /// </summary>
+    private static string TokenIn(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
+        {
+            return text;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        return segments.Length == 0 ? text : segments[^1];
     }
 
     private static Command Decline()

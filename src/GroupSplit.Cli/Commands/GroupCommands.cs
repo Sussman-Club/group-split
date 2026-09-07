@@ -27,6 +27,7 @@ public static class GroupCommands
         groups.Subcommands.Add(Unarchive());
         groups.Subcommands.Add(Leave());
         groups.Subcommands.Add(Invite());
+        groups.Subcommands.Add(JoinLinkCommands.Build());
 
         return groups;
     }

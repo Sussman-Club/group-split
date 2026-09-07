@@ -18,6 +18,18 @@ public sealed record Endpoints
     /// </summary>
     public Uri? AuthorityOrNull { get; init; }
 
+    /// <summary>
+    /// Where the app is published, when a server origin was configured -- the base a join
+    /// link is written against, since the link is a URL a person opens in a browser.
+    /// </summary>
+    /// <remarks>
+    /// Null when the API was pointed at directly with <c>GROUPSPLIT_API_URL</c> and no
+    /// origin was given. That configuration is complete for everything else, and it says
+    /// nothing at all about where a browser would find the app -- so the token is printed
+    /// on its own rather than pasted into a guess.
+    /// </remarks>
+    public Uri? WebOrNull { get; init; }
+
     public required string ClientId { get; init; }
 
     public required string ProfileName { get; init; }

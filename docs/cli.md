@@ -203,6 +203,12 @@ From that origin the CLI derives:
 | --- | --- |
 | API | `{server}/native/api` |
 | Authority | `{server}/idp/realms/group-split` |
+| Join links | `{server}/join/{token}` |
+
+The last of those is the only place the origin is used for something other than reaching a
+service. A group's join link is a URL somebody opens in a browser, and the API does not know
+where the app is published -- so `groupsplit groups link show` composes it here, and without
+a server origin can only give you the token and say why.
 
 `/native/api` rather than `/api` because they are different doors. `/api` is the browser's:
 it authenticates with the web app's session cookie and swaps in the token held inside it, so
