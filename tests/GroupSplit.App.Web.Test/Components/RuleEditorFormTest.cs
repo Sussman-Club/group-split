@@ -1,6 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
+using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -216,6 +217,32 @@ public class RuleEditorFormTest : ComponentTest
         // 33.33 and 66.67, not 33.34 and 66.66: the cent goes to the bigger share.
         Assert.Equal(33.33m, split[Alice.Id]);
         Assert.Equal(66.67m, split[Bob.Id]);
+    }
+
+    /// <summary>
+    /// The form asks who carries the remainder rather than deciding it, so a host that wants
+    /// a different answer registers one. This is the seam, exercised: a policy that always
+    /// names Carol puts the odd cent on Carol, without the form changing.
+    /// </summary>
+    [Fact]
+    public async Task The_form_takes_the_answer_from_the_policy_it_was_given()
+    {
+        Services.AddSingleton<IRemainderPolicy>(new AlwaysPolicy(Carol.Id));
+
+        var form = RenderEmptyPercentages();
+
+        await SplitEvenlyAsync(form);
+
+        var split = Percentages(form).Percentages;
+
+        Assert.Equal(33.34m, split[Carol.Id]);
+        Assert.Equal(33.33m, split[Alice.Id]);
+        Assert.Equal(100m, split.Values.Sum());
+    }
+
+    private sealed class AlwaysPolicy(Guid bearer) : IRemainderPolicy
+    {
+        public Guid CarriedBy(IReadOnlyCollection<UserInfo> members, Func<UserInfo, decimal> weight) => bearer;
     }
 
     /// <summary>Ordered by id, so the comparison is about the numbers and not the dictionary.</summary>

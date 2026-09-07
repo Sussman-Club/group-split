@@ -46,11 +46,18 @@ public abstract class ComponentTest : BunitContext
         Services.AddSingleton(new DataChangeNotifier());
         Services.AddSingleton<LoadGuard>();
 
-        // Answers 0 from the loose JS runtime, so "today" is the UTC day and every test
-        // here resolves its spans the same way wherever it runs.
+        // A plain mock rather than bUnit's runtime, and deliberately not an in-process one:
+        // the clock then cannot ask the browser for an offset and keeps the machine's, which
+        // is what it does under a server-rendered host before the layout has asked. A test
+        // that needs to know what day this clock thinks it is has to read it from here --
+        // it is not necessarily the UTC day.
         Services.AddSingleton(new LocalClock(Mock.Of<IJSRuntime>()));
 
         Services.AddSingleton(Mock.Of<IAuthService>());
+
+        // The production default. A test wanting a different answer registers its own after
+        // this one, which is the point of the policy being a registration at all.
+        Services.AddSingleton<IRemainderPolicy, LargestShareRemainderPolicy>();
     }
 
     /// <summary>Set up so a test can assert what a failure did or did not put in front of anybody.</summary>

@@ -31,11 +31,16 @@ public class InboxPageTest : ComponentTest
     private List<BankTransactionResponse> _rows;
 
     /// <summary>
-    /// The day the component's clock will call today. The JS runtime answers 0 for the
-    /// offset, so the person's day is the UTC one and a preset resolves the same way here
-    /// as it does inside the component.
+    /// The day the component's clock calls today, read from that same clock.
     /// </summary>
-    private static DateTime Today => DateTimeOffset.UtcNow.Date;
+    /// <remarks>
+    /// Not <c>DateTimeOffset.UtcNow.Date</c>, which is the same day only on a machine at
+    /// UTC. <see cref="LocalClock"/> falls back to the machine's offset when the JS runtime
+    /// cannot be asked synchronously, as it cannot here, so a run in the small hours UTC
+    /// resolves "last month" against yesterday's date on a machine behind UTC -- and once a
+    /// month that is a different month.
+    /// </remarks>
+    private DateTime Today => Services.GetRequiredService<LocalClock>().Today;
 
     public InboxPageTest()
     {

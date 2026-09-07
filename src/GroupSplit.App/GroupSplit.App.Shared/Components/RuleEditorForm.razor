@@ -2,9 +2,11 @@
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services
 @inject ISplitRulesClient SplitRulesClient
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
+@inject IRemainderPolicy Remainder
 
 <MudForm @ref="_form" Model="@Model">
     <MudStack Spacing="3">
@@ -245,8 +247,9 @@
         }
 
         // Three members are 33.33 twice and 33.34 once, and the odd cent has to land on
-        // somebody. It used to land on a random one, so the same click gave different
-        // numbers; now it lands where the server would put it.
+        // somebody. Whom is the policy's business; that it is the same somebody every time
+        // is this form's, because these numbers are saved and then divide every expense the
+        // rule touches.
         var remainder = 100m - (basePercentage * (_members.Count - 1));
 
         percent.Percentages[RemainderGoesTo(_ => 1)] = remainder;
@@ -255,23 +258,11 @@
     }
 
     /// <summary>
-    /// Which member carries what the division could not split cleanly: the largest weight,
-    /// and the lowest id among equals.
+    /// Which member carries what the division could not split cleanly. The rule itself is
+    /// <see cref="IRemainderPolicy"/>'s -- this form asks the question and does not answer it.
     /// </summary>
-    /// <remarks>
-    /// The same rule <c>SplitCalculator.RemainderIndex</c> applies on the server, minus the
-    /// payer, which a rule does not have -- a rule says how to divide, and who paid is not
-    /// known until an expense uses it. Restated here rather than shared because the API is
-    /// referenced for its OpenAPI document and not its assembly, so there is nothing to call.
-    /// The point of stating it at all is that the pre-filled numbers are the ones the split
-    /// will actually come out as.
-    /// </remarks>
     private Guid RemainderGoesTo(Func<UserInfo, decimal> weight) =>
-        _members
-            .OrderByDescending(weight)
-            .ThenBy(member => member.Id)
-            .First()
-            .Id;
+        Remainder.CarriedBy([.._members], weight);
 
     private void ClearValues()
     {
@@ -317,11 +308,10 @@
             percentages[member.Id] = Math.Round(share * 100m / totalShares, 2);
         }
 
-        // What the rounding left over. Onto the largest share, so the adjustment is the
-        // smallest part of the number it moves, and never onto a member holding no shares:
-        // they were left out of the split, and a hundredth of a percent would put them back
-        // in it. This used to go to a random member, so converting the same shares twice
-        // gave two different sets of percentages.
+        // What the rounding left over, onto the member the policy names -- weighted by the
+        // shares, so it goes to the largest of them and never to a member holding none.
+        // This used to go to a random member, so converting the same shares twice gave two
+        // different sets of percentages.
         var diff = 100m - percentages.Values.Sum();
 
         if (Math.Abs(diff) <= 0.001m)
