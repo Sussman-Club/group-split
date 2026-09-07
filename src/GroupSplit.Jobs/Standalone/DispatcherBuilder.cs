@@ -1,7 +1,7 @@
 namespace GroupSplit.Jobs.Standalone;
 
 public sealed class DispatcherBuilder(JobsBuilder jobsBuilder)
-    : IJobDispatcherBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    : IJobDispatcherBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
 {
     public JobsBuilder JobsBuilder { get; } = jobsBuilder;
 
@@ -13,7 +13,7 @@ public sealed class DispatcherBuilder(JobsBuilder jobsBuilder)
         return this;
     }
 
-    IJobDispatcher IJobDispatcherBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder>
+    IJobDispatcher IJobDispatcherBuilderBase<JobsBuilder, DispatcherBuilder, HandlersBuilder, ReceiverBuilder, SchedulerBuilder>
         .BuildDispatcher(IServiceProvider serviceProvider) => JobsBuilder.Inner.Dispatcher.BuildDispatcher(serviceProvider);
 
     // The container owns this adapter, not the caller-supplied transport.

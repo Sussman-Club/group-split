@@ -4,7 +4,7 @@ using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Jobs;
-using GroupSplit.Jobs.Recurring;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -55,13 +55,19 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public void The_sweep_is_registered_to_recur_daily_after_a_short_delay()
+    public async Task The_sweep_is_registered_for_midnight_utc()
     {
-        var recurring = GetService<RecurringJobs>().All.Single();
-
-        Assert.Equal(typeof(SweepBankConnections), recurring.JobType);
-        Assert.Equal(BankingServiceExtensions.SweepPeriod, recurring.Period);
-        Assert.Equal(BankingServiceExtensions.SweepDelay, recurring.InitialDelay);
+        var services = new ServiceCollection();
+        services.AddBankingServices();
+        await using var provider = services.BuildServiceProvider();
+        var initializer = provider.GetServices<IHostedService>()
+            .Single(service => service.GetType().Name == "JobScheduleInitializer");
+        await initializer.StartAsync(Ct);
+        var scheduled = Assert.Single(await provider.GetRequiredService<IJobScheduler>().GetScheduledJobsAsync(Ct));
+        Assert.IsType<SweepBankConnections>(scheduled.Job);
+        var cron = Assert.IsType<JobSchedule.CronSchedule>(scheduled.Schedule);
+        Assert.Equal("0 0 * * *", cron.Expression.Value);
+        Assert.Equal(TimeZoneInfo.Utc, cron.TimeZone);
     }
 
     private async Task<BankConnection> LinkAsync(BankConnectionStatus status)

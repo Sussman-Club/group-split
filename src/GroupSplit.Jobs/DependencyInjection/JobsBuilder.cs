@@ -9,6 +9,7 @@ internal class JobsBuilder : IJobsBuilder
     public IJobHandlersBuilder Handlers { get; }
     public IJobDispatcherBuilder Dispatcher { get; }
     public IJobReceiverBuilder Receiver { get; }
+    public IJobSchedulerBuilder Scheduler { get; }
 
     public JobsBuilder(IServiceCollection services)
     {
@@ -16,5 +17,6 @@ internal class JobsBuilder : IJobsBuilder
         Handlers = new JobHandlersBuilder(this);
         Dispatcher = new JobDispatcherBuilder(this);
         Receiver = new JobReceiverBuilder(this);
+        Scheduler = new JobSchedulerBuilder(this);
     }
 }

@@ -328,16 +328,16 @@ A sync is asked for as a job, `SyncBankConnection(connectionId)`, through the
 webhook both dispatch and return; nothing waits on a sync inside a request. The daily
 sweep is a job too, `SweepBankConnections`, whose handler dispatches one sync per active
 connection,
-and it is registered as recurring rather than run from a timer inside the sync code.
+and it is scheduled at midnight UTC rather than relative to application startup.
 
 That seam is the reason the queue is not simply a `Channel<Guid>` in the sync service.
 `GroupSplit.Jobs` holds the shape and defaults to running it here: `AddJobs()` gives an
 in-memory channel, a hosted worker draining it into the registered handlers, and --
-through `AddRecurringJob` -- a timer for the recurring registrations. A deployment that
+through `Scheduler.Add(job, JobSchedule.Cron("0 0 * * *", TimeZoneInfo.Utc))` -- a scheduler for timed registrations. A deployment that
 would rather have a queue service deliver to a function keeps every `AddJobHandler` call
 and points `Dispatcher.Use(...)` and `Receiver.Use(...)` at that transport; the daily
 sweep becomes a schedule outside the process that dispatches `SweepBankConnections`, and
-the in-process scheduler is simply not registered.
+the host calls `WithoutDefaults()` to remove the in-process workers and scheduler.
 Failure has no retry scheme of its own: the transport redelivers by its rules, or the
 sweep catches it tomorrow.
 

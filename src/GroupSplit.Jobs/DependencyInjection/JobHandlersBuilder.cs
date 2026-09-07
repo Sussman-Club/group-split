@@ -39,6 +39,6 @@ internal class JobHandlersBuilder(IJobsBuilder jobsBuilder) : IJobHandlersBuilde
         return this;
     }
 
-    IJobExecutor IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder>.BuildExecutor(
+    IJobExecutor IJobHandlersBuilderBase<IJobsBuilder, IJobDispatcherBuilder, IJobHandlersBuilder, IJobReceiverBuilder, IJobSchedulerBuilder>.BuildExecutor(
         IServiceProvider serviceProvider) => new JobExecutor(serviceProvider, _executions);
 }

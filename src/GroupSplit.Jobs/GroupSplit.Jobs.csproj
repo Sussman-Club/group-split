@@ -7,13 +7,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="Cronos" Version="0.13.0" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     </ItemGroup>
 
     <ItemGroup>
-      <!-- The scheduler is internal: a host chooses it through AddRecurringJob and never
-           names it. The tests name it. -->
+      <!-- Tests verify internal scheduler timing with a controlled clock. -->
       <InternalsVisibleTo Include="GroupSplit.Jobs.Test" />
     </ItemGroup>
 
