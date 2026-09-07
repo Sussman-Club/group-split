@@ -19,6 +19,14 @@ namespace GroupSplit.Cli.Infrastructure;
 /// has. The tree stays the single source of truth -- this only decides what is worth
 /// showing, never what exists.
 /// </para>
+/// <para>
+/// The one place that rule left silent is a positional nobody can complete.
+/// <c>transactions create &lt;TAB&gt;</c> wants a name: free text, no candidate list, so
+/// the answer was nothing at all -- indistinguishable, at the prompt, from a completion
+/// that was never installed. There this emits a hint instead: the name and description
+/// the help already gives the argument, on a line with an empty label. See
+/// <see cref="DescribeNextArgument"/> for why options come with it.
+/// </para>
 /// </summary>
 public static class Suggestions
 {
@@ -50,16 +58,32 @@ public static class Suggestions
 
         var parseResult = root.Parse(line);
         var word = parseResult.GetCompletionContext().WordToComplete;
-        var wantsOptions = word.StartsWith('-');
 
-        var suggestions = parseResult.GetCompletions(position)
-            .Where(item => IsWorthShowing(item.Label, word, wantsOptions))
+        var candidates = parseResult.GetCompletions(position)
+            .Where(item => IsWorthShowing(item.Label, word))
             .Select(item => (item.Label, Description: Flatten(item.Detail)))
+            .DistinctBy(item => item.Label)
+            .ToList();
+
+        var values = candidates.Where(item => !item.Label.StartsWith('-')).ToList();
+
+        // Only when there is nothing else to say. An argument with a closed set of values
+        // -- `completion <TAB>`, `-o <TAB>` -- completes for real, and a hint beside the
+        // values it is describing would be repeating them.
+        var hint = word.Length == 0 && values.Count == 0
+            ? DescribeNextArgument(parseResult)
+            : null;
+
+        if (hint is not null)
+        {
+            stdout.WriteLine(Separator + hint);
+        }
+
+        var suggestions = (word.StartsWith('-') || hint is not null ? candidates : values)
             // Commands and values first, then options: the thing being named is what the
             // reader is usually after, and it is the half a pager truncates last.
             .OrderBy(item => item.Label.StartsWith('-'))
-            .ThenBy(item => item.Label, StringComparer.Ordinal)
-            .DistinctBy(item => item.Label);
+            .ThenBy(item => item.Label, StringComparer.Ordinal);
 
         foreach (var (label, description) in suggestions)
         {
@@ -101,16 +125,48 @@ public static class Suggestions
         return true;
     }
 
-    private static bool IsWorthShowing(string label, string word, bool wantsOptions)
+    /// <summary>
+    /// The next argument the deepest matched command still wants, as <c>&lt;name&gt;</c>
+    /// and its description, or null when it wants none.
+    /// <para>
+    /// A hint is written with an empty label, which is fish's way of showing a note rather
+    /// than something to pick: the pager renders the description alone and accepting the
+    /// entry inserts nothing. It comes at a price -- fish completes a sole candidate
+    /// without asking, and a sole empty one lands on the command line as a literal
+    /// <c>''</c>. So a hint must never be the only line, which is why the caller stops
+    /// gating options at a position that produced one.
+    /// </para>
+    /// <para>
+    /// Letting them through here does not undo the rule that hides them elsewhere. At a
+    /// command position options are noise because they crowd out the commands, which are
+    /// the answer; at a positional there is no answer to crowd out, and an option is the
+    /// only other thing the parser would accept.
+    /// </para>
+    /// </summary>
+    private static string? DescribeNextArgument(ParseResult parseResult)
+    {
+        var argument = parseResult.CommandResult.Command.Arguments
+            .FirstOrDefault(argument => parseResult.GetResult(argument)?.Tokens.Count is null or 0);
+
+        if (argument is null)
+        {
+            return null;
+        }
+
+        // Two spaces, not a tab: the whole line is one field to every shell that reads it,
+        // and this reads the way the "Arguments:" section of the help already does.
+        var description = Flatten(argument.Description);
+
+        return description.Length == 0
+            ? $"<{argument.Name}>"
+            : $"<{argument.Name}>  {description}";
+    }
+
+    private static bool IsWorthShowing(string label, string word)
     {
         // `/?` and `/h` are conveniences for cmd.exe that System.CommandLine adds
         // everywhere. No shell this CLI writes a script for would ever want them.
         if (label.StartsWith('/') || label == "-?")
-        {
-            return false;
-        }
-
-        if (!wantsOptions && label.StartsWith('-'))
         {
             return false;
         }

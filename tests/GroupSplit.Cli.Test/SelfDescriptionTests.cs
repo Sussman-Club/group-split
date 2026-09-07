@@ -172,6 +172,90 @@ public sealed class SelfDescriptionTests
         Assert.All(shells, shell => Assert.NotEqual(string.Empty, shell.Description));
     }
 
+    /// <summary>
+    /// The lines exactly as a shell reads them. <see cref="SuggestAsync"/> trims, and the
+    /// leading tab of a hint -- the empty label that marks one -- is the thing under test.
+    /// </summary>
+    private static async Task<List<string>> SuggestLinesAsync(string line)
+    {
+        var result = await Cli.RunAsync($"[suggest:{line.Length}]", line);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        return result.Stdout
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(suggestion => suggestion.TrimEnd('\r'))
+            .ToList();
+    }
+
+    [Fact]
+    public async Task A_positional_nobody_can_complete_is_hinted_rather_than_left_silent()
+    {
+        // Free text has no candidate list, so the answer used to be nothing at all --
+        // which at the prompt reads as a completion that was never installed.
+        var lines = await SuggestLinesAsync("groupsplit transactions create ");
+
+        Assert.Equal("\t<name>  What the expense was for.", lines[0]);
+    }
+
+    [Fact]
+    public async Task A_hint_names_the_argument_the_cursor_is_actually_on()
+    {
+        var lines = await SuggestLinesAsync("groupsplit transactions create dinner ");
+
+        Assert.Equal("\t<amount>  Total amount, to two decimal places.", lines[0]);
+    }
+
+    [Theory]
+    // The only command carrying options of its own, and the shape the other sixteen have.
+    [InlineData("groupsplit transactions create ")]
+    [InlineData("groupsplit groups show ")]
+    [InlineData("groupsplit config set server ")]
+    public async Task A_hint_never_stands_alone(string line)
+    {
+        // fish completes a sole candidate without asking, and a sole empty one lands on
+        // the command line as a literal ''. Options are what keep it company.
+        var lines = await SuggestLinesAsync(line);
+
+        Assert.StartsWith("\t<", lines[0]);
+        Assert.NotEmpty(lines.Skip(1));
+        Assert.All(lines.Skip(1), suggestion => Assert.StartsWith("-", suggestion));
+    }
+
+    [Fact]
+    public async Task An_argument_with_values_of_its_own_is_completed_rather_than_hinted()
+    {
+        // A hint beside the values it describes would only repeat them.
+        var lines = await SuggestLinesAsync("groupsplit completion ");
+
+        Assert.Equal(["Bash", "Fish", "Pwsh", "Zsh"], lines.Select(l => l.Split('\t')[0]));
+    }
+
+    [Fact]
+    public async Task A_hint_waits_for_an_empty_word_so_it_cannot_become_the_only_match()
+    {
+        // Half a word matches no candidate, and the hint would be alone in the pager again.
+        Assert.Empty(await SuggestLinesAsync("groupsplit transactions create din"));
+    }
+
+    [Fact]
+    public async Task Each_script_handles_a_hint_the_way_its_shell_can()
+    {
+        var bash = (await Cli.RunAsync("completion", "bash")).Stdout;
+        var zsh = (await Cli.RunAsync("completion", "zsh")).Stdout;
+        var fish = (await Cli.RunAsync("completion", "fish")).Stdout;
+        var pwsh = (await Cli.RunAsync("completion", "pwsh")).Stdout;
+
+        // fish reads the empty label natively, so its script needs nothing for one; zsh
+        // has _message, which shows a note without offering it.
+        Assert.Contains("(__groupsplit_complete)", fish);
+        Assert.Contains("_message -r", zsh);
+
+        // The other two have nowhere to show one, and pwsh would throw on the empty label.
+        Assert.Contains("$1 != \"\"", bash);
+        Assert.Contains("if (-not $parts[0]) { return }", pwsh);
+    }
+
     [Fact]
     public async Task A_suggest_request_without_a_position_completes_the_end_of_the_line()
     {
