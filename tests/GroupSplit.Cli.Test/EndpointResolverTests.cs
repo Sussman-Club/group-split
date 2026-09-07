@@ -23,7 +23,7 @@ public sealed class EndpointResolverTests : IDisposable
     {
         var endpoints = _resolver.Resolve("https://groupsplit.example.com", null);
 
-        Assert.Equal("https://groupsplit.example.com/api", endpoints.Api.ToString());
+        Assert.Equal("https://groupsplit.example.com/native/api", endpoints.Api.ToString());
         Assert.Equal("https://groupsplit.example.com/idp/realms/group-split", endpoints.Authority.ToString());
         Assert.Equal("cli", endpoints.ClientId);
     }
@@ -33,14 +33,14 @@ public sealed class EndpointResolverTests : IDisposable
     {
         var endpoints = _resolver.Resolve("https://example.com/groupsplit", null);
 
-        Assert.Equal("https://example.com/groupsplit/api", endpoints.Api.ToString());
+        Assert.Equal("https://example.com/groupsplit/native/api", endpoints.Api.ToString());
         Assert.Equal("https://example.com/groupsplit/idp/realms/group-split", endpoints.Authority.ToString());
     }
 
     [Fact]
     public void Trailing_slash_on_the_server_does_not_double_up()
     {
-        Assert.Equal("https://example.com/api", _resolver.Resolve("https://example.com/", null).Api.ToString());
+        Assert.Equal("https://example.com/native/api", _resolver.Resolve("https://example.com/", null).Api.ToString());
     }
 
     [Fact]
@@ -51,13 +51,13 @@ public sealed class EndpointResolverTests : IDisposable
             Profiles = { ["default"] = new CliProfile { Server = "https://from-config.example.com" } }
         });
 
-        Assert.Equal("https://from-config.example.com/api", _resolver.Resolve(null, null).Api.ToString());
+        Assert.Equal("https://from-config.example.com/native/api", _resolver.Resolve(null, null).Api.ToString());
 
         _environment.Set(EnvironmentVariables.Server, "https://from-env.example.com");
-        Assert.Equal("https://from-env.example.com/api", _resolver.Resolve(null, null).Api.ToString());
+        Assert.Equal("https://from-env.example.com/native/api", _resolver.Resolve(null, null).Api.ToString());
 
         Assert.Equal(
-            "https://from-flag.example.com/api",
+            "https://from-flag.example.com/native/api",
             _resolver.Resolve("https://from-flag.example.com", null).Api.ToString());
     }
 
@@ -113,8 +113,8 @@ public sealed class EndpointResolverTests : IDisposable
             }
         });
 
-        Assert.Equal("https://prod.example.com/api", _resolver.Resolve(null, null).Api.ToString());
-        Assert.Equal("https://staging.example.com/api", _resolver.Resolve(null, "staging").Api.ToString());
+        Assert.Equal("https://prod.example.com/native/api", _resolver.Resolve(null, null).Api.ToString());
+        Assert.Equal("https://staging.example.com/native/api", _resolver.Resolve(null, "staging").Api.ToString());
     }
 
     [Fact]
