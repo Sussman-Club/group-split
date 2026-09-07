@@ -64,6 +64,7 @@ public static class TransactionCommands
         transactions.Subcommands.Add(Create());
         transactions.Subcommands.Add(Update());
         transactions.Subcommands.Add(Summary());
+        transactions.Subcommands.Add(BankMatches());
         transactions.Subcommands.Add(Delete());
 
         return transactions;
@@ -367,6 +368,68 @@ public static class TransactionCommands
 
             context.Output.Write(summary, value => new Markup(
                 $"[bold]{value.Count}[/] transactions totalling [bold]{value.Total:N2}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// The other direction of the same question: imported rows still waiting that could be
+    /// an expense somebody has just typed.
+    /// </summary>
+    /// <remarks>
+    /// Worth having as its own command because the two orders happen to different people.
+    /// Somebody who records the dinner at the table asks this when the card charge lands;
+    /// somebody working through the inbox asks <c>inbox matches</c>. Both answers are the
+    /// same two commands, taken from whichever end you are standing at.
+    /// </remarks>
+    private static Command BankMatches()
+    {
+        var command = new Command(
+            "bank-matches",
+            "List imported bank rows that could be this expense arriving a second time.")
+        {
+            TransactionId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var id = context.ParseResult.GetValue(TransactionId);
+            var rows = await context.Transactions.GetTransactionBankMatchesAsync(id, ct);
+
+            context.Output.Write(rows, value =>
+            {
+                if (value.Count == 0)
+                {
+                    return new Markup("[grey]No imported row looks like this expense.[/]\n");
+                }
+
+                var table = Tables.Grid("Row", "Spent on", "Title", "Amount", "Account");
+
+                foreach (var row in value)
+                {
+                    table.AddRow(
+                        row.Id.ToString(),
+                        row.SpentOn.ToString("yyyy-MM-dd"),
+                        Markup.Escape(row.Title),
+                        Tables.Money(row.Amount),
+                        Markup.Escape($"{row.InstitutionName} · {row.AccountName}"));
+                }
+
+                // The expense id is known here, so it goes into the commands rather than
+                // being left as a placeholder -- and each one gets its own line, because a
+                // label plus a command plus a 36-character id is past the 80 columns text
+                // mode renders at whenever stdout is not a terminal.
+                return new Rows(
+                    table,
+                    new Markup(
+                        "\n[grey]Same payment:[/]\n"
+                        + $"[grey]  groupsplit inbox link <row-id> {id}[/]\n"
+                        + "[grey]Not a match:[/]\n"
+                        + $"[grey]  groupsplit inbox dismiss-match <row-id> {id}[/]\n"));
+            });
 
             return ExitCodes.Success;
         });

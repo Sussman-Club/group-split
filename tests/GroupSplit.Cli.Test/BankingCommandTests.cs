@@ -331,6 +331,175 @@ public sealed class BankingCommandTests : IDisposable
         Assert.Empty(_api.Requests);
     }
 
+    // ---- the same expense arriving twice ---------------------------------------------
+
+    [Fact]
+    public async Task Inbox_list_warns_on_the_row_a_suggestion_hangs_on()
+    {
+        _api.Returns("/api/inbox", Page(Row("Trattoria", 46.00m, matches: [Match("Dinner", 40m)])));
+
+        var result = await Cli.RunAsync("inbox", "list", "--output", "text");
+
+        // Filing this row plainly would be refused, which is a worse way to find out --
+        // and the listing already carries the suggestion, so saying so costs nothing.
+        Assert.Contains("(duplicate?)", result.Stdout);
+        Assert.Contains("inbox matches", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Inbox_list_says_nothing_about_duplicates_when_there_are_none()
+    {
+        _api.Returns("/api/inbox", Page(Row("Sainsbury's", 42.10m)));
+
+        var result = await Cli.RunAsync("inbox", "list", "--output", "text");
+
+        Assert.DoesNotContain("duplicate", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Inbox_matches_names_the_expense_and_both_ways_to_answer()
+    {
+        var id = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+
+        _api.Returns($"/api/inbox/{id}/matches", new[] { Match("Dinner", 40m, transactionId) });
+
+        var result = await Cli.RunAsync("inbox", "matches", id.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(transactionId.ToString(), result.Stdout);
+        Assert.Contains("Dinner", result.Stdout);
+        // Why it was offered, rather than asking anyone to take the suggestion on trust.
+        Assert.Contains("2 days", result.Stdout);
+        Assert.Contains("6.00 apart", result.Stdout);
+        Assert.Contains("inbox link", result.Stdout);
+        Assert.Contains("inbox dismiss-match", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Inbox_matches_says_so_when_nothing_looks_like_the_row()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/inbox/{id}/matches", Array.Empty<object>());
+
+        var result = await Cli.RunAsync("inbox", "matches", id.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains($"inbox file {id}", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Filing_a_row_that_looks_like_a_duplicate_is_refused_with_the_matches_listed()
+    {
+        var id = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+
+        _api.Problem($"/api/inbox/{id}/file", 409, "POSSIBLE_DUPLICATE_EXPENSE",
+            "This looks like an expense you have already recorded.",
+            new { Matches = new[] { Match("Dinner", 40m, transactionId) } });
+
+        var result = await Cli.RunAsync("inbox", "file", id.ToString());
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal("POSSIBLE_DUPLICATE_EXPENSE", result.Error.GetProperty("code").GetString());
+
+        // The id is what both answers take, and the refusal is the only other place it
+        // appears -- without it a caller is told "no" and given nothing to act on.
+        var details = result.Error.GetProperty("details").EnumerateArray()
+            .Select(detail => detail.GetString()!).ToList();
+
+        Assert.Contains(details, detail => detail.StartsWith(transactionId.ToString()));
+        Assert.Contains(details, detail => detail.Contains("Dinner"));
+
+        var remediation = result.Error.GetProperty("remediation").GetString()!;
+        Assert.Contains("inbox link", remediation);
+        Assert.Contains("--file-anyway", remediation);
+        Assert.Contains("inbox dismiss-match", remediation);
+    }
+
+    [Fact]
+    public async Task File_anyway_is_only_sent_when_it_was_asked_for()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/inbox/{id}/file", Transaction("Trattoria", 46.00m, null), status: 201);
+
+        await Cli.RunAsync("inbox", "file", id.ToString());
+        await Cli.RunAsync("inbox", "file", id.ToString(), "--file-anyway");
+
+        var requests = _api.Requests.Where(r => r.Path == $"/api/inbox/{id}/file").ToList();
+
+        // The refusal is what stops a second expense existing before anybody was told, so
+        // the flag defaulting true for convenience would undo the whole feature.
+        Assert.False(requests[0].Json.GetProperty("fileAnyway").GetBoolean());
+        Assert.True(requests[1].Json.GetProperty("fileAnyway").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Inbox_link_attaches_the_row_and_says_the_expense_did_not_change()
+    {
+        var id = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+
+        _api.Returns($"/api/inbox/{id}/link", Transaction("Dinner", 40.00m, Guid.NewGuid()));
+
+        var result = await Cli.RunAsync(
+            "inbox", "link", id.ToString(), transactionId.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/inbox/{id}/link").Json;
+        Assert.Equal(transactionId, body.GetProperty("transactionId").GetGuid());
+
+        // What somebody wrote down stays what they wrote down: a card settling for more is
+        // not a correction, and the command should not imply one was made.
+        Assert.Contains("Nothing about the expense changed", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Inbox_dismiss_match_sends_the_pair_and_needs_no_confirmation()
+    {
+        var id = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+
+        _api.NoContent($"/api/inbox/{id}/dismiss-match");
+
+        var result = await Cli.RunAsync(
+            "inbox", "dismiss-match", id.ToString(), transactionId.ToString());
+
+        // It removes a suggestion, not a record: the row is still there to file or ignore.
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal("dismissed", result.Json.GetProperty("status").GetString());
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/inbox/{id}/dismiss-match").Json;
+        Assert.Equal(transactionId, body.GetProperty("transactionId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Transactions_bank_matches_answers_the_question_from_the_other_end()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}/bank-matches", new[] { Row("Trattoria", 46.00m) });
+
+        var result = await Cli.RunAsync("tx", "bank-matches", id.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("Trattoria", result.Stdout);
+        // The expense id is already known here, so the suggested commands carry it.
+        Assert.Contains($"inbox link <row-id> {id}", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Transactions_bank_matches_is_empty_without_error_when_nothing_matches()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}/bank-matches", Array.Empty<object>());
+
+        var result = await Cli.RunAsync("tx", "bank-matches", id.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("No imported row", result.Stdout);
+    }
+
     [Fact]
     public async Task Inbox_ignore_and_restore_are_each_one_call_and_say_how_to_undo()
     {
@@ -382,12 +551,32 @@ public sealed class BankingCommandTests : IDisposable
         }
     };
 
+    /// <summary>
+    /// One suggested expense. The defaults are the ordinary case the feature exists for: a
+    /// card charge that posted two days after the meal and settled six higher, because a
+    /// tip was added after the receipt was written.
+    /// </summary>
+    private static object Match(string name, decimal amount, Guid? transactionId = null) => new
+    {
+        transactionId = transactionId ?? Guid.NewGuid(),
+        name,
+        amount,
+        currency = "GBP",
+        dateTime = DateTimeOffset.UtcNow.AddDays(-2),
+        groupId = Guid.NewGuid(),
+        groupName = "The flat",
+        paidByUserName = "Anabel",
+        amountDifference = 6.00m,
+        daysApart = 2
+    };
+
     private static object Row(
         string merchant,
         decimal amount,
         DateOnly? date = null,
         DateOnly? authorized = null,
-        string status = "New") => new
+        string status = "New",
+        object[]? matches = null) => new
     {
         id = Guid.NewGuid(),
         date = date ?? new DateOnly(2026, 3, 9),
@@ -406,7 +595,8 @@ public sealed class BankingCommandTests : IDisposable
         transactionId = (Guid?)null,
         removedAt = (DateTimeOffset?)null,
         accountName = "Current account",
-        institutionName = "Monzo"
+        institutionName = "Monzo",
+        possibleDuplicates = matches ?? []
     };
 
     private static object Page(params object[] items) => new

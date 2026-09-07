@@ -26,6 +26,18 @@ public static class ValueCompletions
         return option;
     }
 
+    /// <summary>
+    /// The same, for an option whose absence means something -- a filter nobody set, a sort
+    /// direction left to the server. The values a shell offers are the enum's either way;
+    /// only the type it binds to differs.
+    /// </summary>
+    public static Option<TValue?> WithDescribedValues<TValue>(this Option<TValue?> option)
+        where TValue : struct, Enum
+    {
+        Replace(option.CompletionSources, Describe<TValue>());
+        return option;
+    }
+
     public static Argument<TValue> WithDescribedValues<TValue>(this Argument<TValue> argument)
         where TValue : struct, Enum
     {

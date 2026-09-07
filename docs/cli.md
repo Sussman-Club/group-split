@@ -33,12 +33,12 @@ has to reach for `curl` and a bearer token to do.
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation` |
-| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `delete` |
+| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
 | `invitations` | `list`, `accept`, `decline` |
 | `bank` | `list`, `link-token`, `link`, `sync`, `unlink` |
-| `inbox` | `list`, `summary`, `file`, `ignore`, `restore` |
+| `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
 | `config` | `list`, `get`, `set`, `unset`, `profiles`, `path` |
 
@@ -363,6 +363,49 @@ Filing copies what the bank said. The date, the amount and the currency have no 
 
 When the deployment has no provider configured, `bank list` says so rather than answering
 with an empty list -- "no banks linked" and "bank sync is off here" are different answers.
+
+### When the row is already an expense
+
+Somebody records the dinner at the table so nobody forgets it. The card charge lands two days
+later. Filing it would put the same dinner in the group twice, and
+[the rule that catches that](duplicate-detection.md) is on the API, so it catches this client
+too:
+
+```bash
+groupsplit inbox file <row-id>
+# error: This looks like an expense you have already recorded.
+#   - 3f25... Dinner 40.00 GBP in The flat, 2 days apart, 6.00 apart
+```
+
+Exit code 3, and **no second expense exists** -- the refusal comes before one is written. The
+`details` of the envelope carry each expense it matched, id first, because the id is the
+argument two of the three answers take:
+
+```bash
+groupsplit inbox link <row-id> <transaction-id>            # it is the same payment
+groupsplit inbox file <row-id> --file-anyway               # you really did pay twice
+groupsplit inbox dismiss-match <row-id> <transaction-id>   # not a match at all
+```
+
+`inbox link` leaves one expense with the bank's row attached. The amount, the date and the
+division are untouched: a card settling for six more than the receipt is not a correction
+anybody asked for. `dismiss-match` means the pair is never suggested again.
+
+Nothing has to wait for the refusal. `inbox list` marks a row `(duplicate?)` and counts them
+underneath, and `groupsplit inbox matches <row-id>` names what it matched and why -- how many
+days apart and how far the amounts are -- without filing anything.
+
+The other order is asked from the other end. Somebody who typed the expense first wants to
+know when the card charge arrives, and the row is what they need the id of:
+
+```bash
+groupsplit transactions bank-matches <transaction-id>
+```
+
+Both directions answer with the same two commands. Which of the three applies is a question
+about the money, so no default is picked: `--file-anyway` is never on unless it is asked for,
+because the refusal is the whole mechanism that stops the second expense coming into being
+before somebody has been told about the first.
 
 ## Editing an expense
 
