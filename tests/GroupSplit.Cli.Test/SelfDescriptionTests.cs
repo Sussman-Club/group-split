@@ -84,6 +84,103 @@ public sealed class SelfDescriptionTests
         Assert.ThrowsAny<JsonException>(() => JsonDocument.Parse(result.Stdout));
     }
 
+    /// <summary>
+    /// What a shell asks for on Tab. The directive is answered before the parse, so these
+    /// drive it exactly as the completion scripts do.
+    /// </summary>
+    private static async Task<List<(string Label, string Description)>> SuggestAsync(string line)
+    {
+        var result = await Cli.RunAsync($"[suggest:{line.Length}]", line);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        return result.Stdout
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(suggestion => suggestion.Split('\t', 2))
+            .Select(parts => (parts[0], parts.Length > 1 ? parts[1] : string.Empty))
+            .ToList();
+    }
+
+    [Fact]
+    public async Task Suggestions_at_a_command_position_are_commands_only()
+    {
+        var labels = (await SuggestAsync("groupsplit ")).Select(s => s.Label).ToList();
+
+        Assert.Contains("groups", labels);
+        Assert.Contains("transactions", labels);
+        // The alias is a real way to type the command, so it completes like one.
+        Assert.Contains("tx", labels);
+        // A recursive option is valid here too, but nobody reaching for a command wants it.
+        Assert.DoesNotContain(labels, label => label.StartsWith('-'));
+    }
+
+    [Fact]
+    public async Task Suggestions_become_options_once_a_dash_is_typed()
+    {
+        var labels = (await SuggestAsync("groupsplit -")).Select(s => s.Label).ToList();
+
+        Assert.Contains("--json", labels);
+        Assert.Contains("-o", labels);
+        Assert.DoesNotContain("groups", labels);
+    }
+
+    [Fact]
+    public async Task Suggestions_never_offer_the_aliases_meant_for_cmd_exe()
+    {
+        var labels = (await SuggestAsync("groupsplit ")).Concat(await SuggestAsync("groupsplit -"))
+            .Select(s => s.Label).ToList();
+
+        Assert.DoesNotContain("/?", labels);
+        Assert.DoesNotContain("/h", labels);
+        Assert.DoesNotContain("-?", labels);
+    }
+
+    [Fact]
+    public async Task Suggestions_carry_the_description_the_help_already_has()
+    {
+        var groups = Assert.Single(await SuggestAsync("groupsplit "), s => s.Label == "groups");
+
+        Assert.Equal("Groups you belong to, their members and their balances.", groups.Description);
+    }
+
+    [Fact]
+    public async Task Suggestions_reach_into_a_subcommand_and_its_argument_values()
+    {
+        var nested = (await SuggestAsync("groupsplit groups ")).Select(s => s.Label).ToList();
+        Assert.Contains("balances", nested);
+        Assert.DoesNotContain("groups", nested);
+
+        // An enum argument is a closed set, so it completes where a free value cannot.
+        var shells = (await SuggestAsync("groupsplit completion ")).Select(s => s.Label).ToList();
+        Assert.Equal(["Bash", "Fish", "Pwsh", "Zsh"], shells);
+    }
+
+    [Fact]
+    public async Task Suggested_values_are_described_like_everything_else()
+    {
+        var formats = await SuggestAsync("groupsplit -o ");
+
+        Assert.Equal(["Auto", "Json", "Text"], formats.Select(s => s.Label));
+        Assert.Equal(
+            "Text when stdout is a terminal, JSON when it is not.",
+            Assert.Single(formats, s => s.Label == "Auto").Description);
+
+        // Every value carries one, and none is offered twice now that the framework's own
+        // undescribed source has been replaced rather than added to.
+        var shells = await SuggestAsync("groupsplit completion ");
+        Assert.Equal(["Bash", "Fish", "Pwsh", "Zsh"], shells.Select(s => s.Label));
+        Assert.All(shells, shell => Assert.NotEqual(string.Empty, shell.Description));
+    }
+
+    [Fact]
+    public async Task A_suggest_request_without_a_position_completes_the_end_of_the_line()
+    {
+        var result = await Cli.RunAsync("[suggest]", "groupsplit gr");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.StartsWith("groups\t", result.Stdout);
+    }
+
     [Fact]
     public async Task An_unknown_shell_is_a_usage_error()
     {
