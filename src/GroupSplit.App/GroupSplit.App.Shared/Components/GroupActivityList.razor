@@ -1,8 +1,11 @@
 @using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject ITransactionCommands Transactions
+@inject IDialogService Dialogs
 @inject ApiErrorPresenter Errors
 @inject DataChangeNotifier Changes
 @inject LocalClock Clock
@@ -44,7 +47,8 @@
             @{ var i = 0; }
             @foreach (var entry in _page.Items)
             {
-                <div class="gs-row gs-reveal" style="--i: @(i++); cursor: default">
+                <div class="gs-row gs-reveal @(entry.Kind is ActivityKind.Transfer ? "gs-row-has-actions" : null)"
+                     style="--i: @(i++); cursor: default">
                     <span class="gs-row-icon">
                         <MudIcon Icon="@(entry.Kind is ActivityKind.Transfer
                                            ? Icons.Material.Rounded.Handshake
@@ -68,6 +72,25 @@
                         <div><Money Value="entry.Amount" /></div>
                         <span class="when">@Clock.Local(entry.DateTime).ToString("d MMM yyyy")</span>
                     </div>
+                    @*
+                        Transfers only. An expense is edited and deleted from the grid that
+                        owns it, where the dialog can offer the category and the shares; a
+                        settlement has no such home, and this listing is the only place one
+                        is ever shown.
+                    *@
+                    @if (entry.Kind is ActivityKind.Transfer)
+                    {
+                        <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="@($"Delete settlement: {Headline(entry)}")"
+                                               Disabled="@_loading"
+                                               OnClick="@(async () => await DeleteAsync(entry))" />
+                            </MudTooltip>
+                        </div>
+                    }
                 </div>
             }
         </div>
@@ -108,6 +131,39 @@
         entry.Kind is ActivityKind.Transfer
             ? entry.Description is { Length: > 0 } note ? note : "Settling up"
             : $"Paid by {entry.PaidByUserName}";
+
+    /// <summary>
+    /// Takes back a repayment that was recorded wrongly.
+    /// </summary>
+    /// <remarks>
+    /// The balances are what this is really for: a settlement says a debt was paid, so one
+    /// entered by mistake -- the wrong direction, the wrong member, twice -- leaves everybody
+    /// reading a balance that is not true, and until now the row saying so could not be
+    /// removed from anywhere. Deleting is the whole correction: there is nothing to a
+    /// transfer but who paid whom and how much, so there is nothing an edit could fix that
+    /// re-recording it does not.
+    /// </remarks>
+    private async Task DeleteAsync(GroupActivityResponse entry)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText,
+                $"Delete the settlement where {Headline(entry)}? Everybody's balance in this group "
+                + "goes back to what it was before it was recorded." },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await Dialogs.ShowAsync<ConfirmationDialog>("Delete Settlement", parameters, options);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        // The listing re-reads itself off TransactionsChanged, which the command raises.
+        await Transactions.DeleteAsync(entry.Id, "Settlement", "settlement");
+    }
 
     protected override void OnInitialized() => Changes.TransactionsChanged += ReloadAsync;
 

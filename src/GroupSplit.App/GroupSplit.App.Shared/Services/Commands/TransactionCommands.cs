@@ -82,13 +82,14 @@ public sealed class TransactionCommands(
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not update the expense.");
 
-    public Task<bool> DeleteAsync(Guid transactionId, string name, CancellationToken ct = default) =>
+    public Task<bool> DeleteAsync(Guid transactionId, string name, string noun = "expense",
+        CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
             await transactions.DeleteTransactionAsync(transactionId, ct);
             snackbar.Add($"{name} deleted.", Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not delete the expense.");
+        }, $"Could not delete the {noun}.");
 
     public async Task<SplitPreviewResponse?> PreviewAsync(CreateTransactionRequest request,
         CancellationToken ct = default)

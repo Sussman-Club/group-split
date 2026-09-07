@@ -249,6 +249,67 @@ public sealed class CommandTests : IDisposable
         Assert.Contains(_api.Requests, r => r.Method == "DELETE");
     }
 
+    /// <summary>
+    /// A settlement is deletable even though nothing under /transactions can describe one.
+    /// </summary>
+    /// <remarks>
+    /// The stub is the real shape of it: GET answers 404 because that read is the expenses
+    /// and a transfer is not one of them, while DELETE takes the same id. Before this the
+    /// 404 from the lookup ended the command, so the only way to retract a repayment
+    /// recorded by mistake was to go to the database.
+    /// </remarks>
+    [Fact]
+    public async Task A_settlement_the_expense_read_cannot_see_is_still_offered_for_deletion()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString());
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+
+        var envelope = result.Json;
+        Assert.Equal("transactions.delete", envelope.GetProperty("action").GetString());
+
+        // The prompt cannot name it, so it says what deleting one does instead -- and says
+        // it without claiming the row is a settlement, which a 404 does not establish.
+        var changes = envelope.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString() ?? "").ToList();
+
+        Assert.Contains(changes, change => change.Contains("settlement", StringComparison.OrdinalIgnoreCase));
+
+        Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task A_settlement_is_deleted_once_the_confirmation_is_given()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(_api.Requests, r => r.Method == "DELETE" && r.Path == $"/api/transactions/{id}");
+    }
+
+    /// <summary>
+    /// Only a 404 means "this listing cannot see it". Anything else is a fault, and a fault
+    /// that read as one would delete a row nobody had been shown.
+    /// </summary>
+    [Fact]
+    public async Task A_read_that_fails_for_any_other_reason_stops_the_delete()
+    {
+        var id = Guid.NewGuid();
+        _api.Problem($"/api/transactions/{id}", 500, "SERVER_ERROR", "Something broke.", method: "GET");
+        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
+
+        Assert.NotEqual(ExitCodes.Success, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
+    }
+
     // ---- the rest of the surface -----------------------------------------------------
 
     [Fact]

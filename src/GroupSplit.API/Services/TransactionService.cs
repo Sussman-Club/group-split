@@ -60,6 +60,23 @@ public interface ITransactionService
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
     Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default);
     ValueTask<Expense> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes a transaction of either kind: an expense, or a settlement between two
+    /// members.
+    /// </summary>
+    /// <remarks>
+    /// The one member of this interface that is not expense-only. Everything else here
+    /// reads <c>Set&lt;Expense&gt;()</c> on purpose, so a transfer is invisible to it; a
+    /// settlement entered wrongly still has to be retractable, and there is no second
+    /// delete path for it to use.
+    /// </remarks>
+    /// <exception cref="NotFoundException">
+    /// No transaction of any kind with that id is the caller's to remove.
+    /// </exception>
+    /// <exception cref="ConflictException">
+    /// The caller has left the group it belongs to.
+    /// </exception>
     Task Delete(Guid id, CancellationToken ct = default);
 }
 
@@ -125,13 +142,19 @@ public class TransactionService(
     }
 
     /// <summary>
-    /// Whether the caller is in the expense's group now. Reading is broader than this --
+    /// Whether the caller is in the transaction's group now. Reading is broader than this --
     /// see <see cref="List"/> -- but a change moves balances for people whose group the
     /// caller may have left, and that is theirs to refuse.
     /// </summary>
-    private async Task RefuseIfLeft(Expense expense, CancellationToken ct)
+    /// <remarks>
+    /// Takes a <see cref="Transaction"/> rather than an <see cref="Expense"/> because
+    /// <see cref="Delete"/> now reaches it with either kind. The check itself never read
+    /// anything expense-shaped: a group is a group, and a settlement recorded in one moves
+    /// its balances exactly as much as spending does.
+    /// </remarks>
+    private async Task RefuseIfLeft(Transaction transaction, CancellationToken ct)
     {
-        if (expense.GroupId is not { } groupId)
+        if (transaction.GroupId is not { } groupId)
             return;
 
         var stillIn = await dbContext.Entry(userContext.User).Collection(u => u.Groups).Query()
@@ -139,7 +162,7 @@ public class TransactionService(
 
         if (!stillIn)
             throw new ConflictException(ErrorCodes.TransactionGroupLeft,
-                "You are no longer in this expense's group, so it cannot be changed.");
+                "You are no longer in this transaction's group, so it cannot be changed.");
     }
 
     public async Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default)
@@ -383,9 +406,43 @@ public class TransactionService(
         return expense;
     }
 
+    /// <summary>
+    /// The transaction <paramref name="id"/> names, of either kind, when it is the
+    /// caller's to remove.
+    /// </summary>
+    /// <remarks>
+    /// The one query here that reads <c>Set&lt;Transaction&gt;()</c> rather than
+    /// <c>Set&lt;Expense&gt;()</c>. Keeping the reading surfaces expense-only is the point
+    /// of the reshape -- a repayment is not spending and does not belong in a list of it --
+    /// but deleting is not reading, and routing this through <see cref="Get"/> put the
+    /// discriminator in the predicate, so a settlement recorded by mistake answered
+    /// "Transaction not found." and went on moving balances until somebody edited the
+    /// database. <see cref="Transfer"/> has claimed since it was written that a transfer
+    /// "goes through the same splits, the same balance query and the same delete path as
+    /// everything else"; the first two were true.
+    /// <para>
+    /// The scope is <see cref="List"/>'s, so what widens is which kinds of row are in
+    /// reach and never whose: a transaction in one of the caller's groups, or one they paid
+    /// for wherever it is. Both parties to a transfer are members of its group, so each of
+    /// them finds it here. <see cref="RefuseIfLeft"/> still has the final word.
+    /// </para>
+    /// </remarks>
+    private IQueryable<Transaction> Deletable(Guid id)
+    {
+        var currentUser = userContext.User;
+
+        var groups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
+
+        return from transaction in dbContext.Set<Transaction>()
+               where transaction.Id == id &&
+                     (groups.Any(@group => @group.Id == transaction.GroupId) ||
+                      transaction.UserId == currentUser.Id)
+               select transaction;
+    }
+
     public async Task Delete(Guid id, CancellationToken ct = default)
     {
-        var transaction = await (await Get(id, ct)).FirstOrDefaultAsync(ct);
+        var transaction = await Deletable(id).FirstOrDefaultAsync(ct);
 
         if (transaction is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
