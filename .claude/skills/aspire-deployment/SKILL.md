@@ -3,6 +3,9 @@ name: aspire-deployment
 description: "**WORKFLOW SKILL** — Deploy Aspire apps from AppHost models to Docker Compose, Kubernetes, Azure, or AWS. WHEN: \"deploy Aspire app\", \"publish Aspire artifacts\", \"deploy to Azure Container Apps\", \"generate Kubernetes artifacts\", \"tear down Aspire deployment\". INVOKES: aspire CLI, Aspire docs, target cloud/container CLIs. FOR SINGLE OPERATIONS: use generic Azure, Kubernetes, Docker, or AWS tools only when no Aspire AppHost exists."
 license: MIT
 metadata:
+  # Vendored by `aspire agent init` for contributors working in this repository.
+  # Not ours to republish: hidden from `npx skills add` discovery.
+  internal: true
   author: Microsoft
   version: "0.0.1"
 ---

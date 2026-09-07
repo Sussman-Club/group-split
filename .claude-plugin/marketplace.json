@@ -1,0 +1,16 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "group-split",
+  "description": "Agent skills for the GroupSplit CLI, published from the repository that builds it.",
+  "owner": {
+    "name": "Sussman Club",
+    "url": "https://github.com/Sussman-Club/group-split"
+  },
+  "plugins": [
+    {
+      "name": "groupsplit",
+      "source": "./",
+      "description": "Drive the GroupSplit CLI from an agent: the JSON contract, the exit codes, the confirmation protocol for destructive changes, and filing imported bank rows without recording the same money twice."
+    }
+  ]
+}
