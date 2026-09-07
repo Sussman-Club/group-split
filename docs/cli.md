@@ -55,8 +55,10 @@ groupsplit --help
 
 ### How releases happen
 
-Nothing to do. Merging publishes the CLI, the same way it deploys the stack, so the installed
-tool cannot quietly lag behind what was merged and there is no release step to remember.
+Nothing to do. Merging a CLI change publishes the CLI, the same way merging deploys the stack,
+so the installed tool cannot quietly lag behind what was merged and there is no release step to
+remember. A merge that leaves the CLI alone publishes nothing -- see [When nothing is
+published](#when-nothing-is-published).
 
 Both branches publish, and the version says which is which:
 
@@ -133,10 +135,30 @@ what produced it.
 would leave the **old binary installed** while reporting success -- a stale tool that gives no
 sign of being stale. Publishing on every merge makes that failure mode routine rather than
 occasional, which is why the version comes from git and the workflow claims a new one every
-time.
+time the CLI changes.
 
 Both CI and the release workflow check out with `fetch-depth: 0`, because MinVer needs the
 tags and the history to derive it.
+
+### When nothing is published
+
+Most commits here are API or app work that leaves the packed tool byte-identical. Publishing
+those anyway spent a version number per merge and told anyone reading the feed that something
+had changed when nothing had, so the workflow only triggers on a push that touches the CLI.
+
+The `paths:` filter at the top of `.github/workflows/release-cli.yml` is the whole definition:
+`src/GroupSplit.Cli`, `src/GroupSplit.Shared`, `src/GroupSplit.API`, `global.json`, and the
+workflow itself. `GroupSplit.API` is in there whole even though the CLI consumes only its
+OpenAPI document, because any endpoint change regenerates the client and narrowing the list to
+controllers would stop triggering the day someone moves a file. The tests are deliberately
+absent -- a test-only change does not alter the shipped tool -- but they still run, and still
+gate the publish, whenever the workflow does fire.
+
+One caveat, worth knowing before you go looking for a missing version: the filter judges each
+push on its own. If a CLI change's run fails or is cancelled, the *next* push will not pick it
+up, because that push has no CLI change of its own to trigger on -- the release sits unpublished
+and nothing goes red. Re-run the workflow by hand (`workflow_dispatch`) if that happens; a
+manual run ignores the filter.
 
 ### Without installing
 
