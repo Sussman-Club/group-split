@@ -51,7 +51,7 @@ public static class ErrorMessages
         [ErrorCodes.GroupInvitationAlreadySent] = "That person has already been invited.",
         [ErrorCodes.GroupMemberAlreadyJoined] = "That person is already in this group.",
         [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
-        [ErrorCodes.TransactionGroupLeft] = "You are no longer in this expense's group, so it cannot be changed.",
+        [ErrorCodes.TransactionGroupLeft] = "You are no longer in this transaction's group, so it cannot be changed.",
 
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",

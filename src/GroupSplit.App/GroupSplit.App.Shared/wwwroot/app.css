@@ -1378,6 +1378,39 @@ html:not([data-gs-ready]) .gs-group-card {
     text-align: right;
 }
 
+/*
+    A row that carries an action needs somewhere to put it. .gs-row is three columns --
+    icon, text, figure -- so a fourth child lands on an implicit second row and the button
+    appears under the entry it belongs to instead of beside it.
+*/
+.gs-row.gs-row-has-actions {
+    grid-template-columns: auto 1fr auto auto;
+}
+
+/*
+    Revealed on hover, as the grid's row actions are. The equivalent rules there are scoped
+    to .gs-grid and so never reached a .gs-list row.
+*/
+.gs-list .gs-row-actions {
+    opacity: 0;
+    transform: translateX(6px);
+    transition: opacity var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-list .gs-row:hover .gs-row-actions,
+.gs-list .gs-row:focus-within .gs-row-actions {
+    opacity: 1;
+    transform: none;
+}
+
+/* Nothing hovers on a touch screen, so there the action is simply there. */
+@media (hover: none) {
+    .gs-list .gs-row-actions {
+        opacity: 1;
+        transform: none;
+    }
+}
+
 .gs-tag {
     display: inline-flex;
     align-items: center;

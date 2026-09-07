@@ -14,7 +14,18 @@ public interface ITransactionCommands
     Task<bool> UpdateAsync(Guid transactionId, JsonPatchDocument<UpdateTransactionRequest> patch,
         string name, CancellationToken ct = default);
 
-    Task<bool> DeleteAsync(Guid transactionId, string name, CancellationToken ct = default);
+    /// <summary>
+    /// Removes a transaction and says so.
+    /// </summary>
+    /// <param name="noun">
+    /// What to call it if the removal fails -- "expense", or "settlement" from the one
+    /// listing that shows those. The success line uses <paramref name="name"/>, which
+    /// already reads as itself; only the failure has to name the kind, and reporting that a
+    /// settlement could not be deleted as a failure to delete an expense sent people to
+    /// look for an expense that was never there.
+    /// </param>
+    Task<bool> DeleteAsync(Guid transactionId, string name, string noun = "expense",
+        CancellationToken ct = default);
 
     /// <summary>
     /// What the expense described would be divided into, asked of the API rather than

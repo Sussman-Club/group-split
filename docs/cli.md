@@ -52,6 +52,13 @@ what it is about to change rather than echo a guid back: `groups remove-member`,
 `groups link create` reads for a further reason: it only asks when the group already has a
 link to lose, and making a group's first one destroys nothing.
 
+`transactions delete` reads too, and is the one that is allowed to come back empty-handed.
+It takes either kind of transaction, but the read behind the prompt is the expense listing,
+which cannot see a settlement -- so for one of those the confirmation names the id rather
+than the row, and says what deleting it does instead. Only a 404 is taken that way: any
+other failure of the read stops the command, because a fault that read as "just a
+settlement then" would delete a row nobody had been shown.
+
 ## Installing it
 
 The CLI is published to **GitHub Packages**, private to the org, so installing it needs a

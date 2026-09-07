@@ -86,7 +86,7 @@ Expenses and settlements.
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
-| `transactions delete <transaction-id>` | Delete a transaction. |
+| `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. |
 
 ### users
 
@@ -272,6 +272,11 @@ it off. On the receiving side, `invitations link <link>` says which group a link
 <amount>` records a repayment; `--direction` defaults to `theypaidyou`, the creditor's side,
 so pass `--direction youpaidthem` when the user is the one who handed over the money. It is
 confirmation-gated: it moves money in the ledger.
+
+A settlement recorded wrongly is taken back with `transactions delete <transaction-id>`,
+which balances the ledger back to what it read before. Its id comes from `groups activity`:
+the `transactions` listings read the expenses, so a settlement does not appear in
+`transactions list` and `transactions show` will not describe one.
 
 `groups leave` requires that the user's balance in the group is settled, so expect a refusal
 until the balances are square.

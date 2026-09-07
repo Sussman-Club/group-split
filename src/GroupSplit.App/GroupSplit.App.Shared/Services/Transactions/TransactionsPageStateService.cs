@@ -205,5 +205,5 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         _commands.UpdateAsync(transaction.Id, patch, transaction.Name, ct);
 
     public Task<bool> DeleteAsync(TransactionResponse transaction, CancellationToken ct = default) =>
-        _commands.DeleteAsync(transaction.Id, transaction.Name, ct);
+        _commands.DeleteAsync(transaction.Id, transaction.Name, ct: ct);
 }

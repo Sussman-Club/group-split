@@ -319,6 +319,16 @@ public static class TransactionApi
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
+        /// <summary>
+        /// Removes an expense, or a settlement between two members.
+        /// </summary>
+        /// <remarks>
+        /// The only endpoint under /transactions that a transfer's id gets through. The
+        /// others read the expenses and answer 404 for one, which is right for a listing
+        /// and was wrong here: the Activity tab shows settlements precisely because a
+        /// balance that moved needs explaining, and the row explaining it could not be
+        /// taken back when it was wrong.
+        /// </remarks>
         private RouteHandlerBuilder MapDelete()
         {
             return group.MapDelete("{id:guid}",

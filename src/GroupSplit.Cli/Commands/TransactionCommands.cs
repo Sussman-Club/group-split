@@ -1,4 +1,6 @@
 using System.CommandLine;
+using System.Net;
+using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -559,22 +561,43 @@ public static class TransactionCommands
         return command;
     }
 
+    /// <summary>
+    /// Deletes either kind of transaction: an expense, or a settlement between two members.
+    /// </summary>
+    /// <remarks>
+    /// The id of a settlement comes from <c>groupsplit groups activity</c> -- the one
+    /// listing that shows them. It will not appear in <c>transactions list</c>, which reads
+    /// the expenses, and neither will <c>transactions show</c> describe it; the DELETE
+    /// takes it all the same, which is why the lookup below is allowed to come back empty
+    /// instead of ending the command.
+    /// </remarks>
     private static Command Delete()
     {
-        var command = new Command("delete", "Delete a transaction.") { TransactionId };
+        var command = new Command("delete", "Delete a transaction: an expense, or a settlement.")
+        {
+            TransactionId
+        };
 
         command.SetHandler(async (context, ct) =>
         {
             var id = context.ParseResult.GetValue(TransactionId);
-            var transaction = await context.Transactions.GetTransactionAsync(id, ct);
+            var transaction = await TryShow(context, id, ct);
 
+            // Named when it can be. A 404 from the lookup does not say "no such row" here
+            // -- a settlement answers that way too -- so the prompt claims only the id, and
+            // a genuinely absent one is refused by the DELETE a moment later.
             Confirmation.Require(
                 context,
                 action: "transactions.delete",
-                summary: $"Delete '{transaction.Name}'?",
+                summary: transaction is null
+                    ? $"Delete transaction {id}?"
+                    : $"Delete '{transaction.Name}'?",
                 changes:
                 [
-                    $"'{transaction.Name}' for {transaction.Amount:N2} is removed.",
+                    transaction is null
+                        ? "The transaction is removed. If it is a settlement, the repayment it "
+                          + "recorded is undone and the debt it cleared comes back."
+                        : $"'{transaction.Name}' for {transaction.Amount:N2} is removed.",
                     "Every member's balance in the group is recalculated."
                 ],
                 confirmCommand: $"groupsplit transactions delete {id} --yes");
@@ -582,12 +605,35 @@ public static class TransactionCommands
             await context.Transactions.DeleteTransactionAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", transactionId = id, name = transaction.Name },
-                value => new Markup($"[green]Deleted[/] {Markup.Escape(value.name)}.\n"));
+                new { status = "deleted", transactionId = id, name = transaction?.Name },
+                value => new Markup(
+                    $"[green]Deleted[/] {Markup.Escape(value.name ?? value.transactionId.ToString())}.\n"));
 
             return ExitCodes.Success;
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// The transaction as <c>transactions show</c> would report it, or null when that
+    /// listing cannot see it -- a settlement, or an id belonging to nobody the caller knows.
+    /// </summary>
+    /// <remarks>
+    /// Only 404 is swallowed. Anything else -- unauthorised, a server fault, an unreachable
+    /// host -- is the command's problem and is left to the handler that reports it, so a
+    /// broken connection cannot read as "just a settlement then" and go on to a delete.
+    /// </remarks>
+    private static async Task<TransactionResponse?> TryShow(CliContext context, Guid id,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await context.Transactions.GetTransactionAsync(id, ct);
+        }
+        catch (ApiException api) when (api.StatusCode is (int)HttpStatusCode.NotFound)
+        {
+            return null;
+        }
     }
 }
