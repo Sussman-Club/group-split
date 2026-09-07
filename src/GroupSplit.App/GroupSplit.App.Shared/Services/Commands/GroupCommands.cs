@@ -70,6 +70,56 @@ public sealed class GroupCommands(
             await changes.NotifyGroupsChangedAsync();
         }, "Could not withdraw the invitation.");
 
+    public async Task<GroupJoinLinkResponse?> CreateJoinLinkAsync(Guid groupId, string groupName,
+        CancellationToken ct = default)
+    {
+        GroupJoinLinkResponse? link = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            link = await groups.CreateGroupJoinLinkAsync(groupId, ct);
+
+            // The old link, if there was one, stopped working the moment this one was made,
+            // so the message says the part somebody could otherwise be caught out by.
+            snackbar.Add($"New join link for {groupName}. Any link you shared before has stopped working.",
+                Severity.Success);
+
+            await changes.NotifyGroupsChangedAsync();
+        }, "Could not make a join link.");
+
+        return done ? link : null;
+    }
+
+    public Task<bool> RevokeJoinLinkAsync(Guid groupId, string groupName, CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await groups.RevokeGroupJoinLinksAsync(groupId, ct);
+            snackbar.Add($"The join link to {groupName} no longer works.", Severity.Success);
+            await changes.NotifyGroupsChangedAsync();
+        }, "Could not withdraw the join link.");
+
+    public async Task<JoinedGroupResponse?> JoinByLinkAsync(string token, CancellationToken ct = default)
+    {
+        JoinedGroupResponse? joined = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            joined = await invitations.AcceptJoinLinkAsync(token, ct);
+
+            // Being in it already is not a failure and does not read as one: the person
+            // followed a link to a group they are in, and the app takes them there.
+            snackbar.Add(
+                joined.AlreadyAMember
+                    ? $"You are already in {joined.GroupName}."
+                    : $"You have joined {joined.GroupName}.",
+                joined.AlreadyAMember ? Severity.Info : Severity.Success);
+
+            await changes.NotifyGroupsChangedAsync();
+        }, "Could not join the group.");
+
+        return done ? joined : null;
+    }
+
     public Task<bool> RemoveMemberAsync(Guid groupId, Guid memberUserId, string memberName,
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>

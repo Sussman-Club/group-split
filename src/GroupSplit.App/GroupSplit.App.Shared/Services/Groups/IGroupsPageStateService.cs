@@ -53,6 +53,20 @@ public interface IGroupsPageStateService
     Task<bool> InviteToGroupAsync(AddMemberRequest request, CancellationToken cancellationToken = default);
 
     Task<bool> WithdrawInvitationAsync(Guid invitationId, string email, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The selected group's standing join link, or null when nobody has made one. A group
+    /// has one at a time; the API answers with a list because a race could leave two, and
+    /// this takes the newest, which is the one the members page offers to share.
+    /// </summary>
+    Task<GroupJoinLinkResponse?> GetGroupJoinLinkAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Issues a link into the selected group, replacing whatever it had.</summary>
+    Task<GroupJoinLinkResponse?> CreateGroupJoinLinkAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Puts the selected group's link out, so the URLs already shared stop working.</summary>
+    Task<bool> RevokeGroupJoinLinkAsync(CancellationToken cancellationToken = default);
+
     Task<bool> RemoveGroupMemberAsync(Guid memberUserId, string memberName, CancellationToken cancellationToken = default);
 
     /// <summary>The caller taking themselves out, which needs a settled balance.</summary>
