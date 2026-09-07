@@ -1,0 +1,29 @@
+{
+  "accounts": [
+    {
+      "account_id": "acc-1",
+      "name": "Plaid Checking",
+      "official_name": "Plaid Gold Standard 0% Interest Checking",
+      "mask": "0000",
+      "type": "depository",
+      "subtype": "checking",
+      "balances": {
+        "available": 100,
+        "current": 110,
+        "iso_currency_code": "USD",
+        "unofficial_currency_code": null,
+        "limit": null
+      }
+    }
+  ],
+  "item": {
+    "item_id": "item-1",
+    "institution_id": "ins_109508",
+    "institution_name": "First Platypus Bank",
+    "webhook": "https://example.test/webhooks/plaid",
+    "error": null,
+    "available_products": ["balance"],
+    "billed_products": ["transactions"]
+  },
+  "request_id": "req-accounts"
+}

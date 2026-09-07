@@ -1,0 +1,8 @@
+{
+  "error_type": "RATE_LIMIT_EXCEEDED",
+  "error_code": "TRANSACTIONS_LIMIT",
+  "error_message": "rate limit exceeded for this endpoint",
+  "display_message": null,
+  "request_id": "req-error-3",
+  "status": 429
+}

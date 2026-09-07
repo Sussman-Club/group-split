@@ -18,5 +18,12 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
                     dbValue => dbValue
                 );
         });
+
+        // The provider's row verbatim, queryable when a field it holds is wanted later
+        // without adding a column for it. Text on every other provider.
+        modelBuilder.Entity<BankTransaction>(entity =>
+        {
+            entity.Property(row => row.RawJson).HasColumnType("jsonb");
+        });
     }
 }

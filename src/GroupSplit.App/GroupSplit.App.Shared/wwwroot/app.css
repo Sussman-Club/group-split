@@ -445,6 +445,43 @@ html:not([data-gs-ready]) .gs-group-card {
     transition: transform var(--gs-base) var(--gs-ease-spring);
 }
 
+/* The waiting count on a nav item. Absolutely positioned so it cannot change the
+   item's height: the sliding pill's slot is computed from a fixed pitch, and an item
+   that grew by a pixel would put the highlight out of step with every item below it. */
+.gs-nav-badge {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gs-primary);
+    color: var(--gs-on-primary, #fff);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+/* Collapsed to a rail, and on the mobile tab bar, there is no text to sit beside, so
+   the count rides the icon's corner instead. */
+.is-rail .gs-nav-badge,
+.gs-tabbar .gs-nav-badge {
+    top: 6px;
+    right: 6px;
+    transform: none;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 0.625rem;
+}
+
 .gs-nav-item:hover {
     color: var(--gs-ink);
 }

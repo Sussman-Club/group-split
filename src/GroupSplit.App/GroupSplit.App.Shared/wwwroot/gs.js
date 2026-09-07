@@ -173,6 +173,52 @@
         // source of "where is the person" for every date the app shows or sends.
         tzOffsetMinutes() {
             return -new Date().getTimezoneOffset();
+        },
+
+        // ------------------------------------------------------- plaid --
+
+        // Plaid Link runs in the browser because it has to: the person's bank
+        // credentials are typed into Plaid's own frame and never reach this
+        // origin. What comes back is a one-time public token, useless without
+        // the server's credentials, which the server exchanges for a lasting one.
+        plaid: {
+            // Fetched the first time somebody links a bank rather than on every
+            // page load, so a person who never links one never pays for it.
+            script: null,
+
+            load() {
+                if (this.script) return this.script;
+
+                this.script = new Promise((resolve, reject) => {
+                    if (window.Plaid) return resolve();
+
+                    const el = document.createElement("script");
+                    el.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+                    el.onload = () => resolve();
+                    el.onerror = () => reject(new Error("Plaid Link could not be loaded."));
+                    document.head.appendChild(el);
+                });
+
+                return this.script;
+            },
+
+            async open(token, callback) {
+                await this.load();
+
+                // onSuccess and onExit are exclusive and one of them always runs,
+                // so the .NET side is always answered and never waits forever.
+                const handler = window.Plaid.create({
+                    token: token,
+                    onSuccess(publicToken) {
+                        callback.invokeMethodAsync("OnSuccess", publicToken);
+                    },
+                    onExit(error) {
+                        callback.invokeMethodAsync("OnExit", error ? error.error_code : null);
+                    }
+                });
+
+                handler.open();
+            }
         }
     };
 })();

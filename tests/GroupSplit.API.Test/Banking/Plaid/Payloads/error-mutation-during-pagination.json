@@ -1,0 +1,8 @@
+{
+  "error_type": "TRANSACTIONS_ERROR",
+  "error_code": "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION",
+  "error_message": "underlying transaction data changed since last page was fetched",
+  "display_message": null,
+  "request_id": "req-error-2",
+  "status": 400
+}

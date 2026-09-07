@@ -74,6 +74,8 @@ routing, authentication, model binding, an unhandled exception.
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
 | `GROUP_INVITATION_NOT_FOUND` | The invitation does not exist, or has already been answered or withdrawn. |
+| `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
+| `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
 
 ### Forbidden (403)
 
@@ -99,6 +101,10 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
+| `BANK_SYNC_UNAVAILABLE` | This deployment has no bank provider configured, so there is nothing to link through. `GET /bank-connections` says the same thing without failing, through `enabled`. | |
+| `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment; deleting the expense is how you undo it. | |
+| `BANK_CONNECTION_NEEDS_ATTENTION` | The bank wants the person to sign in again, so a sync would only be told so. Link in update mode is the way out. | |
+| `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency` and `groupCurrency`. |
 
 ### Validation (400)
 
@@ -121,6 +127,18 @@ data saying something untrue. Distinct from a 400, which says a field is wrong, 
 | Code | When | Extra members |
 | --- | --- | --- |
 | `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The stated shares do not add up to the expense's amount. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
+| `BANK_TRANSACTION_IS_CREDIT` | The imported row is money coming in -- a refund, a deposit -- and an expense is money going out. It can be ignored; filing it needs a kind of transaction that does not exist yet. | `amount`, which is negative. |
+
+### Bad gateway (502)
+
+A service this one depends on refused or could not be reached. The only category that is
+nobody's fault at either end, and the only one where retrying the identical request later
+is the right thing to do -- which is precisely what a 4xx would tell a caller not to bother
+with.
+
+| Code | When | Extra members |
+| --- | --- | --- |
+| `BANK_PROVIDER_UNAVAILABLE` | The bank provider did not answer, or refused. Nothing was changed here. | |
 
 ## Producing an error in the API
 

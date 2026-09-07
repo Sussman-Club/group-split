@@ -1,0 +1,48 @@
+{
+  "accounts": [],
+  "added": [
+    {
+      "account_id": "acc-1",
+      "transaction_id": "txn-coffee-posted",
+      "amount": 4.5,
+      "iso_currency_code": "USD",
+      "date": "2026-09-02",
+      "name": "SQ *BLUE BOTTLE",
+      "merchant_name": "Blue Bottle Coffee",
+      "pending": false,
+      "pending_transaction_id": "txn-coffee-pending",
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_COFFEE",
+        "confidence_level": "VERY_HIGH"
+      }
+    }
+  ],
+  "modified": [
+    {
+      "account_id": "acc-1",
+      "transaction_id": "txn-groceries",
+      "amount": 82.14,
+      "iso_currency_code": "USD",
+      "date": "2026-08-28",
+      "name": "LIDL 4412",
+      "merchant_name": "Lidl",
+      "pending": false,
+      "pending_transaction_id": null,
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_GROCERIES",
+        "confidence_level": "VERY_HIGH"
+      }
+    }
+  ],
+  "removed": [
+    { "account_id": "acc-1", "transaction_id": "txn-coffee-pending" }
+  ],
+  "next_cursor": "cursor-page-2",
+  "has_more": false,
+  "transactions_update_status": "HISTORICAL_UPDATE_COMPLETE",
+  "request_id": "req-2"
+}

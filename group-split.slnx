@@ -1,7 +1,7 @@
 <Solution>
   <!-- Folders group projects by the role they play. They are virtual: on disk every
        project sits flat under src/ or tests/, at the paths shown below. -->
-  <!-- The HTTP API, and the DTOs and validation it shares with the clients. -->
+  <!-- The HTTP API and the DTOs and validation it shares with the clients. -->
   <Folder Name="/src/">
     <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
     <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
@@ -29,6 +29,7 @@
     <Project Path="src/GroupSplit.Data.PostgreSQL/GroupSplit.Data.PostgreSQL.csproj" />
     <Project Path="src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj" />
   </Folder>
+  <!-- The background-job seam, and the in-memory transport it defaults to. -->
   <Folder Name="/src/Jobs/">
     <Project Path="src/GroupSplit.Jobs/GroupSplit.Jobs.csproj" />
   </Folder>

@@ -3,6 +3,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking;
 using GroupSplit.Data.PostgreSQL;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -43,6 +44,17 @@ builder.Services.AddAuthorizationBuilder();
 
 builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddDomainServices();
+
+// The Data Protection key ring the bank access tokens are encrypted with, in the app
+// database and itself encrypted with a certificate the deployment holds as a secret.
+builder.AddBankKeyRing();
+
+// The two pieces of banking that read configuration, which only a real host has.
+builder.Services.AddOptions<BankingOptions>().BindConfiguration(BankingOptions.SectionName);
+
+// Only when this deployment has Plaid credentials. Without them the API starts as usual and
+// the bank features say bank sync is off, which is the honest answer.
+builder.Services.AddPlaidConnector(builder.Configuration);
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();

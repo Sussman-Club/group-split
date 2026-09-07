@@ -21,9 +21,21 @@ public sealed class DataChangeNotifier
     /// <summary>A group was created or renamed, or a member joined or left it.</summary>
     public event Func<Task>? GroupsChanged;
 
+    /// <summary>
+    /// A bank was linked or unlinked, or an imported row was filed, ignored or restored.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="TransactionsChanged"/> because most of what happens to
+    /// imported rows is not an expense: ignoring one changes the inbox and the badge and
+    /// nothing else. Filing one is both, and raises both.
+    /// </remarks>
+    public event Func<Task>? BankDataChanged;
+
     public Task NotifyTransactionsChangedAsync() => RaiseAsync(TransactionsChanged);
 
     public Task NotifyGroupsChangedAsync() => RaiseAsync(GroupsChanged);
+
+    public Task NotifyBankDataChangedAsync() => RaiseAsync(BankDataChanged);
 
     private static Task RaiseAsync(Func<Task>? handlers) =>
         handlers is null
