@@ -7,6 +7,7 @@ using GroupSplit.API.Test.Base;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -185,6 +186,101 @@ public class BankEndpointTest : IAsyncLifetime
         Assert.Null(kept.BankTransactionId);
     }
 
+    /// <summary>
+    /// The refusal that keeps a second expense from existing, over the wire: the status, the
+    /// code a client branches on, and the expense it names.
+    /// </summary>
+    [Fact]
+    public async Task Filing_a_row_that_matches_a_recorded_expense_is_a_conflict_naming_it()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        var typed = await ExpenseAsync("Dinner", 10m);
+
+        var filed = await _host.Client.PostAsJsonAsync(
+            $"/inbox/{row.Id}/file", new FileBankTransactionRequest(), Json, Ct);
+
+        Assert.Equal(HttpStatusCode.Conflict, filed.StatusCode);
+
+        var problem = await filed.Content.ReadFromJsonAsync<ProblemDetails>(Json, Ct);
+
+        Assert.NotNull(problem);
+        Assert.Equal(ErrorCodes.PossibleDuplicateExpense, problem.Code);
+
+        var matches = problem.GetExtension<List<ExpenseMatchResponse>>(ProblemDetails.MatchesExtension, Json);
+
+        Assert.Equal(typed.Id, Assert.Single(matches!).TransactionId);
+    }
+
+    [Fact]
+    public async Task The_inbox_listing_carries_what_each_waiting_row_could_already_be()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        var typed = await ExpenseAsync("Dinner", 10m);
+
+        var page = await _host.Client.GetFromJsonAsync<PagedResponse<BankTransactionResponse>>("/inbox", Json, Ct);
+
+        var listed = Assert.Single(page!.Items);
+
+        Assert.Equal(row.Id, listed.Id);
+        Assert.Equal(typed.Id, Assert.Single(listed.PossibleDuplicates).TransactionId);
+    }
+
+    [Fact]
+    public async Task Attaching_a_row_to_an_expense_answers_with_the_expense_that_was_already_there()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        var typed = await ExpenseAsync("Dinner", 10m);
+
+        var response = await _host.Client.PostAsJsonAsync($"/inbox/{row.Id}/link",
+            new LinkBankTransactionRequest { TransactionId = typed.Id }, Json, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var linked = await response.Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct);
+
+        Assert.Equal(typed.Id, linked!.Id);
+
+        using var scope = _host.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Equal(1, await dbContext.Set<Expense>().CountAsync(Ct));
+    }
+
+    [Fact]
+    public async Task An_expense_says_which_waiting_rows_could_be_it()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        var typed = await ExpenseAsync("Dinner", 10m);
+
+        var rows = await _host.Client.GetFromJsonAsync<List<BankTransactionResponse>>(
+            $"/transactions/{typed.Id}/bank-matches", Json, Ct);
+
+        Assert.Equal(row.Id, Assert.Single(rows!).Id);
+    }
+
+    [Fact]
+    public async Task Somebody_elses_row_cannot_be_attached_or_dismissed()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        var typed = await ExpenseAsync("Dinner", 10m);
+
+        using var stranger = _host.ClientForAnotherUser();
+
+        var link = await stranger.PostAsJsonAsync($"/inbox/{row.Id}/link",
+            new LinkBankTransactionRequest { TransactionId = typed.Id }, Json, Ct);
+
+        var dismiss = await stranger.PostAsJsonAsync($"/inbox/{row.Id}/dismiss-match",
+            new DismissBankMatchRequest { TransactionId = typed.Id }, Json, Ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, link.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, dismiss.StatusCode);
+    }
+
     // ---- setup ---------------------------------------------------------------------------
 
     private static HttpContent Body(string json) =>
@@ -232,6 +328,23 @@ public class BankEndpointTest : IAsyncLifetime
         await dbContext.SaveChangesAsync(Ct);
 
         return connection;
+    }
+
+    /// <summary>
+    /// An expense the host's own user typed, on the same day the imported rows here fall on.
+    /// </summary>
+    private async Task<TransactionResponse> ExpenseAsync(string name, decimal amount)
+    {
+        var response = await _host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+        {
+            Name = name,
+            Amount = amount,
+            DateTime = new DateTimeOffset(2026, 9, 1, 20, 30, 0, TimeSpan.Zero)
+        }, Json, Ct);
+
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct))!;
     }
 
     private async Task<BankTransaction> RowAsync(BankConnection connection)

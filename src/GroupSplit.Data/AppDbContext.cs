@@ -400,6 +400,30 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(row => new { row.LinkedAccountId, row.Status, row.Date });
         });
 
+        modelBuilder.Entity<BankMatchDismissal>(entity =>
+        {
+            entity.Property(dismissal => dismissal.DismissedAt).IsRequired();
+
+            // Cascade from both parents. The row is an opinion about a pair, so it has
+            // nothing left to say once either half of the pair is gone -- and Postgres is
+            // happy with two cascade paths into a leaf table.
+            entity.HasOne(dismissal => dismissal.BankTransaction)
+                .WithMany()
+                .HasForeignKey(dismissal => dismissal.BankTransactionId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(dismissal => dismissal.Transaction)
+                .WithMany()
+                .HasForeignKey(dismissal => dismissal.TransactionId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Dismissing the same pair twice is the same answer, not a second one; and the
+            // index is also how every suggestion query asks whether it has been answered.
+            entity.HasIndex(dismissal => new { dismissal.BankTransactionId, dismissal.TransactionId }).IsUnique();
+        });
+
         modelBuilder.Entity<UserIdentity>(entity =>
         {
             entity.Property(userIndentity => userIndentity.IdentityId)

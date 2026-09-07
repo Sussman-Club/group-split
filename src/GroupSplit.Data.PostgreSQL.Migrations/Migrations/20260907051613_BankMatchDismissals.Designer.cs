@@ -3,6 +3,7 @@ using System;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    partial class PostgreSqlAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907051613_BankMatchDismissals")]
+    partial class BankMatchDismissals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -276,44 +279,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsUnique();
 
                     b.ToTable("GroupInvitation");
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.GroupJoinLink", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("GroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.HasIndex("GroupId", "CreatedAt");
-
-                    b.ToTable("GroupJoinLink");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.GroupMembership", b =>
@@ -747,24 +712,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("InvitedBy");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.GroupJoinLink", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.User", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("GroupSplit.Data.Entities.Group", "Group")
-                        .WithMany("JoinLinks")
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("Group");
-                });
-
             modelBuilder.Entity("GroupSplit.Data.Entities.GroupMembership", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Group", null)
@@ -900,8 +847,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Categories");
 
                     b.Navigation("Invitations");
-
-                    b.Navigation("JoinLinks");
 
                     b.Navigation("SplitRules");
                 });

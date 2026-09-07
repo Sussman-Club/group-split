@@ -107,7 +107,9 @@ routing, authentication, model binding, an unhandled exception.
 | `BANK_SYNC_UNAVAILABLE` | This deployment has no bank provider configured, so there is nothing to link through. `GET /bank-connections` says the same thing without failing, through `enabled`. | |
 | `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment; deleting the expense is how you undo it. | |
 | `BANK_CONNECTION_NEEDS_ATTENTION` | The bank wants the person to sign in again, so a sync would only be told so. Link in update mode is the way out. | |
-| `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency` and `groupCurrency`. |
+| `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another -- or, when attaching an imported row to an expense already recorded, in a different one from that expense. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency`, and `groupCurrency` or `expenseCurrency` depending on what it was compared against. |
+| `POSSIBLE_DUPLICATE_EXPENSE` | The imported row looks like an expense already recorded: same payer, close enough in amount, within a few days. Nothing is refused permanently -- the caller either files it anyway, because they really did pay twice, or points the row at the expense that is already there with `POST /inbox/{id}/link`. Raised before the second expense exists, because a duplicate found afterwards is a wrong balance somebody has to notice. | `matches`: an array of `{ transactionId, name, amount, currency, dateTime, groupId, groupName, paidByUserName, amountDifference, daysApart }`, closest first. |
+| `TRANSACTION_ALREADY_IMPORTED` | The expense an imported row is being attached to already came from one. An expense carries at most one bank row, which is what the unique index says. | |
 
 ### Validation (400)
 

@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -26,6 +27,7 @@ public static class TransactionApi
             group.MapGetAll();
             group.MapGetSummary();
             group.MapGetById();
+            group.MapBankMatches();
             group.MapCreate();
             group.MapPreviewSplits();
             group.MapUpdate();
@@ -97,6 +99,60 @@ public static class TransactionApi
                 })
                 .WithName("GetTransaction")
                 .Produces<TransactionDetailsResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Imported rows still waiting that could be this same money.
+        /// </summary>
+        /// <remarks>
+        /// The other order of the same problem the inbox catches. Somebody records the
+        /// dinner at the table, the card charge lands two days later, and by then nothing
+        /// remembers the dinner was already written down -- so the moment to ask is right
+        /// after an expense is recorded, while the person still knows what they paid for.
+        /// <para>
+        /// A read, and only a read. Attaching one of them is <c>POST /inbox/{id}/link</c>
+        /// and saying they are different is <c>POST /inbox/{id}/dismiss-match</c>; both are
+        /// somebody pressing something.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapBankMatches()
+        {
+            return group.MapGet("{id:guid}/bank-matches", async (
+                    Guid id,
+                    ITransactionService transactionService,
+                    IDuplicateMatcher matcher,
+                    IInboxService inbox,
+                    CancellationToken ct) =>
+                {
+                    var expense = await (await transactionService.Get(id, ct)).FirstOrDefaultAsync(ct);
+
+                    if (expense is null)
+                        return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+                    var rows = await matcher.RowsLike(expense, ct);
+
+                    if (rows.Count == 0)
+                        return Results.Ok<IReadOnlyList<BankTransactionResponse>>([]);
+
+                    // Through the inbox's own listing, so a suggested row is described by
+                    // exactly the projection the inbox page shows -- account, institution,
+                    // labels and all.
+                    var ids = rows.Select(row => row.Id).ToList();
+                    var listing = await inbox.List(new InboxFilter(), ct);
+
+                    var responses = await listing
+                        .Where(row => ids.Contains(row.Id))
+                        .SelectDto()
+                        .ToListAsync(ct);
+
+                    // Back into the order the matcher ranked them in: closest first is the
+                    // only order that helps, and a listing sorts by date.
+                    return Results.Ok<IReadOnlyList<BankTransactionResponse>>(
+                        [.. responses.OrderBy(row => ids.IndexOf(row.Id))]);
+                })
+                .WithName("GetTransactionBankMatches")
+                .Produces<IReadOnlyList<BankTransactionResponse>>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 

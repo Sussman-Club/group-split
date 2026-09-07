@@ -23,6 +23,26 @@ public sealed class SelfDescriptionTests
         Assert.Contains("groups", names);
         Assert.Contains("transactions", names);
         Assert.Contains("config", names);
+        Assert.Contains("bank", names);
+        Assert.Contains("inbox", names);
+    }
+
+    [Fact]
+    public async Task The_schema_reports_an_enum_option_as_the_words_a_caller_would_type()
+    {
+        var inbox = (await Cli.RunAsync("schema")).Json
+            .GetProperty("command").GetProperty("subcommands").EnumerateArray()
+            .Single(command => command.GetProperty("name").GetString() == "inbox");
+
+        var list = inbox.GetProperty("subcommands").EnumerateArray()
+            .Single(command => command.GetProperty("name").GetString() == "list");
+
+        var status = list.GetProperty("options").EnumerateArray()
+            .Single(option => option.GetProperty("name").GetString() == "--status");
+
+        // The members, not "InboxStatus": an agent reading this has to know what to pass,
+        // and no amount of help text substitutes for the list of accepted words.
+        Assert.Equal("new|filed|ignored", status.GetProperty("type").GetString());
     }
 
     [Fact]

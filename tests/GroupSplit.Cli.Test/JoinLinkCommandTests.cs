@@ -115,10 +115,10 @@ public sealed class JoinLinkCommandTests : IDisposable
     [Fact]
     public async Task Making_a_groups_first_link_asks_nothing()
     {
-        // The read and the write share an address and mean different things, which is the
-        // one place the stub has to tell the verbs apart.
-        _api.Returns("GET", $"/api/groups/{Trip}/join-links", Array.Empty<object>());
-        _api.Returns("POST", $"/api/groups/{Trip}/join-links", ALink());
+        // The read and the write share an address and mean different things, so each verb
+        // is answered on its own.
+        _api.Returns($"/api/groups/{Trip}/join-links", Array.Empty<object>(), method: "GET");
+        _api.Returns($"/api/groups/{Trip}/join-links", ALink(), method: "POST");
 
         var result = await Cli.RunAsync("groups", "link", "create", Trip.ToString());
 
@@ -132,8 +132,8 @@ public sealed class JoinLinkCommandTests : IDisposable
     [Fact]
     public async Task Replacing_one_with_yes_goes_through()
     {
-        _api.Returns("GET", $"/api/groups/{Trip}/join-links", new[] { ALink("old-token") });
-        _api.Returns("POST", $"/api/groups/{Trip}/join-links", ALink());
+        _api.Returns($"/api/groups/{Trip}/join-links", new[] { ALink("old-token") }, method: "GET");
+        _api.Returns($"/api/groups/{Trip}/join-links", ALink(), method: "POST");
 
         var result = await Cli.RunAsync("groups", "link", "create", Trip.ToString(), "--yes");
 

@@ -62,6 +62,8 @@ public static class ErrorCodes
     public const string BankTransactionAlreadyFiled = "BANK_TRANSACTION_ALREADY_FILED";
     public const string BankConnectionNeedsAttention = "BANK_CONNECTION_NEEDS_ATTENTION";
     public const string CurrencyMismatch = "CURRENCY_MISMATCH";
+    public const string PossibleDuplicateExpense = "POSSIBLE_DUPLICATE_EXPENSE";
+    public const string TransactionAlreadyImported = "TRANSACTION_ALREADY_IMPORTED";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
