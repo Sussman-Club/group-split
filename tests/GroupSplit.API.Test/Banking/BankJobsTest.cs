@@ -4,6 +4,7 @@ using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Jobs;
+using GroupSplit.Jobs.Recurring;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -12,34 +13,34 @@ namespace GroupSplit.API.Test.Banking;
 /// <summary>
 /// The two bank jobs: one syncs a connection, the other asks for every active connection to
 /// be synced. The sweep is what makes a missed webhook cost a day rather than forever, so
-/// what it does and does not enqueue is worth pinning.
+/// what it does and does not dispatch is worth pinning.
 /// </summary>
 public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
-    private readonly RecordingQueue _queue = new();
+    private readonly RecordingDispatcher _jobs = new();
     private readonly FakeBankConnector _bank = new();
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
-        services.Replace(ServiceDescriptor.Singleton<IJobQueue>(_queue));
+        services.Replace(ServiceDescriptor.Singleton<IJobDispatcher>(_jobs));
         services.AddKeyedSingleton<IBankConnector>(FakeBankConnector.Name, _bank);
     }
 
     [Fact]
-    public async Task The_sweep_enqueues_one_sync_per_active_connection_and_no_other()
+    public async Task The_sweep_dispatches_one_sync_per_active_connection_and_no_other()
     {
         var active = await LinkAsync(BankConnectionStatus.Active);
         var alsoActive = await LinkAsync(BankConnectionStatus.Active);
         await LinkAsync(BankConnectionStatus.LoginRequired);
         await LinkAsync(BankConnectionStatus.Revoked);
 
-        await GetService<IJobHandler<SweepBankConnections>>().HandleAsync(new SweepBankConnections(), Ct);
+        await GetService<SweepBankConnectionsHandler>().HandleAsync(new SweepBankConnections(), Ct);
 
-        var queued = _queue.Jobs.OfType<SyncBankConnection>().Select(job => job.ConnectionId).Order().ToList();
+        var dispatched = _jobs.Jobs.OfType<SyncBankConnection>().Select(job => job.ConnectionId).Order().ToList();
 
-        Assert.Equal(new[] { active.Id, alsoActive.Id }.Order(), queued);
+        Assert.Equal(new[] { active.Id, alsoActive.Id }.Order(), dispatched);
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var connection = await LinkAsync(BankConnectionStatus.Active);
         _bank.Answer("cursor-1", added: [FakeBankConnector.Row("t1", 5m)]);
 
-        await GetService<IJobHandler<SyncBankConnection>>().HandleAsync(new SyncBankConnection(connection.Id), Ct);
+        await GetService<SyncBankConnectionHandler>().HandleAsync(new SyncBankConnection(connection.Id), Ct);
 
         Assert.Equal([null], _bank.CursorsSeen);
     }
@@ -58,7 +59,7 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var recurring = GetService<RecurringJobs>().All.Single();
 
-        Assert.Equal("bank.sweep-connections", recurring.JobType);
+        Assert.Equal(typeof(SweepBankConnections), recurring.JobType);
         Assert.Equal(BankingServiceExtensions.SweepPeriod, recurring.Period);
         Assert.Equal(BankingServiceExtensions.SweepDelay, recurring.InitialDelay);
     }
@@ -89,15 +90,23 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         return connection;
     }
 
-    /// <summary>Keeps every job enqueued, typed, so a test can read what was asked for.</summary>
-    private sealed class RecordingQueue : IJobQueue
+    /// <summary>Keeps every job dispatched, typed, so a test can read what was asked for.</summary>
+    private sealed class RecordingDispatcher : IJobDispatcher
     {
-        public List<object> Jobs { get; } = [];
+        public List<IJob> Jobs { get; } = [];
 
-        public Task EnqueueAsync<TJob>(TJob job, CancellationToken ct = default) where TJob : IJob
+        public Task<IJobHandle> DispatchAsync(IJob job, CancellationToken ct = default)
         {
             Jobs.Add(job);
-            return Task.CompletedTask;
+            return Task.FromResult<IJobHandle>(new CompletedHandle());
+        }
+
+        public Task<IJobHandle<TResult>> DispatchAsync<TResult>(IJob<TResult> job, CancellationToken ct = default) =>
+            throw new NotSupportedException("No bank job carries a result.");
+
+        private sealed class CompletedHandle : IJobHandle
+        {
+            public ValueTask WaitAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
         }
     }
 }

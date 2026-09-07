@@ -1,12 +1,9 @@
 <Solution>
   <!-- Folders group projects by the role they play. They are virtual: on disk every
        project sits flat under src/ or tests/, at the paths shown below. -->
-  <!-- The HTTP API, the DTOs and validation it shares with the clients, and the
-       background-job seam whose in-process implementation the API runs today. -->
+  <!-- The HTTP API and the DTOs and validation it shares with the clients. -->
   <Folder Name="/src/">
     <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
-    <Project Path="src/GroupSplit.Jobs/GroupSplit.Jobs.csproj" />
-    <Project Path="src/GroupSplit.Jobs.InProcess/GroupSplit.Jobs.InProcess.csproj" />
     <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
   </Folder>
   <!-- Aspire: the app model that runs everything locally, the seeding worker it
@@ -23,6 +20,7 @@
     <Project Path="src/GroupSplit.App/GroupSplit.App.Shared/GroupSplit.App.Shared.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj" />
     <Project Path="src/GroupSplit.App/GroupSplit.App.Web.Client/GroupSplit.App.Web.Client.csproj" />
+    <Project Path="src/GroupSplit.Cli/GroupSplit.Cli.csproj" />
   </Folder>
   <!-- Persistence: provider-agnostic entities and DbContext, the PostgreSQL
        provider, and the EF Core design-time project holding the migrations. -->
@@ -31,11 +29,17 @@
     <Project Path="src/GroupSplit.Data.PostgreSQL/GroupSplit.Data.PostgreSQL.csproj" />
     <Project Path="src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj" />
   </Folder>
+  <!-- The background-job seam, and the in-memory transport it defaults to. -->
+  <Folder Name="/src/Jobs/">
+    <Project Path="src/GroupSplit.Jobs/GroupSplit.Jobs.csproj" />
+  </Folder>
   <!-- One test project per deployable: the API, the Blazor Web host, the app model. -->
   <Folder Name="/tests/">
     <Project Path="tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj" />
     <Project Path="tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj" />
     <Project Path="tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj" />
+    <Project Path="tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj" />
+    <Project Path="tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj" />
     <Project Path="tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj" />
   </Folder>
 </Solution>

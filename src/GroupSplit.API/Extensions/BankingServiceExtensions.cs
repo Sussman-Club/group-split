@@ -1,6 +1,7 @@
 using GroupSplit.API.Services.Banking;
 using GroupSplit.Jobs;
-using GroupSplit.Jobs.InProcess;
+using GroupSplit.Jobs.DependencyInjection;
+using GroupSplit.Jobs.Recurring;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.API.Extensions;
@@ -12,10 +13,11 @@ namespace GroupSplit.API.Extensions;
 /// whether one is registered at all is what "bank sync is available" means.
 /// </summary>
 /// <remarks>
-/// The jobs are declared here and run by whoever the host says. Today that is
-/// <c>AddInProcessJobs</c>, called from the same list so the API and the test hosts agree;
-/// a host that hands jobs to a queue service instead would make these same <c>AddJob</c>
-/// calls and skip that one.
+/// The jobs are declared here and run by whoever the host says. Today that is the jobs
+/// seam's own defaults -- an in-memory queue drained by a hosted worker -- taken from the
+/// same list so the API and the test hosts agree; a host that hands jobs to a queue service
+/// instead would make these same handler registrations and point the dispatcher and
+/// receiver at that transport.
 /// <para>
 /// Data Protection is added here without a key ring, which is the framework's default and
 /// is all a test host needs. Where the ring lives and what wraps it is the deploying
@@ -56,11 +58,12 @@ public static class BankingServiceExtensions
             services.AddScoped<IBankConnectionService, BankConnectionService>();
             services.AddScoped<IInboxService, InboxService>();
 
-            services.AddJob<SyncBankConnection, SyncBankConnectionHandler>();
-            services.AddJob<SweepBankConnections, SweepBankConnectionsHandler>();
-            services.AddRecurringJob<SweepBankConnections>(SweepPeriod, SweepDelay);
-
-            services.AddInProcessJobs();
+            services.AddJobs()
+                .Handlers
+                    .AddJobHandler<SyncBankConnection, SyncBankConnectionHandler>()
+                    .AddJobHandler<SweepBankConnections, SweepBankConnectionsHandler>()
+                .JobsBuilder
+                    .AddRecurringJob<SweepBankConnections>(SweepPeriod, SweepDelay);
 
             return services;
         }

@@ -7,14 +7,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- The seam and nothing that runs it. No hosting reference on purpose: a host
-             that hands jobs to a function must be able to take this without a pump. -->
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
-        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     </ItemGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="GroupSplit.API.Test" />
+      <!-- The scheduler is internal: a host chooses it through AddRecurringJob and never
+           names it. The tests name it. -->
+      <InternalsVisibleTo Include="GroupSplit.Jobs.Test" />
     </ItemGroup>
 
 </Project>

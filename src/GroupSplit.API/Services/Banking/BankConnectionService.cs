@@ -58,7 +58,7 @@ public sealed class BankConnectionService(
     AppDbContext dbContext,
     IServiceProvider services,
     IAccessTokenProtector protector,
-    IJobQueue jobs,
+    IJobDispatcher jobs,
     TimeProvider clock,
     IOptions<BankingOptions> options,
     ILogger<BankConnectionService> logger) : IBankConnectionService
@@ -129,7 +129,7 @@ public sealed class BankConnectionService(
             MergeAccounts(existing, item.Accounts);
 
             await dbContext.SaveChangesAsync(ct);
-            await jobs.EnqueueAsync(new SyncBankConnection(existing.Id), ct);
+            await jobs.DispatchAsync(new SyncBankConnection(existing.Id), ct);
 
             return existing;
         }
@@ -149,7 +149,7 @@ public sealed class BankConnectionService(
         dbContext.Add(created);
         await dbContext.SaveChangesAsync(ct);
 
-        await jobs.EnqueueAsync(new SyncBankConnection(created.Id), ct);
+        await jobs.DispatchAsync(new SyncBankConnection(created.Id), ct);
 
         return created;
     }
@@ -164,7 +164,7 @@ public sealed class BankConnectionService(
                 "This bank needs you to sign in again before it can be synced.");
         }
 
-        await jobs.EnqueueAsync(new SyncBankConnection(connection.Id), ct);
+        await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
     }
 
     public async Task Unlink(Guid id, CancellationToken ct = default)

@@ -87,6 +87,34 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "cli",
+      "name": "Command Line",
+      "description": "The groupsplit CLI. Device authorization grant only: a terminal cannot be given a redirect URI, and the browser that approves a sign-in is often on another machine.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "api",
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "identityProviders": [

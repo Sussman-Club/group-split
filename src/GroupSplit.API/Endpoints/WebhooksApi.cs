@@ -48,7 +48,7 @@ public static class WebhooksApi
                     HttpContext httpContext,
                     IServiceProvider services,
                     IBankConnectionService connections,
-                    IJobQueue jobs,
+                    IJobDispatcher jobs,
                     ILoggerFactory loggerFactory,
                     CancellationToken ct) =>
                 {
@@ -109,13 +109,13 @@ public static class WebhooksApi
     /// What each kind of notification means here. Only four do anything; the rest are
     /// acknowledged so the provider stops resending them.
     /// </summary>
-    private static async Task Apply(WebhookEvent notification, BankConnection connection, IJobQueue jobs,
+    private static async Task Apply(WebhookEvent notification, BankConnection connection, IJobDispatcher jobs,
         ILogger logger, CancellationToken ct)
     {
         switch (notification)
         {
             case SyncUpdatesAvailable:
-                await jobs.EnqueueAsync(new SyncBankConnection(connection.Id), ct);
+                await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
                 break;
 
             case LoginRequired:
@@ -125,7 +125,7 @@ public static class WebhooksApi
             case LoginRepaired:
                 connection.Status = BankConnectionStatus.Active;
                 // Whatever arrived while it was broken is waiting behind the cursor.
-                await jobs.EnqueueAsync(new SyncBankConnection(connection.Id), ct);
+                await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
                 break;
 
             case PermissionRevoked:

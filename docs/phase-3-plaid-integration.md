@@ -324,22 +324,20 @@ Applying a row:
   is a re-link, not a sync.
 
 A sync is asked for as a job, `SyncBankConnection(connectionId)`, through the
-`IJobQueue` seam in `GroupSplit.Jobs`. `POST /bank-connections/{id}/sync` and the webhook
-both enqueue and return; nothing waits on a sync inside a request. The daily sweep is a
-job too, `SweepBankConnections`, whose handler enqueues one sync per active connection,
+`IJobDispatcher` seam in `GroupSplit.Jobs`. `POST /bank-connections/{id}/sync` and the
+webhook both dispatch and return; nothing waits on a sync inside a request. The daily
+sweep is a job too, `SweepBankConnections`, whose handler dispatches one sync per active
+connection,
 and it is registered as recurring rather than run from a timer inside the sync code.
 
 That seam is the reason the queue is not simply a `Channel<Guid>` in the sync service.
-`GroupSplit.Jobs` holds the shape and nothing that runs it; `GroupSplit.Jobs.InProcess`
-is the one implementation today, and `AddInProcessJobs` puts it in the API: an in-memory
-queue, a pump draining it into the dispatcher, a timer for the recurring registrations.
-A deployment that would rather have a queue service deliver to a function references a
-sibling project instead of that one, keeps every `AddJob` call, registers the transport's
-`IJobQueue`, and has the function hand each message to `IJobDispatcher`; the daily sweep
-becomes a schedule that enqueues `SweepBankConnections`. The split follows the one
-`GroupSplit.Data` and `GroupSplit.Data.PostgreSQL` already make.
-The envelope is JSON on both sides -- even the in-process hop serializes -- so the job
-types are proven on the wire from the first day rather than on the day the queue changes.
+`GroupSplit.Jobs` holds the shape and defaults to running it here: `AddJobs()` gives an
+in-memory channel, a hosted worker draining it into the registered handlers, and --
+through `AddRecurringJob` -- a timer for the recurring registrations. A deployment that
+would rather have a queue service deliver to a function keeps every `AddJobHandler` call
+and points `Dispatcher.Use(...)` and `Receiver.Use(...)` at that transport; the daily
+sweep becomes a schedule outside the process that dispatches `SweepBankConnections`, and
+the in-process scheduler is simply not registered.
 Failure has no retry scheme of its own: the transport redelivers by its rules, or the
 sweep catches it tomorrow.
 

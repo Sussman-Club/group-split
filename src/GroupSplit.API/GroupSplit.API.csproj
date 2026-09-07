@@ -31,7 +31,6 @@
     <ItemGroup>
         <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
         <ProjectReference Include="..\GroupSplit.Jobs\GroupSplit.Jobs.csproj" />
-        <ProjectReference Include="..\GroupSplit.Jobs.InProcess\GroupSplit.Jobs.InProcess.csproj" />
         <ProjectReference Include="..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
         <ProjectReference Include="..\GroupSplit.Shared\GroupSplit.Shared.csproj" />
     </ItemGroup>
