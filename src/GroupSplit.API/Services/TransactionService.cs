@@ -25,6 +25,23 @@ public interface ITransactionService
     /// </summary>
     Task<IQueryable<Expense>> InGroup(Guid groupId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The caller's own share rows: one per expense they owe a part of, whoever paid.
+    /// </summary>
+    /// <remarks>
+    /// The listing <see cref="List"/> is not. That one is "what have I paid" -- the rows
+    /// where the caller is the payer -- and this is the other half of the same ledger,
+    /// which the model has had the rows for since splits became their own table and
+    /// nothing has ever read as a list.
+    /// <para>
+    /// Scoped through <see cref="List"/> rather than straight off the split table, so a
+    /// share cannot show an expense the caller may not read; in practice a split against
+    /// them always sits on one they may, and going through the same door means it cannot
+    /// stop being true here without stopping being true there.
+    /// </para>
+    /// </remarks>
+    Task<IQueryable<TransactionSplit>> Shares(CancellationToken ct = default);
+
     Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default);
     ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
 
@@ -77,6 +94,21 @@ public class TransactionService(
                     select expense;
 
         return Task.FromResult(query);
+    }
+
+    public async Task<IQueryable<TransactionSplit>> Shares(CancellationToken ct = default)
+    {
+        var currentUser = userContext.User;
+        var expenses = await List(ct);
+
+        // Joined rather than filtered on the navigation, because the join is also the
+        // scope: a split whose expense is not in that listing is not returned, and the
+        // discriminator on Expense keeps transfers out -- a settlement has a split too,
+        // and it is a payment rather than something anybody owes a share of.
+        return from split in dbContext.Set<TransactionSplit>()
+               join expense in expenses on split.TransactionId equals expense.Id
+               where split.UserId == currentUser.Id
+               select split;
     }
 
     public Task<IQueryable<Expense>> InGroup(Guid groupId, CancellationToken ct = default)

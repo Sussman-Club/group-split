@@ -53,7 +53,7 @@ benefits from.
 | ~~Settlement as its own thing~~ **Done** | Two mirrored `Transaction` rows (`+A` and `-A`) under a system rule, showing up as expenses everywhere. | A `Transfer` leaf: one row, one split to the recipient. Either member can record one, and the group's Activity tab is where they show. See [Settlements as transfers](#settlements-as-transfers). | Done |
 | ~~Pagination and server filtering~~ **Done for expenses** | Every list was fetched whole, and the grid searched the rows it had been handed. | Offset paging, sorting and filtering on both expense listings, plus a summary endpoint for the figures beside a page. See [Listing contract](#listing-contract). The remaining lists are bounded by group size. | Done |
 | ~~Membership as a record~~ **Done** | Implicit many-to-many; `AddGroupMembers` silently dropped any email that was not already an account. | `GroupMembership` carries `ArchivedAt` and `JoinedAt`; invitations are a `GroupInvitation` table, since an invited address has no user id to key a membership on. Invite, withdraw, accept, decline and leave are all endpoints. | Done |
-| Your share, not just what you paid | `GET /transactions` returns rows where `User == you`. `GET /users/me/position` now totals the position across groups and the home page leads with it. What is still missing is the listing: what you *owe* on other people's expenses, row by row. | A "your share" listing over `TransactionSplit`, beside the one that lists what you paid. | Medium |
+| ~~Your share, not just what you paid~~ **Done for the API** | `GET /transactions` returned rows where `User == you`, and nothing listed the other half: what you *owe* on other people's expenses, row by row. | `GET /transactions/shares` and `GET /transactions/shares/summary`, over `TransactionSplit` where `UserId == you`, taking the same filter, sort and page as the expense listing. Each row carries the whole expense and your part of it, since those are different numbers. The three *Paid by you / Your share / Everything* views on the Expenses page are still to build. | Done (API, CLI) |
 | Recurring, budgets, receipts | Absent. | Later. Budgets by category become natural once categories are labels. | Later |
 
 ### Behaviour that reads as bugs today
@@ -612,6 +612,19 @@ name or payer's name). `GET /transactions/summary` and
 `GET /groups/{id}/transactions/summary` take the same filter and answer
 `{ count, total }` -- what the whole match comes to, which is what the figures beside a
 page have to say and what a page cannot work out for itself.
+
+**Shares** -- `GET /transactions/shares` -- take the same filter over the same expenses,
+and sort by the same keys plus `share`, which is the one figure only this listing has. A
+row is an `ExpenseShareResponse`: the whole expense, plus `share` and `paidByYou`. Its
+sort map is over the response rather than the entity, because the join to the expense has
+already flattened the group and the payer onto it.
+
+`GET /transactions/shares/summary` answers four figures rather than two --
+`{ count, total, share, owedToOthers }` -- and the fourth is the reason. A share of an
+expense the caller paid for themselves is not a debt: they are owed the rest of it. A
+single total that summed every share and stood beside "you owe" would count every personal
+expense and every dinner they picked up, so what is owed is its own figure and the listing
+marks the rows it excludes.
 
 **One thing to know when adding a paged endpoint.** The clients are generated with
 `/GenerateDtoTypes:false`, so a schema id is written into them verbatim as a C# type name,

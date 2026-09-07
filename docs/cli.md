@@ -33,7 +33,7 @@ has to reach for `curl` and a bearer token to do.
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
-| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `bank-matches`, `delete` |
+| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
 | `invitations` | `list`, `accept`, `decline`, `link`, `join` |
@@ -414,6 +414,45 @@ Both directions answer with the same two commands. Which of the three applies is
 about the money, so no default is picked: `--file-anyway` is never on unless it is asked for,
 because the refusal is the whole mechanism that stops the second expense coming into being
 before somebody has been told about the first.
+
+## What you owe, not what you paid
+
+`transactions list` answers one question -- rows where you are the payer -- and
+`transactions shares` answers the other one, which nothing could answer before: the
+expenses you owe a part of, whoever paid for them.
+
+```bash
+groupsplit tx shares list                        # newest first
+groupsplit tx shares list --sort-by share        # what is costing you the most
+groupsplit tx shares list --group <group-id> --from 2026-01-01
+groupsplit tx shares summary
+```
+
+Every row carries two amounts, because they are two different numbers and only one of them
+is yours: `amount` is what the whole expense came to and `share` is your part of it. The
+same filters, sorts and paging as `transactions list`, plus `share` as a sort key.
+
+```
+Id      Date        Name    Total   Your share  Paid by  Group
+3f25…   2026-02-14  Dinner  90.00   45.00       Omar     The flat
+a91c…   2026-02-13  Taxi    30.00   15.00       you      The flat
+```
+
+An expense you paid for **and** owe a share of is in the listing and marked `you`, because
+leaving it out would make the listing disagree with the group's own figures. It is kept out
+of one number and only one: `shares summary` reports your share of everything and, beside
+it, the part of that sitting on somebody else's expense.
+
+```bash
+groupsplit tx shares summary
+# 3 expenses totalling 124.00, your share 64.00
+# Of that, 45.00 is on expenses somebody else paid.
+```
+
+Your share of your own dinner is money you already have -- you are owed the rest of it --
+so `64.00` is not a debt and `45.00` is. Both are gross: a settlement is a transfer rather
+than an expense, so nothing here has been paid back yet. Where you actually stand is
+`groupsplit users position`.
 
 ## Editing an expense
 
