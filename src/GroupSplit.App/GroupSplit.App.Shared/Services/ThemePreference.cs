@@ -7,6 +7,16 @@ public enum ThemeMode
     Dark
 }
 
+/// <summary>Where a theme change came from, and so whether it is worth writing back.</summary>
+public enum ThemeChangeOrigin
+{
+    /// <summary>The browser told us: the stored choice was restored, or the OS preference moved.</summary>
+    Browser,
+
+    /// <summary>Somebody picked a mode. The only origin worth persisting.</summary>
+    Choice
+}
+
 /// <summary>
 /// Holds the chosen theme mode and the last known system preference, and
 /// resolves the two into the dark/light flag the theme provider consumes.
@@ -27,7 +37,35 @@ public sealed class ThemePreference
         _ => _systemIsDark
     };
 
-    public event Action? Changed;
+    public event Action<ThemeChangeOrigin>? Changed;
+
+    /// <summary>
+    /// Adopts the two answers only a browser can give -- the stored choice and
+    /// the OS preference -- as one change.
+    ///
+    /// Both have to land before anything observes the result, which is why this
+    /// is one method rather than two setters. Applying the OS preference first
+    /// and the stored choice second left the pair resolving to dark in between
+    /// for the commonest case there is, a dark-desktop user who asked for Light:
+    /// the mode was still <see cref="ThemeMode.System"/> at that point, so the
+    /// dark desktop won. The gap between the two was an interop call, which is
+    /// long enough for the browser to paint the dark frame.
+    /// </summary>
+    public void Hydrate(ThemeMode mode, bool systemIsDark)
+    {
+        var wasMode = Mode;
+        var wasDark = IsDark;
+
+        Mode = mode;
+        _systemIsDark = systemIsDark;
+
+        // The menu renders the mode and the provider renders the resolved flag,
+        // so either one moving is worth announcing.
+        if (Mode != wasMode || IsDark != wasDark)
+        {
+            Changed?.Invoke(ThemeChangeOrigin.Browser);
+        }
+    }
 
     public void Set(ThemeMode mode)
     {
@@ -37,7 +75,7 @@ public sealed class ThemePreference
         }
 
         Mode = mode;
-        Changed?.Invoke();
+        Changed?.Invoke(ThemeChangeOrigin.Choice);
     }
 
     /// <summary>Records the OS preference, which only matters in <see cref="ThemeMode.System"/>.</summary>
@@ -52,7 +90,7 @@ public sealed class ThemePreference
 
         if (Mode == ThemeMode.System)
         {
-            Changed?.Invoke();
+            Changed?.Invoke(ThemeChangeOrigin.Browser);
         }
     }
 

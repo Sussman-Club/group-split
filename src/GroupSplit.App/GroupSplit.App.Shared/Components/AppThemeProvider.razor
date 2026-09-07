@@ -29,8 +29,14 @@
             return;
         }
 
-        Preference.SetSystemIsDark(await _provider.GetSystemDarkModeAsync());
-        Preference.Set(ThemePreference.Parse(await ReadStoredModeAsync()));
+        // Both answers are read before either is applied. Applying them one at a
+        // time resolved to dark in between for a dark-desktop user who had chosen
+        // Light, for as long as the second interop call took -- long enough to
+        // paint -- and let the write-back below race the read it came from.
+        var systemIsDark = await _provider.GetSystemDarkModeAsync();
+        var storedMode = ThemePreference.Parse(await ReadStoredModeAsync());
+
+        Preference.Hydrate(storedMode, systemIsDark);
 
         await _provider.WatchSystemDarkModeAsync(isDark =>
         {
@@ -60,13 +66,21 @@
     // data-theme attribute on <html>, which gs.js also stamps before boot.
     private Task ApplyDocumentThemeAsync() => JS.InvokeVoidAsync("gs.setTheme", Preference.IsDark).AsTask();
 
-    private async void OnChanged()
+    private async void OnChanged(ThemeChangeOrigin origin)
     {
         try
         {
             await InvokeAsync(StateHasChanged);
             await ApplyDocumentThemeAsync();
-            await JS.InvokeVoidAsync("localStorage.setItem", ThemePreference.StorageKey, Preference.Mode.ToString());
+
+            // Only a choice is worth storing. Writing back what the browser just
+            // told us at best repeats the read, and at worst -- as it did during
+            // hydration -- races it, leaving "System" where the person's own
+            // choice had been.
+            if (origin is ThemeChangeOrigin.Choice)
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", ThemePreference.StorageKey, Preference.Mode.ToString());
+            }
         }
         catch (Exception exception) when (exception is JSException or ObjectDisposedException or TaskCanceledException or InvalidOperationException)
         {
