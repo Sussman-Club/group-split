@@ -59,7 +59,9 @@ var web = builder.AddProject<GroupSplit_App_Web>("web")
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    dbServer.WithPgWeb();
+    dbServer.WithDbx();
+    cache.WithDbx();
+
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
 

@@ -32,6 +32,8 @@
         <PackageReference Include="Aspire.Hosting.Redis" Version="13.5.3" />
         <PackageReference Include="CommunityToolkit.Aspire.Hosting.Keycloak.Extensions" Version="13.5.1-beta.736" />
         <PackageReference Include="CommunityToolkit.Aspire.Hosting.MailPit" Version="13.5.0" />
+        <PackageReference Include="CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions" Version="13.5.0" />
+        <PackageReference Include="CommunityToolkit.Aspire.Hosting.Redis.Extensions" Version="13.5.0" />
         <PackageReference Include="Scalar.Aspire" Version="0.11.18" />
     </ItemGroup>
 
