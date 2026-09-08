@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -22,7 +23,7 @@ public interface IBankConnectionService
     /// A token for the provider's linking UI. Naming a connection opens it in update mode,
     /// which is how a bank asking for a fresh sign-in gets repaired.
     /// </summary>
-    Task<LinkTokenResponse> CreateLinkToken(LinkTokenRequest request, string? webhookUrl, string? redirectUri,
+    Task<LinkTokenResponse> CreateLinkToken(LinkTokenRequest request, string? redirectUri,
         CancellationToken ct = default);
 
     /// <summary>
@@ -97,8 +98,8 @@ public sealed class BankConnectionService(
             connections.Select(Describe).ToList());
     }
 
-    public async Task<LinkTokenResponse> CreateLinkToken(LinkTokenRequest request, string? webhookUrl,
-        string? redirectUri, CancellationToken ct = default)
+    public async Task<LinkTokenResponse> CreateLinkToken(LinkTokenRequest request, string? redirectUri,
+        CancellationToken ct = default)
     {
         // Update mode is asked for by naming a connection, and it is that connection's
         // provider that has to open it -- not this deployment's current default.
@@ -109,13 +110,31 @@ public sealed class BankConnectionService(
         var session = await Call(provider, "create a link token", () => connector.CreateLinkSessionAsync(
             new LinkSessionRequest(
                 userContext.User.Id.ToString(),
-                webhookUrl,
+                WebhookUrlFor(provider),
                 redirectUri,
                 connection is null ? null : protector.Unprotect(connection.AccessTokenCiphertext)),
             ct));
 
         return new LinkTokenResponse(session.Token, session.ExpiresAt);
     }
+
+    /// <summary>
+    /// Where <paramref name="provider"/> should deliver this session's webhooks, or null when
+    /// this deployment has no address to give -- which is the ordinary case locally, where
+    /// nothing outside could reach it anyway.
+    /// </summary>
+    /// <remarks>
+    /// Built here, rather than handed in by the route, because both halves are known here and
+    /// only here. The origin is configuration, which this service already reads; the path
+    /// names the provider, and the provider is the one resolved above -- in update mode the
+    /// connection's, not this deployment's default. An address naming the wrong provider is a
+    /// webhook the wrong connector's verifier would be handed, which refuses it, so that
+    /// connection would simply never hear from its bank again.
+    /// </remarks>
+    private string? WebhookUrlFor(string provider) =>
+        options.Value.PublicOrigin is { Length: > 0 } origin
+            ? origin.TrimEnd('/') + WebhooksApi.PathFor(provider)
+            : null;
 
     public async Task<BankConnection> Link(CreateBankConnectionRequest request, CancellationToken ct = default)
     {
@@ -379,7 +398,7 @@ public sealed class BankConnectionService(
     /// ours to remove on the way out of a failure -- see the two paths above that say so.
     /// </para>
     /// </remarks>
-    private async Task RetiringIfNotStored(string provider, LinkedItem item, Func<Task<int>> write)
+    private async Task RetiringIfNotStored(string provider, LinkedItem item, Func<Task> write)
     {
         try
         {
@@ -466,10 +485,11 @@ public sealed class BankConnectionService(
         // is a delete that behaves differently depending on the provider underneath -- which
         // is exactly the kind of difference that passes every test and surprises somebody
         // in production.
-        await dbContext.Entry(connection).Collection(candidate => candidate.Accounts).LoadAsync(ct);
-
-        foreach (var account in connection.Accounts)
-            await dbContext.Entry(account).Collection(candidate => candidate.Transactions).LoadAsync(ct);
+        await dbContext.Entry(connection)
+            .Collection(candidate => candidate.Accounts)
+            .Query()
+            .Include(account => account.Transactions)
+            .LoadAsync(ct);
 
         // Expenses filed from those rows keep everything except the link back. Said here
         // rather than left to the foreign key's own set-null, for the same reason: this is
@@ -496,11 +516,8 @@ public sealed class BankConnectionService(
         // leave an item nobody owns still being billed for and still sending webhooks.
         if (Connector(connection.Provider) is { } connector)
         {
-            await Call(connection.Provider, "remove the item", async () =>
-            {
-                await connector.RemoveAsync(protector.Unprotect(connection.AccessTokenCiphertext), ct);
-                return true;
-            });
+            await Call(connection.Provider, "remove the item",
+                () => connector.RemoveAsync(protector.Unprotect(connection.AccessTokenCiphertext), ct));
         }
         else
         {
@@ -515,8 +532,8 @@ public sealed class BankConnectionService(
         await dbContext.SaveChangesAsync(ct);
     }
 
-    public Task<BankConnection?>
-        ForProviderItem(string provider, string providerItemId, CancellationToken ct = default) =>
+    public Task<BankConnection?> ForProviderItem(
+        string provider, string providerItemId, CancellationToken ct = default) =>
         dbContext.Set<BankConnection>()
             .FirstOrDefaultAsync(
                 connection => connection.Provider == provider && connection.ProviderItemId == providerItemId, ct);
@@ -560,25 +577,27 @@ public sealed class BankConnectionService(
         {
             return await call();
         }
-        catch (BankSyncException e)
+        catch (Exception e) when (e is BankSyncException or HttpRequestException)
         {
             logger.LogWarning(e, "{Provider} could not {What}.", provider, what);
-            throw new BadGatewayException(ErrorCodes.BankProviderUnavailable,
-                "The bank service could not be reached. Please try again shortly.", e);
-        }
-        catch (HttpRequestException e)
-        {
-            logger.LogWarning(e, "{Provider} could not {What}.", provider, what);
+
             throw new BadGatewayException(ErrorCodes.BankProviderUnavailable,
                 "The bank service could not be reached. Please try again shortly.", e);
         }
     }
 
     /// <summary>
-    /// Keeps the accounts the provider reports, adding new ones and refreshing the names of
-    /// the ones already here. Nothing is removed: rows point at accounts, and an account
-    /// the provider stopped listing still explains where last month's coffee came from.
+    /// The same translation for a call that answers nothing, so a caller does not have to
+    /// invent a return value to get it.
     /// </summary>
+    private Task Call(string provider, string what, Func<Task> call) =>
+        Call<object?>(provider, what, async () =>
+        {
+            await call();
+
+            return null;
+        });
+
     /// <summary>
     /// The connection this freshly linked item duplicates, if it duplicates one.
     /// </summary>
@@ -672,13 +691,39 @@ public sealed class BankConnectionService(
     /// <see cref="MergeAccounts"/> matches on the provider's account id, which is the right
     /// key when the item has not changed and the wrong one here: a new item renames every
     /// account, so matching on it would add a second row for each and orphan the history on
-    /// the first.
+    /// the first. What survives a re-link is what the bank shows the person, so that is what
+    /// is matched on instead.
     /// </remarks>
-    private static void AdoptAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts)
+    private static void AdoptAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts) =>
+        Reconcile(connection, accounts, SameAccount);
+
+    /// <summary>
+    /// Keeps the accounts the provider reports, adding new ones and refreshing the details of
+    /// the ones already here. Nothing is removed: rows point at accounts, and an account the
+    /// provider stopped listing still explains where last month's coffee came from.
+    /// </summary>
+    private static void MergeAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts) =>
+        Reconcile(connection, accounts,
+            (stored, incoming) => stored.ProviderAccountId == incoming.ProviderAccountId);
+
+    /// <summary>
+    /// The body both of those share: every reported account is either recognised by
+    /// <paramref name="recognises"/> and brought up to date, or added.
+    /// </summary>
+    /// <remarks>
+    /// A recognised account has every field written, the two keys included. That is what each
+    /// caller already did: whichever key it matched on it left alone, and writing a value a
+    /// match has just proved equal changes nothing -- so one body is the same work as two,
+    /// without the second copy to keep in step.
+    /// </remarks>
+    private static void Reconcile(
+        BankConnection connection,
+        IReadOnlyList<ImportedAccount> accounts,
+        Func<LinkedAccount, ImportedAccount, bool> recognises)
     {
         foreach (var account in accounts)
         {
-            var stored = connection.Accounts.FirstOrDefault(candidate => SameAccount(candidate, account));
+            var stored = connection.Accounts.FirstOrDefault(candidate => recognises(candidate, account));
 
             if (stored is null)
             {
@@ -698,38 +743,9 @@ public sealed class BankConnectionService(
             stored.ProviderAccountId = account.ProviderAccountId;
             stored.Name = account.Name;
             stored.Mask = account.Mask;
+            stored.Type = account.Type;
             stored.Subtype = account.Subtype;
             stored.Currency = account.Currency;
-        }
-    }
-
-    private static void MergeAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts)
-    {
-        foreach (var account in accounts)
-        {
-            var existing = connection.Accounts
-                .FirstOrDefault(candidate => candidate.ProviderAccountId == account.ProviderAccountId);
-
-            if (existing is null)
-            {
-                connection.Accounts.Add(new LinkedAccount
-                {
-                    ProviderAccountId = account.ProviderAccountId,
-                    Name = account.Name,
-                    Mask = account.Mask,
-                    Type = account.Type,
-                    Subtype = account.Subtype,
-                    Currency = account.Currency
-                });
-
-                continue;
-            }
-
-            existing.Name = account.Name;
-            existing.Mask = account.Mask;
-            existing.Type = account.Type;
-            existing.Subtype = account.Subtype;
-            existing.Currency = account.Currency;
         }
     }
 }

@@ -26,16 +26,17 @@ public sealed class BankingOptions
     /// </summary>
     /// <remarks>
     /// Given rather than read off the request, because this value is handed to a provider as
-    /// the address to deliver webhooks to and the request's host is whatever the caller put
-    /// in the Host header: a caller who could choose it would point the provider at their own
+    /// the address to deliver webhooks to and the request's host is whatever the caller put in
+    /// the Host header: a caller who could choose it would point the provider at their own
     /// server and be sent everything that happens to somebody else's bank. Behind a proxy the
-    /// request cannot answer it anyway -- TLS is terminated upstream, so the scheme it arrives
-    /// on is plain HTTP.
+    /// request could not answer it anyway -- TLS is terminated upstream, so the scheme it
+    /// arrives on is plain HTTP.
     /// <para>
-    /// Absent falls back to the origin the request arrived on, which is the development
-    /// posture: nothing is in front of the API there, and no provider could reach it whatever
-    /// address it were told. A deployment always sets it, from the same public origin the rest
-    /// of the stack is served on.
+    /// Absent means no webhook address is given at all, which is the ordinary case locally:
+    /// nothing outside could reach a development machine, and a sync runs on linking, on
+    /// demand, and nightly regardless. A deployment always sets it, from the same public
+    /// origin the rest of the stack is served on, and
+    /// <see cref="BankingOptionsValidator"/> refuses a value a provider would not accept.
     /// </para>
     /// </remarks>
     public string? PublicOrigin { get; set; }

@@ -12,7 +12,7 @@ namespace GroupSplit.API.Test.Banking;
 /// arrived in which order. Each queued answer is either a <see cref="SyncPage"/> or an
 /// exception to throw in its place.
 /// </remarks>
-internal sealed class FakeBankConnector : IBankConnector
+internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name) : IBankConnector
 {
     public const string Name = "fake";
 
@@ -23,7 +23,7 @@ internal sealed class FakeBankConnector : IBankConnector
     /// <summary>What each exchange answers with, in order. Empty means <see cref="Item"/>.</summary>
     private readonly Queue<LinkedItem> _items = new();
 
-    public string Provider => Name;
+    public string Provider => provider;
 
     /// <summary>The token each <see cref="RemoveAsync"/> call was made with, in order.</summary>
     public List<string> RemovedTokens { get; } = [];

@@ -90,6 +90,10 @@ if (builder.ExecutionContext.IsRunMode)
     builder
         .AddScalarApiReference()
         .WithApiReference(api);
+
+    // Where bank providers are told to deliver webhooks locally, which is the web origin here
+    // exactly as it is in a deployment. Off unless WebhookTunnel says otherwise.
+    api.WithWebhookTunnel(web);
 }
 else
 {

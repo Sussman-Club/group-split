@@ -5,6 +5,7 @@ using GroupSplit.API.Middleware;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.Data.PostgreSQL;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,8 +50,14 @@ builder.Services.AddDomainServices();
 // database and itself encrypted with a certificate the deployment holds as a secret.
 builder.AddBankKeyRing();
 
-// The two pieces of banking that read configuration, which only a real host has.
-builder.Services.AddOptions<BankingOptions>().BindConfiguration(BankingOptions.SectionName);
+// The two pieces of banking that read configuration, which only a real host has. Validated on
+// start, because a public origin no provider would accept is a deployment mistake and the
+// alternative is finding out from the first person who tries to link a bank.
+builder.Services.AddOptions<BankingOptions>()
+    .BindConfiguration(BankingOptions.SectionName)
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IValidateOptions<BankingOptions>, BankingOptionsValidator>();
 
 // Only when this deployment has Plaid credentials. Without them the API starts as usual and
 // the bank features say bank sync is off, which is the honest answer.

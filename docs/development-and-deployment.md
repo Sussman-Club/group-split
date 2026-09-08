@@ -155,18 +155,49 @@ ordinary development posture. A deployment is different: the publish refuses to 
 bank sync is on and the certificate is missing, because a deployment without one looks
 exactly like a deployment with one until somebody reads the database.
 
-Webhooks are the one part that does not work locally. Plaid has to reach the app from
-outside, so it is given a webhook address only when the app is served over HTTPS on a
-hostname it can resolve. Locally a sync runs when the app asks for one, on linking or
-through **Sync now**, and the nightly sweep catches whatever a missed webhook would have.
+Webhooks need an address the provider can reach: a deployment is served on one, and locally a
+dev tunnel supplies one. With no address at all nothing breaks -- none is sent, a sync runs
+when the app asks for one, on linking or through **Sync now**, and the nightly sweep catches
+whatever a missed webhook would have.
 
-The address itself is `Banking:PublicOrigin` plus `/webhooks/{provider}`, and a deployment
-gets it from `web-hostname` -- the same origin everything else is served on, whose
-`/webhooks` path the web app forwards to the API. It is configured rather than read off the
-request on purpose: the request's host is whatever the caller wrote in the `Host` header, and
-this address is handed to a provider as where to deliver somebody's bank activity. With
-nothing configured the request stands in, which is what makes a local HTTPS tunnel work
-without a setting; a deployment never relies on it, because `web-hostname` is required.
+The address is `Banking:PublicOrigin` plus `/webhooks/{provider}`, and a deployment gets it
+from `web-hostname`: the same origin everything else is served on, whose `/webhooks` path the
+web app forwards to the API. It is configured rather than read off the request on purpose --
+the request's host is whatever the caller wrote in the `Host` header, and this address is
+handed to a provider as where to deliver somebody's bank activity. A value that is not an
+absolute HTTPS origin fails the start, because a provider refuses such an address and the
+alternative is finding out from the first person who tries to link a bank.
+
+### Receiving webhooks locally
+
+`WebhookTunnel` in the AppHost's `appsettings.Development.json` puts the web app behind an
+[Aspire dev tunnel](https://aspire.dev/integrations/devtools/dev-tunnels/) and sets the API's
+`Banking:PublicOrigin` to the address it is given. It is `false` there, and on it appears as
+the `webhook-tunnel` resource in the dashboard with the address it was handed:
+
+```bash
+dotnet user-secrets --project src/GroupSplit.AppHost set WebhookTunnel true
+```
+
+The web app rather than the API, because that is the shape a deployment has: the provider
+calls the public origin and the `/webhooks` forwarder carries the call through unchanged, so
+the one hop a webhook makes that nothing else does is exercised locally too.
+
+It needs the `devtunnel` CLI and a signed-in account, which is half of why it is off until
+somebody asks for it:
+
+```bash
+winget install Microsoft.devtunnel
+```
+
+```bash
+devtunnel user login
+```
+
+The other half is that access has to be anonymous -- a provider has no account here and no
+token, and what stands in for one is its signature over the bytes it sent, which the API
+checks before reading them -- so the whole local web app answers on that address for as long
+as the run lasts. Aspire creates the tunnel with the run and tears it down after.
 
 ## The sign-in key ring
 
