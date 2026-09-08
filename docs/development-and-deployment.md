@@ -64,6 +64,7 @@ AppHost needs only a GitHub entry of the matching name.
 | --- | --- | --- | --- |
 | `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, and both apps validate tokens against that issuer. |
 | `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
+| `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
 | `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. |
 | `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
@@ -150,6 +151,108 @@ outside, so it is given a webhook address only when the app is served over HTTPS
 hostname it can resolve. Locally a sync runs when the app asks for one, on linking or
 through **Sync now**, and the nightly sweep catches whatever a missed webhook would have.
 
+## The sign-in key ring
+
+The web app has a second, unrelated key ring. It protects the sign-in cookie, the
+antiforgery token, and the OIDC correlation, nonce and state cookies -- none of which is
+stored in the database, so this ring is nothing to do with the one above and the two never
+read each other's keys.
+
+It lives in a Docker volume mounted at the container's home directory, and
+`DataProtection:KeyRingPath` points the app at it. Both halves come from the AppHost's
+`WithKeyRingVolume`, so the mount and the path cannot drift apart.
+
+The volume is the whole point. Without it the ring sits in the container's writable layer
+and every deploy takes it: the replacement container cannot decrypt a single cookie its
+predecessor issued, which surfaces as `The key {...} was not found in the key ring` against
+an antiforgery token, and `Unable to unprotect the message.State` for anybody who was
+signing in at that moment. Everyone is silently signed out on each release.
+
+Mounted at the home directory rather than at the keys directory itself, and that is not
+cosmetic. Docker seeds a new named volume from the image's contents *and ownership* when
+the mount point exists in the image, and creates it root-owned when it does not. These
+images run as a non-root user and create the keys directory at runtime rather than baking
+it in, so mounting that path directly hands the app a directory it cannot write to. The
+home directory does exist in the image and belongs to that user, so the volume inherits it.
+
+Missing `DataProtection:KeyRingPath` outside development is refused at startup rather than
+quietly defaulted, for the same reason the certificate above is: the default is what made
+this invisible in the first place.
+
+Unlike the bank ring, this one is not encrypted at rest. The threat is different -- it sits
+in a volume on the host, and whatever can read the volume can already read the container it
+belongs to -- and what it protects is a session, not a bank token.
+
+Deleting the volume is harmless: everybody signs in again.
+
+## Where the access token lives
+
+The browser never holds one, and cannot: it holds a cookie, the cookie carries a lookup key
+and nothing else, and every call it makes to the API goes through this app's `/api`
+forwarder, which puts the bearer token on the proxied request. That is the whole point of
+the arrangement.
+
+`SaveTokens` is off, so the tokens are not in the authentication ticket either. That was the
+default and it works, because the ticket is held server-side by the ticket store -- but the
+only thing keeping the tokens out of the cookie would then be that store staying configured,
+which is a load-bearing detail one line away from being changed. They live in
+`ServerSideTokenStore` instead, keyed by the sign-in session, which a cookie cannot carry by
+construction rather than by arrangement.
+
+Keeping them current is `Duende.AccessTokenManagement.OpenIdConnect` (Apache-2.0, and not
+`Duende.BFF`, which is under Duende's own licence). The OIDC handler saves tokens and has no
+opinion about refreshing them, and the three things that go wrong when you refresh them by
+hand are all things it already handles:
+
+- **The same refresh token exchanged twice.** Keycloak rotates them one-time-use by default,
+  so the second exchange is refused -- and a page load fires several requests at once, every
+  one of them holding the same token. One request stays signed in and the rest are signed
+  out.
+- **A Keycloak restart read as a bad refresh token.** Only `invalid_grant` says the token is
+  finished. A 5xx, a timeout, or a wrong client secret says nothing about it, and treating
+  them alike signs out every session at once over a fault none of them can see or fix.
+- **The exchange being retried.** `AddServiceDefaults` puts the standard resilience handler
+  on every HTTP client, and it retries a POST on a timeout or a 5xx. A retry of an exchange
+  the realm did in fact process presents a token it has just retired. So that client is
+  stripped of it and given the library's own resiliency, which knows the difference.
+
+The store is ours rather than the library's default because of the render mode. Nothing sets
+`RenderMode`, so a deployment runs interactive Server, and there a component's call to the
+API happens inside a circuit rather than a request: the ambient `HttpContext` is the
+long-lived one the circuit was opened over, its ticket was validated once when that
+connection was made, and its response started with the WebSocket handshake. Tokens read
+through it were frozen at page load and could not be written back, so a page open longer
+than the access token's lifetime got a 401 from everything it touched.
+`AddBlazorServerAccessTokenManagement` and a store keyed by the principal are what make it
+reachable from there.
+
+The one token value that travels through the browser is the `id_token_hint` on sign-out, in
+the front-channel redirect the protocol defines for it. It is not a bearer credential for
+the API, it goes to the authority that issued it, and without it Keycloak cannot tell which
+session is ending and answers with a confirmation page instead of ending it.
+
+## Sessions across a deploy
+
+The sign-in ticket and the tokens beside it both live in Redis, added to the stack as
+`cache`. Held in the web container's own memory, as they were, both went with it on every
+deploy: the key ring made the cookie decrypt again, and then the session it named was gone
+and everybody was challenged afresh. Redis is not replaced when the web image is, so a
+deploy now leaves people signed in.
+
+It carries a data volume and snapshots every thirty seconds, so the host rebooting or the
+stack being brought fully down costs at most the last few seconds of session writes rather
+than every session. Nothing in there is worth backing up -- the worst case is everybody
+signing in again.
+
+`CACHE_PASSWORD` is a required secret for the same reason `DB_SERVER_PASSWORD` is: Aspire
+generates one per publish otherwise, and the container is already running with the last one.
+
+Two things this does not do. Redis being unreachable stops sign-in and refresh outright,
+which is the price of the sessions surviving anything else. And running more than one `web`
+replica would still race: the refresh concurrency control is in-process, so two replicas
+could exchange one refresh token at once -- and the Data Protection volume above is per-host,
+so a second host would need a shared ring as well.
+
 ## Building in a sandbox that has no SDK
 
 CI installs .NET with `actions/setup-dotnet`, which fetches it from
@@ -190,7 +293,7 @@ The workflow is not the only way to see what a deploy would ship. The same step 
 can be run from a checkout, minus the pushes:
 
 ```bash
-Parameters__web_hostname=https://groupsplit.example.com Parameters__dashboard_token=anything aspire do prepare-compose --environment preview --non-interactive
+Parameters__web_hostname=https://groupsplit.example.com Parameters__dashboard_token=anything Parameters__cache_password=anything aspire do prepare-compose --environment preview --non-interactive
 ```
 
 The step is named after the Compose environment resource, `compose`, the way the Docker
@@ -211,7 +314,8 @@ Two things about that command are easy to trip over:
 - **Publish mode does not read user secrets.** The AppHost runs as `Production` there, so
   the Google credentials and passwords you have locally do not carry over. Passwords are
   generated fresh for the environment and cached as above; everything else has to arrive
-  as `Parameters__*`.
+  as `Parameters__*` -- which includes `cache-password`, since it is declared rather than
+  generated by an integration, the same as `dashboard-token`.
 
 `aspire publish --list-steps` shows the publish pipeline without running it; the deploy
 pipeline the workflow uses is `aspire do --list-steps` with the same `--environment`.
