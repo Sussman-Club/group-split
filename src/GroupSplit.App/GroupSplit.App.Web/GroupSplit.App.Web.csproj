@@ -13,6 +13,11 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.5.3-preview.1.26425.3" />
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.5.3" />
+    <!-- User access token management for the OIDC handler, which ships SaveTokens and no
+         way to keep what it saved current. Apache-2.0, and distinct from Duende.BFF, which
+         is under Duende's own licence and would replace this app's whole BFF. -->
+    <PackageReference Include="Duende.AccessTokenManagement.OpenIdConnect" Version="4.2.0" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="10.9.0" />
     <ProjectReference Include="..\..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />
@@ -21,8 +26,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- TokenRefreshService is internal and is the silent-refresh path; the tests reach
-         it directly rather than through a sign-in that would need a live Keycloak. -->
+    <!-- ServerSideTokenStore and the wiring around it are internal, and the tests reach
+         them directly rather than through a sign-in that would need a live Keycloak. -->
     <InternalsVisibleTo Include="GroupSplit.App.Web.Test" />
   </ItemGroup>
 

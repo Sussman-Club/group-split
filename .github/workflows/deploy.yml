@@ -81,7 +81,8 @@ jobs:
           # without. WEB_HOSTNAME is the stack's single public origin; Keycloak shares it
           # under /idp. DASHBOARD_TOKEN is what the dashboard is published behind.
           require KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET \
-                  WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD
+                  WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
+                  CACHE_PASSWORD
 
           # Mail and Google sign-in are each switched on by a variable, and then need
           # their credentials. A relay that is on but incomplete is worse than none: the

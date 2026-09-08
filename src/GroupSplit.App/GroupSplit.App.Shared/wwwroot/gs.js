@@ -51,6 +51,25 @@
     // the app rendering a newer figure, and it becomes the one to land on.
     const running = new WeakMap();
 
+    // Writes a figure through the text node that is already there, rather than
+    // through `textContent`, which throws that node away and puts a fresh one in
+    // its place. Blazor keeps a reference to the node it rendered and writes its
+    // next figure straight into that node -- so replacing it means every later
+    // render lands on a node no longer in the document, and whatever this file
+    // wrote last stays on screen for good. That is a figure from before the last
+    // count sitting under a caption describing the new one, with `data-gs-count`
+    // beside it already correct: the words moved and the number did not.
+    function setText(el, text) {
+        const node = el.firstChild;
+
+        if (node !== null && node.nodeType === 3 && node.nextSibling === null) {
+            node.data = text;
+            return;
+        }
+
+        el.textContent = text;
+    }
+
     function countUp(el) {
         const token = el.getAttribute("data-gs-count");
         if (token === null) return;
@@ -61,7 +80,7 @@
         // there is this run's own part-way figure; anything else is the app's, and
         // newer than anything remembered here.
         if (state && state.token === token) {
-            if (state.wrote !== null && el.textContent === state.wrote) el.textContent = state.final;
+            if (state.wrote !== null && el.textContent === state.wrote) setText(el, state.final);
             return;
         }
 
@@ -102,7 +121,7 @@
         // whatever the app last rendered, which is not necessarily what it had
         // rendered when the run started.
         function land() {
-            if (run.wrote === null || el.textContent === run.wrote) el.textContent = run.final;
+            if (run.wrote === null || el.textContent === run.wrote) setText(el, run.final);
         }
 
         function settle() {
@@ -131,7 +150,7 @@
                 useGrouping: grouped
             }) + tail;
 
-            el.textContent = text;
+            setText(el, text);
             run.wrote = text;
 
             requestAnimationFrame(frame);

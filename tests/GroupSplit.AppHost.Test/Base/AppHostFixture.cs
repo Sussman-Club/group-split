@@ -1,4 +1,4 @@
-﻿using Aspire.Hosting;
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using GroupSplit.AppHost.Test.Base;
@@ -29,6 +29,9 @@ public class AppHostFixture : IAsyncLifetime
     public static readonly TimeSpan ResourceTimeout = TimeSpan.FromMinutes(3);
 
     public DistributedApplication Application { get; private set; } = null!;
+
+    /// <summary>Sets the realm up for the tests that need an account or a short-lived token.</summary>
+    public KeycloakAdmin Keycloak { get; private set; } = null!;
 
     private readonly List<string> _log = [];
 
@@ -64,6 +67,20 @@ public class AppHostFixture : IAsyncLifetime
             clientBuilder.AddStandardResilienceHandler();
         });
 
+        // Aspire generates the Keycloak admin password and gives a test no way to read it.
+        // Supplied, so these tests can create an account and shorten the realm's token.
+        builder.Configuration["Parameters:keycloak-username"] = KeycloakAdmin.Username;
+        builder.Configuration["Parameters:keycloak-password"] = KeycloakAdmin.Password;
+
+        // The render mode a deployment runs. appsettings.Development.json says
+        // WebAssemblyFirst, so without this the browser tests exercise the one path
+        // production does not take -- and a token frozen inside an interactive circuit is
+        // invisible from the other one.
+        builder
+            .CreateResourceBuilder(
+                builder.Resources.OfType<ProjectResource>().Single(resource => resource.Name == "web"))
+            .WithEnvironment("RenderMode", "ServerFirst");
+
         Application = await builder.BuildAsync();
 
         // Started before StartAsync so that a stall inside start-up is recorded too.
@@ -81,6 +98,32 @@ public class AppHostFixture : IAsyncLifetime
                 $"The AppHost did not finish starting within {StartupTimeout.TotalMinutes:0} minutes."
                 + Environment.NewLine + await DescribeFailuresAsync());
         }
+
+        await ConfigureRealmAsync();
+    }
+
+    /// <summary>
+    /// Waits for Keycloak and shortens its access token, once for the whole run rather than
+    /// per test: the realm is shared, so a test that changed it and put it back would still
+    /// be visible to anything running beside it.
+    /// </summary>
+    private async Task ConfigureRealmAsync()
+    {
+        await WaitForAsync(
+            "keycloak",
+            (notifications, token) => notifications.WaitForResourceHealthyAsync("keycloak", token),
+            "become healthy");
+
+        // Named endpoint, not the default: Keycloak publishes a management port beside its
+        // http one, and the relative admin paths below need the http one specifically. The
+        // trailing slash matters too -- without it Uri resolution drops the last segment.
+        var keycloak = new Uri(Application.GetEndpoint("keycloak", "http").AbsoluteUri.TrimEnd('/') + "/");
+
+        Keycloak = new KeycloakAdmin(new HttpClient { BaseAddress = keycloak });
+
+        using var timeout = new CancellationTokenSource(ResourceTimeout);
+
+        await Keycloak.ShortenAccessTokenLifespanAsync(timeout.Token);
     }
 
     public async ValueTask DisposeAsync()
@@ -178,10 +221,20 @@ public class AppHostFixture : IAsyncLifetime
         return report;
     }
 
-    private async Task<string> ReadLogTailAsync(string resourceName)
+    /// <summary>
+    /// What a resource has logged so far. Public because some things are only observable
+    /// here: the app is built to recover from a 401 by signing in again, so from a browser
+    /// a token that refreshed cleanly and one that failed and recovered look the same.
+    /// </summary>
+    public Task<string> ReadLogAsync(string resourceName) =>
+        ReadLogTailAsync(resourceName, maxLines: 2000);
+
+    private async Task<string> ReadLogTailAsync(string resourceName, int? maxLines = null)
     {
+        var lineBudget = maxLines ?? LogTailLines;
+
         var logs = Application.Services.GetRequiredService<ResourceLoggerService>();
-        var tail = new Queue<string>(LogTailLines);
+        var tail = new Queue<string>(lineBudget);
 
         using var timeout = new CancellationTokenSource(LogCollectionTimeout);
 
@@ -194,7 +247,7 @@ public class AppHostFixture : IAsyncLifetime
             {
                 foreach (var line in batch)
                 {
-                    if (tail.Count == LogTailLines)
+                    if (tail.Count == lineBudget)
                         tail.Dequeue();
 
                     tail.Enqueue($"    {line.Content}");

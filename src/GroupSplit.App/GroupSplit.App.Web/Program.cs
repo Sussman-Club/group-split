@@ -25,6 +25,14 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.Http2.MaxRequestHeaderFieldSize = 128 * 1024;
 });
 
+// Before authentication: the cookie, antiforgery and OIDC handlers all protect their
+// payloads with this ring, and it has to outlive the container they run in.
+builder.AddWebKeyRing();
+
+// And before it too: the sign-in ticket and the tokens beside it are kept here, so a
+// deploy that replaces this container leaves everybody signed in.
+builder.AddRedisDistributedCache("cache");
+
 builder.AddGroupSplitAuthentication();
 
 builder.Services.AddHttpContextAccessor();
@@ -55,8 +63,6 @@ builder.Services.AddMudServices();
 
 // Add the forwarder to make sending requests to the backend easier
 builder.Services.AddHttpForwarderWithServiceDiscovery();
-builder.Services.AddScoped<TokenRefreshService>();
-
 
 // NOTE: The BFF invokes AuthService from the client-side only.
 // This registration exists only to satisfy DI requirements.
