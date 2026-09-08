@@ -3,6 +3,7 @@ using System;
 using GroupSplit.Data.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    partial class PostgreSqlAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260908045035_PendingBankLinks")]
+    partial class PendingBankLinks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -31,11 +34,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<string>("AccessTokenCiphertext")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<bool>("AccountsRekeyed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
 
                     b.Property<string>("Cursor")
                         .HasColumnType("text");

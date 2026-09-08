@@ -1,6 +1,7 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
+using GroupSplit.AppHost.Extensions;
 using GroupSplit.AppHost.Test.Base;
 using Microsoft.Extensions.DependencyInjection;
 using Projects;
@@ -59,8 +60,19 @@ public class AppHostFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
+        // No dev tunnel for the tests. It is a real tunnel to the public internet: it needs
+        // the devtunnel CLI and a signed-in account, which a CI runner has neither of, and
+        // nothing here calls in from outside. Passed as a command-line argument rather than
+        // set on the builder below, because the AppHost reads it while it builds the model --
+        // by the time this method has a builder to configure, the decision is already made.
+        //
+        // Left to itself the failure is total rather than local: the API takes its webhook
+        // origin from the tunnel's endpoint, so a tunnel that cannot start leaves the API
+        // waiting on it, the web app waiting on the API, and the whole stack short of the
+        // start-up budget.
         var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<GroupSplit_AppHost>();
+            .CreateAsync<GroupSplit_AppHost>(
+                [$"--{WebhookTunnelExtensions.EnabledKey}=false"]);
 
         builder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {

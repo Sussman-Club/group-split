@@ -134,6 +134,7 @@ data saying something untrue. Distinct from a 400, which says a field is wrong, 
 | --- | --- | --- |
 | `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The stated shares do not add up to the expense's amount. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
 | `BANK_TRANSACTION_IS_CREDIT` | The imported row is money coming in -- a refund, a deposit -- and an expense is money going out. It can be ignored; filing it needs a kind of transaction that does not exist yet. | `amount`, which is negative. |
+| `BANK_CONNECTION_UNRECOVERABLE` | The access this connection holds can no longer be read here, so it can be neither synced nor repaired in update mode -- both need the token. Removing it and linking the bank again is the way forward; the item is stranded at the provider either way. | |
 
 ### Bad gateway (502)
 
@@ -145,6 +146,20 @@ with.
 | Code | When | Extra members |
 | --- | --- | --- |
 | `BANK_PROVIDER_UNAVAILABLE` | The bank provider did not answer, or refused. Nothing was changed here. | |
+
+### Server error (500) with something to say
+
+Every other 500 is a bug, and a bug has nothing to tell a caller but a trace id. These three
+are the exception: the request failed here *after* somebody's bank had already granted
+access, and what became of that access is not an internal detail. It decides whether the
+person should try again, wait, or go and withdraw the access themselves — and they cannot
+find it out anywhere else.
+
+| Code | When | Extra members |
+| --- | --- | --- |
+| `BANK_LINK_NOT_SAVED` | The bank granted access, storing it failed, and the access was handed straight back. Nothing is linked and nothing is left at the provider. Retrying is safe. | |
+| `BANK_LINK_NOT_SAVED_ACCESS_REMAINS` | The same, except handing the access back also failed. Nothing is linked here, and the provider may still hold a connection the person can withdraw themselves. | |
+| `BANK_LINK_WILL_BE_FINISHED` | The bank granted access and it was written down before the failure, so the link is finished in the background. Nothing for the person to do, and linking again would only spend a second item at the provider. | |
 
 ## Producing an error in the API
 

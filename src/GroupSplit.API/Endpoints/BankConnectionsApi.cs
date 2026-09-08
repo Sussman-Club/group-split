@@ -1,7 +1,6 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.Shared;
-using Microsoft.Extensions.Options;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -17,11 +16,13 @@ namespace GroupSplit.API.Endpoints;
 /// </remarks>
 public static class BankConnectionsApi
 {
+    private const string Prefix = "/bank-connections";
+
     extension(IEndpointRouteBuilder routes)
     {
         public RouteGroupBuilder MapBankConnectionsApi()
         {
-            var group = routes.MapGroup("/bank-connections")
+            var group = routes.MapGroup(Prefix)
                 .RequireAuthorization()
                 .ProducesStandardProblems();
 
@@ -52,24 +53,19 @@ public static class BankConnectionsApi
         }
 
         /// <summary>
-        /// The webhook and redirect addresses are built from the request, so a deployment
-        /// behind any hostname tells the provider where to reach it without being
-        /// configured twice.
+        /// The address the provider should call back on travels with the token, so every item
+        /// is registered against the origin this deployment is served on rather than one
+        /// address set once in the provider's dashboard for all of them. Which address that is
+        /// belongs to <see cref="BankingOptions.PublicOrigin"/> and not to this request.
         /// </summary>
         private RouteHandlerBuilder MapLinkToken()
         {
             return group.MapPost("link-token", async (
                     LinkTokenRequest request,
-                    HttpContext httpContext,
                     IBankConnectionService connections,
-                    IOptions<BankingOptions> options,
                     CancellationToken ct) =>
                 {
-                    var token = await connections.CreateLinkToken(
-                        request,
-                        WebhookUrlFor(httpContext, options.Value.Provider),
-                        redirectUri: null,
-                        ct);
+                    var token = await connections.CreateLinkToken(request, redirectUri: null, ct);
 
                     return Results.Ok(token);
                 })
@@ -90,13 +86,17 @@ public static class BankConnectionsApi
                     var connection = await connections.Link(request, ct);
                     var response = BankConnectionService.Describe(connection);
 
-                    return Results.Created($"/bank-connections/{connection.Id}", response);
+                    return Results.Created($"{Prefix}/{connection.Id}", response);
                 })
                 .WithName("LinkBankConnection")
                 .Produces<BankConnectionResponse>(StatusCodes.Status201Created)
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
+                // Declared, unlike anywhere else, because this route's 500 carries a code
+                // worth reading: the bank granted access and storing it failed, and the
+                // answer says whether that access was handed back.
+                .ProducesProblem(StatusCodes.Status500InternalServerError)
                 .ProducesProblem(StatusCodes.Status502BadGateway);
         }
 
@@ -135,24 +135,5 @@ public static class BankConnectionsApi
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status502BadGateway);
         }
-    }
-
-    /// <summary>
-    /// Where the provider should send this deployment's webhooks: the public origin the
-    /// request arrived on, plus the anonymous path the front end forwards.
-    /// </summary>
-    /// <remarks>
-    /// Null over plain HTTP, which providers refuse anyway, so a developer running locally
-    /// gets a link flow that works with no webhooks rather than a link call refused for an
-    /// address the provider will not accept.
-    /// </remarks>
-    internal static string? WebhookUrlFor(HttpContext httpContext, string provider)
-    {
-        var request = httpContext.Request;
-
-        if (!string.Equals(request.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return $"{request.Scheme}://{request.Host}{WebhooksApi.PathFor(provider)}";
     }
 }

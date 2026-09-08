@@ -146,8 +146,9 @@ public class BankEndpointTest : IAsyncLifetime
         // The fake connector reads every body as "there are updates", so the sync the
         // webhook asks for is the observable effect.
         await WaitForSyncAsync();
+
         Assert.NotEmpty(_bank.CursorsSeen);
-        Assert.Equal(connection.Id, connection.Id);
+        Assert.Equal(BankConnectionStatus.Active, await StatusAsync(connection.Id));
     }
 
     /// <summary>
@@ -282,6 +283,155 @@ public class BankEndpointTest : IAsyncLifetime
     }
 
     // ---- setup ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// A bank saying the sign-in is repaired is the only way a connection gets back to
+    /// Active, so the status it writes has to survive the request.
+    /// </summary>
+    /// <remarks>
+    /// Repairing opens the provider's UI in update mode, which hands back no public token,
+    /// so nothing on the linking path runs and nothing else in the application clears
+    /// LoginRequired. A status left in the change tracker meant somebody who had just
+    /// signed in again was told to sign in again -- and would be told that for ever, with
+    /// unlinking and linking afresh, at the cost of another provider item, the only way out.
+    /// </remarks>
+    [Fact]
+    public async Task A_repaired_sign_in_is_stored_and_the_connection_can_sync_again()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        await SetStatusAsync(connection.Id, BankConnectionStatus.LoginRequired);
+
+        _bank.Answer("cursor-one");
+        _bank.Webhook = _ => new LoginRepaired("item-fake");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+
+        Assert.Equal(BankConnectionStatus.Active, await StatusAsync(connection.Id));
+
+        // And the sync the repair asks for is not refused for the status it just cleared:
+        // it is dispatched to a worker that reads the connection afresh, so the save has to
+        // have happened first.
+        await WaitForSyncAsync();
+        Assert.NotEmpty(_bank.CursorsSeen);
+    }
+
+    [Fact]
+    public async Task A_bank_asking_for_a_fresh_sign_in_is_stored()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.Webhook = _ => new LoginRequired("item-fake");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+        Assert.Equal(BankConnectionStatus.LoginRequired, await StatusAsync(connection.Id));
+    }
+
+    /// <summary>
+    /// Somebody withdrawing this app's access at their bank is the one notification that
+    /// cannot be recovered from, so losing it tells them the wrong story ever after.
+    /// </summary>
+    [Fact]
+    public async Task Access_withdrawn_at_the_bank_is_stored()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.Webhook = _ => new PermissionRevoked("item-fake");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+        Assert.Equal(BankConnectionStatus.Revoked, await StatusAsync(connection.Id));
+    }
+
+    /// <summary>
+    /// The one caller-written value on the only anonymous route. Unconstrained it reached a
+    /// log sink verbatim, newlines and all.
+    /// </summary>
+    /// <remarks>
+    /// The bare newline is the case worth naming. A pattern anchored with <c>$</c> admits a
+    /// single trailing one -- that is what <c>$</c> means in .NET -- so the constraint has to
+    /// be anchored with <c>\z</c>, and a test that only offers something obviously wrong
+    /// like a space would pass either way and guard nothing.
+    /// </remarks>
+    [Theory]
+    // A bare trailing newline: the case a "$"-anchored pattern lets through.
+    [InlineData("fake%0A")]
+    // A whole forged log line.
+    [InlineData("fake%0A2026-01-01%20WARN%20not-a-real-log-line")]
+    // A connector key is lower-case by contract, and route constraints match IgnoreCase.
+    [InlineData("FAKE")]
+    public async Task A_webhook_path_that_could_not_name_a_connector_is_refused_by_routing(string segment)
+    {
+        using var anonymous = _host.AnonymousClient();
+
+        var response = await anonymous.PostAsync($"/webhooks/{segment}", Body("{}"), Ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        // Refused by routing, before any of this route's own code runs -- so nothing it says
+        // can carry the segment anywhere.
+        Assert.DoesNotContain(_host.Logs, entry => entry.Message.Contains("which nothing here speaks"));
+    }
+
+    /// <summary>
+    /// A link request with no token is refused before anything is written down.
+    /// </summary>
+    /// <remarks>
+    /// Worth asserting over HTTP rather than trusting the annotation: linking writes a row
+    /// holding the value, encrypted, and commits it before it asks the provider anything.
+    /// Unvalidated, an absent token was a null through the protector and an opaque 500 on a
+    /// route that advertises a validation problem, and an unbounded one was a row of
+    /// whatever the body carried.
+    /// <para>
+    /// It is also the first test in this suite that exercises a DataAnnotation at all. .NET
+    /// 10 validation is a source-generated interceptor on the AddValidation() call site, so
+    /// while this host called it from the test assembly the annotations quietly did nothing
+    /// here; it goes through GroupSplit.API's own AddApiValidation() now, which is what makes
+    /// this assertable.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Linking_with_no_public_token_is_refused_rather_than_written_down()
+    {
+        var response = await _host.Client.PostAsync("/bank-connections", Body("{}"), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Empty(await dbContext.Set<PendingBankLink>().ToListAsync(Ct));
+        Assert.Empty(await dbContext.Set<BankConnection>().ToListAsync(Ct));
+    }
+
+    private async Task SetStatusAsync(Guid connectionId, BankConnectionStatus status)
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var connection = await dbContext.Set<BankConnection>().FirstAsync(row => row.Id == connectionId, Ct);
+        connection.Status = status;
+
+        await dbContext.SaveChangesAsync(Ct);
+    }
+
+    private async Task<BankConnectionStatus> StatusAsync(Guid connectionId)
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+
+        return (await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .Set<BankConnection>()
+            .AsNoTracking()
+            .FirstAsync(row => row.Id == connectionId, Ct)).Status;
+    }
 
     private static HttpContent Body(string json) =>
         new StringContent(json, Encoding.UTF8, "application/json");

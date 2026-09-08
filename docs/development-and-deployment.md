@@ -62,7 +62,7 @@ AppHost needs only a GitHub entry of the matching name.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
-| `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, and both apps validate tokens against that issuer. |
+| `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, both apps validate tokens against that issuer, and it is the address bank providers are told to deliver webhooks to. Changing it leaves already-linked items pointing at the old one until each is relinked. |
 | `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
@@ -141,15 +141,66 @@ That last line is the value of `BANK_KEY_CERTIFICATE`. Keep the `.pfx` somewhere
 delete it from the machine you made it on; losing it loses the stored tokens and nothing
 else, and the way back is that everybody links their bank again.
 
+Every check in front of that certificate asks whether it is *there* — the workflow's
+`require`, the AppHost's `validate-plaid`, and `KeyRingExtensions.Load`, which goes as far
+as valid base64, a readable PKCS#12 and a private key. None of them can tell whether it is
+the *same* one the ring was wrapped with, so the API checks that itself at startup: it
+unprotects one stored token and refuses to start if it cannot. Deploying a different but
+well-formed certificate would otherwise pass every check, mint a fresh key, and leave every
+stored token unreadable — and an item whose token is gone can be neither synced, nor
+repaired in update mode, nor removed at the provider, because all three need the token.
+
 Locally there is usually no certificate and the ring is stored unwrapped, which is the
 ordinary development posture. A deployment is different: the publish refuses to build when
 bank sync is on and the certificate is missing, because a deployment without one looks
 exactly like a deployment with one until somebody reads the database.
 
-Webhooks are the one part that does not work locally. Plaid has to reach the app from
-outside, so it is given a webhook address only when the app is served over HTTPS on a
-hostname it can resolve. Locally a sync runs when the app asks for one, on linking or
-through **Sync now**, and the nightly sweep catches whatever a missed webhook would have.
+Webhooks need an address the provider can reach: a deployment is served on one, and locally a
+dev tunnel supplies one. With no address at all nothing breaks -- none is sent, a sync runs
+when the app asks for one, on linking or through **Sync now**, and the nightly sweep catches
+whatever a missed webhook would have.
+
+The address is `Banking:PublicOrigin` plus `/webhooks/{provider}`, and a deployment gets it
+from `web-hostname`: the same origin everything else is served on, whose `/webhooks` path the
+web app forwards to the API. It is configured rather than read off the request on purpose --
+the request's host is whatever the caller wrote in the `Host` header, and this address is
+handed to a provider as where to deliver somebody's bank activity. A value that is not an
+absolute HTTPS origin fails the start, because a provider refuses such an address and the
+alternative is finding out from the first person who tries to link a bank.
+
+### Receiving webhooks locally
+
+`WebhookTunnel` in the AppHost's `appsettings.Development.json` puts the web app behind an
+[Aspire dev tunnel](https://aspire.dev/integrations/devtools/dev-tunnels/) and sets the API's
+`Banking:PublicOrigin` to the address it is given. It is `false` there, and on it appears as
+the `webhook-tunnel` resource in the dashboard with the address it was handed:
+
+```bash
+dotnet user-secrets --project src/GroupSplit.AppHost set WebhookTunnel true
+```
+
+The web app rather than the API, because that is the shape a deployment has: the provider
+calls the public origin and the `/webhooks` forwarder carries the call through unchanged, so
+the one hop a webhook makes that nothing else does is exercised locally too.
+
+It needs the `devtunnel` CLI and a signed-in account, which is half of why it is off until
+somebody asks for it:
+
+```bash
+winget install Microsoft.devtunnel
+```
+
+```bash
+devtunnel user login
+```
+
+The other half is that access has to be anonymous -- a provider has no account here and no
+token, and what stands in for one is its signature over the bytes it sent, which the API
+checks before reading them. That reasoning covers `/webhooks` and only `/webhooks`: the
+tunnel fronts the web app's root, so for as long as the run lasts the whole local app --
+sign-in page, dev data and all -- answers to anybody holding the address. Turn it on while
+you are working on webhooks and off again afterwards. Aspire creates the tunnel with the run
+and tears it down after.
 
 ## The sign-in key ring
 

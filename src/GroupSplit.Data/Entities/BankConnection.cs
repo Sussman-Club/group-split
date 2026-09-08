@@ -50,6 +50,27 @@ public class BankConnection : Entity
 
     public BankConnectionStatus Status { get; set; } = BankConnectionStatus.Active;
 
+    /// <summary>
+    /// Set when this connection was moved onto a freshly linked item, and cleared by the
+    /// first sync that completes afterwards. True means the next page run has to recognise
+    /// rows it has already got under ids it has never seen.
+    /// </summary>
+    /// <remarks>
+    /// A provider mints transaction ids per item, exactly as it mints account ids. So the
+    /// re-link that <see cref="Cursor"/> is cleared for does not just re-read the history --
+    /// it re-reads it under a whole new set of ids, and every row looks new to the upsert.
+    /// Left alone, months of already-filed spending reappear in the inbox as fresh rows, and
+    /// the duplicate check cannot warn about any of it: it compares against expenses that
+    /// came from no bank row, and these all came from one.
+    /// <para>
+    /// One run, and only the run straight after the move. Matching stored rows by what they
+    /// look like rather than by their id is the right thing exactly once -- afterwards two
+    /// coffees of the same price on the same day are two rows, and treating them as one
+    /// would lose a real transaction.
+    /// </para>
+    /// </remarks>
+    public bool AccountsRekeyed { get; set; }
+
     public required DateTimeOffset LinkedAt { get; set; }
 
     /// <summary>

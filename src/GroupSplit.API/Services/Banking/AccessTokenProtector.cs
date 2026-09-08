@@ -68,7 +68,18 @@ public sealed class DataProtectionAccessTokenProtector(IDataProtectionProvider p
 
     public string Unprotect(string ciphertext)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ciphertext);
+        // An empty column is an unreadable token like any other, and it says so with the
+        // same exception. Argument-checking it instead put one shape of bad row outside
+        // everything that handles this: the column forbids null but not empty, and every
+        // caller that carefully copes with a token it cannot read -- the sync that marks the
+        // connection, the repair that refuses, the unlink that carries on regardless -- was
+        // handed an ArgumentException none of them catch, which is a 500 on the very route
+        // the others tell somebody to use.
+        if (string.IsNullOrWhiteSpace(ciphertext))
+        {
+            throw new AccessTokenUnreadableException(
+                "The stored bank access token is empty, so there is nothing to unprotect.");
+        }
 
         try
         {

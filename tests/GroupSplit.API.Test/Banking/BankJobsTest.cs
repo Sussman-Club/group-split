@@ -63,10 +63,37 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var initializer = provider.GetServices<IHostedService>()
             .Single(service => service.GetType().Name == "JobScheduleInitializer");
         await initializer.StartAsync(Ct);
-        var scheduled = Assert.Single(await provider.GetRequiredService<IJobScheduler>().GetScheduledJobsAsync(Ct));
-        Assert.IsType<SweepBankConnections>(scheduled.Job);
-        var cron = Assert.IsType<JobSchedule.CronSchedule>(scheduled.Schedule);
+        var scheduled = await provider.GetRequiredService<IJobScheduler>().GetScheduledJobsAsync(Ct);
+
+        // By its job rather than by being the only one: banking schedules more than one
+        // thing, and a test that breaks whenever another is added tests the count.
+        var sweep = Assert.Single(scheduled, job => job.Job is SweepBankConnections);
+        var cron = Assert.IsType<JobSchedule.CronSchedule>(sweep.Schedule);
         Assert.Equal("0 0 * * *", cron.Expression.Value);
+        Assert.Equal(TimeZoneInfo.Utc, cron.TimeZone);
+    }
+
+    /// <summary>
+    /// Five minutes, not daily. Somebody is waiting on an interrupted link -- their bank
+    /// says it is connected and the app does not yet agree -- and a link that has not been
+    /// exchanged yet holds a public token that lasts minutes, so the first attempt has to
+    /// fall inside that window.
+    /// </summary>
+    [Fact]
+    public async Task The_pending_link_sweep_is_registered_for_every_five_minutes()
+    {
+        var services = new ServiceCollection();
+        services.AddBankingServices();
+        await using var provider = services.BuildServiceProvider();
+        var initializer = provider.GetServices<IHostedService>()
+            .Single(service => service.GetType().Name == "JobScheduleInitializer");
+        await initializer.StartAsync(Ct);
+
+        var scheduled = await provider.GetRequiredService<IJobScheduler>().GetScheduledJobsAsync(Ct);
+
+        var sweep = Assert.Single(scheduled, job => job.Job is SweepPendingBankLinks);
+        var cron = Assert.IsType<JobSchedule.CronSchedule>(sweep.Schedule);
+        Assert.Equal("*/5 * * * *", cron.Expression.Value);
         Assert.Equal(TimeZoneInfo.Utc, cron.TimeZone);
     }
 

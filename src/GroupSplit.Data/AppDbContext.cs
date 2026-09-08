@@ -308,6 +308,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(connection => connection.AccessTokenCiphertext).IsRequired();
             entity.Property(connection => connection.LinkedAt).IsRequired();
 
+            // Non-nullable with a false default: every connection that already exists was
+            // never re-keyed, which is exactly what false says.
+            entity.Property(connection => connection.AccountsRekeyed).IsRequired().HasDefaultValue(false);
+
             // By name, not number: the first enum in the schema, and the precedent.
             entity.Property(connection => connection.Status)
                 .HasConversion<string>()
@@ -328,6 +332,29 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             // Every listing's filter.
             entity.HasIndex(connection => connection.UserId);
+        });
+
+        modelBuilder.Entity<PendingBankLink>(entity =>
+        {
+            entity.Property(link => link.Provider).HasMaxLength(32).IsRequired();
+            entity.Property(link => link.StartedAt).IsRequired();
+            entity.Property(link => link.Attempts).IsRequired();
+
+            // Both nullable and both protected: a row carries the public token until the
+            // exchange happens and the item afterwards, and never usefully both.
+            entity.Property(link => link.PublicTokenCiphertext);
+            entity.Property(link => link.ItemCiphertext);
+
+            // Same rule as a connection: a link belongs to the person who started it, and
+            // deleting the account takes it with them.
+            entity.HasOne(link => link.User)
+                .WithMany()
+                .HasForeignKey(link => link.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // What the sweep reads: the oldest links still worth another attempt.
+            entity.HasIndex(link => new { link.Attempts, link.StartedAt });
         });
 
         modelBuilder.Entity<LinkedAccount>(entity =>

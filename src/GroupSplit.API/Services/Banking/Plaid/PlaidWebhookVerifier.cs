@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -44,6 +45,28 @@ public sealed class PlaidWebhookVerifier(
     /// </summary>
     private readonly ConcurrentDictionary<string, JWKPublicKey> _keys = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Key ids Plaid said it does not have, and when it said so.
+    /// </summary>
+    /// <remarks>
+    /// Capped, and emptied wholesale when it fills. The shape check in front of this bounds
+    /// how long a key id may be and not how many there are, so an anonymous caller inventing
+    /// a well-shaped one per request would otherwise trade an outbound call at Plaid for a
+    /// permanent entry here -- the same denial of service wearing a different hat. Emptying
+    /// rather than evicting the oldest because the cost of being wrong is one extra lookup:
+    /// this is a courtesy to Plaid, not a correctness mechanism.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _unknown = new(StringComparer.Ordinal);
+
+    /// <summary>How long a "Plaid does not have this key" answer is trusted.</summary>
+    private static readonly TimeSpan UnknownKeyMemory = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How many refusals are remembered at once. Far more than the handful of key ids Plaid
+    /// has in rotation, and small enough that filling it costs nothing worth having.
+    /// </summary>
+    private const int MaxUnknownKeys = 1024;
+
     public async Task<bool> VerifyAsync(IReadOnlyDictionary<string, string> headers, string body,
         CancellationToken ct = default)
     {
@@ -68,6 +91,14 @@ public sealed class PlaidWebhookVerifier(
             {
                 return Refuse("the token names no key");
             }
+
+            // Shape-checked before it is looked up. A kid is Plaid's own identifier and it
+            // is short and alphanumeric; anything else cannot be one, and the check matters
+            // because the lookup below is an outbound call to Plaid made on behalf of an
+            // unauthenticated caller. Without it, a stranger inventing a fresh kid per
+            // request turns this route into a one-for-one amplifier at our own provider.
+            if (!PlausibleKeyId(kid))
+                return Refuse("the token names a key that is not shaped like one");
 
             if (await KeyAsync(kid, ct) is not { } key)
                 return Refuse("no key is available for kid {Kid}", kid);
@@ -121,6 +152,14 @@ public sealed class PlaidWebhookVerifier(
         if (_keys.TryGetValue(kid, out var cached) && !Expired(cached))
             return cached;
 
+        // Remembered for a while, the same way a hit is. Only successes were cached before,
+        // so a kid Plaid does not know cost an outbound call every single time it was
+        // offered -- and offering one is free to anybody who can reach this route.
+        if (_unknown.TryGetValue(kid, out var refusedAt) && clock.GetUtcNow() - refusedAt < UnknownKeyMemory)
+            return null;
+
+        // No cancellation token: Going.Plaid's generated client does not take one here. The
+        // outbound call is bounded by the HttpClient's own timeout instead.
         var response = await plaid.WebhookVerificationKeyGetAsync(new WebhookVerificationKeyGetRequest
         {
             KeyId = kid
@@ -130,8 +169,18 @@ public sealed class PlaidWebhookVerifier(
         {
             logger.LogWarning("Plaid returned no verification key for kid {Kid}: {Error}.",
                 kid, response.Error?.ErrorCode);
+
+            // Only remembered when Plaid actually answered the question. A 429 or a bad
+            // moment at their end says nothing about the key, and caching one as unknown
+            // would refuse ten minutes of genuine webhooks signed with a key that is real
+            // and current -- turning a blip at the provider into lost notifications here.
+            if (Refused(response.StatusCode))
+                Remember(kid);
+
             return null;
         }
+
+        _unknown.TryRemove(kid, out _);
 
         if (Expired(key))
             return null;
@@ -140,6 +189,45 @@ public sealed class PlaidWebhookVerifier(
 
         return key;
     }
+
+    /// <summary>
+    /// Whether Plaid answered the question rather than failing to answer it.
+    /// </summary>
+    /// <remarks>
+    /// Named individually rather than taken as "any 4xx", because a 429 and a 5xx are Plaid
+    /// declining to answer rather than answering -- caching either as "no such key" would
+    /// refuse ten minutes of genuine webhooks signed with a key that is real and current.
+    /// <para>
+    /// It is not a clean split. Plaid answers an unknown key id with a 400
+    /// (<c>INVALID_WEBHOOK_VERIFICATION_KEY_ID</c>) and answers bad credentials or the wrong
+    /// environment with a 400 as well, so a misconfigured deployment does land here, and
+    /// after somebody fixes it there is up to ten minutes of refusals per key. The status
+    /// alone cannot tell those apart; <c>Error.ErrorCode</c> could, and if this ever costs
+    /// anybody real time that is where to look.
+    /// </para>
+    /// </remarks>
+    private static bool Refused(HttpStatusCode status) =>
+        status is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity;
+
+    private void Remember(string kid)
+    {
+        // Emptied rather than grown. Nothing here is worth a bounded cache with an eviction
+        // policy: the entries are a courtesy to Plaid's rate limit, and losing all of them
+        // costs one lookup each.
+        if (_unknown.Count >= MaxUnknownKeys)
+            _unknown.Clear();
+
+        _unknown[kid] = clock.GetUtcNow();
+    }
+
+    /// <summary>
+    /// Whether a <c>kid</c> could be one of Plaid's at all. Deliberately a shape check and
+    /// not a guess at their format: it exists to bound what an anonymous caller can make
+    /// this service go and ask about, not to decide which keys are real. That is Plaid's
+    /// answer, and it is cached either way.
+    /// </summary>
+    private static bool PlausibleKeyId(string kid) =>
+        kid.Length <= 64 && kid.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 
     private bool Expired(JWKPublicKey key) =>
         key.ExpiredAt is { } expiredAt && DateTimeOffset.FromUnixTimeSeconds(expiredAt) <= clock.GetUtcNow();

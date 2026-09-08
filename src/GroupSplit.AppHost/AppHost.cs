@@ -90,6 +90,10 @@ if (builder.ExecutionContext.IsRunMode)
     builder
         .AddScalarApiReference()
         .WithApiReference(api);
+
+    // Where bank providers are told to deliver webhooks locally, which is the web origin here
+    // exactly as it is in a deployment. Off unless WebhookTunnel says otherwise.
+    api.WithWebhookTunnel(web);
 }
 else
 {
@@ -141,6 +145,9 @@ else
     // It still validates browser-issued tokens, so it needs the same public issuer.
     api
         .WithKeycloakAuthority(authority)
+        // Where bank providers are told to deliver webhooks: the same public origin, whose
+        // /webhooks path the web app forwards here.
+        .WithBankingOrigin(hostname)
         .WithManagementHealthcheck();
 
     dbServer.AsDeployedPostgres();

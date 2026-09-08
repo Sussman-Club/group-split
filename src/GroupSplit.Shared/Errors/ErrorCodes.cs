@@ -84,6 +84,30 @@ public static class ErrorCodes
     public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
 
     /// <summary>
+    /// The access this connection was holding can no longer be read, so nothing can be done
+    /// with it -- not synced, not repaired in update mode, not removed at the provider. All
+    /// three need the token. Linking the bank again is the only way forward.
+    /// </summary>
+    public const string BankConnectionUnrecoverable = "BANK_CONNECTION_UNRECOVERABLE";
+
+    // ---- Server error (500) that still has something to say -------------------------
+    //
+    // Ordinarily a 500 tells a caller a trace id and nothing else, because a bug has no
+    // useful description. These are different: the request failed here, but the bank had
+    // already granted access by the time it did, and what became of that access is
+    // something the person is entitled to know rather than guess at.
+
+    public const string BankLinkNotSaved = "BANK_LINK_NOT_SAVED";
+
+    public const string BankLinkNotSavedAccessRemains = "BANK_LINK_NOT_SAVED_ACCESS_REMAINS";
+
+    /// <summary>
+    /// Storing the connection failed, but the item behind it was written down first, so
+    /// finishing it later needs nothing from the person and costs no second item.
+    /// </summary>
+    public const string BankLinkWillBeFinished = "BANK_LINK_WILL_BE_FINISHED";
+
+    /// <summary>
     /// The generic code for a status, used when a response was produced by something that
     /// knows nothing about the domain: routing, authentication, model binding.
     /// </summary>
