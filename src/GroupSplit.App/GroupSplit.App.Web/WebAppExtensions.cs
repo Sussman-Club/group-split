@@ -1,5 +1,5 @@
 using System.Net.Http.Headers;
-using GroupSplit.App.Web.Services;
+using Duende.AccessTokenManagement.OpenIdConnect;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Yarp.ReverseProxy.Forwarder;
@@ -49,21 +49,33 @@ public static class WebAppExtensions
                         requestTransformContext.Path = other;
                     }
 
-                    var tokenRefreshService = requestTransformContext.HttpContext.RequestServices.GetRequiredService<TokenRefreshService>();
-                    var accessToken = await tokenRefreshService.GetAccessTokenAsync(requestTransformContext.HttpContext);
+                    // Refreshed first if it is due, by the token manager rather than here.
+                    var result = await requestTransformContext.HttpContext.GetUserAccessTokenAsync();
 
-                    if (string.IsNullOrWhiteSpace(accessToken))
+                    if (!result.WasSuccessful(out var token, out var failure))
                     {
-                        // Safe here, unlike from a component: this is an ordinary proxied
-                        // request and nothing has been written to the response yet, so the
-                        // sign-out can still set its cookie. Little should reach it now that
-                        // the cookie handler rejects an unrefreshable ticket of its own
-                        // accord, but a ticket carrying no access token at all lands here.
+                        // Signing out is safe here, unlike from a component: this is an
+                        // ordinary proxied request and nothing has been written to the
+                        // response yet, so it can still set its cookie. And it is the right
+                        // thing to do, because nothing else will -- the tokens no longer
+                        // live in the ticket, so the cookie handler has stopped having an
+                        // opinion about them, and a session whose tokens are gone would
+                        // otherwise look signed in until the cookie idled out.
+                        var logger = requestTransformContext.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger(typeof(WebAppExtensions));
+
+                        logger.LogInformation(
+                            "No access token for a proxied API call; signing out. {Error} ({Description})",
+                            failure.Error, failure.ErrorDescription);
+
                         await requestTransformContext.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
                         return;
                     }
 
-                    requestTransformContext.ProxyRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    requestTransformContext.ProxyRequest.Headers.Authorization =
+                        new AuthenticationHeaderValue("Bearer", token.AccessToken.ToString());
                 });
             });
             

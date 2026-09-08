@@ -14,6 +14,13 @@ var db = dbServer.AddDatabase("db", "groupsplit");
 
 var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
+// Backs the web app's sign-in ticket and token stores. Held in the web container's own
+// memory, both went with it on every deploy: the cookie still decrypted, the session it
+// named was gone, and everybody was challenged again.
+var cache = builder.AddRedis("cache")
+    .WithDataVolume()
+    .WithPersistence(TimeSpan.FromSeconds(30));
+
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn()
     .WithPostgres(keycloakDb)
@@ -45,6 +52,8 @@ var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)
     .WaitFor(api)
     .WithReference(api)
+    .WithReference(cache)
+    .WaitFor(cache)
     .WithHealthEndpoints()
     .WithBrowserLogs();
 
@@ -88,6 +97,13 @@ else
 
     var compose = builder.AddDockerComposeEnvironment("compose")
         .WithProtectedDashboard(dashboardToken);
+
+    // Supplied rather than left to Aspire, which would generate a new one per publish and
+    // not match the password the running container was started with.
+    cache.WithPassword(
+        builder
+            .AddParameter("cache-password", secret: true)
+            .WithDescription("Password for the Redis session cache."));
 
     // The stack's single public origin. Has to resolve to the same address from a browser
     // and from inside the Compose network -- "localhost" cannot: a container resolves it to
