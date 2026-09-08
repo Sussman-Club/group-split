@@ -43,17 +43,19 @@ public static class KeyRingExtensions
                 // content root path would orphan every stored token the day the app moved.
                 .SetApplicationName("GroupSplit");
 
-            // Whether the ring can read what is already stored, checked once at startup.
-            // Registered whether or not a certificate is configured: an unwrapped ring that
-            // has been replaced fails in exactly the same way, and just as quietly.
-            builder.Services.AddHostedService<BankKeyRingVerifier>();
-
             var certificate = options[nameof(BankingOptions.KeyRingCertificate)];
 
             if (string.IsNullOrWhiteSpace(certificate))
                 return builder;
 
             protection.ProtectKeysWithCertificate(Load(certificate));
+
+            // Whether that certificate is the one the ring was actually wrapped with,
+            // checked once at startup -- and only where there is a certificate to be wrong
+            // about. Locally the ring is unwrapped, so there is no mismatch to find, and the
+            // seeder stores a placeholder in place of a token that was never protected by
+            // anything; a check here would refuse to start over ordinary development data.
+            builder.Services.AddHostedService<BankKeyRingVerifier>();
 
             return builder;
         }

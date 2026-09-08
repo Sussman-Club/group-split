@@ -30,6 +30,14 @@ namespace GroupSplit.API.Services.Banking;
 /// happens on a host whose database is not there -- a test host, or a first deploy before
 /// the migration bundle has run. Absence of tokens is not evidence of a bad key.
 /// </para>
+/// <para>
+/// Registered only where a certificate wraps the ring, which is where a certificate can be
+/// the wrong one. An unwrapped ring has no mismatch to find, and the development data that
+/// sits behind one includes the seeder's placeholder in place of a token -- a value nothing
+/// ever protected, which no key can read and which is not evidence of anything. Refusing to
+/// start over that would be a check that only ever fired on the machines it was not written
+/// for.
+/// </para>
 /// </remarks>
 internal sealed class BankKeyRingVerifier(
     IServiceScopeFactory scopes,
@@ -69,11 +77,13 @@ internal sealed class BankKeyRingVerifier(
         catch (AccessTokenUnreadableException e)
         {
             throw new InvalidOperationException(
-                "The bank access-token key ring cannot read a token this deployment has already stored, "
-                + $"so {BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)} is not the "
-                + "certificate the ring was wrapped with. Restore the previous one. Starting anyway would "
-                + "mint a new key and leave every stored token unreadable, and an item whose token is gone "
-                + "can be neither synced, nor repaired, nor removed at the provider.", e);
+                "The bank access-token key ring cannot read a token this deployment has already stored. "
+                + $"Either {BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)} is not "
+                + "the certificate the ring was wrapped with -- restore the previous one -- or the stored "
+                + "value is not a protected token at all, which is what a hand-edited row looks like. "
+                + "Starting anyway would mint a new key and leave every stored token unreadable, and an "
+                + "item whose token is gone can be neither synced, nor repaired, nor removed at the "
+                + "provider.", e);
         }
 
         logger.LogInformation("The bank access-token key ring reads what is stored.");
