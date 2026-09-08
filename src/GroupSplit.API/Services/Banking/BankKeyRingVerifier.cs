@@ -5,9 +5,12 @@ using Microsoft.EntityFrameworkCore;
 namespace GroupSplit.API.Services.Banking;
 
 /// <summary>
-/// Refuses to start when the key ring cannot read the access tokens already stored.
+/// Says at startup what is protecting the bank access tokens, and refuses to start when the
+/// key ring cannot read the ones already stored.
 /// </summary>
 /// <remarks>
+/// Two things that are really one: whether the ring is wrapped, and whether it still opens.
+/// <para>
 /// Every check standing between a deployment and its stored tokens asks whether the
 /// certificate is <em>there</em> -- the workflow's own <c>require</c>, the AppHost's
 /// <c>validate-plaid</c>, and <c>KeyRingExtensions.Load</c>, which goes as far as valid
@@ -15,6 +18,7 @@ namespace GroupSplit.API.Services.Banking;
 /// <em>same</em> certificate the ring was wrapped with. Hand the deployment a different but
 /// perfectly well-formed one and all three pass, Data Protection cannot unwrap the key that
 /// is there, mints a fresh one, and every stored token becomes ciphertext nothing can open.
+/// </para>
 /// <para>
 /// That is worth refusing to start over, because of what an unreadable token costs. A
 /// provider item whose token is gone can no longer be synced, no longer be repaired in
@@ -25,26 +29,44 @@ namespace GroupSplit.API.Services.Banking;
 /// one is permanent.
 /// </para>
 /// <para>
+/// It refuses only where a certificate wraps the ring, which is the only place a
+/// certificate can be the wrong one. Without one the ring is stored unwrapped, and then an
+/// unreadable value is as likely to be the seeder's placeholder -- a token nothing ever
+/// protected -- as anything worth stopping for: <c>Unprotect</c> reports a wrong key and a
+/// value that was never a payload as the same failure, so there is nothing here that could
+/// tell them apart. Both are logged instead.
+/// </para>
+/// <para>
 /// One token is enough to answer the question: they were all written by the same ring. A
 /// deployment with no connections yet has nothing to verify and starts, which is also what
 /// happens on a host whose database is not there -- a test host, or a first deploy before
 /// the migration bundle has run. Absence of tokens is not evidence of a bad key.
 /// </para>
-/// <para>
-/// Registered only where a certificate wraps the ring, which is where a certificate can be
-/// the wrong one. An unwrapped ring has no mismatch to find, and the development data that
-/// sits behind one includes the seeder's placeholder in place of a token -- a value nothing
-/// ever protected, which no key can read and which is not evidence of anything. Refusing to
-/// start over that would be a check that only ever fired on the machines it was not written
-/// for.
-/// </para>
 /// </remarks>
 internal sealed class BankKeyRingVerifier(
     IServiceScopeFactory scopes,
+    IConfiguration configuration,
     ILogger<BankKeyRingVerifier> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // Read the same way AddBankKeyRing read it, so the two cannot disagree about
+        // whether this deployment has one.
+        var wrapped = !string.IsNullOrWhiteSpace(
+            configuration.GetSection(BankingOptions.SectionName)[nameof(BankingOptions.KeyRingCertificate)]);
+
+        if (!wrapped)
+        {
+            // Stated out loud, because the failure this guards against is silence: a
+            // deployment that forgot the certificate looks exactly like one that has it.
+            // Expected in development, where an unwrapped ring is the ordinary posture.
+            logger.LogWarning(
+                "No {Section}:{Key} is configured, so the bank access-token key ring is stored unwrapped "
+                + "beside the tokens it opens. Whoever holds a copy of the database holds both. Expected in "
+                + "development; a mistake in a deployment.",
+                BankingOptions.SectionName, nameof(BankingOptions.KeyRingCertificate));
+        }
+
         await using var scope = scopes.CreateAsyncScope();
 
         string? ciphertext;
@@ -73,6 +95,15 @@ internal sealed class BankKeyRingVerifier(
         try
         {
             scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>().Unprotect(ciphertext);
+        }
+        catch (AccessTokenUnreadableException e) when (!wrapped)
+        {
+            logger.LogWarning(
+                e, "A stored bank access token could not be read. With no certificate configured this is "
+                   + "as likely to be seeded development data as a real key problem, so it is not being "
+                   + "treated as one.");
+
+            return;
         }
         catch (AccessTokenUnreadableException e)
         {
