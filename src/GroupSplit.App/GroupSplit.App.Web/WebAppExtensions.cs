@@ -50,10 +50,15 @@ public static class WebAppExtensions
                     }
 
                     var tokenRefreshService = requestTransformContext.HttpContext.RequestServices.GetRequiredService<TokenRefreshService>();
-                    var accessToken = await tokenRefreshService.GetValidAccessTokenAsync(requestTransformContext.HttpContext, requestTransformContext.CancellationToken);
+                    var accessToken = await tokenRefreshService.GetAccessTokenAsync(requestTransformContext.HttpContext);
 
                     if (string.IsNullOrWhiteSpace(accessToken))
                     {
+                        // Safe here, unlike from a component: this is an ordinary proxied
+                        // request and nothing has been written to the response yet, so the
+                        // sign-out can still set its cookie. Little should reach it now that
+                        // the cookie handler rejects an unrefreshable ticket of its own
+                        // accord, but a ticket carrying no access token at all lands here.
                         await requestTransformContext.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                         return;
                     }

@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-
 namespace GroupSplit.App.Web.Services;
 
 internal class AuthDelegatingHandler(
@@ -17,12 +14,15 @@ internal class AuthDelegatingHandler(
             };
         }
         
-        var token = await tokenRefreshService.GetValidAccessTokenAsync(httpContextAccessor.HttpContext, cancellationToken);
+        var token = await tokenRefreshService.GetAccessTokenAsync(httpContextAccessor.HttpContext);
 
         if (token is null)
         {
-            await httpContextAccessor.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
+            // No sign-out here. This runs from wherever a component asked the API for
+            // something, which is typically mid-render with the response already on its way
+            // out -- and signing out writes a Set-Cookie header, which at that point throws
+            // "Headers are read-only". Rejecting the ticket is the cookie handler's job, in
+            // OnValidatePrincipal, where the response has not started yet.
             return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
             {
                 RequestMessage = request

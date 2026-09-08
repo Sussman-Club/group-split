@@ -56,6 +56,15 @@ public static class AuthenticationExtensions
                     options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
                     options.SlidingExpiration = true;
 
+                    // Refreshing the access token means rewriting the ticket, and validating
+                    // the cookie is the last moment in a request where that is still possible
+                    // -- nothing has been written to the response yet. Done anywhere later,
+                    // the Set-Cookie it needs throws "Headers are read-only".
+                    options.Events.OnValidatePrincipal = context =>
+                        context.HttpContext.RequestServices
+                            .GetRequiredService<TokenRefreshService>()
+                            .ValidateAsync(context);
+
                     options.ConfigureOptions();
                 })
                 .AddKeycloakOpenIdConnect(
