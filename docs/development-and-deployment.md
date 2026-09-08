@@ -150,6 +150,40 @@ outside, so it is given a webhook address only when the app is served over HTTPS
 hostname it can resolve. Locally a sync runs when the app asks for one, on linking or
 through **Sync now**, and the nightly sweep catches whatever a missed webhook would have.
 
+## The sign-in key ring
+
+The web app has a second, unrelated key ring. It protects the sign-in cookie, the
+antiforgery token, and the OIDC correlation, nonce and state cookies -- none of which is
+stored in the database, so this ring is nothing to do with the one above and the two never
+read each other's keys.
+
+It lives in a Docker volume mounted at the container's home directory, and
+`DataProtection:KeyRingPath` points the app at it. Both halves come from the AppHost's
+`WithKeyRingVolume`, so the mount and the path cannot drift apart.
+
+The volume is the whole point. Without it the ring sits in the container's writable layer
+and every deploy takes it: the replacement container cannot decrypt a single cookie its
+predecessor issued, which surfaces as `The key {...} was not found in the key ring` against
+an antiforgery token, and `Unable to unprotect the message.State` for anybody who was
+signing in at that moment. Everyone is silently signed out on each release.
+
+Mounted at the home directory rather than at the keys directory itself, and that is not
+cosmetic. Docker seeds a new named volume from the image's contents *and ownership* when
+the mount point exists in the image, and creates it root-owned when it does not. These
+images run as a non-root user and create the keys directory at runtime rather than baking
+it in, so mounting that path directly hands the app a directory it cannot write to. The
+home directory does exist in the image and belongs to that user, so the volume inherits it.
+
+Missing `DataProtection:KeyRingPath` outside development is refused at startup rather than
+quietly defaulted, for the same reason the certificate above is: the default is what made
+this invisible in the first place.
+
+Unlike the bank ring, this one is not encrypted at rest. The threat is different -- it sits
+in a volume on the host, and whatever can read the volume can already read the container it
+belongs to -- and what it protects is a session, not a bank token.
+
+Deleting the volume is harmless: everybody signs in again.
+
 ## Building in a sandbox that has no SDK
 
 CI installs .NET with `actions/setup-dotnet`, which fetches it from

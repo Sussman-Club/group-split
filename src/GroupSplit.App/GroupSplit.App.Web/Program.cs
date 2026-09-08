@@ -25,6 +25,10 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.Http2.MaxRequestHeaderFieldSize = 128 * 1024;
 });
 
+// Before authentication: the cookie, antiforgery and OIDC handlers all protect their
+// payloads with this ring, and it has to outlive the container they run in.
+builder.AddWebKeyRing();
+
 builder.AddGroupSplitAuthentication();
 
 builder.Services.AddHttpContextAccessor();

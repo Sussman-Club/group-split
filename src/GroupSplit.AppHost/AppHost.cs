@@ -110,6 +110,9 @@ else
 
     web
         .WithKeycloakAuthority(authority)
+        // The sign-in, antiforgery and OIDC cookies are all protected with this ring, so
+        // losing it on every deploy signs everybody out and breaks any sign-in in flight.
+        .WithKeyRingVolume(compose, "web-keyring")
         // Exposed the way every other stack on the host is: joined to the shared `internal`
         // network so Caddy dials it as group-split-web -- and no host port, so nothing on
         // the LAN can bypass the proxy. WEB_HOSTNAME must resolve to the Caddyfile route's

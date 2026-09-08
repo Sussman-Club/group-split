@@ -13,6 +13,12 @@ namespace GroupSplit.AppHost.Extensions;
 /// </summary>
 public static class DeploymentExtensions
 {
+    /// <summary>
+    /// The home directory of the non-root user the published .NET images run as, and the
+    /// only place under it a named volume can be mounted. See <c>WithKeyRingVolume</c>.
+    /// </summary>
+    private const string ContainerHomeDirectory = "/home/app";
+
     extension<T>(IResourceBuilder<T> resource) where T : ContainerResource
     {
         /// <summary>
@@ -231,6 +237,57 @@ public static class DeploymentExtensions
                 service.ContainerName = containerName;
                 service.Networks.Add(networkName);
             });
+        }
+    }
+
+    extension<T>(IResourceBuilder<T> resource)
+        where T : IComputeResource, IResourceWithEnvironment
+    {
+        /// <summary>
+        /// Keeps the service's Data Protection key ring in a named volume, so that it
+        /// outlives the container it was made in.
+        /// <para>
+        /// Left alone the ring goes in the container's writable layer and every deploy takes
+        /// it with the old container. What the next one starts with is a ring that cannot
+        /// read a single cookie the last one issued: "The key {...} was not found in the key
+        /// ring" for an antiforgery token, and "Unable to unprotect the message.State" for
+        /// anyone who was signing in at the time.
+        /// </para>
+        /// <para>
+        /// Mounted at the home directory rather than at the keys directory itself, which is
+        /// not cosmetic. Docker seeds a new named volume from the image's own contents and
+        /// ownership when the mount point exists in the image, and creates it root-owned when
+        /// it does not. These images run as a non-root user and make the keys directory at
+        /// runtime rather than baking it in, so mounting that path directly hands the app a
+        /// directory it cannot write to -- and it would fall back to an ephemeral ring, which
+        /// is the bug this is here to fix, only quieter. The home directory does exist in the
+        /// image and belongs to that user, so a volume mounted there inherits it.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<T> WithKeyRingVolume(
+            IResourceBuilder<DockerComposeEnvironmentResource> compose,
+            string volumeName)
+        {
+            // Declared at the top level as well as mounted, or Compose refuses the file:
+            // a named volume a service asks for has to be one the file defines.
+            compose.ConfigureComposeFile(file => file.AddVolume(new Volume
+            {
+                Name = volumeName,
+                Source = volumeName,
+                Driver = "local"
+            }));
+
+            return resource
+                .WithEnvironment(
+                    "DataProtection__KeyRingPath",
+                    $"{ContainerHomeDirectory}/.aspnet/DataProtection-Keys")
+                .PublishAsDockerComposeService((_, service) => service.AddVolume(new Volume
+                {
+                    Name = volumeName,
+                    Type = "volume",
+                    Source = volumeName,
+                    Target = ContainerHomeDirectory
+                }));
         }
     }
 
