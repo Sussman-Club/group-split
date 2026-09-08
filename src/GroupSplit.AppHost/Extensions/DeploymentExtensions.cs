@@ -263,17 +263,31 @@ public static class DeploymentExtensions
         /// is the bug this is here to fix, only quieter. The home directory does exist in the
         /// image and belongs to that user, so a volume mounted there inherits it.
         /// </para>
+        /// <para>
+        /// One <c>Volume</c> type serves two positions that accept different keys, and it
+        /// carries the union of both, so which properties are left unset is the whole of what
+        /// keeps each valid. A service's mount takes <c>type</c>, <c>source</c> and
+        /// <c>target</c>; the top-level declaration takes only <c>driver</c>,
+        /// <c>driver_opts</c>, <c>external</c> and <c>labels</c>, the name being the key it is
+        /// written under (<c>Name</c> is <c>[YamlIgnore]</c>). A <c>Source</c> on the
+        /// declaration is what Compose rejected the entire file over --
+        /// "volumes.web-keyring additional properties 'source' not allowed" -- and nothing
+        /// catches it until the host validates the file, a whole publish and image push later.
+        /// Aspire draws the same line in its own <c>AddVolume(name, driver, external)</c> and
+        /// <c>AddVolume(source, target, type)</c> helpers, but both are internal, and
+        /// <c>ConfigureComposeFile</c> with a constructed <c>Volume</c> is the public route.
+        /// </para>
         /// </summary>
         public IResourceBuilder<T> WithKeyRingVolume(
             IResourceBuilder<DockerComposeEnvironmentResource> compose,
             string volumeName)
         {
             // Declared at the top level as well as mounted, or Compose refuses the file:
-            // a named volume a service asks for has to be one the file defines.
+            // a named volume a service asks for has to be one the file defines. Driver only,
+            // matching what Aspire itself emits here for a WithDataVolume().
             compose.ConfigureComposeFile(file => file.AddVolume(new Volume
             {
                 Name = volumeName,
-                Source = volumeName,
                 Driver = "local"
             }));
 
