@@ -221,10 +221,20 @@ public class AppHostFixture : IAsyncLifetime
         return report;
     }
 
-    private async Task<string> ReadLogTailAsync(string resourceName)
+    /// <summary>
+    /// What a resource has logged so far. Public because some things are only observable
+    /// here: the app is built to recover from a 401 by signing in again, so from a browser
+    /// a token that refreshed cleanly and one that failed and recovered look the same.
+    /// </summary>
+    public Task<string> ReadLogAsync(string resourceName) =>
+        ReadLogTailAsync(resourceName, maxLines: 2000);
+
+    private async Task<string> ReadLogTailAsync(string resourceName, int? maxLines = null)
     {
+        var lineBudget = maxLines ?? LogTailLines;
+
         var logs = Application.Services.GetRequiredService<ResourceLoggerService>();
-        var tail = new Queue<string>(LogTailLines);
+        var tail = new Queue<string>(lineBudget);
 
         using var timeout = new CancellationTokenSource(LogCollectionTimeout);
 
@@ -237,7 +247,7 @@ public class AppHostFixture : IAsyncLifetime
             {
                 foreach (var line in batch)
                 {
-                    if (tail.Count == LogTailLines)
+                    if (tail.Count == lineBudget)
                         tail.Dequeue();
 
                     tail.Enqueue($"    {line.Content}");

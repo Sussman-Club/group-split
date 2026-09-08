@@ -72,18 +72,24 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         await SignInAsync();
         await Expect(Groups).ToBeVisibleAsync(Visible);
 
+        var failuresBefore = await TokenFailuresAsync();
+
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
         await NavLink("Expenses").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
-        // Rendered by the grid once the API has answered it.
-        await Expect(Page.GetByText("No expenses yet")).ToBeVisibleAsync(Visible);
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Expenses" }))
+            .ToBeVisibleAsync(Visible);
 
-        // And still signed in: a 401 has ApiErrorPresenter send the person back to the
-        // authority, which would leave the browser somewhere other than this page.
         await Expect(Page).ToHaveURLAsync(
             new Regex("/transactions$"),
             new PageAssertionsToHaveURLOptions { Timeout = OperationTimeoutMs });
+
+        // The assertion that means anything. A page that rendered proves little on its own,
+        // because a 401 has ApiErrorPresenter sign in again and the session recovers -- so
+        // a broken refresh looks like a working one from out here. This is the handler
+        // saying it had no token to send, which is what a broken refresh actually is.
+        Assert.Equal(failuresBefore, await TokenFailuresAsync());
     }
 
     /// <summary>
@@ -98,8 +104,7 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         await SignInAsync();
         await Expect(Groups).ToBeVisibleAsync(Visible);
 
-        await Page.GotoAsync(
-            Url("auth/logout"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+        await SignOutAsync();
 
         await Page.GotoAsync(
             Url("auth/login?returnUrl=/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
@@ -114,6 +119,43 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// told, by the API, that there are no groups -- which a fresh account is true of.
     /// </summary>
     private ILocator Groups => Page.GetByText("No group yet");
+
+    /// <summary>
+    /// How many times the API client has reported having no token to send. The marker is
+    /// the one <c>AuthDelegatingHandler</c> logs, and it is logged for every reason a token
+    /// can be unavailable.
+    /// </summary>
+    private async Task<int> TokenFailuresAsync()
+    {
+        const string marker = "No access token for";
+
+        var log = await _appHost.ReadLogAsync("web");
+
+        return (log.Length - log.Replace(marker, string.Empty, StringComparison.Ordinal).Length)
+               / marker.Length;
+    }
+
+    /// <summary>
+    /// Signs out, tolerating the abort Chromium reports for the navigation. The sign-out is
+    /// a redirect chain out to the realm and back into a Blazor page, and the document that
+    /// started it is superseded on the way -- which arrives here as ERR_ABORTED even though
+    /// every hop was followed.
+    /// </summary>
+    private async Task SignOutAsync()
+    {
+        try
+        {
+            await Page.GotoAsync(
+                Url("auth/logout"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+        }
+        catch (PlaywrightException exception) when (exception.Message.Contains("ERR_ABORTED"))
+        {
+            // Followed anyway; the assertion after this is what says whether it worked.
+        }
+
+        await Page.WaitForLoadStateAsync(
+            LoadState.NetworkIdle, new PageWaitForLoadStateOptions { Timeout = OperationTimeoutMs });
+    }
 
     /// <summary>
     /// The nav item on screen. The menu is rendered twice, once in the sidebar and once as
