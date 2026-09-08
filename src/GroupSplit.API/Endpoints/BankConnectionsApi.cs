@@ -17,11 +17,13 @@ namespace GroupSplit.API.Endpoints;
 /// </remarks>
 public static class BankConnectionsApi
 {
+    private const string Prefix = "/bank-connections";
+
     extension(IEndpointRouteBuilder routes)
     {
         public RouteGroupBuilder MapBankConnectionsApi()
         {
-            var group = routes.MapGroup("/bank-connections")
+            var group = routes.MapGroup(Prefix)
                 .RequireAuthorization()
                 .ProducesStandardProblems();
 
@@ -52,9 +54,9 @@ public static class BankConnectionsApi
         }
 
         /// <summary>
-        /// The webhook and redirect addresses are built from the request, so a deployment
-        /// behind any hostname tells the provider where to reach it without being
-        /// configured twice.
+        /// The address the provider should call back on travels with the token, so every item
+        /// is registered against the origin this deployment is served on rather than one
+        /// address set once in the provider's dashboard for all of them.
         /// </summary>
         private RouteHandlerBuilder MapLinkToken()
         {
@@ -67,7 +69,7 @@ public static class BankConnectionsApi
                 {
                     var token = await connections.CreateLinkToken(
                         request,
-                        WebhookUrlFor(httpContext, options.Value.Provider),
+                        WebhookUrlFor(httpContext, options.Value),
                         redirectUri: null,
                         ct);
 
@@ -90,7 +92,7 @@ public static class BankConnectionsApi
                     var connection = await connections.Link(request, ct);
                     var response = BankConnectionService.Describe(connection);
 
-                    return Results.Created($"/bank-connections/{connection.Id}", response);
+                    return Results.Created($"{Prefix}/{connection.Id}", response);
                 })
                 .WithName("LinkBankConnection")
                 .Produces<BankConnectionResponse>(StatusCodes.Status201Created)
@@ -142,21 +144,33 @@ public static class BankConnectionsApi
     }
 
     /// <summary>
-    /// Where the provider should send this deployment's webhooks: the public origin the
-    /// request arrived on, plus the anonymous path the front end forwards.
+    /// Where the provider should send this deployment's webhooks: the origin it reaches this
+    /// deployment on, plus the anonymous path the front end forwards.
     /// </summary>
     /// <remarks>
-    /// Null over plain HTTP, which providers refuse anyway, so a developer running locally
-    /// gets a link flow that works with no webhooks rather than a link call refused for an
-    /// address the provider will not accept.
+    /// The origin is <see cref="BankingOptions.PublicOrigin"/>, which a deployment sets, and
+    /// not the one the request arrived on: that host is the caller's to choose, and this
+    /// address is handed to a provider as where to deliver somebody's bank activity. See the
+    /// remarks there for the fallback and why a deployment never relies on it.
     /// </remarks>
-    internal static string? WebhookUrlFor(HttpContext httpContext, string provider)
+    internal static string? WebhookUrlFor(HttpContext httpContext, BankingOptions options)
     {
-        var request = httpContext.Request;
+        var origin = options.PublicOrigin is { Length: > 0 } configured
+            ? configured.TrimEnd('/')
+            : RequestOrigin(httpContext.Request);
 
-        if (!string.Equals(request.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return $"{request.Scheme}://{request.Host}{WebhooksApi.PathFor(provider)}";
+        return origin is null
+            ? null
+            : origin + WebhooksApi.PathFor(options.Provider);
     }
+
+    /// <summary>
+    /// The origin this request arrived on, or null over plain HTTP -- which providers refuse
+    /// anyway, so a developer running locally gets a link flow that works with no webhooks
+    /// rather than a link call refused for an address the provider will not accept.
+    /// </summary>
+    private static string? RequestOrigin(HttpRequest request) =>
+        string.Equals(request.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            ? $"{request.Scheme}://{request.Host}"
+            : null;
 }

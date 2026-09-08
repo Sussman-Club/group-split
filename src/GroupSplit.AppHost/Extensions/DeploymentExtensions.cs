@@ -318,5 +318,18 @@ public static class DeploymentExtensions
         /// </summary>
         public IResourceBuilder<T> WithKeycloakAuthority(ReferenceExpression authority)
             => resource.WithEnvironment("Keycloak__Authority", authority);
+
+        /// <summary>
+        /// Tells the API which origin to hand a bank provider as the address to deliver
+        /// webhooks to.
+        /// <para>
+        /// The stack's public origin, not the API's compose address: the webhook route is
+        /// served on the web app and forwarded through, and it is a provider on the internet
+        /// that has to reach it. Given here rather than read off the request, which behind the
+        /// proxy carries whatever Host the caller sent and a scheme of plain HTTP.
+        /// </para>
+        /// </summary>
+        public IResourceBuilder<T> WithBankingOrigin(IResourceBuilder<ParameterResource> origin)
+            => resource.WithEnvironment("Banking__PublicOrigin", origin);
     }
 }

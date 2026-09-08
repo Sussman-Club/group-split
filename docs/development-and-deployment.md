@@ -62,7 +62,7 @@ AppHost needs only a GitHub entry of the matching name.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
-| `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, and both apps validate tokens against that issuer. |
+| `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, both apps validate tokens against that issuer, and it is the address bank providers are told to deliver webhooks to. Changing it leaves already-linked items pointing at the old one until each is relinked. |
 | `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
@@ -159,6 +159,14 @@ Webhooks are the one part that does not work locally. Plaid has to reach the app
 outside, so it is given a webhook address only when the app is served over HTTPS on a
 hostname it can resolve. Locally a sync runs when the app asks for one, on linking or
 through **Sync now**, and the nightly sweep catches whatever a missed webhook would have.
+
+The address itself is `Banking:PublicOrigin` plus `/webhooks/{provider}`, and a deployment
+gets it from `web-hostname` -- the same origin everything else is served on, whose
+`/webhooks` path the web app forwards to the API. It is configured rather than read off the
+request on purpose: the request's host is whatever the caller wrote in the `Host` header, and
+this address is handed to a provider as where to deliver somebody's bank activity. With
+nothing configured the request stands in, which is what makes a local HTTPS tunnel work
+without a setting; a deployment never relies on it, because `web-hostname` is required.
 
 ## The sign-in key ring
 

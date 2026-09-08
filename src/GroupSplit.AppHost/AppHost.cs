@@ -141,6 +141,9 @@ else
     // It still validates browser-issued tokens, so it needs the same public issuer.
     api
         .WithKeycloakAuthority(authority)
+        // Where bank providers are told to deliver webhooks: the same public origin, whose
+        // /webhooks path the web app forwards here.
+        .WithBankingOrigin(hostname)
         .WithManagementHealthcheck();
 
     dbServer.AsDeployedPostgres();

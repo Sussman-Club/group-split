@@ -35,6 +35,13 @@ internal sealed class FakeBankConnector : IBankConnector
     public List<string> TokensSeen { get; } = [];
 
     /// <summary>
+    /// The request each <see cref="CreateLinkSessionAsync"/> call was made with, in order.
+    /// The webhook address in it is what a real provider would deliver to, so this is where a
+    /// test reads the address this deployment hands out.
+    /// </summary>
+    public List<LinkSessionRequest> LinkSessionsSeen { get; } = [];
+
+    /// <summary>
     /// When set, every sync waits here after being counted, so a test can hold one run open
     /// while it starts another.
     /// </summary>
@@ -63,8 +70,12 @@ internal sealed class FakeBankConnector : IBankConnector
         bool hasMore = false) =>
         Answer(new SyncPage(added ?? [], modified ?? [], removed ?? [], nextCursor, hasMore));
 
-    public Task<LinkSession> CreateLinkSessionAsync(LinkSessionRequest request, CancellationToken ct = default) =>
-        Task.FromResult(new LinkSession("link-fake-token", DateTimeOffset.UtcNow.AddMinutes(30)));
+    public Task<LinkSession> CreateLinkSessionAsync(LinkSessionRequest request, CancellationToken ct = default)
+    {
+        LinkSessionsSeen.Add(request);
+
+        return Task.FromResult(new LinkSession("link-fake-token", DateTimeOffset.UtcNow.AddMinutes(30)));
+    }
 
     public Task<LinkedItem> ExchangeAsync(string publicToken, CancellationToken ct = default) =>
         Task.FromResult(_items.Count > 0 ? _items.Dequeue() : Item());

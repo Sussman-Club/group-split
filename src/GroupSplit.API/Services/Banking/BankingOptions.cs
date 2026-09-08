@@ -21,6 +21,26 @@ public sealed class BankingOptions
     public string Provider { get; set; } = "plaid";
 
     /// <summary>
+    /// The origin bank providers reach this deployment on, scheme included, e.g.
+    /// <c>https://groupsplit.example.com</c>.
+    /// </summary>
+    /// <remarks>
+    /// Given rather than read off the request, because this value is handed to a provider as
+    /// the address to deliver webhooks to and the request's host is whatever the caller put
+    /// in the Host header: a caller who could choose it would point the provider at their own
+    /// server and be sent everything that happens to somebody else's bank. Behind a proxy the
+    /// request cannot answer it anyway -- TLS is terminated upstream, so the scheme it arrives
+    /// on is plain HTTP.
+    /// <para>
+    /// Absent falls back to the origin the request arrived on, which is the development
+    /// posture: nothing is in front of the API there, and no provider could reach it whatever
+    /// address it were told. A deployment always sets it, from the same public origin the rest
+    /// of the stack is served on.
+    /// </para>
+    /// </remarks>
+    public string? PublicOrigin { get; set; }
+
+    /// <summary>
     /// A PKCS#12 certificate, base64 encoded, that the Data Protection key ring is
     /// encrypted with. Absent means the ring is stored unwrapped.
     /// </summary>

@@ -138,7 +138,8 @@ public sealed class BankConnectionService(
         dbContext.Add(pending);
         await dbContext.SaveChangesAsync(ct);
 
-        var item = await Call(provider, "exchange the public token", () => connector.ExchangeAsync(request.PublicToken, ct));
+        var item = await Call(provider, "exchange the public token",
+            () => connector.ExchangeAsync(request.PublicToken, ct));
 
         // The public token is spent now, and the item is what finishing this needs instead.
         // Retired if it cannot be written down, because at that point nothing else in the
@@ -294,8 +295,10 @@ public sealed class BankConnectionService(
                 // here. Nothing good comes of joining those two together -- and nothing
                 // retires it either, unlike the paths below: it is the item their
                 // connection is using, and removing it would break theirs, not ours.
-                logger.LogWarning("Bank item {ProviderItemId} is already linked to another account.", item.ProviderItemId);
-                throw new NotFoundException(ErrorCodes.BankConnectionNotFound, "That bank connection is not available.");
+                logger.LogWarning("Bank item {ProviderItemId} is already linked to another account.",
+                    item.ProviderItemId);
+                throw new NotFoundException(ErrorCodes.BankConnectionNotFound,
+                    "That bank connection is not available.");
             }
 
             existing.AccessTokenCiphertext = protector.Protect(item.AccessToken);
@@ -512,7 +515,8 @@ public sealed class BankConnectionService(
         await dbContext.SaveChangesAsync(ct);
     }
 
-    public Task<BankConnection?> ForProviderItem(string provider, string providerItemId, CancellationToken ct = default) =>
+    public Task<BankConnection?>
+        ForProviderItem(string provider, string providerItemId, CancellationToken ct = default) =>
         dbContext.Set<BankConnection>()
             .FirstOrDefaultAsync(
                 connection => connection.Provider == provider && connection.ProviderItemId == providerItemId, ct);
@@ -524,17 +528,19 @@ public sealed class BankConnectionService(
             (BankConnectionState)connection.Status,
             connection.LinkedAt,
             connection.LastSyncedAt,
-            connection.Accounts
-                .OrderBy(account => account.Name)
-                .Select(account => new LinkedAccountResponse(
-                    account.Id, account.Name, account.Mask, account.Type, account.Subtype, account.Currency))
-                .ToList());
+            [
+                .. connection.Accounts
+                    .OrderBy(account => account.Name)
+                    .Select(account => new LinkedAccountResponse(
+                        account.Id, account.Name, account.Mask, account.Type, account.Subtype, account.Currency))
+            ]);
 
     private IQueryable<BankConnection> Owned() =>
         dbContext.Set<BankConnection>().Where(connection => connection.UserId == userContext.User.Id);
 
     private async Task<BankConnection> Existing(Guid id, CancellationToken ct) =>
-        await Owned().Include(connection => connection.Accounts).FirstOrDefaultAsync(connection => connection.Id == id, ct)
+        await Owned().Include(connection => connection.Accounts)
+            .FirstOrDefaultAsync(connection => connection.Id == id, ct)
         ?? throw new NotFoundException(ErrorCodes.BankConnectionNotFound, "Bank connection not found.");
 
     private IBankConnector? Connector(string provider) => services.GetKeyedService<IBankConnector>(provider);
