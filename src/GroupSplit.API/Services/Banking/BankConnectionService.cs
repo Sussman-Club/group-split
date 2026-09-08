@@ -117,7 +117,9 @@ public sealed class BankConnectionService(
             if (existing.UserId != userContext.User.Id)
             {
                 // The provider handed us an item that belongs to somebody else's account
-                // here. Nothing good comes of joining those two together.
+                // here. Nothing good comes of joining those two together -- and nothing
+                // retires it either, unlike the paths below: it is the item their
+                // connection is using, and removing it would break theirs, not ours.
                 logger.LogWarning("Bank item {ProviderItemId} is already linked to another account.", item.ProviderItemId);
                 throw new NotFoundException(ErrorCodes.BankConnectionNotFound, "That bank connection is not available.");
             }
@@ -128,6 +130,9 @@ public sealed class BankConnectionService(
 
             MergeAccounts(existing, item.Accounts);
 
+            // Also not retired on failure: this is the item the connection already names,
+            // so removing it would take a working connection with it rather than clean up
+            // after a failed one.
             await dbContext.SaveChangesAsync(ct);
             await jobs.DispatchAsync(new SyncBankConnection(existing.Id), ct);
 
@@ -146,9 +151,23 @@ public sealed class BankConnectionService(
                 "Linking {InstitutionName} again as item {ProviderItemId}; adopting it onto connection {ConnectionId}.",
                 item.InstitutionName, item.ProviderItemId, duplicate.Id);
 
-            await Adopt(duplicate, item, ct);
+            // Read before Adopt overwrites it, so the log below names the item that was
+            // actually retired rather than the one that replaced it.
+            var supersededItemId = duplicate.ProviderItemId;
+            var superseded = Adopt(duplicate, item);
 
-            await dbContext.SaveChangesAsync(ct);
+            await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct), ct);
+
+            // Only now. As of that save the connection names the new item, so the one it
+            // replaced is finally nobody's. The other order -- which this had -- retires the
+            // old item first, and a save that then fails leaves the connection pointing at
+            // something the provider has already removed: unsyncable, unrepairable, and with
+            // no token left anywhere that could remove it either.
+            if (superseded is not null)
+            {
+                await TryRetire(provider, superseded, supersededItemId, ct);
+            }
+
             await jobs.DispatchAsync(new SyncBankConnection(duplicate.Id), ct);
 
             return duplicate;
@@ -167,11 +186,70 @@ public sealed class BankConnectionService(
         MergeAccounts(created, item.Accounts);
 
         dbContext.Add(created);
-        await dbContext.SaveChangesAsync(ct);
 
+        await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct), ct);
+
+        // After the save, so a dispatch that fails leaves a stored connection the nightly
+        // sweep will pick up rather than an item retired out from under one.
         await jobs.DispatchAsync(new SyncBankConnection(created.Id), ct);
 
         return created;
+    }
+
+    /// <summary>
+    /// Runs the write that stores a freshly linked item, and retires the item at the
+    /// provider if that write does not happen.
+    /// </summary>
+    /// <remarks>
+    /// The item exists at the provider from the moment somebody finished linking, which is
+    /// before this application hears anything at all -- and its token is only in hand for
+    /// the length of this request. So a failure between the exchange and the save is the
+    /// expensive one: the item is live, counted, and about to become unnameable, because the
+    /// one token that could ever have retired it is the one being dropped. Retiring it here
+    /// is the last moment that is possible.
+    /// <para>
+    /// Only for an item that is new to us. An item some connection already names is not
+    /// ours to remove on the way out of a failure -- see the two paths above that say so.
+    /// </para>
+    /// </remarks>
+    private async Task StoringOrRetiring(
+        string provider, LinkedItem item, Func<Task<int>> write, CancellationToken ct)
+    {
+        try
+        {
+            await write();
+        }
+        catch
+        {
+            await TryRetire(provider, item.AccessToken, item.ProviderItemId, ct);
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Tells the provider an item is over, and carries on if it will not listen.
+    /// </summary>
+    /// <remarks>
+    /// Best effort everywhere it is called from: every caller has already decided that what
+    /// it was doing stands whether or not this works. A provider that refuses leaves an item
+    /// running there, which is worth a line in the log and is not worth undoing a link over.
+    /// </remarks>
+    private async Task TryRetire(string provider, string accessToken, string itemId, CancellationToken ct)
+    {
+        try
+        {
+            if (Connector(provider) is { } connector)
+            {
+                await connector.RemoveAsync(accessToken, ct);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e,
+                "Could not retire item {ProviderItemId} at {Provider}. It may still be counted there.",
+                itemId, provider);
+        }
     }
 
     public async Task Sync(Guid id, CancellationToken ct = default)
@@ -348,12 +426,33 @@ public sealed class BankConnectionService(
     }
 
     /// <summary>
-    /// Moves a connection onto a newly linked item, and retires the one it replaces.
+    /// Moves a connection onto a newly linked item. Answers the token of the item it
+    /// replaced, for the caller to retire once the move has actually been stored, or null
+    /// when that token cannot be read and so nothing can retire it.
     /// </summary>
-    private async Task Adopt(BankConnection connection, LinkedItem item, CancellationToken ct)
+    /// <remarks>
+    /// Deliberately does not retire anything itself. It is called before the save, and the
+    /// item it replaces must outlive the save -- otherwise a save that fails leaves the
+    /// connection naming an item that has already been removed.
+    /// </remarks>
+    private string? Adopt(BankConnection connection, LinkedItem item)
     {
-        var supersededItemId = connection.ProviderItemId;
-        var supersededToken = connection.AccessTokenCiphertext;
+        string? superseded;
+
+        try
+        {
+            superseded = protector.Unprotect(connection.AccessTokenCiphertext);
+        }
+        catch (AccessTokenUnreadableException e)
+        {
+            // Already unnameable, which is the state this whole path exists to stop new
+            // items falling into. Nothing to do but say so and take the new item on.
+            logger.LogWarning(e,
+                "The token for superseded item {ProviderItemId} cannot be read, so it cannot be retired at {Provider}.",
+                connection.ProviderItemId, connection.Provider);
+
+            superseded = null;
+        }
 
         connection.ProviderItemId = item.ProviderItemId;
         connection.AccessTokenCiphertext = protector.Protect(item.AccessToken);
@@ -367,23 +466,7 @@ public sealed class BankConnectionService(
 
         AdoptAccounts(connection, item.Accounts);
 
-        // The replaced item is told it is over, or it is left running at the provider,
-        // counted against whatever the plan counts, with nothing on this side able to name
-        // it again. Best effort on purpose: the bank is linked either way, and a provider
-        // that refuses this must not undo that.
-        try
-        {
-            if (Connector(connection.Provider) is { } connector)
-            {
-                await connector.RemoveAsync(protector.Unprotect(supersededToken), ct);
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogWarning(e,
-                "Could not remove superseded item {ProviderItemId} at {Provider}. It may still be counted there.",
-                supersededItemId, connection.Provider);
-        }
+        return superseded;
     }
 
     /// <summary>
