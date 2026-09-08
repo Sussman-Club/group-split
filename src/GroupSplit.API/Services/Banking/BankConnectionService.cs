@@ -63,6 +63,9 @@ public sealed class BankConnectionService(
     IOptions<BankingOptions> options,
     ILogger<BankConnectionService> logger) : IBankConnectionService
 {
+    /// <summary>How long a best-effort retirement gets before it is given up on.</summary>
+    private static readonly TimeSpan RetireTimeout = TimeSpan.FromSeconds(10);
+
     private string DefaultProvider => options.Value.Provider;
 
     public async Task<BankConnectionsResponse> Mine(CancellationToken ct = default)
@@ -156,7 +159,7 @@ public sealed class BankConnectionService(
             var supersededItemId = duplicate.ProviderItemId;
             var superseded = Adopt(duplicate, item);
 
-            await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct), ct);
+            await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct));
 
             // Only now. As of that save the connection names the new item, so the one it
             // replaced is finally nobody's. The other order -- which this had -- retires the
@@ -165,7 +168,7 @@ public sealed class BankConnectionService(
             // no token left anywhere that could remove it either.
             if (superseded is not null)
             {
-                await TryRetire(provider, superseded, supersededItemId, ct);
+                await TryRetire(provider, superseded, supersededItemId);
             }
 
             await jobs.DispatchAsync(new SyncBankConnection(duplicate.Id), ct);
@@ -187,7 +190,7 @@ public sealed class BankConnectionService(
 
         dbContext.Add(created);
 
-        await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct), ct);
+        await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct));
 
         // After the save, so a dispatch that fails leaves a stored connection the nightly
         // sweep will pick up rather than an item retired out from under one.
@@ -212,8 +215,7 @@ public sealed class BankConnectionService(
     /// ours to remove on the way out of a failure -- see the two paths above that say so.
     /// </para>
     /// </remarks>
-    private async Task StoringOrRetiring(
-        string provider, LinkedItem item, Func<Task<int>> write, CancellationToken ct)
+    private async Task StoringOrRetiring(string provider, LinkedItem item, Func<Task<int>> write)
     {
         try
         {
@@ -221,7 +223,7 @@ public sealed class BankConnectionService(
         }
         catch
         {
-            await TryRetire(provider, item.AccessToken, item.ProviderItemId, ct);
+            await TryRetire(provider, item.AccessToken, item.ProviderItemId);
 
             throw;
         }
@@ -235,13 +237,20 @@ public sealed class BankConnectionService(
     /// it was doing stands whether or not this works. A provider that refuses leaves an item
     /// running there, which is worth a line in the log and is not worth undoing a link over.
     /// </remarks>
-    private async Task TryRetire(string provider, string accessToken, string itemId, CancellationToken ct)
+    private async Task TryRetire(string provider, string accessToken, string itemId)
     {
+        // Deliberately not the request's cancellation token. This runs *because* something
+        // went wrong, and a caller who disconnected mid-link is one of the likelier reasons
+        // -- handing it the token that was just cancelled would cancel the cleanup too, at
+        // exactly the moment the cleanup is the only thing that can still name the item. A
+        // short budget of its own instead, because nothing is waiting on the answer.
+        using var budget = new CancellationTokenSource(RetireTimeout);
+
         try
         {
             if (Connector(provider) is { } connector)
             {
-                await connector.RemoveAsync(accessToken, ct);
+                await connector.RemoveAsync(accessToken, budget.Token);
             }
         }
         catch (Exception e)
