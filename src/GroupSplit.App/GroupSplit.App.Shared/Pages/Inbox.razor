@@ -8,6 +8,7 @@
 @inject IBankCommands Bank
 @inject IDialogService DialogService
 @inject LocalClock Clock
+@inject ISnackbar Snackbar
 @implements IDisposable
 
 @*
@@ -81,11 +82,41 @@
     else
     {
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
+            @* Selecting is only offered where it means anything. A row that has been added
+               or ignored has had its decision made; the bulk actions here are that same
+               decision, taken for several rows at once. *@
+            @if (Selectable)
+            {
+                <label class="gs-select-all">
+                    <MudCheckBox T="bool"
+                                 Value="@AllSelected"
+                                 ValueChanged="@((bool on) => SelectAll(on))"
+                                 Indeterminate="@(_selected.Count > 0 && !AllSelected)"
+                                 Color="Color.Primary"
+                                 Dense="true" />
+                    <span>@SelectAllLabel</span>
+                </label>
+            }
+
             <div class="gs-list">
                 @foreach (var item in State.Rows)
                 {
                     var row = item;
-                    <div class="gs-row" style="cursor: default" @key="row.Id">
+                    <div class="gs-row @(_selected.Contains(row.Id) ? "is-selected" : "")"
+                         style="cursor: default" @key="row.Id">
+                        @if (Selectable)
+                        {
+                            @* A row with a suggestion is selectable, but select-all leaves
+                               it alone: answering "is this the same payment?" is the one
+                               decision on this page that must not be taken in bulk. *@
+                            <MudCheckBox T="bool"
+                                         Value="@_selected.Contains(row.Id)"
+                                         ValueChanged="@((bool on) => Select(row.Id, on))"
+                                         Color="Color.Primary"
+                                         Dense="true"
+                                         Class="gs-row-check"
+                                         aria-label="@($"Select {row.Title}")" />
+                        }
                         @if (row.LogoUrl is { Length: > 0 } logo)
                         {
                             @* The merchant's own logo where the bank sent one: a row reads
@@ -227,11 +258,148 @@
     }
 </div>
 
+@*
+    What is selected, and what can be done with it, over the list rather than beside it.
+
+    Both actions need no target and neither creates a debt: ignoring is reversible from the
+    Ignored filter, and keeping a payment personal files it in no group and owed to nobody.
+    Adding to a group is deliberately not here -- it needs a group, a category and a split,
+    and one answer applied to twenty rows is a guess about nineteen of them.
+*@
+@if (_selected.Count > 0)
+{
+    <div class="gs-selection-bar" role="status">
+        <span class="count">@_selected.Count selected</span>
+
+        <div class="gs-inline" style="gap: 6px; flex-wrap: nowrap">
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-pill"
+                       Disabled="@_bulkBusy"
+                       OnClick="@KeepSelectedPersonalAsync">Keep personal</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-pill"
+                       Disabled="@_bulkBusy"
+                       OnClick="@IgnoreSelectedAsync">Ignore</MudButton>
+            <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small"
+                           aria-label="Clear the selection"
+                           Disabled="@_bulkBusy"
+                           OnClick="@(() => _selected.Clear())" />
+        </div>
+    </div>
+}
+
 @code {
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
     private Guid? _busy;
     private bool _loadingMore;
+
+    /// <summary>
+    /// The rows ticked for a bulk action. Ids rather than rows, because the list under them
+    /// is re-read whenever anything is written and the row objects are replaced.
+    /// </summary>
+    private readonly HashSet<Guid> _selected = [];
+
+    private bool _bulkBusy;
+
+    /// <summary>
+    /// Whether selecting is offered at all. Only over the rows still waiting: the other two
+    /// filters show decisions already taken.
+    /// </summary>
+    private bool Selectable => State.Filter == InboxStatus.New;
+
+    /// <summary>
+    /// What select-all covers. A row showing a possible duplicate is left out: the whole
+    /// design of this page is that nothing is filed while that question is open, and a
+    /// select-all that swept them in would answer it for somebody.
+    /// </summary>
+    private IEnumerable<BankTransactionResponse> Selectables =>
+        State.Rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count == 0);
+
+    private bool AllSelected =>
+        Selectables.Any() && Selectables.All(row => _selected.Contains(row.Id));
+
+    private string SelectAllLabel
+    {
+        get
+        {
+            var flagged = State.Rows.Count(row =>
+                row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0);
+
+            return flagged == 0
+                ? "Select all"
+                : $"Select all · {flagged} with a possible duplicate left out";
+        }
+    }
+
+    private void Select(Guid rowId, bool on)
+    {
+        if (on) _selected.Add(rowId); else _selected.Remove(rowId);
+    }
+
+    private void SelectAll(bool on)
+    {
+        _selected.Clear();
+
+        if (!on) return;
+
+        foreach (var row in Selectables)
+            _selected.Add(row.Id);
+    }
+
+    /// <summary>The selected rows as they stand now, in the order they are on screen.</summary>
+    private List<BankTransactionResponse> Selected =>
+        [.. State.Rows.Where(row => _selected.Contains(row.Id))];
+
+    private async Task IgnoreSelectedAsync()
+    {
+        _bulkBusy = true;
+
+        try
+        {
+            await Bank.IgnoreManyAsync([.. Selected.Select(row => (row.Id, row.Title))]);
+            _selected.Clear();
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Files the selected rows as the person's own.
+    /// </summary>
+    /// <remarks>
+    /// Money coming in is left out rather than refused one row at a time: a refund is not an
+    /// expense, and there is no other kind of transaction to file it as. FileAnyway travels
+    /// for a row showing a suggestion, because select-all never ticks one -- if it is in
+    /// here, somebody ticked it themselves.
+    /// </remarks>
+    private async Task KeepSelectedPersonalAsync()
+    {
+        _bulkBusy = true;
+
+        try
+        {
+            var rows = Selected.Where(row => !row.IsCredit).ToList();
+            var credits = Selected.Count - rows.Count;
+
+            var done = await Bank.KeepPersonalManyAsync(
+                [.. rows.Select(row => (row.Id, row.Title, row.PossibleDuplicates.Count > 0))]);
+
+            if (credits > 0)
+            {
+                Snackbar.Add(
+                    $"{credits} left alone: money coming in is not an expense.",
+                    Severity.Info);
+            }
+
+            if (done > 0 || credits == Selected.Count)
+                _selected.Clear();
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
 
     private async Task LoadMoreAsync()
     {
@@ -255,7 +423,14 @@
         await State.LoadRowsAsync();
     }
 
-    private void OnChanged() => InvokeAsync(StateHasChanged);
+    private void OnChanged()
+    {
+        // A tick names a row, and a different filter or span is a different set of rows --
+        // a selection carried across would act on whatever happened to share an id.
+        _selected.RemoveWhere(id => State.Rows.All(row => row.Id != id));
+
+        InvokeAsync(StateHasChanged);
+    }
 
     private static string Label(InboxStatus status) => status switch
     {

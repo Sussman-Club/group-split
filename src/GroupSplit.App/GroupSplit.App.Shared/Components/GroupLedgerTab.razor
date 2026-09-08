@@ -38,7 +38,7 @@
     @* One row: what kind, over what span, matching what. Three controls is the whole
        filter, and it was two rows and nine buttons before the span collapsed into one. *@
     <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
-        <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
+        <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; min-width: 0">
             <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
                 @foreach (var (label, value) in Kinds)
                 {
@@ -127,7 +127,10 @@
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Category" Title="Category" Sortable="false">
+                @* HideSmall on the three that are context rather than the point. A phone
+                   turns every column into its own line, and seven lines an entry is a
+                   ledger nobody scrolls: what is left is when, what, and how much. *@
+                <PropertyColumn Property="x => x.Category" Title="Category" Sortable="false" HideSmall="true">
                     <CellTemplate>
                         @if (context.Item.Kind is ActivityKind.Transfer)
                         {
@@ -150,7 +153,8 @@
                    every listing in the app used to show only the first. A transfer has no
                    share -- paying somebody back is not a cost anyone carries a part of --
                    so it renders as a dash rather than as zero. *@
-                <TemplateColumn Title="Your share" Sortable="false" HeaderClass="gs-right" CellClass="gs-right">
+                <TemplateColumn Title="Your share" Sortable="false" HideSmall="true"
+                                HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
                         @if (context.Item.Share is { } share)
                         {
@@ -163,7 +167,8 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                <TemplateColumn Title="Balance" Sortable="false" HeaderClass="gs-right" CellClass="gs-right">
+                <TemplateColumn Title="Balance" Sortable="false" HideSmall="true"
+                                HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
                         <Money Value="context.Item.RunningBalance" Signed Class="gs-grid-balance" />
                     </CellTemplate>

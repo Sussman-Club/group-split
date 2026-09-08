@@ -2959,11 +2959,13 @@ html:not([data-gs-ready]) .gs-group-card {
         controls rather than one choice of three.
     */
     .gs-chipbar {
+        /* A whole line of its own. It shares .gs-range with the span filter, which is
+           told to share a line above -- and a scroller squeezed to a 140px basis clips
+           its own chips mid-word, which is what "Expen" was. */
+        flex: 1 1 100%;
         flex-wrap: nowrap;
         overflow-x: auto;
         scrollbar-width: none;
-        margin-inline: -16px;
-        padding-inline: 16px;
     }
 
     .gs-chipbar::-webkit-scrollbar {
@@ -2980,5 +2982,119 @@ html:not([data-gs-ready]) .gs-group-card {
 
     .gs-stats {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ------------------------------------------------------------- selecting -- */
+
+/*
+    A queue you can act on several rows of at once. The bar floats over the list rather
+    than sitting in it: what is selected is a state of the page, not a row of it, and a
+    bar in the flow would push the queue down every time somebody ticked something.
+*/
+
+.gs-select-all {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: -4px 0 6px -8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--gs-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.gs-row .gs-row-check {
+    flex: 0 0 auto;
+    margin-left: -8px;
+}
+
+/* A ticked row, so the selection is legible against the rest of the queue without
+   hunting for ticks. */
+.gs-row.is-selected {
+    background: var(--gs-teal-soft);
+}
+
+.gs-row.is-selected:hover {
+    background: var(--gs-teal-soft);
+}
+
+.gs-selection-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 1200;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 8px 8px 8px 18px;
+
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-teal-deep);
+    color: var(--gs-on-accent);
+    box-shadow: var(--gs-shadow-lg);
+    animation: gs-selection-in var(--gs-base) var(--gs-ease-spring) both;
+}
+
+.gs-selection-bar .count {
+    font-weight: 700;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+/* The buttons sit on the teal, so they take their colour from it rather than from the
+   page's palette -- Mud's own text colour on this ground is unreadable. */
+.gs-selection-bar .mud-button-root,
+.gs-selection-bar .mud-icon-button {
+    color: var(--gs-on-accent);
+    border: 1px solid rgb(255 255 255 / 35%);
+}
+
+.gs-selection-bar .mud-button-root:hover,
+.gs-selection-bar .mud-icon-button:hover {
+    background: rgb(255 255 255 / 14%);
+}
+
+@keyframes gs-selection-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 12px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gs-selection-bar {
+        animation: none;
+    }
+}
+
+@media (max-width: 820px) {
+    /* Clear of the tab bar, which is the one thing on a phone that must never be covered. */
+    .gs-selection-bar {
+        bottom: calc(var(--gs-tabbar-h) + 16px);
+    }
+}
+
+@media (max-width: 640px) {
+    .gs-selection-bar {
+        left: 16px;
+        right: 16px;
+        transform: none;
+        max-width: none;
+        justify-content: space-between;
+        padding-left: 14px;
+        animation: none;
+    }
+
+    .gs-selection-bar .mud-button-root {
+        min-height: 40px;
     }
 }

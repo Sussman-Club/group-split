@@ -186,13 +186,15 @@
                 @* The group column earns its width here and only here: this is the listing
                    that spans them. No group renders as Personal -- a missing group is not
                    a missing value. *@
-                <PropertyColumn Property="x => x.GroupName" Title="Group">
+                @* HideSmall: a phone gives every column its own line, and the group and
+                   the category are context rather than the point. *@
+                <PropertyColumn Property="x => x.GroupName" Title="Group" HideSmall="true">
                     <CellTemplate>
                         <span class="gs-tag neutral">@(context.Item.GroupName ?? "Personal")</span>
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Category" Title="Category">
+                <PropertyColumn Property="x => x.Category" Title="Category" HideSmall="true">
                     <CellTemplate>
                         @if (!string.IsNullOrWhiteSpace(context.Item.Category))
                         {

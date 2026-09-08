@@ -1,4 +1,5 @@
-﻿using Bunit;
+﻿using AngleSharp.Dom;
+using Bunit;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Pages;
 using GroupSplit.App.Shared.Services;
@@ -27,6 +28,7 @@ public class InboxPageTest : ComponentTest
 {
     private readonly Mock<IInboxClient> _inbox = new();
     private readonly Mock<IBankConnectionsClient> _connections = new();
+    private readonly Mock<IBankCommands> _bank = new();
 
     private readonly List<(DateOnly? From, DateOnly? To)> _asks = [];
 
@@ -78,7 +80,7 @@ public class InboxPageTest : ComponentTest
 
         Services.AddSingleton(_inbox.Object);
         Services.AddSingleton(_connections.Object);
-        Services.AddSingleton<IBankCommands>(Mock.Of<IBankCommands>());
+        Services.AddSingleton(_bank.Object);
         Services.AddSingleton<IInboxStateService>(provider => new InboxStateService(
             _inbox.Object,
             _connections.Object,
@@ -177,4 +179,107 @@ public class InboxPageTest : ComponentTest
         new(Guid.NewGuid(), date, amount, "USD", merchant.ToUpperInvariant(), merchant,
             null, null, null, null, null, null, false, InboxStatus.New, null, null,
             "Everyday", "Fake Bank");
+
+    /// <summary>The same row, showing an expense it might already be.</summary>
+    private BankTransactionResponse Flagged(string merchant, decimal amount) =>
+        Row(merchant, amount, DateOnly.FromDateTime(Today)) with
+        {
+            PossibleDuplicates =
+            [
+                new ExpenseMatchResponse(Guid.NewGuid(), merchant, amount, "USD",
+                    DateTimeOffset.UtcNow, Guid.NewGuid(), "Home", "Anabel", 0m, 0)
+            ]
+        };
+
+    /// <summary>Money coming in, which can be ignored but never filed as an expense.</summary>
+    private BankTransactionResponse Credit(string merchant, decimal amount) =>
+        Row(merchant, -amount, DateOnly.FromDateTime(Today));
+
+    private static IReadOnlyList<IElement> Checkboxes(IRenderedComponent<Inbox> page) =>
+        page.FindAll(".gs-row input[type=checkbox]");
+
+    private static Task TickAsync(IRenderedComponent<Inbox> page, int index) =>
+        Checkboxes(page)[index].ChangeAsync(new ChangeEventArgs { Value = true });
+
+    private static Task PressAsync(IRenderedComponent<Inbox> page, string label) =>
+        page.FindAll(".gs-selection-bar button")
+            .First(button => button.TextContent.Contains(label)).ClickAsync(new());
+
+    // ---- selecting several rows -----------------------------------------------------
+
+    /// <summary>
+    /// The whole safety rule of the bulk actions. A row showing a possible duplicate is
+    /// still tickable one at a time, but select-all leaves it alone: answering "is this the
+    /// same payment?" is the one decision on this page that must not be taken for somebody.
+    /// </summary>
+    [Fact]
+    public async Task Select_all_leaves_out_a_row_that_may_already_be_recorded()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m), Row("Uber", 12m, DateOnly.FromDateTime(Today))];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-select-all input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+
+        Assert.Contains("2 selected", page.Find(".gs-selection-bar").TextContent);
+
+        // And it says why the third was left out, rather than quietly skipping it.
+        Assert.Contains("possible duplicate", page.Find(".gs-select-all").TextContent);
+    }
+
+    [Fact]
+    public async Task Ignoring_the_selection_sends_every_row_that_was_ticked()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Row("Uber", 12m, DateOnly.FromDateTime(Today))];
+
+        var page = Render<Inbox>();
+
+        await TickAsync(page, 0);
+        await TickAsync(page, 1);
+        await PressAsync(page, "Ignore");
+
+        _bank.Verify(bank => bank.IgnoreManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent => sent.Count == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A refund is not an expense and there is no other kind of transaction to file it as,
+    /// so it is left out rather than sent and refused one row at a time.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_the_selection_personal_leaves_money_coming_in_alone()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Credit("Amazon", 19.50m)];
+
+        var page = Render<Inbox>();
+
+        await TickAsync(page, 0);
+        await TickAsync(page, 1);
+        await PressAsync(page, "Keep personal");
+
+        _bank.Verify(bank => bank.KeepPersonalManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title, bool FileAnyway)>>(sent =>
+                sent.Count == 1 && sent[0].Title == "Lidl"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Selecting is offered over the queue and not over decisions already taken.
+    /// </summary>
+    [Fact]
+    public async Task The_added_and_ignored_filters_offer_no_selection()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today))];
+
+        var page = Render<Inbox>();
+
+        Assert.NotEmpty(Checkboxes(page));
+
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Ignored")
+            .ClickAsync(new());
+
+        Assert.Empty(Checkboxes(page));
+    }
 }
