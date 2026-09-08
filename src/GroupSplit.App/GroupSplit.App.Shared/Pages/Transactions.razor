@@ -227,7 +227,10 @@
                     </TemplateColumn>
                 }
 
-                <TemplateColumn Sortable="false" HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                @* Titled so the stacked layout a phone falls back to says which row these
+                   belong to -- see the note on the ledger's. *@
+                <TemplateColumn Title="Actions" Sortable="false"
+                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
                     <CellTemplate>
                         @* Only on rows you recorded. They used to render on every row and
                            the refusal arrived from the API after the click. *@

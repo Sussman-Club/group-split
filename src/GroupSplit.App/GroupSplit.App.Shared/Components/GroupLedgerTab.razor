@@ -179,7 +179,12 @@
                    and the shares; a settlement has nothing to it but who paid whom and
                    how much, so re-recording it is the whole correction -- and this is now
                    the only tab it could live in. *@
-                <TemplateColumn Sortable="false" HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                @* Titled, and not only for the header. On a phone the grid gives every cell
+                   its own line with its label beside it, and a column with no title put two
+                   unattached icons in a band of their own -- which row they belonged to was
+                   anybody's guess. *@
+                <TemplateColumn Title="Actions" Sortable="false"
+                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
                             @if (context.Item.Kind is ActivityKind.Expense)

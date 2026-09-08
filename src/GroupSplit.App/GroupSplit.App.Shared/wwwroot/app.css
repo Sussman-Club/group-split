@@ -2816,7 +2816,12 @@ html:not([data-gs-ready]) .gs-group-card {
         margin: 0 -10px;
     }
 
-    .gs-row > :nth-child(n + 3) {
+    .gs-row.is-selectable {
+        grid-template-columns: auto auto minmax(0, 1fr);
+    }
+
+    .gs-row:not(.is-selectable) > :nth-child(n + 3),
+    .gs-row.is-selectable > :nth-child(n + 4) {
         grid-column: 2 / -1;
         justify-self: stretch;
         display: flex;
@@ -2901,12 +2906,21 @@ html:not([data-gs-ready]) .gs-group-card {
     /* The menu and the icon actions are squares, and a 30px square at the edge of the
        screen is the hardest thing on the page to hit with a thumb. */
     .gs-row .mud-icon-button,
-    .gs-row .mud-menu .mud-button-root {
+    .gs-row .mud-menu .mud-button-root,
+    .gs-grid .mud-icon-button {
         min-width: 44px;
         min-height: 44px;
     }
 
-    .gs-row > :nth-child(n + 3) > .gs-inline {
+    /* A grid falls back to a card per row, one line per cell, each line labelled. The
+       actions line is the only one whose content is not text, so it gets the label's
+       baseline rather than floating free of it. */
+    .gs-grid .mud-table-cell {
+        align-items: center;
+    }
+
+    .gs-row > :nth-child(n + 3) > .gs-inline,
+    .gs-row.is-selectable > :nth-child(n + 4) > .gs-inline {
         flex: 1 1 auto;
     }
 
@@ -2918,7 +2932,8 @@ html:not([data-gs-ready]) .gs-group-card {
         "Review", "Settle up" -- and stretching those turned a summary strip into a stack
         of full-width buttons, each shouting as loudly as the figure above it.
     */
-    .gs-queue .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button) {
+    .gs-queue .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button),
+    .gs-queue .gs-row.is-selectable > :nth-child(n + 4) .mud-button-root:not(.mud-icon-button) {
         flex: 1 1 auto;
         justify-content: center;
     }
@@ -3015,6 +3030,16 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-row .gs-row-check {
     flex: 0 0 auto;
     margin-left: -8px;
+}
+
+/*
+    A row that can be ticked has four children -- the box, the mark, the text, the actions
+    -- against .gs-row's three columns. Without the extra column the box takes the first,
+    everything shifts one along, and the actions fall onto an implicit second row on the
+    wrong side of the card.
+*/
+.gs-row.is-selectable {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
 }
 
 /* A ticked row, so the selection is legible against the rest of the queue without

@@ -105,7 +105,10 @@
                 @foreach (var item in State.Rows)
                 {
                     var row = item;
-                    <div class="gs-row @(_selected.Contains(row.Id) ? "is-selected" : "")"
+                    @* is-selectable, not just is-selected: the checkbox is a fourth child
+                       of a three-column grid, and the row needs the column to put it in
+                       whether or not it is ticked. *@
+                    <div class="gs-row @(Selectable ? "is-selectable" : "") @(_selected.Contains(row.Id) ? "is-selected" : "")"
                          style="cursor: default" @key="row.Id">
                         @if (Selectable)
                         {
