@@ -1,9 +1,11 @@
-using AngleSharp.Dom;
+﻿using AngleSharp.Dom;
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -128,7 +130,19 @@ public class GroupLedgerTabTest : ComponentTest
     }
 
     private static Task ClickChipAsync(IRenderedComponent<GroupLedgerTab> tab, string label) =>
-        tab.FindAll(".gs-chip").First(chip => chip.TextContent.Contains(label)).ClickAsync(new());
+        tab.FindAll(".gs-chip button, button.gs-chip")
+            .First(chip => chip.TextContent.Contains(label)).ClickAsync(new());
+
+    /// <summary>
+    /// Sets the span, through the filter component's own callback -- the presets live in a
+    /// Mud popover, outside the tree bUnit renders. See the note on the inbox's equivalent.
+    /// </summary>
+    private static Task PickSpanAsync(IRenderedComponent<GroupLedgerTab> tab, DateFilterPreset preset)
+    {
+        var filter = tab.FindComponent<DateRangeFilter>();
+
+        return tab.InvokeAsync(() => filter.Instance.ValueChanged.InvokeAsync(new DateFilter(preset)));
+    }
 
     private static IReadOnlyList<IElement> Buttons(IRenderedComponent<GroupLedgerTab> tab, string prefix) =>
         tab.FindAll("button[aria-label^='" + prefix + "']");
@@ -181,7 +195,7 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        await ClickChipAsync(tab, "Last month");
+        await PickSpanAsync(tab, DateFilterPreset.LastMonth);
 
         var narrowed = _asks.Last();
 
@@ -212,7 +226,7 @@ public class GroupLedgerTabTest : ComponentTest
 
         // The first read is still in flight, the way a cold start leaves it. The range is
         // picked while it is, which is the ordinary way to use the page.
-        await ClickChipAsync(tab, "Last month");
+        await PickSpanAsync(tab, DateFilterPreset.LastMonth);
 
         Assert.Equal(("0", "$0.00"), Cards(tab));
 

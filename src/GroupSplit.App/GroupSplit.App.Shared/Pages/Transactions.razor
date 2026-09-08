@@ -13,7 +13,6 @@
 @inject IDialogService DialogService
 @inject NavigationManager Nav
 @inject LocalClock Clock
-@inject IJSRuntime Js
 @implements IAsyncDisposable
 
 @*
@@ -37,34 +36,10 @@
         <h1>@ViewTitle</h1>
         <p>@ViewBlurb</p>
     </div>
-    <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; justify-content: flex-end">
-        @* Searches the server, not the rows on screen: what is on screen is one page.
-           Debounced so a request goes out when typing pauses. *@
-        <MudTextField @bind-Value="_searchString"
-                      Placeholder="Search by name, group, category or payer"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Rounded.Search"
-                      Immediate="true"
-                      DebounceInterval="300"
-                      OnDebounceIntervalElapsed="OnSearchChangedAsync"
-                      Clearable="true"
-                      Margin="Margin.Dense"
-                      Variant="Variant.Outlined"
-                      Class="gs-search"
-                      Style="min-width: min(320px, 100%)" />
-
-        @* An export is of a view, and this is the view that spans everything you are in.
-           It takes the filters and the date range with it, because a CSV of something
-           other than what is on screen would be a different question's answer. *@
-        <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
-                   StartIcon="@Icons.Material.Rounded.Download"
-                   Disabled="@_exporting"
-                   OnClick="@ExportAsync">Export</MudButton>
-    </div>
 </div>
 
 <div class="gs-stack">
-    <div class="gs-inline gs-range" role="group" aria-label="Which view">
+    <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which view">
         @foreach (var (label, value) in Views)
         {
             var view = value;
@@ -74,40 +49,78 @@
         }
     </div>
 
-    <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
+    @*
+        Two controls, not four.
+
+        Where the money is and whether it is shared were a select and three chips, and they
+        contradicted each other: picking a group and then "Personal" asked for personal
+        expenses in a group, which is nothing, so the page had to quietly turn one off when
+        the other moved. They are one question -- *which ledger* -- and one control cannot
+        be set to an answer that does not exist.
+    *@
+    <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
         <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
 
-        <div class="gs-inline" style="gap: 12px; flex-wrap: wrap">
-            @* The axis this page has and a group's own ledger cannot: narrowing to one
-               group from a listing that already spans them all. *@
-            <MudSelect T="Guid?" Value="_groupId" ValueChanged="OnGroupChangedAsync"
-                       Placeholder="All groups"
-                       Clearable="true"
-                       Dense="true"
-                       Margin="Margin.Dense"
-                       Variant="Variant.Outlined"
-                       Class="gs-search"
-                       Style="min-width: 180px"
-                       aria-label="Group">
-                <MudSelectItem T="Guid?" Value="@((Guid?)null)">All groups</MudSelectItem>
-                @foreach (var group in GroupsService.Groups)
+        @* A rendered menu rather than a native select, for the reason the date filter
+           gives at length: the list a select opens is the operating system's, and on
+           Windows it is white on a dark page whatever the stylesheet says. *@
+        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                 Dense="true" PopoverClass="gs-menu">
+            <ActivatorContent>
+                <button type="button" class="gs-chip gs-chip-menu @(_where == AllLedgers ? "" : "active")"
+                        aria-label="@($"Which ledger: {WhereLabel}")">
+                    <MudIcon Icon="@Icons.Material.Rounded.Groups" Size="Size.Small" />
+                    <span class="label">@WhereLabel</span>
+                    <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
+                </button>
+            </ActivatorContent>
+            <ChildContent>
+                <MudMenuItem OnClick="@(() => SetWhereAsync(AllLedgers))">
+                    <span class="gs-menu-item @(_where == AllLedgers ? "is-on" : "")">Everything</span>
+                </MudMenuItem>
+                <MudMenuItem OnClick="@(() => SetWhereAsync(SharedOnly))">
+                    <span class="gs-menu-item @(_where == SharedOnly ? "is-on" : "")">Shared only</span>
+                </MudMenuItem>
+                @* Personal is the absence of a group, which is why it is an entry here
+                   rather than one of the groups below it. *@
+                <MudMenuItem OnClick="@(() => SetWhereAsync(PersonalOnly))">
+                    <span class="gs-menu-item @(_where == PersonalOnly ? "is-on" : "")">Personal only</span>
+                </MudMenuItem>
+                @if (GroupsService.Groups.Count > 0)
                 {
-                    <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
+                    <MudDivider />
+                    @foreach (var group in GroupsService.Groups)
+                    {
+                        var id = group.Id.ToString();
+                        <MudMenuItem OnClick="@(() => SetWhereAsync(id))">
+                            <span class="gs-menu-item @(_where == id ? "is-on" : "")">@group.Name</span>
+                        </MudMenuItem>
+                    }
                 }
-            </MudSelect>
+            </ChildContent>
+        </MudMenu>
 
-            @* Personal is the absence of a group, so it is a filter here rather than an
-               entry in the group list above. *@
-            <div class="gs-inline gs-range" role="group" aria-label="Which expenses">
-                @foreach (var (label, value) in Scopes)
-                {
-                    var scope = value;
-                    <button type="button" class="gs-chip @(_personal == scope ? "active" : "")"
-                            aria-pressed="@(_personal == scope ? "true" : "false")"
-                            @onclick="@(() => OnScopeChangedAsync(scope))">@label</button>
-                }
-            </div>
-        </div>
+        @* Searches the server, not the rows on screen: what is on screen is one page.
+           Debounced so a request goes out when typing pauses rather than per keystroke.
+
+           It sits with the other two rather than up beside the title, because it is a
+           filter and they are filters. The placeholder says "Search" and the columns it
+           reaches are in the label a screen reader gets: naming all four in the box was
+           thirty-eight characters of column list that truncated to "Search by name, gr…"
+           on a phone, and told a person who could see the results nothing they did not
+           already know. *@
+        <MudTextField @bind-Value="_searchString"
+                      Placeholder="Search"
+                      aria-label="Search by name, category or who paid"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                      Immediate="true"
+                      DebounceInterval="300"
+                      OnDebounceIntervalElapsed="OnSearchChangedAsync"
+                      Clearable="true"
+                      Margin="Margin.Dense"
+                      Variant="Variant.Outlined"
+                      Class="gs-search" />
     </div>
 
     <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
@@ -254,9 +267,6 @@
 <ExtendedFab Label="Add expense" OnClick="@AddTransactionAsync" />
 
 @code {
-    /// <summary>How much the export asks for at a time. The server clamps at 200.</summary>
-    private const int ExportPageSize = 200;
-
     /// <summary>Which of the three questions the page is answering.</summary>
     public enum ExpenseView
     {
@@ -279,19 +289,20 @@
         ("Everything you are in", ExpenseView.Everything)
     ];
 
-    private static readonly (string Label, bool? Value)[] Scopes =
-    [
-        ("Everything", null),
-        ("Shared", false),
-        ("Personal", true)
-    ];
+    /// <summary>
+    /// The three answers that are not a group id. Kept as strings so one control can hold
+    /// them and a group id in the same field -- which is what stops the two ever
+    /// contradicting each other.
+    /// </summary>
+    private const string AllLedgers = "";
+    private const string SharedOnly = "shared";
+    private const string PersonalOnly = "personal";
 
     private ExpenseView _view = ExpenseView.PaidByYou;
     private string _searchString = "";
     private DateFilter _range = DateFilter.AllTime;
-    private Guid? _groupId;
-    private bool? _personal;
-    private bool _exporting;
+    /// <summary>Which ledger the page is narrowed to: everything, shared, personal, or one group.</summary>
+    private string _where = AllLedgers;
 
     private MudDataGrid<TransactionResponse>? _grid;
 
@@ -301,7 +312,21 @@
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
-    private bool IsNarrowed => IsSearching || !_range.IsAllTime || _personal is not null || _groupId is not null;
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime || _where != AllLedgers;
+
+    /// <summary>The chosen group, when the choice is a group at all.</summary>
+    private Guid? _groupId => Guid.TryParse(_where, out var id) ? id : null;
+
+    /// <summary>
+    /// Null keeps both, true keeps the expenses in no group, false keeps the ones in a
+    /// group. Choosing a single group leaves it null: the group id has already said it.
+    /// </summary>
+    private bool? _personal => _where switch
+    {
+        PersonalOnly => true,
+        SharedOnly => false,
+        _ => null
+    };
 
     private string? Search => IsSearching ? _searchString.Trim() : null;
 
@@ -356,16 +381,22 @@
         ? "across every group"
         : $"of {(_shareSummary?.Total ?? 0m).ToMoney()} spent around you";
 
+    /// <summary>What the one ledger control currently says, as the button reads it.</summary>
+    private string WhereLabel => _where switch
+    {
+        SharedOnly => "Shared only",
+        PersonalOnly => "Personal only",
+        AllLedgers => "Everything",
+        _ => _groupId is { } id ? GroupName(id) : "Everything"
+    };
+
     private string Describe()
     {
-        var said = new List<string>(4)
+        var said = new List<string>(3)
         {
             _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant(),
-            _groupId is null ? "all groups" : GroupName(_groupId.Value)
+            _where == AllLedgers ? "all groups" : WhereLabel.ToLowerInvariant()
         };
-
-        if (_personal is { } personal)
-            said.Add(personal ? "personal" : "shared");
 
         if (IsSearching)
             said.Add("matching your search");
@@ -531,25 +562,21 @@
         await BackToFirstPageAsync();
     }
 
-    private async Task OnScopeChangedAsync(bool? personal)
+    /// <summary>
+    /// Everything, shared, personal, or one group -- one field, so there is no second
+    /// control to contradict and nothing to quietly turn off.
+    /// </summary>
+    /// <summary>
+    /// Which ledger, as the menu sets it. Public so a test can drive it: the menu's items
+    /// render into a Mud popover, outside the tree a component test puts on the page.
+    /// </summary>
+    public Task SetLedger(string where) => SetWhereAsync(where);
+
+    private async Task SetWhereAsync(string where)
     {
-        _personal = personal;
+        if (_where == where) return;
 
-        // Personal expenses are in no group, so a group filter and "personal" cannot both
-        // be on: keeping both would guarantee an empty list.
-        if (personal is true)
-            _groupId = null;
-
-        await ReadFiguresAsync();
-        await BackToFirstPageAsync();
-    }
-
-    private async Task OnGroupChangedAsync(Guid? groupId)
-    {
-        _groupId = groupId;
-
-        if (groupId is not null && _personal is true)
-            _personal = null;
+        _where = where;
 
         await ReadFiguresAsync();
         await BackToFirstPageAsync();
@@ -611,84 +638,6 @@
         if (request is not null)
             await TransactionsService.CreateAsync(request, CancellationToken);
     }
-
-    // ----------------------------------------------------------------- export --
-
-    /// <summary>
-    /// A CSV of the view as it stands, filters and date range included.
-    /// </summary>
-    /// <remarks>
-    /// Every page of the match rather than the one on screen, because an export of page one
-    /// of forty is not an export. It is assembled here rather than served as a file so the
-    /// download carries the session the rest of the app is using -- a plain link would go
-    /// out without the bearer token and come back as a sign-in page named .csv.
-    /// </remarks>
-    private async Task ExportAsync()
-    {
-        _exporting = true;
-
-        try
-        {
-            var rows = new List<TransactionResponse>();
-            var bounds = _range.Bounds(Clock.Offset, Clock.Today);
-
-            for (var page = 1; ; page++)
-            {
-                var next = await ReadPageAsync(bounds, SortKey(null), descending: true,
-                    page, ExportPageSize, CancellationToken);
-
-                if (next is not { } more) return;
-
-                rows.AddRange(more.Items);
-
-                if (rows.Count >= more.TotalCount || more.Items.Count == 0)
-                    break;
-            }
-
-            await Js.InvokeVoidAsync("gs.download", FileName, Csv(rows));
-        }
-        finally
-        {
-            _exporting = false;
-        }
-    }
-
-    private string FileName =>
-        $"group-split-{_view.ToString().ToLowerInvariant()}-{Clock.Today:yyyy-MM-dd}.csv";
-
-    private string Csv(IReadOnlyList<TransactionResponse> rows)
-    {
-        var csv = new System.Text.StringBuilder();
-
-        csv.AppendLine(_view is ExpenseView.PaidByYou
-            ? "Date,Name,Group,Category,Paid by,Amount"
-            : "Date,Name,Group,Category,Paid by,Amount,Your share");
-
-        foreach (var row in rows)
-        {
-            // Dates as ISO and amounts unformatted: a CSV is read by a spreadsheet, and a
-            // "$1,284.50" in a numeric column becomes text in every one of them.
-            csv.Append(Clock.Local(row.DateTime).ToString("yyyy-MM-dd")).Append(',');
-            csv.Append(Quote(row.Name)).Append(',');
-            csv.Append(Quote(row.GroupName ?? "Personal")).Append(',');
-            csv.Append(Quote(row.Category ?? "")).Append(',');
-            csv.Append(Quote(row.PaidByUserName)).Append(',');
-            csv.Append(row.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-            if (row is ExpenseShareResponse share)
-                csv.Append(',').Append(share.Share.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-            csv.AppendLine();
-        }
-
-        return csv.ToString();
-    }
-
-    /// <summary>
-    /// Always quoted, and a quote inside doubled. A group called "Lisbon, 2024" would
-    /// otherwise become two columns.
-    /// </summary>
-    private static string Quote(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
 
     // ---------------------------------------------------------------- plumbing --
 

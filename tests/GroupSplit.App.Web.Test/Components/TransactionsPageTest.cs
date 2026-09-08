@@ -1,4 +1,6 @@
 ﻿using Bunit;
+using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Pages;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
@@ -139,8 +141,24 @@ public class TransactionsPageTest : ComponentTest
         return (labels[0].TextContent.Trim(), labels[1].TextContent.Trim());
     }
 
-    private static Task PickAsync(IRenderedComponent<Transactions> page, string label) =>
-        page.FindAll(".gs-chip").First(chip => chip.TextContent.Trim() == label).ClickAsync(new());
+    /// <summary>
+    /// Sets the span, through the filter component's own callback -- the presets live in a
+    /// Mud popover, outside the tree bUnit renders. See the note on the inbox's equivalent.
+    /// </summary>
+    private static Task PickSpanAsync(IRenderedComponent<Transactions> page, DateFilterPreset preset)
+    {
+        var filter = page.FindComponent<DateRangeFilter>();
+
+        return page.InvokeAsync(() => filter.Instance.ValueChanged.InvokeAsync(new DateFilter(preset)));
+    }
+
+    /// <summary>
+    /// Sets which ledger. Everything, shared, personal and one group are one control now,
+    /// so there is no second one to contradict it. Its items are in a popover too, so the
+    /// menu item is clicked by finding the handler it would have run.
+    /// </summary>
+    private static Task PickLedgerAsync(IRenderedComponent<Transactions> page, string where) =>
+        page.InvokeAsync(() => page.Instance.SetLedger(where));
 
     // ---- the figures --------------------------------------------------------------------
 
@@ -161,7 +179,7 @@ public class TransactionsPageTest : ComponentTest
     {
         var page = RenderView();
 
-        await PickAsync(page, "Last month");
+        await PickSpanAsync(page, DateFilterPreset.LastMonth);
 
         Assert.Equal(("1", "$4.50"), Cards(page));
         Assert.NotNull(_asks.Last().From);
@@ -176,7 +194,7 @@ public class TransactionsPageTest : ComponentTest
     {
         var page = RenderView();
 
-        await PickAsync(page, "Personal");
+        await PickLedgerAsync(page, "personal");
 
         Assert.Equal(("1", "$4.50"), Cards(page));
         Assert.True(_asks.Last().Personal);
@@ -191,12 +209,12 @@ public class TransactionsPageTest : ComponentTest
     {
         var page = RenderView();
 
-        await PickAsync(page, "Last month");
-        await PickAsync(page, "Personal");
+        await PickSpanAsync(page, DateFilterPreset.LastMonth);
+        await PickLedgerAsync(page, "personal");
 
         var sublines = page.FindAll(".gs-stat .gs-muted").Select(line => line.TextContent.Trim()).ToList();
 
-        Assert.Contains("last month · all groups · personal", sublines);
+        Assert.Contains("last month · personal only", sublines);
         Assert.DoesNotContain("in view", page.Markup);
     }
 
@@ -205,8 +223,8 @@ public class TransactionsPageTest : ComponentTest
     {
         var page = RenderView();
 
-        await PickAsync(page, "Last month");
-        await PickAsync(page, "All time");
+        await PickSpanAsync(page, DateFilterPreset.LastMonth);
+        await PickSpanAsync(page, DateFilterPreset.AllTime);
 
         Assert.Equal(("5", "$29.00"), Cards(page));
     }

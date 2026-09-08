@@ -4,8 +4,10 @@ using GroupSplit.App.Shared.Pages;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -85,15 +87,26 @@ public class InboxPageTest : ComponentTest
             provider.GetRequiredService<LocalClock>()));
     }
 
-    private static Task PickAsync(IRenderedComponent<Inbox> page, string label) =>
-        page.FindAll(".gs-chip").First(chip => chip.TextContent.Contains(label)).ClickAsync(new());
+    /// <summary>
+    /// Sets the span, through the filter component's own callback rather than by clicking
+    /// into its menu. The presets live in a Mud popover, which renders outside the tree
+    /// bUnit puts on the page; what these tests are about is what the page does with a
+    /// span once one is chosen, and this drives exactly that wiring.
+    /// </summary>
+    private static Task PickAsync(IRenderedComponent<Inbox> page, DateFilterPreset preset)
+    {
+        var filter = page.FindComponent<DateRangeFilter>();
+
+        return page.InvokeAsync(() => filter.Instance.ValueChanged.InvokeAsync(new DateFilter(preset)));
+    }
 
     [Fact]
-    public void The_span_chips_are_on_the_page_and_start_on_all_time()
+    public void The_spans_are_on_the_page_and_it_starts_on_all_time()
     {
         var page = Render<Inbox>();
 
-        Assert.Contains(page.FindAll(".gs-chip"), chip => chip.TextContent.Contains("Last month"));
+        // The control is on the page and says what it is showing.
+        Assert.Contains("All time", page.Find(".gs-chip-menu").TextContent);
 
         // Nothing narrowed yet, so the request carried no span -- and the heading says
         // nothing, because on all time the count is the badge's and only the badge's.
@@ -107,7 +120,7 @@ public class InboxPageTest : ComponentTest
     {
         var page = Render<Inbox>();
 
-        await PickAsync(page, "Last month");
+        await PickAsync(page, DateFilterPreset.LastMonth);
 
         var expected = new DateFilter(DateFilterPreset.LastMonth).Days(Today);
 
@@ -134,7 +147,7 @@ public class InboxPageTest : ComponentTest
         // Dated far enough back that no preset the chips offer can contain it.
         _rows = [Row("Lidl", 30m, new DateOnly(2020, 1, 1))];
 
-        await PickAsync(page, "Last month");
+        await PickAsync(page, DateFilterPreset.LastMonth);
 
         Assert.Contains("Nothing in this range", page.Markup);
         Assert.DoesNotContain("Nothing waiting", page.Markup);
@@ -149,8 +162,8 @@ public class InboxPageTest : ComponentTest
     {
         var page = Render<Inbox>();
 
-        await PickAsync(page, "Last month");
-        await PickAsync(page, "All time");
+        await PickAsync(page, DateFilterPreset.LastMonth);
+        await PickAsync(page, DateFilterPreset.AllTime);
 
         Assert.Equal((null, null), _asks.Last());
 

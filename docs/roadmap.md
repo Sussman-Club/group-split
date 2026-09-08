@@ -472,9 +472,8 @@ which is what keeps a settlement out of a spending total now that both are in on
 `/transactions` keeps its path and is titled **You** -- your money across every group,
 where a group's Ledger is a group across people. Two pages called Expenses was the app's
 clearest usability defect. It gained the three views the API has served since phase 2
-(*Paid by you*, *Your share*, *Everything you are in*, in the URL), a group filter, a CSV
-export of the current view, and the one chart in the product: what you paid and what your
-share came to, by month. That last was refused earlier on the grounds that four people and
+(*Paid by you*, *Your share*, *Everything you are in*, in the URL), a group filter, and the
+one chart in the product: what you paid and what your share came to, by month. That last was refused earlier on the grounds that four people and
 eleven expenses is not a dataset -- which was reasoning from the seeder rather than from the
 migrated 42-month workbook.
 

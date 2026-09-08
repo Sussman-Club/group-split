@@ -1,0 +1,448 @@
+[
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "Amount": 126.45,
+    "DateTime": "2025-03-24T16:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 147.79,
+    "DateTime": "2025-03-28T09:30:00Z"
+  },
+  {
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 100.88,
+    "DateTime": "2025-03-28T18:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 169.06,
+    "DateTime": "2025-04-24T10:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 157.06,
+    "DateTime": "2025-04-27T15:30:00Z"
+  },
+  {
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 70.11,
+    "DateTime": "2025-04-27T20:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 172.13,
+    "DateTime": "2025-04-28T10:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 79.29,
+    "DateTime": "2025-05-24T13:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 222.29,
+    "DateTime": "2025-05-26T14:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "Amount": 30.74,
+    "DateTime": "2025-06-27T20:30:00Z"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 213.95,
+    "DateTime": "2025-06-28T16:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 100.47,
+    "DateTime": "2025-07-24T18:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 223.01,
+    "DateTime": "2025-07-25T09:30:00Z"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 103.65,
+    "DateTime": "2025-07-25T13:30:00Z"
+  },
+  {
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 192.93,
+    "DateTime": "2025-07-25T14:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "ToUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "Amount": 156.8,
+    "DateTime": "2025-07-28T11:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "Amount": 191.51,
+    "DateTime": "2025-07-28T17:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "Amount": 72.74,
+    "DateTime": "2025-08-25T15:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "Amount": 88.3,
+    "DateTime": "2025-08-25T16:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 181.29,
+    "DateTime": "2025-08-27T11:30:00Z"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 132.56,
+    "DateTime": "2025-08-28T09:30:00Z"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 165.84,
+    "DateTime": "2025-09-25T17:30:00Z"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "Amount": 238.5,
+    "DateTime": "2025-09-25T20:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 42.6,
+    "DateTime": "2025-10-28T11:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 65.68,
+    "DateTime": "2025-10-28T13:30:00Z"
+  },
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 132.69,
+    "DateTime": "2025-10-28T14:30:00Z"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 138.28,
+    "DateTime": "2025-10-28T18:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "Amount": 107.92,
+    "DateTime": "2025-11-24T16:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 73.67,
+    "DateTime": "2025-11-26T17:30:00Z"
+  },
+  {
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 192.19,
+    "DateTime": "2025-11-26T19:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 192.17,
+    "DateTime": "2025-11-27T13:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 131.08,
+    "DateTime": "2025-12-24T14:30:00Z"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 23.58,
+    "DateTime": "2025-12-28T09:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 219.55,
+    "DateTime": "2025-12-28T12:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "Amount": 104.18,
+    "DateTime": "2026-01-25T13:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 31.4,
+    "DateTime": "2026-01-27T20:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 194.85,
+    "DateTime": "2026-01-28T18:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 84.39,
+    "DateTime": "2026-01-28T19:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "Amount": 186.35,
+    "DateTime": "2026-02-26T18:30:00Z"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 211.4,
+    "DateTime": "2026-02-28T11:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "Amount": 124.65,
+    "DateTime": "2026-03-28T13:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 53.7,
+    "DateTime": "2026-03-28T19:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 206.84,
+    "DateTime": "2026-04-24T09:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 116.87,
+    "DateTime": "2026-04-28T13:30:00Z"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "Amount": 228.96,
+    "DateTime": "2026-04-28T18:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 192.37,
+    "DateTime": "2026-04-28T19:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 131.09,
+    "DateTime": "2026-05-27T11:30:00Z",
+    "Description": "bank transfer"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "Amount": 104.7,
+    "DateTime": "2026-05-28T09:30:00Z"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 186.84,
+    "DateTime": "2026-05-28T11:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "FromUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 210.6,
+    "DateTime": "2026-06-24T14:30:00Z",
+    "Description": "end of the month"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 51.66,
+    "DateTime": "2026-06-24T15:30:00Z"
+  },
+  {
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "Amount": 223.3,
+    "DateTime": "2026-06-27T12:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 109.5,
+    "DateTime": "2026-07-24T09:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 25.25,
+    "DateTime": "2026-07-24T12:30:00Z",
+    "Description": "cash"
+  },
+  {
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "FromUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "ToUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "Amount": 73.14,
+    "DateTime": "2026-07-26T10:30:00Z"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 23.75,
+    "DateTime": "2026-07-27T18:30:00Z"
+  },
+  {
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "FromUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "ToUserId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "Amount": 99.1,
+    "DateTime": "2026-08-28T09:30:00Z",
+    "Description": "MB Way"
+  },
+  {
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "FromUserId": "5D3A7C18-9E62-4F80-B451-8A2C6F1D0E93",
+    "ToUserId": "2B9F6A31-C84D-4E52-A170-6C3B9D5E82A4",
+    "Amount": 150.2,
+    "DateTime": "2026-08-28T10:30:00Z",
+    "Description": "MB Way"
+  }
+]

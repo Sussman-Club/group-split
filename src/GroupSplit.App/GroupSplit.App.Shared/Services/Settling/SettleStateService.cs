@@ -1,4 +1,4 @@
-using GroupSplit.App.Shared.Extensions;
+﻿using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
@@ -19,10 +19,15 @@ namespace GroupSplit.App.Shared.Services.Settling;
 public sealed class SettleStateService : ISettleStateService, IDisposable
 {
     /// <summary>
-    /// How much history the page shows before somebody asks for more. Enough that "did I
-    /// already pay this?" is usually answered without a second read.
+    /// How much history the page shows before somebody asks for more.
     /// </summary>
-    private const int HistoryPageSize = 10;
+    /// <remarks>
+    /// A few, deliberately. The list answers "did I already pay this?", and the payment
+    /// somebody is asking about is nearly always one of the last handful -- past that it
+    /// is a record rather than a check, and a long one pushes the two lists that are
+    /// actually actionable off the screen. "Show more" grows it by another few.
+    /// </remarks>
+    private const int HistoryPageSize = 5;
 
     private readonly IUsersClient _users;
     private readonly SettleTracker _tracker;

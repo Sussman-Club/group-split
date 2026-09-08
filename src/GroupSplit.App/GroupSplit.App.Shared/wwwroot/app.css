@@ -2682,6 +2682,17 @@ html:not([data-gs-ready]) .gs-group-card {
     font-size: 0.6875rem;
     font-weight: 600;
     color: var(--gs-muted);
+    white-space: nowrap;
+}
+
+/* Every point has a span so the labels line up with the marks; the ones between the
+   labels are empty and must not claim any width of their own. */
+.gs-chart-months span {
+    flex: 0 0 auto;
+}
+
+.gs-chart-months span:empty {
+    flex: 1 1 0;
 }
 
 .gs-chart-legend {
@@ -2730,5 +2741,244 @@ html:not([data-gs-ready]) .gs-group-card {
     .gs-plan-row > :last-child {
         grid-column: 2 / -1;
         justify-self: start;
+    }
+}
+
+/* ------------------------------------------------------ a chip that chooses -- */
+
+/*
+    A filter whose choices are inside it rather than beside it. The date span was five
+    chips and a picker; on a page that also filters by ledger and by text, that row read
+    as five decisions to make rather than one.
+
+    A real <select> inside the pill, rather than a popover of our own: on a phone the OS
+    draws the list, the keyboard and the screen reader work with nothing written for
+    them, and the value stays in the DOM. The pill is the chrome; the select is the
+    control, stretched over the whole of it so the whole pill is the hit target.
+*/
+
+.gs-chip-menu {
+    padding-right: 8px;
+    gap: 6px;
+    max-width: 260px;
+}
+
+.gs-chip-menu .label {
+    white-space: nowrap;
+}
+
+/* Mud renders the activator inside a wrapper of its own; without this the pill sits in a
+   block that breaks the filter row's alignment. */
+.gs-range .mud-menu,
+.gs-chip-menu-host {
+    display: inline-flex;
+}
+
+/* The menu itself, so the list follows the app rather than Mud's own surface. */
+.gs-menu .mud-list-item {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gs-ink-2);
+}
+
+.gs-menu-item.is-on {
+    color: var(--gs-teal-deep);
+}
+
+.gs-menu-item.is-on::after {
+    content: ' ·';
+}
+
+/* Only shown while a custom range is being chosen or is in force -- see the note in
+   DateRangeFilter.razor. */
+.gs-range-picker {
+    max-width: 240px;
+}
+
+/* --------------------------------------------------------------- on a phone -- */
+
+/*
+    A list row is a three-column grid: icon, text, figure. On a phone the third column
+    holds an amount *and* up to two buttons, and a nowrap cluster of those against a
+    280px viewport leaves the title two characters wide -- which is what the inbox
+    looked like: every row shrunk to nothing but its avatar and its buttons.
+
+    Below 640px the figure and the actions move to a line of their own, right-aligned
+    under the text they belong to. The text then gets the full width, which is the part
+    somebody is reading.
+*/
+@media (max-width: 640px) {
+    .gs-row,
+    .gs-row.gs-row-has-actions {
+        grid-template-columns: auto minmax(0, 1fr);
+        row-gap: 10px;
+        padding: 12px 10px;
+        margin: 0 -10px;
+    }
+
+    .gs-row > :nth-child(n + 3) {
+        grid-column: 2 / -1;
+        justify-self: stretch;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* The amount and the relative date sit one above the other in the wide layout;
+       side by side is the right shape once they share a line with the buttons. */
+    .gs-row .when {
+        display: inline;
+        margin-left: 8px;
+    }
+
+    /* Two lines rather than an ellipsis two words in: on a phone the bank's own
+       description is most of what identifies a row. */
+    .gs-row .title {
+        flex-wrap: wrap;
+    }
+
+    .gs-row .title span:not(.gs-tag) {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* A tag is two words at most and it is the row's status. Letting it shrink beside a
+       long merchant name is how "Pending" became "PEN…". */
+    .gs-row .title .gs-tag {
+        flex: 0 0 auto;
+    }
+
+    /*
+        Tighter. The desktop rhythm -- a 24px page head over an 18px stack, each control
+        with its own margin -- puts three bands of empty cream between the tab chips and
+        the first row on a phone, where the whole screen is nine rows tall. The spacing
+        that reads as calm on a wide screen reads as a loading state on a narrow one.
+    */
+    .gs-page-head {
+        margin-bottom: 14px;
+        gap: 10px;
+    }
+
+    .gs-stack {
+        gap: 12px;
+    }
+
+    .gs-range {
+        margin-bottom: 0;
+    }
+
+    .gs-card-pad {
+        padding: 14px;
+    }
+
+    /* Hover-revealed actions never reveal on a touch screen, so they are always on --
+       the wide layout hides them until hover, which on a phone means never. */
+    .gs-row .gs-row-actions {
+        opacity: 1;
+    }
+
+    /*
+        Thumbs, not cursors. A 32px pill is comfortable under a mouse and is under the
+        44px a finger needs, and an inbox is the one screen in the app that is nothing but
+        a queue of taps -- twenty-three rows, one decision each.
+
+        The primary action takes the width left over on its line, so the thing somebody
+        means to press is the biggest thing there and the two-character menu beside it is
+        a square they have to aim at on purpose.
+    */
+    .gs-row .mud-button-root,
+    .gs-row .mud-button,
+    .gs-row .gs-row-actions button {
+        min-height: 44px;
+    }
+
+    /* The menu and the icon actions are squares, and a 30px square at the edge of the
+       screen is the hardest thing on the page to hit with a thumb. */
+    .gs-row .mud-icon-button,
+    .gs-row .mud-menu .mud-button-root {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .gs-row > :nth-child(n + 3) > .gs-inline {
+        flex: 1 1 auto;
+    }
+
+    /* The primary action takes whatever the amount and the menu leave, so the thing
+       somebody means to press is the widest thing on its line. */
+    .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button),
+    .gs-row > :nth-child(n + 3) .mud-button-filled,
+    .gs-row > :nth-child(n + 3) .mud-button-text:not(.mud-icon-button) {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    /* The duplicate warning is the highest-value thing the inbox says and the easiest to
+       lose. Its sentence takes the full width and its two answers keep their own size
+       underneath -- both fit on one line at 375px, and two full-width buttons would read
+       as heavier than the decision is. */
+    .mud-alert .gs-inline > span {
+        flex: 1 1 100%;
+    }
+
+    /*
+        The two filter pills share a line and the search takes its own.
+    */
+    .gs-range,
+    .gs-chip-menu {
+        flex: 1 1 140px;
+        min-width: 0;
+    }
+
+    .gs-chip-menu {
+        justify-content: space-between;
+    }
+
+    .gs-chip-menu .label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .gs-search,
+    .gs-range-picker {
+        max-width: none;
+        width: 100%;
+        flex: 1 1 100%;
+    }
+
+    /*
+        The chips that act as tabs scroll sideways instead of wrapping. "Paid by you /
+        Your share / Everything you are in" does not fit across 375px, and wrapped it put
+        one chip alone on a second line under a gap -- which reads as two groups of
+        controls rather than one choice of three.
+    */
+    .gs-chipbar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin-inline: -16px;
+        padding-inline: 16px;
+    }
+
+    .gs-chipbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* A card's title and the aside beside it are a row on a wide screen and two lines on
+       a narrow one: side by side at 375px each gets half, and both wrap to three lines. */
+    .gs-card-title {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .gs-stats {
+        grid-template-columns: minmax(0, 1fr);
     }
 }

@@ -1,37 +1,73 @@
 @using GroupSplit.App.Shared.Models
 @namespace GroupSplit.App.Shared.Components
 
-@* The spans people ask for, one click each, and a picker for the rest. The chips carry
-   the choice rather than the dates it works out to, so "This month" still means this
-   month tomorrow.
+@*
+    One control for the span, not six.
 
-   The picker is a control of its own rather than something a chip opens from behind the
-   scenes: a picker hidden with display:none has no box to anchor its calendar to, and
-   quietly does nothing when told to open. *@
+    It used to be five preset chips and a picker, side by side. That is a lot of furniture
+    for a filter most people set once, and on a page that also filters by ledger and by
+    text it was the row that made the others hard to see -- five chips look like five
+    decisions to make rather than one. The presets are the same five; they are inside the
+    control that says which one is on.
+
+    A rendered menu rather than a native <select>, and that is the whole reason this is not
+    twenty lines shorter. A select is better on every count except one: the list it opens is
+    drawn by the operating system, and on Windows it comes out white with black text on a
+    dark page whatever `color-scheme`, `background-color` and `option` say. A filter that
+    flashes a white sheet over a dark app every time somebody changes the month is not a
+    filter anybody wants to use twice.
+
+    The control carries the choice rather than the dates it works out to, so "This month"
+    still means this month tomorrow.
+*@
 
 <div class="gs-inline gs-range" role="group" aria-label="Filter by date">
-    @foreach (var preset in Presets)
-    {
-        var value = preset;
-        <button type="button"
-                class="gs-chip @(Value.Preset == value ? "active" : "")"
-                aria-pressed="@(Value.Preset == value ? "true" : "false")"
-                @onclick="@(() => SelectAsync(value))">
-            @Label(value)
-        </button>
-    }
+    <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+             Dense="true" PopoverClass="gs-menu">
+        <ActivatorContent>
+            <button type="button" class="gs-chip gs-chip-menu @(Value.IsAllTime ? "" : "active")"
+                    aria-label="@($"Date range: {Value.Label}")">
+                <MudIcon Icon="@Icons.Material.Rounded.DateRange" Size="Size.Small" />
+                <span class="label">@Value.Label</span>
+                <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
+            </button>
+        </ActivatorContent>
+        <ChildContent>
+            @foreach (var preset in Presets)
+            {
+                var value = preset;
+                <MudMenuItem OnClick="@(() => SelectAsync(value))">
+                    <span class="gs-menu-item @(Value.Preset == value ? "is-on" : "")">@Label(value)</span>
+                </MudMenuItem>
+            }
+            <MudDivider />
+            @* Named for what it does rather than for its state: choosing it opens the
+               picker, and the label the chip then shows is the range itself. *@
+            <MudMenuItem OnClick="@PickAsync">
+                <span class="gs-menu-item @(IsCustom ? "is-on" : "")">Custom range…</span>
+            </MudMenuItem>
+        </ChildContent>
+    </MudMenu>
 
-    <MudDateRangePicker DateRange="@_picked"
-                        DateRangeChanged="OnPickedAsync"
-                        PlaceholderText="Custom range"
-                        Variant="Variant.Outlined"
-                        Margin="Margin.Dense"
-                        Clearable="true"
-                        Editable="false"
-                        AdornmentIcon="@Icons.Material.Rounded.DateRange"
-                        AdornmentColor="@(IsCustom ? Color.Primary : Color.Default)"
-                        Class="gs-range-picker"
-                        aria-label="Custom date range" />
+    @* Rendered only while a custom range is being chosen or is the one in force. A picker
+       hidden with display:none has no box to anchor its calendar to and quietly does
+       nothing when told to open, so it is absent rather than hidden -- and opened on the
+       render after it appears, which is the first one where it has a box. *@
+    @if (_picking || IsCustom)
+    {
+        <MudDateRangePicker @ref="_picker"
+                            DateRange="@_picked"
+                            DateRangeChanged="OnPickedAsync"
+                            PlaceholderText="Custom range"
+                            Variant="Variant.Outlined"
+                            Margin="Margin.Dense"
+                            Clearable="true"
+                            Editable="false"
+                            AdornmentIcon="@Icons.Material.Rounded.DateRange"
+                            AdornmentColor="Color.Primary"
+                            Class="gs-range-picker"
+                            aria-label="Custom date range" />
+    }
 </div>
 
 @code {
@@ -48,7 +84,11 @@
         DateFilterPreset.ThisYear
     ];
 
+    private MudDateRangePicker? _picker;
     private MudBlazor.DateRange? _picked;
+
+    /// <summary>Whether the picker has been asked for but has not yet been opened.</summary>
+    private bool _picking;
 
     private bool IsCustom => Value.Preset == DateFilterPreset.Custom && !Value.IsAllTime;
 
@@ -65,14 +105,31 @@
     /// Keeps the picker showing what the filter says. A preset empties it, so it does not
     /// sit there displaying a range that is no longer the one in force.
     /// </summary>
-    protected override void OnParametersSet()
+    protected override void OnParametersSet() =>
+        _picked = IsCustom ? new MudBlazor.DateRange(Value.CustomFrom, Value.CustomTo) : null;
+
+    private async Task SelectAsync(DateFilterPreset preset)
     {
-        _picked = IsCustom
-            ? new MudBlazor.DateRange(Value.CustomFrom, Value.CustomTo)
-            : null;
+        _picking = false;
+
+        await ValueChanged.InvokeAsync(new DateFilter(preset));
     }
 
-    private Task SelectAsync(DateFilterPreset preset) => ValueChanged.InvokeAsync(new DateFilter(preset));
+    /// <summary>
+    /// Asks for the picker. It cannot be opened here -- it is not in the document yet -- so
+    /// this only renders it, and the render after that opens it.
+    /// </summary>
+    private void PickAsync() => _picking = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_picking || _picker is null)
+            return;
+
+        _picking = false;
+
+        await _picker.OpenAsync();
+    }
 
     private async Task OnPickedAsync(MudBlazor.DateRange? range)
     {

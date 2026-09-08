@@ -35,19 +35,29 @@
 *@
 
 <div class="gs-stack">
+    @* One row: what kind, over what span, matching what. Three controls is the whole
+       filter, and it was two rows and nine buttons before the span collapsed into one. *@
     <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
-        <div class="gs-inline gs-range" role="group" aria-label="Which entries">
-            @foreach (var (label, value) in Kinds)
-            {
-                var kind = value;
-                <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
-                        aria-pressed="@(Kind == kind ? "true" : "false")"
-                        @onclick="@(() => SetKindAsync(kind))">@label</button>
-            }
+        <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
+            <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
+                @foreach (var (label, value) in Kinds)
+                {
+                    var kind = value;
+                    <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
+                            aria-pressed="@(Kind == kind ? "true" : "false")"
+                            @onclick="@(() => SetKindAsync(kind))">@label</button>
+                }
+            </div>
+
+            <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
         </div>
 
+        @* "Search" and nothing more in the box; what it reaches is in the label a screen
+           reader gets. A placeholder listing the columns is a spec, not a hint, and it is
+           the first thing to truncate on a phone. *@
         <MudTextField @bind-Value="_searchString"
-                      Placeholder="Search this group"
+                      Placeholder="Search"
+                      aria-label="Search this group by name, note, category or either party"
                       Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Rounded.Search"
                       Immediate="true"
@@ -56,11 +66,8 @@
                       Clearable="true"
                       Margin="Margin.Dense"
                       Variant="Variant.Outlined"
-                      Class="gs-search"
-                      Style="min-width: min(360px, 100%)" />
+                      Class="gs-search" />
     </div>
-
-    <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
 
     <div class="gs-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">

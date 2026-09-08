@@ -30,6 +30,13 @@
 </div>
 
 <div class="gs-stack">
+    @* Which rows, and over what span, on one line. They were two bands with the date
+       control's own margins between them, which on a phone put most of a screen of empty
+       cream between the tabs and the first row somebody came here to deal with.
+
+       The spans are the same five the expense listings offer, so narrowing by date is the
+       one control wherever you meet it. A bank sends months at a time and the answer to a
+       backlog is to take one month of it. *@
     <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
         @foreach (var status in Filters)
         {
@@ -41,12 +48,9 @@
                 @Label(choice)
             </MudButton>
         }
-    </div>
 
-    @* The same spans the expense listings offer, so narrowing by date is the one control
-       wherever you meet it. A bank sends months at a time and the answer to a backlog is
-       to take one month of it. *@
-    <DateRangeFilter Value="@State.Range" ValueChanged="@(range => State.SetRangeAsync(range))" />
+        <DateRangeFilter Value="@State.Range" ValueChanged="@(range => State.SetRangeAsync(range))" />
+    </div>
 
     @if (State.Connections is { Enabled: false })
     {
