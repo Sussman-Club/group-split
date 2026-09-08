@@ -134,6 +134,26 @@ public sealed class BankConnectionService(
             return existing;
         }
 
+        // Not an item of ours, which is not the same as not a bank of theirs. A provider
+        // mints a fresh item every time somebody links, so two links to one bank agree on
+        // no id at all and the match above cannot see them -- which is exactly the case its
+        // own comment describes, somebody repairing by starting again. Left there, the
+        // person gets a second copy of a bank they already had, the rows arrive twice, and
+        // an item is spent at the provider for nothing.
+        if (await SameBankAlreadyLinked(provider, item, ct) is { } duplicate)
+        {
+            logger.LogInformation(
+                "Linking {InstitutionName} again as item {ProviderItemId}; adopting it onto connection {ConnectionId}.",
+                item.InstitutionName, item.ProviderItemId, duplicate.Id);
+
+            await Adopt(duplicate, item, ct);
+
+            await dbContext.SaveChangesAsync(ct);
+            await jobs.DispatchAsync(new SyncBankConnection(duplicate.Id), ct);
+
+            return duplicate;
+        }
+
         var created = new BankConnection
         {
             User = userContext.User,
@@ -286,6 +306,125 @@ public sealed class BankConnectionService(
     /// the ones already here. Nothing is removed: rows point at accounts, and an account
     /// the provider stopped listing still explains where last month's coffee came from.
     /// </summary>
+    /// <summary>
+    /// The connection this freshly linked item duplicates, if it duplicates one.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the bank and the accounts behind it rather than on any id, because there
+    /// is no id the two share: a provider mints account ids per item exactly as it mints the
+    /// item id. What does survive a re-link is what the bank shows the person -- the mask,
+    /// and failing that the account's name -- so that is what is compared.
+    /// <para>
+    /// One account in common is enough. Two items over one login report the same accounts,
+    /// while somebody who genuinely holds two separate logins at one bank has none in
+    /// common, and gets the second connection they asked for.
+    /// </para>
+    /// </remarks>
+    private async Task<BankConnection?> SameBankAlreadyLinked(
+        string provider, LinkedItem item, CancellationToken ct)
+    {
+        var candidates = await dbContext.Set<BankConnection>()
+            .Include(connection => connection.Accounts)
+            .Where(connection => connection.Provider == provider
+                                 && connection.UserId == userContext.User.Id
+                                 && connection.InstitutionName == item.InstitutionName)
+            .ToListAsync(ct);
+
+        return candidates.FirstOrDefault(candidate => candidate.Accounts
+            .Any(stored => item.Accounts.Any(incoming => SameAccount(stored, incoming))));
+    }
+
+    private static bool SameAccount(LinkedAccount stored, ImportedAccount incoming)
+    {
+        if (stored.Type != incoming.Type)
+            return false;
+
+        // The bank's own last few digits, and the same whichever item asks for them.
+        if (!string.IsNullOrWhiteSpace(stored.Mask) && !string.IsNullOrWhiteSpace(incoming.Mask))
+            return stored.Mask == incoming.Mask;
+
+        // Not every institution gives a mask, and then the name is all there is.
+        return string.Equals(stored.Name, incoming.Name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Moves a connection onto a newly linked item, and retires the one it replaces.
+    /// </summary>
+    private async Task Adopt(BankConnection connection, LinkedItem item, CancellationToken ct)
+    {
+        var supersededItemId = connection.ProviderItemId;
+        var supersededToken = connection.AccessTokenCiphertext;
+
+        connection.ProviderItemId = item.ProviderItemId;
+        connection.AccessTokenCiphertext = protector.Protect(item.AccessToken);
+        connection.InstitutionName = item.InstitutionName;
+        connection.Status = BankConnectionStatus.Active;
+
+        // The cursor is the old item's place in its own stream and means nothing to the new
+        // one. Cleared, so the next sync starts from the beginning rather than resuming at
+        // a point the provider has never heard of.
+        connection.Cursor = null;
+
+        AdoptAccounts(connection, item.Accounts);
+
+        // The replaced item is told it is over, or it is left running at the provider,
+        // counted against whatever the plan counts, with nothing on this side able to name
+        // it again. Best effort on purpose: the bank is linked either way, and a provider
+        // that refuses this must not undo that.
+        try
+        {
+            if (Connector(connection.Provider) is { } connector)
+            {
+                await connector.RemoveAsync(protector.Unprotect(supersededToken), ct);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e,
+                "Could not remove superseded item {ProviderItemId} at {Provider}. It may still be counted there.",
+                supersededItemId, connection.Provider);
+        }
+    }
+
+    /// <summary>
+    /// Points the accounts already stored at the new item's ids, so that everything filed
+    /// against them keeps the account it was filed against.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="MergeAccounts"/> matches on the provider's account id, which is the right
+    /// key when the item has not changed and the wrong one here: a new item renames every
+    /// account, so matching on it would add a second row for each and orphan the history on
+    /// the first.
+    /// </remarks>
+    private static void AdoptAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts)
+    {
+        foreach (var account in accounts)
+        {
+            var stored = connection.Accounts.FirstOrDefault(candidate => SameAccount(candidate, account));
+
+            if (stored is null)
+            {
+                connection.Accounts.Add(new LinkedAccount
+                {
+                    ProviderAccountId = account.ProviderAccountId,
+                    Name = account.Name,
+                    Mask = account.Mask,
+                    Type = account.Type,
+                    Subtype = account.Subtype,
+                    Currency = account.Currency
+                });
+
+                continue;
+            }
+
+            stored.ProviderAccountId = account.ProviderAccountId;
+            stored.Name = account.Name;
+            stored.Mask = account.Mask;
+            stored.Subtype = account.Subtype;
+            stored.Currency = account.Currency;
+        }
+    }
+
     private static void MergeAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts)
     {
         foreach (var account in accounts)

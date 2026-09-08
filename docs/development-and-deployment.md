@@ -140,6 +140,15 @@ That last line is the value of `BANK_KEY_CERTIFICATE`. Keep the `.pfx` somewhere
 delete it from the machine you made it on; losing it loses the stored tokens and nothing
 else, and the way back is that everybody links their bank again.
 
+Every check in front of that certificate asks whether it is *there* — the workflow's
+`require`, the AppHost's `validate-plaid`, and `KeyRingExtensions.Load`, which goes as far
+as valid base64, a readable PKCS#12 and a private key. None of them can tell whether it is
+the *same* one the ring was wrapped with, so the API checks that itself at startup: it
+unprotects one stored token and refuses to start if it cannot. Deploying a different but
+well-formed certificate would otherwise pass every check, mint a fresh key, and leave every
+stored token unreadable — and an item whose token is gone can be neither synced, nor
+repaired in update mode, nor removed at the provider, because all three need the token.
+
 Locally there is usually no certificate and the ring is stored unwrapped, which is the
 ordinary development posture. A deployment is different: the publish refuses to build when
 bank sync is on and the certificate is missing, because a deployment without one looks

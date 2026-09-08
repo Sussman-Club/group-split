@@ -20,7 +20,13 @@ internal sealed class FakeBankConnector : IBankConnector
 
     private readonly Queue<object> _answers = new();
 
+    /// <summary>What each exchange answers with, in order. Empty means <see cref="Item"/>.</summary>
+    private readonly Queue<LinkedItem> _items = new();
+
     public string Provider => Name;
+
+    /// <summary>The token each <see cref="RemoveAsync"/> call was made with, in order.</summary>
+    public List<string> RemovedTokens { get; } = [];
 
     /// <summary>The cursor each <see cref="SyncAsync"/> call was made with, in order.</summary>
     public List<string?> CursorsSeen { get; } = [];
@@ -61,10 +67,31 @@ internal sealed class FakeBankConnector : IBankConnector
         Task.FromResult(new LinkSession("link-fake-token", DateTimeOffset.UtcNow.AddMinutes(30)));
 
     public Task<LinkedItem> ExchangeAsync(string publicToken, CancellationToken ct = default) =>
-        Task.FromResult(new LinkedItem(AccessToken, "item-fake", "Fake Bank",
+        Task.FromResult(_items.Count > 0 ? _items.Dequeue() : Item());
+
+    /// <summary>
+    /// The item the next exchange answers with. Queued rather than set, because a provider
+    /// mints a new item on every link and telling those apart is the point of some tests.
+    /// </summary>
+    public FakeBankConnector AnswerExchange(LinkedItem item)
+    {
+        _items.Enqueue(item);
+        return this;
+    }
+
+    /// <summary>One linked item, with only what the test cares about spelled out.</summary>
+    public static LinkedItem Item(
+        string itemId = "item-fake",
+        string accessToken = AccessToken,
+        string institution = "Fake Bank",
+        string accountId = "acc-1",
+        string name = "Everyday",
+        string? mask = "1234",
+        string type = "depository") =>
+        new(accessToken, itemId, institution,
         [
-            new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD")
-        ]));
+            new ImportedAccount(accountId, name, mask, type, "checking", "USD")
+        ]);
 
     public async Task<SyncPage> SyncAsync(string accessToken, string? cursor, CancellationToken ct = default)
     {
@@ -86,7 +113,12 @@ internal sealed class FakeBankConnector : IBankConnector
         };
     }
 
-    public Task RemoveAsync(string accessToken, CancellationToken ct = default) => Task.CompletedTask;
+    public Task RemoveAsync(string accessToken, CancellationToken ct = default)
+    {
+        RemovedTokens.Add(accessToken);
+
+        return Task.CompletedTask;
+    }
 
     public Task<bool> VerifyWebhookAsync(IReadOnlyDictionary<string, string> headers, string body, CancellationToken ct = default) =>
         Task.FromResult(headers.TryGetValue("X-Fake-Signature", out var signature) && signature == "valid");

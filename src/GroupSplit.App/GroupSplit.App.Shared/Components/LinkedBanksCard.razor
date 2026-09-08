@@ -57,6 +57,13 @@
                             <div class="meta">@Describe(connection)</div>
                         </div>
                         <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                            @*
+                                Signing in again is offered whatever the connection's state,
+                                not only when it has been flagged. A bank that is misbehaving
+                                without having been marked leaves somebody with one visible
+                                way out -- linking it a second time -- and that mints a whole
+                                new item at the provider rather than repairing this one.
+                            *@
                             @if (connection.NeedsAttention)
                             {
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
@@ -67,6 +74,8 @@
                             {
                                 <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
                                            OnClick="@(() => SyncAsync(connection))">Sync now</MudButton>
+                                <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
+                                           OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
                             }
                             <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
                                        Disabled="@_busy"
