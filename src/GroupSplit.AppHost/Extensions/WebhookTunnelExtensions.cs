@@ -67,7 +67,7 @@ public static class WebhookTunnelExtensions
                     Description = "Bank provider webhooks to a development machine",
                     Labels = ["groupsplit", "webhooks"]
                 })
-                .WithReference(web.GetEndpoint("https"), allowAnonymous: true);
+                .WithReference(web.GetEndpoint("http"), allowAnonymous: true);
 
             // The same setting a deployment fills from its public origin, so nothing below
             // the AppHost knows a tunnel is involved.
