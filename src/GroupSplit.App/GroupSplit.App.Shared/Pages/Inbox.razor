@@ -98,7 +98,10 @@
                 </label>
             }
 
-            <div class="gs-list">
+            @* gs-queue: a list whose rows are tasks rather than records. It is what earns
+               the full-width primary action on a phone, and no other list in the app
+               should have one. *@
+            <div class="gs-list gs-queue">
                 @foreach (var item in State.Rows)
                 {
                     var row = item;

@@ -2910,11 +2910,15 @@ html:not([data-gs-ready]) .gs-group-card {
         flex: 1 1 auto;
     }
 
-    /* The primary action takes whatever the amount and the menu leave, so the thing
-       somebody means to press is the widest thing on its line. */
-    .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button),
-    .gs-row > :nth-child(n + 3) .mud-button-filled,
-    .gs-row > :nth-child(n + 3) .mud-button-text:not(.mud-icon-button) {
+    /*
+        The primary action takes whatever the amount and the menu leave, so the thing
+        somebody means to press is the widest thing on its line.
+
+        Only in the queue. Everywhere else a row is a record with a way in -- "Open",
+        "Review", "Settle up" -- and stretching those turned a summary strip into a stack
+        of full-width buttons, each shouting as loudly as the figure above it.
+    */
+    .gs-queue .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button) {
         flex: 1 1 auto;
         justify-content: center;
     }
@@ -2972,12 +2976,15 @@ html:not([data-gs-ready]) .gs-group-card {
         display: none;
     }
 
-    /* A card's title and the aside beside it are a row on a wide screen and two lines on
-       a narrow one: side by side at 375px each gets half, and both wrap to three lines. */
+    /*
+        A card's title and whatever sits beside it wrap rather than stack. Stacking put a
+        two-character count on a line of its own under the heading; wrapping keeps a short
+        tag beside the title and moves a long caption down, which is the difference that
+        actually matters.
+    */
     .gs-card-title {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
+        flex-wrap: wrap;
+        row-gap: 2px;
     }
 
     .gs-stats {
