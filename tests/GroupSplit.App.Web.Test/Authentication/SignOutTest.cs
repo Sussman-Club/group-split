@@ -10,19 +10,22 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace GroupSplit.App.Web.Test.Authentication;
 
 /// <summary>
-/// Signing out has two jobs that pull against each other, and the order they happen in is
-/// the whole test.
+/// What signing out has to take with it.
 /// </summary>
+/// <remarks>
+/// What it does <em>not</em> do is supply the <c>id_token_hint</c>. That was tried here and
+/// is the wrong place: the handler builds the hint from
+/// <c>HttpContext.GetTokenAsync(SignOutScheme, "id_token")</c>, which reads the ticket and
+/// nowhere else, so a token put into the sign-out properties is never looked at. The id
+/// token goes into the ticket at sign-in instead.
+/// </remarks>
 public class SignOutTest
 {
-    /// <summary>
-    /// A refresh token left in the store outlives the session it belonged to.
-    /// </summary>
+    /// <summary>A refresh token left in the store outlives the session it belonged to.</summary>
     [Fact]
     public async Task The_tokens_are_thrown_away()
     {
@@ -30,35 +33,12 @@ public class SignOutTest
 
         await AuthenticationExtensions.OnSigningOut(context);
 
-        Assert.False((await store.GetTokenAsync(user, ct: TestContext.Current.CancellationToken)).Succeeded);
+        Assert.False((await store.GetTokenAsync(user)).Succeeded);
     }
 
     /// <summary>
-    /// The bug this test exists for. The hint used to be read by a second hook on the OIDC
-    /// handler, which runs after the cookie has signed out -- by which point the store had
-    /// already been emptied, so no hint was sent, and Keycloak answered the logout with a
-    /// confirmation page instead of ending the session.
-    /// <para>
-    /// Written into the properties rather than onto the protocol message, which is where the
-    /// handler looks by default and is what makes it independent of the order the schemes
-    /// are signed out in.
-    /// </para>
-    /// </summary>
-    [Fact]
-    public async Task The_sign_out_is_given_the_id_token_to_identify_the_session_with()
-    {
-        var (_, context, _) = await SigningOut();
-
-        await AuthenticationExtensions.OnSigningOut(context);
-
-        Assert.Equal(
-            "an-id-token",
-            context.Properties.GetTokenValue(OpenIdConnectParameterNames.IdToken));
-    }
-
-    /// <summary>
-    /// Signing out a session that has no tokens stored -- an idle one, or one already signed
-    /// out in another tab -- still has to complete rather than throw.
+    /// Signing out a session with nothing stored -- an idle one, or one already signed out
+    /// in another tab -- still has to complete rather than throw.
     /// </summary>
     [Fact]
     public async Task A_session_with_nothing_stored_still_signs_out()
@@ -66,8 +46,6 @@ public class SignOutTest
         var (_, context, _) = await SigningOut(store: false);
 
         await AuthenticationExtensions.OnSigningOut(context);
-
-        Assert.Null(context.Properties.GetTokenValue(OpenIdConnectParameterNames.IdToken));
     }
 
     private static async Task<(ServerSideTokenStore Store, CookieSigningOutContext Context, ClaimsPrincipal User)>

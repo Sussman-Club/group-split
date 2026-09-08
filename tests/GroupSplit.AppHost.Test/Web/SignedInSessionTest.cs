@@ -74,9 +74,7 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
-        await Page
-            .GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Expenses" })
-            .ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
+        await NavLink("Expenses").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
         // Rendered by the grid once the API has answered it.
         await Expect(Page.GetByText("No expenses yet")).ToBeVisibleAsync(Visible);
@@ -117,6 +115,15 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// </summary>
     private ILocator Groups => Page.GetByText("No group yet");
 
+    /// <summary>
+    /// The nav item on screen. The menu is rendered twice, once in the sidebar and once as
+    /// the mobile tab bar, so an unscoped role lookup matches two and Playwright refuses it.
+    /// </summary>
+    private ILocator NavLink(string name) =>
+        Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = name })
+            .Locator("visible=true")
+            .First;
+
     private static LocatorAssertionsToBeVisibleOptions Visible =>
         new() { Timeout = OperationTimeoutMs };
 
@@ -143,7 +150,7 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         await Page.ClickAsync("#kc-login", new PageClickOptions { Timeout = OperationTimeoutMs });
 
         // The app, not the realm: proof the callback was accepted and a session exists.
-        await Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Groups" }))
-            .ToBeVisibleAsync(Visible);
+        // The signed-in nav only renders once the API has returned a user record.
+        await Expect(NavLink("Groups")).ToBeVisibleAsync(Visible);
     }
 }

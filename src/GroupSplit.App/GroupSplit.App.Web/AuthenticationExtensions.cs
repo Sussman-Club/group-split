@@ -84,11 +84,15 @@ public static class AuthenticationExtensions
                         options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
                         options.ResponseType = OpenIdConnectResponseType.Code;
 
-                        // Off, deliberately: SaveTokens puts the tokens in the ticket,
-                        // and the ticket is what the cookie is made of. Keeping them out of
-                        // the browser would then rest on the ticket store staying
-                        // configured. They live in ServerSideTokenStore, which a cookie
-                        // cannot carry at all.
+                        // Off, deliberately: SaveTokens puts the access and refresh
+                        // tokens in the ticket, and the ticket is what the cookie is made
+                        // of. Keeping them out of the browser would then rest on the ticket
+                        // store staying configured. They live in ServerSideTokenStore,
+                        // which a cookie cannot carry at all.
+                        //
+                        // The id token is the exception, and StoreTokensOnSignIn puts it
+                        // back: it is not a credential for the API, and the sign-out reads
+                        // it off the ticket to identify the session being ended.
                         options.SaveTokens = false;
                         options.UsePkce = true;
 
@@ -210,6 +214,21 @@ public static class AuthenticationExtensions
 
         SessionTokenKey.Mint(identity);
 
+        // The one token the ticket still carries. The handler builds id_token_hint from
+        // HttpContext.GetTokenAsync(SignOutScheme, "id_token"), which reads the ticket and
+        // nowhere else -- so without this the sign-out sends no hint, Keycloak cannot tell
+        // which session is ending, and the realm's own session survives a sign-out.
+        if (!string.IsNullOrWhiteSpace(response.IdToken))
+        {
+            context.Properties?.StoreTokens([
+                new AuthenticationToken
+                {
+                    Name = OpenIdConnectParameterNames.IdToken,
+                    Value = response.IdToken
+                }
+            ]);
+        }
+
         var expiresIn = int.TryParse(response.ExpiresIn, out var seconds)
             ? TimeSpan.FromSeconds(seconds)
             // Only RECOMMENDED by RFC 6749. A short assumption is safe because being wrong
@@ -239,38 +258,16 @@ public static class AuthenticationExtensions
     }
 
     /// <summary>
-    /// Ends a session: hands the sign-out the <c>id_token_hint</c> it needs, then throws the
-    /// tokens away.
+    /// Throws the session's tokens away. Left behind, a refresh token outlives the session
+    /// it belonged to.
     /// </summary>
     /// <remarks>
-    /// One place and this order, because the two are not independent: read the hint from a
-    /// second hook on the OIDC handler and it runs after this, finds an empty store, and
-    /// sends none -- which has Keycloak answer the logout with a confirmation page instead
-    /// of ending the session. The hint goes into the properties, where the handler looks by
-    /// default, so it does not depend on the order the schemes sign out in. Internal so the
-    /// ordering can be tested.
+    /// Internal so it can be tested without a sign-in.
     /// </remarks>
-    internal static async Task OnSigningOut(CookieSigningOutContext context)
-    {
-        var store = context.HttpContext.RequestServices.GetRequiredService<IUserTokenStore>();
-        var user = context.HttpContext.User;
-
-        var stored = await store.GetTokenAsync(user);
-
-        if (stored.WasSuccessful(out var tokens)
-            && tokens.TokenForSpecifiedParameters?.IdentityToken is { } idToken)
-        {
-            context.Properties.StoreTokens([
-                new AuthenticationToken
-                {
-                    Name = OpenIdConnectParameterNames.IdToken,
-                    Value = idToken.ToString()
-                }
-            ]);
-        }
-
-        await store.ClearTokenAsync(user);
-    }
+    internal static Task OnSigningOut(CookieSigningOutContext context) =>
+        context.HttpContext.RequestServices
+            .GetRequiredService<IUserTokenStore>()
+            .ClearTokenAsync(context.HttpContext.User);
 
     private static Task OnRedirectToIdentityProvider(RedirectContext context)
     {
