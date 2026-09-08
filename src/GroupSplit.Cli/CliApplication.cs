@@ -1,4 +1,4 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.CommandLine.Parsing;
 using GroupSplit.Cli.Commands;
 using GroupSplit.Cli.Infrastructure;
@@ -24,6 +24,7 @@ public static class CliApplication
         root.Subcommands.Add(GroupCommands.Build());
         root.Subcommands.Add(TransactionCommands.Build());
         root.Subcommands.Add(UserCommands.Build());
+        root.Subcommands.Add(SettleCommands.Build());
         root.Subcommands.Add(CategoryCommands.Build());
         root.Subcommands.Add(SplitRuleCommands.Build());
         root.Subcommands.Add(InvitationCommands.Build());

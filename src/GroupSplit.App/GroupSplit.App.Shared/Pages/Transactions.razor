@@ -1,71 +1,283 @@
-@page "/transactions"
+﻿@page "/transactions"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@inject ITransactionsClient TransactionsClient
 @inject ITransactionsPageStateService TransactionsService
+@inject IGroupsPageStateService GroupsService
+@inject ApiErrorPresenter Errors
 @inject IDialogService DialogService
+@inject NavigationManager Nav
+@inject LocalClock Clock
+@inject IJSRuntime Js
 @implements IAsyncDisposable
 
-<PageTitle>Expenses - Group Split</PageTitle>
+@*
+    You: your money across every group.
+
+    Was /transactions, titled "Expenses", and the name is what made it read as a duplicate
+    of a group's own listing -- two pages called Expenses with near-identical furniture. One
+    is a group across people; the other is you across groups, and neither is a subset of the
+    other. "You" states the axis and lets a group's tab own the word ledger.
+
+    The three views are the page's title rather than a chip under it, and they are in the
+    URL. A filter chip under a heading called "Expenses" is what produced the confusion in
+    the first place.
+*@
+
+<PageTitle>@ViewTitle - Group Split</PageTitle>
 
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">Every group</div>
-        <h1>Expenses</h1>
-        <p>Everything you have paid for, across all your groups. To see everything a group
-           has spent, open the group and follow through to its expenses.</p>
+        <div class="gs-eyebrow">Across every group</div>
+        <h1>@ViewTitle</h1>
+        <p>@ViewBlurb</p>
     </div>
-    @* Searches the server, not the rows on screen: what is on screen is one page. Debounced
-       so a request goes out when typing pauses rather than on every keystroke. *@
-    <MudTextField @bind-Value="_searchString"
-                  Placeholder="Search by name, group, category or who paid"
-                  Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Rounded.Search"
-                  Immediate="true"
-                  DebounceInterval="300"
-                  OnDebounceIntervalElapsed="OnSearchChangedAsync"
-                  Clearable="true"
-                  Margin="Margin.Dense"
-                  Variant="Variant.Outlined"
-                  Class="gs-search"
-                  Style="min-width: min(360px, 100%)" />
+    <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; justify-content: flex-end">
+        @* Searches the server, not the rows on screen: what is on screen is one page.
+           Debounced so a request goes out when typing pauses. *@
+        <MudTextField @bind-Value="_searchString"
+                      Placeholder="Search by name, group, category or payer"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                      Immediate="true"
+                      DebounceInterval="300"
+                      OnDebounceIntervalElapsed="OnSearchChangedAsync"
+                      Clearable="true"
+                      Margin="Margin.Dense"
+                      Variant="Variant.Outlined"
+                      Class="gs-search"
+                      Style="min-width: min(320px, 100%)" />
+
+        @* An export is of a view, and this is the view that spans everything you are in.
+           It takes the filters and the date range with it, because a CSV of something
+           other than what is on screen would be a different question's answer. *@
+        <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
+                   StartIcon="@Icons.Material.Rounded.Download"
+                   Disabled="@_exporting"
+                   OnClick="@ExportAsync">Export</MudButton>
+    </div>
 </div>
 
 <div class="gs-stack">
+    <div class="gs-inline gs-range" role="group" aria-label="Which view">
+        @foreach (var (label, value) in Views)
+        {
+            var view = value;
+            <button type="button" class="gs-chip @(_view == view ? "active" : "")"
+                    aria-pressed="@(_view == view ? "true" : "false")"
+                    @onclick="@(() => SetViewAsync(view))">@label</button>
+        }
+    </div>
+
     <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
         <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
 
-        @* Personal is the absence of a group, so it is a filter here rather than an entry
-           in a group switcher. It used to be a hidden group called "Personal" that showed
-           up as a chip, a card on the home page and a member count of one. *@
-        <div class="gs-inline gs-range" role="group" aria-label="Which expenses">
-            @foreach (var (label, value) in Scopes)
-            {
-                var scope = value;
-                <button type="button" class="gs-chip @(_personal == scope ? "active" : "")"
-                        aria-pressed="@(_personal == scope ? "true" : "false")"
-                        @onclick="@(() => OnScopeChangedAsync(scope))">@label</button>
-            }
+        <div class="gs-inline" style="gap: 12px; flex-wrap: wrap">
+            @* The axis this page has and a group's own ledger cannot: narrowing to one
+               group from a listing that already spans them all. *@
+            <MudSelect T="Guid?" Value="_groupId" ValueChanged="OnGroupChangedAsync"
+                       Placeholder="All groups"
+                       Clearable="true"
+                       Dense="true"
+                       Margin="Margin.Dense"
+                       Variant="Variant.Outlined"
+                       Class="gs-search"
+                       Style="min-width: 180px"
+                       aria-label="Group">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">All groups</MudSelectItem>
+                @foreach (var group in GroupsService.Groups)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @* Personal is the absence of a group, so it is a filter here rather than an
+               entry in the group list above. *@
+            <div class="gs-inline gs-range" role="group" aria-label="Which expenses">
+                @foreach (var (label, value) in Scopes)
+                {
+                    var scope = value;
+                    <button type="button" class="gs-chip @(_personal == scope ? "active" : "")"
+                            aria-pressed="@(_personal == scope ? "true" : "false")"
+                            @onclick="@(() => OnScopeChangedAsync(scope))">@label</button>
+                }
+            </div>
         </div>
     </div>
 
-    <ExpenseFigures Summary="Figures" Range="_range" Searching="IsSearching" Scope="@ScopeWord" />
+    <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
+        <div class="gs-card-title">
+            <h2>What you paid, and what it cost you</h2>
+            <span class="gs-muted" style="font-size: .8125rem">The gap is how much you are fronting.</span>
+        </div>
+        <ExposureChart Points="_months" />
+    </div>
 
-    <div class="gs-reveal" style="--i: 2">
-        <ExpensesGrid @ref="_grid" LoadPage="LoadPageAsync" IsNarrowed="@IsNarrowed" />
+    <div class="gs-stats">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+            <span class="gs-eyebrow">@CountLabel</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@Count">@Count</span>
+            <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
+        </div>
+        <div class="gs-card gs-stat gs-reveal" style="--i: 2">
+            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
+            @* The labels change with the view, because the figures do. "Total paid" over a
+               list of other people's expenses would be describing a set nobody asked
+               about. *@
+            <span class="gs-eyebrow">@TotalLabel</span>
+            <Money Value="Total" Animate Class="gs-stat-value" />
+            <span class="gs-muted" style="font-size: .8125rem">@TotalSub</span>
+        </div>
+    </div>
+
+    <div class="gs-reveal" style="--i: 3">
+        <MudDataGrid T="TransactionResponse"
+                     @ref="_grid"
+                     ServerData="LoadPageAsync"
+                     RowsPerPage="10"
+                     SortMode="SortMode.Single"
+                     Hover="true"
+                     Bordered="false"
+                     Elevation="0"
+                     Class="gs-grid">
+            <Columns>
+                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
+                    <CellTemplate>
+                        <div class="gs-num" style="font-weight: 700; font-size: .875rem">@Clock.Local(context.Item.DateTime).ToString("d MMM yyyy")</div>
+                        <div class="gs-muted gs-num" style="font-size: .75rem">@Clock.Local(context.Item.DateTime).ToString("t")</div>
+                    </CellTemplate>
+                </PropertyColumn>
+
+                <PropertyColumn Property="x => x.Name" Title="Expense">
+                    <CellTemplate>
+                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                            <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
+                            <div style="min-width: 0">
+                                <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
+                                <div class="gs-muted" style="font-size: .75rem">@PaidBy(context.Item)</div>
+                            </div>
+                        </div>
+                    </CellTemplate>
+                </PropertyColumn>
+
+                @* The group column earns its width here and only here: this is the listing
+                   that spans them. No group renders as Personal -- a missing group is not
+                   a missing value. *@
+                <PropertyColumn Property="x => x.GroupName" Title="Group">
+                    <CellTemplate>
+                        <span class="gs-tag neutral">@(context.Item.GroupName ?? "Personal")</span>
+                    </CellTemplate>
+                </PropertyColumn>
+
+                <PropertyColumn Property="x => x.Category" Title="Category">
+                    <CellTemplate>
+                        @if (!string.IsNullOrWhiteSpace(context.Item.Category))
+                        {
+                            <span class="gs-tag">@context.Item.Category</span>
+                        }
+                    </CellTemplate>
+                </PropertyColumn>
+
+                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
+                    <CellTemplate>
+                        @* Under "your share" the share is the sort key and the amount is
+                           the context, so the amount is the quieter of the two. *@
+                        <Money Value="context.Item.Amount"
+                               Class="@(_view is ExpenseView.PaidByYou ? "gs-grid-amount" : "gs-grid-share")" />
+                    </CellTemplate>
+                </PropertyColumn>
+
+                @* Absent under "paid by you": you paid all of it, so a share column there
+                   would be the amount repeated beside itself. *@
+                @if (_view is not ExpenseView.PaidByYou)
+                {
+                    <TemplateColumn Title="Your share" SortBy="@(x => (x as ExpenseShareResponse)?.Share ?? 0m)"
+                                    HeaderClass="gs-right" CellClass="gs-right">
+                        <CellTemplate>
+                            @if (context.Item is ExpenseShareResponse row)
+                            {
+                                <Money Value="row.Share" Class="gs-grid-amount" />
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                }
+
+                <TemplateColumn Sortable="false" HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                    <CellTemplate>
+                        @* Only on rows you recorded. They used to render on every row and
+                           the refusal arrived from the API after the click. *@
+                        @if (Mine(context.Item))
+                        {
+                            <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                                <MudTooltip Text="Edit">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"Edit {context.Item.Name}")"
+                                                   OnClick="@(async () => await EditAsync(context.Item))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Delete">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   aria-label="@($"Delete {context.Item.Name}")"
+                                                   OnClick="@(async () => await DeleteAsync(context.Item))" />
+                                </MudTooltip>
+                            </div>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <NoRecordsContent>
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+                    <h3>@(IsNarrowed ? "Nothing matches" : "Nothing here yet")</h3>
+                    <span>
+                        @(IsNarrowed
+                            ? "Try a different name, group, category or date."
+                            : "Record an expense and it will show up here.")
+                    </span>
+                </div>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudDataGridPager T="TransactionResponse" PageSizeOptions="@(new[] { 10, 25, 50 })" />
+            </PagerContent>
+        </MudDataGrid>
     </div>
 </div>
 
 <ExtendedFab Label="Add expense" OnClick="@AddTransactionAsync" />
 
 @code {
-    private string _searchString = "";
-    private DateFilter _range = DateFilter.AllTime;
-    private ExpensesGrid? _grid;
+    /// <summary>How much the export asks for at a time. The server clamps at 200.</summary>
+    private const int ExportPageSize = 200;
 
-    /// <summary>Null for everything, true for your own only, false for the shared ones.</summary>
-    private bool? _personal;
+    /// <summary>Which of the three questions the page is answering.</summary>
+    public enum ExpenseView
+    {
+        /// <summary>Rows where you are the payer. What the page used to be, and only that.</summary>
+        PaidByYou,
+
+        /// <summary>What other people's expenses cost you: shares on rows somebody else paid.</summary>
+        YourShare,
+
+        /// <summary>Every expense you have a share of, your own included.</summary>
+        Everything
+    }
+
+    [Parameter, SupplyParameterFromQuery(Name = "view")] public string? ViewParameter { get; set; }
+
+    private static readonly (string Label, ExpenseView Value)[] Views =
+    [
+        ("Paid by you", ExpenseView.PaidByYou),
+        ("Your share", ExpenseView.YourShare),
+        ("Everything you are in", ExpenseView.Everything)
+    ];
 
     private static readonly (string Label, bool? Value)[] Scopes =
     [
@@ -74,94 +286,313 @@
         ("Personal", true)
     ];
 
+    private ExpenseView _view = ExpenseView.PaidByYou;
+    private string _searchString = "";
+    private DateFilter _range = DateFilter.AllTime;
+    private Guid? _groupId;
+    private bool? _personal;
+    private bool _exporting;
+
+    private MudDataGrid<TransactionResponse>? _grid;
+
+    private TransactionSummaryResponse? _paidSummary;
+    private ExpenseShareSummaryResponse? _shareSummary;
+    private IReadOnlyList<MonthlyExposureResponse> _months = [];
+
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
-    // Narrowed by anything -- a search, a span, or both -- and the figures beside the page
-    // have to describe that narrowing rather than the whole.
-    private bool IsNarrowed => IsSearching || !_range.IsAllTime || _personal is not null;
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime || _personal is not null || _groupId is not null;
 
-    /// <summary>Which of the scope pills is on, as the cards say it.</summary>
-    private string? ScopeWord => _personal switch
+    private string? Search => IsSearching ? _searchString.Trim() : null;
+
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    private Guid? Me => UserInfo?.Id;
+
+    // ---------------------------------------------------------------- wording --
+
+    private string ViewTitle => _view switch
     {
-        true => "personal",
-        false => "shared",
-        _ => null
+        ExpenseView.YourShare => "Your share",
+        ExpenseView.Everything => "Everything you are in",
+        _ => "Paid by you"
+    };
+
+    private string ViewBlurb => _view switch
+    {
+        ExpenseView.YourShare =>
+            "What other people's expenses cost you. Sorted by your share, largest first.",
+        ExpenseView.Everything =>
+            "Every expense you have a share of, across every group — the ones you paid for and the ones you owe on.",
+        _ => "Everything you have paid for, across every group. What it cost you is the next view along."
+    };
+
+    private string CountLabel => _view is ExpenseView.PaidByYou ? "Expenses" : "Expenses you are in";
+
+    private string TotalLabel => _view switch
+    {
+        ExpenseView.YourShare => "Total owed",
+        ExpenseView.Everything => "Your share",
+        _ => "Total paid"
+    };
+
+    private int Count => _view is ExpenseView.PaidByYou
+        ? _paidSummary?.Count ?? 0
+        : _shareSummary?.Count ?? 0;
+
+    private decimal Total => _view switch
+    {
+        ExpenseView.YourShare => _shareSummary?.OwedToOthers ?? 0m,
+        ExpenseView.Everything => _shareSummary?.Share ?? 0m,
+        _ => _paidSummary?.Total ?? 0m
     };
 
     /// <summary>
-    /// The figures the cards show: the server's count and total over what the listing is
-    /// narrowed to, or over everything when nothing is.
+    /// What the total is a part of. Under the two share views the money that moved is the
+    /// larger figure and the caller's part of it is the smaller, and saying only one of
+    /// them is what makes a share listing read as a spending listing.
     /// </summary>
-    /// <remarks>
-    /// One summary for both cards rather than one lookup per figure. A count of everything
-    /// beside a total of the matches is two answers to one question, which is what issue
-    /// #174 was on the group's tab and what this page had after it.
-    /// <para>
-    /// It is the server's arithmetic either way, because the rows on screen are one page
-    /// and a page cannot say what the whole comes to. The state service only asks for a
-    /// narrowed summary while something is narrowing it, so unnarrowed this is the all-time
-    /// one it already holds.
-    /// </para>
-    /// </remarks>
-    private TransactionSummaryResponse? Figures => IsNarrowed
-        ? TransactionsService.MatchesSummary
-        : TransactionsService.Summary;
+    private string TotalSub => _view is ExpenseView.PaidByYou
+        ? "across every group"
+        : $"of {(_shareSummary?.Total ?? 0m).ToMoney()} spent around you";
 
-    // The search box and the chips are this page's, so what they say is read here, as the
-    // request is made, rather than handed to the grid to hold on to. Then through the state
-    // service, which answers from what it holds when the query has not changed.
-    private async Task<PagedResponse<TransactionResponse>?> LoadPageAsync(
-        TransactionQuery query, CancellationToken cancellationToken)
+    private string Describe()
     {
-        var narrowed = query with
+        var said = new List<string>(4)
         {
-            Search = IsSearching ? _searchString.Trim() : null,
-            Range = _range,
-            Personal = _personal
+            _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant(),
+            _groupId is null ? "all groups" : GroupName(_groupId.Value)
         };
 
-        await TransactionsService.LoadAsync(narrowed, cancellationToken);
+        if (_personal is { } personal)
+            said.Add(personal ? "personal" : "shared");
 
-        return TransactionsService.Page;
+        if (IsSearching)
+            said.Add("matching your search");
+
+        return string.Join(" · ", said);
     }
 
-    private Task OnSearchChangedAsync(string _) => BackToFirstPageAsync();
+    private string GroupName(Guid id) =>
+        GroupsService.Groups.FirstOrDefault(group => group.Id == id)?.Name ?? "one group";
 
-    private Task OnRangeChangedAsync(DateFilter range)
+    private string PaidBy(TransactionResponse row) =>
+        row is ExpenseShareResponse { PaidByYou: true } || row.PaidByUserId == Me
+            ? "You paid"
+            : $"{row.PaidByUserName} paid";
+
+    /// <summary>
+    /// Whether the row is the caller's to change. Read off the share flag where there is
+    /// one and off the payer otherwise, so the buttons say the same thing the API will.
+    /// </summary>
+    private bool Mine(TransactionResponse row) => row switch
+    {
+        ExpenseShareResponse share => share.PaidByYou,
+        _ => _view is ExpenseView.PaidByYou || row.PaidByUserId == Me
+    };
+
+    // ---------------------------------------------------------------- reading --
+
+    private async Task<GridData<TransactionResponse>> LoadPageAsync(
+        GridState<TransactionResponse> state, CancellationToken cancellationToken)
+    {
+        var sort = state.SortDefinitions.FirstOrDefault();
+        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+
+        // Two listings behind three views: the expenses where you are the payer, and the
+        // shares. Both answer with a page of rows the grid can hold, because a share row
+        // *is* an expense row with the caller's part of it attached.
+        var page = await ReadPageAsync(bounds, SortKey(sort), sort?.Descending ?? true,
+            state.Page + 1, state.PageSize, cancellationToken);
+
+        return new GridData<TransactionResponse>
+        {
+            Items = page?.Items ?? [],
+            TotalItems = page?.TotalCount ?? 0
+        };
+    }
+
+    /// <summary>One page of a listing: its rows as the grid holds them, and how many there are.</summary>
+    /// <remarks>
+    /// The rows rather than the page object, because <c>PagedResponse&lt;T&gt;</c> is not
+    /// covariant: a page of shares is not a page of expenses to the compiler, even though a
+    /// share row is an expense row with the caller's part of it attached.
+    /// </remarks>
+    private readonly record struct Rows(IReadOnlyList<TransactionResponse> Items, int TotalCount);
+
+    /// <summary>
+    /// One page of whichever listing the view is showing.
+    /// </summary>
+    private async Task<Rows?> ReadPageAsync(
+        DateBounds bounds, string sortBy, bool descending, int page, int pageSize,
+        CancellationToken cancellationToken)
+    {
+        if (_view is ExpenseView.PaidByYou)
+        {
+            var paid = await ReadAsync(() => TransactionsClient.GetTransactionsAsync(
+                from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search,
+                sortBy: sortBy, sortDescending: descending,
+                page: page, pageSize: pageSize, cancellationToken: cancellationToken));
+
+            return paid is null ? null : new Rows(paid.Items, paid.TotalCount);
+        }
+
+        var shares = await ReadAsync(() => TransactionsClient.GetTransactionSharesAsync(
+            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search,
+            sortBy: sortBy, sortDescending: descending,
+            page: page, pageSize: pageSize,
+            owedOnly: _view is ExpenseView.YourShare, cancellationToken: cancellationToken));
+
+        return shares is null ? null : new Rows([.. shares.Items], shares.TotalCount);
+    }
+
+    /// <summary>
+    /// The grid's sort key, or the view's own default. Under "your share" the default is
+    /// the share itself: the whole point of that view is which of other people's expenses
+    /// cost you the most.
+    /// </summary>
+    private string SortKey(SortDefinition<TransactionResponse>? sort) => sort switch
+    {
+        null => _view is ExpenseView.YourShare ? "share" : "dateTime",
+        // The grid names a share column after the expression it sorts by, which is not a
+        // key the server knows.
+        { SortBy: var by } when by.Contains("Share", StringComparison.Ordinal) => "share",
+        { SortBy: "GroupName" } => "group",
+        { SortBy: var by } => Camel(by)
+    };
+
+    private static string Camel(string name) =>
+        string.IsNullOrEmpty(name) ? name : char.ToLowerInvariant(name[0]) + name[1..];
+
+    private async Task<T?> ReadAsync<T>(Func<Task<T>> read) where T : class
+    {
+        T? result = null;
+        await Errors.TryAsync(async () => result = await read(), "Could not load your expenses.");
+        return result;
+    }
+
+    /// <summary>
+    /// The figures and the chart, over whatever the page is narrowed to. Both summaries are
+    /// read whichever view is on, because the labels change with the view but the narrowing
+    /// does not -- and switching view would otherwise show yesterday's figures for a frame.
+    /// </summary>
+    private async Task ReadFiguresAsync()
+    {
+        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+
+        _paidSummary = await ReadAsync(() => TransactionsClient.GetTransactionsSummaryAsync(
+            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search));
+
+        _shareSummary = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
+            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search,
+            owedOnly: _view is ExpenseView.YourShare));
+
+        var months = await ReadAsync(() => TransactionsClient.GetMonthlyExposureAsync(
+            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search));
+
+        _months = months is null ? [] : [.. months];
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ---------------------------------------------------------------- filters --
+
+    private async Task SetViewAsync(ExpenseView view)
+    {
+        if (_view == view) return;
+
+        _view = view;
+
+        // In the URL, so a view is a place. Replacing rather than pushing keeps the back
+        // button leaving the page instead of stepping back through three chips.
+        Nav.NavigateTo($"/transactions{QueryFor(view)}", replace: true);
+
+        await ReadFiguresAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private static string QueryFor(ExpenseView view) => view switch
+    {
+        ExpenseView.YourShare => "?view=share",
+        ExpenseView.Everything => "?view=everything",
+        _ => ""
+    };
+
+    private async Task OnSearchChangedAsync(string _)
+    {
+        await ReadFiguresAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private async Task OnRangeChangedAsync(DateFilter range)
     {
         _range = range;
-        return BackToFirstPageAsync();
+        await ReadFiguresAsync();
+        await BackToFirstPageAsync();
     }
 
-    private Task OnScopeChangedAsync(bool? personal)
+    private async Task OnScopeChangedAsync(bool? personal)
     {
         _personal = personal;
-        return BackToFirstPageAsync();
+
+        // Personal expenses are in no group, so a group filter and "personal" cannot both
+        // be on: keeping both would guarantee an empty list.
+        if (personal is true)
+            _groupId = null;
+
+        await ReadFiguresAsync();
+        await BackToFirstPageAsync();
     }
 
-    // A different span, like a different search, is a different question: page four of the
-    // old answer is an empty grid under a real total.
-    private Task BackToFirstPageAsync() =>
-        _grid?.ReloadFromFirstPageAsync() ?? Task.CompletedTask;
-
-    private CancellationTokenSource? _loadCts;
-    private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
-
-    private void ReRender() => InvokeAsync(StateHasChanged);
-
-    protected override void OnInitialized()
+    private async Task OnGroupChangedAsync(Guid? groupId)
     {
-        _loadCts = new CancellationTokenSource();
+        _groupId = groupId;
 
-        // Only the tiles here: the grid asks again on its own, off the same announcement.
-        TransactionsService.OnTransactionsChanged += ReRender;
+        if (groupId is not null && _personal is true)
+            _personal = null;
+
+        await ReadFiguresAsync();
+        await BackToFirstPageAsync();
     }
 
-    protected override async Task OnInitializedAsync()
+    private Task BackToFirstPageAsync()
     {
-        await TransactionsService.IsReadyTask;
+        if (_grid is null) return Task.CompletedTask;
 
-        await base.OnInitializedAsync();
+        _grid.NavigateTo(MudBlazor.Page.First);
+        return _grid.ReloadServerData();
+    }
+
+    // ---------------------------------------------------------------- writing --
+
+    private async Task EditAsync(TransactionResponse row)
+    {
+        var parameters = new DialogParameters<UpdateTransactionDialog> { { x => x.Original, row } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        if (request is not null)
+            await TransactionsService.UpdateAsync(row, request);
+    }
+
+    private async Task DeleteAsync(TransactionResponse row)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Are you sure you want to delete \"{row.Name}\"?" },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Transaction", parameters, options);
+
+        if (await dialog.ConfirmedAsync())
+            await TransactionsService.DeleteAsync(row);
     }
 
     private async Task AddTransactionAsync()
@@ -173,21 +604,153 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        var dialogReference =
-            await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
+        var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
 
-        var request = await dialogReference.GetReturnValueAsync<CreateTransactionRequest>();
+        var request = await dialog.GetReturnValueAsync<CreateTransactionRequest>();
 
         if (request is not null)
-        {
             await TransactionsService.CreateAsync(request, CancellationToken);
+    }
+
+    // ----------------------------------------------------------------- export --
+
+    /// <summary>
+    /// A CSV of the view as it stands, filters and date range included.
+    /// </summary>
+    /// <remarks>
+    /// Every page of the match rather than the one on screen, because an export of page one
+    /// of forty is not an export. It is assembled here rather than served as a file so the
+    /// download carries the session the rest of the app is using -- a plain link would go
+    /// out without the bearer token and come back as a sign-in page named .csv.
+    /// </remarks>
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+
+        try
+        {
+            var rows = new List<TransactionResponse>();
+            var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+
+            for (var page = 1; ; page++)
+            {
+                var next = await ReadPageAsync(bounds, SortKey(null), descending: true,
+                    page, ExportPageSize, CancellationToken);
+
+                if (next is not { } more) return;
+
+                rows.AddRange(more.Items);
+
+                if (rows.Count >= more.TotalCount || more.Items.Count == 0)
+                    break;
+            }
+
+            await Js.InvokeVoidAsync("gs.download", FileName, Csv(rows));
         }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    private string FileName =>
+        $"group-split-{_view.ToString().ToLowerInvariant()}-{Clock.Today:yyyy-MM-dd}.csv";
+
+    private string Csv(IReadOnlyList<TransactionResponse> rows)
+    {
+        var csv = new System.Text.StringBuilder();
+
+        csv.AppendLine(_view is ExpenseView.PaidByYou
+            ? "Date,Name,Group,Category,Paid by,Amount"
+            : "Date,Name,Group,Category,Paid by,Amount,Your share");
+
+        foreach (var row in rows)
+        {
+            // Dates as ISO and amounts unformatted: a CSV is read by a spreadsheet, and a
+            // "$1,284.50" in a numeric column becomes text in every one of them.
+            csv.Append(Clock.Local(row.DateTime).ToString("yyyy-MM-dd")).Append(',');
+            csv.Append(Quote(row.Name)).Append(',');
+            csv.Append(Quote(row.GroupName ?? "Personal")).Append(',');
+            csv.Append(Quote(row.Category ?? "")).Append(',');
+            csv.Append(Quote(row.PaidByUserName)).Append(',');
+            csv.Append(row.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            if (row is ExpenseShareResponse share)
+                csv.Append(',').Append(share.Share.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            csv.AppendLine();
+        }
+
+        return csv.ToString();
+    }
+
+    /// <summary>
+    /// Always quoted, and a quote inside doubled. A group called "Lisbon, 2024" would
+    /// otherwise become two columns.
+    /// </summary>
+    private static string Quote(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+
+    // ---------------------------------------------------------------- plumbing --
+
+    private CancellationTokenSource? _loadCts;
+    private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
+
+    private async Task OnDataChangedAsync()
+    {
+        await ReadFiguresAsync();
+
+        if (_grid is not null)
+            await _grid.ReloadServerData();
+    }
+
+    private void ReRender() => InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized()
+    {
+        _loadCts = new CancellationTokenSource();
+
+        ResolveView();
+
+        TransactionsService.OnTransactionsChanged += ReRender;
+        GroupsService.OnGroupsChanged += ReRender;
+    }
+
+    /// <summary>
+    /// Which view the URL asks for, or the one this page has always shown. A stale bookmark
+    /// is not a reason to answer nothing.
+    /// </summary>
+    /// <remarks>
+    /// Resolved in <c>OnInitialized</c> as well as on every later parameter set, because the
+    /// first read happens in <c>OnInitializedAsync</c> -- which runs before
+    /// <c>OnParametersSet</c>. Reading the view only there meant arriving straight at
+    /// <c>?view=share</c> asked the server the default view's question and then rendered the
+    /// answer under the share view's headings.
+    /// </remarks>
+    private void ResolveView() =>
+        _view = ViewParameter?.ToLowerInvariant() switch
+        {
+            "share" or "yourshare" => ExpenseView.YourShare,
+            "everything" => ExpenseView.Everything,
+            _ => ExpenseView.PaidByYou
+        };
+
+    protected override void OnParametersSet() => ResolveView();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The group filter lists the caller's groups, so the page waits for them before
+        // reading anything -- a select with no options and a chip that says "all groups"
+        // are the same picture for a moment otherwise.
+        await GroupsService.IsReadyTask;
+
+        await ReadFiguresAsync();
     }
 
     public async ValueTask DisposeAsync()
     {
         TransactionsService.OnTransactionsChanged -= ReRender;
+        GroupsService.OnGroupsChanged -= ReRender;
+
         if (_loadCts is not null) await _loadCts.CancelAsync();
     }
-
 }

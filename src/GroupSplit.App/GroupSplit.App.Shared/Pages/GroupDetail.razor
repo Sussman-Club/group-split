@@ -1,4 +1,4 @@
-@page "/groups/{GroupId:guid}"
+﻿@page "/groups/{GroupId:guid}"
 @page "/groups/{GroupId:guid}/{Tab}"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Models
@@ -12,6 +12,7 @@
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
+@inject LocalClock Clock
 @implements IAsyncDisposable
 
 @*
@@ -37,8 +38,10 @@
             <div>
                 <div class="gs-eyebrow">@(group.IsArchive ? "Archived group" : "Group")</div>
                 <h1 style="margin-top: 2px">@group.Name</h1>
+                @* An expense count told nobody whether the group is still live. When
+                   something last happened does. *@
                 <p style="margin-top: 2px">
-                    @group.MemberCount member@(group.MemberCount == 1 ? "" : "s") · @ExpenseCount expense@(ExpenseCount == 1 ? "" : "s")
+                    @group.MemberCount member@(group.MemberCount == 1 ? "" : "s")@LastActivity
                 </p>
             </div>
         </div>
@@ -56,12 +59,12 @@
                                aria-label="@(group.IsArchive ? "Unarchive group" : "Archive group")" />
             </MudTooltip>
             <span class="sep"></span>
-            @* Records every repayment between you and the group at once, where the buttons
-               in the hero settle with one person for one amount. It is the end-of-the-month
-               action, so it is a button with a word on it rather than another icon. *@
+            @* Settling is a destination now rather than an icon-row action, and the plan
+               card on the overview does the same job in place. What is left here is the
+               link to it, so somebody standing in a group can still get there. *@
             <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
                        StartIcon="@Icons.Material.Rounded.Handshake"
-                       OnClick="@SettleUpAsync">
+                       Href="/settle">
                 Settle up
             </MudButton>
             <MudTooltip Text="Invite someone">
@@ -81,12 +84,8 @@
     <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
         @switch (Current)
         {
-            case "expenses":
-                <GroupExpensesTab GroupId="@group.Id" />
-                break;
-
-            case "activity":
-                <GroupActivityList GroupId="@group.Id" />
+            case "ledger":
+                <GroupLedgerTab GroupId="@group.Id" Kind="@LedgerKind" KindChanged="OnLedgerKindChanged" />
                 break;
 
             case "members":
@@ -94,133 +93,10 @@
                 break;
 
             default:
-                <div class="gs-two-col">
-                    <div class="gs-stack">
-                        @if (GroupsService.Balance is { } balance)
-                        {
-                            <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
-                                @if (UserBalance > 0)
-                                {
-                                    <div class="gs-eyebrow">You are owed</div>
-                                    <Money Value="UserBalance" Animate Class="gs-hero-amount" />
-                                    <div class="gs-hero-sub">by @balance.OwedToYou.Count() @(balance.OwedToYou.Count() == 1 ? "person" : "people") in @group.Name</div>
-                                    <div class="gs-hero-list">
-                                        @foreach (var debt in balance.OwedToYou)
-                                        {
-                                            var owed = debt;
-                                            <div class="gs-hero-row">
-                                                <Avatar Name="@owed.UserName" Size="sm" />
-                                                <div class="who">@owed.UserName <small>owes you</small></div>
-                                                <Money Value="owed.Amount" Animate />
-                                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                                           OnClick="@(() => SettleAsync(owed, SettlementDirection.TheyPaidYou))">
-                                                    They paid
-                                                </MudButton>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                                else if (UserBalance < 0)
-                                {
-                                    <div class="gs-eyebrow">You owe</div>
-                                    <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
-                                    <div class="gs-hero-sub">to @balance.YouOwed.Count() @(balance.YouOwed.Count() == 1 ? "person" : "people") in @group.Name</div>
-                                    <div class="gs-hero-list">
-                                        @* Both sides can record a repayment now. The person who
-                                           actually did the paying had no way to say so, and had
-                                           to ask the other one to do it for them. *@
-                                        @foreach (var debt in balance.YouOwed)
-                                        {
-                                            var owing = debt;
-                                            <div class="gs-hero-row">
-                                                <Avatar Name="@owing.UserName" Size="sm" />
-                                                <div class="who">@owing.UserName <small>is waiting on you</small></div>
-                                                <Money Value="owing.Amount" Animate />
-                                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                                           OnClick="@(() => SettleAsync(owing, SettlementDirection.YouPaidThem))">
-                                                    I paid
-                                                </MudButton>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="gs-eyebrow">Your balance</div>
-                                    <div class="gs-hero-amount">All settled</div>
-                                    <div class="gs-hero-sub">Nothing owed either way in @group.Name. Nice.</div>
-                                }
-                            </section>
-                        }
-
-                        <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
-                            <div class="gs-card-title">
-                                <h2>Recent expenses</h2>
-                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                           Href="@Href("expenses")"
-                                           EndIcon="@Icons.Material.Rounded.ArrowForward">All expenses</MudButton>
-                            </div>
-                            <TransactionsList Transactions="GroupsService.Transactions?.Items ?? []" />
-                            @if (ExpenseCount > (GroupsService.Transactions?.Items.Count ?? 0))
-                            {
-                                <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
-                                    Showing the @(GroupsService.Transactions!.Items.Count) most recent of @ExpenseCount.
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="gs-stack">
-                        <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
-                            <div class="gs-card-title">
-                                <h2>Members</h2>
-                                <span class="gs-tag neutral">net balances</span>
-                            </div>
-                            @if (GroupsService.Balance is { } b && b.NetBalances.Any())
-                            {
-                                var max = Math.Max(b.NetBalances.Max(m => Math.Abs(m.Balance)), 0.01m);
-                                var i = 0;
-                                <div class="gs-balances">
-                                    @foreach (var member in b.NetBalances.OrderByDescending(m => m.Balance))
-                                    {
-                                        var w = (double)(Math.Abs(member.Balance) / max);
-                                        <div class="gs-balance-row @(member.Balance < 0 ? "is-neg" : "")" style="--i: @(i++)">
-                                            <Avatar Name="@member.UserName" Size="sm" />
-                                            <div style="min-width: 0">
-                                                <div class="name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                                                    @member.UserName
-                                                    @if (member.UserId == UserInfo?.Id)
-                                                    {
-                                                        <span class="gs-muted" style="font-weight: 500"> (you)</span>
-                                                    }
-                                                </div>
-                                                <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
-                                            </div>
-                                            <Money Value="member.Balance" Signed Animate />
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="gs-empty" style="padding: 20px">
-                                    <MudIcon Icon="@Icons.Material.Rounded.Balance" />
-                                    <span>Balances appear once there is an expense.</span>
-                                </div>
-                            }
-                        </div>
-
-                        <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
-                            <div class="gs-card-title">
-                                <h2>Latest activity</h2>
-                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                           Href="@Href("activity")"
-                                           EndIcon="@Icons.Material.Rounded.ArrowForward">All</MudButton>
-                            </div>
-                            <GroupActivityList GroupId="@group.Id" PageSize="5" />
-                        </div>
-                    </div>
-                </div>
+                <GroupOverviewTab GroupId="@group.Id"
+                                  GroupName="@group.Name"
+                                  UserId="@UserInfo?.Id"
+                                  OnSettle="OnSettleAsync" />
                 break;
         }
     </div>
@@ -245,33 +121,104 @@ else if (_notFound)
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
+    /// <summary>
+    /// Which kind the ledger is narrowed to, from the query string, so a filtered ledger is
+    /// a link rather than a mode. It is what the Expenses and Activity tabs used to be.
+    /// </summary>
+    [Parameter, SupplyParameterFromQuery(Name = "kind")]
+    public string? KindParameter { get; set; }
+
+    // Three tabs where there were four. Expenses and Activity were the same list with
+    // different filters, and are one Ledger with the filter in the URL; the two old paths
+    // still resolve to it, since they are links people have.
     private static readonly (string Key, string Label)[] Sections =
     [
         ("overview", "Overview"),
-        ("expenses", "Expenses"),
-        ("activity", "Activity"),
+        ("ledger", "Ledger"),
         ("members", "Members")
     ];
 
     private bool _notFound;
 
-    private string Current => Sections.Any(section => section.Key == Tab) ? Tab! : "overview";
+    /// <summary>
+    /// Which section the URL asks for. The two retired tabs land on the ledger they became,
+    /// with Expenses keeping its meaning as a filter -- a bookmark to a group's expenses is
+    /// still a bookmark to a group's expenses.
+    /// </summary>
+    private string Current => Tab?.ToLowerInvariant() switch
+    {
+        "ledger" or "expenses" or "activity" => "ledger",
+        "members" => "members",
+        _ => "overview"
+    };
+
+    private ActivityKind? LedgerKind =>
+        (KindParameter ?? (string.Equals(Tab, "expenses", StringComparison.OrdinalIgnoreCase)
+            ? "expense"
+            : null))?.ToLowerInvariant() switch
+        {
+            "expense" or "expenses" => ActivityKind.Expense,
+            "settlement" or "settlements" or "transfer" => ActivityKind.Transfer,
+            _ => null
+        };
+
+    /// <summary>
+    /// Puts the chosen filter in the URL without adding a history entry, so the browser's
+    /// back button still leaves the group rather than stepping back through three chips.
+    /// </summary>
+    private void OnLedgerKindChanged(ActivityKind? kind)
+    {
+        var query = kind switch
+        {
+            ActivityKind.Expense => "?kind=expense",
+            ActivityKind.Transfer => "?kind=settlement",
+            _ => ""
+        };
+
+        Nav.NavigateTo($"/groups/{GroupId}/ledger{query}", replace: true);
+    }
 
     private string Href(string key) => key == "overview" ? $"/groups/{GroupId}" : $"/groups/{GroupId}/{key}";
 
     private GroupResponse? Group => GroupsService.SelectedGroup?.Id == GroupId ? GroupsService.SelectedGroup : null;
 
-    private int ExpenseCount => GroupsService.Transactions?.TotalCount ?? 0;
+    /// <summary>
+    /// When something last happened here, as a phrase to hang off the member count -- or
+    /// nothing at all in a group where nothing has.
+    /// </summary>
+    /// <remarks>
+    /// It replaces the expense count, which was in the header from the beginning and never
+    /// answered the question somebody has when they open a group: whether it is still
+    /// running. Eleven expenses is the same eleven whether the last one was yesterday or
+    /// two years ago.
+    /// </remarks>
+    private string LastActivity => GroupsService.Transactions?.Items.Count > 0
+        ? " · last activity " + Relative(GroupsService.Transactions.Items.Max(item => item.DateTime))
+        : "";
 
-    private decimal UserBalance =>
-        GroupsService.Balance?.NetBalances.FirstOrDefault(x => x.UserId == UserInfo?.Id)?.Balance ?? 0m;
-
-    private string HeroClass => UserBalance switch
+    private string Relative(DateTimeOffset when)
     {
-        > 0 => "",
-        < 0 => "is-neg",
-        _ => "is-zero"
-    };
+        var local = Clock.Local(when);
+        var days = (Clock.Today - local.Date).Days;
+
+        return days switch
+        {
+            0 => "today",
+            1 => "yesterday",
+            < 7 => $"{days} days ago",
+            < 31 => $"{days / 7} week{(days / 7 == 1 ? "" : "s")} ago",
+            _ when local.Year == Clock.Today.Year => local.ToString("d MMM"),
+            _ => local.ToString("d MMM yyyy")
+        };
+    }
+
+    /// <summary>
+    /// Settling with one person, from a line of the overview's plan or from the hero. The
+    /// page owns it because it owns the dialog and the write; the tab knows only which line
+    /// was pressed.
+    /// </summary>
+    private Task OnSettleAsync((DebtInfo Debt, SettlementDirection Direction) line) =>
+        SettleAsync(line.Debt, line.Direction);
 
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
@@ -380,29 +327,6 @@ else if (_notFound)
 
         if (request is not null)
             await GroupsService.SettleAsync(request, debt.UserName, CancellationToken);
-    }
-
-    /// <summary>
-    /// Records every repayment between you and the rest of the group at once. The dialog
-    /// lists them first, so what somebody agrees to is the repayments themselves rather than
-    /// a promise about them.
-    /// </summary>
-    private async Task SettleUpAsync()
-    {
-        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
-
-        var parameters = new DialogParameters<SettleUpDialog>
-        {
-            { x => x.Owing, GroupsService.Balance?.YouOwed.ToList() ?? [] },
-            { x => x.Owed, GroupsService.Balance?.OwedToYou.ToList() ?? [] }
-        };
-
-        var dialog = await DialogService.ShowAsync<SettleUpDialog>("Settle up", parameters, options);
-
-        var request = await dialog.GetReturnValueAsync<SettleUpRequest>();
-
-        if (request is not null)
-            await GroupsService.SettleUpAsync(request, CancellationToken);
     }
 
     private async Task AddExpenseAsync()

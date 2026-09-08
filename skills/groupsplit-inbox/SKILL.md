@@ -37,10 +37,16 @@ protocol all apply here unchanged.
 ## The loop
 
 ```bash
-groupsplit inbox summary --json                    # how many are waiting
+groupsplit inbox summary --json                    # how many are waiting, and how many look filed already
 groupsplit inbox list --json                       # what they are
 groupsplit inbox matches <row-id> --json           # what each could already be
 ```
+
+`inbox summary` answers `newCount` and `possibleDuplicates` -- how many of those waiting
+look like an expense somebody has already recorded. It is worth leading with: a backlog
+where none of them are duplicates is a different job from one where a third of them are.
+Pass `--duplicates false` to skip that count, which is the cheaper read; the count itself
+means running the matcher over every waiting row.
 
 For each row, in order:
 

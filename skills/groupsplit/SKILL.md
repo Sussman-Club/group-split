@@ -4,9 +4,10 @@ description: >-
   Drive the GroupSplit CLI (`groupsplit`) to read and change shared expenses: groups,
   members, expenses, balances, settlements, split rules, categories, invitations, linked
   bank accounts and imported bank rows.
-  USE FOR: splitting an expense with a group, who owes whom, settling up, recording what
-  somebody paid, a group's activity or totals, inviting or removing members, join links,
-  filing an imported bank row; or whenever a `groupsplit` binary or a
+  USE FOR: splitting an expense with a group, who owes whom, settling up with one person
+  across every group at once, recording what somebody paid, a group's ledger or totals, what
+  you have paid and what it cost you month by month, inviting or removing members, join
+  links, filing an imported bank row; or whenever a `groupsplit` binary or a
   `~/.config/groupsplit/config.json` is present.
   DO NOT USE FOR: working on the GroupSplit codebase itself -- builds, tests, Aspire, EF
   migrations -- which is ordinary repository work; or other expense trackers.
@@ -16,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # GroupSplit from the command line
@@ -78,10 +79,10 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 
 ## Confirming a destructive change
 
-Eleven actions stop unless confirmed: `groups.remove-member`, `groups.settle`,
-`groups.settle-up`, `groups.leave`, `groups.link.create` (when a link already exists),
-`groups.link.revoke`, `transactions.delete`, `categories.delete`, `split-rules.delete`,
-`bank.unlink` and `users.delete`.
+Twelve actions stop unless confirmed: `groups.remove-member`, `groups.settle`,
+`groups.settle-up`, `settle.pay`, `groups.leave`, `groups.link.create` (when a link already
+exists), `groups.link.revoke`, `transactions.delete`, `categories.delete`,
+`split-rules.delete`, `bank.unlink` and `users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 
@@ -133,6 +134,10 @@ along when reporting a problem.
   server would apply and creates nothing.
 - **Do not print the output of `groupsplit auth token`.** It is a bearer token. It is for
   piping into another tool, not for a transcript.
+- **Settle with a person, not a group.** `groupsplit settle plan` is the answer to "how do
+  I clear this?": it adds every group's balance up per person, so one payment clears a
+  friend you owe in two places. `groups settle` is still right when the user means one
+  group specifically.
 - **`groupsplit config list`** answers what the *next* command will talk to, and says which
   source each value came from. Run it before wondering why a request went somewhere
   unexpected.

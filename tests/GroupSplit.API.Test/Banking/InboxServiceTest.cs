@@ -1,4 +1,4 @@
-using GroupSplit.API.Errors;
+﻿using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Test.Base;
@@ -138,11 +138,11 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Inbox.Ignore(row.Id, Ct);
         Assert.Equal(BankTransactionStatus.Ignored, (await Reload(row)).Status);
-        Assert.Equal(0, (await Inbox.Summary(Ct)).NewCount);
+        Assert.Equal(0, (await Inbox.Summary(ct: Ct)).NewCount);
 
         await Inbox.Restore(row.Id, Ct);
         Assert.Equal(BankTransactionStatus.New, (await Reload(row)).Status);
-        Assert.Equal(1, (await Inbox.Summary(Ct)).NewCount);
+        Assert.Equal(1, (await Inbox.Summary(ct: Ct)).NewCount);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal([waiting.Id], newRows.Select(row => row.Id));
         Assert.Equal([ignored.Id], ignoredRows.Select(row => row.Id));
-        Assert.Equal(1, (await Inbox.Summary(Ct)).NewCount);
+        Assert.Equal(1, (await Inbox.Summary(ct: Ct)).NewCount);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             stranger.File(row.Id, new FileBankTransactionRequest(), Ct));
 
         Assert.Equal(ErrorCodes.BankTransactionNotFound, e.Code);
-        Assert.Equal(0, (await stranger.Summary(Ct)).NewCount);
+        Assert.Equal(0, (await stranger.Summary(ct: Ct)).NewCount);
     }
 
     // ---- setup ---------------------------------------------------------------------------

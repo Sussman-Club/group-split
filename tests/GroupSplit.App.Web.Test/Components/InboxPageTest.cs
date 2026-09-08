@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Pages;
 using GroupSplit.App.Shared.Services;
@@ -47,7 +47,7 @@ public class InboxPageTest : ComponentTest
         _rows = [Row("Lidl", 30m, new DateOnly(2026, 9, 1))];
 
         _inbox
-            .Setup(client => client.GetInboxSummaryAsync(It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetInboxSummaryAsync(It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new InboxSummaryResponse(_rows.Count(row => row.Status == InboxStatus.New)));
 
         _inbox

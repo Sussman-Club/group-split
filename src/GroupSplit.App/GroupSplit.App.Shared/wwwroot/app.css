@@ -2491,3 +2491,244 @@ html:not([data-gs-ready]) .gs-group-card {
     height: 1px;
     background: var(--gs-line);
 }
+
+/* ------------------------------------------------------------- settling -- */
+
+/* One line per person, not per group -- the whole point of the Settle screen.
+   Same three-column shape as a balance row, plus the action that records it. */
+
+.gs-settle-list,
+.gs-plan-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-settle-row,
+.gs-plan-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    margin: 0 -12px;
+    border-radius: var(--gs-radius);
+    transition: background var(--gs-fast) var(--gs-ease);
+}
+
+.gs-settle-row + .gs-settle-row,
+.gs-plan-row + .gs-plan-row {
+    border-top: 1px solid var(--gs-line);
+    border-radius: 0 0 var(--gs-radius) var(--gs-radius);
+}
+
+.gs-settle-row:hover,
+.gs-plan-row:hover {
+    background: var(--gs-surface-2);
+    border-top-color: transparent;
+}
+
+.gs-settle-row .who,
+.gs-plan-row .who {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-settle-row .who small,
+.gs-plan-row .who small {
+    font-weight: 500;
+    color: var(--gs-muted);
+}
+
+.gs-settle-row .meta,
+.gs-plan-row .meta {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-settle-row .gs-money,
+.gs-plan-row .gs-money {
+    font-size: 1.0625rem;
+}
+
+/* A line of the plan the reader is on neither end of. Present because a plan
+   that hides a step does not add up, and quiet because it is not theirs. */
+.gs-plan-row.is-theirs {
+    opacity: 0.62;
+}
+
+/* Where a cross-group figure comes from, inside the settle dialog. Shown only
+   when the debt spans more than one group -- for a single group it would be
+   the total printed beside itself. */
+.gs-settle-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-3);
+}
+
+.gs-settle-breakdown-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.875rem;
+    color: var(--gs-ink-2);
+}
+
+/* The home page's one strip of things needing a decision. Tinted so it reads as
+   a queue rather than as another card of figures. */
+.gs-waiting {
+    border-color: var(--gs-teal);
+    background:
+        linear-gradient(180deg, var(--gs-teal-soft), transparent 120px),
+        var(--gs-surface);
+}
+
+/* The settle badge counts people to square up with, which is a standing state
+   rather than something arriving -- so it is outlined where the inbox badge,
+   which counts a queue, is filled. */
+.gs-nav-badge.is-quiet {
+    background: transparent;
+    color: var(--gs-teal);
+    box-shadow: inset 0 0 0 1.5px var(--gs-teal);
+}
+
+/* --------------------------------------------------------------- ledger -- */
+
+/* Your share is the quieter of the two figures on a group's ledger, where the
+   amount is the headline; on the You page under "your share" the two swap, and
+   the classes are applied the other way round. */
+.gs-grid .gs-grid-share {
+    font-size: 0.9375rem;
+    color: var(--gs-muted);
+}
+
+.gs-grid .gs-grid-balance {
+    font-size: 0.9375rem;
+}
+
+/* ---------------------------------------------------------------- chart -- */
+
+/* Two lines and four gridlines. The mark colour is a more chromatic step of the
+   brand teal: the UI teal has too little chroma to read as a data mark and
+   validates as grey against the surface. */
+
+.gs-chart {
+    --gs-mark-paid: #0f8f83;
+    --gs-mark-share: var(--gs-clay);
+}
+
+:root[data-theme="dark"] .gs-chart {
+    --gs-mark-paid: #3fbfb2;
+    --gs-mark-share: var(--gs-clay);
+}
+
+.gs-chart svg {
+    display: block;
+    width: 100%;
+    height: 180px;
+    overflow: visible;
+}
+
+.gs-chart-grid {
+    stroke: var(--gs-line);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.gs-chart-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    /* The viewBox is stretched to the container's width, so a plain stroke-width
+       would be scaled with it and the two lines would thicken on a wide screen. */
+    vector-effect: non-scaling-stroke;
+}
+
+.gs-chart-line.is-paid,
+.gs-chart-dot.is-paid {
+    stroke: var(--gs-mark-paid);
+}
+
+.gs-chart-line.is-share {
+    stroke: var(--gs-mark-share);
+    stroke-dasharray: 5 4;
+}
+
+.gs-chart-dot.is-share {
+    stroke: var(--gs-mark-share);
+}
+
+.gs-chart-dot {
+    fill: var(--gs-surface);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.gs-chart-months {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--gs-muted);
+}
+
+.gs-chart-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gs-ink-2);
+}
+
+.gs-chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gs-chart-legend span::before {
+    content: '';
+    width: 14px;
+    height: 2px;
+    border-radius: 2px;
+}
+
+.gs-chart-legend .is-paid::before {
+    background: var(--gs-mark-paid);
+}
+
+.gs-chart-legend .is-share::before {
+    background: repeating-linear-gradient(
+        90deg,
+        var(--gs-mark-share) 0 5px,
+        transparent 5px 9px
+    );
+}
+
+/* Under 640px the four-column settle rows would put the amount and the button
+   on top of each other. The action drops to its own line instead. */
+@media (max-width: 640px) {
+    .gs-settle-row,
+    .gs-plan-row {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .gs-settle-row > :last-child,
+    .gs-plan-row > :last-child {
+        grid-column: 2 / -1;
+        justify-self: start;
+    }
+}

@@ -1,0 +1,131 @@
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IDialogService DialogService
+@inject LocalClock Clock
+
+@*
+    What has happened anywhere you are: every group's expenses whoever paid for them, and
+    the settlements.
+
+    Replaces a list of the reader's own expenses, which was the one slice of the answer
+    that already existed as a listing -- and the slice that leaves out both the money other
+    people are spending on their behalf and every repayment.
+*@
+
+<div class="gs-list">
+    @if (Entries.Count == 0)
+    {
+        <div class="gs-empty">
+            <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+            <h3>Nothing recorded yet</h3>
+            <span>Add the first expense and it will show up here.</span>
+        </div>
+    }
+    else
+    {
+        var i = 0;
+        foreach (var entry in Entries)
+        {
+            var item = entry;
+            var expense = item.Kind is ActivityKind.Expense;
+
+            <a class="gs-row gs-reveal" style="--i: @(i++)"
+               role="@(expense ? "button" : null)"
+               tabindex="@(expense ? 0 : -1)"
+               @onclick="@(() => expense ? ViewAsync(item) : Task.CompletedTask)"
+               @onkeydown="@(e => expense && e.Key is "Enter" or " " ? ViewAsync(item) : Task.CompletedTask)">
+                @if (expense)
+                {
+                    <Avatar Name="@item.PaidByUserName" />
+                }
+                else
+                {
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+                }
+                <div style="min-width: 0">
+                    <div class="title">
+                        <span>@Headline(item)</span>
+                        @if (!expense)
+                        {
+                            <span class="gs-tag clay">Settlement</span>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(item.Category))
+                        {
+                            <span class="gs-tag">@item.Category</span>
+                        }
+                    </div>
+                    <div class="meta">@Detail(item)</div>
+                </div>
+                <div>
+                    <div><Money Value="item.Amount" /></div>
+                    <span class="when">@Relative(item.DateTime)</span>
+                </div>
+            </a>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<UserActivityResponse> Entries { get; set; } = [];
+
+    private static string Headline(UserActivityResponse entry) =>
+        entry.Kind is ActivityKind.Transfer
+            ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
+            : entry.Name;
+
+    /// <summary>
+    /// Who paid, which group it was in, and what it cost the reader. Three facts because
+    /// this list spans groups: the same dinner in two different groups is two different
+    /// rows, and the middle fact is what tells them apart.
+    /// </summary>
+    private static string Detail(UserActivityResponse entry)
+    {
+        // No group is not a missing group: it is an expense of your own.
+        var parts = new List<string>(3)
+        {
+            entry.Kind is ActivityKind.Transfer
+                ? entry.Description is { Length: > 0 } note ? note : "Settling up"
+                : $"{entry.PaidByUserName} paid",
+            entry.GroupName ?? "Personal"
+        };
+
+        if (entry.Share is { } share)
+            parts.Add($"your share {share.ToMoney()}");
+
+        return string.Join(" · ", parts);
+    }
+
+    // "Today" and "Yesterday" are the person's days, not the server's: both sides of the
+    // comparison come from the same clock.
+    private string Relative(DateTimeOffset when)
+    {
+        var local = Clock.Local(when);
+        var today = Clock.Today;
+        var days = (today - local.Date).Days;
+
+        return days switch
+        {
+            0 => "Today",
+            1 => "Yesterday",
+            < 7 => local.ToString("dddd"),
+            _ when local.Year == today.Year => local.ToString("d MMM"),
+            _ => local.ToString("d MMM yyyy")
+        };
+    }
+
+    /// <summary>
+    /// Expenses only. A settlement has no detail worth a dialog -- who paid whom and how
+    /// much is the whole of it, and all three are already on the row.
+    /// </summary>
+    private async Task ViewAsync(UserActivityResponse entry)
+    {
+        var parameters = new DialogParameters<TransactionDetailsDialog>
+        {
+            { x => x.TransactionId, entry.Id }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+    }
+}

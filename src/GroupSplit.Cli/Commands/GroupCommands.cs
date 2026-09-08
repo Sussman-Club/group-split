@@ -562,15 +562,35 @@ public static class GroupCommands
     }
 
     /// <summary>
-    /// The one listing that shows transfers as well as expenses, which is why it is not
-    /// <c>transactions list --group</c>: "Omar paid you 40" is the row people look for when
-    /// a balance moves, and every other expense surface cannot see it.
+    /// The group's ledger: the one listing that shows transfers as well as expenses, which
+    /// is why it is not <c>transactions list --group</c>. "Omar paid you 40" is the row
+    /// people look for when a balance moves, and every other expense surface cannot see it.
     /// </summary>
+    /// <remarks>
+    /// It carries two figures beside the amount: what each entry cost the caller, and where
+    /// they stood immediately after it. The balance is why the two tabs this replaces became
+    /// one -- a balance history cannot be drawn against a list that hides half the events
+    /// that move it -- and it is cumulative over the whole ledger, so narrowing the list
+    /// does not rewrite it.
+    /// </remarks>
     private static Command Activity()
     {
         var sortBy = new Option<string?>("--sort-by")
         {
             Description = "dateTime, amount or name. Defaults to dateTime."
+        };
+
+        var kind = new Option<ActivityKind?>("--kind")
+        {
+            Description = "Expense or Transfer. Both when it is not said."
+        };
+
+        var from = new Option<DateTimeOffset?>("--from") { Description = "Inclusive lower bound on the date." };
+        var to = new Option<DateTimeOffset?>("--to") { Description = "Inclusive upper bound on the date." };
+
+        var search = new Option<string?>("--search")
+        {
+            Description = "Match a name, note, category, or either party's name."
         };
 
         var order = Sorting.Order();
@@ -582,7 +602,7 @@ public static class GroupCommands
 
         var command = new Command("activity", "List everything that happened in a group, newest first.")
         {
-            GroupId, sortBy, order, page, pageSize
+            GroupId, kind, from, to, search, sortBy, order, page, pageSize
         };
 
         command.SetHandler(async (context, ct) =>
@@ -591,6 +611,10 @@ public static class GroupCommands
 
             var activity = await context.Groups.GetGroupActivityAsync(
                 id: parse.GetValue(GroupId),
+                from: parse.GetValue(from),
+                to: parse.GetValue(to),
+                kind: (int?)parse.GetValue(kind),
+                search: parse.GetValue(search),
                 sortBy: parse.GetValue(sortBy),
                 sortDescending: parse.GetValue(order).Descending(),
                 page: parse.GetValue(page),
@@ -604,17 +628,22 @@ public static class GroupCommands
                     return new Markup(Tables.Empty("activity") + "\n");
                 }
 
-                var table = Tables.Grid("Date", "Kind", "What", "Amount", "Paid by", "Paid to");
+                // Both parties in one column rather than two. The share and the balance are
+                // two new columns and a terminal has a width: eight of them truncated every
+                // cell to five characters, which is a table that says nothing.
+                var table = Tables.Grid("Date", "Kind", "What", "Amount", "Your share", "Balance");
 
                 foreach (var entry in value.Items)
                 {
                     table.AddRow(
                         entry.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
                         entry.Kind == ActivityKind.Transfer ? "transfer" : "expense",
-                        Markup.Escape(entry.Name),
+                        Markup.Escape(Describe(entry)),
                         entry.Amount.ToString("N2"),
-                        Markup.Escape(entry.PaidByUserName),
-                        Markup.Escape(entry.PaidToUserName ?? "-"));
+                        // A dash rather than a zero: a transfer is not a cost anybody
+                        // carries a part of.
+                        entry.Share is { } share ? share.ToString("N2") : "[grey]-[/]",
+                        Tables.Money(entry.RunningBalance));
                 }
 
                 return new Rows(table, Tables.PageFooter(value));
@@ -625,6 +654,15 @@ public static class GroupCommands
 
         return command;
     }
+
+    /// <summary>
+    /// One entry in a phrase: who paid whom on a settlement, and what was bought and by whom
+    /// on an expense.
+    /// </summary>
+    private static string Describe(GroupActivityResponse entry) =>
+        entry.Kind == ActivityKind.Transfer
+            ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
+            : $"{entry.Name} ({entry.PaidByUserName})";
 
     private static Command Archive()
     {

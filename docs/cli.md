@@ -9,6 +9,7 @@ program -- a script, a CI job, or an AI agent shelling out. Everything below tha
 a nicety for the second kind is load-bearing.
 
 - [What it covers](#what-it-covers)
+- [Settling across groups](#settling-across-groups)
 - [Installing it](#installing-it)
 - [Keeping it updated](#keeping-it-updated)
 - [Pointing it at a server](#pointing-it-at-a-server)
@@ -40,6 +41,7 @@ has to reach for `curl` and a bearer token to do.
 | `bank` | `list`, `link-token`, `link`, `sync`, `unlink` |
 | `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
+| `settle` | `plan`, `pay`, `history` |
 | `config` | `list`, `get`, `set`, `unset`, `profiles`, `path` |
 
 The flags of each are in `groupsplit <command> --help`, and all of them at once in
@@ -50,7 +52,10 @@ Two commands read the group's roster or listing before writing, so a confirmatio
 what it is about to change rather than echo a guid back: `groups remove-member`,
 `groups settle`. `bank unlink`, `categories delete` and `split-rules delete` do the same.
 `groups settle-up` reads the balances for the same reason, so its confirmation lists the
-repayments it is about to write rather than describing them.
+repayments it is about to write rather than describing them. `settle pay` reads the
+cross-group plan for the same reason and one more: the payment it records can span two
+groups, so the confirmation names the groups it will land in and what each one takes.
+Without that it would be asking somebody to agree to bookkeeping they cannot see.
 `groups link create` reads for a further reason: it only asks when the group already has a
 link to lose, and making a group's first one destroys nothing.
 
@@ -60,6 +65,41 @@ which cannot see a settlement -- so for one of those the confirmation names the 
 than the row, and says what deleting it does instead. Only a 404 is taken that way: any
 other failure of the read stops the command, because a fault that read as "just a
 settlement then" would delete a row nobody had been shown.
+
+## Settling across groups
+
+`groups settle` and `groups settle-up` work inside a group, because a balance belongs to a
+group. `settle` works on a person, because a payment does -- and somebody who owes the same
+friend in two groups pays them once.
+
+```bash
+groupsplit settle plan --json
+```
+
+One line per person, largest first, each naming the groups its figure comes from. The three
+figures over the top are the same ones `users position` leads with, and for the same reason
+the two gross sides are kept apart there: they are different people and they do not cancel
+out.
+
+```bash
+groupsplit settle pay <user-id> --amount 70 --direction YouPaidThem --dry-run
+```
+
+`--dry-run` prints the per-group breakdown and stops; without it the command goes through
+the usual confirmation gate. `--amount` defaults to the whole of what is outstanding between
+you, and the direction is stated rather than read off the balance -- a debtor recording "I
+paid you back" is acting precisely while the balance still says they owe.
+
+Behind one payment the API writes one transfer per group, in a single save, spending the
+amount over the groups largest first. That last part is not a flag: which group a payment
+lands in is bookkeeping, and the person handing over the money should not have to do it.
+
+```bash
+groupsplit settle history --json
+```
+
+Every repayment you were party to, in any group, newest first. It answers "did I already pay
+this?", which used to mean opening each group's activity in turn.
 
 ## Installing it
 

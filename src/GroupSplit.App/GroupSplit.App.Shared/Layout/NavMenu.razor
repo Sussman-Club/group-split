@@ -1,8 +1,10 @@
-@using GroupSplit.App.Shared.Models
+﻿@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Banking
+@using GroupSplit.App.Shared.Services.Settling
 @using GroupSplit.Shared
 @inject NavigationManager Nav
 @inject IInboxStateService Inbox
+@inject ISettleStateService Settling
 @implements IDisposable
 
 @* One sliding pill marks the active item; each link only changes colour.
@@ -21,6 +23,11 @@
                    sliding pill out of step with the items it slides between. *@
                 <span class="gs-nav-badge" aria-label="@Inbox.NewCount waiting">@Badge(Inbox.NewCount)</span>
             }
+            else if (item.ShowsSettleCount && Settling.OutstandingCount > 0)
+            {
+                <span class="gs-nav-badge is-quiet"
+                      aria-label="@Settling.OutstandingCount to settle with">@Badge(Settling.OutstandingCount)</span>
+            }
         </NavLink>
     }
 </nav>
@@ -30,13 +37,19 @@
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
+    // Five slots before and after. Two things changed hands: Account left, because it is
+    // already one click away in the avatar menu on every screen and a destination people
+    // visit twice a year should not hold a fifth of the product on a phone; and Settle
+    // arrived, because clearing what you owe was the one job in the app with no home of its
+    // own. Expenses became You -- two pages called Expenses, one of them a group's, was the
+    // clearest usability defect the app had.
     private static readonly List<MenuItem> SignedIn =
     [
         new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
         new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups },
-        new() { Href = "/transactions", Text = "Expenses", Icon = Icons.Material.Rounded.ReceiptLong },
-        new() { Href = "/inbox", Text = "Inbox", Icon = Icons.Material.Rounded.Inbox, ShowsInboxCount = true },
-        new() { Href = "/account", Text = "Account", Icon = Icons.Material.Rounded.AccountCircle }
+        new() { Href = "/transactions", Text = "You", Icon = Icons.Material.Rounded.ReceiptLong },
+        new() { Href = "/settle", Text = "Settle", Icon = Icons.Material.Rounded.Handshake, ShowsSettleCount = true },
+        new() { Href = "/inbox", Text = "Inbox", Icon = Icons.Material.Rounded.Inbox, ShowsInboxCount = true }
     ];
 
     // Everything else needs a session, and a link that only bounces to the
@@ -58,6 +71,7 @@
     {
         Nav.LocationChanged += OnLocationChanged;
         Inbox.OnChanged += OnInboxChanged;
+        Settling.OnChanged += OnInboxChanged;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -68,7 +82,10 @@
         // not would answer 401, which the error presenter quite correctly turns into a trip
         // to the sign-in page -- from the nav, on every page.
         if (UserInfo is not null)
+        {
             await Inbox.EnsureLoadedAsync();
+            await Settling.EnsureLoadedAsync();
+        }
     }
 
     private void OnInboxChanged() => InvokeAsync(StateHasChanged);
@@ -92,5 +109,6 @@
     {
         Nav.LocationChanged -= OnLocationChanged;
         Inbox.OnChanged -= OnInboxChanged;
+        Settling.OnChanged -= OnInboxChanged;
     }
 }

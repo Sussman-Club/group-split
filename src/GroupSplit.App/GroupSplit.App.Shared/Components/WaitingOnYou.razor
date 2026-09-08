@@ -1,0 +1,210 @@
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Banking
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Settling
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject ISettleStateService Settling
+@inject IInboxStateService Inbox
+@inject IInvitationsClient InvitationsClient
+@inject IGroupCommands GroupCommands
+@inject ApiErrorPresenter Errors
+@inject DataChangeNotifier Changes
+@inject NavigationManager Nav
+@inject LocalClock Clock
+@implements IDisposable
+
+@*
+    One strip, directly under the position: everything that needs a decision, whatever
+    kind it is.
+
+    These three used to live in three different places -- a settling plan nowhere at all, a
+    badge in the nav, and an invitations panel below four stat tiles -- so "is anything
+    waiting on me?" was answered by looking in three places and remembering to. They are
+    one list because they are one question, and they are ordered by how much they cost to
+    put right: money first, then a queue, then a yes or no.
+*@
+
+@if (Items > 0)
+{
+    <section class="gs-card gs-card-pad gs-waiting gs-reveal" style="--i: @Reveal">
+        <div class="gs-card-title">
+            <h2>Waiting on you</h2>
+            <span class="gs-tag">@Items</span>
+        </div>
+
+        <div class="gs-list">
+            @if (Plan is { } plan && (plan.YouPay.Count > 0 || plan.OwedToYou.Count > 0))
+            {
+                <div class="gs-row" style="cursor: default">
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+                    <div style="min-width: 0">
+                        <div class="title"><span>@SettleHeadline(plan)</span></div>
+                        <div class="meta">@SettleDetail(plan)</div>
+                    </div>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               Class="gs-btn-pill" Href="/settle">Settle up</MudButton>
+                </div>
+            }
+
+            @if (Inbox.NewCount > 0)
+            {
+                <div class="gs-row" style="cursor: default">
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Inbox" /></span>
+                    <div style="min-width: 0">
+                        <div class="title">
+                            <span>@Inbox.NewCount bank transaction@(Inbox.NewCount == 1 ? "" : "s") waiting</span>
+                        </div>
+                        <div class="meta">@InboxDetail</div>
+                    </div>
+                    <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
+                               Href="/inbox">Review</MudButton>
+                </div>
+            }
+
+            @foreach (var invitation in _invitations)
+            {
+                var pending = invitation;
+                <div class="gs-row" style="cursor: default">
+                    <Avatar Name="@pending.GroupName" />
+                    <div style="min-width: 0">
+                        <div class="title">
+                            <span>
+                                @(string.IsNullOrWhiteSpace(pending.InvitedByUserName)
+                                    ? $"You have been asked to join {pending.GroupName}"
+                                    : $"{pending.InvitedByUserName} asked you to join {pending.GroupName}")
+                            </span>
+                        </div>
+                        <div class="meta">Invited @Clock.Local(pending.InvitedAt).ToString("d MMM")</div>
+                    </div>
+                    <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                   Disabled="@(_busy == pending.Id)"
+                                   OnClick="@(() => DeclineAsync(pending))">Decline</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   Class="gs-btn-pill"
+                                   Disabled="@(_busy == pending.Id)"
+                                   OnClick="@(() => AcceptAsync(pending))">Accept</MudButton>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    /// <summary>Where this sits in the page's entrance sequence.</summary>
+    [Parameter] public int Reveal { get; set; }
+
+    private IReadOnlyList<GroupInvitationResponse> _invitations = [];
+    private Guid? _busy;
+
+    private SettlementPlanResponse? Plan => Settling.Plan;
+
+    /// <summary>
+    /// How many decisions are waiting. The settling plan counts once however many people
+    /// are in it, because going to Settle is one decision and the plan is what it is for.
+    /// </summary>
+    private int Items =>
+        (Plan is { } plan && (plan.YouPay.Count > 0 || plan.OwedToYou.Count > 0) ? 1 : 0)
+        + (Inbox.NewCount > 0 ? 1 : 0)
+        + _invitations.Count;
+
+    /// <summary>
+    /// Leads with the payments rather than the debts, because that is the smaller number
+    /// and the one somebody can act on: four debts across two groups can be two payments.
+    /// </summary>
+    private static string SettleHeadline(SettlementPlanResponse plan) => plan.YouPay.Count switch
+    {
+        0 => $"{People(plan.OwedToYou.Count)} owe you",
+        1 => "One payment would clear what you owe",
+        var count => $"{count} payments would clear everything you owe"
+    };
+
+    private static string SettleDetail(SettlementPlanResponse plan)
+    {
+        var owing = plan.YouPay.Count == 0
+            ? null
+            : plan.YouPay.Count == 1
+                ? $"{plan.YouOweTotal.ToMoney()} to {plan.YouPay[0].UserName.Split(' ')[0]}"
+                : $"{plan.YouOweTotal.ToMoney()} to {People(plan.YouPay.Count)}";
+
+        var owed = plan.OwedToYou.Count == 0
+            ? null
+            : $"{People(plan.OwedToYou.Count)} owe you {plan.OwedToYouTotal.ToMoney()}";
+
+        return string.Join(", and ", new[] { owing, owed }.Where(part => part is not null));
+    }
+
+    private static string People(int count) => count == 1 ? "1 person" : $"{count} people";
+
+    /// <summary>
+    /// The duplicate warning is the highest-value thing the inbox says, and the easiest to
+    /// lose: it belongs here as well, before anything has been filed.
+    /// </summary>
+    private string InboxDetail => Inbox.PossibleDuplicates switch
+    {
+        > 0 and var count =>
+            $"{count} of them may already be recorded as an expense",
+        _ => "Nothing counts as money until you say so"
+    };
+
+    protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The plan is usually already read -- the nav badge asks for it -- and this is the
+        // one screen that says the duplicate count out loud, so it is the one that asks.
+        await Settling.EnsureLoadedAsync();
+        await Inbox.WantDuplicateCountAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        var loaded = _invitations;
+
+        await Errors.TryAsync(async () =>
+                loaded = [.. await InvitationsClient.GetMyInvitationsAsync()],
+            "Could not load your invitations.");
+
+        _invitations = loaded;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AcceptAsync(GroupInvitationResponse invitation)
+    {
+        _busy = invitation.Id;
+        await GroupCommands.AcceptInvitationAsync(invitation.Id, invitation.GroupName);
+        _busy = null;
+
+        // Deliberately not opening the group: this strip is a queue, and being thrown into
+        // a group after one decision leaves the rest of it behind.
+    }
+
+    private async Task DeclineAsync(GroupInvitationResponse invitation)
+    {
+        _busy = invitation.Id;
+        await GroupCommands.DeclineInvitationAsync(invitation.Id, invitation.GroupName);
+        _busy = null;
+    }
+
+    private void ReRender() => InvokeAsync(StateHasChanged);
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        Settling.OnChanged += ReRender;
+        Inbox.OnChanged += ReRender;
+    }
+
+    public void Dispose()
+    {
+        Changes.GroupsChanged -= ReloadAsync;
+        Settling.OnChanged -= ReRender;
+        Inbox.OnChanged -= ReRender;
+    }
+}

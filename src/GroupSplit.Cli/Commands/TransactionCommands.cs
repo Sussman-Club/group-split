@@ -1,4 +1,4 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.Net;
 using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
@@ -66,6 +66,7 @@ public static class TransactionCommands
         transactions.Subcommands.Add(Create());
         transactions.Subcommands.Add(Update());
         transactions.Subcommands.Add(Summary());
+        transactions.Subcommands.Add(Monthly());
         transactions.Subcommands.Add(Shares());
         transactions.Subcommands.Add(BankMatches());
         transactions.Subcommands.Add(Delete());
@@ -387,6 +388,75 @@ public static class TransactionCommands
     /// are two numbers -- and the summary underneath answers four figures rather than two.
     /// A flag would have had to widen both.
     /// </remarks>
+    /// <summary>
+    /// Keeps only the rows that are actually a debt: a share of something somebody else paid
+    /// for. Your share of an expense you paid for yourself is money you already have.
+    /// </summary>
+    private static readonly Option<bool> OwedOnly = new("--owed-only")
+    {
+        Description = "Only the shares on expenses somebody else paid."
+    };
+
+    /// <summary>
+    /// What you paid and what it cost you, month by month.
+    /// </summary>
+    /// <remarks>
+    /// The series the web client draws as its one chart. Two figures rather than one because
+    /// the gap between them is the story: it is how much somebody is habitually fronting for
+    /// other people and waiting to get back. Gross, and over expenses only -- settlements are
+    /// transfers, so nothing here has been paid back; <c>groupsplit users position</c>
+    /// remains the one answer to "where do I stand".
+    /// </remarks>
+    private static Command Monthly()
+    {
+        var command = new Command("monthly", "What you paid and what your share came to, by month.")
+        {
+            Group, From, To, Search, Category
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+
+            var months = await context.Transactions.GetMonthlyExposureAsync(
+                from: parse.GetValue(From),
+                to: parse.GetValue(To),
+                groupId: parse.GetValue(Group),
+                paidByUserId: null,
+                category: parse.GetValue(Category),
+                personal: null,
+                search: parse.GetValue(Search),
+                cancellationToken: ct);
+
+            context.Output.Write(months, value =>
+            {
+                if (value.Count == 0)
+                {
+                    return new Markup(Tables.Empty("months") + "\n");
+                }
+
+                var table = Tables.Grid("Month", "Paid", "Your share", "Fronted");
+
+                foreach (var month in value)
+                {
+                    table.AddRow(
+                        month.Month.ToString("yyyy-MM"),
+                        month.Paid.ToString("N2"),
+                        month.Share.ToString("N2"),
+                        // The gap, stated rather than left to be worked out: it is the
+                        // figure the two columns exist to produce.
+                        Tables.Money(month.Paid - month.Share));
+                }
+
+                return table;
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
     private static Command Shares()
     {
         var shares = new Command("shares", "Expenses you owe a share of, whoever paid.");
@@ -406,7 +476,7 @@ public static class TransactionCommands
 
         var command = new Command("list", "List the expenses you owe a share of, newest first.")
         {
-            Group, From, To, Search, Category, shareSortBy, Order, Page, PageSize
+            Group, From, To, Search, Category, OwedOnly, shareSortBy, Order, Page, PageSize
         };
 
         command.SetHandler(async (context, ct) =>
@@ -425,6 +495,7 @@ public static class TransactionCommands
                 sortDescending: parse.GetValue(Order).Descending(),
                 page: parse.GetValue(Page),
                 pageSize: parse.GetValue(PageSize),
+                owedOnly: parse.GetValue(OwedOnly) ? true : null,
                 cancellationToken: ct);
 
             context.Output.Write(page, value =>
@@ -464,7 +535,7 @@ public static class TransactionCommands
     {
         var command = new Command("summary", "Total the shares matching a filter.")
         {
-            Group, From, To, Search, Category
+            Group, From, To, Search, Category, OwedOnly
         };
 
         command.SetHandler(async (context, ct) =>
@@ -479,6 +550,7 @@ public static class TransactionCommands
                 category: parse.GetValue(Category),
                 personal: null,
                 search: parse.GetValue(Search),
+                owedOnly: parse.GetValue(OwedOnly) ? true : null,
                 cancellationToken: ct);
 
             context.Output.Write(summary, value => new Rows(

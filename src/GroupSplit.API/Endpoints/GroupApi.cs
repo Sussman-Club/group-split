@@ -1,4 +1,4 @@
-using GroupSplit.API.Errors;
+﻿using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data;
@@ -322,24 +322,44 @@ public static class GroupApi
                 .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
+        /// <summary>
+        /// The group's ledger: everything that moved money in it, filtered by kind, date and
+        /// text, each row carrying the reader's share and their balance as at that entry.
+        /// </summary>
+        /// <remarks>
+        /// One listing where the app had two tabs. Expenses and Activity were the same rows
+        /// with different filters -- one hid settlements, the other did not -- and splitting
+        /// them made "which one was that in?" a real question while keeping the group's spend
+        /// apart from the group's balance history.
+        /// <para>
+        /// The reason they were separated is real and is answered elsewhere: a settlement is
+        /// not spending and must not land in a spending total. That is what
+        /// <c>{id}/transactions/summary</c> is for -- it counts expenses whatever this is
+        /// filtered to -- and it is why the figure above the list is called <em>total
+        /// spent</em> rather than <em>total</em>.
+        /// </para>
+        /// </remarks>
         private RouteHandlerBuilder MapGetActivity()
         {
             return group.MapGet("{id:guid}/activity", async (
                     Guid id,
+                    [AsParameters] ActivityFilter filter,
                     [AsParameters] SortRequest sort,
                     [AsParameters] PageRequest page,
+                    ICurrentUser currentUser,
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
                     var activity = await groupService.GetGroupActivity(id, ct);
 
                     return Results.Ok(await activity
+                        .ApplyFilter(filter)
                         .ApplySort(sort, ActivitySort)
-                        .SelectActivityDto()
+                        .SelectLedgerDto(currentUser.User.Id, activity)
                         .ToPageAsync(page, ct));
                 })
                 .WithName("GetGroupActivity")
-                .Produces<PagedResponse<GroupActivityResponse>>()
+                .Produces<PagedResponse<GroupLedgerEntryResponse>>()
                 .ProducesProblem(StatusCodes.Status400BadRequest);
         }
 
@@ -527,45 +547,6 @@ public static class GroupApi
         {
             return from user in users
                 select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
-        }
-    }
-
-    extension(IQueryable<Transaction> activity)
-    {
-        /// <summary>
-        /// One row per thing that happened, whichever kind it was. The kind is read off the
-        /// type rather than a column: EF knows which leaf each row is, and a <c>Kind</c>
-        /// beside the discriminator would be a second answer to the same question.
-        /// </summary>
-        internal IQueryable<GroupActivityResponse> SelectActivityDto()
-        {
-            return from transaction in activity
-                select new GroupActivityResponse
-                {
-                    Id = transaction.Id,
-                    Kind = transaction is Transfer ? ActivityKind.Transfer : ActivityKind.Expense,
-                    Name = transaction.Name,
-                    Description = transaction.Description,
-                    Amount = transaction.Amount,
-                    DateTime = transaction.DateTime,
-                    PaidByUserId = transaction.UserId,
-                    PaidByUserName = transaction.User.FirstName +
-                                     (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                    // A transfer has exactly one split, to whoever was paid, and that is
-                    // what makes it a transfer. On an expense the shares say who carried it,
-                    // and there is no single other party to name.
-                    PaidToUserId = transaction is Transfer
-                        ? transaction.Splits.Select(split => (Guid?)split.UserId).FirstOrDefault()
-                        : null,
-                    PaidToUserName = transaction is Transfer
-                        ? transaction.Splits.Select(split =>
-                            split.User.FirstName +
-                            (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
-                        : null,
-                    Category = transaction is Expense && ((Expense)transaction).Category != null
-                        ? ((Expense)transaction).Category!.Name
-                        : null
-                };
         }
     }
 

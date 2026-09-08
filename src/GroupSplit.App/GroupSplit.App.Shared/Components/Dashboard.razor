@@ -1,16 +1,30 @@
-@using GroupSplit.App.Shared.Extensions
+﻿@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsPageStateService GroupsService
 @inject ITransactionsPageStateService TransactionsService
+@inject IUsersClient UsersClient
+@inject ITransactionsClient TransactionsClient
+@inject ApiErrorPresenter Errors
+@inject DataChangeNotifier Changes
 @inject NavigationManager Nav
 @inject LocalClock Clock
 @implements IDisposable
 
-@* Signed-in home. Lives in its own component so the anonymous landing page
-   never constructs the state services, which would call the API unauthenticated. *@
+@*
+    Signed-in home. Lives in its own component so the anonymous landing page never
+    constructs the state services, which would call the API unauthenticated.
+
+    Three changes from the page this replaces. Everything needing a decision is one strip
+    directly under the position, rather than a panel below four stat tiles, a badge in the
+    nav, and nothing at all. The activity feed is everybody's expenses and the settlements
+    too, not only the rows where the reader was the payer, and each row carries their share.
+    And the four stat tiles are one figure -- what has been spent around you this month --
+    because the other three were counts nobody was asking about.
+*@
 
 <div class="gs-page-head">
     <div>
@@ -49,11 +63,7 @@
             {
                 @($"{OwedToYou.ToMoney()} owed to you, {YouOwe.ToMoney()} owed by you. They do not cancel out -- they are different people.")
             }
-            else if (OwedToYou > 0)
-            {
-                @($"Across {Owing.Count} group{(Owing.Count == 1 ? "" : "s")}.")
-            }
-            else if (YouOwe > 0)
+            else if (OwedToYou > 0 || YouOwe > 0)
             {
                 @($"Across {Owing.Count} group{(Owing.Count == 1 ? "" : "s")}.")
             }
@@ -83,99 +93,106 @@
         }
     </section>
 
-    <div class="gs-stats">
-        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
-            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.Groups" /></span>
-            <span class="gs-eyebrow">Groups</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@ActiveGroups.Count">@ActiveGroups.Count</span>
-            <span class="gs-muted" style="font-size: .8125rem">@(ArchivedCount == 0 ? "All active" : $"{ArchivedCount} archived")</span>
-        </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 2">
-            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
-            <span class="gs-eyebrow">Expenses</span>
-            <span class="gs-stat-value gs-num" data-gs-count="@ExpenseCount">@ExpenseCount</span>
-            <span class="gs-muted" style="font-size: .8125rem">recorded by you</span>
-        </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 3">
-            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
-            <span class="gs-eyebrow">This month</span>
-            <Money Value="ThisMonth" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">@ThisMonthCount expense@(ThisMonthCount == 1 ? "" : "s")</span>
-        </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 4">
-            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
-            <span class="gs-eyebrow">You paid</span>
-            <Money Value="Total" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">across every group</span>
-        </div>
-    </div>
-
-    <InvitationsPanel Reveal="5" />
+    <WaitingOnYou Reveal="1" />
 
     <div class="gs-two-col">
-        <div class="gs-card gs-card-pad gs-reveal" style="--i: 6">
-            <div class="gs-card-title">
-                <h2>Your groups</h2>
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/groups"
-                           EndIcon="@Icons.Material.Rounded.ArrowForward">Open</MudButton>
-            </div>
-            @if (ActiveGroups.Count == 0)
-            {
-                <div class="gs-empty">
-                    <MudIcon Icon="@Icons.Material.Rounded.Groups" />
-                    <h3>No groups yet</h3>
-                    <span>Create one from the Groups page to start splitting.</span>
-                </div>
-            }
-            else
-            {
-                <div class="gs-list">
-                    @foreach (var group in ActiveGroups)
-                    {
-                        var g = group;
-                        var balance = BalanceIn(g.Id);
-                        <a class="gs-row" role="button" tabindex="0"
-                           @onclick="@(() => Open(g.Id))"
-                           @onkeydown="@(e => { if (e.Key is "Enter" or " ") Open(g.Id); })">
-                            <Avatar Name="@g.Name" />
-                            <div style="min-width: 0">
-                                <div class="title"><span>@g.Name</span></div>
-                                <div class="meta">@g.MemberCount member@(g.MemberCount == 1 ? "" : "s")</div>
-                            </div>
-                            <div>
-                                <div><Money Value="balance" Signed /></div>
-                                <span class="when">@(balance == 0 ? "settled" : balance > 0 ? "owed to you" : "you owe")</span>
-                            </div>
-                        </a>
-                    }
-                </div>
-            }
-        </div>
-
-        <div class="gs-card gs-card-pad gs-reveal" style="--i: 7">
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
             <div class="gs-card-title">
                 <h2>Recent activity</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/transactions"
                            EndIcon="@Icons.Material.Rounded.ArrowForward">All</MudButton>
             </div>
-            <TransactionsList Transactions="Recent" Limit="6" />
+            @* Everybody's expenses and the settlements too, not only the rows where you
+               were the payer -- and each one carries your share, because that is the
+               number you owe on it. *@
+            <UserActivityList Entries="Recent" />
+        </div>
+
+        <div class="gs-stack">
+            <div class="gs-card gs-stat gs-reveal" style="--i: 3">
+                <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
+                <span class="gs-eyebrow">Shared, this month</span>
+                <Money Value="ThisMonth" Animate Class="gs-stat-value" />
+                <span class="gs-muted" style="font-size: .8125rem">@MonthSub</span>
+            </div>
+
+            <div class="gs-card gs-card-pad gs-reveal" style="--i: 4">
+                <div class="gs-card-title">
+                    <h2>Your groups</h2>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/groups"
+                               EndIcon="@Icons.Material.Rounded.ArrowForward">Open</MudButton>
+                </div>
+                @if (ActiveGroups.Count == 0)
+                {
+                    <div class="gs-empty">
+                        <MudIcon Icon="@Icons.Material.Rounded.Groups" />
+                        <h3>No groups yet</h3>
+                        <span>Create one from the Groups page to start splitting.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="gs-list">
+                        @foreach (var group in ActiveGroups)
+                        {
+                            var g = group;
+                            var balance = BalanceIn(g.Id);
+                            <a class="gs-row" role="button" tabindex="0"
+                               @onclick="@(() => Open(g.Id))"
+                               @onkeydown="@(e => { if (e.Key is "Enter" or " ") Open(g.Id); })">
+                                <Avatar Name="@g.Name" />
+                                <div style="min-width: 0">
+                                    <div class="title"><span>@g.Name</span></div>
+                                    <div class="meta">@g.MemberCount member@(g.MemberCount == 1 ? "" : "s")</div>
+                                </div>
+                                <div>
+                                    <div><Money Value="balance" Signed /></div>
+                                    <span class="when">@(balance == 0 ? "settled" : balance > 0 ? "owed to you" : "you owe")</span>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
 </div>
 
 @code {
+    /// <summary>How many entries the feed shows before sending somebody to the full listing.</summary>
+    private const int RecentCount = 6;
+
     [Parameter, EditorRequired] public UserInfo UserInfo { get; set; } = null!;
 
     private List<GroupResponse> ActiveGroups => [.. GroupsService.Groups.Where(g => !g.IsArchive)];
-    private int ArchivedCount => GroupsService.Groups.Count(g => g.IsArchive);
 
-    // The server counts and totals; this holds one page of the newest, which is all the
-    // activity list shows. Adding up a page would understate every figure here.
-    private IReadOnlyList<TransactionResponse> Recent => TransactionsService.Page?.Items ?? [];
-    private int ExpenseCount => TransactionsService.Summary?.Count ?? 0;
-    private decimal Total => TransactionsService.Summary?.Total ?? 0m;
-    private decimal ThisMonth => TransactionsService.MonthSummary?.Total ?? 0m;
-    private int ThisMonthCount => TransactionsService.MonthSummary?.Count ?? 0;
+    private PagedResponse<UserActivityResponse>? _activity;
+    private ExpenseShareSummaryResponse? _thisMonth;
+    private ExpenseShareSummaryResponse? _lastMonth;
+
+    private IReadOnlyList<UserActivityResponse> Recent => _activity?.Items ?? [];
+
+    // What the groups spent around you, not what you personally paid: the figure a shared
+    // ledger is actually about. Both months come from the same read so the comparison is
+    // between two of the same thing.
+    private decimal ThisMonth => _thisMonth?.Total ?? 0m;
+    private int ThisMonthCount => _thisMonth?.Count ?? 0;
+
+    /// <summary>
+    /// The month in progress against the one before it. A figure with nothing to compare it
+    /// to is a number; the same figure beside last month's is a direction.
+    /// </summary>
+    private string MonthSub
+    {
+        get
+        {
+            var said = $"{ThisMonthCount} expense{(ThisMonthCount == 1 ? "" : "s")}";
+
+            return _lastMonth is { } previous
+                ? $"{said} · {previous.Total.ToMoney()} last month"
+                : said;
+        }
+    }
 
     private UserPositionResponse? Position => GroupsService.Position;
     private decimal Net => Position?.Net ?? 0m;
@@ -210,15 +227,56 @@
         GroupsService.OnGroupsChanged += ReRender;
         GroupsService.OnTransactionsChanged += ReRender;
         TransactionsService.OnTransactionsChanged += ReRender;
+
+        Changes.TransactionsChanged += ReadAsync;
+        Changes.GroupsChanged += ReadAsync;
     }
 
-    protected override Task OnInitializedAsync() =>
-        Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
+        await ReadAsync();
+    }
+
+    /// <summary>
+    /// The two things this page reads for itself: the cross-group feed, and last month's
+    /// total for the figure to be compared against.
+    /// </summary>
+    private async Task ReadAsync()
+    {
+        await Errors.TryAsync(async () =>
+                _activity = await UsersClient.GetCurrentUserActivityAsync(page: 1, pageSize: RecentCount),
+            "Could not load your recent activity.");
+
+        var firstOfThis = new DateTime(Clock.Today.Year, Clock.Today.Month, 1);
+        var firstOfLast = firstOfThis.AddMonths(-1);
+
+        await Errors.TryAsync(async () =>
+        {
+            _thisMonth = await ReadMonthAsync(firstOfThis);
+            _lastMonth = await ReadMonthAsync(firstOfLast);
+        }, "Could not load this month's total.");
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// One calendar month of shared spending the caller is in. Shared only: a personal
+    /// expense is not something a group spent, and this figure sits on a page about groups.
+    /// </summary>
+    private Task<ExpenseShareSummaryResponse> ReadMonthAsync(DateTime firstOfMonth) =>
+        TransactionsClient.GetTransactionSharesSummaryAsync(
+            from: new DateTimeOffset(firstOfMonth, Clock.Offset).ToUniversalTime(),
+            to: new DateTimeOffset(firstOfMonth.AddMonths(1), Clock.Offset).ToUniversalTime().AddTicks(-1),
+            personal: false);
 
     public void Dispose()
     {
         GroupsService.OnGroupsChanged -= ReRender;
         GroupsService.OnTransactionsChanged -= ReRender;
         TransactionsService.OnTransactionsChanged -= ReRender;
+
+        Changes.TransactionsChanged -= ReadAsync;
+        Changes.GroupsChanged -= ReadAsync;
     }
 }

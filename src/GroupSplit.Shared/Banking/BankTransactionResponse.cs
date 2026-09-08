@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace GroupSplit.Shared;
 
@@ -43,7 +43,18 @@ public record InboxFilter(
 /// <summary>
 /// How many rows are waiting, for the badge in the nav.
 /// </summary>
-public sealed record InboxSummaryResponse(int NewCount);
+/// <param name="PossibleDuplicates">
+/// How many of those look like an expense somebody has already recorded, or null when the
+/// caller did not ask.
+/// </param>
+/// <remarks>
+/// The duplicate count is opt-in and null by default, and the distinction matters: null is
+/// "not asked", and zero is "asked, and none of them". Working it out means running the
+/// matcher over every waiting row, which is far too much work for a badge that renders on
+/// every page -- so the nav asks for the count alone, and the one screen that wants to say
+/// "one of them may already be recorded" asks for both.
+/// </remarks>
+public sealed record InboxSummaryResponse(int NewCount, int? PossibleDuplicates = null);
 
 /// <summary>
 /// One imported row, as the inbox shows it.

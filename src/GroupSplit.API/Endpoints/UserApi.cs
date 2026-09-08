@@ -1,5 +1,7 @@
-using GroupSplit.API.Errors;
+﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 
@@ -18,6 +20,10 @@ public static class UserApi
 
             group.MapGetCurrentUser();
             group.MapGetPosition();
+            group.MapGetSettlementPlan();
+            group.MapSettleWithPerson();
+            group.MapGetSettlements();
+            group.MapGetActivity();
             group.MapDeleteCurrentUser();
 
             return group;
@@ -59,6 +65,94 @@ public static class UserApi
                 })
                 .WithName("GetCurrentUserPosition")
                 .Produces<UserPositionResponse>();
+        }
+
+        /// <summary>
+        /// How to clear everything, in the fewest payments, across every group at once.
+        /// </summary>
+        /// <remarks>
+        /// The minimised who-pays-whom has been computed for every group since balances
+        /// existed and was rendered on no screen at all. This is that same arithmetic run
+        /// over every group and then added up by person, which is the axis a payment
+        /// actually has: owing the same friend in two groups is one payment, not two.
+        /// </remarks>
+        private RouteHandlerBuilder MapGetSettlementPlan()
+        {
+            return group.MapGet("/me/settlement-plan", async (
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.GetPlan(ct)))
+                .WithName("GetSettlementPlan")
+                .Produces<SettlementPlanResponse>();
+        }
+
+        /// <summary>
+        /// Records one payment between the caller and one other person, wherever the debt
+        /// between them lives.
+        /// </summary>
+        /// <remarks>
+        /// The cross-group counterpart of <c>POST /groups/{id}/settle</c>. A balance belongs
+        /// to a group and cannot be cleared from outside one, so behind a single action this
+        /// writes one transfer per group -- in one save, because a payment that half-recorded
+        /// would leave two groups disagreeing about whether it happened.
+        /// </remarks>
+        private RouteHandlerBuilder MapSettleWithPerson()
+        {
+            return group.MapPost("/me/settle", async (
+                    SettleWithPersonRequest request,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                Results.Ok(await settlements.SettleWithPerson(request, ct)))
+                .WithName("SettleWithPerson")
+                .Produces<SettleWithPersonResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        /// <summary>
+        /// Every repayment the caller was party to, in any group, newest first.
+        /// </summary>
+        private RouteHandlerBuilder MapGetSettlements()
+        {
+            return group.MapGet("/me/settlements", async (
+                    [AsParameters] PageRequest page,
+                    ISettlementService settlements,
+                    CancellationToken ct) =>
+                {
+                    var history = await settlements.GetHistory(ct);
+
+                    return Results.Ok(await history
+                        .OrderByDescending(settlement => settlement.DateTime)
+                        .ThenByDescending(settlement => settlement.Id)
+                        .ToPageAsync(page, ct));
+                })
+                .WithName("GetSettlements")
+                .Produces<PagedResponse<SettlementResponse>>();
+        }
+
+        /// <summary>
+        /// Everything that has happened anywhere the caller is, newest first: expenses
+        /// whoever paid for them, and settlements.
+        /// </summary>
+        private RouteHandlerBuilder MapGetActivity()
+        {
+            return group.MapGet("/me/activity", async (
+                    [AsParameters] PageRequest page,
+                    ICurrentUser currentUser,
+                    IGroupService groups,
+                    CancellationToken ct) =>
+                {
+                    var activity = await groups.GetUserActivity(ct);
+
+                    return Results.Ok(await activity
+                        .OrderByDescending(transaction => transaction.DateTime)
+                        .ThenByDescending(transaction => transaction.Id)
+                        .SelectUserActivityDto(currentUser.User.Id)
+                        .ToPageAsync(page, ct));
+                })
+                .WithName("GetCurrentUserActivity")
+                .Produces<PagedResponse<UserActivityResponse>>();
         }
 
         private RouteHandlerBuilder MapDeleteCurrentUser()

@@ -319,6 +319,27 @@
             }
         },
 
+        // Hands the browser a file the app built in memory. The export is assembled
+        // through the same HTTP client as everything else, because a plain download link
+        // would go out without the bearer token and come back as a sign-in page named
+        // .csv. The object URL is revoked on the next tick: revoking it synchronously
+        // races the click in Safari and downloads nothing.
+        download(filename, text) {
+            const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            link.style.display = "none";
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+        },
+
         // ------------------------------------------------------- plaid --
 
         // Plaid Link runs in the browser because it has to: the person's bank

@@ -1,0 +1,150 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    Recording one payment between two people, wherever the debt between them lives.
+
+    The same dialog as SettleDialog, one level up: that one settles inside a group, because
+    a balance belongs to a group. This one takes the person and the amount and lets the API
+    write the per-group transfers behind it -- which is the whole point, and is why the
+    groups are listed here rather than asked about. Somebody handing over money should not
+    have to do the bookkeeping.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5">Settle with @Person.UserName</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudStack Spacing="3">
+
+                <MudText Typo="Typo.subtitle2">@Standing</MudText>
+
+                @* Where the figure comes from, so the arithmetic is checkable here rather
+                   than by opening two groups. Shown whenever the debt spans more than one,
+                   because that is exactly the case the person has never been able to see. *@
+                @if (Person.Groups.Count > 1)
+                {
+                    <div class="gs-settle-breakdown">
+                        @foreach (var part in Person.Groups)
+                        {
+                            <div class="gs-settle-breakdown-row">
+                                <span>@part.GroupName</span>
+                                <Money Value="part.Amount" />
+                            </div>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption">
+                        One payment, @Person.Groups.Count groups. Recording it writes a transfer in
+                        each, largest first — a balance belongs to a group and cannot be cleared
+                        from outside one.
+                    </MudText>
+                }
+
+                <MudNumericField @bind-Value="_model.Amount"
+                                 For="@(() => _model.Amount)"
+                                 Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
+                                 Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                 AdornmentColor="Color.Primary"
+                                 HideSpinButtons="true"
+                                 Format="N2"
+                                 Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
+
+                <MudText Typo="Typo.caption">
+                    Remaining after this: @((Person.Amount - _model.Amount).ToMoney())
+                </MudText>
+
+                <MudDatePicker Date="_date" DateChanged="@DateChanged"
+                               Label="When"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               HelperText="Defaults to now." />
+
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Note"
+                              Variant="Variant.Outlined"
+                              Placeholder="Cash, bank transfer, a reference…" />
+
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit">
+            @(YouPaid ? "I paid them" : "They paid me")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public PersonSettlement Person { get; set; } = null!;
+
+    /// <summary>
+    /// Which way the money went. The caller knows: the dialog opens from under "you pay"
+    /// or from under "you are owed", and those are the two answers.
+    /// </summary>
+    [Parameter] public SettlementDirection Direction { get; set; } = SettlementDirection.TheyPaidYou;
+
+    private MudForm _form = null!;
+    private SettleWithPersonRequest _model = new();
+    private DateTime? _date;
+
+    private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
+
+    private string Standing => YouPaid
+        ? $"You owe {Person.UserName} {Person.Amount.ToMoney()}"
+        : $"{Person.UserName} owes you {Person.Amount.ToMoney()}";
+
+    protected override void OnInitialized()
+    {
+        _model = new SettleWithPersonRequest
+        {
+            UserId = Person.UserId,
+            Amount = Person.Amount,
+            Direction = Direction
+        };
+    }
+
+    /// <summary>
+    /// Midday rather than midnight, and stated as UTC -- see the same note on SettleDialog.
+    /// </summary>
+    private void DateChanged(DateTime? date)
+    {
+        _date = date;
+
+        _model.Date = date is { } chosen
+            ? new DateTimeOffset(chosen.Date.AddHours(12), TimeSpan.Zero)
+            : null;
+    }
+
+    /// <summary>
+    /// The amount is editable, as in the per-group dialog, and the screen never suggests
+    /// paying part of it. Partial payments are how balances rot.
+    /// </summary>
+    private IEnumerable<string> ValidateAmount(decimal amount)
+    {
+        if (amount > Person.Amount)
+            yield return $"Amount cannot exceed what is outstanding ({Person.Amount.ToMoney()}).";
+    }
+
+    private async Task Submit()
+    {
+        await _form.ValidateAsync();
+
+        if (!_form.IsValid)
+            return;
+
+        MudDialog.Close(DialogResult.Ok(_model));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

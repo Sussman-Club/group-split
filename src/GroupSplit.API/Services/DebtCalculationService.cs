@@ -59,6 +59,11 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
             }
         );
 
+        // The plan as a whole, kept alongside the two per-person slices below. Every member
+        // gets the same list: it is the group's plan, not a reading of it, and the lines a
+        // given member may actually record are the ones with them on an end.
+        var plan = new List<SettlementPayment>();
+
         // Perform the settlement
         while (i < creditors.Count && j < debtors.Count)
         {
@@ -85,6 +90,15 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
                     Amount = payment
                 });
 
+            plan.Add(new SettlementPayment
+            {
+                FromUserId = debtor.UserId,
+                FromUserName = debtor.UserName,
+                ToUserId = creditor.UserId,
+                ToUserName = creditor.UserName,
+                Amount = payment
+            });
+
             // Update amounts
             debtor.Balance += payment;
             creditor.Balance -= payment;
@@ -92,6 +106,9 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
             if (creditor.Balance == 0) i++;
             if (debtor.Balance == 0) j++;
         }
+
+        foreach (var userId in result.Keys.ToList())
+            result[userId] = result[userId] with { Plan = plan };
 
         return result;
     }

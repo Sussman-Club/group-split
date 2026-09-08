@@ -61,8 +61,9 @@ Groups you belong to, their members and their balances.
 | `groups remove-member <group-id> <user-id>` | Remove a member from a group. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
+| `groups settle-between <group-id> <from-user-id> <to-user-id> <amount>` | Record a repayment between two named members, whichever of them you are — including neither. |
 | `groups settle-up <group-id>` | Record every repayment between you and the rest of the group at once. |
-| `groups activity <group-id>` | List everything that happened in a group, newest first. |
+| `groups activity <group-id>` | The group's ledger: everything that happened in it, newest first, with your share of each entry and your balance as at it. |
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
 | `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. |
@@ -84,6 +85,7 @@ Expenses and settlements.
 | `transactions create <name> <amount>` | Record an expense. |
 | `transactions update <transaction-id>` | Change an expense. Only what you name is sent. |
 | `transactions summary` | Total the transactions matching a filter. |
+| `transactions monthly` | What you paid and what your share came to, month by month. |
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
@@ -98,6 +100,18 @@ The signed-in account and what it is owed.
 | `users me` | Show the account this CLI is acting as. |
 | `users position` | Show your overall balance across every group. |
 | `users delete` | Delete the account you are signed in as. Permanent. |
+
+### settle
+
+Squaring up with a person, across every group at once. `groups settle` and
+`groups settle-up` work inside a group, because a balance belongs to one; these work on a
+person, because a payment does.
+
+| Command | |
+| --- | --- |
+| `settle plan` | The fewest payments that leave you square everywhere, one line per person. |
+| `settle pay <user-id>` | Record one payment between you and that person, wherever the debt between you lives. |
+| `settle history` | Every repayment you were party to, in any group, newest first. |
 
 ### categories
 
@@ -153,7 +167,7 @@ Imported bank rows waiting to be filed.
 | Command | |
 | --- | --- |
 | `inbox list` | List imported rows, newest first. |
-| `inbox summary` | Count the rows still waiting to be filed. |
+| `inbox summary` | Count the rows still waiting to be filed, and how many of those may already be recorded. |
 | `inbox matches <row-id>` | List the expenses already recorded that an imported row could be. |
 | `inbox file <row-id>` | File an imported row as an expense. |
 | `inbox link <row-id> <transaction-id>` | Attach an imported row to an expense already recorded, instead of filing a second one. |
@@ -252,8 +266,14 @@ nothing. Use it whenever the division matters, and show the result before commit
 | `groups activity` | `dateTime`, `amount`, `name` |
 | `inbox list` | `date`, `amount`, `merchant` |
 
-`transactions list` and `transactions shares list` also take `--group`, `--from`, `--to`,
-`--search` and `--category`. `--from`/`--to` are date-times there and calendar dates
+`transactions list`, `transactions shares list` and `transactions monthly` also take
+`--group`, `--from`, `--to`, `--search` and `--category`. The two `shares` commands add
+`--owed-only`, which keeps just the rows that are actually a debt: your share of an expense
+you paid for yourself is money you already have, not money you owe.
+
+`groups activity` takes `--from`, `--to`, `--search` and `--kind` (`Expense` or `Transfer`).
+`--kind` is what the group's two old tabs became: absent means everything, which is the
+default because "what has happened here" does not distinguish. `--from`/`--to` are date-times there and calendar dates
 (`2026-01-01`) on `inbox list`, which is what a bank puts on a row.
 
 `transactions summary` and `transactions shares summary` take the same filters and answer
@@ -285,6 +305,35 @@ it says so and writes nothing.
 It never records money moving between two other members. The user can say what they paid
 and what they were paid, because they were there for both; a payment between two other
 people is not theirs to state.
+
+### Settling with a person, across groups
+
+A balance belongs to a group; a payment belongs to a person. Somebody who owes the same
+friend in two groups used to have to settle twice, and the `settle` commands are what close
+that gap.
+
+`settle plan` adds the per-group minimisation up by person: one line each, largest first,
+naming the groups its figure comes from so the arithmetic is checkable on the row. The three
+figures over the top are the same ones `users position` leads with.
+
+`settle pay <user-id>` records one payment. `--amount` defaults to the whole of what is
+outstanding between the two of them; `--direction` works exactly as it does on
+`groups settle` and defaults to `theypaidyou`. Behind it the API writes one transfer per
+group, in a single save, spending the amount over the groups **largest first**. That is not
+a flag and should not be presented as a choice: which group a payment lands in is
+bookkeeping, and the person handing over the money does not have to do it.
+
+It reads the plan first, so the exit-4 confirmation lists the groups the payment will land
+in and what each takes -- show those lines, they are the part the user cannot otherwise
+see. `--dry-run` prints the same breakdown and writes nothing.
+
+Being square with somebody is success, not a refusal: the command says
+`"status": "nothing-outstanding"` and writes nothing. So is asking in the direction with
+nothing outstanding in it -- which is the point of stating the direction rather than reading
+it off a balance.
+
+`settle history` answers "did I already pay this?", which is the question that stops people
+settling twice. It spans groups, because a payment can.
 
 A settlement recorded wrongly is taken back with `transactions delete <transaction-id>`,
 which balances the ledger back to what it read before. Its id comes from `groups activity`:

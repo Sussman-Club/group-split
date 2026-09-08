@@ -59,6 +59,37 @@ public interface ISettlementService
     /// </remarks>
     Task<SettlementPayment> RecordRepayment(Guid groupId, RecordRepaymentRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// How the caller clears everything, in the fewest payments, across every group at once.
+    /// </summary>
+    /// <remarks>
+    /// The per-group minimisation the balances view already runs, run over every group and
+    /// then added up by person. That last step is the whole point: a balance belongs to a
+    /// group, but a payment belongs to a person, and somebody who owes the same friend in
+    /// two groups pays them once.
+    /// </remarks>
+    Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records one payment between the caller and one other person, spread over whichever
+    /// groups the debt between them lives in, in a single save.
+    /// </summary>
+    /// <exception cref="ConflictException">
+    /// There is nothing outstanding between the two of them in that direction.
+    /// </exception>
+    Task<SettleWithPersonResponse> SettleWithPerson(SettleWithPersonRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every repayment the caller was party to, in any group, newest first.
+    /// </summary>
+    /// <remarks>
+    /// It answers "did I already pay this?", which is the question that stops people
+    /// settling twice, and which until now could only be answered by opening each group's
+    /// activity in turn.
+    /// </remarks>
+    Task<IQueryable<SettlementResponse>> GetHistory(CancellationToken cancellationToken = default);
 }
 
 public class SettlementService(
@@ -156,6 +187,237 @@ public class SettlementService(
             ToUserName = $"{to.FirstName} {to.LastName}".Trim(),
             Amount = request.Amount
         };
+    }
+
+    public async Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default)
+    {
+        var (youPay, owedToYou) = await PlanSides(cancellationToken);
+
+        var youOwe = youPay.Sum(person => person.Amount);
+        var owed = owedToYou.Sum(person => person.Amount);
+
+        var callerId = userContext.User.Id;
+
+        // The newest repayment the caller was on either end of, in any group. Null when
+        // they have never settled, which is a different thing from having settled long ago
+        // and is why the screen can say "never" rather than showing nothing.
+        var lastSettled = await context.Set<Transfer>()
+            .Where(transfer => transfer.UserId == callerId ||
+                               transfer.Splits.Any(split => split.UserId == callerId))
+            .OrderByDescending(transfer => transfer.DateTime)
+            .Select(transfer => (DateTimeOffset?)transfer.DateTime)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return new SettlementPlanResponse(owed - youOwe, owed, youOwe, youPay, owedToYou, lastSettled);
+    }
+
+    public async Task<SettleWithPersonResponse> SettleWithPerson(SettleWithPersonRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var caller = userContext.User;
+
+        if (request.UserId == caller.Id)
+            throw new ConflictException(ErrorCodes.SettlementWithSelf,
+                "A settlement needs two different people.");
+
+        var (youPay, owedToYou) = await PlanSides(cancellationToken);
+
+        // Which list the person has to be in follows from the direction stated on the
+        // request, not from a balance read a second time: somebody recording "I paid them"
+        // is acting precisely while the balance still says they owe.
+        var side = request.Direction is SettlementDirection.YouPaidThem ? youPay : owedToYou;
+
+        var person = side.FirstOrDefault(entry => entry.UserId == request.UserId)
+                     ?? throw new ConflictException(ErrorCodes.SettlementNothingToSettle,
+                         "There is nothing outstanding between the two of you in that direction.");
+
+        var allocations = Allocate(request.Amount, person.Groups);
+
+        var groups = await context.Set<Group>()
+            .Include(@group => @group.Users)
+            .Where(@group => allocations.Select(allocation => allocation.GroupId).Contains(@group.Id))
+            .ToDictionaryAsync(@group => @group.Id, cancellationToken);
+
+        var other = await context.Set<User>()
+                        .FirstOrDefaultAsync(user => user.Id == request.UserId, cancellationToken)
+                    ?? throw new NotFoundException(ErrorCodes.UserNotFound, "That person was not found.");
+
+        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
+        var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
+
+        var (from, to) = request.Direction is SettlementDirection.YouPaidThem
+            ? (caller, other)
+            : (other, caller);
+
+        foreach (var allocation in allocations)
+        {
+            context.Add(Transfer.Between(groups[allocation.GroupId], from, to, allocation.Amount, date,
+                description));
+        }
+
+        // One save for the whole payment. Two groups disagreeing about whether a single
+        // transfer happened is the failure this screen exists to prevent, not to introduce.
+        await context.SaveChangesAsync(cancellationToken);
+
+        return new SettleWithPersonResponse(
+            other.Id,
+            $"{other.FirstName} {other.LastName}".Trim(),
+            request.Amount,
+            request.Direction,
+            date,
+            description,
+            allocations);
+    }
+
+    public async Task<IQueryable<SettlementResponse>> GetHistory(
+        CancellationToken cancellationToken = default)
+    {
+        var callerId = userContext.User.Id;
+        var mine = await groups.GetAllGroups(cancellationToken);
+
+        // Scoped to the caller's own groups, and then to the transfers they were party to.
+        // A repayment between two other members belongs to the group's history; this is a
+        // list of payments somebody made or received.
+        return from transfer in context.Set<Transfer>()
+               where mine.Any(@group => @group.Id == transfer.GroupId)
+                     && (transfer.UserId == callerId ||
+                         transfer.Splits.Any(split => split.UserId == callerId))
+               from split in transfer.Splits
+               select new SettlementResponse
+               {
+                   Id = transfer.Id,
+                   GroupId = transfer.GroupId!.Value,
+                   GroupName = transfer.Group!.Name,
+                   FromUserId = transfer.UserId,
+                   FromUserName = transfer.User.FirstName +
+                                  (transfer.User.LastName != null ? " " + transfer.User.LastName : ""),
+                   ToUserId = split.UserId,
+                   ToUserName = split.User.FirstName +
+                                (split.User.LastName != null ? " " + split.User.LastName : ""),
+                   Amount = transfer.Amount,
+                   DateTime = transfer.DateTime,
+                   Description = transfer.Description,
+                   PaidByYou = transfer.UserId == callerId
+               };
+    }
+
+    /// <summary>
+    /// Both halves of the cross-group plan: what the caller owes by person, and what they
+    /// are owed by person, each largest first.
+    /// </summary>
+    /// <remarks>
+    /// Per group first and then added up, which is the only order that gives an answer
+    /// anybody can act on. Minimising across the union of every group would produce lines
+    /// like "pay Sofia, who pays Daniel" between people who are not in a group together and
+    /// have no reason to be moving money to each other.
+    /// </remarks>
+    private async Task<(IReadOnlyList<PersonSettlement> YouPay, IReadOnlyList<PersonSettlement> OwedToYou)>
+        PlanSides(CancellationToken cancellationToken)
+    {
+        var rows = await (await groups.GetAllGroupNetBalances(cancellationToken))
+            .ToListAsync(cancellationToken);
+
+        var youPay = new Dictionary<Guid, PersonBuilder>();
+        var owedToYou = new Dictionary<Guid, PersonBuilder>();
+
+        foreach (var inGroup in rows.GroupBy(row => new { row.GroupId, row.GroupName }))
+        {
+            var balances = inGroup
+                .Select(row => new GroupNetBalance
+                {
+                    UserId = row.UserId,
+                    UserName = row.UserName,
+                    AmountPaid = row.AmountPaid,
+                    AmountOwed = row.AmountOwed,
+                    Balance = row.Balance
+                })
+                .ToList();
+
+            // Nothing outstanding here at all. Worth skipping rather than minimising an
+            // all-zero group, which produces no payments anyway.
+            if (balances.TrueForAll(balance => balance.Balance == 0))
+                continue;
+
+            var position = await debtCalculator.GetUserBalance(balances);
+
+            foreach (var debt in position.YouOwed)
+                Accumulate(youPay, debt, inGroup.Key.GroupId, inGroup.Key.GroupName);
+
+            foreach (var credit in position.OwedToYou)
+                Accumulate(owedToYou, credit, inGroup.Key.GroupId, inGroup.Key.GroupName);
+        }
+
+        return (Finish(youPay), Finish(owedToYou));
+    }
+
+    private static void Accumulate(Dictionary<Guid, PersonBuilder> side, DebtInfo debt,
+        Guid groupId, string groupName)
+    {
+        if (debt.Amount <= 0)
+            return;
+
+        if (!side.TryGetValue(debt.UserId, out var person))
+            side[debt.UserId] = person = new PersonBuilder(debt.UserName);
+
+        person.Groups.Add(new GroupDebt(groupId, groupName, debt.Amount));
+    }
+
+    /// <summary>
+    /// Largest person first, and within a person largest group first -- which is both how
+    /// somebody reads the list and the order <see cref="Allocate"/> spends a payment in.
+    /// </summary>
+    private static IReadOnlyList<PersonSettlement> Finish(Dictionary<Guid, PersonBuilder> side) =>
+    [
+        .. from entry in side
+           let amount = entry.Value.Groups.Sum(@group => @group.Amount)
+           orderby amount descending, entry.Value.Name
+           select new PersonSettlement(
+               entry.Key,
+               entry.Value.Name,
+               amount,
+               [.. entry.Value.Groups.OrderByDescending(@group => @group.Amount).ThenBy(@group => @group.GroupName)])
+    ];
+
+    /// <summary>
+    /// Spends one payment over the groups the debt spans, largest group first.
+    /// </summary>
+    /// <remarks>
+    /// The caller does not choose, and that is the point of the screen: which group a
+    /// payment lands in is bookkeeping, and the person handing over the money should not
+    /// have to do it. Largest first clears whole groups soonest, so a partial payment
+    /// leaves the fewest groups half-settled.
+    /// <para>
+    /// Anything beyond what is outstanding -- somebody rounding up -- goes onto the largest
+    /// group. It has to land somewhere, and that is where an overpayment is least
+    /// surprising to find.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<GroupDebt> Allocate(decimal amount, IReadOnlyList<GroupDebt> groups)
+    {
+        var allocations = new List<GroupDebt>(groups.Count);
+        var remaining = amount;
+
+        foreach (var @group in groups)
+        {
+            if (remaining <= 0)
+                break;
+
+            var part = Math.Min(remaining, @group.Amount);
+            allocations.Add(@group with { Amount = part });
+            remaining -= part;
+        }
+
+        if (remaining > 0 && allocations.Count > 0)
+            allocations[0] = allocations[0] with { Amount = allocations[0].Amount + remaining };
+
+        return allocations;
+    }
+
+    private sealed class PersonBuilder(string name)
+    {
+        public string Name { get; } = name;
+
+        public List<GroupDebt> Groups { get; } = [];
     }
 
     private async Task<Dictionary<Guid, User>> MembersIn(IReadOnlyList<SettlementPayment> payments,

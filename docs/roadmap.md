@@ -453,6 +453,48 @@ Ordered by how often a person meets them.
 - Linked accounts page under Account: institution, last sync, a "needs attention" state
   for items that need re-login.
 
+### The four views (delivered)
+
+"Better control over my group finances" breaks into four questions, and the app answered
+the first two well, the third only from inside a dialog, and the fourth not at all. Three
+of them are now answered; the fourth is Plan, below.
+
+**Where do I stand?** Unchanged: the home page's position and a group's Overview.
+
+**What did we spend, and on what?** A group's Expenses and Activity tabs were the same list
+with different filters -- one hid settlements, the other did not -- so they are one
+**Ledger**, filtered `Everything / Expenses / Settlements` in the query string, with a
+running balance down the right edge. The balance is the reason it is a merge rather than a
+rename: it cannot be drawn against a list that hides half the events that move it. The
+figure above the list counts expenses whatever the filter says and is called *total spent*,
+which is what keeps a settlement out of a spending total now that both are in one list.
+
+`/transactions` keeps its path and is titled **You** -- your money across every group,
+where a group's Ledger is a group across people. Two pages called Expenses was the app's
+clearest usability defect. It gained the three views the API has served since phase 2
+(*Paid by you*, *Your share*, *Everything you are in*, in the URL), a group filter, a CSV
+export of the current view, and the one chart in the product: what you paid and what your
+share came to, by month. That last was refused earlier on the grounds that four people and
+eleven expenses is not a dataset -- which was reasoning from the seeder rather than from the
+migrated 42-month workbook.
+
+**How do I clear it?** `/settle`, a new top-level destination. Every debt you are on either
+side of, across every group, as one minimised plan grouped **by person** rather than by
+group: owing the same friend in two groups is one payment, and used to be two settlements
+in two dialogs on two pages. Behind one action `POST /users/me/settle` writes one transfer
+per group in a single save, spending the amount largest-group-first. The per-group minimised
+plan -- computed on every balance read since balances existed and rendered on no screen at
+all -- is now on a group's Overview as well.
+
+**What is coming?** Not answered. Budgets and recurring expenses are a group's fourth tab,
+Plan, and they are still Phase 4 below: two entities, a scheduled job, and a real decision
+about whether this product runs shared money or splits shared costs.
+
+**The nav.** Five destinations before and after: Account left it, because it is one click
+away in the avatar menu on every screen and a destination people visit twice a year should
+not hold a fifth of the product on a phone; Settle took the slot. Four group tabs became
+three, and Plan will make it four again.
+
 ### Small things worth doing now
 
 - Deterministic remainder in even split (largest share, or the payer).
@@ -620,12 +662,24 @@ row is an `ExpenseShareResponse`: the whole expense, plus `share` and `paidByYou
 sort map is over the response rather than the entity, because the join to the expense has
 already flattened the group and the payer onto it.
 
+Both share endpoints take `owedOnly`, which keeps only the rows that are a debt. It is the
+difference between two of the three views on the You page: *everything you are in* is every
+share, and *your share* is what other people's expenses cost you.
+
 `GET /transactions/shares/summary` answers four figures rather than two --
 `{ count, total, share, owedToOthers }` -- and the fourth is the reason. A share of an
 expense the caller paid for themselves is not a debt: they are owed the rest of it. A
 single total that summed every share and stood beside "you owe" would count every personal
 expense and every dinner they picked up, so what is owed is its own figure and the listing
 marks the rows it excludes.
+
+**A group's ledger** -- `GET /groups/{id}/activity` -- is the one listing that sees
+transfers. It takes `From`, `To`, `Search` (the name, the note, the category, or either
+party's name) and `Kind`, which is what the two tabs it replaces became: absent means
+everything. A row carries `share` -- the reader's split, null on a transfer, because paying
+somebody back is not a cost anyone carries a part of -- and `runningBalance`, the reader's
+position as at that entry. The balance is read from the unfiltered ledger on purpose: a
+balance as at a date is what it is whether or not the rows above it are on screen.
 
 **One thing to know when adding a paged endpoint.** The clients are generated with
 `/GenerateDtoTypes:false`, so a schema id is written into them verbatim as a C# type name,

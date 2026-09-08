@@ -1,4 +1,4 @@
-using GroupSplit.API.Errors;
+﻿using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
@@ -79,10 +79,11 @@ public static class InboxApi
         private RouteHandlerBuilder MapSummary()
         {
             return group.MapGet("summary", async (
+                    bool? withDuplicates,
                     IInboxService inbox,
                     CancellationToken ct) =>
                 {
-                    return Results.Ok(await inbox.Summary(ct));
+                    return Results.Ok(await inbox.Summary(withDuplicates ?? false, ct));
                 })
                 .WithName("GetInboxSummary")
                 .Produces<InboxSummaryResponse>();

@@ -1,0 +1,304 @@
+﻿@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsPageStateService GroupsService
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject DataChangeNotifier Changes
+@inject IDialogService DialogService
+@inject LocalClock Clock
+@implements IDisposable
+
+@*
+    Where a group stands, on the screen people actually land on.
+
+    Three things changed here. The minimised settlement plan is on the page -- it has been
+    computed on every balance read since balances existed and was rendered nowhere, which
+    is a strange thing for the product to know and not say. The recent entries carry each
+    reader's own share, because what the dinner cost and what it cost you are different
+    numbers. And the two lists that used to sit side by side -- recent expenses and latest
+    activity -- are one, for the same reason the two tabs became one ledger.
+*@
+
+<div class="gs-two-col">
+    <div class="gs-stack">
+        @if (Balance is { } balance)
+        {
+            <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
+                @if (UserBalance > 0)
+                {
+                    <div class="gs-eyebrow">You are owed</div>
+                    <Money Value="UserBalance" Animate Class="gs-hero-amount" />
+                    <div class="gs-hero-sub">by @People(balance.OwedToYou.Count()) in @GroupName</div>
+                    <div class="gs-hero-list">
+                        @foreach (var debt in balance.OwedToYou)
+                        {
+                            var owed = debt;
+                            <div class="gs-hero-row">
+                                <Avatar Name="@owed.UserName" Size="sm" />
+                                <div class="who">@owed.UserName <small>owes you</small></div>
+                                <Money Value="owed.Amount" Animate />
+                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                           OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
+                                    They paid
+                                </MudButton>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (UserBalance < 0)
+                {
+                    <div class="gs-eyebrow">You owe</div>
+                    <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
+                    <div class="gs-hero-sub">to @People(balance.YouOwed.Count()) in @GroupName</div>
+                    <div class="gs-hero-list">
+                        @* Both sides can record a repayment. The person who actually did the
+                           paying had no way to say so, and had to ask the other one to. *@
+                        @foreach (var debt in balance.YouOwed)
+                        {
+                            var owing = debt;
+                            <div class="gs-hero-row">
+                                <Avatar Name="@owing.UserName" Size="sm" />
+                                <div class="who">@owing.UserName <small>is waiting on you</small></div>
+                                <Money Value="owing.Amount" Animate />
+                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                           OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem)))">
+                                    I paid
+                                </MudButton>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="gs-eyebrow">Your balance</div>
+                    <div class="gs-hero-amount">All settled</div>
+                    <div class="gs-hero-sub">Nothing owed either way in @GroupName. Nice.</div>
+                }
+            </section>
+        }
+
+        @if (Plan.Count > 0)
+        {
+            <section class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+                <div class="gs-card-title">
+                    <h2>@Payments(Plan.Count) clear@(Plan.Count == 1 ? "s" : "") this group</h2>
+                    <span class="gs-tag neutral">the shortest way</span>
+                </div>
+                <div class="gs-plan-list">
+                    @foreach (var payment in Plan)
+                    {
+                        var line = payment;
+                        var yours = Involves(line);
+                        <div class="gs-plan-row @(yours ? "" : "is-theirs")">
+                            <Avatar Name="@line.FromUserName" Size="sm" />
+                            <div style="min-width: 0">
+                                <div class="who">@Who(line.FromUserId, line.FromUserName) <small>pays</small> @Who(line.ToUserId, line.ToUserName)</div>
+                                <div class="meta">@Explain(line)</div>
+                            </div>
+                            <Money Value="line.Amount" />
+                            @if (yours)
+                            {
+                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                           OnClick="@(() => RecordAsync(line))">
+                                    @(line.FromUserId == UserId ? "I paid them" : "They paid me")
+                                </MudButton>
+                            }
+                            else
+                            {
+                                @* Not the caller's to record. Listed because a plan that
+                                   hides a step does not add up. *@
+                                <span class="gs-muted" style="font-size: .8125rem">their call</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
+            <div class="gs-card-title">
+                <h2>Recent entries</h2>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                           Href="@($"/groups/{GroupId}/ledger")"
+                           EndIcon="@Icons.Material.Rounded.ArrowForward">Full ledger</MudButton>
+            </div>
+            <GroupEntryList Entries="Recent" />
+            @if (_recent is { } ledger && ledger.TotalCount > ledger.Items.Count)
+            {
+                <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
+                    Showing the @ledger.Items.Count newest of @ledger.TotalCount.
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="gs-stack">
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
+            <div class="gs-card-title">
+                <h2>Members</h2>
+                <span class="gs-tag neutral">net balances</span>
+            </div>
+            @if (Balance is { } b && b.NetBalances.Any())
+            {
+                var max = Math.Max(b.NetBalances.Max(m => Math.Abs(m.Balance)), 0.01m);
+                var i = 0;
+                <div class="gs-balances">
+                    @foreach (var member in b.NetBalances.OrderByDescending(m => m.Balance))
+                    {
+                        var w = (double)(Math.Abs(member.Balance) / max);
+                        <div class="gs-balance-row @(member.Balance < 0 ? "is-neg" : "")" style="--i: @(i++)">
+                            <Avatar Name="@member.UserName" Size="sm" />
+                            <div style="min-width: 0">
+                                <div class="name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                                    @member.UserName
+                                    @if (member.UserId == UserId)
+                                    {
+                                        <span class="gs-muted" style="font-weight: 500"> (you)</span>
+                                    }
+                                </div>
+                                <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
+                            </div>
+                            <Money Value="member.Balance" Signed Animate />
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="gs-empty" style="padding: 20px">
+                    <MudIcon Icon="@Icons.Material.Rounded.Balance" />
+                    <span>Balances appear once there is an expense.</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>How many entries the overview shows before sending somebody to the ledger.</summary>
+    private const int RecentCount = 3;
+
+    [Parameter, EditorRequired] public Guid GroupId { get; set; }
+
+    [Parameter, EditorRequired] public string GroupName { get; set; } = "";
+
+    /// <summary>Who is reading, so the plan can say "you" and offer the lines they may record.</summary>
+    [Parameter] public Guid? UserId { get; set; }
+
+    /// <summary>
+    /// Settling with one person, which the page owns because it owns the dialog and the
+    /// write. The tab knows which line was pressed and nothing else.
+    /// </summary>
+    [Parameter] public EventCallback<(DebtInfo Debt, SettlementDirection Direction)> OnSettle { get; set; }
+
+    private PagedResponse<GroupLedgerEntryResponse>? _recent;
+    private Guid _loadedFor;
+
+    private UserGroupBalanceResponse? Balance => GroupsService.Balance;
+
+    private IReadOnlyList<GroupLedgerEntryResponse> Recent => _recent?.Items ?? [];
+
+    private IReadOnlyList<SettlementPayment> Plan => Balance?.Plan ?? [];
+
+    private decimal UserBalance =>
+        Balance?.NetBalances.FirstOrDefault(member => member.UserId == UserId)?.Balance ?? 0m;
+
+    private string HeroClass => UserBalance switch
+    {
+        > 0 => "",
+        < 0 => "is-neg",
+        _ => "is-zero"
+    };
+
+    private static string People(int count) => count == 1 ? "1 person" : $"{count} people";
+
+    private static string Payments(int count) => count == 1 ? "One payment" : $"{Word(count)} payments";
+
+    private static string Word(int count) => count switch
+    {
+        2 => "Two",
+        3 => "Three",
+        4 => "Four",
+        5 => "Five",
+        _ => count.ToString()
+    };
+
+    private bool Involves(SettlementPayment payment) =>
+        payment.FromUserId == UserId || payment.ToUserId == UserId;
+
+    private string Who(Guid userId, string name) => userId == UserId ? "you" : name;
+
+    /// <summary>
+    /// What this line does for the plan. Naming the person it clears is the check somebody
+    /// needs: a plan whose lines do not obviously add up to the balances above it is a
+    /// black box, and this one is the app's own arithmetic being shown for the first time.
+    /// </summary>
+    private string Explain(SettlementPayment payment)
+    {
+        if (!Involves(payment))
+            return "not yours to record — shown so the plan adds up";
+
+        var other = payment.FromUserId == UserId ? payment.ToUserName : payment.FromUserName;
+        var theirBalance = Balance?.NetBalances
+            .FirstOrDefault(member => member.UserId ==
+                                      (payment.FromUserId == UserId ? payment.ToUserId : payment.FromUserId))
+            ?.Balance ?? 0m;
+
+        return Math.Abs(theirBalance) == payment.Amount
+            ? $"clears {other} entirely"
+            : $"part of what stands between you and {other}";
+    }
+
+    private Task RecordAsync(SettlementPayment payment)
+    {
+        var theirs = payment.FromUserId == UserId ? payment.ToUserId : payment.FromUserId;
+        var name = payment.FromUserId == UserId ? payment.ToUserName : payment.FromUserName;
+
+        var debt = new DebtInfo { UserId = theirs, UserName = name, Amount = payment.Amount };
+
+        return OnSettle.InvokeAsync((debt,
+            payment.FromUserId == UserId
+                ? SettlementDirection.YouPaidThem
+                : SettlementDirection.TheyPaidYou));
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == GroupId) return;
+
+        _loadedFor = GroupId;
+        _recent = null;
+
+        await LoadRecentAsync();
+    }
+
+    private async Task LoadRecentAsync()
+    {
+        // The ledger, three rows of it. Expenses and settlements together, because a
+        // balance that moved with nothing on the page to explain it is its own kind of
+        // wrong -- which is what a "recent expenses" card that hid settlements produced.
+        await Errors.TryAsync(async () =>
+                _recent = await GroupsClient.GetGroupActivityAsync(
+                    _loadedFor, page: 1, pageSize: RecentCount),
+            "Could not load this group's recent entries.");
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task ReloadAsync() => _loadedFor == Guid.Empty ? Task.CompletedTask : LoadRecentAsync();
+
+    protected override void OnInitialized()
+    {
+        Changes.TransactionsChanged += ReloadAsync;
+        Changes.GroupsChanged += ReloadAsync;
+    }
+
+    public void Dispose()
+    {
+        Changes.TransactionsChanged -= ReloadAsync;
+        Changes.GroupsChanged -= ReloadAsync;
+    }
+}

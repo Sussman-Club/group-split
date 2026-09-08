@@ -1,4 +1,4 @@
-@page "/inbox"
+﻿@page "/inbox"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Banking
@@ -126,21 +126,45 @@
                                    Signed="@row.IsCredit" Absolute="@row.IsCredit"
                                    Class="@(row.IsCredit ? "gs-muted" : "")" />
 
+                            @*
+                                One primary action, and the rest one gesture away.
+
+                                The row used to offer up to five buttons, and a page of
+                                twenty-three of them was a hundred and fifteen ways to
+                                mis-tap. Sharing is the answer this app exists for, so it
+                                gets the button; keeping a payment personal and ignoring it
+                                are neither common nor destructive -- ignoring is reversible
+                                from the Ignored filter, which is exactly why it does not
+                                need to be prominent.
+                            *@
                             @if (row.Status == InboxStatus.New)
                             {
                                 <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
-                                    <MudButton Variant="Variant.Text" Size="Size.Small"
-                                               Disabled="@(_busy == row.Id)"
-                                               OnClick="@(() => IgnoreAsync(row))">Ignore</MudButton>
-                                    @if (!row.IsCredit)
+                                    @if (row.IsCredit)
                                     {
+                                        @* Money coming in cannot become an expense, so the
+                                           only answer it has is the quiet one, and it is
+                                           the button. *@
                                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudButton>
+                                                   OnClick="@(() => IgnoreAsync(row))">Ignore</MudButton>
+                                    }
+                                    else
+                                    {
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                    Class="gs-btn-pill"
                                                    Disabled="@(_busy == row.Id)"
                                                    OnClick="@(() => AddToGroupAsync(row))">Add to group</MudButton>
+                                        <MudMenu Icon="@Icons.Material.Rounded.MoreHoriz"
+                                                 Size="Size.Small"
+                                                 Dense="true"
+                                                 AnchorOrigin="Origin.BottomRight"
+                                                 TransformOrigin="Origin.TopRight"
+                                                 Disabled="@(_busy == row.Id)"
+                                                 aria-label="@($"Other answers for {row.Title}")">
+                                            <MudMenuItem OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudMenuItem>
+                                            <MudMenuItem OnClick="@(() => IgnoreAsync(row))">Ignore</MudMenuItem>
+                                        </MudMenu>
                                     }
                                 </div>
                             }

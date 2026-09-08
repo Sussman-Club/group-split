@@ -1,0 +1,262 @@
+﻿@page "/settle"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Settling
+@using GroupSplit.Shared
+@inject ISettleStateService Settling
+@inject IDialogService DialogService
+@inject LocalClock Clock
+@implements IDisposable
+
+@*
+    Squaring up, across every group at once.
+
+    The end-of-month screen. Somebody opens it having already decided to settle and wants
+    to be told what to pay, to whom, and then to record it. That decision had nowhere to
+    go: settling lived in two dialogs behind a group, so clearing four debts across two
+    groups meant four dialogs on two pages, and people did not bother.
+
+    The order is deliberate and is the argument. Your position first, continuous with the
+    home page. Then what you owe -- the half you can act on unilaterally -- and only then
+    what you are owed, because a screen that leads with what other people owe you is a
+    grievance list rather than a settling tool.
+*@
+
+<PageTitle>Settle up - Group Split</PageTitle>
+
+<div class="gs-page-head">
+    <div>
+        <div class="gs-eyebrow">Across every group</div>
+        <h1>Settle up</h1>
+        <p>@Summary</p>
+    </div>
+    @if (Plan?.LastSettled is { } last)
+    {
+        <span class="gs-tag neutral">last settled @Clock.Local(last).ToString("d MMM")</span>
+    }
+</div>
+
+<div class="gs-stack @(Settling.IsLoading ? "gs-loading" : "")">
+
+    @* The same figure, the same hero and the same two gross sides as the home page.
+       Arriving here should feel like stepping closer to a number you were already
+       looking at. The one difference is that here it is an instruction. *@
+    <section class="gs-hero @PositionClass gs-reveal" style="--i: 0" aria-live="polite">
+        @if (Net > 0)
+        {
+            <div class="gs-eyebrow">Overall, you are owed</div>
+            <Money Value="Net" Animate Class="gs-hero-amount" />
+        }
+        else if (Net < 0)
+        {
+            <div class="gs-eyebrow">Overall, you owe</div>
+            <Money Value="Net" Absolute Animate Class="gs-hero-amount" />
+        }
+        else
+        {
+            <div class="gs-eyebrow">Overall</div>
+            <div class="gs-hero-amount">All settled</div>
+        }
+        <div class="gs-hero-sub">@HeroSub</div>
+    </section>
+
+    @if (Nothing)
+    {
+        @* The one screen in the product with a genuinely good empty state available to
+           it, and it should be worth reaching. *@
+        <div class="gs-card gs-empty gs-reveal" style="--i: 1; padding: 56px 24px">
+            <MudIcon Icon="@Icons.Material.Rounded.DoneAll" />
+            <h3>All settled</h3>
+            <span>
+                Nothing owed either way, in any group@(Plan?.LastSettled is { } since
+                                                          ? $" since {Clock.Local(since).ToString("d MMMM yyyy")}"
+                                                          : "").
+            </span>
+        </div>
+    }
+
+    @if (YouPay.Count > 0)
+    {
+        <section class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+            <div class="gs-card-title">
+                <h2>You pay</h2>
+                <span class="gs-tag neutral">@Payments(YouPay.Count)</span>
+            </div>
+            <div class="gs-settle-list">
+                @foreach (var person in YouPay)
+                {
+                    var owed = person;
+                    <SettlePersonRow Person="owed"
+                                     Direction="SettlementDirection.YouPaidThem"
+                                     OnRecord="@(() => RecordAsync(owed, SettlementDirection.YouPaidThem))" />
+                }
+            </div>
+        </section>
+    }
+
+    @if (OwedToYou.Count > 0)
+    {
+        <section class="gs-card gs-card-pad gs-reveal" style="--i: 2">
+            <div class="gs-card-title">
+                <h2>You are owed</h2>
+                <span class="gs-tag neutral">@People(OwedToYou.Count)</span>
+            </div>
+            <div class="gs-settle-list">
+                @foreach (var person in OwedToYou)
+                {
+                    var owing = person;
+                    <SettlePersonRow Person="owing"
+                                     Direction="SettlementDirection.TheyPaidYou"
+                                     OnRecord="@(() => RecordAsync(owing, SettlementDirection.TheyPaidYou))" />
+                }
+            </div>
+        </section>
+    }
+
+    @* Answers "did I already pay this?" -- the question that stops people settling twice,
+       and which used to mean opening each group's activity tab in turn. *@
+    <section class="gs-card gs-card-pad gs-reveal" style="--i: 3">
+        <div class="gs-card-title">
+            <h2>Already settled</h2>
+            @if (History is { TotalCount: > 0 } recorded)
+            {
+                <span class="gs-tag neutral">@recorded.TotalCount</span>
+            }
+        </div>
+
+        @if (History is null)
+        {
+            <div class="gs-empty" style="padding: 24px"><span>Loading…</span></div>
+        }
+        else if (History.Items.Count == 0)
+        {
+            <div class="gs-empty" style="padding: 32px">
+                <MudIcon Icon="@Icons.Material.Rounded.Handshake" />
+                <h3>No settlements yet</h3>
+                <span>Repayments you record — in any group — show up here.</span>
+            </div>
+        }
+        else
+        {
+            <div class="gs-list">
+                @{ var i = 0; }
+                @foreach (var settlement in History.Items)
+                {
+                    <div class="gs-row gs-reveal" style="--i: @(i++); cursor: default">
+                        <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+                        <div style="min-width: 0">
+                            <div class="title"><span>@Headline(settlement)</span></div>
+                            <div class="meta">@Detail(settlement)</div>
+                        </div>
+                        <div>
+                            <div><Money Value="settlement.Amount" /></div>
+                            <span class="when">@Clock.Local(settlement.DateTime).ToString("d MMM")</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (History.TotalCount > History.Items.Count)
+            {
+                <div style="display: flex; justify-content: center; padding-top: 12px">
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                               OnClick="@(() => Settling.ShowMoreHistoryAsync())">Show more</MudButton>
+                </div>
+            }
+        }
+    </section>
+</div>
+
+@code {
+    private SettlementPlanResponse? Plan => Settling.Plan;
+    private PagedResponse<SettlementResponse>? History => Settling.History;
+
+    private IReadOnlyList<PersonSettlement> YouPay => Plan?.YouPay ?? [];
+    private IReadOnlyList<PersonSettlement> OwedToYou => Plan?.OwedToYou ?? [];
+
+    private decimal Net => Plan?.Net ?? 0m;
+
+    private bool Nothing => Plan is not null && YouPay.Count == 0 && OwedToYou.Count == 0;
+
+    private string PositionClass => Net switch
+    {
+        > 0 => "",
+        < 0 => "is-neg",
+        _ => "is-zero"
+    };
+
+    /// <summary>
+    /// The count that matters is how many payments clear it, not how many debts there are:
+    /// four debts across two groups can be two payments, and that reduction is the reason
+    /// this screen exists.
+    /// </summary>
+    private string Summary => Plan is null
+        ? "Working out what clears everything."
+        : Nothing
+            ? "Nothing owed either way, in any group."
+            : YouPay.Count == 0
+                ? $"{People(OwedToYou.Count)} owe you. Marking one as paid is one tap."
+                : $"{Payments(YouPay.Count)} clear{(YouPay.Count == 1 ? "s" : "")} everything you owe. "
+                  + "Recording one clears it in every group it came from.";
+
+    private string HeroSub => Plan is null
+        ? ""
+        : Plan is { OwedToYouTotal: > 0, YouOweTotal: > 0 }
+            ? $"{Plan.OwedToYouTotal.ToMoney()} owed to you by {People(OwedToYou.Count)}, "
+              + $"{Plan.YouOweTotal.ToMoney()} owed by you to {People(YouPay.Count)}. They do not cancel out."
+            : Plan.OwedToYouTotal > 0
+                ? $"From {People(OwedToYou.Count)}."
+                : Plan.YouOweTotal > 0
+                    ? $"To {People(YouPay.Count)}."
+                    : "Nothing outstanding in any of your groups.";
+
+    private static string People(int count) => count == 1 ? "1 person" : $"{count} people";
+
+    private static string Payments(int count) => count == 1 ? "1 payment" : $"{count} payments";
+
+    private string Headline(SettlementResponse settlement) => settlement.PaidByYou
+        ? $"You paid {settlement.ToUserName}"
+        : $"{settlement.FromUserName} paid you";
+
+    /// <summary>
+    /// The group always, the note when there is one. Which group a repayment landed in is
+    /// the fact this list is here to supply -- the plan above deliberately hides it.
+    /// </summary>
+    private static string Detail(SettlementResponse settlement) =>
+        settlement.Description is { Length: > 0 } note
+            ? $"{settlement.GroupName} · {note}"
+            : settlement.GroupName;
+
+    private async Task RecordAsync(PersonSettlement person, SettlementDirection direction)
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        var parameters = new DialogParameters<SettleWithPersonDialog>
+        {
+            { x => x.Person, person },
+            { x => x.Direction, direction }
+        };
+
+        var dialog = await DialogService.ShowAsync<SettleWithPersonDialog>(
+            $"Settle with {person.UserName}", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<SettleWithPersonRequest>();
+
+        if (request is not null)
+            await Settling.SettleAsync(request, person.UserName);
+    }
+
+    private void ReRender() => InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized() => Settling.OnChanged += ReRender;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Settling.EnsureLoadedAsync();
+
+        // Only this page reads the history, so only this page asks for it.
+        await Settling.LoadHistoryAsync();
+    }
+
+    public void Dispose() => Settling.OnChanged -= ReRender;
+}
