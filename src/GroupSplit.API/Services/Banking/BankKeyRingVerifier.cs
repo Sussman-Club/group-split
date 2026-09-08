@@ -43,82 +43,103 @@ namespace GroupSplit.API.Services.Banking;
 /// the migration bundle has run. Absence of tokens is not evidence of a bad key.
 /// </para>
 /// </remarks>
-internal sealed class BankKeyRingVerifier(
-    IServiceScopeFactory scopes,
-    IConfiguration configuration,
-    ILogger<BankKeyRingVerifier> logger) : IHostedService
+public static class BankKeyRingVerifier
 {
-    public async Task StartAsync(CancellationToken cancellationToken)
+    extension(IHost host)
     {
-        // Read the same way AddBankKeyRing read it, so the two cannot disagree about
-        // whether this deployment has one.
-        var wrapped = !string.IsNullOrWhiteSpace(
-            configuration.GetSection(BankingOptions.SectionName)[nameof(BankingOptions.KeyRingCertificate)]);
-
-        if (!wrapped)
+        /// <summary>
+        /// Runs the check, throwing if the ring cannot read what is stored.
+        /// </summary>
+        /// <remarks>
+        /// Called between building the host and running it, rather than from an
+        /// <c>IHostedService</c>. Hosted services start in registration order and the one
+        /// that starts Kestrel is registered while the builder is constructed -- before any
+        /// application code can add its own -- so a check registered as a hosted service
+        /// runs with the server already accepting requests. A link that landed in that
+        /// window would protect its token with the freshly minted key that this exists to
+        /// prevent. Here there is no window.
+        /// </remarks>
+        public async Task VerifyBankKeyRing(CancellationToken ct = default)
         {
-            // Stated out loud, because the failure this guards against is silence: a
-            // deployment that forgot the certificate looks exactly like one that has it.
-            // Expected in development, where an unwrapped ring is the ordinary posture.
-            logger.LogWarning(
-                "No {Section}:{Key} is configured, so the bank access-token key ring is stored unwrapped "
-                + "beside the tokens it opens. Whoever holds a copy of the database holds both. Expected in "
-                + "development; a mistake in a deployment.",
-                BankingOptions.SectionName, nameof(BankingOptions.KeyRingCertificate));
+            var logger = host.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(BankKeyRingVerifier));
+
+            // Read the same way AddBankKeyRing read it, so the two cannot disagree about
+            // whether this deployment has one.
+            var wrapped = !string.IsNullOrWhiteSpace(
+                host.Services.GetRequiredService<IConfiguration>()
+                    .GetSection(BankingOptions.SectionName)[nameof(BankingOptions.KeyRingCertificate)]);
+
+            if (!wrapped)
+            {
+                // Stated out loud, because the failure this guards against is silence: a
+                // deployment that forgot the certificate looks exactly like one that has it.
+                // Expected in development, where an unwrapped ring is the ordinary posture.
+                logger.LogWarning(
+                    "No {Section}:{Key} is configured, so the bank access-token key ring is stored unwrapped "
+                    + "beside the tokens it opens. Whoever holds a copy of the database holds both. Expected in "
+                    + "development; a mistake in a deployment.",
+                    BankingOptions.SectionName, nameof(BankingOptions.KeyRingCertificate));
+            }
+
+            await using var scope = host.Services.CreateAsyncScope();
+
+            string? ciphertext;
+
+            try
+            {
+                ciphertext = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+                    .Set<BankConnection>()
+                    .OrderBy(connection => connection.LinkedAt)
+                    .Select(connection => connection.AccessTokenCiphertext)
+                    .FirstOrDefaultAsync(ct);
+            }
+            catch (Exception e)
+            {
+                // A warning rather than a note. This is the ordinary case on a test host and
+                // on a first deploy, but it is also what a deployment looks like when the
+                // database was briefly away at startup -- and that one skipped the check
+                // silently, which is the shape of failure this whole class exists to end.
+                logger.LogWarning(
+                    e, "No stored bank connections could be read, so the bank access-token key ring was not "
+                       + "checked against one. Expected before the first migration; worth a look otherwise.");
+
+                return;
+            }
+
+            if (ciphertext is null)
+            {
+                return;
+            }
+
+            try
+            {
+                scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>().Unprotect(ciphertext);
+            }
+            catch (AccessTokenUnreadableException e) when (!wrapped)
+            {
+                logger.LogWarning(
+                    e, "A stored bank access token could not be read. With no certificate configured this is "
+                       + "as likely to be seeded development data as a real key problem, so it is not being "
+                       + "treated as one.");
+
+                return;
+            }
+            catch (AccessTokenUnreadableException e)
+            {
+                throw new InvalidOperationException(
+                    "The bank access-token key ring cannot read a token this deployment has already stored. "
+                    + $"Either {BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)} is not "
+                    + "the certificate the ring was wrapped with -- restore the previous one -- or the stored "
+                    + "value is not a protected token at all, which is what a hand-edited row looks like. "
+                    + "Starting anyway would mint a new key and leave every stored token unreadable, and an "
+                    + "item whose token is gone can be neither synced, nor repaired, nor removed at the "
+                    + "provider. Reading the ring to find this out will have added a new key to it, which is "
+                    + "harmless: the old one is still there and reads again as soon as the right certificate "
+                    + "is back.", e);
+            }
+
+            logger.LogInformation("The bank access-token key ring reads what is stored.");
         }
-
-        await using var scope = scopes.CreateAsyncScope();
-
-        string? ciphertext;
-
-        try
-        {
-            ciphertext = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
-                .Set<BankConnection>()
-                .OrderBy(connection => connection.LinkedAt)
-                .Select(connection => connection.AccessTokenCiphertext)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(
-                e, "No stored bank connections could be read, so the key ring was not checked against one.");
-
-            return;
-        }
-
-        if (ciphertext is null)
-        {
-            return;
-        }
-
-        try
-        {
-            scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>().Unprotect(ciphertext);
-        }
-        catch (AccessTokenUnreadableException e) when (!wrapped)
-        {
-            logger.LogWarning(
-                e, "A stored bank access token could not be read. With no certificate configured this is "
-                   + "as likely to be seeded development data as a real key problem, so it is not being "
-                   + "treated as one.");
-
-            return;
-        }
-        catch (AccessTokenUnreadableException e)
-        {
-            throw new InvalidOperationException(
-                "The bank access-token key ring cannot read a token this deployment has already stored. "
-                + $"Either {BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)} is not "
-                + "the certificate the ring was wrapped with -- restore the previous one -- or the stored "
-                + "value is not a protected token at all, which is what a hand-edited row looks like. "
-                + "Starting anyway would mint a new key and leave every stored token unreadable, and an "
-                + "item whose token is gone can be neither synced, nor repaired, nor removed at the "
-                + "provider.", e);
-        }
-
-        logger.LogInformation("The bank access-token key ring reads what is stored.");
     }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

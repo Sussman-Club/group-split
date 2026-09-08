@@ -1,6 +1,7 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Test.Base;
+using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -293,6 +294,198 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         _bank.Gate.Release();
         Assert.Equal(SyncOutcome.Completed, await first);
+    }
+
+    /// <summary>
+    /// A re-link that lands while a sync is in flight wins: the run that was already going
+    /// says nothing about the item it has just stopped being about.
+    /// </summary>
+    /// <remarks>
+    /// Nothing serialises linking against syncing, and a re-link moves the connection onto a
+    /// new item -- new id, new token, no cursor -- and retires the old item at the provider.
+    /// The run still in flight is holding the retired item's token and, if it were allowed to
+    /// finish its writes, would store that item's cursor over the null the re-link just wrote.
+    /// The next sync would then send the new token with a cursor from an item the provider
+    /// has removed, which it refuses, every time, for ever. Nobody could fix that without
+    /// editing a row.
+    /// </remarks>
+    [Fact]
+    public async Task A_sync_that_was_overtaken_by_a_re_link_does_not_store_its_cursor()
+    {
+        var connection = await LinkAsync();
+        await SetCursor(connection, "cursor-0");
+
+        _bank.Gate = new SemaphoreSlim(0, 1);
+        _bank.Answer("cursor-1", added: [Row("t1", 1m)]);
+
+        var running = Sync(connection);
+        await _bank.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+
+        // The re-link, as Adopt leaves it, committed while the run above is held open.
+        await ReLink(connection, "item-two");
+
+        _bank.Gate.Release();
+
+        Assert.Equal(SyncOutcome.Interrupted, await running);
+
+        var after = await Reload(connection);
+
+        // The re-link's own state stands, untouched by the run it overtook.
+        Assert.Null(after.Cursor);
+        Assert.True(after.AccountsRekeyed);
+        Assert.Equal("item-two", after.ProviderItemId);
+
+        // And what the run did import is kept: it is this account's spending whichever item
+        // reported it.
+        Assert.Single(await Rows(connection));
+    }
+
+    /// <summary>
+    /// The other half: a run whose token stops working because the re-link retired the item
+    /// underneath it must not mark the freshly linked connection as needing a sign-in.
+    /// </summary>
+    /// <remarks>
+    /// That status is what the card shows and what <c>Sync</c> refuses on, and only a
+    /// <c>LOGIN_REPAIRED</c> webhook clears it -- which will never arrive for an item the
+    /// provider no longer has. A connection somebody has just successfully re-linked would
+    /// sit there asking them to sign in again, with nothing able to answer.
+    /// </remarks>
+    [Fact]
+    public async Task A_sync_that_was_overtaken_by_a_re_link_does_not_mark_it_needing_attention()
+    {
+        var connection = await LinkAsync();
+
+        _bank.Gate = new SemaphoreSlim(0, 1);
+        _bank.Throw(BankSyncFailure.LoginRequired);
+
+        var running = Sync(connection);
+        await _bank.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+
+        await ReLink(connection, "item-two");
+
+        _bank.Gate.Release();
+
+        Assert.Equal(SyncOutcome.LoginRequired, await running);
+
+        // The outcome is honest about what happened to that token. The connection is not
+        // marked, because the token it is about is not this connection's any more.
+        Assert.Equal(BankConnectionStatus.Active, (await Reload(connection)).Status);
+    }
+
+    /// <summary>
+    /// A supersede chain ends on the stronger of the two decisions, whichever end it came
+    /// from.
+    /// </summary>
+    /// <remarks>
+    /// The pending row's status used to be copied across, which was safe only while the
+    /// posted row was always brand new. A re-key can hand the posted transaction a row this
+    /// connection already held, and such a row carries a real decision -- so a pending New,
+    /// or a pending Ignored, would demote it. A demoted Filed row lists as unfiled or as
+    /// ignored-and-restorable while the expense filed from it still points at it, and
+    /// filing it again is a second expense for the same money that nothing warns about.
+    /// <para>
+    /// Every pair, rather than the two that were found by hand: this is the third time a
+    /// status has been quietly downgraded somewhere in the re-key work, and the pairs nobody
+    /// thinks of are exactly the ones that got through.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    // pending, what the posted row already carries, what the chain must end on
+    [InlineData(BankTransactionStatus.New, BankTransactionStatus.New, BankTransactionStatus.New)]
+    [InlineData(BankTransactionStatus.New, BankTransactionStatus.Ignored, BankTransactionStatus.Ignored)]
+    [InlineData(BankTransactionStatus.New, BankTransactionStatus.Filed, BankTransactionStatus.Filed)]
+    [InlineData(BankTransactionStatus.Ignored, BankTransactionStatus.New, BankTransactionStatus.Ignored)]
+    [InlineData(BankTransactionStatus.Ignored, BankTransactionStatus.Ignored, BankTransactionStatus.Ignored)]
+    [InlineData(BankTransactionStatus.Ignored, BankTransactionStatus.Filed, BankTransactionStatus.Filed)]
+    [InlineData(BankTransactionStatus.Filed, BankTransactionStatus.New, BankTransactionStatus.Filed)]
+    [InlineData(BankTransactionStatus.Filed, BankTransactionStatus.Ignored, BankTransactionStatus.Filed)]
+    [InlineData(BankTransactionStatus.Filed, BankTransactionStatus.Filed, BankTransactionStatus.Filed)]
+    public async Task A_supersede_chain_ends_on_the_stronger_decision(
+        BankTransactionStatus pending, BankTransactionStatus posted, BankTransactionStatus expected)
+    {
+        var connection = await LinkAsync();
+
+        // A re-key run, which is the only way the posted transaction can land on a row that
+        // already carries a decision.
+        await ReKeying(connection);
+
+        // The two rows this connection already holds, identical in everything the re-key
+        // matches on, so the replay below claims them.
+        await CarriedRowAsync(connection, "old-pending", pending);
+        await CarriedRowAsync(connection, "old-posted", posted);
+
+        // The provider replays both under the new item's ids, the second settling the first.
+        _bank.Answer("cursor-1", added:
+        [
+            Row("new-pending", 12.50m, pending: true, description: "LIDL 1234"),
+            Row("new-posted", 12.50m, replaces: "new-pending", description: "LIDL 1234")
+        ]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        var rows = await Rows(connection);
+
+        Assert.Equal(expected, rows.Single(row => row.ProviderTransactionId == "new-posted").Status);
+
+        // And the row it took over from says so, whatever it was before.
+        Assert.Equal(BankTransactionStatus.Superseded,
+            rows.Single(row => row.ProviderTransactionId == "new-pending").Status);
+    }
+
+    private async Task ReKeying(BankConnection connection)
+    {
+        var tracked = await DbContext.Set<BankConnection>().SingleAsync(c => c.Id == connection.Id, Ct);
+
+        tracked.AccountsRekeyed = true;
+        tracked.Cursor = null;
+
+        await DbContext.SaveChangesAsync(Ct);
+    }
+
+    /// <summary>A row already stored under the previous item's id, ready to be claimed.</summary>
+    private async Task CarriedRowAsync(BankConnection connection, string providerId, BankTransactionStatus status)
+    {
+        var account = await DbContext.Set<LinkedAccount>()
+            .SingleAsync(candidate => candidate.BankConnectionId == connection.Id, Ct);
+
+        var row = new BankTransaction
+        {
+            LinkedAccountId = account.Id,
+            ProviderTransactionId = providerId,
+            Date = new DateOnly(2026, 9, 1),
+            Amount = 12.50m,
+            Currency = "USD",
+            Description = "LIDL 1234",
+            Status = status,
+            RawJson = "{}",
+            ImportedAt = DateTimeOffset.UtcNow
+        };
+
+        DbContext.Add(row);
+        await DbContext.SaveChangesAsync(Ct);
+
+        // A filed row is filed from something, and moving that link is half of what a
+        // supersede does.
+        if (status is BankTransactionStatus.Filed)
+            await FileAsync(row);
+    }
+
+    /// <summary>A re-link, as <c>Adopt</c> leaves the row, committed from its own scope.</summary>
+    private async Task ReLink(BankConnection connection, string itemId)
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var protector = scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>();
+
+        var tracked = await dbContext.Set<BankConnection>().SingleAsync(c => c.Id == connection.Id, Ct);
+
+        tracked.ProviderItemId = itemId;
+        tracked.AccessTokenCiphertext = protector.Protect("token-two");
+        tracked.Status = BankConnectionStatus.Active;
+        tracked.Cursor = null;
+        tracked.AccountsRekeyed = true;
+
+        await dbContext.SaveChangesAsync(Ct);
     }
 
     [Fact]

@@ -66,10 +66,15 @@ builder.Services.AddPlaidConnector(builder.Configuration);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApiDocuments();
 
-builder.Services.AddValidation();
+builder.Services.AddApiValidation();
 builder.Services.AddApiErrorHandling();
 
 var app = builder.Build();
+
+// Before the server is listening, not from a hosted service: the one that starts Kestrel is
+// registered while the builder is constructed, so anything added later starts after it and
+// would leave a window where requests are served by a host about to be refused.
+await app.VerifyBankKeyRing();
 
 // Before anything else, so that every failure below it leaves as problem details.
 app.UseApiErrorHandling();

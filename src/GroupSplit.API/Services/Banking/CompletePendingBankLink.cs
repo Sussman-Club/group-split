@@ -23,6 +23,23 @@ internal sealed class CompletePendingBankLinkHandler(IBankConnectionService conn
 }
 
 /// <summary>
+/// Give up on one link that has been tried enough times, handing back the access it holds.
+/// </summary>
+/// <remarks>
+/// A job of its own rather than something the sweep does inline, because giving up talks to
+/// the provider: it belongs on the same queue, with the same retries and the same isolation
+/// from the sweep, as the finishing it is the counterpart to.
+/// </remarks>
+public sealed record AbandonPendingBankLink(Guid PendingLinkId) : IJob;
+
+internal sealed class AbandonPendingBankLinkHandler(IBankConnectionService connections)
+    : IJobHandler<AbandonPendingBankLink>
+{
+    public async ValueTask HandleAsync(AbandonPendingBankLink job, CancellationToken cancellationToken) =>
+        await connections.AbandonPending(job.PendingLinkId, cancellationToken);
+}
+
+/// <summary>
 /// Ask for every interrupted link still worth finishing to be finished.
 /// </summary>
 /// <remarks>
@@ -37,9 +54,12 @@ internal sealed class CompletePendingBankLinkHandler(IBankConnectionService conn
 /// </para>
 /// <para>
 /// Attempts are bounded. A link that cannot be finished -- an expired public token, an item
-/// whose stored form will not read -- stops being retried and stays as a row, because it is
-/// the only remaining record that an item exists at the provider under this account. Those
-/// are counted in the log rather than deleted.
+/// whose stored form will not read -- stops being retried and is given up on, which means
+/// handing its access back to the provider and dropping the row rather than leaving it.
+/// Leaving it was the other option and it is the worse one: the row holds a working bank
+/// access token, nothing surfaces it, nothing revisits it, and the item it names belongs to
+/// no connection anybody can see. Handing the access back is the only thing that actually
+/// resolves that, and where the provider will not take it the log line says so by name.
 /// </para>
 /// </remarks>
 public sealed record SweepPendingBankLinks : IJob;
@@ -63,18 +83,31 @@ internal sealed class SweepPendingBankLinksHandler(
     {
         var startedBefore = clock.GetUtcNow() - Grace;
 
+        // One read, split here. Two reads over the same predicate would be the faster shape
+        // and it is the wrong one: a row whose Attempts crossed MaxAttempts between them
+        // comes back from both, and this would then ask for it to be finished and given up
+        // on at once. Neither of those re-checks the count, so under a job transport that
+        // runs them side by side the give-up retires the item at the provider while the
+        // finish is still storing a connection that names it.
+        //
+        // Reading both halves at once costs nothing here: rows are given up on rather than
+        // left, so this table holds only what is genuinely in flight.
         var links = await dbContext.Set<PendingBankLink>()
             .Where(link => link.StartedAt <= startedBefore)
             .Select(link => new { link.Id, link.Attempts })
             .ToListAsync(cancellationToken);
 
-        var (worthTrying, abandoned) = (
-            links.Where(link => link.Attempts < MaxAttempts).ToList(),
-            links.Count(link => link.Attempts >= MaxAttempts));
+        var worthTrying = links.Where(link => link.Attempts < MaxAttempts).Select(link => link.Id).ToList();
+        var giveUpOn = links.Where(link => link.Attempts >= MaxAttempts).Select(link => link.Id).ToList();
 
-        foreach (var link in worthTrying)
+        foreach (var id in worthTrying)
         {
-            await jobs.DispatchAsync(new CompletePendingBankLink(link.Id), cancellationToken);
+            await jobs.DispatchAsync(new CompletePendingBankLink(id), cancellationToken);
+        }
+
+        foreach (var id in giveUpOn)
+        {
+            await jobs.DispatchAsync(new AbandonPendingBankLink(id), cancellationToken);
         }
 
         if (worthTrying.Count > 0)
@@ -82,14 +115,15 @@ internal sealed class SweepPendingBankLinksHandler(
             logger.LogInformation("Queued {Count} interrupted bank links to finish.", worthTrying.Count);
         }
 
-        if (abandoned > 0)
+        if (giveUpOn.Count > 0)
         {
-            // Worth an error rather than a note: each one is an item live at the provider
-            // that this application has given up on attaching to anybody.
+            // Worth an error rather than a note: each one was an item live at the provider
+            // that this application never managed to attach to anybody.
             logger.LogError(
-                "{Count} interrupted bank links have been tried {MaxAttempts} times and are being left. "
-                + "Each is a provider item that exists and belongs to no connection here.",
-                abandoned, MaxAttempts);
+                "{Count} interrupted bank links have been tried {MaxAttempts} times and are being given up "
+                + "on. Each held a provider item that belongs to no connection here, and is being handed "
+                + "back.",
+                giveUpOn.Count, MaxAttempts);
         }
     }
 }

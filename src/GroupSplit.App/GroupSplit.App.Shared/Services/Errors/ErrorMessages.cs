@@ -77,6 +77,7 @@ public static class ErrorMessages
         [ErrorCodes.BankConnectionNeedsAttention] = "Your bank needs you to sign in again before this can be synced.",
         [ErrorCodes.BankTransactionIsCredit] = "This is money coming in, so it cannot be added as an expense. You can ignore it instead.",
         [ErrorCodes.BankProviderUnavailable] = "We could not reach your bank just now. Please try again in a few minutes.",
+        [ErrorCodes.BankConnectionUnrecoverable] = "We can no longer read the access your bank granted for this connection, so signing in again cannot repair it. Remove it and link the bank again.",
         [ErrorCodes.BankLinkNotSaved] = "Your bank approved the connection, but something went wrong here before we could save it, so we handed the access straight back. Nothing is linked. Please try again.",
         [ErrorCodes.BankLinkNotSavedAccessRemains] = "Your bank approved the connection, but something went wrong here before we could save it -- and we could not hand the access back. Nothing is linked here. Please try again, and you can withdraw this app's access from your bank if you would rather not.",
         [ErrorCodes.BankLinkWillBeFinished] = "Your bank approved the connection and we have it safely, but we could not finish setting it up just now. It will appear on its own shortly -- there is nothing you need to do, and no need to link it again.",

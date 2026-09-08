@@ -196,8 +196,11 @@ devtunnel user login
 
 The other half is that access has to be anonymous -- a provider has no account here and no
 token, and what stands in for one is its signature over the bytes it sent, which the API
-checks before reading them -- so the whole local web app answers on that address for as long
-as the run lasts. Aspire creates the tunnel with the run and tears it down after.
+checks before reading them. That reasoning covers `/webhooks` and only `/webhooks`: the
+tunnel fronts the web app's root, so for as long as the run lasts the whole local app --
+sign-in page, dev data and all -- answers to anybody holding the address. Turn it on while
+you are working on webhooks and off again afterwards. Aspire creates the tunnel with the run
+and tears it down after.
 
 ## The sign-in key ring
 

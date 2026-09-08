@@ -308,6 +308,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(connection => connection.AccessTokenCiphertext).IsRequired();
             entity.Property(connection => connection.LinkedAt).IsRequired();
 
+            // Non-nullable with a false default: every connection that already exists was
+            // never re-keyed, which is exactly what false says.
+            entity.Property(connection => connection.AccountsRekeyed).IsRequired().HasDefaultValue(false);
+
             // By name, not number: the first enum in the schema, and the precedent.
             entity.Property(connection => connection.Status)
                 .HasConversion<string>()

@@ -69,6 +69,7 @@ public static class BankingServiceExtensions
                     .AddJobHandler<SyncBankConnection, SyncBankConnectionHandler>()
                     .AddJobHandler<SweepBankConnections, SweepBankConnectionsHandler>()
                     .AddJobHandler<CompletePendingBankLink, CompletePendingBankLinkHandler>()
+                    .AddJobHandler<AbandonPendingBankLink, AbandonPendingBankLinkHandler>()
                     .AddJobHandler<SweepPendingBankLinks, SweepPendingBankLinksHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepBankConnections(),

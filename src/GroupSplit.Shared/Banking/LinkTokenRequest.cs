@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace GroupSplit.Shared;
 
 /// <summary>
@@ -27,5 +29,14 @@ public record CreateBankConnectionRequest
     /// The provider's one-time token. Not a secret worth protecting for long: it is useless
     /// without this application's credentials and expires in minutes.
     /// </summary>
+    /// <remarks>
+    /// Bounded and required, because the route acts on this before it knows whether it is a
+    /// token at all: it writes the value down encrypted and commits that row, and only then
+    /// asks the provider. Absent, that was a null through the protector and an opaque 500 on
+    /// a route that advertises a validation problem; unbounded, it was a row of whatever the
+    /// request body would carry. The provider's own tokens are short.
+    /// </remarks>
+    [Required]
+    [StringLength(512, MinimumLength = 1)]
     public string PublicToken { get; set; } = null!;
 }

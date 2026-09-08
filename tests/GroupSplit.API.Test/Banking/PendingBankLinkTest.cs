@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GroupSplit.API.Services.Banking;
@@ -7,6 +8,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GroupSplit.API.Test.Banking;
 
@@ -135,6 +137,135 @@ public class PendingBankLinkTest : IAsyncLifetime
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         Assert.Empty(await dbContext.Set<BankConnection>().ToListAsync(Ct));
+    }
+
+    /// <summary>
+    /// An item that already belongs to somebody else's connection is refused, and the row
+    /// that was holding it goes with the refusal.
+    /// </summary>
+    /// <remarks>
+    /// A refusal is not an interruption. Held rows exist so that a link which could not be
+    /// stored *yet* can be finished later, and this one can never be stored at all -- the
+    /// sweep would try it to exhaustion and reach the same answer every time. Left there it
+    /// would be a row belonging to one person holding a live access token to another
+    /// person's bank, which is the last thing that should outlive a 404.
+    /// </remarks>
+    [Fact]
+    public async Task An_item_that_is_somebody_elses_leaves_no_row_holding_their_access()
+    {
+        _bank.Answer("cursor-one");
+
+        var item = FakeBankConnector.Item("item-shared", "token-shared");
+
+        // Somebody else links first, so the item is theirs.
+        _bank.AnswerExchange(item);
+
+        using var somebodyElse = _host.ClientForAnotherUser();
+
+        var theirs = await somebodyElse.PostAsJsonAsync(
+            "/bank-connections", new CreateBankConnectionRequest { PublicToken = "public-token" }, Ct);
+
+        theirs.EnsureSuccessStatusCode();
+
+        // And now the provider hands the caller the same item.
+        _bank.AnswerExchange(item);
+
+        var mine = await _host.Client.PostAsJsonAsync(
+            "/bank-connections", new CreateBankConnectionRequest { PublicToken = "public-token" }, Ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, mine.StatusCode);
+
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Empty(await dbContext.Set<PendingBankLink>().ToListAsync(Ct));
+
+        // Still exactly the one connection, and its access was not handed back: the item is
+        // theirs and in use, and removing it would break their connection rather than ours.
+        Assert.Single(await dbContext.Set<BankConnection>().ToListAsync(Ct));
+        Assert.Empty(_bank.RemovedTokens);
+    }
+
+    /// <summary>
+    /// A link that has been tried enough times is given up on, and giving up means handing
+    /// the access back rather than keeping it.
+    /// </summary>
+    /// <remarks>
+    /// The row holds a working bank access token. Nothing surfaces it, nothing revisits it,
+    /// and the item it names belongs to no connection anybody can see -- so leaving it is
+    /// keeping somebody's bank access alive forever for no one's benefit. Handing it back is
+    /// the one action that resolves both halves at once.
+    /// </remarks>
+    [Fact]
+    public async Task Giving_up_hands_the_access_back_and_drops_the_row()
+    {
+        var pendingId = await Held(FakeBankConnector.Item("item-held", "token-held"));
+
+        await using (var scope = _host.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IBankConnectionService>()
+                .AbandonPending(pendingId, Ct);
+        }
+
+        Assert.Equal(["token-held"], _bank.RemovedTokens);
+
+        await using var after = _host.Services.CreateAsyncScope();
+        var dbContext = after.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Empty(await dbContext.Set<PendingBankLink>().ToListAsync(Ct));
+        Assert.Empty(await dbContext.Set<BankConnection>().ToListAsync(Ct));
+    }
+
+    /// <summary>
+    /// The provider refusing does not buy the row a reprieve: it goes either way, and the
+    /// log is what is left naming the item somebody has to remove by hand.
+    /// </summary>
+    [Fact]
+    public async Task Giving_up_drops_the_row_even_when_the_access_cannot_be_handed_back()
+    {
+        _bank.RefuseRemoval = true;
+
+        var pendingId = await Held(FakeBankConnector.Item("item-stuck", "token-stuck"));
+
+        await using (var scope = _host.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IBankConnectionService>()
+                .AbandonPending(pendingId, Ct);
+        }
+
+        await using var after = _host.Services.CreateAsyncScope();
+
+        Assert.Empty(await after.ServiceProvider.GetRequiredService<AppDbContext>()
+            .Set<PendingBankLink>().ToListAsync(Ct));
+
+        // Named, and at Error, because once the row is gone this line is the only record
+        // that the item is still there.
+        Assert.Contains(_host.Logs, entry =>
+            entry.Level == LogLevel.Error && entry.Message.Contains("item-stuck"));
+    }
+
+    /// <summary>A link written down as holding <paramref name="item"/> and nothing more.</summary>
+    private async Task<Guid> Held(LinkedItem item)
+    {
+        var user = await SomebodyWhoExists();
+
+        await using var scope = _host.Services.CreateAsyncScope();
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var protector = scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>();
+
+        var pending = new PendingBankLink
+        {
+            UserId = user,
+            Provider = FakeBankConnector.Name,
+            ItemCiphertext = protector.Protect(JsonSerializer.Serialize(item, ItemJson)),
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-30)
+        };
+
+        dbContext.Add(pending);
+        await dbContext.SaveChangesAsync(Ct);
+
+        return pending.Id;
     }
 
     /// <summary>The signed-in caller, as a row, so a pending link can be given an owner.</summary>

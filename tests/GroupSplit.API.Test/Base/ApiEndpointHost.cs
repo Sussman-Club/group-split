@@ -114,7 +114,7 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         // The same registrations Program.cs makes, minus the ones that need Aspire.
         // The production list, so a test host cannot drift from what actually runs.
         builder.Services.AddDomainServices();
-        builder.Services.AddValidation();
+        builder.Services.AddApiValidation();
         builder.Services.AddApiErrorHandling();
 
 

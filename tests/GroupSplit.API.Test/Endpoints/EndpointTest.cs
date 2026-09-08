@@ -245,13 +245,13 @@ public class EndpointTest : IAsyncLifetime
 
     // ---- Validation on the way in ---------------------------------------------------
 
-    // Body validation on the create routes is deliberately not asserted here. In .NET 10
+    // Body validation on the create routes does run here now. It did not: .NET 10
     // minimal-API validation is a source-generated interceptor on the AddValidation() call
-    // site, so it exists only in the API assembly's own Program.cs. A host assembled from
-    // the outside, as this one is, gets the registration without the interceptor and the
-    // annotations never run. What the annotations themselves do is covered by
-    // ValidationAttributeTests, and the PATCH routes below validate through PatchedModel,
-    // which is ordinary code and does run here.
+    // site, and this host called it from the test assembly, so the filter ran and found no
+    // annotations to check. It goes through GroupSplit.API's own AddApiValidation() instead,
+    // which puts the interceptor in the assembly the endpoints are in. What the annotations
+    // themselves do is still covered by ValidationAttributeTests; the PATCH routes below
+    // validate through PatchedModel, which is ordinary code and always ran here.
 
     /// <summary>
     /// The other defect this branch fixed. The PATCH routes validated nothing, because the

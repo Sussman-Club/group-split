@@ -43,12 +43,6 @@ public static class KeyRingExtensions
                 // content root path would orphan every stored token the day the app moved.
                 .SetApplicationName("GroupSplit");
 
-            // Says which of the two postures below this deployment ended up in, and checks
-            // that the ring still opens what is stored. Registered either way: an unwrapped
-            // ring is the thing most worth saying out loud, and it is the case that would
-            // otherwise pass in silence.
-            builder.Services.AddHostedService<BankKeyRingVerifier>();
-
             var certificate = options[nameof(BankingOptions.KeyRingCertificate)];
 
             if (string.IsNullOrWhiteSpace(certificate))

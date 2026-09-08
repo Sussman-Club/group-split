@@ -136,5 +136,4 @@ public static class BankConnectionsApi
                 .ProducesProblem(StatusCodes.Status502BadGateway);
         }
     }
-
 }

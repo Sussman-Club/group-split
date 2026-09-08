@@ -134,6 +134,7 @@ data saying something untrue. Distinct from a 400, which says a field is wrong, 
 | --- | --- | --- |
 | `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The stated shares do not add up to the expense's amount. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
 | `BANK_TRANSACTION_IS_CREDIT` | The imported row is money coming in -- a refund, a deposit -- and an expense is money going out. It can be ignored; filing it needs a kind of transaction that does not exist yet. | `amount`, which is negative. |
+| `BANK_CONNECTION_UNRECOVERABLE` | The access this connection holds can no longer be read here, so it can be neither synced nor repaired in update mode -- both need the token. Removing it and linking the bank again is the way forward; the item is stranded at the provider either way. | |
 
 ### Bad gateway (502)
 

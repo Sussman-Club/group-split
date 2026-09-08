@@ -83,6 +83,13 @@ public static class ErrorCodes
 
     public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
 
+    /// <summary>
+    /// The access this connection was holding can no longer be read, so nothing can be done
+    /// with it -- not synced, not repaired in update mode, not removed at the provider. All
+    /// three need the token. Linking the bank again is the only way forward.
+    /// </summary>
+    public const string BankConnectionUnrecoverable = "BANK_CONNECTION_UNRECOVERABLE";
+
     // ---- Server error (500) that still has something to say -------------------------
     //
     // Ordinarily a 500 tells a caller a trace id and nothing else, because a bug has no

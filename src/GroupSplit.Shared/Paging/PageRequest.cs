@@ -5,12 +5,10 @@ namespace GroupSplit.Shared;
 /// </summary>
 /// <remarks>
 /// Out-of-range values are clamped rather than refused, and the page that comes back says
-/// which values were actually applied. Refusing would be the stricter contract, but the
-/// annotations that would express it (<c>[Range]</c>) only run inside the API's own
-/// assembly -- .NET 10 validation is a source-generated interceptor on the
-/// <c>AddValidation()</c> call site -- so a caller hosted anywhere else would silently get
-/// the lenient behaviour instead. One behaviour everywhere is worth more here than the
-/// stricter of the two.
+/// which values were actually applied. Refusing would be the stricter contract; clamping is
+/// chosen because a page size is a request for how much, not an assertion about the world,
+/// and answering "here is as much as you may have, and here is how much that was" is more
+/// use to a caller than a 400. There are deliberately no <c>[Range]</c> annotations here.
 /// </remarks>
 public record PageRequest(int Page = 1, int PageSize = PageRequest.DefaultPageSize)
 {

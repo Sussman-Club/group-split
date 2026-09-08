@@ -1,6 +1,8 @@
 using GroupSplit.API.Services.Banking;
+using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Jobs;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -21,6 +23,13 @@ namespace GroupSplit.API.Endpoints;
 public static class WebhooksApi
 {
     private const string Prefix = "/webhooks";
+
+    /// <summary>
+    /// How much of an anonymous caller's body is read before it has proved anything. A
+    /// provider's notification is a small JSON object; this is generous by two orders of
+    /// magnitude and still refuses a stranger the server's 30MB default.
+    /// </summary>
+    private const long MaxBodyBytes = 128 * 1024;
 
     /// <summary>The path a provider should be told to send its webhooks to.</summary>
     public static string PathFor(string provider) => $"{Prefix}/{provider}";
@@ -43,9 +52,23 @@ public static class WebhooksApi
     {
         private RouteHandlerBuilder MapProviderWebhook()
         {
-            return group.MapPost("{provider}", async (
+            // Constrained rather than matched loosely, so a segment that could not name a
+            // connector never reaches the handler. It is the one caller-written value on an
+            // anonymous route, and unconstrained it reached a log sink verbatim --
+            // percent-decoded, newlines and all, as long as a URL allows.
+            //
+            // Anchored with \A and \z and not with ^ and $. Route constraints match rather
+            // than parse, and in .NET a trailing "$" is happy to sit in front of a final
+            // newline -- so "plaid%0A" would pass the constraint, miss the connector lookup,
+            // and split the log line that says so.
+            //
+            // And (?-i:...) because route constraints are compiled IgnoreCase, so without it
+            // this reads as lower-case only and admits "PLAID". A connector key is
+            // lower-case by contract; the pattern should mean what it says.
+            return group.MapPost(@"{provider:regex(\A(?-i:[a-z0-9-]+)\z):maxlength(32)}", async (
                     string provider,
                     HttpContext httpContext,
+                    AppDbContext dbContext,
                     IServiceProvider services,
                     IBankConnectionService connections,
                     IJobDispatcher jobs,
@@ -60,9 +83,16 @@ public static class WebhooksApi
                         return Results.NotFound();
                     }
 
+                    // Capped before a byte is read. This is the only anonymous route in the
+                    // API, and everything below -- reading the body, hashing it, checking the
+                    // signature -- happens before the caller has proved anything. On the
+                    // server's default a stranger could spend 30MB of disk and twice that in
+                    // memory per call, and a provider's notification is a fraction of this.
+                    if (httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
+                        size.MaxRequestBodySize = MaxBodyBytes;
+
                     // The raw bytes, because the signature is over exactly these and a
                     // round trip through a deserializer would not reproduce them.
-                    httpContext.Request.EnableBuffering();
                     using var reader = new StreamReader(httpContext.Request.Body, leaveOpen: true);
                     var body = await reader.ReadToEndAsync(ct);
 
@@ -90,7 +120,7 @@ public static class WebhooksApi
                         return Results.Ok();
                     }
 
-                    await Apply(notification, connection, jobs, logger, ct);
+                    await Apply(notification, connection, dbContext, jobs, logger, ct);
 
                     return Results.Ok();
                 })
@@ -109,8 +139,26 @@ public static class WebhooksApi
     /// What each kind of notification means here. Only four do anything; the rest are
     /// acknowledged so the provider stops resending them.
     /// </summary>
-    private static async Task Apply(WebhookEvent notification, BankConnection connection, IJobDispatcher jobs,
-        ILogger logger, CancellationToken ct)
+    /// <remarks>
+    /// A status is written and saved, and saved before any sync is asked for. Both halves
+    /// matter.
+    /// <para>
+    /// Saved, because these notifications are the only thing in the application that can
+    /// move a connection out of <see cref="BankConnectionStatus.LoginRequired"/>. Repairing
+    /// one opens the provider's UI in update mode, which hands back no public token, so
+    /// nothing on the linking path runs and <c>LOGIN_REPAIRED</c> is the whole of the way
+    /// back. A status left sitting in the change tracker means somebody who has just signed
+    /// in again is told to sign in again, and goes on being told that.
+    /// </para>
+    /// <para>
+    /// And before, because a sync is dispatched to a worker that reads the connection
+    /// afresh. Asking for one while the status it depends on is uncommitted is a race the
+    /// sync loses: it reads the old status, answers <c>NotSyncable</c>, and everything
+    /// waiting behind the cursor stays there until the nightly sweep.
+    /// </para>
+    /// </remarks>
+    private static async Task Apply(WebhookEvent notification, BankConnection connection, AppDbContext dbContext,
+        IJobDispatcher jobs, ILogger logger, CancellationToken ct)
     {
         switch (notification)
         {
@@ -120,16 +168,20 @@ public static class WebhooksApi
 
             case LoginRequired:
                 connection.Status = BankConnectionStatus.LoginRequired;
+                await dbContext.SaveChangesAsync(ct);
                 break;
 
             case LoginRepaired:
                 connection.Status = BankConnectionStatus.Active;
+                await dbContext.SaveChangesAsync(ct);
+
                 // Whatever arrived while it was broken is waiting behind the cursor.
                 await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
                 break;
 
             case PermissionRevoked:
                 connection.Status = BankConnectionStatus.Revoked;
+                await dbContext.SaveChangesAsync(ct);
                 break;
 
             case UnhandledWebhook unhandled:
