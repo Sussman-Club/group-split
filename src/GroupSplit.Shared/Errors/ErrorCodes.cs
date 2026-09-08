@@ -83,6 +83,17 @@ public static class ErrorCodes
 
     public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
 
+    // ---- Server error (500) that still has something to say -------------------------
+    //
+    // Ordinarily a 500 tells a caller a trace id and nothing else, because a bug has no
+    // useful description. These two are different: the request failed here, but the bank
+    // had already granted access by the time it did, and whether that access was handed
+    // back is something the person is entitled to know rather than guess at.
+
+    public const string BankLinkNotSaved = "BANK_LINK_NOT_SAVED";
+
+    public const string BankLinkNotSavedAccessRemains = "BANK_LINK_NOT_SAVED_ACCESS_REMAINS";
+
     /// <summary>
     /// The generic code for a status, used when a response was produced by something that
     /// knows nothing about the domain: routing, authentication, model binding.

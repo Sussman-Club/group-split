@@ -71,3 +71,16 @@ public sealed class UnprocessableException(string code, string message)
 /// </remarks>
 public sealed class BadGatewayException(string code, string message, Exception? inner = null)
     : DomainException(StatusCodes.Status502BadGateway, code, message, inner);
+
+/// <summary>
+/// The request failed here, after something outside had already been done on its behalf.
+/// </summary>
+/// <remarks>
+/// The only 500 in this catalog that says anything. A 500 is otherwise a bug, and a bug has
+/// nothing useful to tell a caller but a trace id -- but this one is a bug that happened
+/// after somebody's bank had already granted access, and whether that access was handed
+/// back is not a detail of our internals. It is the thing they would want to know, and they
+/// cannot find it out from anywhere else.
+/// </remarks>
+public sealed class LeftBehindException(string code, string message, Exception? inner = null)
+    : DomainException(StatusCodes.Status500InternalServerError, code, message, inner);

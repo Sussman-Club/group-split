@@ -97,6 +97,10 @@ public static class BankConnectionsApi
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
+                // Declared, unlike anywhere else, because this route's 500 carries a code
+                // worth reading: the bank granted access and storing it failed, and the
+                // answer says whether that access was handed back.
+                .ProducesProblem(StatusCodes.Status500InternalServerError)
                 .ProducesProblem(StatusCodes.Status502BadGateway);
         }
 

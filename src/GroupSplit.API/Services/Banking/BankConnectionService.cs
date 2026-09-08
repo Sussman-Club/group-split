@@ -221,11 +221,23 @@ public sealed class BankConnectionService(
         {
             await write();
         }
-        catch
+        catch (Exception e)
         {
-            await TryRetire(provider, item.AccessToken, item.ProviderItemId);
+            var retired = await TryRetire(provider, item.AccessToken, item.ProviderItemId);
 
-            throw;
+            // Said out loud rather than left as a bare 500. The bank granted access a
+            // moment ago and this request then failed, so "something went wrong" would
+            // leave somebody unable to tell whether their bank is now connected to an
+            // application that cannot use it. The two codes differ only in whether the
+            // access was handed back, which is the part they cannot find out anywhere else.
+            throw new LeftBehindException(
+                retired ? ErrorCodes.BankLinkNotSaved : ErrorCodes.BankLinkNotSavedAccessRemains,
+                retired
+                    ? "The bank connection could not be stored, so the access it granted was handed back. "
+                      + "Nothing is linked."
+                    : "The bank connection could not be stored, and the access it granted could not be "
+                      + "handed back. Nothing is linked here.",
+                e);
         }
     }
 
@@ -237,7 +249,8 @@ public sealed class BankConnectionService(
     /// it was doing stands whether or not this works. A provider that refuses leaves an item
     /// running there, which is worth a line in the log and is not worth undoing a link over.
     /// </remarks>
-    private async Task TryRetire(string provider, string accessToken, string itemId)
+    /// <returns>Whether the provider was actually told.</returns>
+    private async Task<bool> TryRetire(string provider, string accessToken, string itemId)
     {
         // Deliberately not the request's cancellation token. This runs *because* something
         // went wrong, and a caller who disconnected mid-link is one of the likelier reasons
@@ -248,16 +261,22 @@ public sealed class BankConnectionService(
 
         try
         {
-            if (Connector(provider) is { } connector)
+            if (Connector(provider) is not { } connector)
             {
-                await connector.RemoveAsync(accessToken, budget.Token);
+                return false;
             }
+
+            await connector.RemoveAsync(accessToken, budget.Token);
+
+            return true;
         }
         catch (Exception e)
         {
             logger.LogWarning(e,
                 "Could not retire item {ProviderItemId} at {Provider}. It may still be counted there.",
                 itemId, provider);
+
+            return false;
         }
     }
 
