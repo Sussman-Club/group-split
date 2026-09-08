@@ -161,10 +161,12 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// The nav item on screen. The menu is rendered twice, once in the sidebar and once as
     /// the mobile tab bar, so an unscoped role lookup matches two and Playwright refuses it.
     /// Filter rather than a chained visible= selector, which descends into the link and
-    /// matches its icon and label instead of the link itself.
+    /// matches its icon and label instead of the link itself. Exact, because a role name is
+    /// otherwise a case-insensitive substring: "Expenses" also matches the brand link, whose
+    /// accessible name ends "Shared expenses", and that one comes first in the document.
     /// </summary>
     private ILocator NavLink(string name) =>
-        Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = name })
+        Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = name, Exact = true })
             .Filter(new LocatorFilterOptions { Visible = true })
             .First;
 
