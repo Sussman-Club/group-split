@@ -170,6 +170,15 @@ public class DuplicateLinkTest : IAsyncLifetime
             .AnswerExchange(FakeBankConnector.Item("item-two", "token-two"));
 
         await Link();
+
+        // The first item's sync has to have finished and stored its cursor before the
+        // re-link, or there is nothing for the adoption to clear and the test proves
+        // nothing. Worse, the run left in flight then reads the connection after the
+        // adoption -- so it is a sync of the new item, and the cursor it stores is the new
+        // item's own. The second run resuming from that is correct, and indistinguishable
+        // from the bug below to a fake whose pages do not say which item they came from.
+        await SyncedTo("cursor-one");
+
         await Link();
 
         // Waited for, or the assertion below reads a list with one entry in it and passes
