@@ -160,10 +160,12 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// <summary>
     /// The nav item on screen. The menu is rendered twice, once in the sidebar and once as
     /// the mobile tab bar, so an unscoped role lookup matches two and Playwright refuses it.
+    /// Filter rather than a chained visible= selector, which descends into the link and
+    /// matches its icon and label instead of the link itself.
     /// </summary>
     private ILocator NavLink(string name) =>
         Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = name })
-            .Locator("visible=true")
+            .Filter(new LocatorFilterOptions { Visible = true })
             .First;
 
     private static LocatorAssertionsToBeVisibleOptions Visible =>
