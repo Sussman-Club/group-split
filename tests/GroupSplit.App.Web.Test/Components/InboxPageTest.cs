@@ -219,13 +219,13 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
-        await page.Find(".gs-select-all input[type=checkbox]").ChangeAsync(
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
 
         Assert.Contains("2 selected", page.Find(".gs-selection-bar").TextContent);
 
         // And it says why the third was left out, rather than quietly skipping it.
-        Assert.Contains("possible duplicate", page.Find(".gs-select-all").TextContent);
+        Assert.Contains("possible duplicate", page.Find(".gs-list-head").TextContent);
     }
 
     [Fact]

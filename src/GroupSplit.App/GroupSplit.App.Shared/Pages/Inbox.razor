@@ -87,15 +87,31 @@
                decision, taken for several rows at once. *@
             @if (Selectable)
             {
-                <label class="gs-select-all">
-                    <MudCheckBox T="bool"
-                                 Value="@AllSelected"
-                                 ValueChanged="@((bool on) => SelectAll(on))"
-                                 Indeterminate="@(_selected.Count > 0 && !AllSelected)"
-                                 Color="Color.Primary"
-                                 Dense="true" />
-                    <span>@SelectAllLabel</span>
-                </label>
+                @* A header for the list rather than a control floating over it: it carries
+                   the same padding as a row, so its box sits in the same column as theirs
+                   and the ticks line up down the left edge. *@
+                <div class="gs-list-head">
+                    <label class="gs-list-head-select">
+                        <MudCheckBox T="bool"
+                                     Value="@AllSelected"
+                                     ValueChanged="@((bool on) => SelectAll(on))"
+                                     Indeterminate="@(_selected.Count > 0 && !AllSelected)"
+                                     Color="Color.Primary"
+                                     Dense="true"
+                                     Class="gs-row-check"
+                                     aria-label="Select every row that can be" />
+                        <span>@(_selected.Count > 0 ? $"{_selected.Count} selected" : "Select all")</span>
+                    </label>
+
+                    @* Said apart from the label rather than tacked onto it: it explains
+                       what select-all did not do, which is not part of its name. *@
+                    @if (FlaggedCount > 0)
+                    {
+                        <span class="note">
+                            @FlaggedCount with a possible duplicate @(FlaggedCount == 1 ? "is" : "are") left out
+                        </span>
+                    }
+                </div>
             }
 
             @* gs-queue: a list whose rows are tasks rather than records. It is what earns
@@ -323,18 +339,13 @@
     private bool AllSelected =>
         Selectables.Any() && Selectables.All(row => _selected.Contains(row.Id));
 
-    private string SelectAllLabel
-    {
-        get
-        {
-            var flagged = State.Rows.Count(row =>
-                row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0);
-
-            return flagged == 0
-                ? "Select all"
-                : $"Select all · {flagged} with a possible duplicate left out";
-        }
-    }
+    /// <summary>
+    /// How many waiting rows select-all leaves alone. Said on the header, because a
+    /// control that quietly covers less than its name claims is worse than one that says
+    /// so.
+    /// </summary>
+    private int FlaggedCount => State.Rows.Count(row =>
+        row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0);
 
     private void Select(Guid rowId, bool on)
     {

@@ -60,6 +60,10 @@
        render after it appears, which is the first one where it has a box. *@
     @if (_picking || IsCustom)
     {
+        @* No toolbar. Mud's is a tall coloured band carrying the year and the range it
+           has so far, and the chip beside this already says the range -- so it was a
+           third of the calendar's height spent restating what is on screen, in dark ink
+           on a saturated teal. *@
         <MudDateRangePicker @ref="_picker"
                             DateRange="@_picked"
                             DateRangeChanged="OnPickedAsync"
@@ -68,6 +72,8 @@
                             Margin="Margin.Dense"
                             Clearable="true"
                             Editable="false"
+                            ShowToolbar="false"
+                            Color="Color.Primary"
                             AdornmentIcon="@Icons.Material.Rounded.DateRange"
                             AdornmentColor="Color.Primary"
                             Class="gs-range-picker"
