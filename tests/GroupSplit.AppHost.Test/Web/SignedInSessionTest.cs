@@ -78,7 +78,10 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await NavLink("Expenses").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Expenses" }))
+        // The grid's own empty state, which it renders only once the API has answered it.
+        // Exact, or it also matches the page's h1 and the top bar's h2.
+        await Expect(Page.GetByRole(
+                AriaRole.Heading, new PageGetByRoleOptions { Name = "No expenses yet", Exact = true }))
             .ToBeVisibleAsync(Visible);
 
         await Expect(Page).ToHaveURLAsync(
