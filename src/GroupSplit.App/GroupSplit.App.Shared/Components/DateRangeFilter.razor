@@ -1,4 +1,4 @@
-@using GroupSplit.App.Shared.Models
+﻿@using GroupSplit.App.Shared.Models
 @namespace GroupSplit.App.Shared.Components
 
 @*
@@ -24,8 +24,13 @@
 <div class="gs-inline gs-range" role="group" aria-label="Filter by date">
     <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
              Dense="true" PopoverClass="gs-menu">
-        <ActivatorContent>
+        @* The context, and the click that uses it, are the whole contract of a custom
+           activator: MudMenu hands one in and wires nothing up itself, so an activator
+           that does not toggle is a button that does nothing at all. *@
+        <ActivatorContent Context="menu">
             <button type="button" class="gs-chip gs-chip-menu @(Value.IsAllTime ? "" : "active")"
+                    aria-haspopup="listbox"
+                    @onclick="@(args => menu.ToggleAsync(args))"
                     aria-label="@($"Date range: {Value.Label}")">
                 <MudIcon Icon="@Icons.Material.Rounded.DateRange" Size="Size.Small" />
                 <span class="label">@Value.Label</span>

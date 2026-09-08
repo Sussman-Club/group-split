@@ -66,8 +66,12 @@
            Windows it is white on a dark page whatever the stylesheet says. *@
         <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
                  Dense="true" PopoverClass="gs-menu">
-            <ActivatorContent>
+            @* See the note in DateRangeFilter: a custom activator has to toggle the menu
+               itself, and one that does not is a button that does nothing. *@
+            <ActivatorContent Context="menu">
                 <button type="button" class="gs-chip gs-chip-menu @(_where == AllLedgers ? "" : "active")"
+                        aria-haspopup="listbox"
+                        @onclick="@(args => menu.ToggleAsync(args))"
                         aria-label="@($"Which ledger: {WhereLabel}")">
                     <MudIcon Icon="@Icons.Material.Rounded.Groups" Size="Size.Small" />
                     <span class="label">@WhereLabel</span>
