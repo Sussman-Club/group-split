@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -31,6 +32,16 @@ public interface IBankConnectionService
     /// </summary>
     Task<BankConnection> Link(CreateBankConnectionRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Finishes a link that was interrupted between the provider handing over its item and
+    /// this application storing it. Does nothing if there is nothing left to finish.
+    /// </summary>
+    /// <remarks>
+    /// Finishing costs no item at the provider where linking again costs one, which is the
+    /// whole reason the interrupted link was written down rather than abandoned.
+    /// </remarks>
+    Task CompletePending(Guid pendingLinkId, CancellationToken ct = default);
+
     /// <summary>Queues a sync. Returns once it is queued; nothing waits on the sync itself.</summary>
     Task Sync(Guid id, CancellationToken ct = default);
 
@@ -63,6 +74,12 @@ public sealed class BankConnectionService(
     IOptions<BankingOptions> options,
     ILogger<BankConnectionService> logger) : IBankConnectionService
 {
+    /// <summary>
+    /// How a held item is written down and read back. The same options both ways, and only
+    /// ever by this deployment: nothing outside reads this column.
+    /// </summary>
+    private static readonly JsonSerializerOptions ItemJson = new(JsonSerializerDefaults.Web);
+
     /// <summary>How long a best-effort retirement gets before it is given up on.</summary>
     private static readonly TimeSpan RetireTimeout = TimeSpan.FromSeconds(10);
 
@@ -104,9 +121,163 @@ public sealed class BankConnectionService(
     {
         var provider = DefaultProvider;
         var connector = Required(provider);
+        var user = userContext.User;
+
+        // Written down before it can be lost. The provider's item already exists by the
+        // time this request arrives, and the token that names it is handed over once, so
+        // everything from here to a stored connection is a window in which losing it means
+        // losing the item -- live at the provider, counted, and nameable by nothing.
+        var pending = new PendingBankLink
+        {
+            User = user,
+            Provider = provider,
+            PublicTokenCiphertext = protector.Protect(request.PublicToken),
+            StartedAt = clock.GetUtcNow()
+        };
+
+        dbContext.Add(pending);
+        await dbContext.SaveChangesAsync(ct);
 
         var item = await Call(provider, "exchange the public token", () => connector.ExchangeAsync(request.PublicToken, ct));
 
+        // The public token is spent now, and the item is what finishing this needs instead.
+        // Retired if it cannot be written down, because at that point nothing else in the
+        // world holds a token for it.
+        pending.PublicTokenCiphertext = null;
+        pending.ItemCiphertext = protector.Protect(JsonSerializer.Serialize(item, ItemJson));
+
+        await RetiringIfNotStored(provider, item, () => dbContext.SaveChangesAsync(ct));
+
+        BankConnection connection;
+
+        try
+        {
+            connection = await Store(user, provider, item, ct);
+        }
+        catch (Exception e)
+        {
+            // Not retired, unlike every other failure after an exchange: the item is safely
+            // written down, so this link can be finished later rather than started again --
+            // and starting again would spend another of the provider's items where
+            // finishing spends none. The sweep picks it up.
+            logger.LogWarning(e,
+                "Bank link {PendingLinkId} could not be stored yet. The item is held and will be finished.",
+                pending.Id);
+
+            throw new LeftBehindException(
+                ErrorCodes.BankLinkWillBeFinished,
+                "The bank connection could not be finished just now. The access it granted is held safely and "
+                + "will be applied shortly; nothing needs doing.", e);
+        }
+
+        // Idempotent if this does not happen: a row whose connection already exists is
+        // found again by the same matching below, which answers with that connection.
+        dbContext.Remove(pending);
+        await dbContext.SaveChangesAsync(ct);
+
+        await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
+
+        return connection;
+    }
+
+    public async Task CompletePending(Guid pendingLinkId, CancellationToken ct = default)
+    {
+        var pending = await dbContext.Set<PendingBankLink>()
+            .Include(link => link.User)
+            .FirstOrDefaultAsync(link => link.Id == pendingLinkId, ct);
+
+        if (pending is null)
+        {
+            // Finished by the request that started it, or by an earlier attempt.
+            return;
+        }
+
+        pending.Attempts++;
+        pending.LastAttemptAt = clock.GetUtcNow();
+        await dbContext.SaveChangesAsync(ct);
+
+        var item = await ItemFor(pending, ct);
+
+        if (item is null)
+        {
+            return;
+        }
+
+        var connection = await Store(pending.User, pending.Provider, item, ct);
+
+        dbContext.Remove(pending);
+        await dbContext.SaveChangesAsync(ct);
+
+        await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
+
+        logger.LogInformation(
+            "Finished interrupted bank link {PendingLinkId} as connection {ConnectionId}.",
+            pending.Id, connection.Id);
+    }
+
+    /// <summary>
+    /// The exchanged item a pending link carries, exchanging its public token first if that
+    /// has not happened yet. Null when neither is usable, which is the end of the road for
+    /// that row.
+    /// </summary>
+    private async Task<LinkedItem?> ItemFor(PendingBankLink pending, CancellationToken ct)
+    {
+        if (pending.ItemCiphertext is { } stored)
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<LinkedItem>(protector.Unprotect(stored), ItemJson);
+            }
+            catch (Exception e) when (e is AccessTokenUnreadableException or JsonException)
+            {
+                logger.LogError(e,
+                    "The item held for bank link {PendingLinkId} cannot be read, so the link cannot be finished.",
+                    pending.Id);
+
+                return null;
+            }
+        }
+
+        if (pending.PublicTokenCiphertext is not { } publicToken || Connector(pending.Provider) is not { } connector)
+        {
+            return null;
+        }
+
+        // Still worth trying: a public token outlives the request that fetched it by a few
+        // minutes, and inside that window an interrupted link finishes without anybody
+        // being asked to link their bank a second time.
+        try
+        {
+            var item = await connector.ExchangeAsync(protector.Unprotect(publicToken), ct);
+
+            pending.PublicTokenCiphertext = null;
+            pending.ItemCiphertext = protector.Protect(JsonSerializer.Serialize(item, ItemJson));
+            await dbContext.SaveChangesAsync(ct);
+
+            return item;
+        }
+        catch (Exception e)
+        {
+            // Expired, most likely, which is ordinary and not worth an error: the person
+            // links again, and that is the one case where an item really is spent.
+            logger.LogWarning(e,
+                "The public token held for bank link {PendingLinkId} could not be exchanged.", pending.Id);
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Turns an exchanged item into a stored connection: the same work whether a request is
+    /// waiting on it or the sweep is finishing what one left behind.
+    /// </summary>
+    /// <remarks>
+    /// Takes the person rather than reading the current one, because the second caller has
+    /// no request and therefore no current one.
+    /// </remarks>
+    private async Task<BankConnection> Store(
+        User user, string provider, LinkedItem item, CancellationToken ct)
+    {
         var existing = await dbContext.Set<BankConnection>()
             .Include(connection => connection.Accounts)
             .FirstOrDefaultAsync(
@@ -117,7 +288,7 @@ public sealed class BankConnectionService(
         // fresh token, not a second one whose rows would duplicate the first's.
         if (existing is not null)
         {
-            if (existing.UserId != userContext.User.Id)
+            if (existing.UserId != user.Id)
             {
                 // The provider handed us an item that belongs to somebody else's account
                 // here. Nothing good comes of joining those two together -- and nothing
@@ -133,11 +304,7 @@ public sealed class BankConnectionService(
 
             MergeAccounts(existing, item.Accounts);
 
-            // Also not retired on failure: this is the item the connection already names,
-            // so removing it would take a working connection with it rather than clean up
-            // after a failed one.
             await dbContext.SaveChangesAsync(ct);
-            await jobs.DispatchAsync(new SyncBankConnection(existing.Id), ct);
 
             return existing;
         }
@@ -148,7 +315,7 @@ public sealed class BankConnectionService(
         // own comment describes, somebody repairing by starting again. Left there, the
         // person gets a second copy of a bank they already had, the rows arrive twice, and
         // an item is spent at the provider for nothing.
-        if (await SameBankAlreadyLinked(provider, item, ct) is { } duplicate)
+        if (await SameBankAlreadyLinked(user.Id, provider, item, ct) is { } duplicate)
         {
             logger.LogInformation(
                 "Linking {InstitutionName} again as item {ProviderItemId}; adopting it onto connection {ConnectionId}.",
@@ -159,7 +326,7 @@ public sealed class BankConnectionService(
             var supersededItemId = duplicate.ProviderItemId;
             var superseded = Adopt(duplicate, item);
 
-            await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct));
+            await dbContext.SaveChangesAsync(ct);
 
             // Only now. As of that save the connection names the new item, so the one it
             // replaced is finally nobody's. The other order -- which this had -- retires the
@@ -171,14 +338,12 @@ public sealed class BankConnectionService(
                 await TryRetire(provider, superseded, supersededItemId);
             }
 
-            await jobs.DispatchAsync(new SyncBankConnection(duplicate.Id), ct);
-
             return duplicate;
         }
 
         var created = new BankConnection
         {
-            User = userContext.User,
+            User = user,
             Provider = provider,
             ProviderItemId = item.ProviderItemId,
             InstitutionName = item.InstitutionName,
@@ -190,11 +355,7 @@ public sealed class BankConnectionService(
 
         dbContext.Add(created);
 
-        await StoringOrRetiring(provider, item, () => dbContext.SaveChangesAsync(ct));
-
-        // After the save, so a dispatch that fails leaves a stored connection the nightly
-        // sweep will pick up rather than an item retired out from under one.
-        await jobs.DispatchAsync(new SyncBankConnection(created.Id), ct);
+        await dbContext.SaveChangesAsync(ct);
 
         return created;
     }
@@ -215,7 +376,7 @@ public sealed class BankConnectionService(
     /// ours to remove on the way out of a failure -- see the two paths above that say so.
     /// </para>
     /// </remarks>
-    private async Task StoringOrRetiring(string provider, LinkedItem item, Func<Task<int>> write)
+    private async Task RetiringIfNotStored(string provider, LinkedItem item, Func<Task<int>> write)
     {
         try
         {
@@ -427,12 +588,12 @@ public sealed class BankConnectionService(
     /// </para>
     /// </remarks>
     private async Task<BankConnection?> SameBankAlreadyLinked(
-        string provider, LinkedItem item, CancellationToken ct)
+        Guid userId, string provider, LinkedItem item, CancellationToken ct)
     {
         var candidates = await dbContext.Set<BankConnection>()
             .Include(connection => connection.Accounts)
             .Where(connection => connection.Provider == provider
-                                 && connection.UserId == userContext.User.Id
+                                 && connection.UserId == userId
                                  && connection.InstitutionName == item.InstitutionName)
             .ToListAsync(ct);
 

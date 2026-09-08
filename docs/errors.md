@@ -146,6 +146,20 @@ with.
 | --- | --- | --- |
 | `BANK_PROVIDER_UNAVAILABLE` | The bank provider did not answer, or refused. Nothing was changed here. | |
 
+### Server error (500) with something to say
+
+Every other 500 is a bug, and a bug has nothing to tell a caller but a trace id. These three
+are the exception: the request failed here *after* somebody's bank had already granted
+access, and what became of that access is not an internal detail. It decides whether the
+person should try again, wait, or go and withdraw the access themselves — and they cannot
+find it out anywhere else.
+
+| Code | When | Extra members |
+| --- | --- | --- |
+| `BANK_LINK_NOT_SAVED` | The bank granted access, storing it failed, and the access was handed straight back. Nothing is linked and nothing is left at the provider. Retrying is safe. | |
+| `BANK_LINK_NOT_SAVED_ACCESS_REMAINS` | The same, except handing the access back also failed. Nothing is linked here, and the provider may still hold a connection the person can withdraw themselves. | |
+| `BANK_LINK_WILL_BE_FINISHED` | The bank granted access and it was written down before the failure, so the link is finished in the background. Nothing for the person to do, and linking again would only spend a second item at the provider. | |
+
 ## Producing an error in the API
 
 Everything lives under [`src/GroupSplit.API/Errors`](../src/GroupSplit.API/Errors).

@@ -86,13 +86,19 @@ public static class ErrorCodes
     // ---- Server error (500) that still has something to say -------------------------
     //
     // Ordinarily a 500 tells a caller a trace id and nothing else, because a bug has no
-    // useful description. These two are different: the request failed here, but the bank
-    // had already granted access by the time it did, and whether that access was handed
-    // back is something the person is entitled to know rather than guess at.
+    // useful description. These are different: the request failed here, but the bank had
+    // already granted access by the time it did, and what became of that access is
+    // something the person is entitled to know rather than guess at.
 
     public const string BankLinkNotSaved = "BANK_LINK_NOT_SAVED";
 
     public const string BankLinkNotSavedAccessRemains = "BANK_LINK_NOT_SAVED_ACCESS_REMAINS";
+
+    /// <summary>
+    /// Storing the connection failed, but the item behind it was written down first, so
+    /// finishing it later needs nothing from the person and costs no second item.
+    /// </summary>
+    public const string BankLinkWillBeFinished = "BANK_LINK_WILL_BE_FINISHED";
 
     /// <summary>
     /// The generic code for a status, used when a response was produced by something that

@@ -79,6 +79,7 @@ public static class ErrorMessages
         [ErrorCodes.BankProviderUnavailable] = "We could not reach your bank just now. Please try again in a few minutes.",
         [ErrorCodes.BankLinkNotSaved] = "Your bank approved the connection, but something went wrong here before we could save it, so we handed the access straight back. Nothing is linked. Please try again.",
         [ErrorCodes.BankLinkNotSavedAccessRemains] = "Your bank approved the connection, but something went wrong here before we could save it -- and we could not hand the access back. Nothing is linked here. Please try again, and you can withdraw this app's access from your bank if you would rather not.",
+        [ErrorCodes.BankLinkWillBeFinished] = "Your bank approved the connection and we have it safely, but we could not finish setting it up just now. It will appear on its own shortly -- there is nothing you need to do, and no need to link it again.",
         [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead.",
         [ErrorCodes.PossibleDuplicateExpense] = "This looks like an expense you have already recorded. Check the suggestion on the row before adding it again.",
         [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction."

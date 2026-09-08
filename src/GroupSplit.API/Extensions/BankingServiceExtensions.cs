@@ -29,6 +29,18 @@ public static class BankingServiceExtensions
     /// <summary>The daily sweep runs at midnight UTC, independently of application startup.</summary>
     internal static readonly JobSchedule.CronSchedule SweepSchedule = JobSchedule.Cron(CronExpression.Daily(), TimeZoneInfo.Utc);
 
+    /// <summary>
+    /// Interrupted links are swept every five minutes, not daily.
+    /// </summary>
+    /// <remarks>
+    /// Two reasons for the difference. A person is waiting: their bank says it is connected
+    /// and the app does not yet agree, and a day of that is not a recovery. And a link
+    /// interrupted before its exchange holds a public token that lasts minutes, so the first
+    /// attempt has to fall inside that window or the cheapest way out is already gone.
+    /// </remarks>
+    internal static readonly JobSchedule.CronSchedule PendingLinkSweepSchedule =
+        JobSchedule.Cron("*/5 * * * *", TimeZoneInfo.Utc);
+
     extension(IServiceCollection services)
     {
         public IServiceCollection AddBankingServices()
@@ -56,9 +68,13 @@ public static class BankingServiceExtensions
                 .Handlers
                     .AddJobHandler<SyncBankConnection, SyncBankConnectionHandler>()
                     .AddJobHandler<SweepBankConnections, SweepBankConnectionsHandler>()
+                    .AddJobHandler<CompletePendingBankLink, CompletePendingBankLinkHandler>()
+                    .AddJobHandler<SweepPendingBankLinks, SweepPendingBankLinksHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepBankConnections(),
-                        SweepSchedule);
+                        SweepSchedule)
+                    .Add(new SweepPendingBankLinks(),
+                        PendingLinkSweepSchedule);
 
             return services;
         }
