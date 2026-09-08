@@ -71,7 +71,7 @@ public static class WebhookTunnelExtensions
 
             // The same setting a deployment fills from its public origin, so nothing below
             // the AppHost knows a tunnel is involved.
-            return api.WithEnvironment("Banking__PublicOrigin", tunnel.GetEndpoint(web, "https"));
+            return api.WithEnvironment("Banking__PublicOrigin", tunnel.GetEndpoint(web, "http"));
         }
     }
 }
