@@ -180,16 +180,30 @@ public class InboxPageTest : ComponentTest
             null, null, null, null, null, null, null, false, InboxStatus.New, null, null,
             "Everyday", "Fake Bank");
 
-    /// <summary>The same row, showing an expense it might already be.</summary>
+    /// <summary>
+    /// The same row, showing an expense it might already be: the same money to the cent, so
+    /// a confident match.
+    /// </summary>
     private BankTransactionResponse Flagged(string merchant, decimal amount) =>
         Row(merchant, amount, DateOnly.FromDateTime(Today)) with
         {
-            PossibleDuplicates =
-            [
-                new ExpenseMatchResponse(Guid.NewGuid(), merchant, amount, "USD",
-                    DateTimeOffset.UtcNow, Guid.NewGuid(), "Home", "Anabel", 0m, 0)
-            ]
+            PossibleDuplicates = [Match(merchant, amount, 0m, MatchConfidence.Confident)]
         };
+
+    /// <summary>
+    /// The same row, showing something whose amounts do not quite agree -- a tip, or a figure
+    /// somebody rounded. Worth answering and not worth a warning.
+    /// </summary>
+    private BankTransactionResponse Possibly(string merchant, decimal amount, decimal apart = 6m) =>
+        Row(merchant, amount, DateOnly.FromDateTime(Today)) with
+        {
+            PossibleDuplicates = [Match("Dinner", amount - apart, apart, MatchConfidence.Possible)]
+        };
+
+    private static ExpenseMatchResponse Match(string name, decimal amount, decimal apart,
+        MatchConfidence confidence) =>
+        new(Guid.NewGuid(), name, amount, "USD", DateTimeOffset.UtcNow, Guid.NewGuid(), "Home", "Anabel",
+            apart, apart == 0m ? 0 : 2, confidence);
 
     /// <summary>Money coming in, which can be ignored but never filed as an expense.</summary>
     private BankTransactionResponse Credit(string merchant, decimal amount) =>
@@ -204,6 +218,88 @@ public class InboxPageTest : ComponentTest
     private static Task PressAsync(IRenderedComponent<Inbox> page, string label) =>
         page.FindAll(".gs-selection-bar button")
             .First(button => button.TextContent.Contains(label)).ClickAsync(new());
+
+    // ---- how loudly a suggestion is said --------------------------------------------
+
+    /// <summary>
+    /// The same money to the cent is a claim worth a warning on a row nobody has touched.
+    /// </summary>
+    [Fact]
+    public void A_confident_match_arrives_as_a_warning()
+    {
+        _rows = [Flagged("Costco", 87.15m)];
+
+        var page = Render<Inbox>();
+
+        var alert = page.Find(".gs-queue .mud-alert");
+
+        Assert.Contains("mud-alert-text-warning", alert.ClassName);
+        Assert.Contains("You may already have recorded this", alert.TextContent);
+    }
+
+    /// <summary>
+    /// A figure within a quarter of the charge is not. Measured over real spending it lands
+    /// on unrelated money often enough that a warning for it is how somebody learns to stop
+    /// reading them -- so it is said on the same surface in a plainer voice, and it says why
+    /// it is being offered.
+    /// </summary>
+    [Fact]
+    public void A_possible_match_arrives_as_a_note_and_not_a_warning()
+    {
+        _rows = [Possibly("Trattoria da Enzo", 46m)];
+
+        var page = Render<Inbox>();
+
+        var alert = page.Find(".gs-queue .mud-alert");
+
+        Assert.DoesNotContain("mud-alert-text-warning", alert.ClassName);
+        Assert.Contains("mud-alert-text-normal", alert.ClassName);
+        Assert.Contains("could be one you have already recorded", alert.TextContent);
+        Assert.Contains("6.00 apart", alert.TextContent);
+    }
+
+    /// <summary>
+    /// Every candidate, not only the best-ranked one. The ranking can be wrong, and while
+    /// the row showed one slot a coincidence a few cents nearer took it and kept the real
+    /// duplicate off the screen altogether.
+    /// </summary>
+    [Fact]
+    public void Every_candidate_is_listed_and_not_only_the_best_ranked_one()
+    {
+        _rows =
+        [
+            Row("Trattoria da Enzo", 46m, DateOnly.FromDateTime(Today)) with
+            {
+                PossibleDuplicates =
+                [
+                    Match("Dinner", 46m, 0m, MatchConfidence.Confident),
+                    Match("Taxi home", 44m, 2m, MatchConfidence.Possible)
+                ]
+            }
+        ];
+
+        var page = Render<Inbox>();
+
+        var alert = page.Find(".gs-queue .mud-alert");
+
+        Assert.Equal(2, page.FindAll(".gs-queue .gs-match-line").Count);
+        Assert.Contains("Dinner", alert.TextContent);
+        Assert.Contains("Taxi home", alert.TextContent);
+    }
+
+    /// <summary>
+    /// Both grades refuse a filing, so both have to stay out of select-all: a control that
+    /// swept them in would walk into a refusal on every one.
+    /// </summary>
+    [Fact]
+    public void Select_all_leaves_out_a_row_whose_match_is_only_possible()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
+
+        var page = Render<Inbox>();
+
+        Assert.Contains("possible duplicate", page.Find(".gs-list-head").TextContent);
+    }
 
     // ---- selecting several rows -----------------------------------------------------
 

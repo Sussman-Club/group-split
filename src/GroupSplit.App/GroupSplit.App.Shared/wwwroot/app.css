@@ -3374,3 +3374,20 @@ html:not([data-gs-ready]) .gs-group-card {
     background: var(--gs-teal-soft) !important;
     color: var(--gs-teal-deep) !important;
 }
+
+/*
+    A row's duplicate suggestions. Two grades and two voices: a confident match arrives as a
+    warning, a possible one as a plain note on the same surface -- see Inbox.razor. What is
+    shared is the shape, because both list every candidate rather than only the best-ranked
+    one, and a list of one should not read differently from a list of three.
+*/
+.gs-match-lead {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.gs-match-line + .gs-match-line {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
