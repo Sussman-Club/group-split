@@ -14,4 +14,16 @@ public class TransactionSeedDto
     public required DateTimeOffset DateTime { get; set; }
     public required string Name { get; set; }
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The shop this was spent at, by name, matching an entry in <c>merchants.json</c> --
+    /// or null, which is most of them.
+    /// </summary>
+    /// <remarks>
+    /// A real expense gets this by being filed from a bank row, and demo data has no bank
+    /// behind its history, so it is named here instead. Named and not seeded per expense:
+    /// the point of the table is that "Coffee run" in March and "Coffee run" in August are
+    /// two expenses at one place, and a name in the seed file is how the file says that.
+    /// </remarks>
+    public string? Merchant { get; init; }
 }

@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.Net;
 using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
@@ -148,6 +148,10 @@ public static class TransactionCommands
                 table.AddRow("Paid by", Markup.Escape(value.PaidByUserName));
                 table.AddRow("Group", Markup.Escape(value.GroupName ?? "-"));
                 table.AddRow("Category", Markup.Escape(value.Category ?? "-"));
+                // Where it was spent, for one filed from a bank. A terminal cannot draw the
+                // logo the web app badges onto the row, but it has the name the logo stands
+                // for -- and "-" for the expenses nobody imported.
+                table.AddRow("Where", Markup.Escape(value.MerchantName ?? "-"));
 
                 if (value.Splits.Count == 0)
                 {

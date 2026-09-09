@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -178,6 +178,9 @@ public sealed class InboxService(
 
         expense.BankTransaction = row;
         expense.BankTransactionId = row.Id;
+        // Where it was spent, carried onto the ledger. A link and not a name, so an expense
+        // filed today shows the logo a provider only supplies next month.
+        expense.MerchantId = row.MerchantId;
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
@@ -243,6 +246,10 @@ public sealed class InboxService(
         // bank settling for a different figure is not a correction anybody asked for.
         expense.BankTransaction = row;
         expense.BankTransactionId = row.Id;
+        // The merchant comes across on a link too. Pointing a row at an expense somebody
+        // typed in is how that expense learns where it happened -- the amount and the date
+        // it keeps, because those were written down on purpose, but nobody typed a shop.
+        expense.MerchantId = row.MerchantId;
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);

@@ -95,10 +95,17 @@ public class BankTransaction : Entity
     public string? City { get; set; }
 
     /// <summary>
-    /// The merchant's logo, as the provider hosts it. A row with one reads as the place it
-    /// happened rather than as two initials in a circle.
+    /// The place this was spent, resolved from <see cref="MerchantName"/> as the row was
+    /// imported. A row with one reads as the place it happened rather than as two initials
+    /// in a circle, and the logo lives there rather than here.
     /// </summary>
-    public string? LogoUrl { get; set; }
+    /// <remarks>
+    /// Null when the provider sent no merchant name at all, which is an ordinary state for
+    /// a bank line nobody has enriched -- <see cref="Description"/> is then all there is.
+    /// </remarks>
+    public virtual Merchant? Merchant { get; set; }
+
+    public Guid? MerchantId { get; set; }
 
     /// <summary>
     /// Not yet settled at the bank. A pending row is not a transaction: it may change

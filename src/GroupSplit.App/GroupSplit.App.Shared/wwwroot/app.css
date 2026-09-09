@@ -791,6 +791,77 @@ html:not([data-gs-ready]) .gs-group-card {
     transform: translateX(calc(var(--i, 0) * 4px));
 }
 
+/*
+    Who paid, with where badged onto it. One 40px slot in the row's first column has to
+    carry both facts, and the payer is the one the page is about -- so the logo rides the
+    corner rather than taking the square.
+
+    Rounded square and not a circle, which is the whole of what makes the pair legible: a
+    circle in that corner is the slot and the shape every app uses for a presence dot, so
+    a round logo there reads as a status rather than as a place -- and the round mask cuts
+    the corners off a mark that was drawn as a tile. Square is a thing, circle is a person.
+    The ring is the surface colour so the tile sits in a gap cut out of the row.
+*/
+.gs-mark {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+    --gs-mark-badge: 18px;
+    --gs-mark-radius: 5px;
+}
+
+/* Scaled off the avatar it sits on, so the grid's smaller rows get a smaller badge. */
+.gs-mark:has(.gs-avatar.sm) {
+    --gs-mark-badge: 14px;
+    --gs-mark-radius: 4px;
+}
+
+.gs-mark-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: var(--gs-mark-badge);
+    height: var(--gs-mark-badge);
+    border-radius: var(--gs-mark-radius);
+    object-fit: cover;
+    background: var(--gs-surface);
+    box-shadow: 0 0 0 2px var(--gs-surface);
+}
+
+/* Beside a line of text rather than on an avatar: the detail view, where there is room
+   to say where the money went in words and the logo is only the picture of it. */
+.gs-mark-inline {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--gs-surface-3);
+}
+
+/*
+    The logo as the mark itself, where there is no payer to show -- the inbox. The same
+    12px tile .gs-row-icon is, so a row with a logo and a row with an icon line up down
+    the page instead of alternating between a square and a circle.
+*/
+.gs-mark-solo {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--gs-surface-3);
+}
+
+/* And the initials that stand in for a place with no logo: a tile, for the same reason. */
+.gs-avatar.tile {
+    border-radius: 12px;
+}
+
+.gs-avatar.sm.tile {
+    border-radius: 9px;
+}
+
 .gs-user-btn {
     display: inline-flex;
     align-items: center;

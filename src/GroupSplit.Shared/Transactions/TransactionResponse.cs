@@ -24,4 +24,13 @@ public record TransactionResponse
     public Guid? CategoryId { get; set; }
 
     public string? Category { get; set; }
+
+    /// <summary>
+    /// Where it was spent, for an expense filed from a bank row that named a place, and
+    /// null for one somebody typed in. See <see cref="GroupActivityResponse.MerchantName"/>.
+    /// </summary>
+    public string? MerchantName { get; set; }
+
+    /// <summary>The merchant's logo, where there is one.</summary>
+    public string? MerchantLogoUrl { get; set; }
 }

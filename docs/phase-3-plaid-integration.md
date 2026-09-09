@@ -207,6 +207,7 @@ public class BankTransaction : Entity
     public string Currency { get; set; } = Currencies.Default;
     public required string Description { get; set; }  // the bank's line
     public string? MerchantName { get; set; }         // the provider's enrichment
+    public Guid? MerchantId { get; set; }             // the shared row for that place
     public string? ProviderCategory { get; set; }
     public bool Pending { get; set; }
     public Guid? ReplacesId { get; set; }
@@ -220,6 +221,25 @@ public abstract class Transaction : Entity
 {
     // ...
     public Guid? BankTransactionId { get; set; }      // set by filing; never by a sync
+    public Guid? MerchantId { get; set; }             // copied by filing, from the row above
+}
+```
+
+The merchant is a table of its own and was not, added after the phase shipped. The logo
+started as a `LogoUrl` column on `BankTransaction`, which put the same URL on every payment
+at the same shop and left it where no expense could reach it -- the ledger holds no
+provider enrichment and should not start. A row per place fixes both: the sync resolves the
+provider's `merchant_name` to one, filing copies the link onto the expense the way it copies
+the amount, and a logo the provider only supplies later arrives on every expense at that
+place at once.
+
+```csharp
+public class Merchant : Entity
+{
+    public required string Name { get; set; }           // as first seen
+    public required string NormalizedName { get; set; } // trimmed, lower-cased; unique
+    public string? LogoUrl { get; set; }
+    public required DateTimeOffset FirstSeenAt { get; set; }
 }
 ```
 
@@ -237,6 +257,10 @@ Mapping, in `AppDbContext`:
   `jsonb` in the Postgres context and text elsewhere. Cascades from the account.
 - `Transaction.BankTransactionId` is `SetNull` on delete and uniquely indexed: a bank
   row files into at most one expense, and Postgres lets the nulls through.
+- `Merchant` unique on `NormalizedName`, which is both the resolver's lookup and what keeps
+  the table one row per place. Both `MerchantId` columns are `Restrict` on delete: the row
+  is shared by every expense filed against it, so losing one must not take somebody's
+  history with it.
 - Strings: provider ids 128, names 128, `Mask` 8, `Type`/`Subtype` 32, `ProviderCategory`
   64, `Description` 256, statuses 16. Money `HasPrecision(18, 2)`; currency
   `character(3)` like everywhere else.

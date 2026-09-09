@@ -56,6 +56,25 @@
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@details.Category</MudChip>
                 </MudStack>
 
+                @* Only where a row knows it, which is an expense filed from a bank. The
+                   logo is beside the name here rather than badged onto anything: there is
+                   room, and this is the one view where "where" is a fact in its own right
+                   instead of a hint on a list row. *@
+                @if (!string.IsNullOrWhiteSpace(details.MerchantName))
+                {
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.body1">Where</MudText>
+                        <div class="gs-inline" style="gap: 8px">
+                            @if (!string.IsNullOrWhiteSpace(details.MerchantLogoUrl))
+                            {
+                                <img class="gs-mark-inline" src="@details.MerchantLogoUrl"
+                                     alt="" width="20" height="20" loading="lazy" />
+                            }
+                            <MudText Typo="Typo.body1" Class="font-weight-medium">@details.MerchantName</MudText>
+                        </div>
+                    </MudStack>
+                }
+
                 <MudStack Row="true" Justify="Justify.SpaceBetween">
                     <MudText Typo="Typo.body1">Paid By</MudText>
                     <MudText Typo="Typo.body1" Class="font-weight-medium">@details.PaidByUserName</MudText>

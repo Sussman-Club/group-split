@@ -10,6 +10,7 @@ namespace GroupSplit.Seeder.Seeders;
 
 [DependsOn(typeof(CategorySeeder))]
 [DependsOn(typeof(UserSeeder))]
+[DependsOn(typeof(MerchantSeeder))]
 public class TransactionSeeder(
     AppDbContext db,
     ILogger<TransactionSeeder> logger,
@@ -46,6 +47,10 @@ public class TransactionSeeder(
             User = payer,
             Group = category?.Group,
             Category = category,
+            // Where it was spent, for the seeded expenses that name a shop. A real one gets
+            // this from the bank row it was filed from; nothing files a seeded expense, so
+            // without this every list in the demo shows initials and nothing else.
+            Merchant = await MerchantAsync(dto.Merchant, ct)
         };
 
         // Through the same division the app uses, so a developer's seeded balances are
@@ -54,4 +59,39 @@ public class TransactionSeeder(
 
         return expense;
     }
+
+    /// <summary>
+    /// The seeded shop of that name, or null for an expense that names none. Looked up and
+    /// never created -- <see cref="MerchantSeeder"/> owns that table.
+    /// </summary>
+    /// <remarks>
+    /// Cached per run because the seed file names the same handful of shops across hundreds
+    /// of expenses, and a query each would be hundreds of round trips for fourteen answers.
+    /// </remarks>
+    private async Task<Merchant?> MerchantAsync(string? name, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        var normalized = name.Trim().ToLowerInvariant();
+
+        if (_merchants.TryGetValue(normalized, out var seen))
+            return seen;
+
+        var merchant = await DbContext.Set<Merchant>()
+            .FirstOrDefaultAsync(candidate => candidate.NormalizedName == normalized, ct);
+
+        if (merchant is null)
+        {
+            logger.LogInformation(
+                "Seeded expense names {Merchant}, which merchants.json does not list; it will show as initials.",
+                name);
+        }
+
+        _merchants[normalized] = merchant;
+
+        return merchant;
+    }
+
+    private readonly Dictionary<string, Merchant?> _merchants = [];
 }

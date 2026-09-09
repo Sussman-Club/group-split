@@ -67,6 +67,25 @@ public abstract class Transaction : Entity
     public Guid? BankTransactionId { get; set; }
 
     /// <summary>
+    /// Where the money went, when it went somewhere with a name. Copied from the imported
+    /// row by filing, the same way the amount and the date are.
+    /// </summary>
+    /// <remarks>
+    /// Nullable because most transactions have no merchant and never will: a transfer is
+    /// one member paying another, and an expense somebody typed in is "Dinner" and not a
+    /// shop. Null here is the same kind of null as <see cref="Group"/>'s -- a fact that
+    /// does not apply, rather than one that is missing and wants backfilling.
+    /// <para>
+    /// Copied as a link and not as a name, so a merchant whose logo the provider adds later
+    /// lights up every expense already filed against it. That is the whole reason the place
+    /// is a row of its own; see <see cref="Entities.Merchant"/>.
+    /// </para>
+    /// </remarks>
+    public virtual Merchant? Merchant { get; set; }
+
+    public Guid? MerchantId { get; set; }
+
+    /// <summary>
     /// What each person owed on this. Sums to <see cref="Amount"/>, always.
     /// </summary>
     public virtual ICollection<TransactionSplit> Splits { get; } = [];

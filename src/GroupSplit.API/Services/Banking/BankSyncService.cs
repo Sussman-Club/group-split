@@ -62,6 +62,7 @@ public sealed class BankSyncService(
     IServiceProvider services,
     IAccessTokenProtector protector,
     BankSyncLocks locks,
+    IMerchantDirectory merchants,
     TimeProvider clock,
     ILogger<BankSyncService> logger) : IBankSyncService
 {
@@ -309,7 +310,7 @@ public sealed class BankSyncService(
         // done with it stays done.
         if (index.Find(account.Id, imported.ProviderTransactionId) is { } existing)
         {
-            Overwrite(existing, imported);
+            await OverwriteAsync(existing, imported, ct);
             return;
         }
 
@@ -348,7 +349,7 @@ public sealed class BankSyncService(
             dbContext.Add(row);
         }
 
-        Overwrite(row, imported);
+        await OverwriteAsync(row, imported, ct);
         index.Add(row);
 
         // Shared by both, and it was not: a re-keyed row used to return before this, so a
@@ -382,7 +383,7 @@ public sealed class BankSyncService(
             return;
         }
 
-        Overwrite(row, imported);
+        await OverwriteAsync(row, imported, ct);
     }
 
     private void Remove(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
@@ -507,7 +508,13 @@ public sealed class BankSyncService(
     /// What the provider says about the row, onto the row. Never the status, never
     /// <c>ImportedAt</c>: those are ours.
     /// </summary>
-    private static void Overwrite(BankTransaction row, ImportedTransaction imported)
+    /// <remarks>
+    /// The merchant is the one thing here that is not a column copy: the name comes off the
+    /// row and the row comes away pointing at a shared <see cref="Merchant"/>, so the logo
+    /// is stored once for the place rather than once per payment. A row the provider stops
+    /// naming a merchant on goes back to pointing at nothing.
+    /// </remarks>
+    private async Task OverwriteAsync(BankTransaction row, ImportedTransaction imported, CancellationToken ct)
     {
         row.Date = imported.Date;
         row.Amount = imported.Amount;
@@ -519,9 +526,13 @@ public sealed class BankSyncService(
         row.AuthorizedDate = imported.AuthorizedDate;
         row.PaymentChannel = Clip(imported.PaymentChannel, 32);
         row.City = Clip(imported.City, 64);
-        row.LogoUrl = Clip(imported.LogoUrl, 512);
         row.Pending = imported.Pending;
         row.RawJson = imported.RawJson;
+
+        var merchant = await merchants.ResolveAsync(imported.MerchantName, imported.LogoUrl, ct);
+
+        row.Merchant = merchant;
+        row.MerchantId = merchant?.Id;
     }
 
     private void SkipUnknownAccount(BankConnection connection, string providerAccountId) =>

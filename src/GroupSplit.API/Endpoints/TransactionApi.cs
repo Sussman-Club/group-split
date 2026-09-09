@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
@@ -434,7 +434,9 @@ public static class TransactionApi
                     PaidByUserName = transaction.User.FirstName +
                                      (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
                     CategoryId = transaction.CategoryId,
-                    Category = transaction.Category != null ? transaction.Category.Name : null
+                    Category = transaction.Category != null ? transaction.Category.Name : null,
+                    MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
+                    MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null
                 };
         }
 
@@ -549,7 +551,9 @@ public static class TransactionApi
                                      (expense.User.LastName != null ? " " + expense.User.LastName : ""),
                     PaidByYou = expense.UserId == userId,
                     CategoryId = expense.CategoryId,
-                    Category = expense.Category != null ? expense.Category.Name : null
+                    Category = expense.Category != null ? expense.Category.Name : null,
+                    MerchantName = expense.Merchant != null ? expense.Merchant.Name : null,
+                    MerchantLogoUrl = expense.Merchant != null ? expense.Merchant.LogoUrl : null
                 };
         }
 

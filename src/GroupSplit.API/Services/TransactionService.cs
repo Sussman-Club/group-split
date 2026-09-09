@@ -293,6 +293,7 @@ public class TransactionService(
             .Include(t => t.User)
             .Include(t => t.Group)
             .Include(t => t.Category)
+            .Include(t => t.Merchant)
             .Include(t => t.Splits)
             .ThenInclude(split => split.User)
             .FirstOrDefaultAsync(ct);
@@ -322,6 +323,8 @@ public class TransactionService(
             PaidByUserName = $"{transaction.User.FirstName} {transaction.User.LastName}",
             CategoryId = transaction.CategoryId,
             Category = transaction.Category?.Name,
+            MerchantName = transaction.Merchant?.Name,
+            MerchantLogoUrl = transaction.Merchant?.LogoUrl,
             Splits = splits
         };
     }

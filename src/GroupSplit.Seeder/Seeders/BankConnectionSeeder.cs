@@ -20,6 +20,7 @@ namespace GroupSplit.Seeder.Seeders;
 /// </para>
 /// </remarks>
 [DependsOn(typeof(UserSeeder))]
+[DependsOn(typeof(MerchantSeeder))]
 public class BankConnectionSeeder(
     AppDbContext db,
     TimeProvider clock,
@@ -32,6 +33,12 @@ public class BankConnectionSeeder(
     /// from data that has no bank behind it.
     /// </summary>
     private const string Provider = "seed";
+
+    /// <summary>
+    /// The merchants this run has already looked up, by the key the unique index is on. The
+    /// seed file names the same shops across several demo accounts and several rows each.
+    /// </summary>
+    private readonly Dictionary<string, Merchant?> _merchants = [];
 
     protected override async Task<BankConnection?> MapAsync(BankConnectionSeedDto dto, CancellationToken ct = default)
     {
@@ -88,7 +95,7 @@ public class BankConnectionSeeder(
                         : null,
                     PaymentChannel = rowDto.PaymentChannel,
                     City = rowDto.City,
-                    LogoUrl = rowDto.LogoUrl,
+                    Merchant = Merchant(rowDto),
                     Pending = rowDto.Pending,
                     RawJson = "{}",
                     ImportedAt = now.AddHours(-1)
@@ -99,5 +106,35 @@ public class BankConnectionSeeder(
         }
 
         return connection;
+    }
+
+    /// <summary>
+    /// The seeded shop this row names, or null for one <c>merchants.json</c> does not list.
+    /// Looked up and never created: <see cref="MerchantSeeder"/> owns that table, because
+    /// this seeder and the expenses' one run at the same time and both point at it.
+    /// </summary>
+    private Merchant? Merchant(BankTransactionSeedDto row)
+    {
+        if (string.IsNullOrWhiteSpace(row.MerchantName))
+            return null;
+
+        var normalized = row.MerchantName.Trim().ToLowerInvariant();
+
+        if (_merchants.TryGetValue(normalized, out var seen))
+            return seen;
+
+        var merchant = DbContext.Set<Merchant>()
+            .FirstOrDefault(candidate => candidate.NormalizedName == normalized);
+
+        if (merchant is null)
+        {
+            logger.LogInformation(
+                "Seeded bank row names {Merchant}, which merchants.json does not list; it will show as initials.",
+                row.MerchantName);
+        }
+
+        _merchants[normalized] = merchant;
+
+        return merchant;
     }
 }

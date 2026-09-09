@@ -89,7 +89,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 87.15,
     "DateTime": "2025-02-10T15:40:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "D2D22222-2222-2222-2222-222222222222",
@@ -112,7 +113,8 @@
     "PayerId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
     "Amount": 16.25,
     "DateTime": "2025-02-13T12:00:00Z",
-    "Name": "Coffee beans"
+    "Name": "Coffee beans",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "C4C44444-4444-4444-4444-444444444444",
@@ -183,7 +185,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 181.51,
     "DateTime": "2025-03-05T11:45:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E000000B-0000-4000-8000-00000000000B",
@@ -215,7 +218,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 89.27,
     "DateTime": "2025-03-06T15:00:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E000000C-0000-4000-8000-00000000000C",
@@ -366,7 +370,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 45.22,
     "DateTime": "2025-03-27T12:20:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E000001D-0000-4000-8000-00000000001D",
@@ -404,7 +409,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 39.15,
     "DateTime": "2025-04-03T10:05:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E0000021-0000-4000-8000-000000000021",
@@ -444,7 +450,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 24.48,
     "DateTime": "2025-04-08T10:05:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E0000024-0000-4000-8000-000000000024",
@@ -452,7 +459,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 45.36,
     "DateTime": "2025-04-10T11:30:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E0000032-0000-4000-8000-000000000032",
@@ -548,7 +556,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 71.36,
     "DateTime": "2025-04-20T19:20:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E0000020-0000-4000-8000-000000000020",
@@ -586,7 +595,8 @@
     "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "Amount": 14.92,
     "DateTime": "2025-04-27T21:00:00Z",
-    "Name": "Coffee beans"
+    "Name": "Coffee beans",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000025-0000-4000-8000-000000000025",
@@ -698,7 +708,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 104.53,
     "DateTime": "2025-05-07T17:05:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E000004D-0000-4000-8000-00000000004D",
@@ -722,7 +733,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 220.5,
     "DateTime": "2025-05-10T14:30:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E000003C-0000-4000-8000-00000000003C",
@@ -825,7 +837,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 56.32,
     "DateTime": "2025-05-19T21:05:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E000003F-0000-4000-8000-00000000003F",
@@ -849,7 +862,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 20.48,
     "DateTime": "2025-05-21T18:00:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E000003B-0000-4000-8000-00000000003B",
@@ -865,7 +879,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 40.96,
     "DateTime": "2025-05-23T08:45:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E0000064-0000-4000-8000-000000000064",
@@ -919,7 +934,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 21.51,
     "DateTime": "2025-05-27T21:00:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E000005D-0000-4000-8000-00000000005D",
@@ -975,7 +991,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 16.25,
     "DateTime": "2025-06-04T12:05:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000071-0000-4000-8000-000000000071",
@@ -991,7 +1008,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 10.02,
     "DateTime": "2025-06-07T10:15:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000079-0000-4000-8000-000000000079",
@@ -1023,7 +1041,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 54.0,
     "DateTime": "2025-06-10T13:05:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E000007A-0000-4000-8000-00000000007A",
@@ -1118,7 +1137,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 40.76,
     "DateTime": "2025-06-17T18:05:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E0000084-0000-4000-8000-000000000084",
@@ -1182,7 +1202,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 39.0,
     "DateTime": "2025-06-20T18:30:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E0000078-0000-4000-8000-000000000078",
@@ -1221,7 +1242,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 53.2,
     "DateTime": "2025-06-23T17:45:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E0000077-0000-4000-8000-000000000077",
@@ -1269,7 +1291,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 41.08,
     "DateTime": "2025-07-05T17:45:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E000009E-0000-4000-8000-00000000009E",
@@ -1285,7 +1308,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 42.28,
     "DateTime": "2025-07-06T14:30:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E0000094-0000-4000-8000-000000000094",
@@ -1395,7 +1419,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 110.54,
     "DateTime": "2025-07-15T13:45:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E00000A4-0000-4000-8000-0000000000A4",
@@ -1427,7 +1452,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 13.74,
     "DateTime": "2025-07-17T16:20:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E000008B-0000-4000-8000-00000000008B",
@@ -1435,7 +1461,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 204.57,
     "DateTime": "2025-07-17T20:20:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E00000A1-0000-4000-8000-0000000000A1",
@@ -1451,7 +1478,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 111.68,
     "DateTime": "2025-07-19T20:45:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E000008A-0000-4000-8000-00000000008A",
@@ -1459,7 +1487,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 106.86,
     "DateTime": "2025-07-22T15:45:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E0000095-0000-4000-8000-000000000095",
@@ -1483,7 +1512,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 17.54,
     "DateTime": "2025-07-26T08:05:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00000A8-0000-4000-8000-0000000000A8",
@@ -1546,7 +1576,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 7.58,
     "DateTime": "2025-08-03T08:00:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00000B0-0000-4000-8000-0000000000B0",
@@ -1610,7 +1641,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 38.37,
     "DateTime": "2025-08-06T19:00:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E00000C2-0000-4000-8000-0000000000C2",
@@ -1682,7 +1714,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 33.86,
     "DateTime": "2025-08-15T13:20:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E00000B4-0000-4000-8000-0000000000B4",
@@ -1737,7 +1770,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 39.48,
     "DateTime": "2025-08-21T14:15:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E00000CA-0000-4000-8000-0000000000CA",
@@ -1769,7 +1803,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 16.15,
     "DateTime": "2025-08-24T17:15:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00000C3-0000-4000-8000-0000000000C3",
@@ -1849,7 +1884,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 70.58,
     "DateTime": "2025-09-06T18:00:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E00000D4-0000-4000-8000-0000000000D4",
@@ -1857,7 +1893,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 168.81,
     "DateTime": "2025-09-07T19:45:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E00000DF-0000-4000-8000-0000000000DF",
@@ -1865,7 +1902,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 54.12,
     "DateTime": "2025-09-08T08:30:00Z",
-    "Name": "Uber Eats"
+    "Name": "Uber Eats",
+    "Merchant": "Uber"
   },
   {
     "Id": "E00000E5-0000-4000-8000-0000000000E5",
@@ -1905,7 +1943,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 103.83,
     "DateTime": "2025-09-12T13:15:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E00000E4-0000-4000-8000-0000000000E4",
@@ -1959,7 +1998,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 7.86,
     "DateTime": "2025-09-19T13:15:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00000EB-0000-4000-8000-0000000000EB",
@@ -1983,7 +2023,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 8.23,
     "DateTime": "2025-09-23T13:20:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00000E0-0000-4000-8000-0000000000E0",
@@ -1999,7 +2040,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 45.94,
     "DateTime": "2025-09-24T16:45:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E00000E8-0000-4000-8000-0000000000E8",
@@ -2015,7 +2057,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 14.99,
     "DateTime": "2025-09-25T21:30:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E00000D5-0000-4000-8000-0000000000D5",
@@ -2023,7 +2066,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 205.16,
     "DateTime": "2025-09-27T12:45:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E00000DE-0000-4000-8000-0000000000DE",
@@ -2047,7 +2091,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 21.88,
     "DateTime": "2025-10-02T10:45:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E00000FD-0000-4000-8000-0000000000FD",
@@ -2126,7 +2171,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 48.53,
     "DateTime": "2025-10-11T19:05:00Z",
-    "Name": "Uber Eats"
+    "Name": "Uber Eats",
+    "Merchant": "Uber"
   },
   {
     "Id": "E0000101-0000-4000-8000-000000000101",
@@ -2174,7 +2220,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 42.06,
     "DateTime": "2025-10-17T09:20:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E0000104-0000-4000-8000-000000000104",
@@ -2182,7 +2229,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 14.59,
     "DateTime": "2025-10-18T12:15:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000106-0000-4000-8000-000000000106",
@@ -2213,7 +2261,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 10.27,
     "DateTime": "2025-10-21T20:45:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00000F5-0000-4000-8000-0000000000F5",
@@ -2277,7 +2326,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 38.83,
     "DateTime": "2025-11-04T11:20:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E0000111-0000-4000-8000-000000000111",
@@ -2395,7 +2445,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 11.32,
     "DateTime": "2025-11-22T18:05:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E000010C-0000-4000-8000-00000000010C",
@@ -2403,7 +2454,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 39.18,
     "DateTime": "2025-11-23T18:05:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E0000110-0000-4000-8000-000000000110",
@@ -2419,7 +2471,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 11.11,
     "DateTime": "2025-11-26T14:00:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000116-0000-4000-8000-000000000116",
@@ -2435,7 +2488,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 25.4,
     "DateTime": "2025-12-02T12:15:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E000013A-0000-4000-8000-00000000013A",
@@ -2451,7 +2505,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 76.71,
     "DateTime": "2025-12-03T11:00:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E0000123-0000-4000-8000-000000000123",
@@ -2467,7 +2522,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 57.62,
     "DateTime": "2025-12-08T21:05:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E0000131-0000-4000-8000-000000000131",
@@ -2482,7 +2538,8 @@
     "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "Amount": 30.57,
     "DateTime": "2025-12-09T15:00:00Z",
-    "Name": "Pharmacy"
+    "Name": "Pharmacy",
+    "Merchant": "Pharmacy 88"
   },
   {
     "Id": "E0000137-0000-4000-8000-000000000137",
@@ -2601,7 +2658,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 155.58,
     "DateTime": "2025-12-23T08:05:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E000012F-0000-4000-8000-00000000012F",
@@ -2625,7 +2683,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 11.23,
     "DateTime": "2025-12-27T11:45:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000134-0000-4000-8000-000000000134",
@@ -2640,7 +2699,8 @@
     "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "Amount": 12.21,
     "DateTime": "2025-12-27T20:00:00Z",
-    "Name": "Coffee beans"
+    "Name": "Coffee beans",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000125-0000-4000-8000-000000000125",
@@ -2648,7 +2708,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 45.94,
     "DateTime": "2025-12-27T21:05:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E0000126-0000-4000-8000-000000000126",
@@ -2776,7 +2837,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 119.82,
     "DateTime": "2026-01-13T14:00:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E0000140-0000-4000-8000-000000000140",
@@ -2815,7 +2877,8 @@
     "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "Amount": 15.88,
     "DateTime": "2026-01-15T16:00:00Z",
-    "Name": "Coffee beans"
+    "Name": "Coffee beans",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000163-0000-4000-8000-000000000163",
@@ -2838,7 +2901,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 33.75,
     "DateTime": "2026-01-16T13:20:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E0000145-0000-4000-8000-000000000145",
@@ -2878,7 +2942,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 10.34,
     "DateTime": "2026-01-22T09:45:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000149-0000-4000-8000-000000000149",
@@ -2950,7 +3015,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 39.12,
     "DateTime": "2026-01-27T14:05:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E000014D-0000-4000-8000-00000000014D",
@@ -3006,7 +3072,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 44.17,
     "DateTime": "2026-02-02T19:00:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E0000164-0000-4000-8000-000000000164",
@@ -3014,7 +3081,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 45.26,
     "DateTime": "2026-02-02T19:15:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E000016E-0000-4000-8000-00000000016E",
@@ -3022,7 +3090,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 20.11,
     "DateTime": "2026-02-03T12:45:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E000017B-0000-4000-8000-00000000017B",
@@ -3086,7 +3155,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 173.49,
     "DateTime": "2026-02-09T19:00:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E000017F-0000-4000-8000-00000000017F",
@@ -3102,7 +3172,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 16.43,
     "DateTime": "2026-02-10T14:05:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000183-0000-4000-8000-000000000183",
@@ -3189,7 +3260,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 128.57,
     "DateTime": "2026-02-19T19:30:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E0000168-0000-4000-8000-000000000168",
@@ -3237,7 +3309,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 56.21,
     "DateTime": "2026-02-28T13:20:00Z",
-    "Name": "Uber Eats"
+    "Name": "Uber Eats",
+    "Merchant": "Uber"
   },
   {
     "Id": "E000016F-0000-4000-8000-00000000016F",
@@ -3324,7 +3397,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 17.21,
     "DateTime": "2026-03-05T19:00:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E000019B-0000-4000-8000-00000000019B",
@@ -3444,7 +3518,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 11.19,
     "DateTime": "2026-03-17T12:20:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00001AD-0000-4000-8000-0000000001AD",
@@ -3514,7 +3589,8 @@
     "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "Amount": 25.91,
     "DateTime": "2026-03-26T09:00:00Z",
-    "Name": "Pharmacy"
+    "Name": "Pharmacy",
+    "Merchant": "Pharmacy 88"
   },
   {
     "Id": "E000018C-0000-4000-8000-00000000018C",
@@ -3530,7 +3606,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 43.62,
     "DateTime": "2026-03-28T14:00:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E00001A2-0000-4000-8000-0000000001A2",
@@ -3546,7 +3623,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 45.62,
     "DateTime": "2026-03-28T21:20:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E00001BE-0000-4000-8000-0000000001BE",
@@ -3578,7 +3656,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 39.14,
     "DateTime": "2026-04-06T21:05:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E00001BB-0000-4000-8000-0000000001BB",
@@ -3626,7 +3705,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 6.04,
     "DateTime": "2026-04-10T12:45:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00001B8-0000-4000-8000-0000000001B8",
@@ -3658,7 +3738,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 15.76,
     "DateTime": "2026-04-14T15:20:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E00001C8-0000-4000-8000-0000000001C8",
@@ -3767,7 +3848,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 35.45,
     "DateTime": "2026-04-26T08:30:00Z",
-    "Name": "Uber Eats"
+    "Name": "Uber Eats",
+    "Merchant": "Uber"
   },
   {
     "Id": "E00001B1-0000-4000-8000-0000000001B1",
@@ -3799,7 +3881,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 38.2,
     "DateTime": "2026-05-04T16:30:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E00001CF-0000-4000-8000-0000000001CF",
@@ -3887,7 +3970,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 63.84,
     "DateTime": "2026-05-10T16:00:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E00001EB-0000-4000-8000-0000000001EB",
@@ -4022,7 +4106,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 10.52,
     "DateTime": "2026-05-20T17:00:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E00001E3-0000-4000-8000-0000000001E3",
@@ -4141,7 +4226,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 150.79,
     "DateTime": "2026-06-05T18:05:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E0000206-0000-4000-8000-000000000206",
@@ -4212,7 +4298,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 31.88,
     "DateTime": "2026-06-12T14:05:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E000020E-0000-4000-8000-00000000020E",
@@ -4260,7 +4347,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 53.01,
     "DateTime": "2026-06-16T12:00:00Z",
-    "Name": "Uber Eats"
+    "Name": "Uber Eats",
+    "Merchant": "Uber"
   },
   {
     "Id": "E0000214-0000-4000-8000-000000000214",
@@ -4316,7 +4404,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 44.4,
     "DateTime": "2026-06-24T14:05:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E00001FF-0000-4000-8000-0000000001FF",
@@ -4404,7 +4493,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 148.06,
     "DateTime": "2026-07-01T12:45:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E0000224-0000-4000-8000-000000000224",
@@ -4420,7 +4510,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 8.22,
     "DateTime": "2026-07-01T16:05:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000234-0000-4000-8000-000000000234",
@@ -4436,7 +4527,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 51.21,
     "DateTime": "2026-07-03T14:20:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E0000229-0000-4000-8000-000000000229",
@@ -4500,7 +4592,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 6.13,
     "DateTime": "2026-07-09T10:00:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000230-0000-4000-8000-000000000230",
@@ -4548,7 +4641,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 82.96,
     "DateTime": "2026-07-15T13:30:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E000023B-0000-4000-8000-00000000023B",
@@ -4579,7 +4673,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 38.21,
     "DateTime": "2026-07-18T21:45:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E0000222-0000-4000-8000-000000000222",
@@ -4595,7 +4690,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 100.2,
     "DateTime": "2026-07-20T15:45:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E000022E-0000-4000-8000-00000000022E",
@@ -4611,7 +4707,8 @@
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
     "Amount": 31.51,
     "DateTime": "2026-07-21T08:20:00Z",
-    "Name": "IKEA"
+    "Name": "IKEA",
+    "Merchant": "IKEA"
   },
   {
     "Id": "E0000218-0000-4000-8000-000000000218",
@@ -4619,7 +4716,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 150.87,
     "DateTime": "2026-07-22T19:00:00Z",
-    "Name": "Lidl"
+    "Name": "Lidl",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E0000237-0000-4000-8000-000000000237",
@@ -4682,7 +4780,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 54.03,
     "DateTime": "2026-08-01T12:05:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E0000259-0000-4000-8000-000000000259",
@@ -4713,7 +4812,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 15.35,
     "DateTime": "2026-08-04T21:20:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000255-0000-4000-8000-000000000255",
@@ -4793,7 +4893,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 42.4,
     "DateTime": "2026-08-13T10:20:00Z",
-    "Name": "NOS Internet"
+    "Name": "NOS Internet",
+    "Merchant": "NOS Internet"
   },
   {
     "Id": "E0000249-0000-4000-8000-000000000249",
@@ -4801,7 +4902,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 93.0,
     "DateTime": "2026-08-13T13:30:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E0000243-0000-4000-8000-000000000243",
@@ -4809,7 +4911,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 60.11,
     "DateTime": "2026-08-14T21:05:00Z",
-    "Name": "Uber Eats"
+    "Name": "Uber Eats",
+    "Merchant": "Uber"
   },
   {
     "Id": "E0000256-0000-4000-8000-000000000256",
@@ -4833,7 +4936,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 119.47,
     "DateTime": "2026-08-17T10:05:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E0000246-0000-4000-8000-000000000246",
@@ -4865,7 +4969,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 37.5,
     "DateTime": "2026-08-22T16:15:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E0000251-0000-4000-8000-000000000251",
@@ -4959,7 +5064,8 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 37.15,
     "DateTime": "2026-09-03T18:20:00Z",
-    "Name": "Glovo"
+    "Name": "Glovo",
+    "Merchant": "Glovo"
   },
   {
     "Id": "E0000260-0000-4000-8000-000000000260",
@@ -4983,7 +5089,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 41.56,
     "DateTime": "2026-09-05T09:05:00Z",
-    "Name": "Aldi"
+    "Name": "Aldi",
+    "Merchant": "Aldi"
   },
   {
     "Id": "E0000266-0000-4000-8000-000000000266",
@@ -4999,7 +5106,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 16.5,
     "DateTime": "2026-09-06T17:45:00Z",
-    "Name": "Blue Bottle"
+    "Name": "Blue Bottle",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E0000265-0000-4000-8000-000000000265",
@@ -5015,7 +5123,8 @@
     "CategoryId": "A1A11111-1111-1111-1111-111111111111",
     "Amount": 198.14,
     "DateTime": "2026-09-08T10:00:00Z",
-    "Name": "Costco"
+    "Name": "Costco",
+    "Merchant": "Costco"
   },
   {
     "Id": "E0000271-0000-4000-8000-000000000271",
@@ -5023,7 +5132,8 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 17.43,
     "DateTime": "2026-09-08T10:00:00Z",
-    "Name": "Coffee run"
+    "Name": "Coffee run",
+    "Merchant": "Blue Bottle Coffee"
   },
   {
     "Id": "E000025D-0000-4000-8000-00000000025D",
@@ -5102,7 +5212,8 @@
     "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
     "Amount": 71.28,
     "DateTime": "2026-09-08T14:15:00Z",
-    "Name": "Market haul"
+    "Name": "Market haul",
+    "Merchant": "Lidl"
   },
   {
     "Id": "E0000261-0000-4000-8000-000000000261",
@@ -5110,7 +5221,8 @@
     "CategoryId": "CA7E0002-0000-4000-8000-000000000002",
     "Amount": 45.66,
     "DateTime": "2026-09-08T19:00:00Z",
-    "Name": "Vodafone Fibre"
+    "Name": "Vodafone Fibre",
+    "Merchant": "Vodafone Fibre"
   },
   {
     "Id": "E0000262-0000-4000-8000-000000000262",

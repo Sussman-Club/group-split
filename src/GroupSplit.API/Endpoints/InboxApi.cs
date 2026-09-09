@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
@@ -246,7 +246,9 @@ public static class InboxApi
                 row.AuthorizedDate,
                 row.PaymentChannel,
                 row.City,
-                row.LogoUrl,
+                // Off the merchant now, not off the row: the logo is stored once for the
+                // place, and this join is what the inbox reads it back through.
+                row.Merchant == null ? null : row.Merchant.LogoUrl,
                 row.Pending,
                 row.Status == BankTransactionStatus.Filed
                     ? InboxStatus.Filed
