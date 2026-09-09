@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Aspire.Hosting.Testing;
 using GroupSplit.AppHost.Test.Base;
 using Microsoft.Playwright;
@@ -76,12 +76,13 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
-        await NavLink("Expenses").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
+        await NavLink("You").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
         // The grid's own empty state, which it renders only once the API has answered it.
-        // Exact, or it also matches the page's h1 and the top bar's h2.
+        // Exact, or it also matches the page's h1 and the top bar's h2. The unfiltered
+        // wording, because a fresh account arrives here with no filter set.
         await Expect(Page.GetByRole(
-                AriaRole.Heading, new PageGetByRoleOptions { Name = "No expenses yet", Exact = true }))
+                AriaRole.Heading, new PageGetByRoleOptions { Name = "Nothing here yet", Exact = true }))
             .ToBeVisibleAsync(Visible);
 
         await Expect(Page).ToHaveURLAsync(
@@ -165,8 +166,8 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// the mobile tab bar, so an unscoped role lookup matches two and Playwright refuses it.
     /// Filter rather than a chained visible= selector, which descends into the link and
     /// matches its icon and label instead of the link itself. Exact, because a role name is
-    /// otherwise a case-insensitive substring: "Expenses" also matches the brand link, whose
-    /// accessible name ends "Shared expenses", and that one comes first in the document.
+    /// otherwise a case-insensitive substring, and these names are short enough to turn up
+    /// inside other ones -- "You" is in "Your account", "Home" in the brand link beside it.
     /// </summary>
     private ILocator NavLink(string name) =>
         Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = name, Exact = true })
