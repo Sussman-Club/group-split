@@ -1,5 +1,6 @@
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Groups;
+using GroupSplit.App.Shared.Services.Settling;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.App.Web;
@@ -52,6 +53,9 @@ RenderModeConfig.Initialize(renderModePreference);
 builder.Services.AddRazorComponents()
     .RegisterPersistentService<GroupsTracker>(RenderMode.InteractiveAuto)
     .RegisterPersistentService<TransactionsTracker>(RenderMode.InteractiveAuto)
+    // Marked persistent like the others and never registered, so the plan the prerender
+    // read was read again by the interactive side on every page, for the nav badge.
+    .RegisterPersistentService<SettleTracker>(RenderMode.InteractiveAuto)
     .RegisterPersistentService<UserTracker>(RenderMode.InteractiveAuto)
     .AddRenderModeComponents();
 

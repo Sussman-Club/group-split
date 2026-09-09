@@ -151,7 +151,15 @@
         _ => "Nothing counts as money until you say so"
     };
 
-    protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
+    protected override void OnInitialized()
+    {
+        Changes.GroupsChanged += ReloadAsync;
+
+        // From the start, like every other reader of these two: subscribing after the
+        // first render missed whatever the reads below announced before it.
+        Settling.OnChanged += ReRender;
+        Inbox.OnChanged += ReRender;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -192,14 +200,6 @@
     }
 
     private void ReRender() => InvokeAsync(StateHasChanged);
-
-    protected override void OnAfterRender(bool firstRender)
-    {
-        if (!firstRender) return;
-
-        Settling.OnChanged += ReRender;
-        Inbox.OnChanged += ReRender;
-    }
 
     public void Dispose()
     {

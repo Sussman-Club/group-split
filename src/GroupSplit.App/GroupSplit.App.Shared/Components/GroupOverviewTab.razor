@@ -1,4 +1,4 @@
-﻿@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.Shared
@@ -197,7 +197,20 @@
     private PagedResponse<GroupLedgerEntryResponse>? _recent;
     private Guid _loadedFor;
 
-    private UserGroupBalanceResponse? Balance => GroupsService.Balance;
+    /// <summary>
+    /// Counts reads of the recent entries, so the answer to an older one -- a change
+    /// announced while the group was still being switched to -- cannot land over a newer.
+    /// </summary>
+    private int _recentVersion;
+
+    /// <summary>
+    /// The balances, but only the selected group's own. The state holds one group's at a
+    /// time and this tab is about one group; the two are the same group in every case but
+    /// the moment between a selection and its figures landing, and in that moment the
+    /// previous group's balances are the wrong thing to hang this group's name on.
+    /// </summary>
+    private UserGroupBalanceResponse? Balance =>
+        GroupsService.SelectedGroup?.Id == GroupId ? GroupsService.Balance : null;
 
     private IReadOnlyList<GroupLedgerEntryResponse> Recent => _recent?.Items ?? [];
 
@@ -277,13 +290,25 @@
 
     private async Task LoadRecentAsync()
     {
+        var version = ++_recentVersion;
+        var groupId = _loadedFor;
+
+        PagedResponse<GroupLedgerEntryResponse>? recent = null;
+
         // The ledger, three rows of it. Expenses and settlements together, because a
         // balance that moved with nothing on the page to explain it is its own kind of
         // wrong -- which is what a "recent expenses" card that hid settlements produced.
-        await Errors.TryAsync(async () =>
-                _recent = await GroupsClient.GetGroupActivityAsync(
-                    _loadedFor, page: 1, pageSize: RecentCount),
+        var loaded = await Errors.TryAsync(async () =>
+                recent = await GroupsClient.GetGroupActivityAsync(
+                    groupId, page: 1, pageSize: RecentCount),
             "Could not load this group's recent entries.");
+
+        // Something newer has been asked for since. That answer is the one to show.
+        if (version != _recentVersion)
+            return;
+
+        if (loaded)
+            _recent = recent;
 
         await InvokeAsync(StateHasChanged);
     }

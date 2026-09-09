@@ -38,11 +38,13 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         _changes.TransactionsChanged += RefreshAsync;
         _changes.GroupsChanged += RefreshAsync;
 
-        IsReadyTask = Task.Run(async () =>
-        {
-            if (tracker.Page is not null && tracker.Summary is not null) return;
-            await RefreshAsync();
-        });
+        // Started here rather than on a pool thread: the announcement this ends in is what
+        // the page re-renders on, and under interactive server rendering that has to reach
+        // the circuit's own thread. A first read the prerender already persisted is not
+        // read again.
+        IsReadyTask = tracker.Page is not null && tracker.Summary is not null
+            ? Task.CompletedTask
+            : RefreshAsync();
     }
 
     public PagedResponse<TransactionResponse>? Page

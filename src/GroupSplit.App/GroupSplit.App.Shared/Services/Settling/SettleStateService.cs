@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Shared.Extensions;
+using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
@@ -42,6 +42,19 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
     private bool _historyWanted;
     private int _historyShown = HistoryPageSize;
 
+    /// <summary>
+    /// How many reads of the plan are in flight, so the page is dimmed until the last of
+    /// them lands rather than until the first does. A write raises two announcements and
+    /// this reads on both.
+    /// </summary>
+    private int _reading;
+
+    /// <summary>Counts reads of the plan, so an older answer cannot land over a newer one's.</summary>
+    private int _planVersion;
+
+    /// <summary>The same, for the history.</summary>
+    private int _historyVersion;
+
     public SettleStateService(
         IUsersClient users,
         SettleTracker tracker,
@@ -77,7 +90,7 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
 
     public int OutstandingCount => Plan is { } plan ? plan.YouPay.Count + plan.OwedToYou.Count : 0;
 
-    public bool IsLoading { get; private set; }
+    public bool IsLoading => _reading > 0;
 
     public event Action? OnChanged;
 
@@ -160,23 +173,43 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
 
     private async Task ReadAsync(CancellationToken cancellationToken)
     {
-        IsLoading = true;
+        var version = ++_planVersion;
+
+        _reading++;
         Announce();
 
-        await _guard.RunAsync(async () =>
-                Plan = await _users.GetSettlementPlanAsync(cancellationToken),
-            "your settlement plan");
+        try
+        {
+            SettlementPlanResponse? plan = null;
 
-        IsLoading = false;
-        Announce();
+            var loaded = await _guard.RunAsync(async () =>
+                    plan = await _users.GetSettlementPlanAsync(cancellationToken),
+                "your settlement plan");
+
+            if (loaded && version == _planVersion)
+                Plan = plan;
+        }
+        finally
+        {
+            _reading--;
+            Announce();
+        }
     }
 
     private async Task ReadHistoryAsync(CancellationToken cancellationToken)
     {
-        await _guard.RunAsync(async () =>
-                History = await _users.GetSettlementsAsync(page: 1, pageSize: _historyShown,
+        var version = ++_historyVersion;
+        var shown = _historyShown;
+
+        PagedResponse<SettlementResponse>? history = null;
+
+        var loaded = await _guard.RunAsync(async () =>
+                history = await _users.GetSettlementsAsync(page: 1, pageSize: shown,
                     cancellationToken: cancellationToken),
             "your settlements");
+
+        if (loaded && version == _historyVersion)
+            History = history;
 
         Announce();
     }

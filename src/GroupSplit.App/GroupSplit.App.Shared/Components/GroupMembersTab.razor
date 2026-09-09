@@ -119,14 +119,45 @@
     private List<UserInfo> _members = [];
     private IReadOnlyList<GroupInvitationResponse> _pending = [];
 
+    /// <summary>The group the lists were last read for, so they are not read again for it.</summary>
+    /// <remarks>
+    /// Parameters are set on every render of the page above, and the page renders on every
+    /// announcement about the group -- several per load. Reading the members and the
+    /// invitations on each of those was two requests per render, all answering the same
+    /// question; they are read once per group, and again only when a write says the
+    /// membership moved.
+    /// </remarks>
+    private Guid _loadedFor;
+
+    /// <summary>
+    /// Counts reads, so the answer to an older one cannot land over a newer one's.
+    /// </summary>
+    private int _version;
+
     protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
 
-    protected override Task OnParametersSetAsync() => ReloadAsync();
+    protected override Task OnParametersSetAsync()
+    {
+        if (_loadedFor == GroupId)
+            return Task.CompletedTask;
+
+        _loadedFor = GroupId;
+
+        return ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
-        _members = await GroupsService.GetGroupMembersAsync().ToListAsync();
-        _pending = await GroupsService.GetGroupInvitationsAsync();
+        var version = ++_version;
+
+        var members = await GroupsService.GetGroupMembersAsync().ToListAsync();
+        var pending = await GroupsService.GetGroupInvitationsAsync();
+
+        if (version != _version)
+            return;
+
+        _members = members;
+        _pending = pending;
 
         await InvokeAsync(StateHasChanged);
     }
