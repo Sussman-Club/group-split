@@ -1879,6 +1879,92 @@ html:not([data-gs-ready]) .gs-group-card {
     border-top: 0;
 }
 
+/*
+    A phone gets one card per entry.
+
+    Below Mud's own xs breakpoint the grid stops being a table and gives every cell a
+    line of its own with the column's name beside it. What it does not do is say where
+    one entry ends: the lines are ruled evenly all the way down, so "Actions" sat
+    between two dates looking like a band of its own rather than the end of the entry
+    above it. Two of our desktop rules made it worse -- the border under every cell drew
+    that even rule, and the 14px of cell padding reinflated the columns marked
+    HideSmall, which is where the empty bands above the amount and the actions came
+    from.
+
+    So the row becomes the card. The container stops drawing one box around all of them,
+    the lines inside a card share it without rules between them, and the gap between
+    cards is what separates one expense from the next.
+
+    600px rather than the 640px the rest of the phone layout uses: this has to switch on
+    the same pixel Mud's stacked layout does, and Breakpoint.Xs is 600.
+*/
+@media (max-width: 600px) {
+    .gs-grid .mud-table-container {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        overflow: visible;
+    }
+
+    /* A table row cannot take a radius, a margin or a gap; a block one can. */
+    .gs-grid.mud-table .mud-table-root,
+    .gs-grid.mud-table .mud-table-body {
+        display: block;
+        border-top: 0;
+    }
+
+    .gs-grid.mud-table .mud-table-body .mud-table-row {
+        display: block;
+        margin-bottom: 10px;
+        padding: 6px 0;
+        border: 1px solid var(--gs-line);
+        border-radius: var(--gs-radius);
+        background: var(--gs-surface);
+        overflow: hidden;
+    }
+
+    .gs-grid.mud-table .mud-table-body .mud-table-row:last-child {
+        margin-bottom: 0;
+    }
+
+    /* No rules inside a card -- its own edge is the separator now. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell {
+        border-bottom: 0;
+        padding: 7px 14px;
+    }
+
+    /* A column that is right-aligned as a column is a line like any other once it is
+       one: the name on the left, the figure on the right, in step with the lines above
+       and below it rather than shoved against them. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell.gs-right {
+        justify-content: space-between;
+    }
+
+    /* An expense somebody else recorded has no actions on it, and a cell with nothing
+       in it still prints its label -- a card that ended on the word ACTIONS and then
+       stopped. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell:empty {
+        display: none;
+    }
+
+    /* The column's name is a label, and it was rendering at the weight of the figure
+       beside it. Same treatment as the header it stands in for. */
+    .gs-grid.mud-table .mud-table-cell::before {
+        font-size: 0.6875rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--gs-muted);
+    }
+
+    /* HideSmall takes a column out of the phone layout entirely. Mud collapses the cell
+       and zeroes its padding; ours was putting the padding back, and a collapsed cell
+       with padding is an empty band. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell-hide {
+        padding: 0;
+    }
+}
+
 /* ------------------------------------------------------------- snackbar ---- */
 
 .mud-snackbar {
