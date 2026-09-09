@@ -57,6 +57,11 @@ public static class ActivityProjectionExtensions
                        Category = transaction is Expense && ((Expense)transaction).Category != null
                            ? ((Expense)transaction).Category!.Name
                            : null,
+                       // Through the merchant rather than off the row: the logo is a fact
+                       // about the place, stored once, and this join is how an expense gets
+                       // to show it at all.
+                       MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
+                       MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null,
                        // Null on a transfer, and null rather than zero on an expense the
                        // reader has no split of: both mean "this did not cost you", and a
                        // 0.00 in the column would be claiming their part of it was nothing.
@@ -114,7 +119,12 @@ public static class ActivityProjectionExtensions
                               (split.User.LastName != null &&
                                split.User.LastName.ToLower().Contains(search))) ||
                           (transaction is Expense && ((Expense)transaction).Category != null &&
-                           ((Expense)transaction).Category!.Name.ToLower().Contains(search)))
+                           ((Expense)transaction).Category!.Name.ToLower().Contains(search)) ||
+                          // The shop, once a row shows one. Searching a ledger for "lidl"
+                          // and being told nothing happened, while four rows on screen
+                          // carry the Lidl logo, is the list disagreeing with itself.
+                          (transaction.Merchant != null &&
+                           transaction.Merchant.Name.ToLower().Contains(search)))
                    select transaction;
         }
 
@@ -154,6 +164,11 @@ public static class ActivityProjectionExtensions
                        Category = transaction is Expense && ((Expense)transaction).Category != null
                            ? ((Expense)transaction).Category!.Name
                            : null,
+                       // Through the merchant rather than off the row: the logo is a fact
+                       // about the place, stored once, and this join is how an expense gets
+                       // to show it at all.
+                       MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
+                       MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null,
                        Share = transaction is Transfer
                            ? null
                            : transaction.Splits
@@ -209,6 +224,11 @@ public static class ActivityProjectionExtensions
                        Category = transaction is Expense && ((Expense)transaction).Category != null
                            ? ((Expense)transaction).Category!.Name
                            : null,
+                       // Through the merchant rather than off the row: the logo is a fact
+                       // about the place, stored once, and this join is how an expense gets
+                       // to show it at all.
+                       MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
+                       MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null,
                        Share = transaction is Transfer
                            ? null
                            : transaction.Splits

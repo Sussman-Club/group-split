@@ -73,5 +73,33 @@ public class SeederCompositionTest
         Assert.NotEmpty(seeders);
         Assert.Contains(seeders, seeder => seeder is Seeders.TransactionSeeder);
         Assert.Contains(seeders, seeder => seeder is Seeders.CategorySeeder);
+        Assert.Contains(seeders, seeder => seeder is Seeders.MerchantSeeder);
     }
+
+    /// <summary>
+    /// The shops have to be written before anything that points at one.
+    /// </summary>
+    /// <remarks>
+    /// Not a preference about ordering: the expenses and the bank rows both name merchants,
+    /// they land in the same layer as each other, and a layer runs its seeders at the same
+    /// time in separate scopes. If either of them could create the row, two of them would
+    /// race for it and the unique index would turn that into a failed seeding run -- so
+    /// neither does, and this is the edge that makes the row already be there.
+    /// </remarks>
+    [Fact]
+    public void The_merchants_are_seeded_before_the_expenses_and_the_bank_rows_that_name_them()
+    {
+        using var host = ComposeSeederHost();
+        using var scope = host.Services.CreateScope();
+
+        var layers = scope.ServiceProvider.GetServices<ISeeder>().TopologicallySort();
+
+        var merchants = LayerOf<Seeders.MerchantSeeder>(layers);
+
+        Assert.True(merchants < LayerOf<Seeders.TransactionSeeder>(layers));
+        Assert.True(merchants < LayerOf<Seeders.BankConnectionSeeder>(layers));
+    }
+
+    private static int LayerOf<TSeeder>(List<List<ISeeder>> layers) =>
+        layers.FindIndex(layer => layer.Any(seeder => seeder is TSeeder));
 }

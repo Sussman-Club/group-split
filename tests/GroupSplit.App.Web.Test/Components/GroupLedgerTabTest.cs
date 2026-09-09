@@ -1,4 +1,4 @@
-﻿using AngleSharp.Dom;
+using AngleSharp.Dom;
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
@@ -173,6 +173,14 @@ public class GroupLedgerTabTest : ComponentTest
             PaidByUserName = "Omar",
             Share = share,
             RunningBalance = -12m
+        };
+
+    /// <summary>An expense filed from a bank row: it knows the shop, and the shop has a mark.</summary>
+    private static GroupLedgerEntryResponse AtAShop(Guid id) =>
+        Expense(id, "Weekly shop") with
+        {
+            MerchantName = "Lidl",
+            MerchantLogoUrl = "/_content/GroupSplit.App.Shared/merchants/lidl.svg"
         };
 
     // ---- the figures over the list ------------------------------------------------------
@@ -443,5 +451,51 @@ public class GroupLedgerTabTest : ComponentTest
 
         Assert.Contains("$12.00", tab.Markup);
         Assert.Contains("—", tab.Markup);
+    }
+
+    // ---- where an entry happened --------------------------------------------------------
+
+    /// <summary>
+    /// The ledger is the surface this was asked for: an expense filed from a bank shows
+    /// the shop's mark on the payer's avatar rather than only in the words.
+    /// </summary>
+    [Fact]
+    public void An_expense_filed_from_a_bank_row_shows_the_shops_mark_in_the_ledger()
+    {
+        _entries = [AtAShop(Guid.NewGuid())];
+
+        var tab = Render();
+
+        var badge = tab.Find("img.gs-mark-badge");
+
+        Assert.Equal("/_content/GroupSplit.App.Shared/merchants/lidl.svg", badge.GetAttribute("src"));
+        Assert.Equal("Lidl", badge.GetAttribute("title"));
+
+        // The payer keeps the square. The badge is the second fact, not a replacement for
+        // the first -- who fronted the money is what a ledger is read for.
+        Assert.Equal("O", tab.Find(".gs-avatar").TextContent.Trim());
+    }
+
+    [Fact]
+    public void An_expense_nobody_imported_is_the_payer_and_nothing_else()
+    {
+        _entries = [Expense(Guid.NewGuid())];
+
+        var tab = Render();
+
+        Assert.Empty(tab.FindAll("img.gs-mark-badge"));
+        Assert.Equal("O", tab.Find(".gs-avatar").TextContent.Trim());
+    }
+
+    /// <summary>A settlement is one member paying another, so there is no shop to badge.</summary>
+    [Fact]
+    public void A_settlement_keeps_its_own_icon_and_gets_no_mark()
+    {
+        _entries = [Transfer(Guid.NewGuid())];
+
+        var tab = Render();
+
+        Assert.Empty(tab.FindAll("img.gs-mark-badge"));
+        Assert.NotEmpty(tab.FindAll(".gs-row-icon"));
     }
 }

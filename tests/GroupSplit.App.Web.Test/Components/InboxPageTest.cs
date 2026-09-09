@@ -1,4 +1,4 @@
-﻿using AngleSharp.Dom;
+using AngleSharp.Dom;
 using Bunit;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Pages;
@@ -177,7 +177,7 @@ public class InboxPageTest : ComponentTest
 
     private static BankTransactionResponse Row(string merchant, decimal amount, DateOnly date) =>
         new(Guid.NewGuid(), date, amount, "USD", merchant.ToUpperInvariant(), merchant,
-            null, null, null, null, null, null, false, InboxStatus.New, null, null,
+            null, null, null, null, null, null, null, false, InboxStatus.New, null, null,
             "Everyday", "Fake Bank");
 
     /// <summary>The same row, showing an expense it might already be.</summary>

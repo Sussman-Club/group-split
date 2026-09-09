@@ -36,7 +36,9 @@
                @onkeydown="@(e => expense && e.Key is "Enter" or " " ? ViewAsync(item) : Task.CompletedTask)">
                 @if (expense)
                 {
-                    <Avatar Name="@item.PaidByUserName" />
+                    <MerchantMark PaidByUserName="@item.PaidByUserName"
+                                  MerchantName="@item.MerchantName"
+                                  MerchantLogoUrl="@item.MerchantLogoUrl" />
                 }
                 else
                 {

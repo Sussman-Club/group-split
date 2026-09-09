@@ -26,6 +26,17 @@ public record CreateTransactionRequest
     public Guid? CategoryId { get; set; }
 
     /// <summary>
+    /// Where it was spent, or null for the ordinary case of nowhere anybody wrote down.
+    /// </summary>
+    /// <remarks>
+    /// Filing an imported row sets this from the row itself, so it is here for the other
+    /// way in: cash at the same shop every week, or a group with no bank linked. What it
+    /// buys is the merchant's mark on the row and the shop being searchable -- it says
+    /// nothing about how the expense divides, which is the category's job.
+    /// </remarks>
+    public Guid? MerchantId { get; set; }
+
+    /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
     /// </summary>
     /// <remarks>

@@ -1,0 +1,72 @@
+[
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000001",
+    "Name": "Lidl",
+    "Logo": "lidl"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000002",
+    "Name": "Aldi",
+    "Logo": "aldi"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000003",
+    "Name": "Costco",
+    "Logo": "costco"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000004",
+    "Name": "Blue Bottle Coffee",
+    "Logo": "blue-bottle-coffee"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000005",
+    "Name": "Trattoria da Enzo",
+    "Logo": "trattoria-da-enzo"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000006",
+    "Name": "Glovo",
+    "Logo": "glovo"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000007",
+    "Name": "IKEA",
+    "Logo": "ikea"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000008",
+    "Name": "Amazon",
+    "Logo": "amazon"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-000000000009",
+    "Name": "Netflix",
+    "Logo": "netflix"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-00000000000A",
+    "Name": "Uber",
+    "Logo": "uber"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-00000000000B",
+    "Name": "City Power & Light",
+    "Logo": "city-power-and-light"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-00000000000C",
+    "Name": "Pharmacy 88",
+    "Logo": "pharmacy-88"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-00000000000D",
+    "Name": "NOS Internet",
+    "Logo": "nos-internet"
+  },
+  {
+    "Id": "3F2A1B4C-5D6E-4F70-8A91-00000000000E",
+    "Name": "Vodafone Fibre",
+    "Logo": "vodafone-fibre"
+  }
+]

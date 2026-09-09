@@ -209,6 +209,7 @@ public class TransactionService(
             Description = request.Description,
             Group = group,
             Category = category,
+            MerchantId = await MerchantFor(request.MerchantId, ct),
             User = payer
         };
 
@@ -293,6 +294,7 @@ public class TransactionService(
             .Include(t => t.User)
             .Include(t => t.Group)
             .Include(t => t.Category)
+            .Include(t => t.Merchant)
             .Include(t => t.Splits)
             .ThenInclude(split => split.User)
             .FirstOrDefaultAsync(ct);
@@ -322,6 +324,8 @@ public class TransactionService(
             PaidByUserName = $"{transaction.User.FirstName} {transaction.User.LastName}",
             CategoryId = transaction.CategoryId,
             Category = transaction.Category?.Name,
+            MerchantName = transaction.Merchant?.Name,
+            MerchantLogoUrl = transaction.Merchant?.LogoUrl,
             Splits = splits
         };
     }
@@ -337,7 +341,11 @@ public class TransactionService(
                 DateTime = t.DateTime,
                 PaidByUserId = t.User.Id,
                 GroupId = t.GroupId,
-                CategoryId = t.CategoryId
+                CategoryId = t.CategoryId,
+                // Unlike the splits below, this is filled in: a patch that says nothing
+                // about the shop means "leave it where it was spent", and an edit to the
+                // amount is no reason to forget that.
+                MerchantId = t.MerchantId
                 // Splits are deliberately absent. Null means "divide it again", and that is
                 // the only safe default for a model somebody is about to change the amount
                 // on: filled in here, an ordinary read-change-write would quietly mean
@@ -393,6 +401,7 @@ public class TransactionService(
         expense.Description = request.Description;
         expense.Category = category;
         expense.CategoryId = category?.Id;
+        expense.MerchantId = await MerchantFor(request.MerchantId, ct);
         expense.User = payer;
 
         // The amount, the payer and the category can all have changed, and each of them
@@ -503,5 +512,23 @@ public class TransactionService(
                    .FirstOrDefaultAsync(category =>
                        category.Id == categoryId && category.Group.Id == group.Id, ct)
                ?? throw new NotFoundException(ErrorCodes.CategoryNotFound, "Category not found.");
+    }
+
+    /// <summary>
+    /// The shop an expense says it was spent at, checked to exist. Unscoped, unlike the
+    /// category above: a merchant belongs to nobody, so there is no group for it to be in
+    /// or out of.
+    /// </summary>
+    private async Task<Guid?> MerchantFor(Guid? merchantId, CancellationToken ct)
+    {
+        if (merchantId is null)
+            return null;
+
+        var exists = await dbContext.Set<Merchant>().AnyAsync(merchant => merchant.Id == merchantId, ct);
+
+        if (!exists)
+            throw new NotFoundException(ErrorCodes.MerchantNotFound, "Merchant not found.");
+
+        return merchantId;
     }
 }

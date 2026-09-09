@@ -54,6 +54,11 @@ public class BankTransactionSeedDto
 
     public required string Description { get; init; }
 
+    /// <summary>
+    /// Who was paid. Matched against <c>merchants.json</c> by name to find the shop -- and
+    /// with it the logo, which is the merchant's and not the row's. A name that file does
+    /// not list still shows on the row; it just has no mark to go with it.
+    /// </summary>
     public string? MerchantName { get; init; }
 
     public string? ProviderCategory { get; init; }
@@ -77,13 +82,6 @@ public class BankTransactionSeedDto
     public string? PaymentChannel { get; init; }
 
     public string? City { get; init; }
-
-    /// <summary>
-    /// The merchant's logo. Left unset in the seed file on purpose: a URL nobody can
-    /// verify renders as a broken image, which is worse than the initials the row falls
-    /// back to. Here so real imported rows and seeded ones take the same path.
-    /// </summary>
-    public string? LogoUrl { get; init; }
 
     public bool Pending { get; init; }
 }

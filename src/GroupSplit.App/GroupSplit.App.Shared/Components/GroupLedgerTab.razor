@@ -1,4 +1,4 @@
-﻿@using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
@@ -117,7 +117,10 @@
                             }
                             else
                             {
-                                <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
+                                <MerchantMark PaidByUserName="@context.Item.PaidByUserName"
+                                              MerchantName="@context.Item.MerchantName"
+                                              MerchantLogoUrl="@context.Item.MerchantLogoUrl"
+                                              Size="sm" />
                             }
                             <div style="min-width: 0">
                                 <div style="font-weight: 700; font-size: .9375rem">@Headline(context.Item)</div>
@@ -435,7 +438,9 @@
             GroupId = GroupId,
             PaidByUserId = entry.PaidByUserId,
             PaidByUserName = entry.PaidByUserName,
-            Category = entry.Category
+            Category = entry.Category,
+            MerchantName = entry.MerchantName,
+            MerchantLogoUrl = entry.MerchantLogoUrl
         };
 
         var parameters = new DialogParameters<UpdateTransactionDialog> { { x => x.Original, original } };

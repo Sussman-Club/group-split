@@ -259,6 +259,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey<Transaction>(transaction => transaction.BankTransactionId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // Restrict, not cascade: a merchant row is shared by every expense filed
+            // against it, so deleting one must not take somebody's history. Nothing deletes
+            // merchants today, and failing loudly is the right answer if something starts.
+            entity.HasOne(transaction => transaction.Merchant)
+                .WithMany(merchant => merchant.Transactions)
+                .HasForeignKey(transaction => transaction.MerchantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasIndex(transaction => transaction.DateTime);
             entity.HasIndex(transaction => transaction.Name);
 
@@ -391,7 +399,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(row => row.ProviderCategoryDetailed).HasMaxLength(96);
             entity.Property(row => row.PaymentChannel).HasMaxLength(32);
             entity.Property(row => row.City).HasMaxLength(64);
-            entity.Property(row => row.LogoUrl).HasMaxLength(512);
+            entity.Property(row => row.CategoryIconUrl).HasMaxLength(512);
             entity.Property(row => row.Pending).IsRequired();
             entity.Property(row => row.RawJson).IsRequired();
             entity.Property(row => row.ImportedAt).IsRequired();
@@ -419,6 +427,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .WithMany()
                 .HasForeignKey(row => row.ReplacesId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Restrict for the same reason the ledger's side is: the row is shared.
+            entity.HasOne(row => row.Merchant)
+                .WithMany()
+                .HasForeignKey(row => row.MerchantId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // The dedup key every upsert relies on: the provider's id, within the account.
             entity.HasIndex(row => new { row.LinkedAccountId, row.ProviderTransactionId }).IsUnique();
@@ -449,6 +463,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // Dismissing the same pair twice is the same answer, not a second one; and the
             // index is also how every suggestion query asks whether it has been answered.
             entity.HasIndex(dismissal => new { dismissal.BankTransactionId, dismissal.TransactionId }).IsUnique();
+        });
+
+        modelBuilder.Entity<Merchant>(entity =>
+        {
+            entity.Property(merchant => merchant.Name).HasMaxLength(128).IsRequired();
+            entity.Property(merchant => merchant.NormalizedName).HasMaxLength(128).IsRequired();
+            entity.Property(merchant => merchant.LogoUrl).HasMaxLength(512);
+            entity.Property(merchant => merchant.FirstSeenAt).IsRequired();
+
+            // One row per place. The resolver reads this index before every insert, so a
+            // sync that meets Lidl on forty rows creates one merchant and links forty.
+            entity.HasIndex(merchant => merchant.NormalizedName).IsUnique();
         });
 
         modelBuilder.Entity<UserIdentity>(entity =>

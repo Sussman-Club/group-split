@@ -50,6 +50,19 @@ public record GroupActivityResponse
     public string? Category { get; init; }
 
     /// <summary>
+    /// Where it was spent, for an expense filed from a bank row that named a place. Null on
+    /// a transfer and on anything somebody typed in: those went to a person, or to a shop
+    /// nobody wrote down.
+    /// </summary>
+    public string? MerchantName { get; init; }
+
+    /// <summary>
+    /// The merchant's logo, where there is one. Read through the merchant and not stored
+    /// per row, so a logo that arrives later arrives on every expense at that place at once.
+    /// </summary>
+    public string? MerchantLogoUrl { get; init; }
+
+    /// <summary>
     /// What this cost the caller: their split of an expense, or null on a transfer.
     /// </summary>
     /// <remarks>

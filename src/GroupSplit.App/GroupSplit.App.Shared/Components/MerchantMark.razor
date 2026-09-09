@@ -1,0 +1,63 @@
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    What a row leads with: who paid, and where.
+
+    Two facts and one 40px square, because a splitting app cannot give up either. The payer
+    is the fact the whole page is about -- "who is owed for this" -- so the avatar keeps the
+    square and the merchant's logo rides its corner. Swapping the avatar out for the logo
+    reads better and answers the wrong question; and it would make the first column mean
+    two different things down one list, since only an imported expense has a logo at all.
+
+    The badge is a rounded square where the avatar is a circle, and that is load-bearing
+    rather than decorative: a circle in that corner is where every app puts a presence dot,
+    so a round logo there reads as a status. Square is a place, circle is a person.
+
+    With no payer -- the inbox, where nothing has been paid by anybody yet -- there is only
+    one fact to show, so the logo takes the tile itself and falls back to the shop's
+    initials in one.
+*@
+
+@if (string.IsNullOrWhiteSpace(PaidByUserName))
+{
+    @if (Logo is { } only)
+    {
+        <img class="gs-mark-solo" src="@only" alt="" width="40" height="40"
+             title="@MerchantName" loading="lazy" />
+    }
+    else
+    {
+        <Avatar Name="@MerchantName" Size="@Size" Class="tile" />
+    }
+}
+else if (Logo is { } badge)
+{
+    <span class="gs-mark">
+        <Avatar Name="@PaidByUserName" Size="@Size" />
+        <img class="gs-mark-badge" src="@badge" alt="" title="@MerchantName" loading="lazy" />
+    </span>
+}
+else
+{
+    <Avatar Name="@PaidByUserName" Size="@Size" />
+}
+
+@code {
+    /// <summary>Who paid, or null on a row where nobody has yet -- an imported bank row.</summary>
+    [Parameter] public string? PaidByUserName { get; set; }
+
+    /// <summary>Where it was spent, when the row knows. The logo's tooltip and its fallback.</summary>
+    [Parameter] public string? MerchantName { get; set; }
+
+    [Parameter] public string? MerchantLogoUrl { get; set; }
+
+    /// <summary>Passed through to <see cref="Avatar"/>: "sm", "" (default), "lg" or "xl".</summary>
+    [Parameter] public string Size { get; set; } = "";
+
+    /// <summary>
+    /// Whitespace is no logo. The API sends null for a merchant without one and an empty
+    /// string is nobody's URL, so both take the same path rather than rendering an img that
+    /// resolves to this page.
+    /// </summary>
+    private string? Logo => string.IsNullOrWhiteSpace(MerchantLogoUrl) ? null : MerchantLogoUrl;
+}

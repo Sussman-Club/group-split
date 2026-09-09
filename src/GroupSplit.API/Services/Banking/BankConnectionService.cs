@@ -737,6 +737,9 @@ public sealed class BankConnectionService(
                                   && importedIds.Contains(transaction.BankTransactionId.Value))
             .ToListAsync(ct);
 
+        // The merchant stays. It is where the expense happened, which is as true after the
+        // bank is gone as it was before -- and the row it points at is shared by every other
+        // group that shops there, so unlinking one person's card cannot take it away.
         foreach (var transaction in filed)
         {
             transaction.BankTransaction = null;

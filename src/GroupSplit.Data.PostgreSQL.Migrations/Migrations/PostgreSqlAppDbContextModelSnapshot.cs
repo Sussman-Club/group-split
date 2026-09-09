@@ -117,6 +117,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<DateOnly?>("AuthorizedDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("CategoryIconUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<string>("City")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -143,9 +147,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid>("LinkedAccountId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("LogoUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                    b.Property<Guid?>("MerchantId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("MerchantName")
                         .HasMaxLength(128)
@@ -187,6 +190,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("character varying(16)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("MerchantId");
 
                     b.HasIndex("ReplacesId");
 
@@ -394,6 +399,37 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("LinkedAccount");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.Merchant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Merchant");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.PendingBankLink", b =>
                 {
                     b.Property<Guid>("Id")
@@ -526,6 +562,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("MerchantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -542,6 +581,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("DateTime");
 
                     b.HasIndex("Discriminator");
+
+                    b.HasIndex("MerchantId");
 
                     b.HasIndex("Name");
 
@@ -744,12 +785,19 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("GroupSplit.Data.Entities.Merchant", "Merchant")
+                        .WithMany()
+                        .HasForeignKey("MerchantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GroupSplit.Data.Entities.BankTransaction", "Replaces")
                         .WithMany()
                         .HasForeignKey("ReplacesId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Account");
+
+                    b.Navigation("Merchant");
 
                     b.Navigation("Replaces");
                 });
@@ -886,6 +934,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId");
 
+                    b.HasOne("GroupSplit.Data.Entities.Merchant", "Merchant")
+                        .WithMany("Transactions")
+                        .HasForeignKey("MerchantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GroupSplit.Data.Entities.User", "User")
                         .WithMany("Transactions")
                         .HasForeignKey("UserId")
@@ -895,6 +948,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("BankTransaction");
 
                     b.Navigation("Group");
+
+                    b.Navigation("Merchant");
 
                     b.Navigation("User");
                 });
@@ -961,6 +1016,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.LinkedAccount", b =>
+                {
+                    b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.Merchant", b =>
                 {
                     b.Navigation("Transactions");
                 });

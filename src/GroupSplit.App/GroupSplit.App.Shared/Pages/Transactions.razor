@@ -1,4 +1,4 @@
-﻿@page "/transactions"
+@page "/transactions"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
@@ -174,7 +174,10 @@
                 <PropertyColumn Property="x => x.Name" Title="Expense">
                     <CellTemplate>
                         <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
-                            <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
+                            <MerchantMark PaidByUserName="@context.Item.PaidByUserName"
+                                          MerchantName="@context.Item.MerchantName"
+                                          MerchantLogoUrl="@context.Item.MerchantLogoUrl"
+                                          Size="sm" />
                             <div style="min-width: 0">
                                 <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
                                 <div class="gs-muted" style="font-size: .75rem">@PaidBy(context.Item)</div>

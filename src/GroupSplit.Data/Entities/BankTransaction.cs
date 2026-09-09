@@ -95,10 +95,31 @@ public class BankTransaction : Entity
     public string? City { get; set; }
 
     /// <summary>
-    /// The merchant's logo, as the provider hosts it. A row with one reads as the place it
-    /// happened rather than as two initials in a circle.
+    /// The place this was spent, resolved from <see cref="MerchantName"/> as the row was
+    /// imported. A row with one reads as the place it happened rather than as two initials
+    /// in a circle, and the logo lives there rather than here.
     /// </summary>
-    public string? LogoUrl { get; set; }
+    /// <remarks>
+    /// Null when the provider sent no merchant name at all, which is an ordinary state for
+    /// a bank line nobody has enriched -- <see cref="Description"/> is then all there is.
+    /// </remarks>
+    public virtual Merchant? Merchant { get; set; }
+
+    public Guid? MerchantId { get; set; }
+
+    /// <summary>
+    /// A mark for the kind of thing this was, from the provider, for a row whose merchant
+    /// has no logo -- or that named no merchant at all.
+    /// </summary>
+    /// <remarks>
+    /// On the row and not on the <see cref="Entities.Merchant"/>, because it is not a fact
+    /// about the place: it belongs to <see cref="ProviderCategory"/>, and the same shop can
+    /// come back under a different category next month. It is the inbox's last resort
+    /// before initials, and it goes no further -- an expense in the ledger badges the
+    /// payer's avatar with where it was spent, and a category icon there would be claiming
+    /// to know a place when all it knows is a kind.
+    /// </remarks>
+    public string? CategoryIconUrl { get; set; }
 
     /// <summary>
     /// Not yet settled at the bank. A pending row is not a transaction: it may change

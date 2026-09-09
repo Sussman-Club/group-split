@@ -1,4 +1,4 @@
-﻿@page "/inbox"
+@page "/inbox"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Banking
@@ -139,17 +139,12 @@
                                          Class="gs-row-check"
                                          aria-label="@($"Select {row.Title}")" />
                         }
-                        @if (row.LogoUrl is { Length: > 0 } logo)
-                        {
-                            @* The merchant's own logo where the bank sent one: a row reads
-                               as the place it happened rather than as two initials. *@
-                            <img src="@logo" alt="" width="36" height="36"
-                                 style="border-radius: 50%; object-fit: cover; flex: 0 0 auto" />
-                        }
-                        else
-                        {
-                            <Avatar Name="@row.Title" />
-                        }
+                        @* The merchant's own logo where the bank sent one: a row reads as
+                           the place it happened rather than as two initials. No payer to
+                           show yet -- nobody has filed this -- so the logo takes the square
+                           rather than badging an avatar, which is the same component's other
+                           half. *@
+                        <MerchantMark MerchantName="@row.Title" MerchantLogoUrl="@row.Mark" />
                         <div style="min-width: 0">
                             <div class="title">
                                 <span>@row.Title</span>
