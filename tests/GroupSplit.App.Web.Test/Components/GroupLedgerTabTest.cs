@@ -6,6 +6,7 @@ using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -383,6 +384,44 @@ public class GroupLedgerTabTest : ComponentTest
 
         var edit = Assert.Single(edits);
         Assert.Contains("Dinner", edit.GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public async Task Editing_an_expense_passes_the_category_and_category_id_to_the_dialog()
+    {
+        var categoryId = Guid.NewGuid();
+        var expense = Expense(Guid.NewGuid(), "Dinner") with
+        {
+            CategoryId = categoryId,
+            Category = "Food"
+        };
+        _entries = [expense];
+
+        DialogParameters? capturedParams = null;
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<UpdateTransactionDialog>(
+                It.IsAny<string>(),
+                It.IsAny<DialogParameters>(),
+                It.IsAny<DialogOptions>()))
+            .Callback((string _, DialogParameters parameters, DialogOptions _) =>
+            {
+                capturedParams = parameters;
+            })
+            .ReturnsAsync(() =>
+            {
+                var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
+                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                return reference;
+            });
+
+        var tab = Render();
+
+        await tab.InvokeAsync(() => Buttons(tab, "Edit").Single().Click());
+
+        Assert.NotNull(capturedParams);
+        var original = Assert.IsType<TransactionResponse>(capturedParams[nameof(UpdateTransactionDialog.Original)]);
+        Assert.Equal(categoryId, original.CategoryId);
+        Assert.Equal("Food", original.Category);
     }
 
     [Fact]

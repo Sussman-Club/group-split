@@ -398,4 +398,131 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         Assert.Equal(me, share.UserId);
         Assert.Equal(100m, share.Amount);
     }
+
+    [Fact]
+    public async Task Patching_the_group_to_another_group_clears_the_splits_and_recomputes_for_the_new_group()
+    {
+        var (transactionId, me, _) = await AnEvenlySplitExpense();
+
+        using var other2Client = _host.ClientForAnotherUser();
+        var other2 = (await other2Client.GetFromJsonAsync<UserInfo>("/users/me", Json, Ct))!;
+
+        var group2Response = await Client.PostAsJsonAsync("/groups",
+            new CreateGroupRequest { Name = "Group 2" }, Json, Ct);
+        group2Response.EnsureSuccessStatusCode();
+        var group2Id = (await group2Response.Content.ReadFromJsonAsync<GroupResponse>(Json, Ct))!.Id;
+
+        var invited = await Client.PostAsJsonAsync($"/groups/{group2Id}/invitations",
+            new AddMemberRequest([new UserIdentifier { Email = other2.Email! }]), Json, Ct);
+        invited.EnsureSuccessStatusCode();
+        var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
+        var accepted = await other2Client.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        accepted.EnsureSuccessStatusCode();
+
+        var response = await Client.PatchAsync($"/transactions/{transactionId}",
+            PatchBody(("replace", "/groupId", group2Id)), Ct);
+        response.EnsureSuccessStatusCode();
+
+        var details = await Details(transactionId);
+        Assert.Equal(group2Id, details.GroupId);
+        Assert.Equal(2, details.Splits.Count);
+        Assert.Equal(50m, ShareOf(details, me));
+        Assert.Equal(50m, ShareOf(details, other2.Id));
+    }
+
+    [Fact]
+    public async Task Patching_the_group_to_another_group_with_explicit_splits_applies_them()
+    {
+        var (transactionId, me, _) = await AnEvenlySplitExpense();
+
+        using var other2Client = _host.ClientForAnotherUser();
+        var other2 = (await other2Client.GetFromJsonAsync<UserInfo>("/users/me", Json, Ct))!;
+
+        var group2Response = await Client.PostAsJsonAsync("/groups",
+            new CreateGroupRequest { Name = "Group 2" }, Json, Ct);
+        group2Response.EnsureSuccessStatusCode();
+        var group2Id = (await group2Response.Content.ReadFromJsonAsync<GroupResponse>(Json, Ct))!.Id;
+
+        var invited = await Client.PostAsJsonAsync($"/groups/{group2Id}/invitations",
+            new AddMemberRequest([new UserIdentifier { Email = other2.Email! }]), Json, Ct);
+        invited.EnsureSuccessStatusCode();
+        var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
+        var accepted = await other2Client.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        accepted.EnsureSuccessStatusCode();
+
+        var response = await Client.PatchAsync($"/transactions/{transactionId}",
+            PatchBody(
+                ("replace", "/groupId", group2Id),
+                ("replace", "/splits", new[]
+                {
+                    new { userId = me, amount = 80m },
+                    new { userId = other2.Id, amount = 20m }
+                })
+            ), Ct);
+        response.EnsureSuccessStatusCode();
+
+        var details = await Details(transactionId);
+        Assert.Equal(group2Id, details.GroupId);
+        Assert.Equal(80m, ShareOf(details, me));
+        Assert.Equal(20m, ShareOf(details, other2.Id));
+    }
+
+    [Fact]
+    public async Task Patching_a_personal_expense_to_a_group_divides_among_members()
+    {
+        var me = (await Client.GetFromJsonAsync<UserInfo>("/users/me", Json, Ct))!;
+
+        using var otherClient = _host.ClientForAnotherUser();
+        var other = (await otherClient.GetFromJsonAsync<UserInfo>("/users/me", Json, Ct))!;
+
+        var groupResponse = await Client.PostAsJsonAsync("/groups",
+            new CreateGroupRequest { Name = "Shared Group" }, Json, Ct);
+        groupResponse.EnsureSuccessStatusCode();
+        var groupId = (await groupResponse.Content.ReadFromJsonAsync<GroupResponse>(Json, Ct))!.Id;
+
+        var invited = await Client.PostAsJsonAsync($"/groups/{groupId}/invitations",
+            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Json, Ct);
+        invited.EnsureSuccessStatusCode();
+        var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
+        var accepted = await otherClient.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        accepted.EnsureSuccessStatusCode();
+
+        var created = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+        {
+            Name = "Coffee",
+            Amount = 40m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Json, Ct);
+        created.EnsureSuccessStatusCode();
+        var transaction = (await created.Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct))!;
+
+        var response = await Client.PatchAsync($"/transactions/{transaction.Id}",
+            PatchBody(("replace", "/groupId", groupId)), Ct);
+        response.EnsureSuccessStatusCode();
+
+        var details = await Details(transaction.Id);
+        Assert.Equal(groupId, details.GroupId);
+        Assert.Equal(2, details.Splits.Count);
+        Assert.Equal(20m, ShareOf(details, me.Id));
+        Assert.Equal(20m, ShareOf(details, other.Id));
+    }
+
+    [Fact]
+    public async Task Patch_returns_transaction_details_response_with_splits()
+    {
+        var (transactionId, me, other) = await AnEvenlySplitExpense();
+
+        var response = await Client.PatchAsync($"/transactions/{transactionId}",
+            PatchBody(("replace", "/name", "New Name")), Ct);
+        response.EnsureSuccessStatusCode();
+
+        var details = await response.Content.ReadFromJsonAsync<TransactionDetailsResponse>(Json, Ct);
+        Assert.NotNull(details);
+        Assert.Equal("New Name", details.Name);
+        Assert.NotNull(details.Splits);
+        Assert.Equal(2, details.Splits.Count);
+        Assert.Equal(50m, ShareOf(details, me));
+        Assert.Equal(50m, ShareOf(details, other));
+    }
 }
