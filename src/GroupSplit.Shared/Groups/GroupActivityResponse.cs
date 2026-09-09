@@ -47,6 +47,8 @@ public record GroupActivityResponse
     public string? PaidToUserName { get; init; }
 
     /// <summary>What the expense was filed under, when it was an expense filed under anything.</summary>
+    public Guid? CategoryId { get; init; }
+
     public string? Category { get; init; }
 
     /// <summary>

@@ -88,7 +88,7 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var moved = await Transactions.Update(expense.Id, Moving(expense, toGroup: null), Ct);
 
         Assert.Null(moved.GroupId);
-        Assert.Null(moved.CategoryId);
+        Assert.Null((moved as Expense)?.CategoryId);
 
         var share = Assert.Single(await SplitsOf(expense.Id));
         Assert.Equal(Me, share.UserId);

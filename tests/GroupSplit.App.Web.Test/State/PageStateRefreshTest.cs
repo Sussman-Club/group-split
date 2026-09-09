@@ -177,7 +177,24 @@ public class PageStateRefreshTest
                 var edited = new UpdateTransactionRequest { Amount = _transactions[index].Amount };
                 patch.ApplyTo(edited);
                 _transactions[index] = _transactions[index] with { Amount = edited.Amount };
-                return _transactions[index];
+                var current = _transactions[index];
+                return new TransactionDetailsResponse
+                {
+                    Id = current.Id,
+                    Name = current.Name,
+                    Description = current.Description,
+                    Amount = current.Amount,
+                    DateTime = current.DateTime,
+                    GroupId = current.GroupId,
+                    GroupName = current.GroupName,
+                    PaidByUserId = current.PaidByUserId,
+                    PaidByUserName = current.PaidByUserName,
+                    CategoryId = current.CategoryId,
+                    Category = current.Category,
+                    MerchantName = current.MerchantName,
+                    MerchantLogoUrl = current.MerchantLogoUrl,
+                    Splits = []
+                };
             });
 
         _transactionsClient

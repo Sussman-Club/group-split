@@ -3,6 +3,7 @@ namespace GroupSplit.Shared;
 public record TransactionResponse
 {
     public Guid Id { get; set; }
+    public ActivityKind Kind { get; set; } = ActivityKind.Expense;
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public decimal Amount { get; set; }
@@ -20,6 +21,8 @@ public record TransactionResponse
 
     public Guid PaidByUserId { get; set; }
     public string PaidByUserName { get; set; } = "";
+    public Guid? PaidToUserId { get; set; }
+    public string? PaidToUserName { get; set; }
     /// <summary>What it was filed under, or null for an expense filed under nothing.</summary>
     public Guid? CategoryId { get; set; }
 

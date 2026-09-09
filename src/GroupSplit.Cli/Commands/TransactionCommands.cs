@@ -282,7 +282,7 @@ public static class TransactionCommands
         var splits = new Option<string[]>("--split")
         {
             Description = "Set the exact shares as <user-id>=<amount>, repeatable. "
-                          + "Without this the division is re-derived.",
+                          + "Without this the existing division is kept.",
             AllowMultipleArgumentsPerToken = true
         };
 

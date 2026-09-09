@@ -59,7 +59,7 @@ public interface ITransactionService
     Task<SplitPreviewResponse> Preview(CreateTransactionRequest request, CancellationToken ct = default);
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
     Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default);
-    ValueTask<Expense> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
+    ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
 
     /// <summary>
     /// Removes a transaction of either kind: an expense, or a settlement between two
@@ -286,14 +286,14 @@ public class TransactionService(
 
     public async Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default)
     {
-        // Through Get, which is scoped to the caller's groups, rather than over the whole
+        // Through ScopedTransaction, which is scoped to the caller's groups, rather than over the whole
         // table. Reading straight from the set returned any transaction to any signed-in
         // caller who knew its id — amount, group name, category, who paid and the full
         // per-member split — while every other read here is scoped and List never shows it.
-        var transaction = await (await Get(id, ct))
+        var transaction = await ScopedTransaction(id)
             .Include(t => t.User)
             .Include(t => t.Group)
-            .Include(t => t.Category)
+            .Include(t => (t as Expense)!.Category)
             .Include(t => t.Merchant)
             .Include(t => t.Splits)
             .ThenInclude(split => split.User)
@@ -307,13 +307,18 @@ public class TransactionService(
         var splits = transaction.Splits
             .Select(split => new TransactionSplitResponse(
                 split.User.Id,
-                $"{split.User.FirstName} {split.User.LastName}",
+                $"{split.User.FirstName} {split.User.LastName}".Trim(),
                 split.Amount))
             .ToList();
+
+        var expense = transaction as Expense;
+        var transfer = transaction as Transfer;
+        var recipientSplit = transfer != null ? splits.FirstOrDefault() : null;
 
         return new TransactionDetailsResponse
         {
             Id = transaction.Id,
+            Kind = transfer != null ? ActivityKind.Transfer : ActivityKind.Expense,
             Name = transaction.Name,
             Description = transaction.Description,
             Amount = transaction.Amount,
@@ -321,9 +326,11 @@ public class TransactionService(
             GroupId = transaction.GroupId,
             GroupName = transaction.Group?.Name,
             PaidByUserId = transaction.User.Id,
-            PaidByUserName = $"{transaction.User.FirstName} {transaction.User.LastName}",
-            CategoryId = transaction.CategoryId,
-            Category = transaction.Category?.Name,
+            PaidByUserName = $"{transaction.User.FirstName} {transaction.User.LastName}".Trim(),
+            PaidToUserId = recipientSplit?.UserId,
+            PaidToUserName = recipientSplit?.UserName,
+            CategoryId = expense?.CategoryId,
+            Category = expense?.Category?.Name,
             MerchantName = transaction.Merchant?.Name,
             MerchantLogoUrl = transaction.Merchant?.LogoUrl,
             Splits = splits
@@ -332,44 +339,92 @@ public class TransactionService(
 
     public async Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)
     {
-        var transaction = await (await Get(id, ct))
-            .Select(t => new UpdateTransactionRequest
-            {
-                Amount = t.Amount,
-                Description = t.Description,
-                Name = t.Name,
-                DateTime = t.DateTime,
-                PaidByUserId = t.User.Id,
-                GroupId = t.GroupId,
-                CategoryId = t.CategoryId,
-                // Unlike the splits below, this is filled in: a patch that says nothing
-                // about the shop means "leave it where it was spent", and an edit to the
-                // amount is no reason to forget that.
-                MerchantId = t.MerchantId
-                // Splits are deliberately absent. Null means "divide it again", and that is
-                // the only safe default for a model somebody is about to change the amount
-                // on: filled in here, an ordinary read-change-write would quietly mean
-                // "keep these exact shares" and fail the moment the amount moved. The one
-                // caller that needs them -- a patch addressing a share by index, which
-                // needs an index to address -- fills them in itself.
-            })
+        var transaction = await ScopedTransaction(id)
+            .Include(t => t.User)
+            .Include(t => t.Splits)
             .FirstOrDefaultAsync(ct);
 
-        return transaction;
+        if (transaction is null)
+            return null;
+
+        var expense = transaction as Expense;
+
+        return new UpdateTransactionRequest
+        {
+            Amount = transaction.Amount,
+            Description = transaction.Description,
+            Name = transaction.Name,
+            DateTime = transaction.DateTime,
+            PaidByUserId = transaction.User.Id,
+            GroupId = transaction.GroupId,
+            CategoryId = expense?.CategoryId,
+            MerchantId = transaction.MerchantId,
+            Splits = transaction.GroupId == null
+                ? null
+                : transaction.Splits.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList()
+        };
     }
 
-    public async ValueTask<Expense> Update(Guid id, UpdateTransactionRequest request,
+    public async ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
         CancellationToken ct = default)
     {
-        var expense = await (await Get(id, ct))
+        var transaction = await ScopedTransaction(id)
             .Include(t => t.Group)
             .Include(t => t.Splits)
             .FirstOrDefaultAsync(ct);
 
-        if (expense is null)
+        if (transaction is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
-        await RefuseIfLeft(expense, ct);
+        await RefuseIfLeft(transaction, ct);
+
+        if (transaction is Transfer transfer)
+        {
+            var payer = await MemberOf(transfer.Group, request.PaidByUserId, ct)
+                        ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                            "The paying user is not a member of the group.");
+
+            transfer.Amount = request.Amount;
+            transfer.DateTime = request.DateTime.ToUniversalTime();
+            transfer.Description = request.Description;
+            transfer.User = payer;
+
+            if (request.Splits is { Count: > 0 } splits)
+            {
+                var recipientId = splits[0].UserId;
+                var recipient = await MemberOf(transfer.Group, recipientId, ct)
+                                ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                                    "The recipient is not a member of the group.");
+
+                if (recipient.Id == payer.Id)
+                    throw new ConflictException(ErrorCodes.SettlementWithSelf,
+                        "A settlement needs two different people.");
+
+                var existingSplit = transfer.Splits.FirstOrDefault();
+                if (existingSplit is not null)
+                {
+                    existingSplit.User = recipient;
+                    existingSplit.UserId = recipient.Id;
+                    existingSplit.Amount = request.Amount;
+                }
+                else
+                {
+                    transfer.Splits.Add(new TransactionSplit { User = recipient, Amount = request.Amount });
+                }
+            }
+            else
+            {
+                foreach (var split in transfer.Splits)
+                {
+                    split.Amount = request.Amount;
+                }
+            }
+
+            await dbContext.SaveChangesAsync(ct);
+            return transfer;
+        }
+
+        var expense = (Expense)transaction;
 
         // The destination, which is the group it is already in unless the request moves it.
         // Resolved the way a create resolves its group -- one of the caller's, or none for
@@ -385,9 +440,13 @@ public class TransactionService(
             expense.Group = group;
             expense.GroupId = group?.Id;
             expense.Currency = group?.Currency ?? Currencies.Default;
+            if (group == null)
+            {
+                request.Splits = null;
+            }
         }
 
-        var payer = await MemberOf(group, request.PaidByUserId, ct)
+        var expensePayer = await MemberOf(group, request.PaidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
                         group is null
                             ? "A personal expense can only have been paid by you."
@@ -402,7 +461,7 @@ public class TransactionService(
         expense.Category = category;
         expense.CategoryId = category?.Id;
         expense.MerchantId = await MerchantFor(request.MerchantId, ct);
-        expense.User = payer;
+        expense.User = expensePayer;
 
         // The amount, the payer and the category can all have changed, and each of them
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
@@ -416,14 +475,14 @@ public class TransactionService(
     }
 
     /// <summary>
-    /// The transaction <paramref name="id"/> names, of either kind, when it is the
-    /// caller's to remove.
+    /// The transaction <paramref name="id"/> names, of either kind (expense or settlement),
+    /// when it is the caller's to view or modify.
     /// </summary>
     /// <remarks>
-    /// The one query here that reads <c>Set&lt;Transaction&gt;()</c> rather than
+    /// The query here that reads <c>Set&lt;Transaction&gt;()</c> rather than
     /// <c>Set&lt;Expense&gt;()</c>. Keeping the reading surfaces expense-only is the point
     /// of the reshape -- a repayment is not spending and does not belong in a list of it --
-    /// but deleting is not reading, and routing this through <see cref="Get"/> put the
+    /// but deleting/editing is not reading, and routing this through <see cref="Get"/> put the
     /// discriminator in the predicate, so a settlement recorded by mistake answered
     /// "Transaction not found." and went on moving balances until somebody edited the
     /// database. <see cref="Transfer"/> has claimed since it was written that a transfer
@@ -436,7 +495,7 @@ public class TransactionService(
     /// them finds it here. <see cref="RefuseIfLeft"/> still has the final word.
     /// </para>
     /// </remarks>
-    private IQueryable<Transaction> Deletable(Guid id)
+    private IQueryable<Transaction> ScopedTransaction(Guid id)
     {
         var currentUser = userContext.User;
 
@@ -451,7 +510,7 @@ public class TransactionService(
 
     public async Task Delete(Guid id, CancellationToken ct = default)
     {
-        var transaction = await Deletable(id).FirstOrDefaultAsync(ct);
+        var transaction = await ScopedTransaction(id).FirstOrDefaultAsync(ct);
 
         if (transaction is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");

@@ -53,7 +53,6 @@
                                    AmPm="true"/>
                 </MudStack>
 
-
                 @* Where it belongs. Changing this is how an expense moves: a personal one is
                    shared by giving it a group, a shared one taken back by choosing Personal.
                    The category, the payer and the shares below all belong to whichever group
@@ -190,12 +189,19 @@
 
             await LoadGroupAsync(Original.GroupId);
 
+            var details = await TransactionsClient.GetTransactionAsync(Original.Id);
+
+            if (Original.CategoryId is null && details.CategoryId is not null)
+            {
+                Original.CategoryId = details.CategoryId;
+                Original.Category = details.Category;
+                editModel.CategoryId = details.CategoryId;
+            }
+
             // A category that has since been deleted still names what this expense was
             // filed under, so it stays in the list rather than silently reading as none.
-            if (Original.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
-                GroupCategories.Add(new CategoryInfo(original, Original.Category ?? "(removed)"));
-
-            var details = await TransactionsClient.GetTransactionAsync(Original.Id);
+            if (editModel.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
+                GroupCategories.Add(new CategoryInfo(original, Original.Category ?? details.Category ?? "(removed)"));
 
             storedSplits = [.. details.Splits.Select(split =>
                 new SplitInput { UserId = split.UserId, Amount = split.Amount })];
@@ -312,5 +318,4 @@
     }
 
     internal record CategoryInfo(Guid CategoryId, string Name);
-
 }
