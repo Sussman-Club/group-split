@@ -42,6 +42,9 @@ public class RuleEditorFormTest : ComponentTest
     /// <summary>Who the group answers with. Set before rendering to change the membership.</summary>
     private List<UserInfo> _group = [Carol, Alice, Bob];
 
+    /// <summary>Kept, so a test can say what copying from another rule reads back.</summary>
+    private readonly Mock<ISplitRulesClient> _rules = new();
+
     public RuleEditorFormTest()
     {
         var groups = new Mock<IGroupsClient>();
@@ -49,13 +52,12 @@ public class RuleEditorFormTest : ComponentTest
             .Setup(client => client.GetGroupMembersAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => _group);
 
-        var rules = new Mock<ISplitRulesClient>();
-        rules
+        _rules
             .Setup(client => client.GetSplitRulesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         Services.AddSingleton(groups.Object);
-        Services.AddSingleton(rules.Object);
+        Services.AddSingleton(_rules.Object);
 
         // The real command over the mocked client, rather than a mocked command: what the
         // form reads through it is the same call it used to make itself, and the error
@@ -223,6 +225,146 @@ public class RuleEditorFormTest : ComponentTest
         // 33.33 and 66.67, not 33.34 and 66.66: the cent goes to the bigger share.
         Assert.Equal(33.33m, split[Alice.Id]);
         Assert.Equal(66.67m, split[Bob.Id]);
+    }
+
+    // ---- a rule that names somebody who is not in the group ---------------------------
+
+    /// <summary>
+    /// The acceptance criterion from issue #184. Carol's share was in the divisor and had no
+    /// percentage of its own, so the two members left were each given a third and the third
+    /// nobody could account for went to whoever carried the remainder: 66.67 and 33.33.
+    /// </summary>
+    [Fact]
+    public async Task Shares_held_by_somebody_who_has_left_are_not_in_the_divisor()
+    {
+        _group = [Alice, Bob];
+
+        var form = RenderShares();
+
+        await SwitchToPercentAsync(form);
+
+        var split = Percentages(form).Percentages;
+
+        Assert.Equal(50m, split[Alice.Id]);
+        Assert.Equal(50m, split[Bob.Id]);
+        Assert.Equal(100m, split.Values.Sum());
+    }
+
+    /// <summary>
+    /// The size of the departed share decided how wrong it got: five shares against two
+    /// turned an even split into roughly 85.71 and 14.29.
+    /// </summary>
+    [Fact]
+    public async Task A_large_share_held_by_somebody_who_has_left_does_not_skew_the_rest()
+    {
+        _group = [Alice, Bob];
+
+        var model = new RuleEditorForm.RuleEditorModel
+        {
+            Category = "Food",
+            Version = new SharesSplitRuleDto
+            {
+                Shares = new Dictionary<Guid, int> { [Alice.Id] = 1, [Bob.Id] = 1, [Carol.Id] = 5 }
+            }
+        };
+
+        var form = Render<RuleEditorForm>(parameters => parameters
+            .AddCascadingValue(Mock.Of<IMudDialogInstance>())
+            .Add(component => component.GroupId, GroupId)
+            .Add(component => component.Model, model));
+
+        await SwitchToPercentAsync(form);
+
+        var split = Percentages(form).Percentages;
+
+        Assert.Equal(50m, split[Alice.Id]);
+        Assert.Equal(50m, split[Bob.Id]);
+    }
+
+    /// <summary>
+    /// The entry itself goes, not just its weight in a conversion. It is rendered by no
+    /// field and counted by every total, so leaving it in a percentage rule holds the total
+    /// away from 100 with nothing on screen to correct -- and the form refuses to save a
+    /// percentage rule that does not total 100.
+    /// </summary>
+    [Fact]
+    public async Task A_percentage_left_to_somebody_who_has_gone_is_dropped_and_the_rest_can_reach_a_hundred()
+    {
+        _group = [Alice, Bob];
+
+        var form = Render(new PercentSplitRuleDto
+        {
+            Percentages = new Dictionary<Guid, decimal>
+            {
+                [Alice.Id] = 33.33m, [Bob.Id] = 33.33m, [Carol.Id] = 33.34m
+            }
+        });
+
+        Assert.DoesNotContain(Carol.Id, Percentages(form).Percentages.Keys);
+
+        await SplitEvenlyAsync(form);
+
+        var split = Percentages(form).Percentages;
+
+        Assert.Equal(50m, split[Alice.Id]);
+        Assert.Equal(50m, split[Bob.Id]);
+        Assert.Equal(100m, split.Values.Sum());
+    }
+
+    /// <summary>
+    /// The other direction, which was worse: the fields bind through the dictionary
+    /// indexer, so a member who joined after the rule was written had no entry to bind to
+    /// and the form threw as it rendered. They get a field at zero instead.
+    /// </summary>
+    [Fact]
+    public void A_member_the_rule_never_named_starts_at_zero_rather_than_throwing()
+    {
+        var form = Render(new SharesSplitRuleDto
+        {
+            Shares = new Dictionary<Guid, int> { [Alice.Id] = 1 }
+        });
+
+        var shares = ((SharesSplitRuleDto)form.Instance.Model.Version).Shares;
+
+        Assert.Equal(1, shares[Alice.Id]);
+        Assert.Equal(0, shares[Bob.Id]);
+        Assert.Equal(0, shares[Carol.Id]);
+    }
+
+    /// <summary>
+    /// A division copied from another rule arrives from the server whole, naming whoever
+    /// that rule names, so it is scoped to the membership the same way the rule being
+    /// edited is.
+    /// </summary>
+    [Fact]
+    public async Task A_copied_division_is_scoped_to_the_membership_too()
+    {
+        _group = [Alice, Bob];
+
+        var source = Guid.NewGuid();
+
+        _rules
+            .Setup(client => client.GetSplitRuleAsync(source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleDetailsResponse
+            {
+                Id = source,
+                GroupId = GroupId,
+                Name = "Rent",
+                Definition = new SharesSplitRuleDto
+                {
+                    Shares = new Dictionary<Guid, int> { [Alice.Id] = 1, [Bob.Id] = 1, [Carol.Id] = 1 }
+                }
+            });
+
+        var form = RenderShares();
+
+        var copyFrom = form.FindComponent<MudSelect<Guid?>>();
+
+        await form.InvokeAsync(() => copyFrom.Instance.ValueChanged.InvokeAsync(source));
+
+        var shares = ((SharesSplitRuleDto)form.Instance.Model.Version).Shares;
+
+        Assert.Equal([Alice.Id, Bob.Id], shares.Keys.OrderBy(id => id));
     }
 
     /// <summary>

@@ -64,6 +64,19 @@ folders are how the solution reads in an IDE; on disk the projects stay flat und
 | `tests/GroupSplit.AppHost.Test` | Aspire orchestration and integration tests |
 | `tests/GroupSplit.Cli.Test` | CLI configuration, output contract and auth tests |
 
+## Splitting
+
+A category points at a split rule -- evenly, by percentages, by whole shares, or all on
+whoever paid -- and an expense filed under it is divided that way unless the shares are
+stated on the expense itself. A rule is a template and not a record: an expense stores the
+amounts it was divided into, so editing a rule changes what the next one is pre-filled with
+and nothing already recorded.
+
+Rules name people, and people join groups and leave them. What a stored rule means then --
+who is taken out of it, what happens to their share, and why a percentage rule can be left
+reading less than 100 -- is in
+[docs/split-rules-and-membership.md](docs/split-rules-and-membership.md).
+
 ## Errors
 
 Every non-2xx API response is RFC 9457 problem details carrying a stable `code`, a `traceId`

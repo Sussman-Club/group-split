@@ -157,6 +157,10 @@
 
         _groupRules = rules;
 
+        // Both halves are in hand now -- the rule and who is actually in the group -- and
+        // one is edited against the other from here on.
+        ScopeToMembers();
+
         OnModelVersionChange();
     }
 
@@ -208,6 +212,11 @@
         if (details is null) return;
 
         Model.Version = details.Definition;
+
+        // A copied division arrives from the server whole, naming whoever that rule names,
+        // which need not be this membership either.
+        ScopeToMembers();
+
         OnModelVersionChange();
     }
 
@@ -297,22 +306,80 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Restates the division so that it names today's members and nobody else: an entry for
+    /// somebody who has left is dropped, and a member the rule never named starts at zero.
+    /// </summary>
+    /// <remarks>
+    /// Every figure on this form comes out of these dictionaries, and every field is
+    /// rendered from <see cref="_members"/> -- so an entry for somebody who is not one is
+    /// invisible and still counted. It diluted the shares-to-percent conversion, dividing
+    /// three members' worth of shares between the two left and handing the shortfall to
+    /// whoever the remainder landed on, and it held <see cref="PercentTotal"/> away from 100
+    /// with no field on screen to correct, which the form reads as invalid and refuses to
+    /// save. The other direction was worse than either: the fields bind through the
+    /// dictionary indexer, so a member who joined after the rule was written threw
+    /// <see cref="KeyNotFoundException"/> as the form rendered.
+    /// <para>
+    /// The totals stay the sum of the whole dictionary on purpose. Scoping them instead
+    /// would show 100 while saving something else -- the server counts what it is sent, and
+    /// refuses both a percentage rule that does not total 100 and any rule naming a
+    /// non-member at all. Making the dictionary true is what makes the totals true.
+    /// </para>
+    /// <para>
+    /// Nothing is renormalised. Dropping a departed member's 33.34 leaves the two who are
+    /// left reading 33.33 and a total of 66.66, and that is the honest state of the rule:
+    /// what the missing third becomes is a decision for the group, one "Split Evenly" away,
+    /// not a number this form should invent on their behalf.
+    /// </para>
+    /// <para>
+    /// The server takes a departing member out of the rules that name them, so what reaches
+    /// here is a form opened against a membership that has moved since -- see
+    /// <c>docs/split-rules-and-membership.md</c>.
+    /// </para>
+    /// </remarks>
+    private void ScopeToMembers()
+    {
+        Model.Version = Model.Version switch
+        {
+            PercentSplitRuleDto percent => new PercentSplitRuleDto
+            {
+                Percentages = _members.ToDictionary(
+                    member => member.Id,
+                    member => percent.Percentages.GetValueOrDefault(member.Id, 0m))
+            },
+
+            SharesSplitRuleDto shares => new SharesSplitRuleDto
+            {
+                Shares = _members.ToDictionary(
+                    member => member.Id,
+                    member => shares.Shares.GetValueOrDefault(member.Id, 0))
+            },
+
+            // A personal rule names nobody, and a rule type not yet chosen is null: neither
+            // has weights to scope.
+            var unweighted => unweighted
+        };
+    }
+
     private Dictionary<Guid, decimal> ConvertSharesToPercentages(SharesSplitRuleDto shares)
     {
         if (_members.Count is 0)
             throw new InvalidOperationException();
 
-        var percentages = _members.ToDictionary(m => m.Id, _ => 0m);
+        // Read once, over the members and only the members, so the denominator is the total
+        // of the shares that get a percentage out of it. Summing the stored dictionary
+        // instead put anybody the rule still named who had left into the divisor with no
+        // percentage of their own, diluting everybody left. See ScopeToMembers.
+        var held = _members.ToDictionary(
+            member => member.Id, member => shares.Shares.GetValueOrDefault(member.Id, 0));
 
-        var totalShares = shares.Shares.Values.Sum();
+        var totalShares = held.Values.Sum();
 
-        if (totalShares is 0) return percentages;
+        if (totalShares is 0) return held.ToDictionary(entry => entry.Key, _ => 0m);
 
-        foreach (var member in _members)
-        {
-            var share = shares.Shares.GetValueOrDefault(member.Id, 0);
-            percentages[member.Id] = Math.Round(share * 100m / totalShares, 2);
-        }
+        var percentages = held.ToDictionary(
+            entry => entry.Key, entry => Math.Round(entry.Value * 100m / totalShares, 2));
 
         // What the rounding left over, onto the member the policy names -- weighted by the
         // shares, so it goes to the largest of them and never to a member holding none.
@@ -323,7 +390,7 @@
         if (Math.Abs(diff) <= 0.001m)
             return percentages;
 
-        percentages[RemainderGoesTo(member => shares.Shares.GetValueOrDefault(member.Id, 0))] += diff;
+        percentages[RemainderGoesTo(member => held[member.Id])] += diff;
 
         return percentages;
     }
