@@ -21,8 +21,8 @@ namespace GroupSplit.App.Web.Test.Components;
 /// It replaces the Expenses and Activity tabs and inherits both of their contracts. From
 /// Expenses: the cards and the list can never describe different questions, which is the
 /// defect they were written against (#174) -- picking a range emptied the list and left the
-/// cards showing the all-time figures under a caption naming the range. From Activity: a
-/// settlement can be deleted and an expense edited, and neither offers the other's action.
+/// cards showing the all-time figures under a caption naming the range. From Activity: both
+/// settlements and expenses can be edited and deleted.
 /// <para>
 /// And one contract that exists only because of the merge: the kind chips must not move the
 /// figures. Total spent counts expenses whatever is on screen -- that label is the only
@@ -363,27 +363,62 @@ public class GroupLedgerTabTest : ComponentTest
     }
 
     /// <summary>
-    /// Each kind of row offers what can actually be done to it. An expense is edited and
-    /// deleted; a settlement has nothing to it but who paid whom and how much, so
-    /// re-recording it is the whole correction and there is no edit to offer.
+    /// Both expenses and settlements offer both edit and delete actions on the ledger.
     /// </summary>
     [Fact]
-    public void A_settlement_offers_a_delete_and_no_edit_and_an_expense_offers_both()
+    public void A_settlement_and_an_expense_both_offer_an_edit_and_a_delete()
     {
         _entries = [Transfer(Guid.NewGuid()), Expense(Guid.NewGuid())];
 
         var tab = Render();
 
-        // Named after the row rather than "Delete": there is one of these per entry and
+        // Named after the row rather than "Delete" / "Edit": there is one of these per entry and
         // they are otherwise indistinguishable to a screen reader.
         var deletes = Buttons(tab, "Delete");
         var edits = Buttons(tab, "Edit");
 
         Assert.Equal(2, deletes.Count);
         Assert.Contains(deletes, button => button.GetAttribute("aria-label")!.Contains("Anabel paid Daniel"));
+        Assert.Contains(deletes, button => button.GetAttribute("aria-label")!.Contains("Dinner"));
 
-        var edit = Assert.Single(edits);
-        Assert.Contains("Dinner", edit.GetAttribute("aria-label"));
+        Assert.Equal(2, edits.Count);
+        Assert.Contains(edits, button => button.GetAttribute("aria-label")!.Contains("Anabel paid Daniel"));
+        Assert.Contains(edits, button => button.GetAttribute("aria-label")!.Contains("Dinner"));
+    }
+
+    [Fact]
+    public async Task Editing_a_settlement_passes_the_settlement_to_the_dialog()
+    {
+        var id = Guid.NewGuid();
+        var transfer = Transfer(id);
+        _entries = [transfer];
+
+        DialogParameters? capturedParams = null;
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<UpdateSettlementDialog>(
+                It.IsAny<string>(),
+                It.IsAny<DialogParameters>(),
+                It.IsAny<DialogOptions>()))
+            .Callback((string _, DialogParameters parameters, DialogOptions _) =>
+            {
+                capturedParams = parameters;
+            })
+            .ReturnsAsync(() =>
+            {
+                var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
+                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                return reference;
+            });
+
+        var tab = Render();
+
+        await tab.InvokeAsync(() => Buttons(tab, "Edit").Single().Click());
+
+        Assert.NotNull(capturedParams);
+        var original = Assert.IsType<TransactionResponse>(capturedParams[nameof(UpdateSettlementDialog.Original)]);
+        Assert.Equal(id, original.Id);
+        Assert.Equal(transfer.Name, original.Name);
+        Assert.Equal(transfer.Amount, original.Amount);
     }
 
     [Fact]

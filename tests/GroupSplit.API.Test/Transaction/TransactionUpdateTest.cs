@@ -1,8 +1,11 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
+using GroupSplit.Data;
+using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Transaction;
 
@@ -134,5 +137,100 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
             await transactionService.Update(transaction.Id, request, TestContext.Current.CancellationToken));
 
         Assert.Equal(ErrorCodes.TransactionPayerNotInGroup, ex.Code);
+    }
+
+    [Fact]
+    public async Task UpdateSettlement_Successful()
+    {
+        // Arrange
+        var groupService = GetService<IGroupService>();
+        var settlementService = GetService<ISettlementService>();
+        var transactionService = GetService<ITransactionService>();
+        var userService = GetService<ICurrentUser>();
+        var db = GetService<AppDbContext>();
+        var currentUser = userService.User;
+
+        var group = await groupService.CreateGroup(
+            new CreateGroupRequest { Name = "Flat" }, TestContext.Current.CancellationToken);
+        var otherUser = await CreateNewUser();
+        await JoinGroup(group.Id, otherUser);
+
+        await settlementService.RecordRepayment(group.Id, new RecordRepaymentRequest
+        {
+            FromUserId = currentUser.Id,
+            ToUserId = otherUser.Id,
+            Amount = 30m,
+            Description = "Cash"
+        }, TestContext.Current.CancellationToken);
+
+        var transfer = await db.Set<Transfer>().FirstAsync(t => t.GroupId == group.Id, TestContext.Current.CancellationToken);
+
+        var updateRequest = new UpdateTransactionRequest
+        {
+            Name = "Settlement",
+            Description = "Bank Transfer",
+            Amount = 50m,
+            DateTime = DateTimeOffset.UtcNow.AddHours(2),
+            PaidByUserId = currentUser.Id,
+            GroupId = group.Id,
+            Splits = [new SplitInput { UserId = otherUser.Id, Amount = 50m }]
+        };
+
+        // Act
+        var updated = await transactionService.Update(transfer.Id, updateRequest, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(transfer.Id, updated.Id);
+        Assert.Equal(50m, updated.Amount);
+        Assert.Equal("Bank Transfer", updated.Description);
+
+        var details = await transactionService.GetDetails(transfer.Id, TestContext.Current.CancellationToken);
+        Assert.NotNull(details);
+        Assert.Equal(ActivityKind.Transfer, details.Kind);
+        Assert.Equal(50m, details.Amount);
+        Assert.Equal("Bank Transfer", details.Description);
+        Assert.Equal(otherUser.Id, details.PaidToUserId);
+    }
+
+    [Fact]
+    public async Task UpdateSettlement_WithSelf_ThrowsException()
+    {
+        // Arrange
+        var groupService = GetService<IGroupService>();
+        var settlementService = GetService<ISettlementService>();
+        var transactionService = GetService<ITransactionService>();
+        var userService = GetService<ICurrentUser>();
+        var db = GetService<AppDbContext>();
+        var currentUser = userService.User;
+
+        var group = await groupService.CreateGroup(
+            new CreateGroupRequest { Name = "Flat" }, TestContext.Current.CancellationToken);
+        var otherUser = await CreateNewUser();
+        await JoinGroup(group.Id, otherUser);
+
+        await settlementService.RecordRepayment(group.Id, new RecordRepaymentRequest
+        {
+            FromUserId = currentUser.Id,
+            ToUserId = otherUser.Id,
+            Amount = 30m
+        }, TestContext.Current.CancellationToken);
+
+        var transfer = await db.Set<Transfer>().FirstAsync(t => t.GroupId == group.Id, TestContext.Current.CancellationToken);
+
+        var updateRequest = new UpdateTransactionRequest
+        {
+            Name = "Settlement",
+            Amount = 50m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = currentUser.Id,
+            GroupId = group.Id,
+            Splits = [new SplitInput { UserId = currentUser.Id, Amount = 50m }]
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ConflictException>(async () =>
+            await transactionService.Update(transfer.Id, updateRequest, TestContext.Current.CancellationToken));
+
+        Assert.Equal(ErrorCodes.SettlementWithSelf, ex.Code);
     }
 }

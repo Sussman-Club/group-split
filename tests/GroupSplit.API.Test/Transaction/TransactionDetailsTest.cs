@@ -1,5 +1,6 @@
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
+using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 
 namespace GroupSplit.API.Test.Transaction;
@@ -294,7 +295,7 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             model with { CategoryId = categoryId },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(categoryId, updated.CategoryId);
+        Assert.Equal(categoryId, (updated as Expense)?.CategoryId);
 
         var details = await transactions.GetDetails(created.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(details);

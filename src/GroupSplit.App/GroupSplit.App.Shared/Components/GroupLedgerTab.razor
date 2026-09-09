@@ -177,11 +177,7 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                @* Editing and deleting live on the row, and what is offered depends on
-                   which kind it is. An expense has a dialog that can offer the category
-                   and the shares; a settlement has nothing to it but who paid whom and
-                   how much, so re-recording it is the whole correction -- and this is now
-                   the only tab it could live in. *@
+                @* Editing and deleting live on the row. *@
                 @* Titled, and not only for the header. On a phone the grid gives every cell
                    its own line with its label beside it, and a column with no title put two
                    unattached icons in a band of their own -- which row they belonged to was
@@ -190,15 +186,12 @@
                                 HeaderStyle="width: 96px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                            @if (context.Item.Kind is ActivityKind.Expense)
-                            {
-                                <MudTooltip Text="Edit">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.Edit"
-                                                   Size="Size.Small"
-                                                   aria-label="@($"Edit {context.Item.Name}")"
-                                                   OnClick="@(async () => await EditAsync(context.Item))" />
-                                </MudTooltip>
-                            }
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                               Size="Size.Small"
+                                               aria-label="@($"Edit {Headline(context.Item)}")"
+                                               OnClick="@(async () => await EditAsync(context.Item))" />
+                            </MudTooltip>
                             <MudTooltip Text="Delete">
                                 <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
                                                Size="Size.Small"
@@ -426,11 +419,46 @@
 
     private async Task EditAsync(GroupLedgerEntryResponse entry)
     {
-        // The edit dialog works in expenses, so the row is handed over as one. Only an
-        // expense row offers the button.
+        if (entry.Kind is ActivityKind.Transfer)
+            await EditSettlementAsync(entry);
+        else
+            await EditExpenseAsync(entry);
+    }
+
+    private async Task EditSettlementAsync(GroupLedgerEntryResponse entry)
+    {
         var original = new TransactionResponse
         {
             Id = entry.Id,
+            Kind = entry.Kind,
+            Name = entry.Name,
+            Description = entry.Description,
+            Amount = entry.Amount,
+            DateTime = entry.DateTime,
+            GroupId = GroupId,
+            PaidByUserId = entry.PaidByUserId,
+            PaidByUserName = entry.PaidByUserName,
+            PaidToUserId = entry.PaidToUserId,
+            PaidToUserName = entry.PaidToUserName
+        };
+
+        var parameters = new DialogParameters<UpdateSettlementDialog> { { x => x.Original, original } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<UpdateSettlementDialog>("Edit Settlement", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        if (request is not null)
+            await TransactionsService.UpdateAsync(original, request);
+    }
+
+    private async Task EditExpenseAsync(GroupLedgerEntryResponse entry)
+    {
+        var original = new TransactionResponse
+        {
+            Id = entry.Id,
+            Kind = entry.Kind,
             Name = entry.Name,
             Description = entry.Description,
             Amount = entry.Amount,

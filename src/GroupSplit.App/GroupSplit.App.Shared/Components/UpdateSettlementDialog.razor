@@ -1,0 +1,211 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Errors
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+@inject ITransactionsClient TransactionsClient
+@inject ApiErrorPresenter Errors
+@inject LocalClock Clock
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            Edit Settlement
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="@_editModel">
+            <MudStack Spacing="3">
+
+                <MudNumericField
+                    @bind-Value="_editModel.Amount"
+                    For="@(() => _editModel.Amount)"
+                    Label="Amount"
+                    Variant="Variant.Outlined"
+                    Adornment="Adornment.Start"
+                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentColor="Color.Primary"
+                    Immediate="true"
+                    HideSpinButtons="true"/>
+
+                <MudStack Row="true" Spacing="4">
+                    <MudDatePicker @bind-Date="_selectedDate"
+                                   Label="When"
+                                   Variant="Variant.Outlined"/>
+
+                    <MudTimePicker @bind-Time="_selectedTime"
+                                   Label="Time"
+                                   Variant="Variant.Outlined"
+                                   AmPm="true"/>
+                </MudStack>
+
+                <MudSelect T="Guid" Label="Paid By"
+                           Variant="Variant.Outlined"
+                           Disabled="@(!_groupUsers.Any())"
+                           @bind-Value="_editModel.PaidByUserId">
+                    @foreach (var u in _groupUsers)
+                    {
+                        <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="Guid?" Label="Paid To"
+                           Variant="Variant.Outlined"
+                           Disabled="@(!_groupUsers.Any())"
+                           @bind-Value="_paidToUserId"
+                           Validation="@(new Func<Guid?, IEnumerable<string>>(ValidatePaidTo))">
+                    @foreach (var u in _groupUsers.Where(u => u.Id != _editModel.PaidByUserId))
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)u.Id)">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_editModel.Description"
+                              Label="Note"
+                              Variant="Variant.Outlined"
+                              Placeholder="Cash, bank transfer, a reference…"
+                              Immediate="true"/>
+
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@_loading" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public TransactionResponse Original { get; set; } = null!;
+
+    private bool _loading = false;
+    private MudForm _form = null!;
+
+    private UpdateTransactionRequest _editModel = new();
+    private Guid? _paidToUserId;
+
+    private DateTime? _selectedDate;
+    private TimeSpan? _selectedTime;
+
+    private ICollection<UserInfo> _groupUsers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editModel = new UpdateTransactionRequest
+        {
+            Name = "Settlement",
+            Description = Original.Description,
+            Amount = Original.Amount,
+            DateTime = Original.DateTime,
+            GroupId = Original.GroupId,
+            PaidByUserId = Original.PaidByUserId
+        };
+
+        var shown = Clock.Local(Original.DateTime);
+        _selectedDate = shown.Date;
+        _selectedTime = shown.TimeOfDay;
+        _paidToUserId = Original.PaidToUserId;
+
+        var loaded = await Errors.TryAsync(async () =>
+        {
+            if (Original.GroupId is { } groupId)
+            {
+                _groupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
+            }
+
+            if (_paidToUserId is null)
+            {
+                var details = await TransactionsClient.GetTransactionAsync(Original.Id);
+                _paidToUserId = details.Splits.FirstOrDefault()?.UserId;
+            }
+        }, "Could not load group members.");
+
+        if (!loaded)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        StateHasChanged();
+    }
+
+    private IEnumerable<string> ValidatePaidTo(Guid? paidToId)
+    {
+        if (paidToId is null)
+            yield return "Recipient is required.";
+        if (paidToId == _editModel.PaidByUserId)
+            yield return "A settlement needs two different people.";
+    }
+
+    private async Task Submit()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+
+        _editModel.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+        _editModel.Name = "Settlement";
+        _editModel.CategoryId = null;
+
+        if (_paidToUserId is { } toId)
+        {
+            _editModel.Splits = [new SplitInput { UserId = toId, Amount = _editModel.Amount }];
+        }
+
+        var original = new UpdateTransactionRequest
+        {
+            Name = Original.Name,
+            Description = Original.Description,
+            Amount = Original.Amount,
+            DateTime = Original.DateTime,
+            GroupId = Original.GroupId,
+            CategoryId = Original.CategoryId,
+            PaidByUserId = Original.PaidByUserId,
+            Splits = Original.PaidToUserId is { } originalToId
+                ? [new SplitInput { UserId = originalToId, Amount = Original.Amount }]
+                : null
+        };
+
+        var patch = CreatePatch(original, _editModel);
+        MudDialog.Close(DialogResult.Ok(patch));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    static JsonPatchDocument<UpdateTransactionRequest> CreatePatch(
+        UpdateTransactionRequest original,
+        UpdateTransactionRequest updated)
+    {
+        var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+
+        if (original.Name != updated.Name)
+            patch.Replace(x => x.Name, updated.Name);
+
+        if (original.Description != updated.Description)
+            patch.Replace(x => x.Description, updated.Description);
+
+        if (original.Amount != updated.Amount)
+            patch.Replace(x => x.Amount, updated.Amount);
+
+        if (original.DateTime != updated.DateTime)
+            patch.Replace(x => x.DateTime, updated.DateTime);
+
+        if (original.GroupId != updated.GroupId)
+            patch.Replace(x => x.GroupId, updated.GroupId);
+
+        if (original.CategoryId != updated.CategoryId)
+            patch.Replace(x => x.CategoryId, updated.CategoryId);
+
+        if (original.PaidByUserId != updated.PaidByUserId)
+            patch.Replace(x => x.PaidByUserId, updated.PaidByUserId);
+
+        if (updated.Splits is not null)
+            patch.Replace(x => x.Splits, updated.Splits);
+
+        return patch;
+    }
+}
