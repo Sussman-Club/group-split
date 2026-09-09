@@ -334,16 +334,57 @@ public sealed class BankingCommandTests : IDisposable
     // ---- the same expense arriving twice ---------------------------------------------
 
     [Fact]
-    public async Task Inbox_list_warns_on_the_row_a_suggestion_hangs_on()
+    public async Task Inbox_list_warns_on_the_row_that_really_is_already_recorded()
     {
-        _api.Returns("/api/inbox", Page(Row("Trattoria", 46.00m, matches: [Match("Dinner", 40m)])));
+        _api.Returns("/api/inbox", Page(Row("Trattoria", 46.00m,
+            matches: [Match("Dinner", 46.00m, confidence: "Confident", apart: 0m, daysApart: 0)])));
 
         var result = await Cli.RunAsync("inbox", "list", "--output", "text");
 
         // Filing this row plainly would be refused, which is a worse way to find out --
         // and the listing already carries the suggestion, so saying so costs nothing.
         Assert.Contains("(duplicate?)", result.Stdout);
+        Assert.Contains("may already be recorded", result.Stdout);
         Assert.Contains("inbox matches", result.Stdout);
+    }
+
+    /// <summary>
+    /// A row whose amounts merely sit close gets the quieter mark.
+    /// </summary>
+    /// <remarks>
+    /// Measured over real spending, the softer test lands on unrelated money often enough
+    /// that <c>(duplicate?)</c> would be wrong most times it appeared -- and a mark that is
+    /// usually wrong is one people stop reading, which is also how a real duplicate gets
+    /// waved through. Filing is still refused, so the listing still has to say something.
+    /// </remarks>
+    [Fact]
+    public async Task Inbox_list_marks_a_row_that_is_only_similar_more_quietly()
+    {
+        _api.Returns("/api/inbox", Page(Row("Trattoria", 46.00m, matches: [Match("Dinner", 40m)])));
+
+        var result = await Cli.RunAsync("inbox", "list", "--output", "text");
+
+        Assert.Contains("(similar)", result.Stdout);
+        Assert.DoesNotContain("(duplicate?)", result.Stdout);
+        Assert.Contains("could be", result.Stdout);
+        Assert.Contains("refused until answered", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Inbox_matches_says_which_grade_each_candidate_is()
+    {
+        var row = Guid.NewGuid();
+
+        _api.Returns($"/api/inbox/{row}/matches", new[]
+        {
+            Match("Dinner", 46.00m, confidence: "Confident", apart: 0m, daysApart: 0),
+            Match("Taxi home", 40.00m)
+        });
+
+        var result = await Cli.RunAsync("inbox", "matches", row.ToString(), "--output", "text");
+
+        Assert.Contains("(same amount)", result.Stdout);
+        Assert.Contains("(similar amount)", result.Stdout);
     }
 
     [Fact]
@@ -556,7 +597,13 @@ public sealed class BankingCommandTests : IDisposable
     /// card charge that posted two days after the meal and settled six higher, because a
     /// tip was added after the receipt was written.
     /// </summary>
-    private static object Match(string name, decimal amount, Guid? transactionId = null) => new
+    /// <summary>
+    /// One suggested match as the API sends it. Defaults to the tip-shaped case -- six apart,
+    /// two days later -- which is <c>Possible</c> and not <c>Confident</c>; pass
+    /// <paramref name="confidence"/> for the same money to the cent.
+    /// </summary>
+    private static object Match(string name, decimal amount, Guid? transactionId = null,
+        string confidence = "Possible", decimal apart = 6.00m, int daysApart = 2) => new
     {
         transactionId = transactionId ?? Guid.NewGuid(),
         name,
@@ -566,8 +613,9 @@ public sealed class BankingCommandTests : IDisposable
         groupId = Guid.NewGuid(),
         groupName = "The flat",
         paidByUserName = "Anabel",
-        amountDifference = 6.00m,
-        daysApart = 2
+        amountDifference = apart,
+        daysApart,
+        confidence
     };
 
     private static object Row(
