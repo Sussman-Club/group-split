@@ -15,9 +15,25 @@ public class TransactionSeeder(
     AppDbContext db,
     ILogger<TransactionSeeder> logger,
     IExpenseSplitter splitter,
+    TimeProvider clock,
     ISeedDataSource<TransactionSeedDto> source)
     : AppDbContextSeeder<Expense, TransactionSeedDto>(db, source, logger)
 {
+    /// <summary>
+    /// The day an expense is recorded against: a fixed one for the history, or a relative
+    /// one for the few that have to sit beside a seeded bank row.
+    /// </summary>
+    /// <remarks>
+    /// Given a time of day rather than midnight either way, because a person records an
+    /// expense at a moment and the ledger sorts on it.
+    /// </remarks>
+    protected DateTimeOffset When(TransactionSeedDto dto) =>
+        dto.DaysAgo is { } days
+            ? new DateTimeOffset(
+                clock.GetUtcNow().UtcDateTime.Date.AddDays(-days).Add(new TimeSpan(20, 30, 0)), TimeSpan.Zero)
+            : dto.DateTime ?? throw new InvalidOperationException(
+                $"Seeded expense {dto.Id} gives neither a date nor a number of days ago.");
+
     protected override async Task<Expense?> MapAsync(TransactionSeedDto dto, CancellationToken ct = default)
     {
         var payer = await DbContext.Set<User>().FindAsync([dto.PayerId], ct);
@@ -43,7 +59,7 @@ public class TransactionSeeder(
             Currency = category?.Group.Currency ?? Currencies.Default,
             Name = dto.Name,
             Description = dto.Description,
-            DateTime = dto.DateTime,
+            DateTime = When(dto),
             User = payer,
             Group = category?.Group,
             Category = category,

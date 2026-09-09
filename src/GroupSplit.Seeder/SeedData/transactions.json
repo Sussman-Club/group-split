@@ -5239,5 +5239,51 @@
     "Amount": 55.73,
     "DateTime": "2026-09-08T21:45:00Z",
     "Name": "Water"
+  },
+  {
+    "Id": "D0000001-0000-4000-8000-000000000001",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 40.00,
+    "DaysAgo": 9,
+    "Name": "Dinner",
+    "Description": "Typed at the table so nobody forgot it",
+    "Merchant": "Trattoria da Enzo"
+  },
+  {
+    "Id": "D0000002-0000-4000-8000-000000000002",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 82.14,
+    "DaysAgo": 1,
+    "Name": "Big shop",
+    "Description": "Off the receipt, to the cent",
+    "Merchant": "Lidl"
+  },
+  {
+    "Id": "D0000003-0000-4000-8000-000000000003",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 5.20,
+    "DaysAgo": 2,
+    "Name": "Flat white",
+    "Merchant": "Blue Bottle Coffee"
+  },
+  {
+    "Id": "D0000004-0000-4000-8000-000000000004",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 27.80,
+    "DaysAgo": 6,
+    "Name": "Month of bus fares",
+    "Description": "Nothing to do with the taxi it will be offered against"
+  },
+  {
+    "Id": "D0000005-0000-4000-8000-000000000005",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Amount": 9.35,
+    "DaysAgo": 3,
+    "Name": "Painkillers",
+    "Merchant": "Pharmacy 88"
   }
 ]

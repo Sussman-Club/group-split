@@ -11,7 +11,24 @@ public class TransactionSeedDto
     /// </summary>
     public Guid? CategoryId { get; init; }
     public required decimal Amount { get; set; }
-    public required DateTimeOffset DateTime { get; set; }
+
+    /// <summary>
+    /// The moment it was recorded, for the history: three years of it, on the days it
+    /// actually happened. Ignored when <see cref="DaysAgo"/> is set.
+    /// </summary>
+    public DateTimeOffset? DateTime { get; set; }
+
+    /// <summary>
+    /// Recorded this many days before the run instead, the way an imported row is dated.
+    /// </summary>
+    /// <remarks>
+    /// For the handful of expenses that have to line up with a seeded bank row. Those rows
+    /// are dated relative to the run so a database seeded months ago still reads as this
+    /// week's, and an expense on a fixed date cannot be the same money as one of them for
+    /// longer than a week -- which is the whole thing the pair exists to demonstrate.
+    /// </remarks>
+    public int? DaysAgo { get; init; }
+
     public required string Name { get; set; }
     public string? Description { get; set; }
 
