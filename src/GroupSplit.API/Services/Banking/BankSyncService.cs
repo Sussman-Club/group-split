@@ -526,6 +526,7 @@ public sealed class BankSyncService(
         row.AuthorizedDate = imported.AuthorizedDate;
         row.PaymentChannel = Clip(imported.PaymentChannel, 32);
         row.City = Clip(imported.City, 64);
+        row.CategoryIconUrl = Clip(imported.CategoryIconUrl, 512);
         row.Pending = imported.Pending;
         row.RawJson = imported.RawJson;
 

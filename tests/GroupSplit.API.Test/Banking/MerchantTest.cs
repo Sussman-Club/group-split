@@ -218,6 +218,104 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Single(found);
     }
 
+    // ---- what a row shows when the provider named no merchant ------------------------
+
+    /// <summary>
+    /// The case Plaid's sandbox is entirely made of, and a large share of real rows: no
+    /// merchant name and no merchant logo, but an icon for the kind of thing it was.
+    /// </summary>
+    [Fact]
+    public async Task A_row_with_no_merchant_still_has_the_providers_icon_to_show()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added:
+        [
+            Row("t1", 12.50m,
+                merchant: null,
+                description: "TOUCHSTONE CLIMBING",
+                logo: null,
+                categoryIcon: "https://plaid-category-icons.plaid.com/PFC_OTHER.png")
+        ]);
+
+        await Sync(connection);
+
+        Assert.Empty(await Merchants());
+
+        var listed = Assert.Single(await (await Inbox.List(new InboxFilter(), Ct))
+            .SelectDto()
+            .ToListAsync(Ct));
+
+        // Nothing to badge, so the row leads with the icon rather than two initials.
+        Assert.Null(listed.LogoUrl);
+        Assert.Equal("https://plaid-category-icons.plaid.com/PFC_OTHER.png", listed.Mark);
+    }
+
+    [Fact]
+    public async Task A_merchants_own_logo_wins_over_the_category_icon()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added:
+        [
+            Row("t1", 12.50m, merchant: "Lidl",
+                logo: "https://logos/lidl.png",
+                categoryIcon: "https://plaid-category-icons.plaid.com/PFC_FOOD_AND_DRINK.png")
+        ]);
+
+        await Sync(connection);
+
+        var listed = Assert.Single(await (await Inbox.List(new InboxFilter(), Ct))
+            .SelectDto()
+            .ToListAsync(Ct));
+
+        // The place beats the kind of place: one says where, the other only what sort.
+        Assert.Equal("https://logos/lidl.png", listed.Mark);
+    }
+
+    [Fact]
+    public async Task A_row_with_neither_has_no_mark_at_all()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: null, logo: null)]);
+
+        await Sync(connection);
+
+        var listed = Assert.Single(await (await Inbox.List(new InboxFilter(), Ct))
+            .SelectDto()
+            .ToListAsync(Ct));
+
+        // Null and not an empty string: an img with an empty src resolves to the page and
+        // renders as a broken image, where null renders as initials.
+        Assert.Null(listed.Mark);
+    }
+
+    /// <summary>
+    /// The icon stops at the inbox. An expense badges the payer with where it was spent,
+    /// and a category icon there would be claiming to know a place when it knows a kind.
+    /// </summary>
+    [Fact]
+    public async Task The_category_icon_does_not_follow_a_row_onto_the_ledger()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added:
+        [
+            Row("t1", 12.50m, merchant: null,
+                categoryIcon: "https://plaid-category-icons.plaid.com/PFC_OTHER.png")
+        ]);
+
+        await Sync(connection);
+
+        var row = Assert.Single(await Rows(connection));
+        await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        var reader = GetService<ICurrentUser>().User;
+        var entry = Assert.Single(await DbContext.Set<Data.Entities.Transaction>()
+            .SelectUserActivityDto(reader.Id)
+            .ToListAsync(Ct));
+
+        Assert.Null(entry.MerchantName);
+        Assert.Null(entry.MerchantLogoUrl);
+    }
+
     private Task<List<Merchant>> Merchants() =>
         DbContext.Set<Merchant>().AsNoTracking().ToListAsync(Ct);
 

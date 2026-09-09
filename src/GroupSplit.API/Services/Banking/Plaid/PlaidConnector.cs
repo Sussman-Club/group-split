@@ -185,6 +185,10 @@ public sealed class PlaidConnector(
                 transaction.PaymentChannel?.ToString().ToLowerInvariant(),
                 transaction.Location?.City,
                 transaction.LogoUrl,
+                // Sent on every row, unlike the merchant's own logo -- Plaid fills that in
+                // only for merchants it recognises, and never in the sandbox. Without this
+                // an imported row has nothing to show but two initials.
+                transaction.PersonalFinanceCategoryIconUrl,
                 transaction.Pending ?? false,
                 transaction.PendingTransactionId,
                 JsonSerializer.Serialize(transaction, SerializerOptions)));

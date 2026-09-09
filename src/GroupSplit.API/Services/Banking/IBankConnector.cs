@@ -117,6 +117,13 @@ public sealed record ImportedTransaction(
     string? PaymentChannel,
     string? City,
     string? LogoUrl,
+    /// <summary>
+    /// A mark for the kind of thing this was, where the provider has one and has no logo
+    /// for the merchant itself. Plaid populates this on every row and populates
+    /// <see cref="LogoUrl"/> only for merchants it recognises, so this is what most rows
+    /// actually have to show.
+    /// </summary>
+    string? CategoryIconUrl,
     bool Pending,
     string? ReplacesProviderTransactionId,
     string RawJson);

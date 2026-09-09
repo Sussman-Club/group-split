@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace GroupSplit.Shared;
 
@@ -85,6 +85,7 @@ public sealed record BankTransactionResponse(
     string? PaymentChannel,
     string? City,
     string? LogoUrl,
+    string? CategoryIconUrl,
     bool Pending,
     InboxStatus Status,
     Guid? TransactionId,
@@ -104,6 +105,20 @@ public sealed record BankTransactionResponse(
 
     /// <summary>What to lead the row with: who was paid, falling back to the bank's line.</summary>
     public string Title => string.IsNullOrWhiteSpace(MerchantName) ? Description : MerchantName;
+
+    /// <summary>
+    /// The mark to show for this row: the merchant's own logo, then the provider's icon for
+    /// the kind of thing it was, then nothing -- which renders as initials.
+    /// </summary>
+    /// <remarks>
+    /// Two fields and one question, answered here rather than in each client. Plaid fills
+    /// the merchant logo in only for merchants it recognises and never in the sandbox, while
+    /// it sends a category icon on every row, so the second is what most rows actually have.
+    /// </remarks>
+    public string? Mark =>
+        string.IsNullOrWhiteSpace(LogoUrl)
+            ? string.IsNullOrWhiteSpace(CategoryIconUrl) ? null : CategoryIconUrl
+            : LogoUrl;
 
     /// <summary>
     /// Money came in rather than went out: a refund, a deposit, a paycheque. It can be

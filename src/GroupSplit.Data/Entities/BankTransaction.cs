@@ -108,6 +108,20 @@ public class BankTransaction : Entity
     public Guid? MerchantId { get; set; }
 
     /// <summary>
+    /// A mark for the kind of thing this was, from the provider, for a row whose merchant
+    /// has no logo -- or that named no merchant at all.
+    /// </summary>
+    /// <remarks>
+    /// On the row and not on the <see cref="Entities.Merchant"/>, because it is not a fact
+    /// about the place: it belongs to <see cref="ProviderCategory"/>, and the same shop can
+    /// come back under a different category next month. It is the inbox's last resort
+    /// before initials, and it goes no further -- an expense in the ledger badges the
+    /// payer's avatar with where it was spent, and a category icon there would be claiming
+    /// to know a place when all it knows is a kind.
+    /// </remarks>
+    public string? CategoryIconUrl { get; set; }
+
+    /// <summary>
     /// Not yet settled at the bank. A pending row is not a transaction: it may change
     /// amount, or vanish, before it posts. It can still be filed, if the person wants to.
     /// </summary>

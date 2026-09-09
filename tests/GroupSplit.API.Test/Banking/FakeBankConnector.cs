@@ -196,10 +196,10 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     public static ImportedTransaction Row(string id, decimal amount, string account = "acc-1",
         bool pending = false, string? replaces = null, string description = "LIDL 1234",
         string? merchant = "Lidl", string? category = "FOOD_AND_DRINK", DateOnly? date = null,
-        string? logo = null) =>
+        string? logo = null, string? categoryIcon = null) =>
         new(account, id, date ?? new DateOnly(2026, 9, 1), amount, "USD", description, merchant, category,
             category is null ? null : category + "_DETAILED", null, "in store", "Lisbon", logo,
-            pending, replaces, $$$"""{"transaction_id":"{{{id}}}"}""");
+            categoryIcon, pending, replaces, $$$"""{"transaction_id":"{{{id}}}"}""");
 
     public static RemovedTransaction Removed(string id, string account = "acc-1") => new(account, id);
 

@@ -399,6 +399,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(row => row.ProviderCategoryDetailed).HasMaxLength(96);
             entity.Property(row => row.PaymentChannel).HasMaxLength(32);
             entity.Property(row => row.City).HasMaxLength(64);
+            entity.Property(row => row.CategoryIconUrl).HasMaxLength(512);
             entity.Property(row => row.Pending).IsRequired();
             entity.Property(row => row.RawJson).IsRequired();
             entity.Property(row => row.ImportedAt).IsRequired();

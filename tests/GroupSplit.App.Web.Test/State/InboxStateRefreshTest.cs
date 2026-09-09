@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Shared.Models;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
@@ -384,6 +384,7 @@ public class InboxStateRefreshTest
             null,
             "in store",
             "Lisbon",
+            null,
             null,
             false,
             InboxStatus.New,
