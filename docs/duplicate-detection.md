@@ -157,12 +157,21 @@ Both surfaces say the same two things in their own vocabulary, so nobody learns 
 | | `Confident` | `Possible` |
 | --- | --- | --- |
 | Inbox | A warning on the row, with both answers | The same block in a plain voice, saying how far apart they are |
-| Inbox select-all | Left out | Left out -- filing is refused over both |
+| Inbox select-all | Ticked like any other row | Ticked like any other row |
+| Inbox bulk add | Left alone, and said | Left alone, and said |
+| Inbox bulk ignore | Included -- it creates nothing | Included -- it creates nothing |
 | Nav badge, `inbox summary` | Counted | Not counted |
 | `inbox list` | `(duplicate?)` | `(similar)` |
 | `inbox matches` | `(same amount)` | `(similar amount)` |
 
 Every candidate is listed rather than only the best-ranked one, on both surfaces.
+
+Select-all covers every waiting row, suggestion or not: a control called "select all" that
+quietly covers less than everything is worse than one that covers everything and says what it
+will not do with some of it. The guard sits on the bulk **add** instead, which leaves a
+flagged row where it is and says how many it left -- and `KeepPersonalManyAsync` takes no
+`FileAnyway` at all, so nothing that files rows by the dozen is even able to assert that the
+same money really was paid twice.
 
 ## What is still out
 

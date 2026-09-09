@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Shared.Services.Errors;
+using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
 
@@ -143,12 +143,18 @@ public sealed class BankCommands(
                 : $"{done} transactions ignored.",
             "Could not ignore them.");
 
-    public Task<int> KeepPersonalManyAsync(IReadOnlyList<(Guid Id, string Title, bool FileAnyway)> rows,
+    /// <remarks>
+    /// No <c>FileAnyway</c>, and deliberately not as an option. Asserting that the same
+    /// money really was paid twice is a claim about the world, and nothing that files rows
+    /// by the dozen is in a position to make it -- so a row with a suggestion on it is one
+    /// the caller has to leave out.
+    /// </remarks>
+    public Task<int> KeepPersonalManyAsync(IReadOnlyList<(Guid Id, string Title)> rows,
         CancellationToken ct = default) =>
         ManyAsync(rows.Count,
             index => inbox.FileBankTransactionAsync(
                 rows[index].Id,
-                new FileBankTransactionRequest { FileAnyway = rows[index].FileAnyway },
+                new FileBankTransactionRequest(),
                 ct),
             done => done == 1
                 ? $"{rows[0].Title} added to your own expenses."

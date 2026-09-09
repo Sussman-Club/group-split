@@ -103,12 +103,13 @@
                         <span>@(_selected.Count > 0 ? $"{_selected.Count} selected" : "Select all")</span>
                     </label>
 
-                    @* Said apart from the label rather than tacked onto it: it explains
-                       what select-all did not do, which is not part of its name. *@
+                    @* Said apart from the label rather than tacked onto it: select-all ticks
+                       these like any other row, and what it cannot do is answer the question
+                       hanging on them -- so adding them in bulk leaves them where they are. *@
                     @if (FlaggedCount > 0)
                     {
                         <span class="note">
-                            @FlaggedCount with a possible duplicate @(FlaggedCount == 1 ? "is" : "are") left out
+                            @FlaggedCount may already be recorded, and @(FlaggedCount == 1 ? "needs" : "need") answering one by one
                         </span>
                     }
                 </div>
@@ -128,9 +129,10 @@
                          style="cursor: default" @key="row.Id">
                         @if (Selectable)
                         {
-                            @* A row with a suggestion is selectable, but select-all leaves
-                               it alone: answering "is this the same payment?" is the one
-                               decision on this page that must not be taken in bulk. *@
+                            @* Every waiting row is tickable, a suggestion on it or not.
+                               What must not be taken in bulk is the answer to "is this the
+                               same payment?" -- so the guard is on the bulk add and not on
+                               the tick. *@
                             <MudCheckBox T="bool"
                                          Value="@_selected.Contains(row.Id)"
                                          ValueChanged="@((bool on) => Select(row.Id, on))"
@@ -345,21 +347,25 @@
     private bool Selectable => State.Filter == InboxStatus.New;
 
     /// <summary>
-    /// What select-all covers. A row with any candidate against it is left out, whichever
-    /// grade it is: filing is refused over both, so a select-all that swept them in would
-    /// walk into a refusal on every one -- and the whole design of this page is that nothing
-    /// is filed while that question is open.
+    /// What select-all covers: every row still waiting, whether or not something is
+    /// suggested against it.
     /// </summary>
+    /// <remarks>
+    /// A control called "select all" that quietly covers less than everything is worse than
+    /// one that covers everything and says what it will not do with some of it. Ignoring a
+    /// flagged row in bulk is fine -- it creates nothing, and filing it later is still
+    /// checked -- and adding one is what has to wait for a person, which
+    /// <see cref="KeepSelectedPersonalAsync"/> enforces where the writing happens.
+    /// </remarks>
     private IEnumerable<BankTransactionResponse> Selectables =>
-        State.Rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count == 0);
+        State.Rows.Where(row => row.Status == InboxStatus.New);
 
     private bool AllSelected =>
         Selectables.Any() && Selectables.All(row => _selected.Contains(row.Id));
 
     /// <summary>
-    /// How many waiting rows select-all leaves alone. Said on the header, because a
-    /// control that quietly covers less than its name claims is worse than one that says
-    /// so.
+    /// How many of the waiting rows carry a suggestion. Said on the header so somebody
+    /// ticking everything knows some of it needs answering rather than adding.
     /// </summary>
     private int FlaggedCount => State.Rows.Count(row =>
         row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0);
@@ -402,10 +408,13 @@
     /// Files the selected rows as the person's own.
     /// </summary>
     /// <remarks>
-    /// Money coming in is left out rather than refused one row at a time: a refund is not an
-    /// expense, and there is no other kind of transaction to file it as. FileAnyway travels
-    /// for a row showing a suggestion, because select-all never ticks one -- if it is in
-    /// here, somebody ticked it themselves.
+    /// Two kinds of row are left alone rather than sent and refused one at a time. Money
+    /// coming in is not an expense and there is no other kind of transaction to file it as.
+    /// And a row carrying a suggestion is a question, which is the one thing on this page
+    /// that must not be answered in bulk: sending it would either walk into the refusal or,
+    /// worse, have to assert <c>FileAnyway</c> on somebody's behalf and record the same
+    /// money twice. Both are counted and said, because silently doing less than was ticked
+    /// is how somebody comes to believe the inbox is empty.
     /// </remarks>
     private async Task KeepSelectedPersonalAsync()
     {
@@ -413,11 +422,14 @@
 
         try
         {
-            var rows = Selected.Where(row => !row.IsCredit).ToList();
-            var credits = Selected.Count - rows.Count;
+            var rows = Selected
+                .Where(row => !row.IsCredit && row.PossibleDuplicates.Count == 0)
+                .ToList();
 
-            var done = await Bank.KeepPersonalManyAsync(
-                [.. rows.Select(row => (row.Id, row.Title, row.PossibleDuplicates.Count > 0))]);
+            var credits = Selected.Count(row => row.IsCredit);
+            var asked = Selected.Count(row => !row.IsCredit && row.PossibleDuplicates.Count > 0);
+
+            var done = await Bank.KeepPersonalManyAsync([.. rows.Select(row => (row.Id, row.Title))]);
 
             if (credits > 0)
             {
@@ -426,7 +438,14 @@
                     Severity.Info);
             }
 
-            if (done > 0 || credits == Selected.Count)
+            if (asked > 0)
+            {
+                Snackbar.Add(
+                    $"{asked} left alone: each may already be recorded, so answer it on the row.",
+                    Severity.Info);
+            }
+
+            if (done > 0 || rows.Count == 0)
                 _selected.Clear();
         }
         finally

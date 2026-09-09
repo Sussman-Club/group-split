@@ -288,28 +288,28 @@ public class InboxPageTest : ComponentTest
     }
 
     /// <summary>
-    /// Both grades refuse a filing, so both have to stay out of select-all: a control that
-    /// swept them in would walk into a refusal on every one.
+    /// Both grades are counted in what the header says needs answering, because filing is
+    /// refused over both.
     /// </summary>
     [Fact]
-    public void Select_all_leaves_out_a_row_whose_match_is_only_possible()
+    public void The_header_counts_a_row_whose_match_is_only_possible()
     {
         _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
 
         var page = Render<Inbox>();
 
-        Assert.Contains("possible duplicate", page.Find(".gs-list-head").TextContent);
+        Assert.Contains("1 may already be recorded", page.Find(".gs-list-head").TextContent);
     }
 
     // ---- selecting several rows -----------------------------------------------------
 
     /// <summary>
-    /// The whole safety rule of the bulk actions. A row showing a possible duplicate is
-    /// still tickable one at a time, but select-all leaves it alone: answering "is this the
-    /// same payment?" is the one decision on this page that must not be taken for somebody.
+    /// Select-all means all of them. A row with a suggestion on it is ticked like any other
+    /// -- ignoring one in bulk is perfectly safe, and it is only *adding* it that has to
+    /// wait for a person.
     /// </summary>
     [Fact]
-    public async Task Select_all_leaves_out_a_row_that_may_already_be_recorded()
+    public async Task Select_all_covers_a_row_that_may_already_be_recorded()
     {
         _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m), Row("Uber", 12m, DateOnly.FromDateTime(Today))];
 
@@ -318,10 +318,73 @@ public class InboxPageTest : ComponentTest
         await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
 
-        Assert.Contains("2 selected", page.Find(".gs-selection-bar").TextContent);
+        Assert.Contains("3 selected", page.Find(".gs-selection-bar").TextContent);
 
-        // And it says why the third was left out, rather than quietly skipping it.
-        Assert.Contains("possible duplicate", page.Find(".gs-list-head").TextContent);
+        // And the header still says which of them will need answering rather than adding.
+        Assert.Contains("may already be recorded", page.Find(".gs-list-head").TextContent);
+    }
+
+    /// <summary>
+    /// The safety rule, where it now lives. Sending a flagged row in bulk would either walk
+    /// into the refusal or -- much worse -- have to assert that the same money really was
+    /// paid twice on somebody's behalf, and record it twice.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_the_selection_personal_leaves_a_flagged_row_for_a_person()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+        await PressAsync(page, "Keep personal");
+
+        _bank.Verify(bank => bank.KeepPersonalManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
+                sent.Count == 1 && sent[0].Title == "Lidl"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The same for the softer grade, which is the commoner one: filing is refused over it
+    /// too, so it is not something a bulk add may quietly push through.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_the_selection_personal_leaves_a_merely_similar_row_alone_as_well()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+        await PressAsync(page, "Keep personal");
+
+        _bank.Verify(bank => bank.KeepPersonalManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
+                sent.Count == 1 && sent[0].Title == "Lidl"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Ignoring is the bulk action a flagged row may take part in. It creates nothing, and
+    /// filing that row later is still checked -- so there is nothing to protect it from.
+    /// </summary>
+    [Fact]
+    public async Task Ignoring_the_selection_covers_a_flagged_row_too()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+        await PressAsync(page, "Ignore");
+
+        _bank.Verify(bank => bank.IgnoreManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent => sent.Count == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -356,7 +419,7 @@ public class InboxPageTest : ComponentTest
         await PressAsync(page, "Keep personal");
 
         _bank.Verify(bank => bank.KeepPersonalManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title, bool FileAnyway)>>(sent =>
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
                 sent.Count == 1 && sent[0].Title == "Lidl"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
