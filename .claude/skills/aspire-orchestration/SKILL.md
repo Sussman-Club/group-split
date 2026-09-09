@@ -11,9 +11,6 @@ description: >-
   FOR SINGLE OPERATIONS: Run the aspire CLI command directly.
 license: MIT
 metadata:
-  # Vendored by `aspire agent init` for contributors working in this repository.
-  # Not ours to republish: hidden from `npx skills add` discovery.
-  internal: true
   author: Microsoft
   version: "0.0.1"
 ---
