@@ -106,7 +106,8 @@ public sealed class InboxService(
         // shows and therefore the one somebody is filtering by. A card charge often posts
         // days after it was spent, and matching on the posting date would put a row dated
         // the 30th of last month inside "this month" -- the row would then sit under a
-        // heading naming a span its own date is outside of.
+        // heading naming a span its own date is outside of. InboxApi.Sort orders by the same
+        // date for the same reason: what is filtered, ordered and shown has to be one date.
         return Task.FromResult(Owned().Where(row =>
             row.Status == wanted &&
             (after == null || (row.AuthorizedDate ?? row.Date) >= after) &&

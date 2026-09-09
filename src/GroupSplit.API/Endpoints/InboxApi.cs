@@ -17,8 +17,22 @@ public static class InboxApi
     /// <summary>
     /// Newest first, because an inbox is read from the top and the top is what just arrived.
     /// </summary>
+    /// <remarks>
+    /// The date key is the authorized date where the provider knows it, falling back to the
+    /// posting date -- <see cref="BankTransactionResponse.SpentOn"/>, which is the only date
+    /// either client shows, and the one the span filter in
+    /// <see cref="Services.Banking.InboxService.List"/> narrows by. Ordering by the posting
+    /// date instead put a charge authorized on the 30th of one month above every row
+    /// displaying a later date, with nothing on screen to explain it.
+    /// <para>
+    /// It translates as a <c>COALESCE</c>, so the stored order of the
+    /// (account, status, date) index is no use to it and a page of a span is sorted. That is
+    /// a few hundred rows an account here rather than the millions where it would be worth a
+    /// stored column, so the honest order is worth more than the index.
+    /// </para>
+    /// </remarks>
     internal static readonly SortMap<BankTransaction> Sort = new SortMap<BankTransaction>()
-        .Key("date", row => row.Date, defaultDescending: true)
+        .Key("date", row => row.AuthorizedDate ?? row.Date, defaultDescending: true)
         .Key("amount", row => row.Amount, defaultDescending: true)
         .Key("merchant", row => row.MerchantName)
         .Default("date")
