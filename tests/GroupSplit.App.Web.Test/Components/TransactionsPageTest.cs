@@ -1,4 +1,4 @@
-﻿using Bunit;
+using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Pages;
@@ -337,5 +337,53 @@ public class TransactionsPageTest : ComponentTest
 
         Assert.Contains("all groups", page.Markup);
         Assert.Null(_asks.Last().GroupId);
+    }
+
+    // ---- a write, from anywhere ----------------------------------------------------------
+
+    private int RowReads =>
+        _client.Invocations.Count(i => i.Method.Name == nameof(ITransactionsClient.GetTransactionsAsync));
+
+    /// <summary>
+    /// The figures and the rows are this page's own reads, so an announcement has to make
+    /// it ask again. It used to only re-render, and a grid that asks the server for its
+    /// rows shows, on a re-render, the rows it already has: an expense added from the
+    /// button on this page did not appear in the list under it.
+    /// </summary>
+    [Fact]
+    public async Task A_write_announced_anywhere_re_reads_the_figures_and_the_rows()
+    {
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.True(RowReads >= 1));
+
+        var asksBefore = _asks.Count;
+        var rowsBefore = RowReads;
+
+        await page.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
+
+        page.WaitForAssertion(() =>
+        {
+            Assert.True(_asks.Count > asksBefore);
+            Assert.True(RowReads > rowsBefore);
+        });
+    }
+
+    /// <summary>
+    /// A group renamed changes the tag on every one of its rows, so it is a change to this
+    /// listing as much as an expense is.
+    /// </summary>
+    [Fact]
+    public async Task A_change_to_the_groups_re_reads_the_rows_too()
+    {
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.True(RowReads >= 1));
+
+        var rowsBefore = RowReads;
+
+        await page.InvokeAsync(() => Changes.NotifyGroupsChangedAsync());
+
+        page.WaitForAssertion(() => Assert.True(RowReads > rowsBefore));
     }
 }

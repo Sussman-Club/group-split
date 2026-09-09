@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Shared.Models;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 
@@ -117,6 +117,13 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     /// leaving a hole that only a reload closes.
     /// </summary>
     private int _pages = 1;
+
+    /// <summary>
+    /// Counts reads. Two filters picked in quick succession are two requests, and the
+    /// first can answer last; its rows are the wrong ones under the second's tab, so an
+    /// answer is written down only if nothing has been asked for since.
+    /// </summary>
+    private int _version;
 
     public InboxStateService(
         IInboxClient inbox,
@@ -237,30 +244,48 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public Task RefreshAsync(CancellationToken ct = default) =>
         _guard.RunAsync(async () =>
         {
+            var version = ++_version;
+
+            // Read once, here: the filter and the span can move while this is in flight,
+            // and the rows have to be the answer to one question.
+            var filter = Filter;
+            var range = Range;
+            var pages = _pages;
+
             var summary = await _inbox.GetInboxSummaryAsync(_duplicatesWanted ? true : null, ct);
             var connections = await _connections.GetBankConnectionsAsync(ct);
 
-            NewCount = summary.NewCount;
-            PossibleDuplicates = summary.PossibleDuplicates;
-            Connections = connections;
+            PagedResponse<BankTransactionResponse>? page = null;
 
             if (_rowsWanted)
             {
                 // A bank row is dated by the day the bank put on it, so the span is asked
                 // for as days. Which month "this month" is remains the person's question,
                 // which is what the clock is for.
-                var days = Range.Days(_clock.Today);
+                var days = range.Days(_clock.Today);
 
-                var page = await _inbox.GetInboxAsync(
-                    status: Filter,
+                page = await _inbox.GetInboxAsync(
+                    status: filter,
                     from: days.From,
                     to: days.To,
                     sortBy: null,
                     sortDescending: null,
                     page: 1,
-                    pageSize: PageSize * _pages,
+                    pageSize: PageSize * pages,
                     cancellationToken: ct);
+            }
 
+            // Something has been asked for since this went out. That answer is the one
+            // the page is waiting for; this one would put the previous filter's rows back.
+            if (version != _version)
+                return;
+
+            NewCount = summary.NewCount;
+            PossibleDuplicates = summary.PossibleDuplicates;
+            Connections = connections;
+
+            if (page is not null)
+            {
                 Rows = page.Items;
                 TotalCount = page.TotalCount;
             }

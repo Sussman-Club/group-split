@@ -12,6 +12,7 @@
 @inject ApiErrorPresenter Errors
 @inject IDialogService DialogService
 @inject NavigationManager Nav
+@inject DataChangeNotifier Changes
 @inject LocalClock Clock
 @implements IAsyncDisposable
 
@@ -322,6 +323,13 @@
     private ExpenseShareSummaryResponse? _shareSummary;
     private IReadOnlyList<MonthlyExposureResponse> _months = [];
 
+    /// <summary>
+    /// Counts reads of the figures, so the answer to a narrowing that has since been left
+    /// behind cannot land on the cards over the one in force. The group's ledger tab keeps
+    /// the same guard, for the same reason.
+    /// </summary>
+    private int _figuresVersion;
+
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
     private bool IsNarrowed => IsSearching || !_range.IsAllTime || _where != AllLedgers;
@@ -521,18 +529,33 @@
     /// </summary>
     private async Task ReadFiguresAsync()
     {
+        var version = ++_figuresVersion;
+
+        // Read once, here: the three requests below have to describe one narrowing, and
+        // the fields can move while they are in flight.
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+        var groupId = _groupId;
+        var personal = _personal;
+        var search = Search;
+        var owedOnly = _view is ExpenseView.YourShare;
 
-        _paidSummary = await ReadAsync(() => TransactionsClient.GetTransactionsSummaryAsync(
-            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search));
+        var paid = await ReadAsync(() => TransactionsClient.GetTransactionsSummaryAsync(
+            from: bounds.From, to: bounds.To, groupId: groupId, personal: personal, search: search));
 
-        _shareSummary = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
-            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search,
-            owedOnly: _view is ExpenseView.YourShare));
+        var shares = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
+            from: bounds.From, to: bounds.To, groupId: groupId, personal: personal, search: search,
+            owedOnly: owedOnly));
 
         var months = await ReadAsync(() => TransactionsClient.GetMonthlyExposureAsync(
-            from: bounds.From, to: bounds.To, groupId: _groupId, personal: _personal, search: Search));
+            from: bounds.From, to: bounds.To, groupId: groupId, personal: personal, search: search));
 
+        // Something else has been asked for since. Its answer is the one the cards are
+        // waiting for; this one is about a narrowing nobody is looking at any more.
+        if (version != _figuresVersion)
+            return;
+
+        _paidSummary = paid;
+        _shareSummary = shares;
         _months = months is null ? [] : [.. months];
 
         await InvokeAsync(StateHasChanged);
@@ -656,12 +679,24 @@
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
+    /// <summary>
+    /// A write landed, from this page or any other. The figures and the chart are this
+    /// page's own reads and the grid asks the server for its rows, so neither moves on a
+    /// re-render alone: both are asked again.
+    /// </summary>
+    /// <remarks>
+    /// This was written and never wired up. The page re-rendered when the state service
+    /// announced, and a re-render of a grid fed by <c>ServerData</c> shows the rows it
+    /// already has -- so an expense added from the button on this page did not appear in
+    /// the list under it, and the count above stayed where it was, until the page was
+    /// opened again.
+    /// </remarks>
     private async Task OnDataChangedAsync()
     {
         await ReadFiguresAsync();
 
         if (_grid is not null)
-            await _grid.ReloadServerData();
+            await InvokeAsync(() => _grid.ReloadServerData());
     }
 
     private void ReRender() => InvokeAsync(StateHasChanged);
@@ -674,6 +709,11 @@
 
         TransactionsService.OnTransactionsChanged += ReRender;
         GroupsService.OnGroupsChanged += ReRender;
+
+        // A group renamed changes the tag on every one of its rows, so that is a change to
+        // this listing as much as an expense is.
+        Changes.TransactionsChanged += OnDataChangedAsync;
+        Changes.GroupsChanged += OnDataChangedAsync;
     }
 
     /// <summary>
@@ -711,6 +751,9 @@
     {
         TransactionsService.OnTransactionsChanged -= ReRender;
         GroupsService.OnGroupsChanged -= ReRender;
+
+        Changes.TransactionsChanged -= OnDataChangedAsync;
+        Changes.GroupsChanged -= OnDataChangedAsync;
 
         if (_loadCts is not null) await _loadCts.CancelAsync();
     }

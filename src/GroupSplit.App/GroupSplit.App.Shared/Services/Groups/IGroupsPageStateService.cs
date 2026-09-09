@@ -36,6 +36,16 @@ public interface IGroupsPageStateService
     /// <summary>True while the selected group's expenses and balances are on their way.</summary>
     bool IsLoading { get; }
 
+    /// <summary>
+    /// Makes sure <see cref="Transactions"/> and <see cref="Balance"/> are the selected
+    /// group's own, reading them if they are not, and completes when they have landed.
+    /// </summary>
+    /// <remarks>
+    /// A page opening on a group calls this rather than trusting what is held: the
+    /// selection and its figures are persisted across the prerender separately, and the
+    /// figures beside a restored selection can be another group's, or nobody's yet.
+    /// </remarks>
+    Task EnsureSelectedLoadedAsync();
 
     event Action? OnGroupSelected;
     event Action? OnTransactionsChanged;

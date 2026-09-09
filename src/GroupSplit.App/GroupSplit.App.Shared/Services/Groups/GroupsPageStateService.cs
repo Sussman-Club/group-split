@@ -26,8 +26,28 @@ public class GroupsPageStateService : IGroupsPageStateService
     private readonly ITransactionCommands _transactionCommands;
 
     public Task IsReadyTask { get; }
-    public bool IsLoading { get; private set; }
+
+    /// <summary>
+    /// The load behind the selection in force: the figures' journey from the server, for
+    /// anybody who needs to wait for them. Complete once they have landed, or failed.
+    /// </summary>
     private Task _selectedLoad = Task.CompletedTask;
+
+    /// <summary>
+    /// Counts selections. Every read of the selected group's figures remembers the number
+    /// it was started under and writes nothing down if the number has moved on, which is
+    /// what keeps a slow answer about the previous group from landing on the current one.
+    /// </summary>
+    /// <remarks>
+    /// The selection changes faster than the server answers: somebody opening one group
+    /// from the list and then another has two reads in flight, and nothing about the
+    /// network promises the second lands last. Without this the first group's expenses and
+    /// balances arrived after the second's and were written down as its own.
+    /// </remarks>
+    private int _selectionVersion;
+
+    /// <summary>Whether the load under way is one that dims the page: a change of subject, not a refresh.</summary>
+    private bool _selecting;
 
     public GroupsPageStateService(GroupsTracker tracker, IGroupsClient groupsClient,
         IUsersClient usersClient, LoadGuard guard, ApiErrorPresenter errors,
@@ -50,11 +70,11 @@ public class GroupsPageStateService : IGroupsPageStateService
         _changes.GroupsChanged += RefreshGroupsAsync;
         _changes.TransactionsChanged += RefreshSelectedAsync;
 
-        IsReadyTask = Task.Run(async () =>
-        {
-            if (tracker.Groups is not null) return;
-            await RefreshGroupsAsync();
-        });
+        // Started here rather than on a pool thread: the events this raises are what
+        // components re-render on, and under interactive server rendering those have to
+        // reach the circuit's own thread. A first read that has already landed -- the
+        // prerender persisted it -- is not read again.
+        IsReadyTask = tracker.Groups is not null ? Task.CompletedTask : RefreshGroupsAsync();
     }
 
     public ICollection<GroupResponse> Groups
@@ -75,9 +95,28 @@ public class GroupsPageStateService : IGroupsPageStateService
             if (value is not null && Groups.All(g => g.Id != value.Id))
                 throw new ArgumentException("The selected group must be part of the user's groups.", nameof(value));
 
+            var changed = value?.Id != _tracker.SelectedGroup?.Id;
+
             _tracker.SelectedGroup = value;
+
+            if (changed)
+            {
+                // A different group. What is held describes the one being left, and a
+                // page that opened on this one with the old figures under its name was the
+                // wrong answer for as long as the server took -- so they go now, and the
+                // page shows nothing rather than somebody else's balances.
+                ClearFigures();
+                _selectedLoad = LoadSelectedAsync(value, ++_selectionVersion);
+            }
+            else if (value is not null)
+            {
+                // The same group, handed over again -- the list was re-read and this is
+                // its new object. The figures are still its own; they are re-read in place,
+                // without the dimming a change of subject gets.
+                _selectedLoad = RefreshFiguresAsync(value, _selectionVersion);
+            }
+
             OnGroupSelected?.Invoke();
-            _selectedLoad = LoadSelectedAsync();
         }
     }
 
@@ -111,6 +150,8 @@ public class GroupsPageStateService : IGroupsPageStateService
         }
     }
 
+    public bool IsLoading => _selecting && !_selectedLoad.IsCompleted;
+
     public event Action? OnGroupSelected;
     public event Action? OnTransactionsChanged;
     public event Action? OnGroupsChanged;
@@ -131,17 +172,32 @@ public class GroupsPageStateService : IGroupsPageStateService
     }
 
     /// <summary>
-    /// Re-reads the selected group's expenses and balances in place. Unlike a selection,
-    /// this does not raise the loading flag: what is on screen is the right group, only a
-    /// moment behind, and dimming it would read as a change of subject.
+    /// Re-reads the selected group's expenses and balances in place, and the position with
+    /// them. Unlike a selection, this does not raise the loading flag: what is on screen is
+    /// the right group, only a moment behind, and dimming it would read as a change of
+    /// subject.
     /// </summary>
-    private Task RefreshSelectedAsync() =>
-        _guard.RunAsync(async () =>
-        {
-            await LoadTransactionsAsync();
-            await LoadGroupBalancesAsync();
-            await LoadPositionAsync();
-        }, "this group");
+    private async Task RefreshSelectedAsync()
+    {
+        _selectedLoad = RefreshFiguresAsync(SelectedGroup, _selectionVersion);
+
+        await _selectedLoad;
+        await _guard.RunAsync(() => LoadPositionAsync(), "this group");
+    }
+
+    public Task EnsureSelectedLoadedAsync()
+    {
+        if (SelectedGroup is not { } selected)
+            return Task.CompletedTask;
+
+        // Either the figures are its own, or they are on their way. A tracker restored from
+        // the prerender can say neither -- the selection persisted before its figures
+        // landed, or beside the previous group's -- and that is the case this exists for.
+        if (_tracker.FiguresGroupId == selected.Id || !_selectedLoad.IsCompleted)
+            return _selectedLoad;
+
+        return _selectedLoad = LoadSelectedAsync(selected, ++_selectionVersion);
+    }
 
     /// <summary>
     /// The cross-group position. Read alongside the selected group rather than with it: an
@@ -153,53 +209,89 @@ public class GroupsPageStateService : IGroupsPageStateService
         Position = await _usersClient.GetCurrentUserPositionAsync(cancellationToken);
     }
 
-    // Both halves of the selected group travel together, under one loading
-    // flag, and a failure clears them: stale figures under a fresh name read
-    // as the wrong answer, an empty panel reads as "not loaded".
-    private async Task LoadSelectedAsync()
+    /// <summary>
+    /// The figures behind a change of subject: both halves together, under the loading
+    /// flag, and a failure leaves them clear -- stale figures under a fresh name read as
+    /// the wrong answer, an empty panel reads as "not loaded".
+    /// </summary>
+    private async Task LoadSelectedAsync(GroupResponse? group, int version)
     {
-        IsLoading = true;
+        _selecting = true;
         OnTransactionsChanged?.Invoke();
 
-        var loaded = await _guard.RunAsync(async () =>
+        try
         {
-            await LoadTransactionsAsync();
-            await LoadGroupBalancesAsync();
-        }, "this group");
+            var loaded = await RefreshFiguresAsync(group, version);
 
-        if (!loaded)
-        {
-            _tracker.Transactions = null;
-            _tracker.Balance = null;
+            // Nothing landed, and nothing of this group's was there before. The panel
+            // stays empty rather than showing the group that was left.
+            if (!loaded && version == _selectionVersion)
+            {
+                ClearFigures();
+                OnTransactionsChanged?.Invoke();
+            }
         }
+        finally
+        {
+            if (version == _selectionVersion)
+                _selecting = false;
 
-        IsLoading = false;
-        OnTransactionsChanged?.Invoke();
+            OnTransactionsChanged?.Invoke();
+        }
     }
 
-    // The loads below always assign a new collection, never edit the old one in place: a
-    // component that was handed the previous one only looks again when the reference
-    // changes.
-
-    private async Task LoadTransactionsAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Reads one group's expenses and balances and writes them down -- if, once they
+    /// arrive, that group is still the one selected. An answer about a group nobody is
+    /// looking at any more is dropped whole: half of it landing would be worse than none.
+    /// A failure writes nothing down either: on a refresh what is on screen is the right
+    /// group's, only a moment behind, and the failure has already been shown.
+    /// </summary>
+    /// <returns>Whether the figures landed.</returns>
+    private async Task<bool> RefreshFiguresAsync(GroupResponse? group, int version)
     {
-        if (SelectedGroup is null)
+        if (group is null)
         {
-            Transactions = null;
+            ClearFigures();
+            OnTransactionsChanged?.Invoke();
+            return true;
         }
-        else
+
+        PagedResponse<TransactionResponse>? transactions = null;
+        UserGroupBalanceResponse? balance = null;
+
+        var loaded = await _guard.RunAsync(async () =>
         {
             // The newest few, which is exactly what the card on the page shows, plus the
             // count of all of them for the header. Ordering is the server's now: it is the
             // only end that can order rows it did not send.
-            Transactions = await _groupsClient.GetGroupTransactionsAsync(
-                SelectedGroup.Id,
+            transactions = await _groupsClient.GetGroupTransactionsAsync(
+                group.Id,
                 sortBy: TransactionQuery.DefaultSortBy,
                 sortDescending: true,
                 page: 1,
-                pageSize: RecentPageSize,
-                cancellationToken: cancellationToken);
-        }
+                pageSize: RecentPageSize);
+
+            balance = await _groupsClient.GetGroupUserBalanceAsync(group.Id);
+        }, "this group");
+
+        if (version != _selectionVersion || !loaded)
+            return loaded;
+
+        // Both assign a new object rather than editing the old one in place: a component
+        // that was handed the previous one only looks again when the reference changes.
+        _tracker.FiguresGroupId = group.Id;
+        Transactions = transactions;
+        Balance = balance;
+
+        return true;
+    }
+
+    private void ClearFigures()
+    {
+        _tracker.Transactions = null;
+        _tracker.Balance = null;
+        _tracker.FiguresGroupId = null;
     }
 
     private async Task LoadGroupsAsync(CancellationToken cancellationToken = default)
@@ -214,18 +306,6 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         SelectedGroup = Groups.FirstOrDefault(g => g.Id == wanted) ??
                         Groups.FirstOrDefault();
-    }
-
-    private async Task LoadGroupBalancesAsync(CancellationToken cancellationToken = default)
-    {
-        if (SelectedGroup is null)
-        {
-            Balance = null;
-        }
-        else
-        {
-            Balance = await _groupsClient.GetGroupUserBalanceAsync(SelectedGroup.Id, cancellationToken: cancellationToken);
-        }
     }
 
     // Every write below runs through the presenter: a refusal from the API becomes an
@@ -247,7 +327,10 @@ public class GroupsPageStateService : IGroupsPageStateService
         // selecting it costs nothing -- a second notify here would re-read the whole list
         // to learn what this line already knows.
         if (Groups.FirstOrDefault(group => group.Id == created.Id) is { } landed)
+        {
             SelectedGroup = landed;
+            await EnsureSelectedLoadedAsync();
+        }
 
         return true;
     }

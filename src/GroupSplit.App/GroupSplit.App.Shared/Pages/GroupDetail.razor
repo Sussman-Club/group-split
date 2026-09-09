@@ -1,4 +1,4 @@
-﻿@page "/groups/{GroupId:guid}"
+@page "/groups/{GroupId:guid}"
 @page "/groups/{GroupId:guid}/{Tab}"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Models
@@ -103,7 +103,7 @@
 
     <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@AddExpenseAsync" />
 }
-else if (_notFound)
+else if (NotFound)
 {
     <div class="gs-card gs-empty" style="padding: 64px 24px">
         <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
@@ -138,7 +138,14 @@ else if (_notFound)
         ("members", "Members")
     ];
 
-    private bool _notFound;
+    /// <summary>
+    /// Whether the group in the URL is not one of this person's. Read off the list rather
+    /// than remembered from the last parameter set, so a group that goes while the page is
+    /// open -- left from the members tab, say -- turns into this rather than into a page
+    /// with nothing on it.
+    /// </summary>
+    private bool NotFound =>
+        GroupsService.IsReadyTask.IsCompleted && GroupsService.Groups.All(candidate => candidate.Id != GroupId);
 
     /// <summary>
     /// Which section the URL asks for. The two retired tabs land on the ledger they became,
@@ -237,22 +244,27 @@ else if (_notFound)
     /// The URL says which group; the state service holds one at a time and reads its
     /// figures when it changes. So the route selects, rather than a switcher doing it.
     /// </summary>
+    /// <remarks>
+    /// The figures are awaited as well as asked for, and asked for even when the selection
+    /// already matches. A selection that matches is not proof the figures do: the prerender
+    /// persists the two separately, and this used to take a matching selection as read and
+    /// leave whatever figures came with it -- the previous group's -- on the page for good.
+    /// Awaiting them also means the prerendered page carries them, so the interactive one
+    /// has nothing to fetch. The page renders at the first await either way, so the header
+    /// is up before the server has answered.
+    /// </remarks>
     protected override async Task OnParametersSetAsync()
     {
         await GroupsService.IsReadyTask;
 
-        if (GroupsService.SelectedGroup?.Id == GroupId)
+        if (GroupsService.SelectedGroup?.Id != GroupId
+            && GroupsService.Groups.FirstOrDefault(candidate => candidate.Id == GroupId) is { } group)
         {
-            _notFound = false;
-            return;
+            GroupsService.SelectedGroup = group;
         }
 
-        var group = GroupsService.Groups.FirstOrDefault(candidate => candidate.Id == GroupId);
-
-        _notFound = group is null;
-
-        if (group is not null)
-            GroupsService.SelectedGroup = group;
+        if (GroupsService.SelectedGroup?.Id == GroupId)
+            await GroupsService.EnsureSelectedLoadedAsync();
     }
 
     private async Task ManageRulesAsync()

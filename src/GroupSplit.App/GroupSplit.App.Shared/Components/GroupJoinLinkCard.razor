@@ -87,6 +87,13 @@
     private GroupJoinLinkResponse? _link;
     private bool _busy;
 
+    /// <summary>The group the link was last read for. See the note on the members tab: a
+    /// parameter set is not a reason to ask the server again.</summary>
+    private Guid _loadedFor;
+
+    /// <summary>Counts reads, so an older answer cannot land over a newer one's.</summary>
+    private int _version;
+
     /// <summary>
     /// Built here rather than by the API, from the address this browser is already on: the
     /// app is published at whatever host it is published at, and a server guessing that
@@ -96,11 +103,26 @@
 
     protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
 
-    protected override Task OnParametersSetAsync() => ReloadAsync();
+    protected override Task OnParametersSetAsync()
+    {
+        if (_loadedFor == GroupId)
+            return Task.CompletedTask;
+
+        _loadedFor = GroupId;
+
+        return ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
-        _link = await GroupsService.GetGroupJoinLinkAsync();
+        var version = ++_version;
+
+        var link = await GroupsService.GetGroupJoinLinkAsync();
+
+        if (version != _version)
+            return;
+
+        _link = link;
 
         await InvokeAsync(StateHasChanged);
     }
