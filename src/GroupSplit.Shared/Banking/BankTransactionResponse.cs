@@ -44,8 +44,9 @@ public record InboxFilter(
 /// How many rows are waiting, for the badge in the nav.
 /// </summary>
 /// <param name="PossibleDuplicates">
-/// How many of those look like an expense somebody has already recorded, or null when the
-/// caller did not ask.
+/// How many of those carry a confident match -- the same money to the cent -- or null when
+/// the caller did not ask. Not the rows a filing would be questioned over, which is a wider
+/// set: a badge saying some of these may already be recorded should be right about it.
 /// </param>
 /// <remarks>
 /// The duplicate count is opt-in and null by default, and the distinction matters: null is

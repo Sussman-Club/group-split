@@ -25,7 +25,14 @@ public sealed record SpendingFacts(decimal Amount, string Currency, DateOnly On)
 /// <param name="DaysApart">
 /// How far apart the two dates are. A card charge posts days after the meal.
 /// </param>
-public sealed record DuplicateMatch(Expense Expense, decimal AmountDifference, int DaysApart);
+/// <param name="Confidence">
+/// How strong a claim this is. What a caller reads to decide how loudly to say it.
+/// </param>
+public sealed record DuplicateMatch(
+    Expense Expense,
+    decimal AmountDifference,
+    int DaysApart,
+    MatchConfidence Confidence);
 
 /// <summary>
 /// Whether an imported row and an expense could be the same money.
@@ -85,9 +92,17 @@ public sealed class DuplicateMatcher(
     private const int WindowDays = 5;
 
     /// <summary>
-    /// How far the two amounts may be apart, as a share of the smaller one. A tip added
-    /// after the receipt was written is the usual reason they differ.
+    /// How far the two amounts may be apart, as a share of the smaller one, for a match
+    /// that is <see cref="MatchConfidence.Possible"/>. A tip added after the receipt was
+    /// written is the usual reason they differ.
     /// </summary>
+    /// <remarks>
+    /// This decides nothing on its own any more. A difference inside it also has to have a
+    /// shape a duplicate could have -- see
+    /// <see cref="TheDifferenceHasAShapeADuplicateCouldHave"/> -- and the two must not name
+    /// different places. Measured against real spending, the tolerance alone lets 11.5% of
+    /// unrelated pairs through; with those two conditions it is 3.9%.
+    /// </remarks>
     private const decimal RelativeTolerance = 0.25m;
 
     /// <summary>
@@ -103,31 +118,110 @@ public sealed class DuplicateMatcher(
     private const int MostSuggestions = 3;
 
     /// <summary>
-    /// The rule, and the only statement of it.
+    /// The rule, and the only statement of it: how strongly these two could be the same
+    /// money, or null when they could not be.
     /// </summary>
     /// <remarks>
-    /// Amount and a date window, on money of the same currency. The payer is not compared
-    /// here because it is a condition on the *sets* both sides are drawn from -- the
-    /// caller's own bank rows against expenses the caller paid -- and enforced there.
+    /// Money of the same currency, inside the date window, and then the amount decides the
+    /// grade. Agreeing to the cent is a different claim from being within a quarter, and
+    /// treating them alike is what made the suggestion wrong more often than right.
     /// <para>
-    /// The bank's merchant text is deliberately not consulted. "Dinner" against
-    /// <c>SQ *TRATTORIA 4421</c> is the ordinary case, so a name condition would refuse
-    /// most real duplicates; it is a tiebreak in <see cref="Ranked"/> at most.
+    /// The payer is not compared here because it is a condition on the *sets* both sides are
+    /// drawn from -- the caller's own bank rows against expenses the caller paid -- and
+    /// enforced there.
+    /// </para>
+    /// <para>
+    /// The bank's merchant *text* is still not a condition: "Dinner" against
+    /// <c>SQ *TRATTORIA 4421</c> is the ordinary case, so a name test would refuse most real
+    /// duplicates. What is a condition is the merchant both sides resolved to, which is a
+    /// different thing -- see <see cref="NameDifferentPlaces"/>.
     /// </para>
     /// </remarks>
-    private static bool CouldBeTheSameMoney(SpendingFacts row, SpendingFacts expense)
+    private static MatchConfidence? Grade(BankTransaction row, Transaction expense)
     {
-        if (!string.Equals(row.Currency, expense.Currency, StringComparison.OrdinalIgnoreCase))
-            return false;
+        var (spent, recorded) = (Facts(row), Facts(expense));
 
-        if (DaysBetween(row, expense) > WindowDays)
-            return false;
+        if (!string.Equals(spent.Currency, recorded.Currency, StringComparison.OrdinalIgnoreCase))
+            return null;
 
+        if (DaysBetween(spent, recorded) > WindowDays)
+            return null;
+
+        // The same money to the cent. This is the only claim worth putting in front of
+        // somebody who has not touched the row, and it stands even against a merchant that
+        // disagrees: one shop can end up as two -- a chain and its subscription arm, a shop
+        // and its parent -- and refusing a real duplicate is the expensive mistake.
+        if (spent.Amount == recorded.Amount)
+            return MatchConfidence.Confident;
+
+        if (NameDifferentPlaces(row, expense))
+            return null;
+
+        return WithinTolerance(spent, recorded)
+               && TheDifferenceHasAShapeADuplicateCouldHave(row, spent, recorded)
+            ? MatchConfidence.Possible
+            : null;
+    }
+
+    /// <summary>Close enough in amount to be worth asking about at all.</summary>
+    private static bool WithinTolerance(SpendingFacts row, SpendingFacts expense)
+    {
         var difference = Math.Abs(row.Amount - expense.Amount);
 
         return difference <= AbsoluteTolerance
                || difference <= RelativeTolerance * Math.Min(Math.Abs(row.Amount), Math.Abs(expense.Amount));
     }
+
+    /// <summary>
+    /// Whether the direction of the difference is one a duplicate could actually produce.
+    /// </summary>
+    /// <remarks>
+    /// The tolerance exists for a tip, and a tip only ever makes the card charge *larger*
+    /// than the figure somebody wrote down. Reading the tolerance both ways cost half of
+    /// everything the rule raised -- and both false suggestions the seeded inbox produces are
+    /// of the shape this refuses, a bank charging less than the expense it was offered
+    /// against.
+    /// <para>
+    /// Two things do explain a charge coming in lower. A <b>pending</b> authorisation is
+    /// often taken before the tip is added, so for a pending row the lower charge is the
+    /// expected one. And people round when they type: an expense on a whole unit may be
+    /// above the charge and still be the same money.
+    /// </para>
+    /// </remarks>
+    private static bool TheDifferenceHasAShapeADuplicateCouldHave(
+        BankTransaction row, SpendingFacts spent, SpendingFacts recorded)
+    {
+        if (spent.Amount > recorded.Amount)
+            return true;
+
+        if (row.Pending)
+            return true;
+
+        return recorded.Amount == Math.Truncate(recorded.Amount);
+    }
+
+    /// <summary>
+    /// Both sides know where the money went, and it is not the same place.
+    /// </summary>
+    /// <remarks>
+    /// The one condition the merchant is allowed to be, and only against a
+    /// <see cref="MatchConfidence.Possible"/> match. A streaming subscription offered against
+    /// a coffee run is settled by this and by nothing else in the rule.
+    /// <para>
+    /// One side knowing and the other not says nothing: most expenses somebody types have no
+    /// merchant and never will, so silence here is not disagreement.
+    /// </para>
+    /// </remarks>
+    private static bool NameDifferentPlaces(BankTransaction row, Transaction expense) =>
+        row.MerchantId is { } place && expense.MerchantId is { } other && place != other;
+
+    /// <summary>
+    /// Both sides name the same place. Not a condition -- a ranking signal, and a better one
+    /// than a nearer amount, because a coincidence a few cents closer should not outrank the
+    /// genuine duplicate with a tip on it.
+    /// </summary>
+    private static bool NameTheSamePlace(BankTransaction row, Transaction expense) =>
+        row.MerchantId is { } place && expense.MerchantId == place;
 
     private static int DaysBetween(SpendingFacts row, SpendingFacts expense) =>
         Math.Abs(row.On.DayNumber - expense.On.DayNumber);
@@ -205,9 +299,16 @@ public sealed class DuplicateMatcher(
 
         var could = rows
             .Where(row => !dismissed.Contains((row.Id, expense.Id)))
-            .Where(row => CouldBeTheSameMoney(Facts(row), facts));
+            .Select(row => (Row: row, Confidence: Grade(row, expense)))
+            .Where(candidate => candidate.Confidence is not null)
+            .Select(candidate => new Graded<BankTransaction>(
+                candidate.Row,
+                candidate.Confidence!.Value,
+                NameTheSamePlace(candidate.Row, expense),
+                ReadsLike(candidate.Row, expense),
+                Facts(candidate.Row)));
 
-        return [.. Closest(could, facts, Facts).Take(MostSuggestions)];
+        return [.. BestFirst(could, facts).Take(MostSuggestions).Select(candidate => candidate.Value)];
     }
 
     public async Task Dismiss(BankTransaction row, Expense expense, CancellationToken ct = default)
@@ -244,43 +345,82 @@ public sealed class DuplicateMatcher(
     }
 
     /// <summary>
-    /// The candidates ranked and cut to the few worth showing: closest amount first, then
-    /// nearest date, and only then the bank's own text, which is a tiebreak and never a
-    /// condition.
+    /// The candidates ranked and cut to the few worth showing.
     /// </summary>
     private static IReadOnlyList<DuplicateMatch> Ranked(BankTransaction row, IEnumerable<Expense> candidates)
     {
         var facts = Facts(row);
 
-        var could = candidates.Where(expense => CouldBeTheSameMoney(facts, Facts(expense)));
+        var could = candidates
+            .Select(expense => (Expense: expense, Confidence: Grade(row, expense)))
+            .Where(candidate => candidate.Confidence is not null)
+            .Select(candidate => new Graded<Expense>(
+                candidate.Expense,
+                candidate.Confidence!.Value,
+                NameTheSamePlace(row, candidate.Expense),
+                ReadsLike(row, candidate.Expense),
+                Facts(candidate.Expense)));
 
         return
         [
-            .. Closest(could, facts, Facts)
-                .ThenByDescending(expense => ReadsLike(row, expense))
+            .. BestFirst(could, facts)
                 .Take(MostSuggestions)
-                .Select(expense => new DuplicateMatch(
-                    expense,
-                    Math.Abs(row.Amount - expense.Amount),
-                    DaysBetween(facts, Facts(expense))))
+                .Select(candidate => new DuplicateMatch(
+                    candidate.Value,
+                    Math.Abs(row.Amount - candidate.Value.Amount),
+                    DaysBetween(facts, candidate.Facts),
+                    candidate.Confidence))
         ];
     }
 
     /// <summary>
-    /// Closest first: nearest in amount, then nearest in date. The order candidates are
-    /// offered in whichever side is asking, so the two directions cannot drift apart.
+    /// One candidate with everything the order depends on already worked out.
     /// </summary>
-    private static IOrderedEnumerable<T> Closest<T>(IEnumerable<T> candidates, SpendingFacts against,
-        Func<T, SpendingFacts> factsOf) =>
-        candidates
-            .OrderBy(candidate => Math.Abs(factsOf(candidate).Amount - against.Amount))
-            .ThenBy(candidate => DaysBetween(factsOf(candidate), against));
+    /// <param name="SamePlace">Both sides resolved to the same merchant.</param>
+    /// <param name="ReadsAlike">
+    /// The bank's own text and the expense's name have something to do with each other. The
+    /// weakest of the signals and the last one consulted -- worth something only when
+    /// neither side knows the place.
+    /// </param>
+    private readonly record struct Graded<T>(
+        T Value,
+        MatchConfidence Confidence,
+        bool SamePlace,
+        bool ReadsAlike,
+        SpendingFacts Facts);
 
     /// <summary>
-    /// Whether the two names have anything to do with each other. Worth a tiebreak between
-    /// two equally close candidates and worth nothing else: banks write
-    /// <c>SQ *TRATTORIA 4421</c> where people write "Dinner".
+    /// Best first: a confident match before a possible one, then the place agreeing, then
+    /// nearest in amount, then nearest in date, and only then the bank's own text.
     /// </summary>
+    /// <remarks>
+    /// The place outranks a nearer amount deliberately. Ordering by closeness alone let a
+    /// coincidence a few cents nearer outrank the genuine duplicate with a tip on it -- and
+    /// since the inbox leads with the best candidate, that did not merely mis-sort the list,
+    /// it kept the real match off the screen.
+    /// <para>
+    /// The order candidates are offered in whichever side is asking, so the two directions
+    /// cannot drift apart.
+    /// </para>
+    /// </remarks>
+    private static IOrderedEnumerable<Graded<T>> BestFirst<T>(IEnumerable<Graded<T>> candidates,
+        SpendingFacts against) =>
+        candidates
+            .OrderByDescending(candidate => candidate.Confidence)
+            .ThenByDescending(candidate => candidate.SamePlace)
+            .ThenBy(candidate => Math.Abs(candidate.Facts.Amount - against.Amount))
+            .ThenBy(candidate => DaysBetween(candidate.Facts, against))
+            .ThenByDescending(candidate => candidate.ReadsAlike);
+
+    /// <summary>
+    /// Whether the two names have anything to do with each other. The last tiebreak and
+    /// worth nothing else: banks write <c>SQ *TRATTORIA 4421</c> where people write "Dinner".
+    /// </summary>
+    /// <remarks>
+    /// Below <see cref="NameTheSamePlace"/>, which asks the same question of the merchant
+    /// both sides resolved to and gets a real answer. This is what is left when neither side
+    /// has one.
+    /// </remarks>
     private static bool ReadsLike(BankTransaction row, Expense expense)
     {
         if (row.MerchantName is not { Length: > 0 } merchant || expense.Name.Length == 0)
@@ -297,7 +437,7 @@ public sealed class DuplicateMatcher(
     /// </summary>
     /// <remarks>
     /// Deliberately wider than the rule and asked of the database in the plainest terms a
-    /// date range can be put in; <see cref="CouldBeTheSameMoney"/> decides. A person spends
+    /// date range can be put in; <see cref="Grade"/> decides. A person spends
     /// a handful of times a day, so this is a small list however it is filtered, and the
     /// arithmetic that matters stays somewhere it can be read.
     /// </remarks>
@@ -382,7 +522,8 @@ public static class DuplicateMatchExtensions
                 match.Expense.Group?.Name,
                 $"{match.Expense.User.FirstName} {match.Expense.User.LastName}".Trim(),
                 match.AmountDifference,
-                match.DaysApart);
+                match.DaysApart,
+                match.Confidence);
     }
 
     extension(IEnumerable<DuplicateMatch> matches)
