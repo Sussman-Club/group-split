@@ -2149,22 +2149,33 @@ html:not([data-gs-ready]) .gs-group-card {
     border-bottom: 0;
 }
 
+/*
+    Always there, under a column headed "Actions".
+
+    They used to fade in on hover. A column announces itself in the header and then holds
+    nothing down every row, so the actions read as absent rather than as waiting: somebody
+    looking for how to open an expense found an empty column and concluded there was no
+    way. Hover is a poor place to keep the only route to a screen, and it is no place at
+    all for a reader on a keyboard scanning before they tab, or on a touch screen, where
+    the `hover: none` branch below was already conceding the point.
+
+    Quiet rather than hidden: they sit back at 70% and come to full strength on the row
+    under the pointer or holding focus, so a row still lights up without the column
+    emptying itself.
+*/
 .gs-grid .gs-row-actions {
-    opacity: 0;
-    transform: translateX(6px);
-    transition: opacity var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+    opacity: 0.7;
+    transition: opacity var(--gs-fast) var(--gs-ease);
 }
 
 .gs-grid .mud-table-row:hover .gs-row-actions,
 .gs-grid .mud-table-row:focus-within .gs-row-actions {
     opacity: 1;
-    transform: none;
 }
 
 @media (hover: none) {
     .gs-grid .gs-row-actions {
         opacity: 1;
-        transform: none;
     }
 }
 

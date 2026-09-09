@@ -260,29 +260,46 @@
 
                 @* Titled so the stacked layout a phone falls back to says which row these
                    belong to -- see the note on the ledger's. *@
+                @*
+                    Open, edit, delete -- on every row, not only the ones you paid for.
+
+                    They were gated on whether the caller was the payer, which is stricter
+                    than the API: a transaction is reachable by anybody in its group, and
+                    both write endpoints go through the same membership scope the reads do.
+                    So a shared expense somebody else entered with the wrong amount could be
+                    seen by four people and corrected by one, and the group's own ledger --
+                    which never gated these -- offered the buttons the You page withheld for
+                    the same row.
+                *@
                 <TemplateColumn Title="Actions" Sortable="false"
-                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                                HeaderStyle="width: 132px" CellStyle="padding: 8px">
                     <CellTemplate>
-                        @* Only on rows you recorded. They used to render on every row and
-                           the refusal arrived from the API after the click. *@
-                        @if (Mine(context.Item))
-                        {
-                            <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                                <MudTooltip Text="Edit">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.Edit"
-                                                   Size="Size.Small"
-                                                   aria-label="@($"Edit {context.Item.Name}")"
-                                                   OnClick="@(async () => await EditAsync(context.Item))" />
-                                </MudTooltip>
-                                <MudTooltip Text="Delete">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
-                                                   Size="Size.Small"
-                                                   Color="Color.Error"
-                                                   aria-label="@($"Delete {context.Item.Name}")"
-                                                   OnClick="@(async () => await DeleteAsync(context.Item))" />
-                                </MudTooltip>
-                            </div>
-                        }
+                        <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            @* The way into the details from this grid. Clicking the row
+                               does nothing here -- the row is not a link and its cells hold
+                               their own controls -- so without this the one screen about a
+                               single expense was reachable from the home page's lists and
+                               from nowhere on the page devoted to expenses. *@
+                            <MudTooltip Text="View details">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
+                                               Size="Size.Small"
+                                               aria-label="@($"View {context.Item.Name}")"
+                                               OnClick="@(async () => await ViewAsync(context.Item))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                               Size="Size.Small"
+                                               aria-label="@($"Edit {context.Item.Name}")"
+                                               OnClick="@(async () => await EditAsync(context.Item))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="@($"Delete {context.Item.Name}")"
+                                               OnClick="@(async () => await DeleteAsync(context.Item))" />
+                            </MudTooltip>
+                        </div>
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
@@ -569,15 +586,9 @@
             ? "You paid"
             : $"{row.PaidByUserName} paid";
 
-    /// <summary>
-    /// Whether the row is the caller's to change. Read off the share flag where there is
-    /// one and off the payer otherwise, so the buttons say the same thing the API will.
-    /// </summary>
-    private bool Mine(TransactionResponse row) => row switch
-    {
-        ExpenseShareResponse share => share.PaidByYou,
-        _ => _view is ExpenseView.PaidByYou || row.PaidByUserId == Me
-    };
+    @* Whether the row was the caller's to change used to be worked out here, off the share
+       flag or the payer. It is not the question the API asks -- membership of the group is
+       -- so the rows it hid the buttons on were rows the server would have accepted. *@
 
     // ---------------------------------------------------------------- reading --
 
@@ -774,6 +785,22 @@
     }
 
     // ---------------------------------------------------------------- writing --
+
+    /// <summary>
+    /// The one expense, and how it was divided.
+    /// </summary>
+    /// <remarks>
+    /// Read-only, so nothing is announced when it closes and the grid is left alone. The
+    /// dialog reads the expense itself rather than being handed this row: a listing row
+    /// carries no splits, and the split is most of what somebody opens this for.
+    /// </remarks>
+    private async Task ViewAsync(TransactionResponse row)
+    {
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, row.Id } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+    }
 
     private async Task EditAsync(TransactionResponse row)
     {

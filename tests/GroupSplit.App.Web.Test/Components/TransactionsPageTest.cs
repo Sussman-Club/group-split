@@ -1,3 +1,4 @@
+using AngleSharp.Dom;
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
@@ -8,6 +9,7 @@ using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using MudBlazor;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -35,12 +37,22 @@ public class TransactionsPageTest : ComponentTest
 
     private readonly Mock<ITransactionsClient> _client = new();
     private readonly Mock<IGroupsPageStateService> _groups = new();
+    private readonly Mock<IDialogService> _dialogs = new();
 
     /// <summary>Every narrowing the page asked a summary about, in order.</summary>
     private readonly List<Ask> _asks = [];
 
     /// <summary>Whether the last share request asked for the owed rows only.</summary>
     private bool? _owedOnly;
+
+    /// <summary>
+    /// The share rows the grid is handed. Empty unless a test wants rows: most of these
+    /// are about the figures over the list rather than the list.
+    /// </summary>
+    private List<ExpenseShareResponse> _rows = [];
+
+    /// <summary>Which expense a details dialog was opened for, if one was.</summary>
+    private Guid? _viewed;
 
     private record Ask(DateTimeOffset? From, DateTimeOffset? To, Guid? GroupId, bool? Personal, string? Search)
     {
@@ -103,7 +115,21 @@ public class TransactionsPageTest : ComponentTest
                 It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<bool?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new PagedResponseOfExpenseShareResponse([], 1, 10, 0));
+            .ReturnsAsync(() => new PagedResponseOfExpenseShareResponse(_rows, 1, 10, _rows.Count));
+
+        // A stand-in, so a test can see which expense the row asked to open. The real one
+        // would render the dialog, which reads the expense over a client that has not been
+        // told about it.
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<TransactionDetailsDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<TransactionDetailsDialog>>(),
+                It.IsAny<DialogOptions>()))
+            .ReturnsAsync((string _, DialogParameters<TransactionDetailsDialog> parameters, DialogOptions _) =>
+            {
+                _viewed = parameters.Get<Guid>(nameof(TransactionDetailsDialog.TransactionId));
+
+                return new DialogReference(Guid.NewGuid(), _dialogs.Object);
+            });
 
         _client
             .Setup(client => client.GetMonthlyExposureAsync(
@@ -116,6 +142,7 @@ public class TransactionsPageTest : ComponentTest
 
         Services.AddSingleton(_client.Object);
         Services.AddSingleton(_groups.Object);
+        Services.AddSingleton(_dialogs.Object);
         Services.AddSingleton(Mock.Of<ITransactionsPageStateService>());
     }
 
@@ -648,5 +675,81 @@ public class TransactionsPageTest : ComponentTest
             "Nothing of yours in Weekend in Lisbon. The whole of what this group has spent, "
             + "whoever paid for it, is on the group's own ledger.",
             Empty(page).Blurb);
+    }
+
+    // ---- the actions on a row -----------------------------------------------------------
+
+    /// <summary>A share row, so the grid has something to hang actions off.</summary>
+    private static ExpenseShareResponse Row(string name, Guid payer, bool paidByYou) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = name,
+        Amount = 40m,
+        Share = 10m,
+        PaidByYou = paidByYou,
+        PaidByUserId = payer,
+        PaidByUserName = paidByYou ? "Anabel Benitez" : "Daniel Rivero",
+        GroupId = GroupId,
+        GroupName = "Weekend in Lisbon",
+        DateTime = DateTimeOffset.UtcNow
+    };
+
+    private static IReadOnlyList<IElement> Actions(IRenderedComponent<Transactions> page, string prefix) =>
+        page.FindAll("button[aria-label^='" + prefix + "']");
+
+    /// <summary>
+    /// Every row can be edited and deleted, whoever paid for it.
+    /// </summary>
+    /// <remarks>
+    /// The buttons were gated on whether the caller was the payer, which is stricter than
+    /// the API: both write endpoints reach a transaction through the caller's group
+    /// membership, so every row in this listing is one the server would accept a change
+    /// to. A shared expense entered with the wrong amount could be seen by four people and
+    /// corrected by one -- and the group's own ledger, which never gated these, offered
+    /// the buttons for the same row.
+    /// </remarks>
+    [Fact]
+    public void Every_row_can_be_edited_and_deleted_whoever_paid()
+    {
+        _rows =
+        [
+            Row("Rent", Guid.NewGuid(), paidByYou: true),
+            Row("Big shop", Guid.NewGuid(), paidByYou: false)
+        ];
+
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.Equal(2, Actions(page, "Edit ").Count));
+
+        Assert.Equal(2, Actions(page, "Delete ").Count);
+        Assert.Contains(Actions(page, "Edit "),
+            button => button.GetAttribute("aria-label") == "Edit Big shop");
+    }
+
+    /// <summary>
+    /// Every row opens its own details, and the eye is the way in.
+    /// </summary>
+    /// <remarks>
+    /// There was none. The dialog is reachable from the home page's two lists and was
+    /// reachable from nowhere on the page devoted to expenses: the grid's rows are not
+    /// links and their cells carry their own controls, so clicking one does nothing. The
+    /// screen showing how a single expense was divided could not be opened from the screen
+    /// listing the expenses.
+    /// </remarks>
+    [Fact]
+    public async Task Every_row_opens_its_own_details()
+    {
+        var wanted = Row("Big shop", Guid.NewGuid(), paidByYou: false);
+        _rows = [Row("Rent", Guid.NewGuid(), paidByYou: true), wanted];
+
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.Equal(2, Actions(page, "View ").Count));
+
+        await Actions(page, "View ")
+            .First(button => button.GetAttribute("aria-label") == "View Big shop")
+            .ClickAsync(new());
+
+        Assert.Equal(wanted.Id, _viewed);
     }
 }
