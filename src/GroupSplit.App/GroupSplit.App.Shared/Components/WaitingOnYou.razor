@@ -59,7 +59,9 @@
                         </div>
                         <div class="meta">@InboxDetail</div>
                     </div>
-                    <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
+                    @* Not gs-btn-glass: every rule of that class is scoped to .gs-hero,
+                       so out here it styled nothing and "Review" rendered as bare text. *@
+                    <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                                Href="/inbox">Review</MudButton>
                 </div>
             }

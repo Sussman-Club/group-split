@@ -2,102 +2,178 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@using GroupSplit.App.Shared.Services.Users
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
-@inject IDialogService DialogService
-@inject ISnackbar Snackbar
 @inject ApiErrorPresenter Errors
-@inject DataChangeNotifier Changes
+@inject IUserLogin UserLogin
+@inject LocalClock Clock
+
+@*
+    One expense, and how it was divided. Reading only.
+
+    Redesigned around what somebody opens it to find out. It was headed "Transaction
+    Details" -- a title naming the screen rather than its subject -- with the expense's own
+    name demoted to the first line of the body, the amount as one of five identical
+    label/value rows, and a raw "9/8/2026 9:45 PM" in a product that writes dates as
+    "8 Sep 2026" everywhere else.
+
+    The subject is the title now: the mark it carries in every list, the group it belongs
+    to, and its name. Then the money, which is the reason anybody is here -- the total and,
+    beside it, what it actually cost the person reading. That second figure was on no screen
+    at all for a single expense, though a group's ledger has had the column for months.
+    Then the facts, then the division.
+
+    No edit and no delete. They were two icons under the heading, which put a destructive
+    action in the corner of a dialog somebody opened to look something up, and they made the
+    header carry three things at once. Both live on the rows instead -- the You page's grid
+    and a group's ledger both have them -- so this dialog does one thing.
+*@
 
 <MudDialog>
     <TitleContent>
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-            <MudText Typo="Typo.h5" Class="font-weight-bold">
-                Transaction Details
-            </MudText>
-            <MudStack Row="true">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@EditTransaction"/>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@DeleteTransaction"/>
-            </MudStack>
-        </MudStack>
+        @* The subject, not the screen. Until it loads there is no subject, so the heading
+           says what kind of thing is coming rather than sitting empty. *@
+        <div class="gs-dialog-head">
+            @if (details is { } loaded)
+            {
+                <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap; min-width: 0">
+                    <MerchantMark PaidByUserName="@loaded.PaidByUserName"
+                                  MerchantName="@loaded.MerchantName"
+                                  MerchantLogoUrl="@loaded.MerchantLogoUrl" />
+                    <div style="min-width: 0">
+                        <div class="gs-eyebrow">@(loaded.GroupName ?? "Personal")</div>
+                        <h2 class="gs-dialog-title">@loaded.Name</h2>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <h2 class="gs-dialog-title">Expense</h2>
+            }
+        </div>
     </TitleContent>
 
     <DialogContent>
-        @if (details == null)
+        @if (details is null)
         {
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            <div class="gs-empty" style="padding: 32px">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
         }
         else
         {
-            <MudStack Spacing="4">
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">@details.Name</MudText>
-                    @if (!string.IsNullOrEmpty(details.Description))
-                    {
-                        <MudText Typo="Typo.body2">@details.Description</MudText>
-                    }
-                </MudStack>
-
-                <MudDivider/>
-
-                <MudStack Row="true" Justify="Justify.SpaceBetween">
-                    <MudText Typo="Typo.body1">Total Amount</MudText>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">@details.Amount.ToMoney()</MudText>
-                </MudStack>
-
-                <MudStack Row="true" Justify="Justify.SpaceBetween">
-                    <MudText Typo="Typo.body1">Date</MudText>
-                    <MudText Typo="Typo.body1">@details.DateTime.ToString("g")</MudText>
-                </MudStack>
-
-                <MudStack Row="true" Justify="Justify.SpaceBetween">
-                    <MudText Typo="Typo.body1">Category</MudText>
-                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@details.Category</MudChip>
-                </MudStack>
-
-                @* Only where a row knows it, which is an expense filed from a bank. The
-                   logo is beside the name here rather than badged onto anything: there is
-                   room, and this is the one view where "where" is a fact in its own right
-                   instead of a hint on a list row. *@
-                @if (!string.IsNullOrWhiteSpace(details.MerchantName))
+            <div class="gs-stack" style="gap: 20px">
+                @if (!string.IsNullOrWhiteSpace(details.Description))
                 {
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                        <MudText Typo="Typo.body1">Where</MudText>
-                        <div class="gs-inline" style="gap: 8px">
-                            @if (!string.IsNullOrWhiteSpace(details.MerchantLogoUrl))
-                            {
-                                <img class="gs-mark-inline" src="@details.MerchantLogoUrl"
-                                     alt="" width="20" height="20" loading="lazy" />
-                            }
-                            <MudText Typo="Typo.body1" Class="font-weight-medium">@details.MerchantName</MudText>
-                        </div>
-                    </MudStack>
+                    <p class="gs-muted" style="margin: 0; font-size: .875rem">@details.Description</p>
                 }
 
-                <MudStack Row="true" Justify="Justify.SpaceBetween">
-                    <MudText Typo="Typo.body1">Paid By</MudText>
-                    <MudText Typo="Typo.body1" Class="font-weight-medium">@details.PaidByUserName</MudText>
-                </MudStack>
+                @*
+                    The money, and both of the numbers there are.
 
-                <MudDivider/>
+                    The total used to be one row among five. What it cost the reader was
+                    nowhere: a group's ledger carries a "your share" column, and this -- the
+                    one screen about a single expense -- did not.
+                *@
+                <div class="gs-figures">
+                    <div class="gs-figure">
+                        <span class="gs-eyebrow">Total</span>
+                        <span class="gs-figure-value gs-num">@details.Amount.ToMoney()</span>
+                    </div>
 
-                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">Split Breakdown</MudText>
-                <MudStack Spacing="2">
-                    @foreach (var split in details.Splits)
+                    @if (MyShare is { } mine)
                     {
-                        <MudStack Row="true" Justify="Justify.SpaceBetween">
-                            <MudText Typo="Typo.body2">@split.UserName</MudText>
-                            <MudText Typo="Typo.body2" Class="font-weight-medium">@split.Amount.ToMoney()</MudText>
-                        </MudStack>
+                        <div class="gs-figure">
+                            <span class="gs-eyebrow">@(PaidByMe ? "Your share" : "You owe")</span>
+                            <span class="gs-figure-value gs-num is-quiet">@mine.ToMoney()</span>
+                            @* Which of the two it is changes what the figure means: your
+                               share of your own expense is money you already have. *@
+                            <span class="gs-figure-note">
+                                @(PaidByMe
+                                    ? "you fronted the rest"
+                                    : $"{details.PaidByUserName} paid")
+                            </span>
+                        </div>
                     }
-                </MudStack>
-            </MudStack>
+                </div>
+
+                <dl class="gs-kv">
+                    <div class="gs-kv-row">
+                        <dt>When</dt>
+                        @* The app's date, not the machine's: "9/8/2026 9:45 PM" is ambiguous
+                           between two continents and matches nothing else in the product. *@
+                        <dd>@Clock.Local(details.DateTime).ToString("d MMM yyyy, HH:mm")</dd>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(details.MerchantName))
+                    {
+                        <div class="gs-kv-row">
+                            <dt>Where</dt>
+                            <dd class="gs-inline" style="gap: 8px; justify-content: flex-end">
+                                @if (!string.IsNullOrWhiteSpace(details.MerchantLogoUrl))
+                                {
+                                    <img class="gs-mark-inline" src="@details.MerchantLogoUrl"
+                                         alt="" width="20" height="20" loading="lazy" />
+                                }
+                                <span>@details.MerchantName</span>
+                            </dd>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(details.Category))
+                    {
+                        <div class="gs-kv-row">
+                            <dt>Category</dt>
+                            <dd><span class="gs-tag">@details.Category</span></dd>
+                        </div>
+                    }
+
+                    <div class="gs-kv-row">
+                        <dt>Paid by</dt>
+                        <dd>@(PaidByMe ? "You" : details.PaidByUserName)</dd>
+                    </div>
+                </dl>
+
+                @if (details.Splits.Count > 0)
+                {
+                    <div>
+                        <div class="gs-card-title" style="margin-bottom: 10px">
+                            <h3 style="margin: 0; font-size: 1rem">@SplitHeadline</h3>
+                            @* Said in a word rather than left to be worked out by comparing
+                               a column of near-identical figures. *@
+                            @if (IsEven)
+                            {
+                                <span class="gs-tag neutral">evenly</span>
+                            }
+                        </div>
+
+                        @* A row per person and nothing else. There was a bar under each one
+                           drawing the share as a proportion, and it earned nothing: an
+                           evenly split expense -- which is most of them -- drew a column of
+                           identical full-width bars that read as rules between the rows
+                           rather than as data. A mark that distinguishes nothing from its
+                           neighbours is furniture. *@
+                        <div class="gs-splits">
+                            @foreach (var split in details.Splits)
+                            {
+                                <div class="gs-split @(split.UserId == Me ? "is-me" : "")">
+                                    <Avatar Name="@split.UserName" Size="sm" />
+                                    <span class="gs-split-who">
+                                        @(split.UserId == Me ? "You" : split.UserName)
+                                    </span>
+                                    <span class="gs-split-amount gs-num">@split.Amount.ToMoney()</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
         }
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Close" Color="Color.Secondary">Close</MudButton>
+        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="Close">Close</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -107,6 +183,39 @@
 
     private TransactionDetailsResponse? details;
 
+    /// <summary>
+    /// Who is reading, so the dialog can say "You" and single their share out.
+    /// </summary>
+    /// <remarks>
+    /// Injected rather than cascaded. The <c>UserInfo</c> cascade wraps the router, and a
+    /// dialog renders where <c>MudDialogProvider</c> sits rather than where it was asked
+    /// for -- so relying on tree position here would work until somebody moved the
+    /// provider. This reads the same source the cascade itself reads.
+    /// </remarks>
+    private Guid? Me => UserLogin.User?.Id;
+
+    private bool PaidByMe => details is { } loaded && Me is { } me && loaded.PaidByUserId == me;
+
+    /// <summary>
+    /// The reader's own share, when they have one -- they may not be in the split at all.
+    /// </summary>
+    private decimal? MyShare =>
+        Me is { } me
+            ? details?.Splits.FirstOrDefault(split => split.UserId == me)?.Amount
+            : null;
+
+    private string SplitHeadline => details is { Splits.Count: var count } && count > 0
+        ? $"Split between {count} {(count == 1 ? "person" : "people")}"
+        : "Split";
+
+    /// <summary>
+    /// Whether every share is the same to the penny, which is worth saying in one word
+    /// rather than leaving somebody to compare a column of identical figures.
+    /// </summary>
+    private bool IsEven =>
+        details is { Splits.Count: > 1 } loaded
+        && loaded.Splits.Select(split => split.Amount).Distinct().Count() == 1;
+
     // Failures go through the presenter, which names the reason the API gave; a dialog
     // that cannot load its subject has nothing to show, so it closes.
     protected override async Task OnInitializedAsync()
@@ -115,64 +224,22 @@
             async () => details = await TransactionsClient.GetTransactionAsync(TransactionId),
             "Could not load the expense.");
 
-        if (!loaded) MudDialog.Cancel();
+        if (!loaded)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        // The title has to be told separately, and this is not belt and braces.
+        //
+        // TitleContent is hoisted out of this component and rendered in the dialog
+        // provider's own tree, so it does not re-render when this component's state
+        // changes -- it keeps whatever it drew the first time. The heading is the expense's
+        // name now rather than a fixed "Transaction Details", so the first draw is the
+        // placeholder and without this the dialog stays headed "Expense" over a body full
+        // of the thing it is refusing to name.
+        MudDialog.StateHasChanged();
     }
 
     private void Close() => MudDialog.Close();
-
-    // This dialog opens from lists on more than one page, so it writes through the client
-    // and announces the change; every page state that shows the expense re-reads itself.
-    // The dialog closes first: the person made their change, the lists catch up behind it.
-
-    private async Task EditTransaction()
-    {
-        var parameters = new DialogParameters<UpdateTransactionDialog>
-        {
-            { x => x.Original, details }
-        };
-
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
-
-        var dialogReference = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
-
-        var request = await dialogReference.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
-
-        if (request is null) return;
-
-        var updated = await Errors.TryAsync(
-            () => TransactionsClient.UpdateTransactionAsync(TransactionId, request),
-            "Could not update the expense.");
-
-        if (updated)
-        {
-            Snackbar.Add("Transaction updated.", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(true));
-            await Changes.NotifyTransactionsChangedAsync();
-        }
-    }
-
-    private async Task DeleteTransaction()
-    {
-        var boolResult = await DialogService.ShowMessageBoxAsync(
-            "Delete Transaction",
-            "Are you sure you want to delete this transaction?",
-            yesText: "Delete", cancelText: "Cancel");
-
-        if (boolResult is not true) return;
-
-        var deleted = await Errors.TryAsync(
-            () => TransactionsClient.DeleteTransactionAsync(TransactionId),
-            "Could not delete the expense.");
-
-        if (deleted)
-        {
-            Snackbar.Add("Transaction deleted.", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(true));
-            await Changes.NotifyTransactionsChangedAsync();
-        }
-    }
 }

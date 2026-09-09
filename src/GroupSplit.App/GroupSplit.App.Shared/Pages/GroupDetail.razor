@@ -30,12 +30,19 @@
 @if (Group is { } group)
 {
     <div class="gs-page-head" @key="@($"head-{group.Id}")">
-        <div class="gs-inline" style="gap: 16px">
+        @* One line: back, the group's mark, and who it is. It used to be a plain .gs-inline,
+           which wraps -- and on a phone the thing it wrapped was the text, leaving a 56px
+           avatar stranded on a line of its own beside the back arrow with the rest of the
+           width empty. Four bands of chrome stacked up before any content.
+
+           Nowrap here and min-width:0 on the text means the name wraps *inside* its own
+           block instead of pushing itself onto the next line. *@
+        <div class="gs-inline gs-identity">
             <MudTooltip Text="All groups">
                 <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" aria-label="All groups" Href="/groups" />
             </MudTooltip>
             <Avatar Name="@group.Name" Size="lg" />
-            <div>
+            <div class="gs-identity-who">
                 <div class="gs-eyebrow">@(group.IsArchive ? "Archived group" : "Group")</div>
                 <h1 style="margin-top: 2px">@group.Name</h1>
                 @* An expense count told nobody whether the group is still live. When
@@ -62,7 +69,9 @@
             @* Settling is a destination now rather than an icon-row action, and the plan
                card on the overview does the same job in place. What is left here is the
                link to it, so somebody standing in a group can still get there. *@
-            <MudButton Variant="Variant.Text" Class="gs-btn-glass" Size="Size.Small"
+            @* Not gs-btn-glass: that class only styles anything inside .gs-hero, and this
+               toolbar is not one -- so the only button in it rendered without chrome. *@
+            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                        StartIcon="@Icons.Material.Rounded.Handshake"
                        Href="/settle">
                 Settle up

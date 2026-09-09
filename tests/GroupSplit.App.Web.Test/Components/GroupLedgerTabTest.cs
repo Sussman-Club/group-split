@@ -186,13 +186,28 @@ public class GroupLedgerTabTest : ComponentTest
 
     // ---- the figures over the list ------------------------------------------------------
 
+    /// <summary>
+    /// The tab opens on the current month, and asks about that month.
+    /// </summary>
+    /// <remarks>
+    /// It opened on all time, which over a ledger going back years bought nothing but a
+    /// "total spent" across a span nobody chose -- the list itself only ever shows the
+    /// newest twenty-five either way. The empty state names the month for the same reason
+    /// the chip does: a quiet month must not read as an empty group.
+    /// </remarks>
     [Fact]
-    public void The_cards_start_on_the_whole_group()
+    public void The_cards_start_on_the_current_month()
     {
         var tab = Render();
 
         Assert.Equal(("5", "$29.00"), Cards(tab));
-        Assert.True(Assert.Single(_asks).IsAllTime);
+
+        var opening = Assert.Single(_asks);
+
+        Assert.False(opening.IsAllTime);
+        Assert.NotNull(opening.From);
+        Assert.NotNull(opening.To);
+        Assert.Contains("this month", tab.Markup);
     }
 
     [Fact]
@@ -219,16 +234,20 @@ public class GroupLedgerTabTest : ComponentTest
     /// <summary>
     /// The defect itself, as a race rather than as a wrong request. Every request the tab
     /// makes is correct; the group page re-renders it on each of three announcements about
-    /// the group, and an all-time answer from before a chip was clicked could land after the
-    /// filtered one -- putting the all-time figures back on cards captioned with the range.
+    /// the group, and the answer from before a chip was clicked could land after the
+    /// filtered one -- putting the old figures back on cards captioned with the new range.
     /// </summary>
     [Fact]
-    public async Task An_all_time_answer_that_arrives_late_does_not_land_on_the_cards()
+    public async Task An_earlier_answer_that_arrives_late_does_not_land_on_the_cards()
     {
-        var allTimeAnswered = new TaskCompletionSource<TransactionSummaryResponse>();
+        var openingAnswered = new TaskCompletionSource<TransactionSummaryResponse>();
 
-        _answer = ask => ask.IsAllTime
-            ? allTimeAnswered.Task
+        // Keyed on the *first* ask rather than on all time: the tab opens on the current
+        // month now, so "the stale one" is the month's answer and not an all-time one.
+        var asked = 0;
+
+        _answer = _ => ++asked == 1
+            ? openingAnswered.Task
             : Task.FromResult(new TransactionSummaryResponse(0, 0m));
 
         var tab = Render();
@@ -242,7 +261,7 @@ public class GroupLedgerTabTest : ComponentTest
         // Now the stale one answers. The component resumes on the renderer's dispatcher, so
         // it is given its turns there before anything is looked at -- asserting straight
         // after the result is set would pass by having looked too early to see the damage.
-        allTimeAnswered.SetResult(new TransactionSummaryResponse(5, 29m));
+        openingAnswered.SetResult(new TransactionSummaryResponse(5, 29m));
 
         for (var turn = 0; turn < 5; turn++)
             await tab.InvokeAsync(() => { });
@@ -286,8 +305,12 @@ public class GroupLedgerTabTest : ComponentTest
         tab.Render();
 
         Assert.Equal(2, _asks.Count);
-        Assert.True(_asks.Last().IsAllTime);
         Assert.Equal(("6", "$41.50"), Cards(tab));
+
+        // Re-asked about the span in force, not widened back to the tab's default. A write
+        // is news about the figures, not a reason to change the question.
+        Assert.Equal(_asks[0].From, _asks.Last().From);
+        Assert.Equal(_asks[0].To, _asks.Last().To);
     }
 
     [Fact]
@@ -530,24 +553,29 @@ public class GroupLedgerTabTest : ComponentTest
     // ---- where an entry happened --------------------------------------------------------
 
     /// <summary>
-    /// The ledger is the surface this was asked for: an expense filed from a bank shows
-    /// the shop's mark on the payer's avatar rather than only in the words.
+    /// The ledger is the surface this was asked for: an expense filed from a bank leads
+    /// with the shop's mark rather than saying where it happened only in words.
     /// </summary>
+    /// <remarks>
+    /// The shop used to ride the corner of the payer's avatar, at 17px on these rows, which
+    /// is below the size any logo is still a logo at. It has the tile now and the payer has
+    /// the corner. <see cref="MerchantMarkTest"/> carries the whole of that argument.
+    /// </remarks>
     [Fact]
-    public void An_expense_filed_from_a_bank_row_shows_the_shops_mark_in_the_ledger()
+    public void An_expense_filed_from_a_bank_row_leads_with_the_shops_mark()
     {
         _entries = [AtAShop(Guid.NewGuid())];
 
         var tab = Render();
 
-        var badge = tab.Find("img.gs-mark-badge");
+        var place = tab.Find("img.gs-mark-place");
 
-        Assert.Equal("/_content/GroupSplit.App.Shared/merchants/lidl.svg", badge.GetAttribute("src"));
-        Assert.Equal("Lidl", badge.GetAttribute("title"));
+        Assert.Equal("/_content/GroupSplit.App.Shared/merchants/lidl.svg", place.GetAttribute("src"));
+        Assert.Equal("Lidl", place.GetAttribute("title"));
 
-        // The payer keeps the square. The badge is the second fact, not a replacement for
-        // the first -- who fronted the money is what a ledger is read for.
-        Assert.Equal("O", tab.Find(".gs-avatar").TextContent.Trim());
+        // The payer is still on the row -- who fronted the money is what a ledger is read
+        // for -- on the corner rather than under the shop.
+        Assert.Equal("O", tab.Find(".gs-mark-who").TextContent.Trim());
     }
 
     [Fact]
@@ -557,19 +585,25 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        Assert.Empty(tab.FindAll("img.gs-mark-badge"));
+        Assert.Empty(tab.FindAll("img.gs-mark-place"));
+        Assert.Empty(tab.FindAll(".gs-mark-who"));
         Assert.Equal("O", tab.Find(".gs-avatar").TextContent.Trim());
     }
 
-    /// <summary>A settlement is one member paying another, so there is no shop to badge.</summary>
+    /// <summary>A settlement is one member paying another, so there is no shop to lead with.</summary>
+    /// <remarks>
+    /// And its mark is a circle. The column's rule is that a square is a place and a circle
+    /// is a person, so the one entry with no shop behind it was the one wearing a square --
+    /// and, at 40px beside 28px avatars, the biggest thing in the column as well.
+    /// </remarks>
     [Fact]
-    public void A_settlement_keeps_its_own_icon_and_gets_no_mark()
+    public void A_settlement_gets_a_persons_mark_rather_than_a_places()
     {
         _entries = [Transfer(Guid.NewGuid())];
 
         var tab = Render();
 
-        Assert.Empty(tab.FindAll("img.gs-mark-badge"));
-        Assert.NotEmpty(tab.FindAll(".gs-row-icon"));
+        Assert.Empty(tab.FindAll("img.gs-mark-place"));
+        Assert.NotEmpty(tab.FindAll(".gs-row-icon.transfer"));
     }
 }

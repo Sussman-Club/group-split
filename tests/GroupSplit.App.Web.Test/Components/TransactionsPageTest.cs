@@ -46,7 +46,12 @@ public class TransactionsPageTest : ComponentTest
     {
         public bool IsAllTime => From is null && To is null;
 
-        public bool IsWhole => IsAllTime && GroupId is null && Personal is null && Search is null;
+        public bool IsWhole => Dimensions == 0;
+
+        /// <summary>How many of the four filters are set.</summary>
+        public int Dimensions =>
+            (IsAllTime ? 0 : 1) + (GroupId is null ? 0 : 1)
+            + (Personal is null ? 0 : 1) + (Search is null ? 0 : 1);
     }
 
     public TransactionsPageTest()
@@ -62,9 +67,12 @@ public class TransactionsPageTest : ComponentTest
                 var ask = new Ask(from, to, group, personal, search);
                 _asks.Add(ask);
 
-                return ask.IsWhole
-                    ? new TransactionSummaryResponse(5, 29m)
-                    : new TransactionSummaryResponse(1, 4.50m);
+                // One figure per shape of narrowing, so a card reading the wrong ask reads
+                // a visibly wrong number. Five for the whole ledger, one fewer per
+                // dimension somebody has narrowed by.
+                var count = 5 - ask.Dimensions;
+
+                return new TransactionSummaryResponse(count, count * 5.5m);
             });
 
         _client
@@ -162,27 +170,47 @@ public class TransactionsPageTest : ComponentTest
 
     // ---- the figures --------------------------------------------------------------------
 
+    /// <summary>
+    /// The page opens on the current month, and says so where the figures are.
+    /// </summary>
+    /// <remarks>
+    /// It used to open on all time, which meant the two big figures were an all-time total
+    /// nobody had asked for over a first page of whatever happened to be newest. A month is
+    /// the span somebody reviews -- but a default narrowing that does not announce itself is
+    /// the whole defect this session went after, so the subline names it.
+    /// </remarks>
     [Fact]
-    public void Unnarrowed_the_cards_describe_the_whole_ledger()
+    public void The_page_opens_on_the_current_month_and_the_cards_say_which()
     {
-        var page = RenderView();
+        var page = RenderView("paid");
 
-        Assert.Equal(("5", "$29.00"), Cards(page));
-        Assert.Contains("all time", page.Markup);
+        // One dimension narrowed: the span, and nothing else.
+        Assert.Equal(("4", "$22.00"), Cards(page));
+        Assert.Equal(1, _asks.Last().Dimensions);
+        Assert.NotNull(_asks.Last().From);
+
+        Assert.Contains("this month", page.Markup);
+        Assert.DoesNotContain("all time", page.Markup);
     }
 
     /// <summary>
     /// The defect: the count kept describing everything while the total described the span.
     /// </summary>
     [Fact]
-    public async Task Picking_a_span_moves_both_figures_and_not_just_the_total()
+    public async Task Picking_a_span_re_asks_with_the_new_bounds()
     {
-        var page = RenderView();
+        var page = RenderView("paid");
+
+        var opening = _asks.Last().From;
 
         await PickSpanAsync(page, DateFilterPreset.LastMonth);
 
-        Assert.Equal(("1", "$4.50"), Cards(page));
-        Assert.NotNull(_asks.Last().From);
+        // Asserted on the bounds rather than the figures, because both spans narrow by the
+        // same one dimension and would answer the same number. What has to be true is that
+        // the page asked again, about the span now in force.
+        Assert.NotEqual(opening, _asks.Last().From);
+        Assert.Equal(1, _asks.Last().Dimensions);
+        Assert.Contains("last month", page.Markup);
     }
 
     /// <summary>
@@ -192,11 +220,12 @@ public class TransactionsPageTest : ComponentTest
     [Fact]
     public async Task Narrowing_by_scope_moves_them_too()
     {
-        var page = RenderView();
+        var page = RenderView("paid");
 
         await PickLedgerAsync(page, "personal");
 
-        Assert.Equal(("1", "$4.50"), Cards(page));
+        // Two dimensions now: the month it opened on, and the ledger.
+        Assert.Equal(("3", "$16.50"), Cards(page));
         Assert.True(_asks.Last().Personal);
     }
 
@@ -207,7 +236,7 @@ public class TransactionsPageTest : ComponentTest
     [Fact]
     public async Task The_subline_says_which_expenses_the_figures_are_of()
     {
-        var page = RenderView();
+        var page = RenderView("paid");
 
         await PickSpanAsync(page, DateFilterPreset.LastMonth);
         await PickLedgerAsync(page, "personal");
@@ -218,15 +247,119 @@ public class TransactionsPageTest : ComponentTest
         Assert.DoesNotContain("in view", page.Markup);
     }
 
+    /// <summary>
+    /// All time is still reachable, and reaching it puts the whole ledger on the cards.
+    /// </summary>
     [Fact]
-    public async Task Widening_back_puts_the_whole_ledger_back_on_the_cards()
+    public async Task Widening_to_all_time_puts_the_whole_ledger_on_the_cards()
     {
-        var page = RenderView();
+        var page = RenderView("paid");
 
         await PickSpanAsync(page, DateFilterPreset.LastMonth);
         await PickSpanAsync(page, DateFilterPreset.AllTime);
 
-        Assert.Equal(("5", "$29.00"), Cards(page));
+        Assert.Equal(("5", "$27.50"), Cards(page));
+        Assert.True(_asks.Last().IsWhole);
+    }
+
+    // ---- saying which question is on screen ---------------------------------------------
+
+    /// <summary>
+    /// Each chip carries the line that says what it counts.
+    /// </summary>
+    /// <remarks>
+    /// The two share views differ only by a flag: one is the reader's part of what other
+    /// people paid, the other their part of everything, their own expenses included. Their
+    /// labels were "Your share" and "Everything you are in", which name neither of those
+    /// things, so the only way to tell which was on was to click one and watch the figures
+    /// move. Pinned because a label is the cheapest thing in a page to quietly rewrite.
+    /// </remarks>
+    [Fact]
+    public void Every_view_chip_says_what_it_counts()
+    {
+        var page = RenderView();
+
+        var details = page.FindAll(".gs-chipbar .gs-chip-detail")
+            .Select(chip => chip.TextContent.Trim())
+            .ToList();
+
+        Assert.Equal(
+        [
+            "expenses you covered",
+            "your share of what others paid",
+            "your share of every expense"
+        ], details);
+    }
+
+    /// <summary>
+    /// The eyebrow reports the ledger, and the heading reports the view, so each of the two
+    /// controls has exactly one place on the page that speaks for it.
+    /// </summary>
+    /// <remarks>
+    /// It read "Across every group" whatever the ledger control was set to, so a page
+    /// narrowed to one group carried a line saying it was not -- next to a view chip called
+    /// "Everything you are in" and a ledger menu whose default also read "Everything".
+    /// </remarks>
+    [Fact]
+    public async Task The_eyebrow_follows_the_ledger_rather_than_always_saying_every_group()
+    {
+        var page = RenderView();
+
+        Assert.Equal("Across every group", page.Find(".gs-eyebrow").TextContent.Trim());
+
+        await PickLedgerAsync(page, GroupId.ToString());
+
+        Assert.Equal("Weekend in Lisbon", page.Find(".gs-eyebrow").TextContent.Trim());
+
+        await PickLedgerAsync(page, "personal");
+
+        Assert.Equal("Personal expenses only", page.Find(".gs-eyebrow").TextContent.Trim());
+    }
+
+    /// <summary>
+    /// The word "Everything" appeared in both controls, meaning two different things: a
+    /// view over the reader's shares, and every ledger at once. Whichever one a reader had
+    /// moved, the page looked the same.
+    /// </summary>
+    [Fact]
+    public void The_two_controls_do_not_share_a_word()
+    {
+        var page = RenderView("everything");
+
+        var chips = page.FindAll(".gs-chipbar .gs-chip-label").Select(chip => chip.TextContent.Trim());
+
+        // By its own label, not by class: the date filter is a menu chip too, and it was
+        // the one this found.
+        var ledger = page.Find("[aria-label^='Which ledger']").QuerySelector(".label")!.TextContent.Trim();
+
+        Assert.Equal("All groups", ledger);
+        Assert.DoesNotContain(ledger, chips);
+    }
+
+    /// <summary>
+    /// The chart is gone, and stays gone.
+    /// </summary>
+    /// <remarks>
+    /// Two lines -- what the reader paid and what their share came to -- under the caption
+    /// "the gap is how much you are fronting". The gap is not that: a settlement is a
+    /// transfer rather than an expense, so the series never contained a repayment and the
+    /// difference took no account of anything anybody had paid back. Somebody square with
+    /// their flatmates read months of being owed hundreds. Asserted on the request rather
+    /// than only on the markup, because the read is what made the claim available to draw.
+    /// </remarks>
+    [Fact]
+    public void The_page_neither_draws_nor_asks_for_the_exposure_series()
+    {
+        var page = RenderView();
+
+        Assert.Empty(page.FindAll(".gs-chart"));
+        Assert.DoesNotContain("fronting", page.Markup, StringComparison.OrdinalIgnoreCase);
+
+        _client.Verify(
+            client => client.GetMonthlyExposureAsync(
+                It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
+                It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // ---- the three views ----------------------------------------------------------------
@@ -236,9 +369,12 @@ public class TransactionsPageTest : ComponentTest
     /// confusion with a group's own listing in the first place.
     /// </summary>
     [Theory]
-    [InlineData(null, "Paid by you")]
-    [InlineData("share", "Your share")]
-    [InlineData("everything", "Everything you are in")]
+    [InlineData(null, "All yours")]
+    [InlineData("paid", "What you paid")]
+    [InlineData("share", "What you owe")]
+    // What the default used to be reached by. Still honoured, so an old bookmark lands on
+    // the same view rather than on an error.
+    [InlineData("everything", "All yours")]
     public void The_view_in_the_url_is_the_heading(string? view, string expected)
     {
         var page = RenderView(view);
@@ -247,15 +383,37 @@ public class TransactionsPageTest : ComponentTest
     }
 
     /// <summary>
-    /// An unknown view falls back to the one the page has always shown rather than to an
-    /// empty screen. A stale bookmark is not a reason to answer nothing.
+    /// An unknown view falls back to the default rather than to an empty screen. A stale
+    /// bookmark is not a reason to answer nothing.
     /// </summary>
     [Fact]
-    public void An_unknown_view_falls_back_to_what_you_paid()
+    public void An_unknown_view_falls_back_to_the_default()
     {
         var page = RenderView("nonsense");
 
-        Assert.Equal("Paid by you", page.Find("h1").TextContent.Trim());
+        Assert.Equal("All yours", page.Find("h1").TextContent.Trim());
+    }
+
+    /// <summary>
+    /// "All yours" is what the page opens on.
+    /// </summary>
+    /// <remarks>
+    /// It opened on "You paid", which answers a narrower question than most people arrive
+    /// with: somebody who is not the household's main payer saw a nearly empty page and no
+    /// indication that the other two views existed. Same shape of defect as the CLI's
+    /// `--group`, one surface along -- a plausible answer to a question nobody asked.
+    /// </remarks>
+    [Fact]
+    public void The_page_opens_on_all_yours()
+    {
+        var page = RenderView();
+
+        Assert.Equal("All yours", page.Find("h1").TextContent.Trim());
+
+        var chips = page.FindAll(".gs-chipbar .gs-chip");
+        var active = chips.Single(chip => chip.ClassList.Contains("active"));
+
+        Assert.Contains("All yours", active.TextContent);
     }
 
     /// <summary>
@@ -263,9 +421,9 @@ public class TransactionsPageTest : ComponentTest
     /// other people's expenses would be describing a set nobody asked about.
     /// </summary>
     [Theory]
-    [InlineData(null, "Expenses", "Total paid")]
-    [InlineData("share", "Expenses you are in", "Total owed")]
-    [InlineData("everything", "Expenses you are in", "Your share")]
+    [InlineData("paid", "Expenses you paid", "You paid")]
+    [InlineData("share", "Expenses you are in", "You owe")]
+    [InlineData(null, "Expenses you are in", "Your share")]
     public void Each_view_names_its_own_figures(string? view, string count, string total)
     {
         var page = RenderView(view);
@@ -313,7 +471,7 @@ public class TransactionsPageTest : ComponentTest
     /// the name of one of the three view chips, which is on screen whichever view is open.
     /// </remarks>
     [Theory]
-    [InlineData(null, false)]
+    [InlineData("paid", false)]
     [InlineData("share", true)]
     [InlineData("everything", true)]
     public void The_share_column_appears_only_where_it_says_something(string? view, bool expected)
@@ -341,8 +499,19 @@ public class TransactionsPageTest : ComponentTest
 
     // ---- a write, from anywhere ----------------------------------------------------------
 
+    /// <summary>
+    /// Reads of the grid's rows, whichever of the two listings the view in force uses.
+    /// </summary>
+    /// <remarks>
+    /// Counted across both rather than pinned to one: the page has three views over two
+    /// listings, and which one is the default has changed once already. What these tests
+    /// are about is that an announcement makes the page ask <em>again</em>, which is true
+    /// of every view.
+    /// </remarks>
     private int RowReads =>
-        _client.Invocations.Count(i => i.Method.Name == nameof(ITransactionsClient.GetTransactionsAsync));
+        _client.Invocations.Count(i => i.Method.Name
+            is nameof(ITransactionsClient.GetTransactionsAsync)
+            or nameof(ITransactionsClient.GetTransactionSharesAsync));
 
     /// <summary>
     /// The figures and the rows are this page's own reads, so an announcement has to make

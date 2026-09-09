@@ -113,14 +113,13 @@
                                kind is visible before any of the words are. *@
                             @if (context.Item.Kind is ActivityKind.Transfer)
                             {
-                                <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+                                <span class="gs-row-icon transfer"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
                             }
                             else
                             {
                                 <MerchantMark PaidByUserName="@context.Item.PaidByUserName"
                                               MerchantName="@context.Item.MerchantName"
-                                              MerchantLogoUrl="@context.Item.MerchantLogoUrl"
-                                              Size="sm" />
+                                              MerchantLogoUrl="@context.Item.MerchantLogoUrl" />
                             }
                             <div style="min-width: 0">
                                 <div style="font-weight: 700; font-size: .9375rem">@Headline(context.Item)</div>
@@ -207,11 +206,11 @@
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
                     <h3>@(IsNarrowed ? "Nothing matches" : "Nothing recorded yet")</h3>
-                    <span>
-                        @(IsNarrowed
-                            ? "Try a different name, category, person or date."
-                            : "Expenses and settlements in this group will show up here.")
-                    </span>
+                    @* The tab opens on the current month, so an empty ledger is the default
+                       state for any group that has been quiet -- and "Nothing matches" over
+                       a span nobody chose reads as "this group is empty", which is the
+                       exact confusion the --group fix was about. Name the span. *@
+                    <span>@EmptyBlurb</span>
                 </div>
             </NoRecordsContent>
             <PagerContent>
@@ -242,7 +241,13 @@
     ];
 
     private string _searchString = "";
-    private DateFilter _range = DateFilter.AllTime;
+    /// <summary>
+    /// The current month. A group's ledger going back three years opens on a page of the
+    /// newest twenty-five either way, so all-time bought nothing but a "total spent" over
+    /// a span nobody chose. The chip above the list says which month, and widening is one
+    /// tap.
+    /// </summary>
+    private DateFilter _range = new(DateFilterPreset.ThisMonth);
     private MudDataGrid<GroupLedgerEntryResponse>? _grid;
     private bool _reloading;
 
@@ -255,6 +260,25 @@
     private bool IsNarrowed => IsSearching || !_range.IsAllTime || Kind is not null;
 
     private string? Search => IsSearching ? _searchString.Trim() : null;
+
+    /// <summary>The span in words, for a sentence rather than a chip.</summary>
+    private string Span => _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant();
+
+    /// <summary>
+    /// What an empty ledger means. Never simply "there is nothing": this tab opens on the
+    /// current month, so the commonest empty state is a quiet month in a group with years
+    /// of history behind it, and saying "nothing matches" about a span nobody picked is how
+    /// a populated group comes to look like an empty one.
+    /// </summary>
+    private string EmptyBlurb => (IsSearching, Kind) switch
+    {
+        (false, null) =>
+            $"Nothing in {Span}. This tab opens on the current month — pick \"All time\" for "
+            + "the whole ledger.",
+        (false, ActivityKind.Transfer) => $"No settlements in {Span}.",
+        (false, ActivityKind.Expense) => $"Nothing spent in {Span}.",
+        _ => $"Nothing in {Span} matches. Try a different name, category, person or date."
+    };
 
     private int ExpenseCount => _spending?.Count ?? 0;
     private decimal Spent => _spending?.Total ?? 0m;

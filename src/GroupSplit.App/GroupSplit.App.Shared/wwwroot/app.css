@@ -806,30 +806,56 @@ html:not([data-gs-ready]) .gs-group-card {
     position: relative;
     display: inline-flex;
     flex: 0 0 auto;
-    /* Around 60% of the avatar it sits on. Smaller than that and a mark stops being
-       recognisable -- at 18px a shopping trolley and a coffee cup are the same grey
-       smudge, which is a badge that costs a row its corner and gives nothing back. */
-    --gs-mark-badge: 22px;
-    --gs-mark-radius: 6px;
 }
 
-/* Held to the same proportion on the grid's smaller rows. */
-.gs-mark:has(.gs-avatar.sm) {
-    --gs-mark-badge: 17px;
-    --gs-mark-radius: 5px;
+/*
+    The place, as the tile a row leads with. 40px, which is what every mark in that
+    column is: the settlement's .gs-row-icon and the inbox's logo were already 40 and
+    the expense mark was 28, so the column had two left edges and two right edges.
+*/
+.gs-mark-place {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--gs-surface-3);
 }
 
-.gs-mark-badge {
+/*
+    The payer, on its corner. A circle, because it is a person -- and a circle in that
+    corner reads as a presence dot, which is what it now actually is.
+
+    20px is half the tile. The logo used to be the thing down here, at 17px on the grid
+    rows, and a pictogram that small is a smudge; initials are not, which is the whole
+    reason the two swapped places.
+*/
+.gs-mark-who {
     position: absolute;
     right: -4px;
     bottom: -4px;
-    width: var(--gs-mark-badge);
-    height: var(--gs-mark-badge);
-    border-radius: var(--gs-mark-radius);
-    object-fit: cover;
-    background: var(--gs-surface);
-    box-shadow: 0 0 0 2px var(--gs-surface);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gs-teal-bright), var(--gs-teal-deep));
+    /* The ring is the surface, so the badge reads as sitting on top of the tile rather
+       than being part of it. The inset keeps the avatars' own edge highlight. */
+    box-shadow: 0 0 0 2px var(--gs-surface), inset 0 0 0 1px rgb(255 255 255 / 25%);
+    color: var(--gs-on-accent);
+    font-family: var(--gs-font-display);
+    font-weight: 700;
+    font-size: 0.5rem;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    user-select: none;
 }
+
+/* The same three tones the avatars use, so one person is one colour everywhere. */
+.gs-mark-who.clay { background: linear-gradient(135deg, var(--gs-clay), var(--gs-clay-deep)); }
+.gs-mark-who.ink { background: linear-gradient(135deg, var(--gs-ink-2), var(--gs-ink)); color: var(--gs-bg); }
 
 /* Beside a line of text rather than on an avatar: the detail view, where there is room
    to say where the money went in words and the logo is only the picture of it. */
@@ -842,27 +868,24 @@ html:not([data-gs-ready]) .gs-group-card {
     background: var(--gs-surface-3);
 }
 
-/*
-    The logo as the mark itself, where there is no payer to show -- the inbox. The same
-    12px tile .gs-row-icon is, so a row with a logo and a row with an icon line up down
-    the page instead of alternating between a square and a circle.
-*/
-.gs-mark-solo {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    object-fit: cover;
-    flex: 0 0 auto;
-    background: var(--gs-surface-3);
-}
-
-/* And the initials that stand in for a place with no logo: a tile, for the same reason. */
+/* The initials that stand in for a place with no logo: a tile, because it is a place. */
 .gs-avatar.tile {
     border-radius: 12px;
 }
 
 .gs-avatar.sm.tile {
     border-radius: 9px;
+}
+
+/*
+    The size a mark in a list's first column is. Not part of the sm/lg/xl ladder, which is
+    about how prominent a person is; this is about lining up with the other things that can
+    lead a row, all of which are 40px.
+*/
+.gs-avatar.mark {
+    width: 40px;
+    height: 40px;
+    font-size: 0.875rem;
 }
 
 .gs-user-btn {
@@ -961,6 +984,33 @@ html:not([data-gs-ready]) .gs-group-card {
     margin: 6px 0 0;
     color: var(--gs-muted);
     max-width: 52ch;
+}
+
+/*
+    A group's identity: back, its mark, its name. One line, and it has to stay one line.
+
+    It was a plain .gs-inline, which wraps -- and what wrapped on a narrow screen was the
+    text block, because its min-content width is the longest word in the heading plus the
+    member line. That left a 56px avatar on a row of its own next to the back arrow with
+    two thirds of the width empty, and pushed the tabs a whole band further down a screen
+    that is nine rows tall.
+*/
+.gs-inline.gs-identity {
+    flex-wrap: nowrap;
+    gap: 16px;
+    min-width: 0;
+}
+
+/* The one thing allowed to shrink. Without it the block claims its min-content width and
+   nowrap turns a wrap into an overflow, which is the worse of the two failures. */
+.gs-identity-who {
+    min-width: 0;
+}
+
+/* A long group name breaks rather than running off the edge -- "Weekend in Lisbon" at
+   2.25rem is wider than a phone. */
+.gs-identity-who h1 {
+    overflow-wrap: anywhere;
 }
 
 /* --------------------------------------------------------------- hero ------ */
@@ -1523,6 +1573,32 @@ html:not([data-gs-ready]) .gs-group-card {
     transition: transform var(--gs-base) var(--gs-ease-spring), background var(--gs-fast);
 }
 
+/*
+    A settlement. Circle, and clay.
+
+    The shape is load-bearing and it used to be wrong. MerchantMark's rule is that a square
+    is a place and a circle is a person, and a settlement is money moving between two
+    people -- so the one mark in that column wearing a square was the one with no shop
+    behind it at all. Beside a list of expenses it also read as *more* important, being the
+    only 40px mark next to 28px avatars.
+
+    Clay separates it from the teal a person's own tile gets, because the row is not
+    spending: it is money going back. Only on the handshake -- the square .gs-row-icon is
+    still right for the prompts and the landing page's feature tiles, which are neither
+    people nor places.
+*/
+.gs-row-icon.transfer {
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--gs-clay) 18%, var(--gs-surface-3));
+    color: var(--gs-clay-deep);
+}
+
+:root[data-theme="dark"] .gs-row-icon.transfer { color: var(--gs-clay); }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-row-icon.transfer { color: var(--gs-clay); }
+}
+
 .gs-row:hover .gs-row-icon {
     background: var(--gs-teal-soft);
     color: var(--gs-teal);
@@ -1643,6 +1719,76 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-btn-pill {
     border-radius: var(--gs-radius-pill) !important;
     padding-inline: 18px !important;
+}
+
+/*
+    The secondary button the system did not have.
+
+    .gs-btn-glass was doing this job at seven call sites, but every one of its rules is
+    scoped to .gs-hero -- it is white-on-teal glass for the balance cards. At the two sites
+    outside a hero (the group toolbar's "Settle up", the home card's "Review") it therefore
+    styled nothing at all, and a Mud text button with no chrome reads as a link rather than
+    a control. This is the ordinary-surface version: a pill that pairs with the filled one
+    beside it and still gives it the emphasis.
+*/
+.gs-btn-quiet {
+    border-radius: var(--gs-radius-pill) !important;
+    padding-inline: 16px !important;
+    background: var(--gs-surface-2) !important;
+    border: 1px solid var(--gs-line-strong) !important;
+    color: var(--gs-ink-2) !important;
+    transition: background var(--gs-fast) var(--gs-ease),
+                border-color var(--gs-fast) var(--gs-ease),
+                color var(--gs-fast) var(--gs-ease),
+                transform var(--gs-base) var(--gs-ease-spring) !important;
+}
+
+.gs-btn-quiet:hover {
+    background: var(--gs-surface-3) !important;
+    color: var(--gs-ink) !important;
+}
+
+/*
+    And the destructive one. Quiet by default -- it is never the thing somebody came to do
+    -- but it carries the border every other control has, so it reads as a button, and it
+    commits to red only when reached for.
+*/
+.gs-btn-danger {
+    border-radius: var(--gs-radius-pill) !important;
+    padding-inline: 16px !important;
+    background: transparent !important;
+    border: 1px solid color-mix(in srgb, var(--gs-danger) 32%, transparent) !important;
+    color: var(--gs-danger) !important;
+    transition: background var(--gs-fast) var(--gs-ease),
+                border-color var(--gs-fast) var(--gs-ease) !important;
+}
+
+.gs-btn-danger:hover {
+    background: var(--gs-danger-soft) !important;
+    border-color: color-mix(in srgb, var(--gs-danger) 55%, transparent) !important;
+}
+
+/*
+    A row of actions under a card's content, and -- where one of them is destructive -- the
+    hairline that keeps it out of the group.
+
+    The join-link card had three buttons in one wrapping flex row: a filled pill, a bare
+    text button and a bare red one. At 375px the red one wrapped alone onto a second line,
+    which made an irreversible action look like an afterthought rather than a deliberately
+    separated one. Two zones, so it is separated on purpose at every width.
+*/
+.gs-btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 12px;
+}
+
+.gs-btn-row.is-destructive {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gs-line);
 }
 
 /* Action toolbar on group header. */
@@ -1780,6 +1926,153 @@ html:not([data-gs-ready]) .gs-group-card {
     padding: 8px 24px 20px;
     gap: 8px;
 }
+
+/*
+    A dialog's title row.
+
+    Mud renders its close button inside this row rather than floating it over the corner,
+    which is what the reserved right padding is for: without it the heading ran under the
+    X. The details dialog also carried an edit and a delete in here, and one piece of text
+    sharing 295px with three 48px targets shrank below the width of a single word -- the
+    browser then broke inside it, giving "Transacti / on / Details". Those two actions live
+    on the list rows now, and the heading has the row to itself.
+*/
+.gs-dialog-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding-right: 40px;
+    width: 100%;
+}
+
+.gs-dialog-head > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+
+/* The expense's own name, as the dialog's heading. */
+.gs-dialog-title {
+    margin: 0;
+    font-family: var(--gs-font-display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    /* A merchant name can be one long unbroken word; it breaks rather than widening the
+       dialog past the screen. */
+    overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------- dialog figures -- */
+
+/*
+    Two figures side by side: what the expense came to, and what it cost the reader.
+
+    Not .gs-stat cards -- those are a page's headline numbers and three of them in a dialog
+    would out-shout the dialog. This is the same idea at the weight a dialog can carry: an
+    eyebrow, a figure, and one line of context under the second one saying which kind of
+    number it is.
+*/
+.gs-figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.gs-figure {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 16px;
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+    min-width: 0;
+}
+
+.gs-figure-value {
+    font-family: var(--gs-font-display);
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+}
+
+/* The reader's share is the smaller fact of the two, and looks it. */
+.gs-figure-value.is-quiet {
+    color: var(--gs-ink-2);
+}
+
+.gs-figure-note {
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+}
+
+/* ---------------------------------------------------------- dialog splits -- */
+
+/*
+    Who owes what: a row per person.
+
+    Three columns so the amounts line up in a column of their own -- a split read as
+    "name ......... amount" down a ragged right edge is what tabular figures exist to
+    prevent.
+*/
+.gs-splits {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.gs-split {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--gs-radius-sm);
+}
+
+/* The reader's own row, marked the way the ledger marks it: this is the one line in the
+   list that is about them, and finding it by reading names is what the highlight saves. */
+.gs-split.is-me {
+    background: var(--gs-teal-soft);
+}
+
+.gs-split-who {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.gs-split.is-me .gs-split-who {
+    color: var(--gs-teal-deep);
+}
+
+:root[data-theme="dark"] .gs-split.is-me .gs-split-who {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-split.is-me .gs-split-who {
+        color: var(--gs-teal-bright);
+    }
+}
+
+.gs-split-amount {
+    font-size: 0.875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
 
 /* --------------------------------------------------------------- inputs ---- */
 
@@ -2248,6 +2541,32 @@ html:not([data-gs-ready]) .gs-group-card {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+/* Two form fields side by side, until there is not room for two. Date and time in the
+   expense dialogs: at 375px each got about 140px, part of which the picker spends on its
+   own calendar or clock button, so both values were clipped mid-string -- "9/9/20" and
+   "06:09". They stack instead. Full width each, because a date half as wide as the field
+   above it reads as a different kind of input. */
+
+.gs-field-pair {
+    flex-wrap: wrap;
+}
+
+.gs-field-pair > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+@media (max-width: 599px) {
+    .gs-field-pair {
+        flex-direction: column;
+    }
+
+    .gs-field-pair > * {
+        flex: 1 1 auto;
+        width: 100%;
+    }
 }
 
 /* ---------------------------------------------------------- responsive ---- */
@@ -2776,117 +3095,52 @@ html:not([data-gs-ready]) .gs-group-card {
     font-size: 0.9375rem;
 }
 
-/* ---------------------------------------------------------------- chart -- */
+/* --------------------------------------------------------- stacked chip -- */
 
-/* Two lines and four gridlines. The mark colour is a more chromatic step of the
-   brand teal: the UI teal has too little chroma to read as a data mark and
-   validates as grey against the surface. */
+/* A chip with a second line under its label. The three view chips on the You page
+   differed only in wording that did not distinguish them -- "Your share" beside
+   "Everything you are in" -- so each one now states what it counts. */
 
-.gs-chart {
-    --gs-mark-paid: #0f8f83;
-    --gs-mark-share: var(--gs-clay);
+.gs-range .gs-chip-stacked {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    height: auto;
+    min-height: 34px;
+    padding: 6px 14px;
+    text-align: left;
+    line-height: 1.25;
 }
 
-:root[data-theme="dark"] .gs-chart {
-    --gs-mark-paid: #3fbfb2;
-    --gs-mark-share: var(--gs-clay);
+.gs-chip-stacked .gs-chip-label {
+    font-weight: 700;
 }
 
-.gs-chart svg {
-    display: block;
-    width: 100%;
-    height: 180px;
-    overflow: visible;
-}
-
-.gs-chart-grid {
-    stroke: var(--gs-line);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-}
-
-.gs-chart-line {
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    /* The viewBox is stretched to the container's width, so a plain stroke-width
-       would be scaled with it and the two lines would thicken on a wide screen. */
-    vector-effect: non-scaling-stroke;
-}
-
-.gs-chart-line.is-paid,
-.gs-chart-dot.is-paid {
-    stroke: var(--gs-mark-paid);
-}
-
-.gs-chart-line.is-share {
-    stroke: var(--gs-mark-share);
-    stroke-dasharray: 5 4;
-}
-
-.gs-chart-dot.is-share {
-    stroke: var(--gs-mark-share);
-}
-
-.gs-chart-dot {
-    fill: var(--gs-surface);
-    stroke-width: 2;
-    vector-effect: non-scaling-stroke;
-}
-
-.gs-chart-months {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 8px;
+/* Quieter than the label and quieter still when the chip is off, so a row of three
+   reads as three labels first and three explanations second. */
+.gs-chip-stacked .gs-chip-detail {
     font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--gs-muted);
-    white-space: nowrap;
+    font-weight: 500;
+    opacity: 0.72;
 }
 
-/* Every point has a span so the labels line up with the marks; the ones between the
-   labels are empty and must not claim any width of their own. */
-.gs-chart-months span {
-    flex: 0 0 auto;
+.gs-chip-stacked.active .gs-chip-detail {
+    opacity: 0.85;
 }
 
-.gs-chart-months span:empty {
-    flex: 1 1 0;
-}
+/* On a narrow screen three stacked chips will not sit on one line, and a chip whose
+   second line has wrapped is unreadable. The detail is dropped rather than wrapped:
+   the label still says which view is on, and the heading under it repeats the
+   sentence in full. */
+@media (max-width: 560px) {
+    .gs-chip-stacked .gs-chip-detail {
+        display: none;
+    }
 
-.gs-chart-legend {
-    display: flex;
-    gap: 16px;
-    margin-top: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--gs-ink-2);
-}
-
-.gs-chart-legend span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.gs-chart-legend span::before {
-    content: '';
-    width: 14px;
-    height: 2px;
-    border-radius: 2px;
-}
-
-.gs-chart-legend .is-paid::before {
-    background: var(--gs-mark-paid);
-}
-
-.gs-chart-legend .is-share::before {
-    background: repeating-linear-gradient(
-        90deg,
-        var(--gs-mark-share) 0 5px,
-        transparent 5px 9px
-    );
+    .gs-range .gs-chip-stacked {
+        flex-direction: row;
+        align-items: center;
+    }
 }
 
 /* Under 640px the four-column settle rows would put the amount and the button
@@ -2991,6 +3245,50 @@ html:not([data-gs-ready]) .gs-group-card {
         flex-wrap: wrap;
     }
 
+    /*
+        Unless that third child *is* the action.
+
+        The rule above assumes the action line is a wrapper holding a figure and some
+        buttons, which it is in the inbox and the grids. Where a row carries one bare
+        button instead -- "Settle up", "Review", "Accept" -- the rule made the button
+        itself the stretched flex container, so it spanned the full width and then pushed
+        its own label to the far right edge. A filled one read as a full-width primary
+        action shouting louder than the figure above it; a text one just had its label
+        floating out at the margin.
+
+        The button keeps its own width and sits at the end of the line, which is where the
+        wrapper would have put it.
+    */
+    .gs-row:not(.is-selectable) > .mud-button-root:nth-child(n + 3),
+    .gs-row.is-selectable > .mud-button-root:nth-child(n + 4) {
+        justify-self: end;
+        display: inline-flex;
+        justify-content: center;
+        flex-wrap: nowrap;
+    }
+
+    /*
+        And a row whose action is one icon keeps it on the line.
+
+        44px fits beside the text at 375px, and giving it a line of its own costs a whole
+        row per entry -- four members came out as eight rows, each with an orphaned red
+        icon floating under an email address. A class rather than a selector inferring it
+        from the markup, because "is this action icon-sized" is a fact about the row that
+        only the row knows: here the third child is a tooltip wrapper, not the button.
+    */
+    .gs-row.gs-row-tight-action,
+    .gs-row.gs-row-tight-action.gs-row-has-actions {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .gs-row.gs-row-tight-action > :nth-child(3) {
+        grid-column: 3;
+        justify-self: end;
+        align-self: center;
+        display: inline-flex;
+        justify-content: flex-end;
+    }
+
     /* The amount and the relative date sit one above the other in the wide layout;
        side by side is the right shape once they share a line with the buttons. */
     .gs-row .when {
@@ -3028,6 +3326,26 @@ html:not([data-gs-ready]) .gs-group-card {
     .gs-page-head {
         margin-bottom: 14px;
         gap: 10px;
+    }
+
+    /* 56px is a desktop mark. Beside a heading that has clamped down to 1.75rem it is
+       larger than the name it belongs to, and it is the reason the line did not fit. */
+    .gs-identity {
+        gap: 12px;
+    }
+
+    .gs-identity .gs-avatar.lg {
+        width: 40px;
+        height: 40px;
+        font-size: 0.9375rem;
+    }
+
+    /* Edge to edge, so the actions read as this page's toolbar rather than a pill floating
+       under the title. Five controls spread across the width are also five bigger touch
+       targets. */
+    .gs-toolbar {
+        width: 100%;
+        justify-content: space-between;
     }
 
     .gs-stack {
