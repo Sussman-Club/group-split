@@ -47,4 +47,16 @@ public class Merchant : Entity
     /// a sync, and a table that grows on its own is worth being able to date.
     /// </summary>
     public required DateTimeOffset FirstSeenAt { get; set; }
+
+    /// <summary>
+    /// What has been spent here, across every group.
+    /// </summary>
+    /// <remarks>
+    /// Here to be counted and not to be loaded. A shared row can have a very large number of
+    /// these behind it, and nothing in the app wants them in memory -- the listing projects
+    /// <c>Transactions.Count</c>, which EF turns into a subquery, and that count is the whole
+    /// reason the navigation exists: renaming a place with four hundred expenses behind it is
+    /// a different act from renaming one with two, and a caller should be told which.
+    /// </remarks>
+    public virtual ICollection<Transaction> Transactions { get; } = [];
 }

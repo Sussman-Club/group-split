@@ -35,6 +35,7 @@ public static class ErrorCodes
     public const string GroupJoinLinkNotFound = "GROUP_JOIN_LINK_NOT_FOUND";
     public const string BankConnectionNotFound = "BANK_CONNECTION_NOT_FOUND";
     public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
+    public const string MerchantNotFound = "MERCHANT_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -65,6 +66,8 @@ public static class ErrorCodes
     public const string CurrencyMismatch = "CURRENCY_MISMATCH";
     public const string PossibleDuplicateExpense = "POSSIBLE_DUPLICATE_EXPENSE";
     public const string TransactionAlreadyImported = "TRANSACTION_ALREADY_IMPORTED";
+    public const string MerchantNameTaken = "MERCHANT_NAME_TAKEN";
+    public const string MerchantInUse = "MERCHANT_IN_USE";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 

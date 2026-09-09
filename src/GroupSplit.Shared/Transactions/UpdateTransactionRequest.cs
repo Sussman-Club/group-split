@@ -34,6 +34,17 @@ public record UpdateTransactionRequest
     public Guid? CategoryId { get; set; }
 
     /// <summary>
+    /// Where it was spent, or null for none. See
+    /// <see cref="CreateTransactionRequest.MerchantId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Editable, including on an expense that came from a bank: the sync sets it once and
+    /// never follows the link again, so a provider that named the wrong shop is a thing a
+    /// person can correct without the next sync undoing them.
+    /// </remarks>
+    public Guid? MerchantId { get; set; }
+
+    /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
     /// </summary>
     /// <remarks>

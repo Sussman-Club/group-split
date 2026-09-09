@@ -79,10 +79,12 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 
 ## Confirming a destructive change
 
-Twelve actions stop unless confirmed: `groups.remove-member`, `groups.settle`,
+Fourteen actions stop unless confirmed: `groups.remove-member`, `groups.settle`,
 `groups.settle-up`, `settle.pay`, `groups.leave`, `groups.link.create` (when a link already
 exists), `groups.link.revoke`, `transactions.delete`, `categories.delete`,
-`split-rules.delete`, `bank.unlink` and `users.delete`.
+`split-rules.delete`, `merchants.update` (only when it renames -- a merchant is shared by
+every group that has spent there, so the prompt carries the count), `merchants.delete`,
+`bank.unlink` and `users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 

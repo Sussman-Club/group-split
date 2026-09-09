@@ -36,6 +36,7 @@ has to reach for `curl` and a bearer token to do.
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
+| `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
 | `invitations` | `list`, `accept`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `sync`, `unlink` |
@@ -50,7 +51,11 @@ arguments, so this table can go stale and that one cannot.
 
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
-`groups settle`. `bank unlink`, `categories delete` and `split-rules delete` do the same.
+`groups settle`. `bank unlink`, `categories delete`, `split-rules delete` and
+`merchants delete` do the same. `merchants update` is the one command whose confirmation is
+conditional on which field is being changed: a merchant belongs to no group, so renaming one
+is felt by every group that has spent there and the prompt carries the count, while giving
+one a logo needs no agreement from anybody.
 `groups settle-up` reads the balances for the same reason, so its confirmation lists the
 repayments it is about to write rather than describing them. `settle pay` reads the
 cross-group plan for the same reason and one more: the payment it records can span two

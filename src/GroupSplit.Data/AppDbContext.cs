@@ -263,7 +263,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // against it, so deleting one must not take somebody's history. Nothing deletes
             // merchants today, and failing loudly is the right answer if something starts.
             entity.HasOne(transaction => transaction.Merchant)
-                .WithMany()
+                .WithMany(merchant => merchant.Transactions)
                 .HasForeignKey(transaction => transaction.MerchantId)
                 .OnDelete(DeleteBehavior.Restrict);
 

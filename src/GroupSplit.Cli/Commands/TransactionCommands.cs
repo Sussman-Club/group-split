@@ -186,6 +186,10 @@ public static class TransactionCommands
         };
         var description = new Option<string?>("--description") { Description = "Free-text note." };
         var category = new Option<Guid?>("--category-id") { Description = "Category to file it under." };
+        var merchant = new Option<Guid?>("--merchant-id")
+        {
+            Description = "Where it was spent, from `groupsplit merchants list`."
+        };
         var paidBy = new Option<Guid?>("--paid-by")
         {
             Description = "Member who paid. Defaults to you."
@@ -197,7 +201,7 @@ public static class TransactionCommands
 
         var command = new Command("create", "Record an expense.")
         {
-            name, amount, group, date, description, category, paidBy, preview
+            name, amount, group, date, description, category, merchant, paidBy, preview
         };
 
         command.SetHandler(async (context, ct) =>
@@ -211,6 +215,7 @@ public static class TransactionCommands
                 DateTime = parse.GetValue(date) ?? DateTimeOffset.UtcNow,
                 GroupId = parse.GetValue(group),
                 CategoryId = parse.GetValue(category),
+                MerchantId = parse.GetValue(merchant),
                 PaidByUserId = parse.GetValue(paidBy),
                 Description = parse.GetValue(description)
             };
@@ -265,6 +270,14 @@ public static class TransactionCommands
         {
             Description = "File it under nothing, so it divides evenly."
         };
+        var merchant = new Option<Guid?>("--merchant-id")
+        {
+            Description = "Say where it was spent, from `groupsplit merchants list`."
+        };
+        var noMerchant = new Option<bool>("--no-merchant")
+        {
+            Description = "Forget where it was spent, so it shows no logo."
+        };
         var paidBy = new Option<Guid?>("--paid-by") { Description = "Change who paid." };
         var splits = new Option<string[]>("--split")
         {
@@ -276,7 +289,7 @@ public static class TransactionCommands
         var command = new Command("update", "Change an expense. Only what you name is sent.")
         {
             TransactionId, name, amount, date, description,
-            group, personal, category, noCategory, paidBy, splits
+            group, personal, category, noCategory, merchant, noMerchant, paidBy, splits
         };
 
         command.SetHandler(async (context, ct) =>
@@ -298,6 +311,13 @@ public static class TransactionCommands
                     "Pass one or the other.");
             }
 
+            if (parse.GetResult(merchant) is not null && parse.GetValue(noMerchant))
+            {
+                throw CliException.Input(
+                    "--merchant-id and --no-merchant contradict each other.",
+                    "Pass one or the other.");
+            }
+
             if (parse.GetValue(name) is { } newName) patch.Replace(request => request.Name, newName);
             if (parse.GetValue(amount) is { } newAmount) patch.Replace(request => request.Amount, newAmount);
             if (parse.GetValue(date) is { } newDate) patch.Replace(request => request.DateTime, newDate);
@@ -314,6 +334,10 @@ public static class TransactionCommands
             if (parse.GetValue(noCategory)) patch.Replace(request => request.CategoryId, null);
             else if (parse.GetValue(category) is { } newCategory)
                 patch.Replace(request => request.CategoryId, newCategory);
+
+            if (parse.GetValue(noMerchant)) patch.Replace(request => request.MerchantId, null);
+            else if (parse.GetValue(merchant) is { } newMerchant)
+                patch.Replace(request => request.MerchantId, newMerchant);
 
             if (parse.GetValue(splits) is { Length: > 0 } given)
                 patch.Replace(request => request.Splits, Pairs.Splits("--split", given));

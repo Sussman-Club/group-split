@@ -40,6 +40,7 @@ public static class ErrorMessages
         [ErrorCodes.AccountNotFound] = "Your account could not be found.",
         [ErrorCodes.TransactionNotFound] = "That expense no longer exists.",
         [ErrorCodes.CategoryNotFound] = "That category no longer exists.",
+        [ErrorCodes.MerchantNotFound] = "That merchant no longer exists.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
@@ -63,6 +64,10 @@ public static class ErrorMessages
         [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",
         [ErrorCodes.SplitRuleNameTaken] = "This group already has a rule with that name.",
         [ErrorCodes.SplitRuleInUse] = "This rule is still the default for a category. Point the category elsewhere first.",
+        // "Already" and not "this group already": a merchant is shared, so the one it
+        // collides with may well be a place somebody else's bank reported.
+        [ErrorCodes.MerchantNameTaken] = "There is already a merchant with that name.",
+        [ErrorCodes.MerchantInUse] = "This merchant still has transactions pointing at it. Move them first.",
 
         [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
         [ErrorCodes.SplitsInvalid] = "The shares are not valid. Each person can appear only once.",

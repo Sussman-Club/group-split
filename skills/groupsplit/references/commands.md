@@ -124,6 +124,31 @@ Expense categories and their default split rules.
 | `categories update <category-id>` | Change a category's name or its default rule. |
 | `categories delete <category-id>` | Delete a category. |
 
+### merchants
+
+Places money gets spent, shared across every group, and their logos. A bank sync fills this
+table on its own; these are the by-hand way in -- cash at the same shop every week, a group
+with no bank linked, or a provider that named a place badly.
+
+A merchant belongs to no group, so none of these take `--group`, and a rename is felt by
+every group that has spent there. `merchants update --name` therefore asks first and its
+confirmation carries the count of transactions behind the row; `--logo-url` alone does not
+ask. `merchants delete` is refused while anything still points at the row, including a bank
+row still waiting in an inbox.
+
+| Command | |
+| --- | --- |
+| `merchants list` | List merchants, alphabetically. `--search` narrows on the name. |
+| `merchants show <merchant-id>` | Show one merchant, with how many transactions point at it. |
+| `merchants create <name>` | Add a place. `--logo-url` gives it a mark; without one it renders as initials. |
+| `merchants update <merchant-id>` | Rename it, or change its logo. `--no-logo` clears the logo. |
+| `merchants delete <merchant-id>` | Delete a merchant. |
+
+To say where an expense was spent, name the merchant on the expense rather than here:
+`transactions create --merchant-id`, or `transactions update --merchant-id` to add it
+afterwards and `--no-merchant` to forget it. Filing a bank row sets it from the row itself,
+so an imported expense already knows.
+
 ### split-rules
 
 Reusable rules describing how an expense is divided.
