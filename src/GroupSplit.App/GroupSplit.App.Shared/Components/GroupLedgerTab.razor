@@ -205,7 +205,11 @@
             <NoRecordsContent>
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(IsNarrowed ? "Nothing matches" : "Nothing recorded yet")</h3>
+                    @* Turns on what the reader narrowed, not on what the tab is narrowed
+                       to. The opening month is the tab's own doing, so keying this on
+                       IsNarrowed put "Nothing matches" over a group created a minute ago
+                       -- naming a filter nobody set. *@
+                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
                     @* The tab opens on the current month, so an empty ledger is the default
                        state for any group that has been quiet -- and "Nothing matches" over
                        a span nobody chose reads as "this group is empty", which is the
@@ -242,12 +246,18 @@
 
     private string _searchString = "";
     /// <summary>
-    /// The current month. A group's ledger going back three years opens on a page of the
-    /// newest twenty-five either way, so all-time bought nothing but a "total spent" over
-    /// a span nobody chose. The chip above the list says which month, and widening is one
-    /// tap.
+    /// The span the tab opens on: the current month. A group's ledger going back three
+    /// years opens on a page of the newest twenty-five either way, so all-time bought
+    /// nothing but a "total spent" over a span nobody chose. The chip above the list says
+    /// which month, and widening is one tap.
     /// </summary>
-    private DateFilter _range = new(DateFilterPreset.ThisMonth);
+    /// <remarks>
+    /// Named rather than inlined because the empty state has to tell this span apart from
+    /// one somebody picked -- otherwise it offers "All time" to a reader already on it.
+    /// </remarks>
+    private static readonly DateFilter OpensOn = new(DateFilterPreset.ThisMonth);
+
+    private DateFilter _range = OpensOn;
     private MudDataGrid<GroupLedgerEntryResponse>? _grid;
     private bool _reloading;
 
@@ -259,10 +269,29 @@
 
     private bool IsNarrowed => IsSearching || !_range.IsAllTime || Kind is not null;
 
+    /// <summary>
+    /// Whether the reader narrowed this, as opposed to the tab opening narrowed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsNarrowed"/> asks whether the listing is a slice, which it is from the
+    /// first frame now that the range starts at the current month. This asks whether
+    /// anybody asked for the slice. The opening month does not count, and neither does all
+    /// time, which is the widest the tab goes rather than a narrowing.
+    /// </remarks>
+    private bool IsNarrowedByHand =>
+        IsSearching || Kind is not null || (!_range.IsAllTime && _range != OpensOn);
+
     private string? Search => IsSearching ? _searchString.Trim() : null;
 
     /// <summary>The span in words, for a sentence rather than a chip.</summary>
     private string Span => _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant();
+
+    /// <summary>
+    /// The span to hang on the end of a clause, or nothing at all when there is no span to
+    /// name. "No settlements in all time" is not a sentence anybody writes; the sentence
+    /// somebody writes about that set is "No settlements".
+    /// </summary>
+    private string InSpan => _range.IsAllTime ? "" : $" in {Span}";
 
     /// <summary>
     /// What an empty ledger means. Never simply "there is nothing": this tab opens on the
@@ -272,12 +301,19 @@
     /// </summary>
     private string EmptyBlurb => (IsSearching, Kind) switch
     {
-        (false, null) =>
+        // The default empty state: a quiet month in a group that may have years behind it.
+        // Names the span and says how to leave it.
+        (false, null) when _range == OpensOn =>
             $"Nothing in {Span}. This tab opens on the current month — pick \"All time\" for "
             + "the whole ledger.",
-        (false, ActivityKind.Transfer) => $"No settlements in {Span}.",
-        (false, ActivityKind.Expense) => $"Nothing spent in {Span}.",
-        _ => $"Nothing in {Span} matches. Try a different name, category, person or date."
+        // Already at the widest the tab goes, so there is no span to name and nowhere to
+        // point. Offering "All time" from here was advice to do the thing they had done.
+        (false, null) when _range.IsAllTime =>
+            "Nothing recorded in this group yet. Expenses and settlements will show up here.",
+        (false, null) => $"Nothing in {Span}.",
+        (false, ActivityKind.Transfer) => $"No settlements{InSpan}.",
+        (false, ActivityKind.Expense) => $"Nothing spent{InSpan}.",
+        _ => $"Nothing{InSpan} matches. Try a different name, category, person or date."
     };
 
     private int ExpenseCount => _spending?.Count ?? 0;

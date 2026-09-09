@@ -606,4 +606,89 @@ public class GroupLedgerTabTest : ComponentTest
         Assert.Empty(tab.FindAll("img.gs-mark-place"));
         Assert.NotEmpty(tab.FindAll(".gs-row-icon.transfer"));
     }
+
+    // ---- what an empty ledger says ------------------------------------------------------
+
+    /// <summary>The empty state's heading and the sentence under it.</summary>
+    private static (string Heading, string Blurb) Empty(IRenderedComponent<GroupLedgerTab> tab)
+    {
+        tab.WaitForElement(".gs-empty > span", TimeSpan.FromSeconds(5));
+
+        return (tab.Find(".gs-empty h3").TextContent.Trim(),
+            tab.Find(".gs-empty > span").TextContent.Trim());
+    }
+
+    /// <summary>
+    /// The month the tab opens on is the tab's doing rather than the reader's, and the
+    /// heading says so.
+    /// </summary>
+    /// <remarks>
+    /// The heading turned on IsNarrowed, which counts any span at all -- and since the
+    /// range starts at the current month that is true before anybody has touched anything.
+    /// So a group created a minute ago opened on "Nothing matches", naming a filter nobody
+    /// had set, which is this branch's own subject pointed back at the reader.
+    /// </remarks>
+    [Fact]
+    public void A_ledger_nobody_has_filtered_does_not_say_nothing_matches()
+    {
+        var tab = Render();
+
+        var (heading, blurb) = Empty(tab);
+
+        Assert.Equal("Nothing recorded yet", heading);
+        Assert.Contains("this month", blurb);
+        Assert.Contains("All time", blurb);
+    }
+
+    /// <summary>
+    /// From all time there is nowhere wider to go, so the sentence stops offering it.
+    /// </summary>
+    /// <remarks>
+    /// The blurb offered "All time" from every unsearched state, so widening to all time on
+    /// a group with nothing in it produced "Nothing in all time. This tab opens on the
+    /// current month -- pick 'All time' for the whole ledger": advice to do the thing they
+    /// had just done, under a heading that already said the group was empty.
+    /// </remarks>
+    [Fact]
+    public async Task All_time_is_not_offered_to_somebody_already_on_it()
+    {
+        var tab = Render();
+
+        await PickSpanAsync(tab, DateFilterPreset.AllTime);
+
+        var (heading, blurb) = Empty(tab);
+
+        Assert.Equal("Nothing recorded yet", heading);
+        Assert.DoesNotContain("All time", blurb);
+        Assert.DoesNotContain("all time", blurb);
+    }
+
+    /// <summary>
+    /// No span to name means no span in the sentence, rather than the words "all time"
+    /// dropped into the slot a month goes in.
+    /// </summary>
+    [Fact]
+    public async Task A_kind_over_all_time_names_no_span()
+    {
+        var tab = Render();
+
+        await ClickChipAsync(tab, "Settlements");
+        await PickSpanAsync(tab, DateFilterPreset.AllTime);
+
+        Assert.Equal("No settlements.", Empty(tab).Blurb);
+    }
+
+    /// <summary>A span somebody picked is a filter, and the heading treats it as one.</summary>
+    [Fact]
+    public async Task A_span_somebody_picked_is_read_as_a_filter()
+    {
+        var tab = Render();
+
+        await PickSpanAsync(tab, DateFilterPreset.LastMonth);
+
+        var (heading, blurb) = Empty(tab);
+
+        Assert.Equal("Nothing matches", heading);
+        Assert.Equal("Nothing in last month.", blurb);
+    }
 }

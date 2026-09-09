@@ -289,7 +289,11 @@
             <NoRecordsContent>
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(IsNarrowed ? "Nothing matches" : "Nothing here yet")</h3>
+                    @* Turns on what the reader narrowed, not on what the page is narrowed
+                       to -- the opening month is the page's own doing, and "Nothing
+                       matches" over a filter nobody set tells a brand-new account it has
+                       filtered its way into an empty list. *@
+                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing here yet")</h3>
                     @* Says whose rows are missing, not just that rows are. Under "You paid",
                        an empty list means nobody has recorded you paying for anything -- not
                        that the group is empty, which is what it reads as. *@
@@ -354,11 +358,18 @@
     private ExpenseView _view = ExpenseView.Everything;
     private string _searchString = "";
     /// <summary>
-    /// The current month, not all time. An all-time listing opens on a page of whatever is
-    /// newest and totals a figure nobody asked about; a month is the span somebody
-    /// actually reviews, and the range chip says which one.
+    /// The span the page opens on: the current month, not all time. An all-time listing
+    /// opens on a page of whatever is newest and totals a figure nobody asked about; a
+    /// month is the span somebody actually reviews, and the range chip says which one.
     /// </summary>
-    private DateFilter _range = new(DateFilterPreset.ThisMonth);
+    /// <remarks>
+    /// Named rather than inlined because the empty state has to tell this span apart from
+    /// one somebody picked. They can resolve to the same rows -- choosing "This month" off
+    /// the menu lands back here -- and that is fine: the same set gets the same sentence.
+    /// </remarks>
+    private static readonly DateFilter OpensOn = new(DateFilterPreset.ThisMonth);
+
+    private DateFilter _range = OpensOn;
     /// <summary>Which ledger the page is narrowed to: everything, shared, personal, or one group.</summary>
     private string _where = AllLedgers;
 
@@ -377,6 +388,19 @@
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
     private bool IsNarrowed => IsSearching || !_range.IsAllTime || _where != AllLedgers;
+
+    /// <summary>
+    /// Whether the reader narrowed this, as opposed to the page opening narrowed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsNarrowed"/> asks whether the listing is a slice, which it is from the
+    /// first frame now that the range starts at the current month -- so a heading keyed on
+    /// it says "Nothing matches" to somebody who has touched nothing. This asks the other
+    /// question: did anybody ask for this slice? The opening month does not count, and
+    /// neither does all time, which is the widest the page goes rather than a narrowing.
+    /// </remarks>
+    private bool IsNarrowedByHand =>
+        IsSearching || _where != AllLedgers || (!_range.IsAllTime && _range != OpensOn);
 
     /// <summary>The chosen group, when the choice is a group at all.</summary>
     private Guid? _groupId => Guid.TryParse(_where, out var id) ? id : null;
@@ -460,15 +484,17 @@
     private string EmptyBlurb => (IsNarrowed, _view) switch
     {
         (true, _) when _groupId is { } id =>
-            $"Nothing of yours in {GroupName(id)} for {Span}. The whole of what this group "
+            $"Nothing of yours in {GroupName(id)}{ForSpan}. The whole of what this group "
             + "has spent, whoever paid for it, is on the group's own ledger.",
         // The page opens on the current month, so this is the *default* empty state rather
         // than one somebody filtered their way into: it has to name the span and say how to
-        // leave it, or a quiet month reads as an empty account.
-        (true, _) when !IsSearching && _where == AllLedgers =>
+        // leave it, or a quiet month reads as an empty account. Only for the opening month,
+        // though -- pointing at "All time" from a span somebody chose themselves is advice
+        // about a control they have already found.
+        (true, _) when !IsSearching && _where == AllLedgers && _range == OpensOn =>
             $"Nothing for {Span}. This page opens on the current month — pick "
             + "\"All time\" to see everything.",
-        (true, _) => $"Nothing for {Span} matches. Try a different name, group, category or date.",
+        (true, _) => $"Nothing{ForSpan} matches. Try a different name, group, category or date.",
         (false, ExpenseView.PaidByYou) =>
             "Nothing recorded with you as the payer yet. Expenses somebody else paid for are "
             + "under \"You owe\".",
@@ -477,6 +503,13 @@
 
     /// <summary>The span in words, for a sentence rather than a chip.</summary>
     private string Span => _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant();
+
+    /// <summary>
+    /// The span to hang on the end of a clause, or nothing at all when there is no span to
+    /// name. "Nothing for all time matches" is not a sentence anybody writes; the sentence
+    /// somebody writes about that set is "Nothing matches".
+    /// </summary>
+    private string ForSpan => _range.IsAllTime ? "" : $" for {Span}";
 
     private string TotalLabel => _view switch
     {

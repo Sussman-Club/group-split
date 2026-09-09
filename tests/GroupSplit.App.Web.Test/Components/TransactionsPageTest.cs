@@ -555,4 +555,98 @@ public class TransactionsPageTest : ComponentTest
 
         page.WaitForAssertion(() => Assert.True(RowReads > rowsBefore));
     }
+
+    // ---- what an empty list says --------------------------------------------------------
+
+    /// <summary>The empty state's heading and the sentence under it.</summary>
+    private static (string Heading, string Blurb) Empty(IRenderedComponent<Transactions> page)
+    {
+        page.WaitForElement(".gs-empty > span", TimeSpan.FromSeconds(5));
+
+        return (page.Find(".gs-empty h3").TextContent.Trim(),
+            page.Find(".gs-empty > span").TextContent.Trim());
+    }
+
+    /// <summary>
+    /// The month the page opens on is the page's doing rather than the reader's, and the
+    /// heading says so.
+    /// </summary>
+    /// <remarks>
+    /// The heading turned on IsNarrowed, which counts any span at all -- and since the
+    /// range starts at the current month that is true from the first frame. So a brand-new
+    /// account opened on "Nothing matches", naming a filter nobody had set.
+    /// </remarks>
+    [Fact]
+    public void A_list_nobody_has_filtered_does_not_say_nothing_matches()
+    {
+        var page = RenderView();
+
+        var (heading, blurb) = Empty(page);
+
+        Assert.Equal("Nothing here yet", heading);
+        Assert.Contains("this month", blurb);
+        Assert.Contains("All time", blurb);
+    }
+
+    /// <summary>
+    /// Widening to all time reaches the first-run sentence, which is the one an account
+    /// with nothing in it should be reading.
+    /// </summary>
+    /// <remarks>
+    /// It was unreachable: every arm of the blurb behind IsNarrowed was taken while the
+    /// range sat on the opening month, so the copy telling somebody to record their first
+    /// expense could only be seen by a reader who had gone looking for it.
+    /// </remarks>
+    [Fact]
+    public async Task Widening_to_all_time_reaches_the_first_run_sentence()
+    {
+        var page = RenderView();
+
+        await PickSpanAsync(page, DateFilterPreset.AllTime);
+
+        var (heading, blurb) = Empty(page);
+
+        Assert.Equal("Nothing here yet", heading);
+        Assert.Equal(
+            "Nothing you have a share of yet. Record an expense and it will show up here.",
+            blurb);
+    }
+
+    /// <summary>A span somebody picked is a filter, and both lines treat it as one.</summary>
+    /// <remarks>
+    /// And the advice goes with it: pointing at "All time" from a span somebody chose
+    /// themselves is a note about a control they have already found.
+    /// </remarks>
+    [Fact]
+    public async Task A_span_somebody_picked_is_read_as_a_filter()
+    {
+        var page = RenderView();
+
+        await PickSpanAsync(page, DateFilterPreset.LastMonth);
+
+        var (heading, blurb) = Empty(page);
+
+        Assert.Equal("Nothing matches", heading);
+        Assert.Equal(
+            "Nothing for last month matches. Try a different name, group, category or date.",
+            blurb);
+    }
+
+    /// <summary>
+    /// Narrowed to one group over all time, the sentence points at the group's own ledger
+    /// and names no span, because there is none to name.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_group_points_at_the_groups_own_ledger()
+    {
+        var page = RenderView();
+
+        await PickLedgerAsync(page, GroupId.ToString());
+        await PickSpanAsync(page, DateFilterPreset.AllTime);
+
+        Assert.Equal(
+            "Nothing of yours in Weekend in Lisbon. The whole of what this group has spent, "
+            + "whoever paid for it, is on the group's own ledger.",
+            Empty(page).Blurb);
+    }
 }
