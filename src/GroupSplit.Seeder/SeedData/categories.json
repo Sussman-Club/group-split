@@ -40,5 +40,185 @@
         "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 100000
       }
     }
+  },
+  {
+    "Id": "CA7E0001-0000-4000-8000-000000000001",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Rent",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0002-0000-4000-8000-000000000002",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Internet",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0003-0000-4000-8000-000000000003",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Household",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0004-0000-4000-8000-000000000004",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Takeaway",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0005-0000-4000-8000-000000000005",
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "Category": "Transport",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0006-0000-4000-8000-000000000006",
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "Category": "Food",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0007-0000-4000-8000-000000000007",
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "Category": "Excursions",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0008-0000-4000-8000-000000000008",
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "Category": "Lift passes",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0009-0000-4000-8000-000000000009",
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "Category": "Chalet",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E000A-0000-4000-8000-00000000000A",
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "Category": "Equipment hire",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E000B-0000-4000-8000-00000000000B",
+    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
+    "Category": "Après-ski",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E000C-0000-4000-8000-00000000000C",
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "Category": "Pitch hire",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E000D-0000-4000-8000-00000000000D",
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "Category": "Kit",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E000E-0000-4000-8000-00000000000E",
+    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
+    "Category": "Post-match",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E000F-0000-4000-8000-00000000000F",
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "Category": "Rent",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0010-0000-4000-8000-000000000010",
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "Category": "Bills",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0011-0000-4000-8000-000000000011",
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "Category": "Cleaning",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0012-0000-4000-8000-000000000012",
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "Category": "Repairs",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0013-0000-4000-8000-000000000013",
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "Category": "Lunch",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0014-0000-4000-8000-000000000014",
+    "GroupId": "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42",
+    "Category": "Coffee run",
+    "SplitRule": {
+      "$type": "even",
+      "Among": []
+    }
   }
 ]

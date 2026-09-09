@@ -1,4 +1,4 @@
-using GroupSplit.API.Errors;
+﻿using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -16,7 +16,15 @@ public interface IInboxService
     Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default);
 
     /// <summary>How many rows are waiting, for the badge.</summary>
-    Task<InboxSummaryResponse> Summary(CancellationToken ct = default);
+    /// <summary>
+    /// How many rows are waiting, and -- when asked -- how many of those look like an
+    /// expense already recorded.
+    /// </summary>
+    /// <param name="withDuplicates">
+    /// Whether to run the matcher over the waiting rows as well as counting them. Off by
+    /// default because the nav badge reads this on every page and only needs the count.
+    /// </param>
+    Task<InboxSummaryResponse> Summary(bool withDuplicates = false, CancellationToken ct = default);
 
     /// <summary>
     /// Turns a row into an expense: copies the bank's facts, applies the category's
@@ -99,11 +107,21 @@ public sealed class InboxService(
             (before == null || (row.AuthorizedDate ?? row.Date) <= before)));
     }
 
-    public async Task<InboxSummaryResponse> Summary(CancellationToken ct = default)
+    public async Task<InboxSummaryResponse> Summary(bool withDuplicates = false,
+        CancellationToken ct = default)
     {
-        var waiting = await Owned().CountAsync(row => row.Status == BankTransactionStatus.New, ct);
+        var waiting = await Owned()
+            .Where(row => row.Status == BankTransactionStatus.New)
+            .ToListAsync(ct);
 
-        return new InboxSummaryResponse(waiting);
+        if (!withDuplicates)
+            return new InboxSummaryResponse(waiting.Count);
+
+        var matches = await matcher.ExpensesLike(waiting, ct);
+
+        return new InboxSummaryResponse(
+            waiting.Count,
+            matches.Count(row => row.Value.Count > 0));
     }
 
     public async Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default)

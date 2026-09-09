@@ -1,0 +1,519 @@
+﻿@using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Transactions
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+@inject ITransactionsClient TransactionsClient
+@inject ITransactionsPageStateService TransactionsService
+@inject ITransactionCommands Transactions
+@inject IDialogService DialogService
+@inject ApiErrorPresenter Errors
+@inject NavigationManager Nav
+@inject DataChangeNotifier Changes
+@inject LocalClock Clock
+@implements IDisposable
+
+@*
+    Everything that moved money in one group: what it spent, and who has paid whom.
+
+    One list where there were two tabs. Expenses and Activity were the same rows with
+    different filters -- one hid settlements, the other did not -- and having two of them
+    made "which one was that in?" a real question while keeping the group's spend apart
+    from the group's balance history.
+
+    The reason they were split is real, and it is answered by the label rather than by the
+    split: a settlement is money changing hands and not money spent, so the figure above the
+    list counts expenses whatever the filter says and is called *total spent*. That label
+    carries all the weight, which is why it has to say total spent and not total.
+
+    The balance column is why this is a merge rather than a rename. You cannot show a
+    balance history against a list that hides half the events that move it.
+*@
+
+<div class="gs-stack">
+    @* One row: what kind, over what span, matching what. Three controls is the whole
+       filter, and it was two rows and nine buttons before the span collapsed into one. *@
+    <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
+        <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; min-width: 0">
+            <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
+                @foreach (var (label, value) in Kinds)
+                {
+                    var kind = value;
+                    <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
+                            aria-pressed="@(Kind == kind ? "true" : "false")"
+                            @onclick="@(() => SetKindAsync(kind))">@label</button>
+                }
+            </div>
+
+            <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+        </div>
+
+        @* "Search" and nothing more in the box; what it reaches is in the label a screen
+           reader gets. A placeholder listing the columns is a spec, not a hint, and it is
+           the first thing to truncate on a phone. *@
+        <MudTextField @bind-Value="_searchString"
+                      Placeholder="Search"
+                      aria-label="Search this group by name, note, category or either party"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                      Immediate="true"
+                      DebounceInterval="300"
+                      OnDebounceIntervalElapsed="OnSearchChangedAsync"
+                      Clearable="true"
+                      Margin="Margin.Dense"
+                      Variant="Variant.Outlined"
+                      Class="gs-search" />
+    </div>
+
+    <div class="gs-stats">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 0">
+            <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+            <span class="gs-eyebrow">Expenses</span>
+            <span class="gs-stat-value gs-num" data-gs-count="@ExpenseCount">@ExpenseCount</span>
+            <span class="gs-muted" style="font-size: .8125rem">@CountedOver</span>
+        </div>
+        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+            <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
+            @* Expenses only, whatever the chips say. This is the label that makes one tab
+               safe: two figures on one screen, one counting a subset of the list beneath
+               it, and the wording is all that tells them apart. *@
+            <span class="gs-eyebrow">Total spent</span>
+            <Money Value="Spent" Animate Class="gs-stat-value" />
+            <span class="gs-muted" style="font-size: .8125rem">your share @YourShare.ToMoney()</span>
+        </div>
+    </div>
+
+    <div class="gs-reveal" style="--i: 2">
+        <MudDataGrid T="GroupLedgerEntryResponse"
+                     @ref="_grid"
+                     ServerData="LoadPageAsync"
+                     RowsPerPage="10"
+                     SortMode="SortMode.Single"
+                     Hover="true"
+                     Bordered="false"
+                     Elevation="0"
+                     Class="gs-grid">
+            <Columns>
+                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
+                    <CellTemplate>
+                        <div class="gs-num" style="font-weight: 700; font-size: .875rem">@Clock.Local(context.Item.DateTime).ToString("d MMM yyyy")</div>
+                        <div class="gs-muted gs-num" style="font-size: .75rem">@Clock.Local(context.Item.DateTime).ToString("t")</div>
+                    </CellTemplate>
+                </PropertyColumn>
+
+                <PropertyColumn Property="x => x.Name" Title="Entry">
+                    <CellTemplate>
+                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                            @* An avatar for an expense and an icon for a transfer. It is
+                               what lets the merged list stay readable at a glance -- the
+                               kind is visible before any of the words are. *@
+                            @if (context.Item.Kind is ActivityKind.Transfer)
+                            {
+                                <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+                            }
+                            else
+                            {
+                                <Avatar Name="@context.Item.PaidByUserName" Size="sm" />
+                            }
+                            <div style="min-width: 0">
+                                <div style="font-weight: 700; font-size: .9375rem">@Headline(context.Item)</div>
+                                <div class="gs-muted" style="font-size: .75rem">@Detail(context.Item)</div>
+                            </div>
+                        </div>
+                    </CellTemplate>
+                </PropertyColumn>
+
+                @* HideSmall on the three that are context rather than the point. A phone
+                   turns every column into its own line, and seven lines an entry is a
+                   ledger nobody scrolls: what is left is when, what, and how much. *@
+                <PropertyColumn Property="x => x.Category" Title="Category" Sortable="false" HideSmall="true">
+                    <CellTemplate>
+                        @if (context.Item.Kind is ActivityKind.Transfer)
+                        {
+                            <span class="gs-tag clay">Settlement</span>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(context.Item.Category))
+                        {
+                            <span class="gs-tag">@context.Item.Category</span>
+                        }
+                    </CellTemplate>
+                </PropertyColumn>
+
+                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
+                    <CellTemplate>
+                        <Money Value="context.Item.Amount" Class="gs-grid-amount" />
+                    </CellTemplate>
+                </PropertyColumn>
+
+                @* What the dinner cost and what it cost you are different numbers, and
+                   every listing in the app used to show only the first. A transfer has no
+                   share -- paying somebody back is not a cost anyone carries a part of --
+                   so it renders as a dash rather than as zero. *@
+                <TemplateColumn Title="Your share" Sortable="false" HideSmall="true"
+                                HeaderClass="gs-right" CellClass="gs-right">
+                    <CellTemplate>
+                        @if (context.Item.Share is { } share)
+                        {
+                            <Money Value="share" Class="gs-grid-share" />
+                        }
+                        else
+                        {
+                            <span class="gs-muted">—</span>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+
+                <TemplateColumn Title="Balance" Sortable="false" HideSmall="true"
+                                HeaderClass="gs-right" CellClass="gs-right">
+                    <CellTemplate>
+                        <Money Value="context.Item.RunningBalance" Signed Class="gs-grid-balance" />
+                    </CellTemplate>
+                </TemplateColumn>
+
+                @* Editing and deleting live on the row, and what is offered depends on
+                   which kind it is. An expense has a dialog that can offer the category
+                   and the shares; a settlement has nothing to it but who paid whom and
+                   how much, so re-recording it is the whole correction -- and this is now
+                   the only tab it could live in. *@
+                @* Titled, and not only for the header. On a phone the grid gives every cell
+                   its own line with its label beside it, and a column with no title put two
+                   unattached icons in a band of their own -- which row they belonged to was
+                   anybody's guess. *@
+                <TemplateColumn Title="Actions" Sortable="false"
+                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                    <CellTemplate>
+                        <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            @if (context.Item.Kind is ActivityKind.Expense)
+                            {
+                                <MudTooltip Text="Edit">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"Edit {context.Item.Name}")"
+                                                   OnClick="@(async () => await EditAsync(context.Item))" />
+                                </MudTooltip>
+                            }
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="@($"Delete {Headline(context.Item)}")"
+                                               OnClick="@(async () => await DeleteAsync(context.Item))" />
+                            </MudTooltip>
+                        </div>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <NoRecordsContent>
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+                    <h3>@(IsNarrowed ? "Nothing matches" : "Nothing recorded yet")</h3>
+                    <span>
+                        @(IsNarrowed
+                            ? "Try a different name, category, person or date."
+                            : "Expenses and settlements in this group will show up here.")
+                    </span>
+                </div>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudDataGridPager T="GroupLedgerEntryResponse" PageSizeOptions="@(new[] { 10, 25, 50 })" />
+            </PagerContent>
+        </MudDataGrid>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid GroupId { get; set; }
+
+    /// <summary>
+    /// Which kind the list is narrowed to, from the URL. A filtered ledger is a place
+    /// somebody can be sent to rather than a mode they have to set: it is the thing that
+    /// used to be a choice of tab, and losing the ability to link to it would be a step
+    /// back from the two tabs this replaces.
+    /// </summary>
+    [Parameter] public ActivityKind? Kind { get; set; }
+
+    [Parameter] public EventCallback<ActivityKind?> KindChanged { get; set; }
+
+    private static readonly (string Label, ActivityKind? Value)[] Kinds =
+    [
+        ("Everything", null),
+        ("Expenses", ActivityKind.Expense),
+        ("Settlements", ActivityKind.Transfer)
+    ];
+
+    private string _searchString = "";
+    private DateFilter _range = DateFilter.AllTime;
+    private MudDataGrid<GroupLedgerEntryResponse>? _grid;
+    private bool _reloading;
+
+    private TransactionSummaryResponse? _spending;
+    private ExpenseShareSummaryResponse? _shares;
+    private SummaryKey? _asked;
+
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
+
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime || Kind is not null;
+
+    private string? Search => IsSearching ? _searchString.Trim() : null;
+
+    private int ExpenseCount => _spending?.Count ?? 0;
+    private decimal Spent => _spending?.Total ?? 0m;
+    private decimal YourShare => _shares?.Share ?? 0m;
+
+    /// <summary>
+    /// What the two figures are of. It never mentions the kind chips, because the figures
+    /// deliberately ignore them -- saying "settlements" over a count of expenses is exactly
+    /// the confusion the label is there to prevent.
+    /// </summary>
+    private string CountedOver
+    {
+        get
+        {
+            var said = new List<string>(3)
+            {
+                "by everyone",
+                _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant()
+            };
+
+            if (IsSearching)
+                said.Add("matching your search");
+
+            return string.Join(" · ", said);
+        }
+    }
+
+    /// <summary>
+    /// Everything the figures depend on, so two narrowings arrived at the same way compare
+    /// equal and one arrived at differently does not. The kind is absent on purpose: it does
+    /// not move these figures, so a chip click must not send a request for them.
+    /// </summary>
+    private sealed record SummaryKey(Guid Group, DateFilter Range, string? Search);
+
+    private SummaryKey CurrentKey => new(GroupId, _range, Search);
+
+    private async Task<GridData<GroupLedgerEntryResponse>> LoadPageAsync(
+        GridState<GroupLedgerEntryResponse> state, CancellationToken cancellationToken)
+    {
+        var sort = state.SortDefinitions.FirstOrDefault();
+        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+
+        var page = await ReadAsync(() => GroupsClient.GetGroupActivityAsync(
+            GroupId,
+            from: bounds.From,
+            to: bounds.To,
+            kind: (int?)Kind,
+            search: Search,
+            sortBy: sort is null ? "dateTime" : Camel(sort.SortBy),
+            sortDescending: sort?.Descending ?? true,
+            page: state.Page + 1,
+            pageSize: state.PageSize,
+            cancellationToken: cancellationToken));
+
+        return new GridData<GroupLedgerEntryResponse>
+        {
+            Items = page?.Items ?? [],
+            TotalItems = page?.TotalCount ?? 0
+        };
+    }
+
+    private static string Camel(string propertyName) =>
+        string.IsNullOrEmpty(propertyName)
+            ? propertyName
+            : char.ToLowerInvariant(propertyName[0]) + propertyName[1..];
+
+    private async Task<T?> ReadAsync<T>(Func<Task<T>> read) where T : class
+    {
+        T? result = null;
+        await Errors.TryAsync(async () => result = await read(), "Could not load this group's ledger.");
+        return result;
+    }
+
+    private async Task SetKindAsync(ActivityKind? kind)
+    {
+        if (Kind == kind) return;
+
+        Kind = kind;
+
+        // The host page owns the URL, so it is told rather than written to from here.
+        if (KindChanged.HasDelegate)
+            await KindChanged.InvokeAsync(kind);
+
+        await BackToFirstPageAsync();
+    }
+
+    private async Task OnSearchChangedAsync(string _)
+    {
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private async Task OnRangeChangedAsync(DateFilter range)
+    {
+        _range = range;
+
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private Task BackToFirstPageAsync()
+    {
+        if (_grid is null) return Task.CompletedTask;
+
+        _grid.NavigateTo(MudBlazor.Page.First);
+        return ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        // A write raises two events, and two reloads at once would race over the rows.
+        if (_grid is null || _reloading) return;
+
+        _reloading = true;
+        try
+        {
+            await InvokeAsync(() => _grid.ReloadServerData());
+        }
+        finally
+        {
+            _reloading = false;
+        }
+    }
+
+    /// <summary>
+    /// The two figures above the list. Both read expenses only -- the spend and the
+    /// caller's part of it -- so neither moves when the kind chips do, and a settlement can
+    /// never land in a spending total.
+    /// </summary>
+    /// <remarks>
+    /// Asked only when the narrowing changes, and shown only if it is still the narrowing in
+    /// force: the group page re-renders this tab on every announcement about the group, and
+    /// an answer about a span nobody is looking at any more arriving last would put the
+    /// wrong figures on the cards.
+    /// </remarks>
+    private async Task ReadSummaryAsync()
+    {
+        var key = CurrentKey;
+
+        if (key == _asked)
+            return;
+
+        _asked = key;
+
+        var bounds = key.Range.Bounds(Clock.Offset, Clock.Today);
+
+        var spending = await ReadAsync(() => GroupsClient.GetGroupTransactionsSummaryAsync(
+            key.Group, from: bounds.From, to: bounds.To, search: key.Search));
+
+        // The caller's own share of the same set, read through the shares summary narrowed
+        // to this group. It is the one figure on the screen that is about the reader rather
+        // than about the group.
+        var shares = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
+            from: bounds.From, to: bounds.To, groupId: key.Group, search: key.Search));
+
+        if (key != _asked)
+            return;
+
+        _spending = spending;
+        _shares = shares;
+    }
+
+    private async Task EditAsync(GroupLedgerEntryResponse entry)
+    {
+        // The edit dialog works in expenses, so the row is handed over as one. Only an
+        // expense row offers the button.
+        var original = new TransactionResponse
+        {
+            Id = entry.Id,
+            Name = entry.Name,
+            Description = entry.Description,
+            Amount = entry.Amount,
+            DateTime = entry.DateTime,
+            GroupId = GroupId,
+            PaidByUserId = entry.PaidByUserId,
+            PaidByUserName = entry.PaidByUserName,
+            Category = entry.Category
+        };
+
+        var parameters = new DialogParameters<UpdateTransactionDialog> { { x => x.Original, original } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
+
+        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        if (request is not null)
+            await TransactionsService.UpdateAsync(original, request);
+    }
+
+    /// <summary>
+    /// Removes an entry of either kind. The wording is not the same for the two, and the
+    /// difference matters: deleting an expense removes something the group spent, and
+    /// deleting a settlement says a debt somebody thought was paid is outstanding again.
+    /// </summary>
+    private async Task DeleteAsync(GroupLedgerEntryResponse entry)
+    {
+        var settlement = entry.Kind is ActivityKind.Transfer;
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, settlement
+                ? $"Delete the settlement where {Headline(entry)}? Everybody's balance in this group "
+                  + "goes back to what it was before it was recorded."
+                : $"Are you sure you want to delete \"{entry.Name}\"?" },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
+            settlement ? "Delete Settlement" : "Delete Transaction", parameters, options);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        await Transactions.DeleteAsync(entry.Id, entry.Name, settlement ? "settlement" : "expense");
+    }
+
+    private static string Headline(GroupLedgerEntryResponse entry) =>
+        entry.Kind is ActivityKind.Transfer
+            ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
+            : entry.Name;
+
+    /// <summary>
+    /// A transfer's note when it has one, and who paid on an expense. The column has always
+    /// been on the row and nothing ever put anything in it, so every repayment read the
+    /// same: "Settling up", with no way to tell one from another.
+    /// </summary>
+    private static string Detail(GroupLedgerEntryResponse entry) =>
+        entry.Kind is ActivityKind.Transfer
+            ? entry.Description is { Length: > 0 } note ? note : "Settling up"
+            : $"{entry.PaidByUserName} paid";
+
+    private async Task OnDataChangedAsync()
+    {
+        _asked = null;
+
+        await ReadSummaryAsync();
+        await ReloadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnInitialized()
+    {
+        Changes.TransactionsChanged += OnDataChangedAsync;
+        Changes.GroupsChanged += OnDataChangedAsync;
+    }
+
+    protected override Task OnParametersSetAsync() => ReadSummaryAsync();
+
+    public void Dispose()
+    {
+        Changes.TransactionsChanged -= OnDataChangedAsync;
+        Changes.GroupsChanged -= OnDataChangedAsync;
+    }
+}

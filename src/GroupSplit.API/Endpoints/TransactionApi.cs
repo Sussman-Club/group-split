@@ -1,4 +1,4 @@
-using GroupSplit.API.Errors;
+﻿using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
@@ -28,6 +28,7 @@ public static class TransactionApi
             group.MapGetSummary();
             group.MapGetShares();
             group.MapGetSharesSummary();
+            group.MapGetMonthlyExposure();
             group.MapGetById();
             group.MapBankMatches();
             group.MapCreate();
@@ -108,6 +109,7 @@ public static class TransactionApi
                     [AsParameters] TransactionFilter filter,
                     [AsParameters] SortRequest sort,
                     [AsParameters] PageRequest page,
+                    bool? owedOnly,
                     ICurrentUser currentUser,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
@@ -116,7 +118,8 @@ public static class TransactionApi
                     var expenses = await transactionService.List(ct);
 
                     return Results.Ok(await shares
-                        .ToSharePageAsync(expenses, filter, sort, page, currentUser.User.Id, ct));
+                        .ToSharePageAsync(expenses, filter, sort, page, currentUser.User.Id,
+                            owedOnly ?? false, ct));
                 })
                 .WithName("GetTransactionShares")
                 .Produces<PagedResponse<ExpenseShareResponse>>()
@@ -131,6 +134,7 @@ public static class TransactionApi
         {
             return group.MapGet("shares/summary", async (
                     [AsParameters] TransactionFilter filter,
+                    bool? owedOnly,
                     ICurrentUser currentUser,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
@@ -139,10 +143,77 @@ public static class TransactionApi
                     var expenses = await transactionService.List(ct);
 
                     return Results.Ok(await shares
-                        .ToShareSummaryAsync(expenses, filter, currentUser.User.Id, ct));
+                        .ToShareSummaryAsync(expenses, filter, currentUser.User.Id,
+                            owedOnly ?? false, ct));
                 })
                 .WithName("GetTransactionSharesSummary")
                 .Produces<ExpenseShareSummaryResponse>();
+        }
+
+        /// <summary>
+        /// What the caller paid and what it cost them, month by month, over the same filter
+        /// the listings take.
+        /// </summary>
+        /// <remarks>
+        /// The one series in the product worth drawing, and the one place a chart is
+        /// unarguable: a migrated workbook of forty-odd months is not readable as a table.
+        /// Two figures rather than one, because the gap between them is the story -- it is
+        /// how much somebody is habitually fronting and waiting to get back.
+        /// <para>
+        /// Two grouped reads rather than one join. What was paid and what was owed live in
+        /// different tables and a month can have one without the other -- a month where
+        /// somebody paid for nothing but owed a share of a flatmate's rent is a real month
+        /// and an inner join would drop it.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapGetMonthlyExposure()
+        {
+            return group.MapGet("monthly", async (
+                    [AsParameters] TransactionFilter filter,
+                    ICurrentUser currentUser,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var user = currentUser.User;
+                    var expenses = (await transactionService.List(ct)).ApplyFilter(filter);
+                    var shares = await transactionService.Shares(ct);
+
+                    var paid = await expenses
+                        .Where(expense => expense.UserId == user.Id)
+                        .GroupBy(expense => new { expense.DateTime.Year, expense.DateTime.Month })
+                        .Select(month => new
+                        {
+                            month.Key.Year,
+                            month.Key.Month,
+                            Total = month.Sum(expense => expense.Amount)
+                        })
+                        .ToListAsync(ct);
+
+                    var owed = await (from split in shares
+                                      join expense in expenses on split.TransactionId equals expense.Id
+                                      group split.Amount by new { expense.DateTime.Year, expense.DateTime.Month }
+                                      into month
+                                      select new
+                                      {
+                                          month.Key.Year,
+                                          month.Key.Month,
+                                          Total = month.Sum()
+                                      })
+                        .ToListAsync(ct);
+
+                    var months = paid.Select(row => (row.Year, row.Month))
+                        .Union(owed.Select(row => (row.Year, row.Month)))
+                        .OrderBy(month => month)
+                        .Select(month => new MonthlyExposureResponse(
+                            new DateOnly(month.Year, month.Month, 1),
+                            paid.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m,
+                            owed.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m))
+                        .ToList();
+
+                    return Results.Ok(months);
+                })
+                .WithName("GetMonthlyExposure")
+                .Produces<MonthlyExposureResponse[]>();
         }
 
         private RouteHandlerBuilder MapGetById()
@@ -429,6 +500,22 @@ public static class TransactionApi
         }
     }
 
+    extension(IQueryable<ExpenseShareResponse> rows)
+    {
+        /// <summary>
+        /// Keeps only the rows that are actually a debt: a share of something somebody else
+        /// paid for.
+        /// </summary>
+        /// <remarks>
+        /// The difference between two of the three views the page offers. <em>Everything you
+        /// are in</em> is every share; <em>your share</em> is what other people's expenses
+        /// cost you, and a share of an expense you paid for yourself is not that -- you are
+        /// owed the rest of it.
+        /// </remarks>
+        internal IQueryable<ExpenseShareResponse> OwedOnly(bool owedOnly) =>
+            owedOnly ? rows.Where(row => !row.PaidByYou) : rows;
+    }
+
     extension(IQueryable<TransactionSplit> shares)
     {
         /// <summary>
@@ -472,8 +559,9 @@ public static class TransactionApi
         /// </summary>
         internal Task<PagedResponse<ExpenseShareResponse>> ToSharePageAsync(
             IQueryable<Expense> expenses, TransactionFilter filter, SortRequest sort, PageRequest page,
-            Guid userId, CancellationToken ct) =>
+            Guid userId, bool owedOnly, CancellationToken ct) =>
             shares.SelectDto(expenses.ApplyFilter(filter), userId)
+                .OwedOnly(owedOnly)
                 .ApplySort(sort, ShareSort)
                 .ToPageAsync(page, ct);
 
@@ -486,9 +574,10 @@ public static class TransactionApi
         /// aggregates over an indexed join is not worth taking that risk for.
         /// </remarks>
         internal async Task<ExpenseShareSummaryResponse> ToShareSummaryAsync(
-            IQueryable<Expense> expenses, TransactionFilter filter, Guid userId, CancellationToken ct)
+            IQueryable<Expense> expenses, TransactionFilter filter, Guid userId, bool owedOnly,
+            CancellationToken ct)
         {
-            var matches = shares.SelectDto(expenses.ApplyFilter(filter), userId);
+            var matches = shares.SelectDto(expenses.ApplyFilter(filter), userId).OwedOnly(owedOnly);
 
             return new ExpenseShareSummaryResponse(
                 await matches.CountAsync(ct),

@@ -1,0 +1,44 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    One person, one payment, and the groups it comes from.
+
+    The line is per person and not per group, which is the whole change: owing the same
+    friend in two groups is one payment to one person, and today it is two settlements in
+    two dialogs on two pages. The groups are named underneath so the arithmetic stays
+    checkable -- the reduction is a convenience, not a black box.
+*@
+
+<div class="gs-settle-row">
+    <Avatar Name="@Person.UserName" />
+    <div style="min-width: 0">
+        <div class="who">@Person.UserName</div>
+        <div class="meta">@Breakdown</div>
+    </div>
+    <Money Value="Person.Amount" Animate />
+    <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRecord">
+        @(YouPaid ? "I paid them" : "They paid me")
+    </MudButton>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PersonSettlement Person { get; set; } = null!;
+
+    /// <summary>Which side of the plan this line is on, which is what the button says.</summary>
+    [Parameter] public SettlementDirection Direction { get; set; } = SettlementDirection.TheyPaidYou;
+
+    [Parameter] public EventCallback OnRecord { get; set; }
+
+    private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
+
+    /// <summary>
+    /// Where the figure comes from. One group renders as just its name -- the amount would
+    /// be the total repeated beside itself -- and two or more carry their own amounts,
+    /// because that is the case somebody has to be able to check.
+    /// </summary>
+    private string Breakdown => Person.Groups.Count == 1
+        ? Person.Groups[0].GroupName
+        : string.Join(" · ", Person.Groups.Select(part =>
+            $"{part.Amount.ToMoney()} in {part.GroupName}"));
+}

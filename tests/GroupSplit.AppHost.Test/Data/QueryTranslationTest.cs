@@ -1,4 +1,4 @@
-using GroupSplit.API.Endpoints;
+﻿using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
@@ -128,16 +128,77 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         await Service<IGroupService>().GetPosition(Ct);
     }
 
+    /// <summary>
+    /// A group's ledger: the merged listing, its filters, and the two correlated subqueries
+    /// behind the running balance.
+    /// </summary>
+    /// <remarks>
+    /// The balance column is the reason this test matters more than it used to. It is a
+    /// pair of aggregate subqueries per row, each correlated on a two-part comparison over
+    /// the date and the id -- exactly the shape the in-memory provider evaluates on the
+    /// client without complaining and Npgsql either translates or refuses outright.
+    /// </remarks>
     [Fact(Timeout = 120_000)]
-    public async Task A_groups_activity_translates()
+    public async Task A_groups_ledger_translates()
     {
-        var activity = await Service<IGroupService>().GetGroupActivity(await AGroupOfTheirs(), Ct);
+        var group = await AGroupOfTheirs();
+        var activity = await Service<IGroupService>().GetGroupActivity(group, Ct);
+        var me = Service<ICurrentUser>().User.Id;
 
-        // Through the endpoint's own ordering and projection, which is where the shape that
-        // has to translate actually lives.
+        // Through the endpoint's own filtering, ordering and projection, which is where the
+        // shape that has to translate actually lives.
+        foreach (var kind in new ActivityKind?[] { null, ActivityKind.Expense, ActivityKind.Transfer })
+        {
+            await activity
+                .ApplyFilter(new ActivityFilter(
+                    From: DateTimeOffset.UtcNow.AddYears(-1),
+                    To: DateTimeOffset.UtcNow,
+                    Kind: kind,
+                    Search: "a"))
+                .ApplySort(new SortRequest(), GroupApi.ActivitySort)
+                .SelectLedgerDto(me, activity)
+                .ToPageAsync(new PageRequest(), Ct);
+        }
+    }
+
+    /// <summary>
+    /// The home page's feed: everything in every group the caller is in, plus their own,
+    /// with the group name and their share on each row.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_cross_group_activity_feed_translates()
+    {
+        var activity = await Service<IGroupService>().GetUserActivity(Ct);
+        var me = Service<ICurrentUser>().User.Id;
+
         await activity
-            .ApplySort(new SortRequest(), GroupApi.ActivitySort)
-            .SelectActivityDto()
+            .OrderByDescending(transaction => transaction.DateTime)
+            .ThenByDescending(transaction => transaction.Id)
+            .SelectUserActivityDto(me)
+            .ToPageAsync(new PageRequest(), Ct);
+    }
+
+    /// <summary>
+    /// Every member balance in every group the caller is in, which is what the cross-group
+    /// settlement plan is computed from.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task Every_group_balance_translates_in_one_read()
+    {
+        await (await Service<IGroupService>().GetAllGroupNetBalances(Ct)).ToListAsync(Ct);
+    }
+
+    /// <summary>
+    /// The settlement plan and the history behind it, both of which reach through a
+    /// transfer's splits to name the other end.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_cross_group_settlement_plan_translates()
+    {
+        await Service<ISettlementService>().GetPlan(Ct);
+
+        await (await Service<ISettlementService>().GetHistory(Ct))
+            .OrderByDescending(settlement => settlement.DateTime)
             .ToPageAsync(new PageRequest(), Ct);
     }
 
@@ -193,7 +254,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     [Fact(Timeout = 120_000)]
     public async Task The_inbox_summary_translates()
     {
-        await Service<IInboxService>().Summary(Ct);
+        await Service<IInboxService>().Summary(withDuplicates: true, Ct);
     }
 
     /// <summary>

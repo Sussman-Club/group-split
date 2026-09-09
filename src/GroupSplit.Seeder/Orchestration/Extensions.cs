@@ -1,4 +1,4 @@
-using GroupSplit.API.Services;
+﻿using GroupSplit.API.Services;
 ﻿using GroupSplit.API.Extensions;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.DataSources;
@@ -42,6 +42,11 @@ public static class Extensions
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 
+            // Repayments, after the expenses. Without them every seeded balance only ever
+            // grows: the Settle page has no history and a ledger filtered to settlements
+            // is empty.
+            builder.AddSeeder<SettlementSeeder>();
+
             // Demo bank data. Its provider has no connector, so nothing ever tries to
             // sync it; it exists so the inbox is not empty for anybody without Plaid.
             builder.AddSeeder<BankConnectionSeeder>();
@@ -62,6 +67,7 @@ public static class Extensions
             services.AddJsonSeedSource<UserSeedDto>(opt => opt.Paths.Users);
             services.AddJsonSeedSource<CategorySeedDto>(opt => opt.Paths.Categories);
             services.AddJsonSeedSource<TransactionSeedDto>(opt => opt.Paths.Transactions);
+            services.AddJsonSeedSource<SettlementSeedDto>(opt => opt.Paths.Settlements);
             services.AddJsonSeedSource<BankConnectionSeedDto>(opt => opt.Paths.BankConnections);
             return services;
         }

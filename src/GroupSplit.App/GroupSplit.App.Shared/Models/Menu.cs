@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Components.Routing;
+﻿using Microsoft.AspNetCore.Components.Routing;
 
 namespace GroupSplit.App.Shared.Models;
 
@@ -24,4 +24,15 @@ public class MenuItem
     /// renders an item that wants one.
     /// </remarks>
     public bool ShowsInboxCount { get; init; }
+
+    /// <summary>
+    /// Whether this item shows how many people are outstanding, in either direction.
+    /// </summary>
+    /// <remarks>
+    /// A second flag rather than a shared one, because the two counts mean different things
+    /// and only one of them is a queue. An inbox badge counts rows a bank sent that nobody
+    /// has looked at; this one counts people somebody has to square up with, which is a
+    /// standing state rather than something arriving.
+    /// </remarks>
+    public bool ShowsSettleCount { get; init; }
 }

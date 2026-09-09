@@ -1,4 +1,4 @@
-using GroupSplit.App.Shared.Services.Errors;
+﻿using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
 
@@ -133,4 +133,72 @@ public sealed class BankCommands(
             snackbar.Add($"{title} is back in your inbox.", Severity.Success);
             await changes.NotifyBankDataChangedAsync();
         }, "Could not restore it.");
+
+    public Task<int> IgnoreManyAsync(IReadOnlyList<(Guid Id, string Title)> rows,
+        CancellationToken ct = default) =>
+        ManyAsync(rows.Count,
+            index => inbox.IgnoreBankTransactionAsync(rows[index].Id, ct),
+            done => done == 1
+                ? $"{rows[0].Title} ignored."
+                : $"{done} transactions ignored.",
+            "Could not ignore them.");
+
+    public Task<int> KeepPersonalManyAsync(IReadOnlyList<(Guid Id, string Title, bool FileAnyway)> rows,
+        CancellationToken ct = default) =>
+        ManyAsync(rows.Count,
+            index => inbox.FileBankTransactionAsync(
+                rows[index].Id,
+                new FileBankTransactionRequest { FileAnyway = rows[index].FileAnyway },
+                ct),
+            done => done == 1
+                ? $"{rows[0].Title} added to your own expenses."
+                : $"{done} transactions added to your own expenses.",
+            "Could not add them.");
+
+    /// <summary>
+    /// Runs the same write over several rows, and tells the person once.
+    /// </summary>
+    /// <remarks>
+    /// One announcement at the end rather than one per row: every state that holds inbox
+    /// rows re-reads itself off that announcement, and twenty of them would be twenty round
+    /// trips behind a page nobody is looking at yet.
+    /// <para>
+    /// A row that fails does not stop the rest, and it does not raise its own message
+    /// either. What comes back is how many landed; the caller says what to do about the
+    /// difference, because only it knows what was asked for.
+    /// </para>
+    /// </remarks>
+    private async Task<int> ManyAsync(int count, Func<int, Task> write, Func<int, string> said,
+        string whenNoneLanded)
+    {
+        var done = 0;
+
+        for (var index = 0; index < count; index++)
+        {
+            try
+            {
+                await write(index);
+                done++;
+            }
+            catch (Exception exception) when (ApiErrors.IsApiFailure(exception))
+            {
+                // Kept, and reported by the count rather than by a message of its own. A
+                // row the API refuses -- one already filed on another tab, one it will not
+                // file over a duplicate -- is an ordinary outcome in a queue somebody is
+                // clearing in bulk.
+            }
+        }
+
+        if (done > 0)
+        {
+            snackbar.Add(said(done), Severity.Success);
+            await changes.NotifyBankDataChangedAsync();
+        }
+        else if (count > 0)
+        {
+            snackbar.Add(whenNoneLanded, Severity.Error);
+        }
+
+        return done;
+    }
 }

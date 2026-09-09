@@ -41,6 +41,19 @@ Two colours legitimately differ between the app and Keycloak's dark scheme, for 
 rather than taste: `--gs-teal-deep` is the *lighter* tint in dark mode, because hover has
 to move away from the background rather than toward it.
 
+## The one exception: data marks
+
+`--gs-mark-paid` and `--gs-mark-share` are defined on `.gs-chart` in `app.css` and nowhere
+else, and that is deliberate rather than an oversight. They are the only tokens the rule
+above does not apply to, because Keycloak draws no charts and a mail has none: there is no
+second copy for them to drift from.
+
+The paid mark is a more chromatic step of the brand teal (`#0f8f83` in light, `#3fbfb2` in
+dark) rather than `--gs-teal` itself. The UI teal is tuned to sit under text and behind
+surfaces, and at that chroma a two-pixel line on a cream ground reads as grey. A colour that
+carries a value has to be legible as a *mark*, which is a different requirement from being
+legible as a *surface*, and using one token for both jobs would mean losing one of them.
+
 ## Checking a change
 
 The app is the easy one — `aspire start` and look. For the Keycloak pages, the theme is

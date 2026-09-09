@@ -1,4 +1,4 @@
-using GroupSplit.App.Shared.Models;
+﻿using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
@@ -58,7 +58,7 @@ public class InboxStateRefreshTest
         ];
 
         _inboxClient
-            .Setup(client => client.GetInboxSummaryAsync(It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetInboxSummaryAsync(It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new InboxSummaryResponse(_rows.Count(row => row.Status == InboxStatus.New)));
 
         _inboxClient

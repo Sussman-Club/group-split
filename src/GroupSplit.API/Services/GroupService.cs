@@ -7,6 +7,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
 
+/// <summary>
+/// One member's balance in one group, with the group named on the row.
+/// </summary>
+/// <remarks>
+/// <see cref="GroupNetBalance"/> with the group attached, and not a replacement for it: a
+/// group's own balances view already knows which group it is looking at, and putting the
+/// name on every row there would be the same string repeated down the page. This exists
+/// for the one read that spans groups.
+/// </remarks>
+public record GroupMemberBalance(
+    Guid GroupId,
+    string GroupName,
+    Guid UserId,
+    string UserName,
+    decimal AmountPaid,
+    decimal AmountOwed)
+{
+    public decimal Balance => AmountPaid - AmountOwed;
+}
+
 public interface IGroupService
 {
     /// <summary>
@@ -69,6 +89,19 @@ public interface IGroupService
     Task<IQueryable<Transaction>> GetGroupActivity(Guid groupId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Everything that has happened anywhere the caller is: every group they belong to, and
+    /// their own expenses outside all of them.
+    /// </summary>
+    /// <remarks>
+    /// The home page's feed. A group's activity answers "what has happened here"; this
+    /// answers "what has happened", which is the question somebody opening the app actually
+    /// has. Until now the nearest thing to it was the listing of expenses they had paid for
+    /// personally -- one slice of the answer, and the slice that leaves out both the money
+    /// other people are spending on their behalf and every settlement.
+    /// </remarks>
+    Task<IQueryable<Transaction>> GetUserActivity(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the balance of a group per user
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
@@ -85,6 +118,23 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalanceFor(Guid groupId, Guid memberId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every member balance in every group the caller is in, each row saying which group it
+    /// belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The input to the cross-group settlement plan. That plan is the per-group minimisation
+    /// run over each group and then added up per person, so it needs the whole picture in
+    /// one read rather than a query per group: the alternative is one round trip per group
+    /// somebody is in, on the screen they open to square up.
+    /// <para>
+    /// Archived groups are in it. Archiving tidies somebody's list; it does not forgive a
+    /// debt, and a settle screen that quietly dropped one would be telling them they are
+    /// square when they are not.
+    /// </para>
+    /// </remarks>
+    Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(CancellationToken cancellationToken = default);
 
     Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
@@ -284,6 +334,22 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
                select transaction;
     }
 
+    public async Task<IQueryable<Transaction>> GetUserActivity(
+        CancellationToken cancellationToken = default)
+    {
+        var user = userContext.User;
+        var groups = await GetAllGroups(cancellationToken);
+
+        // The same two clauses the expense listing uses -- anything in a group they are in,
+        // plus anything they paid for wherever it is -- over transactions rather than
+        // expenses, so settlements are in it. That is the whole difference: a balance that
+        // moved with nothing in the feed to explain it is its own kind of wrong.
+        return from transaction in context.Set<Transaction>()
+               where groups.Any(@group => @group.Id == transaction.GroupId) ||
+                     transaction.UserId == user.Id
+               select transaction;
+    }
+
     public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
         CancellationToken cancellationToken = default)
     {
@@ -296,6 +362,30 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         var groupQuery = GroupsOf(memberId).Where(g => g.Id == groupId);
 
         return Task.FromResult(NetBalances(groupQuery));
+    }
+
+    public async Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(
+        CancellationToken cancellationToken = default)
+    {
+        var groups = await GetAllGroups(cancellationToken);
+
+        // The same two sums <see cref="NetBalances"/> takes, with the group carried through.
+        // Transfers are in both of them, because a transfer is a transaction with one split:
+        // the payer's paid rises and the payee's owed rises, which is what paying somebody
+        // back does to a balance.
+        return from @group in groups
+               from user in @group.Users
+               select new GroupMemberBalance(
+                   @group.Id,
+                   @group.Name,
+                   user.Id,
+                   user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
+                   (from transaction in context.Set<Transaction>()
+                    where transaction.GroupId == @group.Id && transaction.UserId == user.Id
+                    select transaction.Amount).Sum(),
+                   (from split in context.Set<TransactionSplit>()
+                    where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
+                    select split.Amount).Sum());
     }
 
     /// <summary>

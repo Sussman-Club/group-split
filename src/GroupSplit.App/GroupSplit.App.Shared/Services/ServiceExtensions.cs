@@ -1,7 +1,8 @@
-using GroupSplit.App.Shared.Services.Banking;
+﻿using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
+using GroupSplit.App.Shared.Services.Settling;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
@@ -53,6 +54,11 @@ public static class ServiceExtensions
 
             services.TryAdd<GroupsTracker>(sessionLifetime);
             services.TryAddScoped<IGroupsPageStateService, GroupsPageStateService>();
+
+            // Read by the Settle page, by the home page's waiting strip, and by the nav
+            // badge, so one service rather than three that would each fetch the plan.
+            services.TryAdd<SettleTracker>(sessionLifetime);
+            services.TryAddScoped<ISettleStateService, SettleStateService>();
             
             services.TryAdd<UserTracker>(sessionLifetime);
             services.TryAdd<IUserLogin, UserLogin>(sessionLifetime);

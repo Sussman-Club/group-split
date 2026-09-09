@@ -1,4 +1,4 @@
-@page "/inbox"
+﻿@page "/inbox"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Banking
@@ -8,6 +8,7 @@
 @inject IBankCommands Bank
 @inject IDialogService DialogService
 @inject LocalClock Clock
+@inject ISnackbar Snackbar
 @implements IDisposable
 
 @*
@@ -30,6 +31,13 @@
 </div>
 
 <div class="gs-stack">
+    @* Which rows, and over what span, on one line. They were two bands with the date
+       control's own margins between them, which on a phone put most of a screen of empty
+       cream between the tabs and the first row somebody came here to deal with.
+
+       The spans are the same five the expense listings offer, so narrowing by date is the
+       one control wherever you meet it. A bank sends months at a time and the answer to a
+       backlog is to take one month of it. *@
     <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
         @foreach (var status in Filters)
         {
@@ -41,12 +49,9 @@
                 @Label(choice)
             </MudButton>
         }
-    </div>
 
-    @* The same spans the expense listings offer, so narrowing by date is the one control
-       wherever you meet it. A bank sends months at a time and the answer to a backlog is
-       to take one month of it. *@
-    <DateRangeFilter Value="@State.Range" ValueChanged="@(range => State.SetRangeAsync(range))" />
+        <DateRangeFilter Value="@State.Range" ValueChanged="@(range => State.SetRangeAsync(range))" />
+    </div>
 
     @if (State.Connections is { Enabled: false })
     {
@@ -77,11 +82,63 @@
     else
     {
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
-            <div class="gs-list">
+            @* Selecting is only offered where it means anything. A row that has been added
+               or ignored has had its decision made; the bulk actions here are that same
+               decision, taken for several rows at once. *@
+            @if (Selectable)
+            {
+                @* A header for the list rather than a control floating over it: it carries
+                   the same padding as a row, so its box sits in the same column as theirs
+                   and the ticks line up down the left edge. *@
+                <div class="gs-list-head">
+                    <label class="gs-list-head-select">
+                        <MudCheckBox T="bool"
+                                     Value="@AllSelected"
+                                     ValueChanged="@((bool on) => SelectAll(on))"
+                                     Indeterminate="@(_selected.Count > 0 && !AllSelected)"
+                                     Color="Color.Primary"
+                                     Dense="true"
+                                     Class="gs-row-check"
+                                     aria-label="Select every row that can be" />
+                        <span>@(_selected.Count > 0 ? $"{_selected.Count} selected" : "Select all")</span>
+                    </label>
+
+                    @* Said apart from the label rather than tacked onto it: it explains
+                       what select-all did not do, which is not part of its name. *@
+                    @if (FlaggedCount > 0)
+                    {
+                        <span class="note">
+                            @FlaggedCount with a possible duplicate @(FlaggedCount == 1 ? "is" : "are") left out
+                        </span>
+                    }
+                </div>
+            }
+
+            @* gs-queue: a list whose rows are tasks rather than records. It is what earns
+               the full-width primary action on a phone, and no other list in the app
+               should have one. *@
+            <div class="gs-list gs-queue">
                 @foreach (var item in State.Rows)
                 {
                     var row = item;
-                    <div class="gs-row" style="cursor: default" @key="row.Id">
+                    @* is-selectable, not just is-selected: the checkbox is a fourth child
+                       of a three-column grid, and the row needs the column to put it in
+                       whether or not it is ticked. *@
+                    <div class="gs-row @(Selectable ? "is-selectable" : "") @(_selected.Contains(row.Id) ? "is-selected" : "")"
+                         style="cursor: default" @key="row.Id">
+                        @if (Selectable)
+                        {
+                            @* A row with a suggestion is selectable, but select-all leaves
+                               it alone: answering "is this the same payment?" is the one
+                               decision on this page that must not be taken in bulk. *@
+                            <MudCheckBox T="bool"
+                                         Value="@_selected.Contains(row.Id)"
+                                         ValueChanged="@((bool on) => Select(row.Id, on))"
+                                         Color="Color.Primary"
+                                         Dense="true"
+                                         Class="gs-row-check"
+                                         aria-label="@($"Select {row.Title}")" />
+                        }
                         @if (row.LogoUrl is { Length: > 0 } logo)
                         {
                             @* The merchant's own logo where the bank sent one: a row reads
@@ -126,21 +183,45 @@
                                    Signed="@row.IsCredit" Absolute="@row.IsCredit"
                                    Class="@(row.IsCredit ? "gs-muted" : "")" />
 
+                            @*
+                                One primary action, and the rest one gesture away.
+
+                                The row used to offer up to five buttons, and a page of
+                                twenty-three of them was a hundred and fifteen ways to
+                                mis-tap. Sharing is the answer this app exists for, so it
+                                gets the button; keeping a payment personal and ignoring it
+                                are neither common nor destructive -- ignoring is reversible
+                                from the Ignored filter, which is exactly why it does not
+                                need to be prominent.
+                            *@
                             @if (row.Status == InboxStatus.New)
                             {
                                 <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
-                                    <MudButton Variant="Variant.Text" Size="Size.Small"
-                                               Disabled="@(_busy == row.Id)"
-                                               OnClick="@(() => IgnoreAsync(row))">Ignore</MudButton>
-                                    @if (!row.IsCredit)
+                                    @if (row.IsCredit)
                                     {
+                                        @* Money coming in cannot become an expense, so the
+                                           only answer it has is the quiet one, and it is
+                                           the button. *@
                                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudButton>
+                                                   OnClick="@(() => IgnoreAsync(row))">Ignore</MudButton>
+                                    }
+                                    else
+                                    {
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                    Class="gs-btn-pill"
                                                    Disabled="@(_busy == row.Id)"
                                                    OnClick="@(() => AddToGroupAsync(row))">Add to group</MudButton>
+                                        <MudMenu Icon="@Icons.Material.Rounded.MoreHoriz"
+                                                 Size="Size.Small"
+                                                 Dense="true"
+                                                 AnchorOrigin="Origin.BottomRight"
+                                                 TransformOrigin="Origin.TopRight"
+                                                 Disabled="@(_busy == row.Id)"
+                                                 aria-label="@($"Other answers for {row.Title}")">
+                                            <MudMenuItem OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudMenuItem>
+                                            <MudMenuItem OnClick="@(() => IgnoreAsync(row))">Ignore</MudMenuItem>
+                                        </MudMenu>
                                     }
                                 </div>
                             }
@@ -199,11 +280,143 @@
     }
 </div>
 
+@*
+    What is selected, and what can be done with it, over the list rather than beside it.
+
+    Both actions need no target and neither creates a debt: ignoring is reversible from the
+    Ignored filter, and keeping a payment personal files it in no group and owed to nobody.
+    Adding to a group is deliberately not here -- it needs a group, a category and a split,
+    and one answer applied to twenty rows is a guess about nineteen of them.
+*@
+@if (_selected.Count > 0)
+{
+    <div class="gs-selection-bar" role="status">
+        <span class="count">@_selected.Count selected</span>
+
+        <div class="gs-inline" style="gap: 6px; flex-wrap: nowrap">
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-pill"
+                       Disabled="@_bulkBusy"
+                       OnClick="@KeepSelectedPersonalAsync">Keep personal</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-pill"
+                       Disabled="@_bulkBusy"
+                       OnClick="@IgnoreSelectedAsync">Ignore</MudButton>
+            <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small"
+                           aria-label="Clear the selection"
+                           Disabled="@_bulkBusy"
+                           OnClick="@(() => _selected.Clear())" />
+        </div>
+    </div>
+}
+
 @code {
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
     private Guid? _busy;
     private bool _loadingMore;
+
+    /// <summary>
+    /// The rows ticked for a bulk action. Ids rather than rows, because the list under them
+    /// is re-read whenever anything is written and the row objects are replaced.
+    /// </summary>
+    private readonly HashSet<Guid> _selected = [];
+
+    private bool _bulkBusy;
+
+    /// <summary>
+    /// Whether selecting is offered at all. Only over the rows still waiting: the other two
+    /// filters show decisions already taken.
+    /// </summary>
+    private bool Selectable => State.Filter == InboxStatus.New;
+
+    /// <summary>
+    /// What select-all covers. A row showing a possible duplicate is left out: the whole
+    /// design of this page is that nothing is filed while that question is open, and a
+    /// select-all that swept them in would answer it for somebody.
+    /// </summary>
+    private IEnumerable<BankTransactionResponse> Selectables =>
+        State.Rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count == 0);
+
+    private bool AllSelected =>
+        Selectables.Any() && Selectables.All(row => _selected.Contains(row.Id));
+
+    /// <summary>
+    /// How many waiting rows select-all leaves alone. Said on the header, because a
+    /// control that quietly covers less than its name claims is worse than one that says
+    /// so.
+    /// </summary>
+    private int FlaggedCount => State.Rows.Count(row =>
+        row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0);
+
+    private void Select(Guid rowId, bool on)
+    {
+        if (on) _selected.Add(rowId); else _selected.Remove(rowId);
+    }
+
+    private void SelectAll(bool on)
+    {
+        _selected.Clear();
+
+        if (!on) return;
+
+        foreach (var row in Selectables)
+            _selected.Add(row.Id);
+    }
+
+    /// <summary>The selected rows as they stand now, in the order they are on screen.</summary>
+    private List<BankTransactionResponse> Selected =>
+        [.. State.Rows.Where(row => _selected.Contains(row.Id))];
+
+    private async Task IgnoreSelectedAsync()
+    {
+        _bulkBusy = true;
+
+        try
+        {
+            await Bank.IgnoreManyAsync([.. Selected.Select(row => (row.Id, row.Title))]);
+            _selected.Clear();
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Files the selected rows as the person's own.
+    /// </summary>
+    /// <remarks>
+    /// Money coming in is left out rather than refused one row at a time: a refund is not an
+    /// expense, and there is no other kind of transaction to file it as. FileAnyway travels
+    /// for a row showing a suggestion, because select-all never ticks one -- if it is in
+    /// here, somebody ticked it themselves.
+    /// </remarks>
+    private async Task KeepSelectedPersonalAsync()
+    {
+        _bulkBusy = true;
+
+        try
+        {
+            var rows = Selected.Where(row => !row.IsCredit).ToList();
+            var credits = Selected.Count - rows.Count;
+
+            var done = await Bank.KeepPersonalManyAsync(
+                [.. rows.Select(row => (row.Id, row.Title, row.PossibleDuplicates.Count > 0))]);
+
+            if (credits > 0)
+            {
+                Snackbar.Add(
+                    $"{credits} left alone: money coming in is not an expense.",
+                    Severity.Info);
+            }
+
+            if (done > 0 || credits == Selected.Count)
+                _selected.Clear();
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
 
     private async Task LoadMoreAsync()
     {
@@ -227,7 +440,14 @@
         await State.LoadRowsAsync();
     }
 
-    private void OnChanged() => InvokeAsync(StateHasChanged);
+    private void OnChanged()
+    {
+        // A tick names a row, and a different filter or span is a different set of rows --
+        // a selection carried across would act on whatever happened to share an id.
+        _selected.RemoveWhere(id => State.Rows.All(row => row.Id != id));
+
+        InvokeAsync(StateHasChanged);
+    }
 
     private static string Label(InboxStatus status) => status switch
     {

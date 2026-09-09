@@ -2491,3 +2491,726 @@ html:not([data-gs-ready]) .gs-group-card {
     height: 1px;
     background: var(--gs-line);
 }
+
+/* ------------------------------------------------------------- settling -- */
+
+/* One line per person, not per group -- the whole point of the Settle screen.
+   Same three-column shape as a balance row, plus the action that records it. */
+
+.gs-settle-list,
+.gs-plan-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-settle-row,
+.gs-plan-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    margin: 0 -12px;
+    border-radius: var(--gs-radius);
+    transition: background var(--gs-fast) var(--gs-ease);
+}
+
+.gs-settle-row + .gs-settle-row,
+.gs-plan-row + .gs-plan-row {
+    border-top: 1px solid var(--gs-line);
+    border-radius: 0 0 var(--gs-radius) var(--gs-radius);
+}
+
+.gs-settle-row:hover,
+.gs-plan-row:hover {
+    background: var(--gs-surface-2);
+    border-top-color: transparent;
+}
+
+.gs-settle-row .who,
+.gs-plan-row .who {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-settle-row .who small,
+.gs-plan-row .who small {
+    font-weight: 500;
+    color: var(--gs-muted);
+}
+
+.gs-settle-row .meta,
+.gs-plan-row .meta {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-settle-row .gs-money,
+.gs-plan-row .gs-money {
+    font-size: 1.0625rem;
+}
+
+/* A line of the plan the reader is on neither end of. Present because a plan
+   that hides a step does not add up, and quiet because it is not theirs. */
+.gs-plan-row.is-theirs {
+    opacity: 0.62;
+}
+
+/* Where a cross-group figure comes from, inside the settle dialog. Shown only
+   when the debt spans more than one group -- for a single group it would be
+   the total printed beside itself. */
+.gs-settle-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-3);
+}
+
+.gs-settle-breakdown-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.875rem;
+    color: var(--gs-ink-2);
+}
+
+/* The home page's one strip of things needing a decision. Tinted so it reads as
+   a queue rather than as another card of figures. */
+.gs-waiting {
+    border-color: var(--gs-teal);
+    background:
+        linear-gradient(180deg, var(--gs-teal-soft), transparent 120px),
+        var(--gs-surface);
+}
+
+/* The settle badge counts people to square up with, which is a standing state
+   rather than something arriving -- so it is outlined where the inbox badge,
+   which counts a queue, is filled. */
+.gs-nav-badge.is-quiet {
+    background: transparent;
+    color: var(--gs-teal);
+    box-shadow: inset 0 0 0 1.5px var(--gs-teal);
+}
+
+/* --------------------------------------------------------------- ledger -- */
+
+/* Your share is the quieter of the two figures on a group's ledger, where the
+   amount is the headline; on the You page under "your share" the two swap, and
+   the classes are applied the other way round. */
+.gs-grid .gs-grid-share {
+    font-size: 0.9375rem;
+    color: var(--gs-muted);
+}
+
+.gs-grid .gs-grid-balance {
+    font-size: 0.9375rem;
+}
+
+/* ---------------------------------------------------------------- chart -- */
+
+/* Two lines and four gridlines. The mark colour is a more chromatic step of the
+   brand teal: the UI teal has too little chroma to read as a data mark and
+   validates as grey against the surface. */
+
+.gs-chart {
+    --gs-mark-paid: #0f8f83;
+    --gs-mark-share: var(--gs-clay);
+}
+
+:root[data-theme="dark"] .gs-chart {
+    --gs-mark-paid: #3fbfb2;
+    --gs-mark-share: var(--gs-clay);
+}
+
+.gs-chart svg {
+    display: block;
+    width: 100%;
+    height: 180px;
+    overflow: visible;
+}
+
+.gs-chart-grid {
+    stroke: var(--gs-line);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.gs-chart-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    /* The viewBox is stretched to the container's width, so a plain stroke-width
+       would be scaled with it and the two lines would thicken on a wide screen. */
+    vector-effect: non-scaling-stroke;
+}
+
+.gs-chart-line.is-paid,
+.gs-chart-dot.is-paid {
+    stroke: var(--gs-mark-paid);
+}
+
+.gs-chart-line.is-share {
+    stroke: var(--gs-mark-share);
+    stroke-dasharray: 5 4;
+}
+
+.gs-chart-dot.is-share {
+    stroke: var(--gs-mark-share);
+}
+
+.gs-chart-dot {
+    fill: var(--gs-surface);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.gs-chart-months {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--gs-muted);
+    white-space: nowrap;
+}
+
+/* Every point has a span so the labels line up with the marks; the ones between the
+   labels are empty and must not claim any width of their own. */
+.gs-chart-months span {
+    flex: 0 0 auto;
+}
+
+.gs-chart-months span:empty {
+    flex: 1 1 0;
+}
+
+.gs-chart-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gs-ink-2);
+}
+
+.gs-chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gs-chart-legend span::before {
+    content: '';
+    width: 14px;
+    height: 2px;
+    border-radius: 2px;
+}
+
+.gs-chart-legend .is-paid::before {
+    background: var(--gs-mark-paid);
+}
+
+.gs-chart-legend .is-share::before {
+    background: repeating-linear-gradient(
+        90deg,
+        var(--gs-mark-share) 0 5px,
+        transparent 5px 9px
+    );
+}
+
+/* Under 640px the four-column settle rows would put the amount and the button
+   on top of each other. The action drops to its own line instead. */
+@media (max-width: 640px) {
+    .gs-settle-row,
+    .gs-plan-row {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .gs-settle-row > :last-child,
+    .gs-plan-row > :last-child {
+        grid-column: 2 / -1;
+        justify-self: start;
+    }
+}
+
+/* ------------------------------------------------------ a chip that chooses -- */
+
+/*
+    A filter whose choices are inside it rather than beside it. The date span was five
+    chips and a picker; on a page that also filters by ledger and by text, that row read
+    as five decisions to make rather than one.
+
+    A real <select> inside the pill, rather than a popover of our own: on a phone the OS
+    draws the list, the keyboard and the screen reader work with nothing written for
+    them, and the value stays in the DOM. The pill is the chrome; the select is the
+    control, stretched over the whole of it so the whole pill is the hit target.
+*/
+
+.gs-chip-menu {
+    padding-right: 8px;
+    gap: 6px;
+    max-width: 260px;
+}
+
+.gs-chip-menu .label {
+    white-space: nowrap;
+}
+
+/* Mud renders the activator inside a wrapper of its own; without this the pill sits in a
+   block that breaks the filter row's alignment. */
+.gs-range .mud-menu,
+.gs-chip-menu-host {
+    display: inline-flex;
+}
+
+/* The menu itself, so the list follows the app rather than Mud's own surface. */
+.gs-menu .mud-list-item {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gs-ink-2);
+}
+
+.gs-menu-item.is-on {
+    color: var(--gs-teal-deep);
+}
+
+.gs-menu-item.is-on::after {
+    content: ' ·';
+}
+
+/* Only shown while a custom range is being chosen or is in force -- see the note in
+   DateRangeFilter.razor. */
+.gs-range-picker {
+    max-width: 240px;
+}
+
+/* --------------------------------------------------------------- on a phone -- */
+
+/*
+    A list row is a three-column grid: icon, text, figure. On a phone the third column
+    holds an amount *and* up to two buttons, and a nowrap cluster of those against a
+    280px viewport leaves the title two characters wide -- which is what the inbox
+    looked like: every row shrunk to nothing but its avatar and its buttons.
+
+    Below 640px the figure and the actions move to a line of their own, right-aligned
+    under the text they belong to. The text then gets the full width, which is the part
+    somebody is reading.
+*/
+@media (max-width: 640px) {
+    .gs-row,
+    .gs-row.gs-row-has-actions {
+        grid-template-columns: auto minmax(0, 1fr);
+        row-gap: 10px;
+        padding: 12px 10px;
+        margin: 0 -10px;
+    }
+
+    .gs-row.is-selectable {
+        grid-template-columns: auto auto minmax(0, 1fr);
+    }
+
+    .gs-row:not(.is-selectable) > :nth-child(n + 3),
+    .gs-row.is-selectable > :nth-child(n + 4) {
+        grid-column: 2 / -1;
+        justify-self: stretch;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* The amount and the relative date sit one above the other in the wide layout;
+       side by side is the right shape once they share a line with the buttons. */
+    .gs-row .when {
+        display: inline;
+        margin-left: 8px;
+    }
+
+    /* Two lines rather than an ellipsis two words in: on a phone the bank's own
+       description is most of what identifies a row. */
+    .gs-row .title {
+        flex-wrap: wrap;
+    }
+
+    .gs-row .title span:not(.gs-tag) {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* A tag is two words at most and it is the row's status. Letting it shrink beside a
+       long merchant name is how "Pending" became "PEN…". */
+    .gs-row .title .gs-tag {
+        flex: 0 0 auto;
+    }
+
+    /*
+        Tighter. The desktop rhythm -- a 24px page head over an 18px stack, each control
+        with its own margin -- puts three bands of empty cream between the tab chips and
+        the first row on a phone, where the whole screen is nine rows tall. The spacing
+        that reads as calm on a wide screen reads as a loading state on a narrow one.
+    */
+    .gs-page-head {
+        margin-bottom: 14px;
+        gap: 10px;
+    }
+
+    .gs-stack {
+        gap: 12px;
+    }
+
+    .gs-range {
+        margin-bottom: 0;
+    }
+
+    .gs-card-pad {
+        padding: 14px;
+    }
+
+    /* Hover-revealed actions never reveal on a touch screen, so they are always on --
+       the wide layout hides them until hover, which on a phone means never. */
+    .gs-row .gs-row-actions {
+        opacity: 1;
+    }
+
+    /*
+        Thumbs, not cursors. A 32px pill is comfortable under a mouse and is under the
+        44px a finger needs, and an inbox is the one screen in the app that is nothing but
+        a queue of taps -- twenty-three rows, one decision each.
+
+        The primary action takes the width left over on its line, so the thing somebody
+        means to press is the biggest thing there and the two-character menu beside it is
+        a square they have to aim at on purpose.
+    */
+    .gs-row .mud-button-root,
+    .gs-row .mud-button,
+    .gs-row .gs-row-actions button {
+        min-height: 44px;
+    }
+
+    /* The menu and the icon actions are squares, and a 30px square at the edge of the
+       screen is the hardest thing on the page to hit with a thumb. */
+    .gs-row .mud-icon-button,
+    .gs-row .mud-menu .mud-button-root,
+    .gs-grid .mud-icon-button {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* A grid falls back to a card per row, one line per cell, each line labelled. The
+       actions line is the only one whose content is not text, so it gets the label's
+       baseline rather than floating free of it. */
+    .gs-grid .mud-table-cell {
+        align-items: center;
+    }
+
+    .gs-row > :nth-child(n + 3) > .gs-inline,
+    .gs-row.is-selectable > :nth-child(n + 4) > .gs-inline {
+        flex: 1 1 auto;
+    }
+
+    /*
+        The primary action takes whatever the amount and the menu leave, so the thing
+        somebody means to press is the widest thing on its line.
+
+        Only in the queue. Everywhere else a row is a record with a way in -- "Open",
+        "Review", "Settle up" -- and stretching those turned a summary strip into a stack
+        of full-width buttons, each shouting as loudly as the figure above it.
+    */
+    .gs-queue .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button),
+    .gs-queue .gs-row.is-selectable > :nth-child(n + 4) .mud-button-root:not(.mud-icon-button) {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    /* The duplicate warning is the highest-value thing the inbox says and the easiest to
+       lose. Its sentence takes the full width and its two answers keep their own size
+       underneath -- both fit on one line at 375px, and two full-width buttons would read
+       as heavier than the decision is. */
+    .mud-alert .gs-inline > span {
+        flex: 1 1 100%;
+    }
+
+    /*
+        The two filter pills share a line and the search takes its own.
+    */
+    .gs-range,
+    .gs-chip-menu {
+        flex: 1 1 140px;
+        min-width: 0;
+    }
+
+    .gs-chip-menu {
+        justify-content: space-between;
+    }
+
+    .gs-chip-menu .label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .gs-search,
+    .gs-range-picker {
+        max-width: none;
+        width: 100%;
+        flex: 1 1 100%;
+    }
+
+    /*
+        The chips that act as tabs scroll sideways instead of wrapping. "Paid by you /
+        Your share / Everything you are in" does not fit across 375px, and wrapped it put
+        one chip alone on a second line under a gap -- which reads as two groups of
+        controls rather than one choice of three.
+    */
+    .gs-chipbar {
+        /* A whole line of its own. It shares .gs-range with the span filter, which is
+           told to share a line above -- and a scroller squeezed to a 140px basis clips
+           its own chips mid-word, which is what "Expen" was. */
+        flex: 1 1 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .gs-chipbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /*
+        A card's title and whatever sits beside it wrap rather than stack. Stacking put a
+        two-character count on a line of its own under the heading; wrapping keeps a short
+        tag beside the title and moves a long caption down, which is the difference that
+        actually matters.
+    */
+    .gs-card-title {
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
+
+    .gs-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ------------------------------------------------------------- selecting -- */
+
+/*
+    A queue you can act on several rows of at once. The bar floats over the list rather
+    than sitting in it: what is selected is a state of the page, not a row of it, and a
+    bar in the flow would push the queue down every time somebody ticked something.
+*/
+
+/*
+    The list's header. Same horizontal padding and negative margin as .gs-row, so the box
+    in it lands in the same column as the boxes below and the ticks read as one edge --
+    which is the whole reason it is a header and not a control floating over the list.
+*/
+.gs-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 0 12px 10px;
+    margin: 0 -12px 2px;
+    border-bottom: 1px solid var(--gs-line);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--gs-muted);
+}
+
+.gs-list-head-select {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Matches .gs-row-check's own offset, which is what puts the two in one column. */
+.gs-list-head .gs-row-check {
+    margin-left: -8px;
+}
+
+.gs-list-head .note {
+    font-weight: 500;
+    color: var(--gs-muted);
+    opacity: 0.85;
+}
+
+.gs-row .gs-row-check {
+    flex: 0 0 auto;
+    margin-left: -8px;
+}
+
+/*
+    A row that can be ticked has four children -- the box, the mark, the text, the actions
+    -- against .gs-row's three columns. Without the extra column the box takes the first,
+    everything shifts one along, and the actions fall onto an implicit second row on the
+    wrong side of the card.
+*/
+.gs-row.is-selectable {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+
+/* A ticked row, so the selection is legible against the rest of the queue without
+   hunting for ticks. */
+.gs-row.is-selected {
+    background: var(--gs-teal-soft);
+}
+
+.gs-row.is-selected:hover {
+    background: var(--gs-teal-soft);
+}
+
+.gs-selection-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 1200;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 8px 8px 8px 18px;
+
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-teal-deep);
+    color: var(--gs-on-accent);
+    box-shadow: var(--gs-shadow-lg);
+    animation: gs-selection-in var(--gs-base) var(--gs-ease-spring) both;
+}
+
+.gs-selection-bar .count {
+    font-weight: 700;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+/* The buttons sit on the teal, so they take their colour from it rather than from the
+   page's palette -- Mud's own text colour on this ground is unreadable. */
+.gs-selection-bar .mud-button-root,
+.gs-selection-bar .mud-icon-button {
+    color: var(--gs-on-accent);
+    border: 1px solid rgb(255 255 255 / 35%);
+}
+
+.gs-selection-bar .mud-button-root:hover,
+.gs-selection-bar .mud-icon-button:hover {
+    background: rgb(255 255 255 / 14%);
+}
+
+@keyframes gs-selection-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 12px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gs-selection-bar {
+        animation: none;
+    }
+}
+
+@media (max-width: 820px) {
+    /* Clear of the tab bar, which is the one thing on a phone that must never be covered. */
+    .gs-selection-bar {
+        bottom: calc(var(--gs-tabbar-h) + 16px);
+    }
+}
+
+@media (max-width: 640px) {
+    .gs-selection-bar {
+        left: 16px;
+        right: 16px;
+        transform: none;
+        max-width: none;
+        justify-content: space-between;
+        padding-left: 14px;
+        animation: none;
+    }
+
+    .gs-selection-bar .mud-button-root {
+        min-height: 40px;
+    }
+}
+
+/* ------------------------------------------------------------ the picker -- */
+
+/*
+    The calendar a custom range opens, brought onto the app's own surface.
+
+    Mud draws it on its own paper with its own radius and shadow, which on a cream page is
+    a white card with a different corner from every other card around it, and on a dark one
+    is a lighter grey than the surface behind it. The toolbar is off (see the note in
+    DateRangeFilter), so what is left is the two months and the days.
+*/
+
+.mud-picker-paper,
+.mud-picker-container {
+    background: var(--gs-surface);
+    color: var(--gs-ink);
+    border-radius: var(--gs-radius-lg);
+}
+
+.mud-picker-paper {
+    border: 1px solid var(--gs-line);
+    box-shadow: var(--gs-shadow-lg);
+    overflow: hidden;
+}
+
+.mud-picker-calendar-header-day {
+    color: var(--gs-muted);
+    font-weight: 700;
+}
+
+.mud-picker-calendar-header-transition,
+.mud-picker-calendar-header-switch {
+    color: var(--gs-ink);
+}
+
+/* Today, and the day under the cursor: an outline and a wash rather than a filled
+   circle, so the two read differently from a day that has actually been chosen. */
+.mud-picker-calendar-day.mud-current:not(.mud-selected) {
+    border-color: var(--gs-teal);
+    color: var(--gs-teal-deep);
+}
+
+.mud-picker-calendar-day:hover:not(.mud-selected) {
+    background: var(--gs-teal-soft);
+}
+
+/* The chosen days and the span between them. */
+.mud-picker-calendar-day.mud-selected,
+.mud-picker-calendar-day.mud-range-start-selected,
+.mud-picker-calendar-day.mud-range-end-selected {
+    background: var(--gs-teal) !important;
+    color: var(--gs-on-accent) !important;
+}
+
+.mud-picker-calendar-day.mud-range-between {
+    background: var(--gs-teal-soft) !important;
+    color: var(--gs-teal-deep) !important;
+}

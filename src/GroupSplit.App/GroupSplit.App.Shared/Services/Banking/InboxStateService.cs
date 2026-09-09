@@ -1,4 +1,4 @@
-using GroupSplit.App.Shared.Models;
+﻿using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 
@@ -11,6 +11,17 @@ public interface IInboxStateService
 
     /// <summary>How many rows are waiting, whatever the filter shows. What the nav badge reads.</summary>
     int NewCount { get; }
+
+    /// <summary>
+    /// How many of those look like an expense already recorded, or null if nobody has asked
+    /// for that count.
+    /// </summary>
+    /// <remarks>
+    /// Null and zero are different answers. Working it out means running the matcher over
+    /// every waiting row, which is too much for the badge on every page, so it is asked for
+    /// only where it is said out loud -- see <see cref="WantDuplicateCountAsync"/>.
+    /// </remarks>
+    int? PossibleDuplicates { get; }
 
     /// <summary>Which rows the page is asking for.</summary>
     InboxStatus Filter { get; }
@@ -42,6 +53,11 @@ public interface IInboxStateService
     /// until a caller that knows somebody is signed in asks for it.
     /// </remarks>
     Task EnsureLoadedAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Asks for the duplicate count as well as the waiting count, from here on.
+    /// </summary>
+    Task WantDuplicateCountAsync(CancellationToken ct = default);
 
     event Action? OnChanged;
 
@@ -93,6 +109,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     private Task? _loaded;
     private bool _rowsWanted;
+    private bool _duplicatesWanted;
 
     /// <summary>
     /// How many pages the inbox is showing. Re-read as one query rather than kept as a
@@ -124,6 +141,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public IReadOnlyList<BankTransactionResponse> Rows { get; private set; } = [];
 
     public int NewCount { get; private set; }
+
+    public int? PossibleDuplicates { get; private set; }
 
     public InboxStatus Filter { get; private set; } = InboxStatus.New;
 
@@ -178,6 +197,20 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     }
 
     /// <inheritdoc />
+    public Task WantDuplicateCountAsync(CancellationToken ct = default)
+    {
+        if (_duplicatesWanted && PossibleDuplicates is not null)
+            return Task.CompletedTask;
+
+        _duplicatesWanted = true;
+
+        lock (_lock)
+            _loaded ??= Task.CompletedTask;
+
+        return RefreshAsync(ct);
+    }
+
+    /// <inheritdoc />
     public Task LoadRowsAsync(CancellationToken ct = default)
     {
         _rowsWanted = true;
@@ -204,10 +237,11 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public Task RefreshAsync(CancellationToken ct = default) =>
         _guard.RunAsync(async () =>
         {
-            var summary = await _inbox.GetInboxSummaryAsync(ct);
+            var summary = await _inbox.GetInboxSummaryAsync(_duplicatesWanted ? true : null, ct);
             var connections = await _connections.GetBankConnectionsAsync(ct);
 
             NewCount = summary.NewCount;
+            PossibleDuplicates = summary.PossibleDuplicates;
             Connections = connections;
 
             if (_rowsWanted)

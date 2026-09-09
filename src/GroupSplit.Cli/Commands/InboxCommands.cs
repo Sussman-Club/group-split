@@ -1,4 +1,4 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -153,12 +153,30 @@ public static class InboxCommands
     {
         var command = new Command("summary", "Count the rows still waiting to be filed.");
 
+        // Working out how many of those look like an expense already recorded means running
+        // the matcher over every waiting row, so the server only does it when asked. Asked
+        // for by default here: this command exists to be read once, not polled.
+        var duplicates = new Option<bool>("--duplicates")
+        {
+            Description = "Also count the rows that may already be recorded as an expense.",
+            DefaultValueFactory = _ => true
+        };
+
+        command.Add(duplicates);
+
         command.SetHandler(async (context, ct) =>
         {
-            var summary = await new Api.InboxClient(context.ApiHttpClient).GetInboxSummaryAsync(ct);
+            var wanted = context.ParseResult.GetValue(duplicates);
+
+            var summary = await new Api.InboxClient(context.ApiHttpClient)
+                .GetInboxSummaryAsync(wanted ? true : null, ct);
 
             context.Output.Write(summary, value => new Markup(
-                $"[bold]{value.NewCount}[/] rows waiting.\n"));
+                $"[bold]{value.NewCount}[/] rows waiting"
+                + (value.PossibleDuplicates is { } possible
+                    ? $", [bold]{possible}[/] possibly already recorded"
+                    : string.Empty)
+                + ".\n"));
 
             return ExitCodes.Success;
         });

@@ -1,4 +1,4 @@
-using GroupSplit.API.Endpoints;
+﻿using GroupSplit.API.Endpoints;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
@@ -45,7 +45,8 @@ public class TransactionShareTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         }, Ct).AsTask();
 
     private async Task<PagedResponse<ExpenseShareResponse>> Shares(
-        TransactionFilter? filter = null, SortRequest? sort = null, PageRequest? page = null)
+        TransactionFilter? filter = null, SortRequest? sort = null, PageRequest? page = null,
+        bool owedOnly = false)
     {
         var transactions = GetService<ITransactionService>();
         var me = GetService<ICurrentUser>().User.Id;
@@ -55,16 +56,17 @@ public class TransactionShareTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             filter ?? new TransactionFilter(),
             sort ?? new SortRequest(),
             page ?? new PageRequest(),
-            me, Ct);
+            me, owedOnly, Ct);
     }
 
-    private async Task<ExpenseShareSummaryResponse> Summary(TransactionFilter? filter = null)
+    private async Task<ExpenseShareSummaryResponse> Summary(TransactionFilter? filter = null,
+        bool owedOnly = false)
     {
         var transactions = GetService<ITransactionService>();
         var me = GetService<ICurrentUser>().User.Id;
 
         return await (await transactions.Shares(Ct)).ToShareSummaryAsync(
-            await transactions.List(Ct), filter ?? new TransactionFilter(), me, Ct);
+            await transactions.List(Ct), filter ?? new TransactionFilter(), me, owedOnly, Ct);
     }
 
     [Fact]
