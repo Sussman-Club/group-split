@@ -80,12 +80,12 @@ Expenses and settlements.
 
 | Command | |
 | --- | --- |
-| `transactions list` | List transactions, newest first. |
+| `transactions list` | The expenses **you** paid for, newest first. With `--group`, the group's whole ledger. |
 | `transactions show <transaction-id>` | Show one transaction and how it was split. |
 | `transactions create <name> <amount>` | Record an expense. |
 | `transactions update <transaction-id>` | Change an expense. Only what you name is sent. |
-| `transactions summary` | Total the transactions matching a filter. |
-| `transactions monthly` | What you paid and what your share came to, month by month. |
+| `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. |
+| `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. |
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
@@ -121,7 +121,7 @@ Expense categories and their default split rules.
 | --- | --- |
 | `categories list` | List categories. |
 | `categories create <name>` | Create a category. |
-| `categories update <category-id>` | Change a category's name or its default rule. |
+| `categories update <category-id>` | Change a category's name or its default rule. `--no-rule` clears the rule, which `--rule` cannot: a flag with no value cannot say the difference between "leave it" and "clear it". |
 | `categories delete <category-id>` | Delete a category. |
 
 ### merchants
@@ -180,7 +180,7 @@ Linked banks: what is connected, syncing it, and unlinking.
 | Command | |
 | --- | --- |
 | `bank list` | List the banks you have linked, and their accounts. |
-| `bank link-token` | Ask for a token that opens the provider's linking UI in a browser. |
+| `bank link-token` | Ask for a token that opens the provider's linking UI in a browser. `--connection <id>` repairs an existing connection rather than linking a new bank. |
 | `bank link <public-token>` | Finish linking a bank with the token its UI returned. |
 | `bank sync <connection-id>` | Ask for a fresh pull of transactions from a bank. |
 | `bank unlink <connection-id>` | Unlink a bank and stop syncing it. |
@@ -296,6 +296,32 @@ nothing. Use it whenever the division matters, and show the result before commit
 `--owed-only`, which keeps just the rows that are actually a debt: your share of an expense
 you paid for yourself is money you already have, not money you owe.
 
+`transactions list` and `transactions summary` add `--paid-by <user-id>`, which narrows to
+one person's spending. Ids come from `groups members <group-id>`.
+
+#### `--group` does two different things
+
+Read the flag's own description in the schema rather than assuming, because one name covers
+both behaviours:
+
+| Command | `--group` means |
+| --- | --- |
+| `transactions list`, `transactions summary` | **the group's whole ledger** -- every expense in it, whoever paid |
+| `transactions monthly`, `transactions shares list\|summary` | only *your* rows in that group |
+
+The first two used to behave like the rest, which made them lie: they were the caller's own
+expenses under a flag documented as a group filter, so a group of 1,411 expenses answered a
+count of 2 to the member who had paid for two of them, and an $39,429.42 year of group
+spending answered "nothing has been spent". A short answer from these is not evidence a
+group is empty -- check which question you asked.
+
+The two go together. If you list with `--group`, total with `--group`, or the page and the
+figure beside it describe different sets.
+
+A group the caller is not in -- including one they have **left** -- is refused with exit
+code 3 and `GROUP_NOT_FOUND`, not answered with an empty list. Their own expenses in a group
+they left are still in `transactions list`; the group's ledger is the group's.
+
 `groups activity` takes `--from`, `--to`, `--search` and `--kind` (`Expense` or `Transfer`).
 `--kind` is what the group's two old tabs became: absent means everything, which is the
 default because "what has happened here" does not distinguish. `--from`/`--to` are date-times there and calendar dates
@@ -364,6 +390,12 @@ A settlement recorded wrongly is taken back with `transactions delete <transacti
 which balances the ledger back to what it read before. Its id comes from `groups activity`:
 the `transactions` listings read the expenses, so a settlement does not appear in
 `transactions list` and `transactions show` will not describe one.
+
+That absence is why no total from `transactions summary`, `transactions monthly` or
+`transactions shares summary` is net -- with `--group` as much as without. Do not present
+one as what somebody is owed or owes. `users position` is that answer; `groups balances
+<group-id>` is it for one group; `groups activity <group-id> --kind Transfer` is the
+transfers themselves.
 
 `groups leave` requires that the user's balance in the group is settled, so expect a refusal
 until the balances are square.

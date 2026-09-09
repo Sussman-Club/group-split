@@ -34,7 +34,7 @@ has to reach for `curl` and a bearer token to do.
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
-| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `shares list\|summary`, `bank-matches`, `delete` |
+| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
@@ -489,6 +489,59 @@ Both directions answer with the same two commands. Which of the three applies is
 about the money, so no default is picked: `--file-anyway` is never on unless it is asked for,
 because the refusal is the whole mechanism that stops the second expense coming into being
 before somebody has been told about the first.
+
+## Whose expenses a listing covers
+
+`transactions list` and `transactions summary` are about **you**: the expenses you paid
+for, across every group and outside them. That is deliberate, and for a long time nothing
+said so.
+
+```bash
+groupsplit tx list                               # expenses you paid for
+groupsplit tx summary                            # and their total
+```
+
+`--group` switches them to the group's own ledger -- every expense in it, whoever paid:
+
+```bash
+groupsplit tx list --group <group-id>            # the group's whole ledger
+groupsplit tx summary --group <group-id>         # and its total
+```
+
+It used to be a filter applied to your listing, which narrowed to the payer as well. So
+`--group` answered "what have I paid in this group" under a flag documented as a group
+filter, and an empty answer read as an empty group. It cost real time twice: during the
+spreadsheet migration a group holding 1,411 expenses reported a count of 2, which looked
+exactly like a failed import; and in September 2026 a question about a group's monthly
+spending was answered "nothing has been spent" when the group had spent $39,429.42.
+
+Both commands moved together, because the listing and the total narrowed independently: a
+page of the group's rows under a figure counting only yours is worse than either being
+wrong alone, since the two agreeing is what a reader checks.
+
+To ask for one person's spending, say so:
+
+```bash
+groupsplit tx list --group <group-id> --paid-by <user-id>
+```
+
+That is what `--group` was doing by accident. Ids come from
+`groupsplit groups members <group-id>`.
+
+Three things are worth knowing about the answers:
+
+- **A group you are not in is refused**, exit code 3, rather than answered with an empty
+  list. The API returns an empty page to a non-member on purpose, so the CLI checks and
+  says which of the two it was. This includes a group you have **left**: your own expenses
+  in it are still in `transactions list`, but the group's ledger is the group's.
+- **Settlements are absent** from both, and from `shares` and `monthly`. A transfer is a
+  different type, so none of these figures has been paid back. Everything a group did,
+  transfers included, is `groupsplit groups activity <group-id>`; where you stand is
+  `groupsplit users position`.
+- **`monthly` and the two `shares` commands stay yours.** Their columns are what you paid
+  and what your share came to, and neither has a group-wide reading, so `--group` there
+  narrows rather than switches. The flag's own help text says which it does on each
+  command.
 
 ## What you owe, not what you paid
 

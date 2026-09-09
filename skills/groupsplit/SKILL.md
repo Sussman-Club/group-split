@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # GroupSplit from the command line
@@ -58,7 +58,10 @@ If `groupsplit` is not on `PATH`, or no server is configured, see
 
 ```bash
 groupsplit groups list --json
-groupsplit transactions list --group <group-id> --json --fields id,name,amount,date
+# --group means the group's whole ledger, whoever paid. Without it, the caller's own
+# expenses -- which is a different question and, for anybody who is not the household's
+# main payer, a much shorter answer.
+groupsplit transactions list --group <group-id> --json --fields id,name,amount,dateTime
 ```
 
 `--fields` keeps only the named top-level fields, of an object or of every element of an
@@ -143,6 +146,18 @@ along when reporting a problem.
 - **`groupsplit config list`** answers what the *next* command will talk to, and says which
   source each value came from. Run it before wondering why a request went somewhere
   unexpected.
+- **Know whose expenses a listing covers before you report a total.** `transactions list`
+  and `transactions summary` are the caller's own expenses; `--group` switches both to the
+  group's whole ledger, whoever paid. `transactions monthly` and the two
+  `transactions shares` commands stay the caller's whichever way, and there `--group` only
+  narrows. The flag's own description on each command says which it does -- read it in the
+  schema rather than assuming, since one flag name covers both behaviours.
+- **Never total a group's spending from an expense listing without saying what is missing.**
+  Settlements are a different transaction type and appear in none of these commands, so
+  every figure they give is gross. `groupsplit groups activity <group-id>` is everything a
+  group did, transfers included; `groupsplit users position` is where somebody actually
+  stands. Reporting a group's spend as though it were net is the mistake this CLI is
+  shaped to make easy.
 - Set `GROUPSPLIT_DEBUG=1` to attach a stack trace to an unexpected error. An envelope with
   code `CLI_INTERNAL_ERROR` is a defect in the CLI, not a usage mistake -- report it rather
   than working around it.

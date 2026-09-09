@@ -443,11 +443,8 @@ public sealed class CommandTests : IDisposable
     {
         _api.Returns("/api/transactions", Page());
 
-        var groupId = Guid.NewGuid();
-
         await Cli.RunAsync(
             "transactions", "list",
-            "--group", groupId.ToString(),
             "--search", "pizza",
             "--category", "Food",
             "--from", "2026-01-01",
@@ -459,13 +456,34 @@ public sealed class CommandTests : IDisposable
         // from one the server ignored: the command succeeds and returns the wrong rows.
         var request = _api.Requests.Single(r => r.Path == "/api/transactions");
 
-        Assert.Equal(groupId.ToString(), request.Parameter("groupId"));
         Assert.Equal("pizza", request.Parameter("search"));
         Assert.Equal("Food", request.Parameter("category"));
         Assert.Equal("2", request.Parameter("page"));
         Assert.Equal("5", request.Parameter("pageSize"));
         Assert.StartsWith("2026-01-01", request.Parameter("from"));
         Assert.StartsWith("2026-02-01", request.Parameter("to"));
+    }
+
+    /// <summary>
+    /// Asking one person's spending on purpose, rather than getting it as a hidden default.
+    /// </summary>
+    /// <remarks>
+    /// The filter existed in the request contract and was honoured; nothing set it, and
+    /// <c>--group</c> was quietly doing it instead. Now that <c>--group</c> means the
+    /// group, this is what asks the question <c>--group</c> used to answer by accident.
+    /// </remarks>
+    [Fact]
+    public async Task Transactions_list_can_be_narrowed_to_one_payer_on_purpose()
+    {
+        _api.Returns("/api/transactions", Page());
+
+        var payer = Guid.NewGuid();
+
+        await Cli.RunAsync("transactions", "list", "--paid-by", payer.ToString());
+
+        Assert.Equal(
+            payer.ToString(),
+            _api.Requests.Single(r => r.Path == "/api/transactions").Parameter("paidByUserId"));
     }
 
     [Fact]
@@ -495,6 +513,242 @@ public sealed class CommandTests : IDisposable
         Assert.Null(request.Parameter("category"));
         Assert.Null(request.Parameter("groupId"));
         Assert.Null(request.Parameter("from"));
+    }
+
+    // ---- a group's ledger ------------------------------------------------------------
+
+    /// <summary>
+    /// The defect these exist for, in the shape that made it invisible: a group whose
+    /// expenses were paid by somebody else.
+    /// </summary>
+    /// <remarks>
+    /// <c>--group</c> was sent as a filter to the personal listing, which narrows to the
+    /// payer on top of whatever it was given. A member who had paid for 2 of a group's
+    /// 1,411 expenses was told the group held 2 -- and the answer was believed twice,
+    /// because a small number is not obviously a wrong one.
+    /// <para>
+    /// Asserted on the path, not on the rows: a stub answers whatever it is asked, so the
+    /// only proof the right question was asked is which door the request went through.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Transactions_list_with_a_group_reads_the_groups_ledger_whoever_paid()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{groupId}/transactions", Page(
+            SomebodyElsePaid("Rent", 1200m, groupId, "The flat"),
+            SomebodyElsePaid("Electricity", 88.40m, groupId, "The flat")));
+
+        var result = await Cli.RunAsync("transactions", "list", "--group", groupId.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal(2, result.Json.GetProperty("items").GetArrayLength());
+
+        // The group's own listing, and not the personal one with a filter bolted on.
+        Assert.Contains(_api.Requests, r => r.Path == $"/api/groups/{groupId}/transactions");
+        Assert.DoesNotContain(_api.Requests, r => r.Path == "/api/transactions");
+    }
+
+    /// <summary>
+    /// The total beside the page has to describe the page's set. Both narrowed
+    /// independently, so fixing the listing alone would have put a group's rows under a
+    /// figure still counting only the caller's.
+    /// </summary>
+    [Fact]
+    public async Task Transactions_summary_with_a_group_totals_the_same_set_the_listing_lists()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{groupId}/transactions/summary",
+            new { count = 1411, total = 39429.42m });
+
+        var result = await Cli.RunAsync("transactions", "summary", "--group", groupId.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal(1411, result.Json.GetProperty("count").GetInt32());
+        Assert.Equal(39429.42m, result.Json.GetProperty("total").GetDecimal());
+
+        Assert.Contains(_api.Requests, r => r.Path == $"/api/groups/{groupId}/transactions/summary");
+        Assert.DoesNotContain(_api.Requests, r => r.Path == "/api/transactions/summary");
+    }
+
+    [Fact]
+    public async Task Without_a_group_both_commands_still_read_your_own_listing()
+    {
+        _api.Returns("/api/transactions", Page());
+        _api.Returns("/api/transactions/summary", new { count = 0, total = 0m });
+
+        await Cli.RunAsync("transactions", "list");
+        await Cli.RunAsync("transactions", "summary");
+
+        Assert.Contains(_api.Requests, r => r.Path == "/api/transactions");
+        Assert.Contains(_api.Requests, r => r.Path == "/api/transactions/summary");
+        Assert.DoesNotContain(_api.Requests, r => r.Path.StartsWith("/api/groups/"));
+    }
+
+    /// <summary>
+    /// Every other filter has to keep working through the other door, or the fix trades one
+    /// wrong answer for another.
+    /// </summary>
+    [Fact]
+    public async Task The_other_filters_travel_with_a_group_listing_too()
+    {
+        var groupId = Guid.NewGuid();
+        var payer = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{groupId}/transactions",
+            Page(SomebodyElsePaid("Rent", 1200m, groupId, "The flat")));
+
+        await Cli.RunAsync(
+            "transactions", "list",
+            "--group", groupId.ToString(),
+            "--paid-by", payer.ToString(),
+            "--search", "rent",
+            "--category", "Housing",
+            "--from", "2026-01-01",
+            "--to", "2026-02-01",
+            "--sort-by", "amount",
+            "--order", "asc",
+            "--page", "2",
+            "--page-size", "5");
+
+        var request = _api.Requests.Single(r => r.Path == $"/api/groups/{groupId}/transactions");
+
+        Assert.Equal(payer.ToString(), request.Parameter("paidByUserId"));
+        Assert.Equal("rent", request.Parameter("search"));
+        Assert.Equal("Housing", request.Parameter("category"));
+        Assert.Equal("amount", request.Parameter("sortBy"));
+        Assert.Equal("false", request.Parameter("sortDescending"));
+        Assert.Equal("2", request.Parameter("page"));
+        Assert.Equal("5", request.Parameter("pageSize"));
+        Assert.StartsWith("2026-01-01", request.Parameter("from"));
+        Assert.StartsWith("2026-02-01", request.Parameter("to"));
+
+        // The id is in the path. Sent again beside it, it would be one value narrowing the
+        // same set twice.
+        Assert.Null(request.Parameter("groupId"));
+    }
+
+    /// <summary>
+    /// A group the caller is not in. The group sub-listings answer a non-member with an
+    /// empty page rather than a 404, so without this the fix would swap one silent
+    /// plausible answer for another -- and this one would be new, since the personal
+    /// listing used to show the caller's own rows in a group they had left.
+    /// </summary>
+    [Fact]
+    public async Task A_group_you_are_not_in_is_refused_rather_than_answered_with_nothing()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{groupId}/transactions", Page());
+        _api.Problem($"/api/groups/{groupId}", 404, "GROUP_NOT_FOUND", "Group was not found.");
+
+        var result = await Cli.RunAsync("transactions", "list", "--group", groupId.ToString());
+
+        // Exit 3, not 1: no retry helps. And not 0, which is what made it a lie.
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(result.Stdout);
+        Assert.Equal("GROUP_NOT_FOUND", result.Error.GetProperty("code").GetString());
+        Assert.Contains("not in that group", result.Error.GetProperty("error").GetString());
+        Assert.Contains("groups list", result.Error.GetProperty("remediation").GetString());
+    }
+
+    [Fact]
+    public async Task A_group_you_are_in_that_holds_nothing_says_so_and_succeeds()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{groupId}/transactions", Page());
+        _api.Returns($"/api/groups/{groupId}", Group("The flat"));
+
+        var result = await Cli.RunAsync(
+            "transactions", "list", "--group", groupId.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("The flat", result.Stdout);
+        // Where the transfers went, since a settlement is not an expense and nothing else
+        // here would say so.
+        Assert.Contains("groups activity", result.Stdout);
+    }
+
+    /// <summary>
+    /// The output says which of the two sets it describes, so a reader need not remember
+    /// which flag they typed to know what they are looking at.
+    /// </summary>
+    [Fact]
+    public async Task Text_output_says_which_ledger_the_rows_came_from()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{groupId}/transactions",
+            Page(SomebodyElsePaid("Rent", 1200m, groupId, "The flat")));
+        _api.Returns("/api/transactions", Page(Transaction("Coffee", 3m, groupId, "The flat")));
+
+        var ledger = await Cli.RunAsync(
+            "transactions", "list", "--group", groupId.ToString(), "--output", "text");
+        var mine = await Cli.RunAsync("transactions", "list", "--output", "text");
+
+        Assert.Contains("whoever paid", ledger.Stdout);
+        Assert.Contains("you paid for", mine.Stdout);
+    }
+
+    /// <summary>
+    /// An empty personal listing is where somebody arrives expecting a group's ledger, so
+    /// it is where the pointer belongs.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_listing_of_your_own_points_at_the_group_flag()
+    {
+        _api.Returns("/api/transactions", Page());
+
+        var result = await Cli.RunAsync("transactions", "list", "--output", "text");
+
+        Assert.Contains("--group", result.Stdout);
+    }
+
+    /// <summary>
+    /// <c>monthly</c> keeps its own meaning. Its two columns are what the caller paid and
+    /// what their share came to, and neither has a group-wide reading, so <c>--group</c>
+    /// there narrows rather than switches.
+    /// </summary>
+    [Fact]
+    public async Task Monthly_keeps_reading_your_own_rows_when_given_a_group()
+    {
+        var groupId = Guid.NewGuid();
+
+        _api.Returns("/api/transactions/monthly", Array.Empty<object>());
+
+        await Cli.RunAsync("transactions", "monthly", "--group", groupId.ToString());
+
+        var request = _api.Requests.Single(r => r.Path == "/api/transactions/monthly");
+
+        Assert.Equal(groupId.ToString(), request.Parameter("groupId"));
+        Assert.DoesNotContain(_api.Requests, r => r.Path.StartsWith("/api/groups/"));
+    }
+
+    /// <summary>
+    /// The gap between paid and share was headed "Fronted", and it was a claim the figures
+    /// cannot support: a settlement is a transfer, so nothing in this series has been paid
+    /// back. Somebody who had settled up in full still read a month of being owed hundreds.
+    /// </summary>
+    [Fact]
+    public async Task Monthly_reports_only_the_two_figures_the_server_answers()
+    {
+        _api.Returns("/api/transactions/monthly", new[]
+        {
+            // A DateOnly on the wire, which is what the response carries: a month is a
+            // month, not an instant somebody has to pick a zone for.
+            new { month = new DateOnly(2026, 1, 1), paid = 1240m, share = 620m }
+        });
+
+        var result = await Cli.RunAsync("transactions", "monthly", "--output", "text");
+
+        Assert.Contains("1,240.00", result.Stdout);
+        Assert.Contains("620.00", result.Stdout);
+        Assert.DoesNotContain("Fronted", result.Stdout);
+        // What does count the transfers, named where the wrong figure used to be.
+        Assert.Contains("users position", result.Stdout);
     }
 
     // ---- the share listing -----------------------------------------------------------
@@ -750,6 +1004,18 @@ public sealed class CommandTests : IDisposable
     private static object Page(params object[] items) => new
     {
         items, page = 1, pageSize = 20, totalCount = items.Length
+    };
+
+    /// <summary>
+    /// A group expense the caller did not pay for: the rows the personal listing correctly
+    /// leaves out and a group's ledger must not.
+    /// </summary>
+    private static object SomebodyElsePaid(string name, decimal amount, Guid groupId, string groupName) => new
+    {
+        id = Guid.NewGuid(), name, description = (string?)null, amount,
+        dateTime = DateTimeOffset.UtcNow, groupId, groupName,
+        paidByUserId = Guid.NewGuid(), paidByUserName = "Omar",
+        categoryId = (Guid?)null, category = (string?)null
     };
 
     private static object Transaction(string name, decimal amount, Guid groupId, string groupName) => new

@@ -138,6 +138,11 @@ This is a step only a person can complete. **Do not run it and wait.** When a co
 returns exit code 2, tell the user to run `groupsplit auth login`, or ask them for a token
 to put in `GROUPSPLIT_TOKEN`.
 
+`--no-browser` prints the URL and the code without trying to open anything. It is the flag
+to give a user over SSH or in a container, where a launch attempt either fails silently or
+opens a browser on the wrong machine. It does not make the step automatable: somebody still
+has to approve it.
+
 Credentials land in `~/.local/share/groupsplit/credentials.json`, keyed by realm and client,
 narrowed to `0600` on Unix. Expired access tokens refresh silently; a spent refresh token is
 discarded so the next command says "sign in" rather than failing the same way twice.
