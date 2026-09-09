@@ -54,6 +54,9 @@ public static class ActivityProjectionExtensions
                                split.User.FirstName +
                                (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
                            : null,
+                       CategoryId = transaction is Expense
+                           ? ((Expense)transaction).CategoryId
+                           : null,
                        Category = transaction is Expense && ((Expense)transaction).Category != null
                            ? ((Expense)transaction).Category!.Name
                            : null,
@@ -161,6 +164,9 @@ public static class ActivityProjectionExtensions
                                split.User.FirstName +
                                (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
                            : null,
+                       CategoryId = transaction is Expense
+                           ? ((Expense)transaction).CategoryId
+                           : null,
                        Category = transaction is Expense && ((Expense)transaction).Category != null
                            ? ((Expense)transaction).Category!.Name
                            : null,
@@ -220,6 +226,9 @@ public static class ActivityProjectionExtensions
                            ? transaction.Splits.Select(split =>
                                split.User.FirstName +
                                (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
+                           : null,
+                       CategoryId = transaction is Expense
+                           ? ((Expense)transaction).CategoryId
                            : null,
                        Category = transaction is Expense && ((Expense)transaction).Category != null
                            ? ((Expense)transaction).Category!.Name

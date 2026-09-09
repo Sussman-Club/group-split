@@ -379,6 +379,10 @@ public class TransactionService(
             expense.Group = group;
             expense.GroupId = group?.Id;
             expense.Currency = group?.Currency ?? Currencies.Default;
+            if (group == null)
+            {
+                request.Splits = null;
+            }
         }
 
         var payer = await MemberOf(group, request.PaidByUserId, ct)

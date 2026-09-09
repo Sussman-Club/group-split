@@ -347,6 +347,11 @@ public static class TransactionApi
                     if (transactionUpdateRequest is null)
                         return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
+                    if (patchDocument.Touches("/groupId") && !patchDocument.Touches("/splits"))
+                    {
+                        transactionUpdateRequest.Splits = null;
+                    }
+
                     patchDocument.ApplyTo(transactionUpdateRequest);
 
                     if (!PatchedModel.IsValid(transactionUpdateRequest, out var invalid))

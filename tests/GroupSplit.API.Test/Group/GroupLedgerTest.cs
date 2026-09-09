@@ -53,6 +53,28 @@ public class GroupLedgerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Single(entries);
     }
 
+    [Fact]
+    public async Task AnExpense_CarriesTheCategoryAndCategoryId()
+    {
+        var (group, _) = await GroupOfTwo();
+        var categoryId = await CreateEvenCategory(group, "Food");
+
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group,
+            PaidByUserId = Me.Id,
+            Name = "Dinner",
+            Amount = 100,
+            DateTime = DateTimeOffset.UtcNow,
+            CategoryId = categoryId
+        }, Ct);
+
+        var entry = Assert.Single(await Ledger(group));
+
+        Assert.Equal(categoryId, entry.CategoryId);
+        Assert.Equal("Food", entry.Category);
+    }
+
     /// <summary>
     /// What the dinner cost and what it cost you are different numbers, and no listing in
     /// the app carried the second.

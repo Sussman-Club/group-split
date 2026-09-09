@@ -381,4 +381,21 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         Assert.Equal(100m, body.RootElement.GetProperty("amount").GetDecimal());
         Assert.Equal(50m, body.RootElement.GetProperty("difference").GetDecimal());
     }
+
+    [Fact]
+    public async Task Patching_the_group_to_personal_clears_the_splits()
+    {
+        var (transactionId, me, _) = await AnEvenlySplitExpense();
+
+        var response = await Client.PatchAsync($"/transactions/{transactionId}",
+            PatchBody(("replace", "/groupId", null)), Ct);
+        response.EnsureSuccessStatusCode();
+
+        var details = await Details(transactionId);
+
+        Assert.Null(details.GroupId);
+        var share = Assert.Single(details.Splits);
+        Assert.Equal(me, share.UserId);
+        Assert.Equal(100m, share.Amount);
+    }
 }
