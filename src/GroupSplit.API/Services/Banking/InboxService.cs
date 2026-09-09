@@ -24,6 +24,12 @@ public interface IInboxService
     /// Whether to run the matcher over the waiting rows as well as counting them. Off by
     /// default because the nav badge reads this on every page and only needs the count.
     /// </param>
+    /// <remarks>
+    /// The duplicate count is of rows carrying a <see cref="MatchConfidence.Confident"/>
+    /// match, not of rows carrying any. A screen or a badge that says some of these may
+    /// already be recorded should be right about it, and a possible match is not that claim
+    /// -- it is a question asked of whoever files the row.
+    /// </remarks>
     Task<InboxSummaryResponse> Summary(bool withDuplicates = false, CancellationToken ct = default);
 
     /// <summary>
@@ -121,7 +127,7 @@ public sealed class InboxService(
 
         return new InboxSummaryResponse(
             waiting.Count,
-            matches.Count(row => row.Value.Count > 0));
+            matches.Count(row => row.Value.Any(match => match.Confidence == MatchConfidence.Confident)));
     }
 
     public async Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default)
@@ -150,14 +156,19 @@ public sealed class InboxService(
         // wrong balance somebody has to notice and undo. The refusal names what it matched,
         // and the person answers it -- by filing anyway, because they really did pay twice,
         // or by pointing the row at the expense that is already there through Link.
+        //
+        // Over either grade, deliberately. A tip added to a dinner is the likeliest
+        // duplicate there is and it is only ever a possible match, so a guard that asked for
+        // a confident one would let the commonest case through in silence. What the grade
+        // decides is how loudly a suggestion is announced to somebody who has not touched
+        // the row -- not whether the money can be recorded twice without a word.
         if (!request.FileAnyway)
         {
             var matches = await matcher.ExpensesLike(row, ct);
 
             if (matches.Count > 0)
             {
-                throw new ConflictException(ErrorCodes.PossibleDuplicateExpense,
-                        "This looks like an expense you have already recorded.")
+                throw new ConflictException(ErrorCodes.PossibleDuplicateExpense, Refusal(matches))
                     .WithExtension(ProblemDetails.MatchesExtension, matches.ToResponses());
             }
         }
@@ -187,6 +198,16 @@ public sealed class InboxService(
 
         return expense;
     }
+
+    /// <summary>
+    /// How sure to sound about it. The same refusal carries both grades, and claiming the
+    /// row *is* an expense already recorded when the amounts merely sit within a quarter of
+    /// each other is how a person learns to stop reading the sentence.
+    /// </summary>
+    private static string Refusal(IReadOnlyList<DuplicateMatch> matches) =>
+        matches.Any(match => match.Confidence == MatchConfidence.Confident)
+            ? "This looks like an expense you have already recorded."
+            : "This could be an expense you have already recorded.";
 
     public async Task<IReadOnlyList<DuplicateMatch>> Matches(Guid id, CancellationToken ct = default)
     {

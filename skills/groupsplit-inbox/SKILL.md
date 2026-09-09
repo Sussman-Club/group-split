@@ -43,18 +43,21 @@ groupsplit inbox matches <row-id> --json           # what each could already be
 ```
 
 `inbox summary` answers `newCount` and `possibleDuplicates` -- how many of those waiting
-look like an expense somebody has already recorded. It is worth leading with: a backlog
-where none of them are duplicates is a different job from one where a third of them are.
-Pass `--duplicates false` to skip that count, which is the cheaper read; the count itself
-means running the matcher over every waiting row.
+agree **to the cent** with an expense somebody has already recorded. It is worth leading
+with: a backlog where none of them are duplicates is a different job from one where a third
+of them are. Pass `--duplicates false` to skip that count, which is the cheaper read; the
+count itself means running the matcher over every waiting row.
+
+That count is the confident ones only. `inbox list` marks the rest -- see
+[How sure a suggestion is](#how-sure-a-suggestion-is) -- and filing is refused over both, so
+`possibleDuplicates` being zero does **not** mean every row will file cleanly.
 
 For each row, in order:
 
 1. **`inbox matches <row-id>`** first, always -- before filing anything. It is a read: it
    changes nothing, and it answers the only question that matters. At most three candidates
-   come back, each with `transactionId`, `name`, `amount`, `daysApart` and
-   `amountDifference`, so a person can see *why* it was offered rather than take it on
-   trust.
+   come back, each with `transactionId`, `name`, `amount`, `daysApart`, `amountDifference`
+   and `confidence`, so a person can see *why* it was offered rather than take it on trust.
 2. **Nothing came back** → file it. `groupsplit inbox file <row-id> [--group <id>]
    [--category-id <id>]`.
 3. **Something came back** → show the candidates to the user with their amounts and how far
@@ -68,6 +71,24 @@ For each row, in order:
 
 Do not pick for them. The three are not interchangeable and the wrong one is not obviously
 wrong afterwards.
+
+## How sure a suggestion is
+
+Every candidate carries a `confidence`, and it changes how you should put it -- not whether
+you put it.
+
+| `confidence` | What the rule found | How to say it |
+| --- | --- | --- |
+| `Confident` | The amounts agree to the cent | Lead with it. Measured against real spending, two unrelated expenses by one person agree this closely 0.18% of the time, so this is very probably the same money. |
+| `Possible` | The amounts differ by a tip, or by a figure somebody rounded | Mention it as a question, not a finding. It is right often enough to be worth asking and wrong often enough that presenting it as a duplicate is misleading. |
+
+**Both are refused a filing.** A tip added to a dinner is the likeliest duplicate there is
+and it is never `Confident`, so a `Possible` match is not something to skip past -- it is the
+commonest real case. Take one of the three answers for either grade.
+
+What you must not do is flatten them. Telling somebody a streaming charge "is already
+recorded" when the rule only found a figure within a quarter of it is how they learn to stop
+reading you -- and that is also how a genuine duplicate gets waved through.
 
 ## The refusal
 

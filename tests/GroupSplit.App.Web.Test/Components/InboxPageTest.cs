@@ -180,16 +180,30 @@ public class InboxPageTest : ComponentTest
             null, null, null, null, null, null, null, false, InboxStatus.New, null, null,
             "Everyday", "Fake Bank");
 
-    /// <summary>The same row, showing an expense it might already be.</summary>
+    /// <summary>
+    /// The same row, showing an expense it might already be: the same money to the cent, so
+    /// a confident match.
+    /// </summary>
     private BankTransactionResponse Flagged(string merchant, decimal amount) =>
         Row(merchant, amount, DateOnly.FromDateTime(Today)) with
         {
-            PossibleDuplicates =
-            [
-                new ExpenseMatchResponse(Guid.NewGuid(), merchant, amount, "USD",
-                    DateTimeOffset.UtcNow, Guid.NewGuid(), "Home", "Anabel", 0m, 0)
-            ]
+            PossibleDuplicates = [Match(merchant, amount, 0m, MatchConfidence.Confident)]
         };
+
+    /// <summary>
+    /// The same row, showing something whose amounts do not quite agree -- a tip, or a figure
+    /// somebody rounded. Worth answering and not worth a warning.
+    /// </summary>
+    private BankTransactionResponse Possibly(string merchant, decimal amount, decimal apart = 6m) =>
+        Row(merchant, amount, DateOnly.FromDateTime(Today)) with
+        {
+            PossibleDuplicates = [Match("Dinner", amount - apart, apart, MatchConfidence.Possible)]
+        };
+
+    private static ExpenseMatchResponse Match(string name, decimal amount, decimal apart,
+        MatchConfidence confidence) =>
+        new(Guid.NewGuid(), name, amount, "USD", DateTimeOffset.UtcNow, Guid.NewGuid(), "Home", "Anabel",
+            apart, apart == 0m ? 0 : 2, confidence);
 
     /// <summary>Money coming in, which can be ignored but never filed as an expense.</summary>
     private BankTransactionResponse Credit(string merchant, decimal amount) =>
@@ -205,15 +219,97 @@ public class InboxPageTest : ComponentTest
         page.FindAll(".gs-selection-bar button")
             .First(button => button.TextContent.Contains(label)).ClickAsync(new());
 
+    // ---- how loudly a suggestion is said --------------------------------------------
+
+    /// <summary>
+    /// The same money to the cent is a claim worth a warning on a row nobody has touched.
+    /// </summary>
+    [Fact]
+    public void A_confident_match_arrives_as_a_warning()
+    {
+        _rows = [Flagged("Costco", 87.15m)];
+
+        var page = Render<Inbox>();
+
+        var alert = page.Find(".gs-queue .mud-alert");
+
+        Assert.Contains("mud-alert-text-warning", alert.ClassName);
+        Assert.Contains("You may already have recorded this", alert.TextContent);
+    }
+
+    /// <summary>
+    /// A figure within a quarter of the charge is not. Measured over real spending it lands
+    /// on unrelated money often enough that a warning for it is how somebody learns to stop
+    /// reading them -- so it is said on the same surface in a plainer voice, and it says why
+    /// it is being offered.
+    /// </summary>
+    [Fact]
+    public void A_possible_match_arrives_as_a_note_and_not_a_warning()
+    {
+        _rows = [Possibly("Trattoria da Enzo", 46m)];
+
+        var page = Render<Inbox>();
+
+        var alert = page.Find(".gs-queue .mud-alert");
+
+        Assert.DoesNotContain("mud-alert-text-warning", alert.ClassName);
+        Assert.Contains("mud-alert-text-normal", alert.ClassName);
+        Assert.Contains("could be one you have already recorded", alert.TextContent);
+        Assert.Contains("6.00 apart", alert.TextContent);
+    }
+
+    /// <summary>
+    /// Every candidate, not only the best-ranked one. The ranking can be wrong, and while
+    /// the row showed one slot a coincidence a few cents nearer took it and kept the real
+    /// duplicate off the screen altogether.
+    /// </summary>
+    [Fact]
+    public void Every_candidate_is_listed_and_not_only_the_best_ranked_one()
+    {
+        _rows =
+        [
+            Row("Trattoria da Enzo", 46m, DateOnly.FromDateTime(Today)) with
+            {
+                PossibleDuplicates =
+                [
+                    Match("Dinner", 46m, 0m, MatchConfidence.Confident),
+                    Match("Taxi home", 44m, 2m, MatchConfidence.Possible)
+                ]
+            }
+        ];
+
+        var page = Render<Inbox>();
+
+        var alert = page.Find(".gs-queue .mud-alert");
+
+        Assert.Equal(2, page.FindAll(".gs-queue .gs-match-line").Count);
+        Assert.Contains("Dinner", alert.TextContent);
+        Assert.Contains("Taxi home", alert.TextContent);
+    }
+
+    /// <summary>
+    /// Both grades are counted in what the header says needs answering, because filing is
+    /// refused over both.
+    /// </summary>
+    [Fact]
+    public void The_header_counts_a_row_whose_match_is_only_possible()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
+
+        var page = Render<Inbox>();
+
+        Assert.Contains("1 may already be recorded", page.Find(".gs-list-head").TextContent);
+    }
+
     // ---- selecting several rows -----------------------------------------------------
 
     /// <summary>
-    /// The whole safety rule of the bulk actions. A row showing a possible duplicate is
-    /// still tickable one at a time, but select-all leaves it alone: answering "is this the
-    /// same payment?" is the one decision on this page that must not be taken for somebody.
+    /// Select-all means all of them. A row with a suggestion on it is ticked like any other
+    /// -- ignoring one in bulk is perfectly safe, and it is only *adding* it that has to
+    /// wait for a person.
     /// </summary>
     [Fact]
-    public async Task Select_all_leaves_out_a_row_that_may_already_be_recorded()
+    public async Task Select_all_covers_a_row_that_may_already_be_recorded()
     {
         _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m), Row("Uber", 12m, DateOnly.FromDateTime(Today))];
 
@@ -222,10 +318,73 @@ public class InboxPageTest : ComponentTest
         await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
 
-        Assert.Contains("2 selected", page.Find(".gs-selection-bar").TextContent);
+        Assert.Contains("3 selected", page.Find(".gs-selection-bar").TextContent);
 
-        // And it says why the third was left out, rather than quietly skipping it.
-        Assert.Contains("possible duplicate", page.Find(".gs-list-head").TextContent);
+        // And the header still says which of them will need answering rather than adding.
+        Assert.Contains("may already be recorded", page.Find(".gs-list-head").TextContent);
+    }
+
+    /// <summary>
+    /// The safety rule, where it now lives. Sending a flagged row in bulk would either walk
+    /// into the refusal or -- much worse -- have to assert that the same money really was
+    /// paid twice on somebody's behalf, and record it twice.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_the_selection_personal_leaves_a_flagged_row_for_a_person()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+        await PressAsync(page, "Keep personal");
+
+        _bank.Verify(bank => bank.KeepPersonalManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
+                sent.Count == 1 && sent[0].Title == "Lidl"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The same for the softer grade, which is the commoner one: filing is refused over it
+    /// too, so it is not something a bulk add may quietly push through.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_the_selection_personal_leaves_a_merely_similar_row_alone_as_well()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+        await PressAsync(page, "Keep personal");
+
+        _bank.Verify(bank => bank.KeepPersonalManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
+                sent.Count == 1 && sent[0].Title == "Lidl"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Ignoring is the bulk action a flagged row may take part in. It creates nothing, and
+    /// filing that row later is still checked -- so there is nothing to protect it from.
+    /// </summary>
+    [Fact]
+    public async Task Ignoring_the_selection_covers_a_flagged_row_too()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
+
+        var page = Render<Inbox>();
+
+        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
+            new ChangeEventArgs { Value = true });
+        await PressAsync(page, "Ignore");
+
+        _bank.Verify(bank => bank.IgnoreManyAsync(
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent => sent.Count == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -260,7 +419,7 @@ public class InboxPageTest : ComponentTest
         await PressAsync(page, "Keep personal");
 
         _bank.Verify(bank => bank.KeepPersonalManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title, bool FileAnyway)>>(sent =>
+            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
                 sent.Count == 1 && sent[0].Title == "Lidl"),
             It.IsAny<CancellationToken>()), Times.Once);
     }

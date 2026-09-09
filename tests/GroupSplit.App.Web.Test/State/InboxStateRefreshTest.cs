@@ -51,7 +51,8 @@ public class InboxStateRefreshTest
                 PossibleDuplicates =
                 [
                     new ExpenseMatchResponse(Guid.NewGuid(), "Shopping", 28m, "USD",
-                        new DateTimeOffset(2026, 9, 1, 18, 0, 0, TimeSpan.Zero), null, null, "Me", 2m, 0)
+                        new DateTimeOffset(2026, 9, 1, 18, 0, 0, TimeSpan.Zero), null, null, "Me", 2m, 0,
+                        MatchConfidence.Possible)
                 ]
             },
             Row("Blue Bottle", 4.5m)

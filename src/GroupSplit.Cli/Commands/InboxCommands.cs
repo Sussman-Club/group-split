@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -116,14 +116,25 @@ public static class InboxCommands
                 // The listing already carries the suggestions, so saying so costs nothing
                 // here -- and filing one of these without an answer would be refused, which
                 // is a worse way to find out.
-                var duplicates = value.Items.Count(row => row.PossibleDuplicates.Count > 0);
+                //
+                // Two counts, because they are two different claims. A confident match is
+                // the same money to the cent; a possible one is a figure within a quarter of
+                // it, which lands on unrelated money often enough that calling it "already
+                // recorded" would be wrong most times it was said. Both are refused a
+                // filing, so both are worth knowing about before trying.
+                var recorded = value.Items.Count(row => row.PossibleDuplicates.Any(match => match.IsConfident));
+                var could = value.Items.Count(row =>
+                    row.PossibleDuplicates.Count > 0 && !row.PossibleDuplicates.Any(match => match.IsConfident));
 
                 return new Rows(
                     table,
-                    duplicates == 0
+                    recorded == 0 && could == 0
                         ? new Markup(string.Empty)
                         : new Markup(
-                            $"[yellow]{duplicates}[/] may already be recorded.\n"
+                            (recorded > 0 ? $"[yellow]{recorded}[/] may already be recorded" : string.Empty)
+                            + (recorded > 0 && could > 0 ? ", and " : string.Empty)
+                            + (could > 0 ? $"[grey]{could}[/] could be" : string.Empty)
+                            + ". Filing either is refused until answered.\n"
                             + "[grey]  groupsplit inbox matches <row-id>[/]\n"),
                     Tables.PageFooter(value));
             });
@@ -143,11 +154,24 @@ public static class InboxCommands
     /// Marked on the title rather than in a column of its own, because that is where the
     /// eye already is and because this table is wide enough as it is -- text mode is 80
     /// columns whenever stdout is not a terminal, which is every redirected run.
+    /// <para>
+    /// The mark says which grade it is. <c>(duplicate?)</c> claims the row is one, and a
+    /// mark that claims it wrongly most times it appears is a mark people stop reading --
+    /// which is also how a real duplicate gets waved through. A possible match gets the
+    /// quieter <c>(similar)</c>, because that is all the rule actually found.
+    /// </para>
     /// </remarks>
     private static string Title(BankTransactionResponse row)
         => Markup.Escape(row.Title)
            + (row.Pending ? " [grey](pending)[/]" : string.Empty)
-           + (row.PossibleDuplicates.Count > 0 ? " [yellow](duplicate?)[/]" : string.Empty);
+           + Mark(row.PossibleDuplicates);
+
+    private static string Mark(IReadOnlyList<ExpenseMatchResponse> matches) => matches switch
+    {
+        { Count: 0 } => string.Empty,
+        _ when matches.Any(match => match.IsConfident) => " [yellow](duplicate?)[/]",
+        _ => " [grey](similar)[/]"
+    };
 
     private static Command Summary()
     {
@@ -156,6 +180,11 @@ public static class InboxCommands
         // Working out how many of those look like an expense already recorded means running
         // the matcher over every waiting row, so the server only does it when asked. Asked
         // for by default here: this command exists to be read once, not polled.
+        //
+        // What comes back is the count of *confident* matches -- rows whose amount agrees to
+        // the cent with something already recorded. Rows that merely sit close are not in
+        // it, deliberately: a single number read as "some of these are already recorded"
+        // has to be right about it. `inbox list` says how many of those there are.
         var duplicates = new Option<bool>("--duplicates")
         {
             Description = "Also count the rows that may already be recorded as an expense.",
@@ -174,7 +203,7 @@ public static class InboxCommands
             context.Output.Write(summary, value => new Markup(
                 $"[bold]{value.NewCount}[/] rows waiting"
                 + (value.PossibleDuplicates is { } possible
-                    ? $", [bold]{possible}[/] possibly already recorded"
+                    ? $", [bold]{possible}[/] already recorded to the cent"
                     : string.Empty)
                 + ".\n"));
 
@@ -227,7 +256,8 @@ public static class InboxCommands
                 {
                     blocks.Add(new Markup(
                         $"[bold]{Markup.Escape(match.Name)}[/] {match.Amount:N2} "
-                        + $"{Markup.Escape(match.Currency)} in {Markup.Escape(match.Where)}\n"
+                        + $"{Markup.Escape(match.Currency)} in {Markup.Escape(match.Where)}"
+                        + $" {Grade(match)}\n"
                         + $"  [grey]paid by {Markup.Escape(match.PaidByUserName)}, "
                         + $"{Markup.Escape(Apart(match))}[/]\n"
                         + $"  [cyan]{match.TransactionId}[/]\n\n"));
@@ -249,6 +279,19 @@ public static class InboxCommands
 
         return command;
     }
+
+    /// <summary>
+    /// Which grade a candidate is, said on its own line rather than left to be inferred from
+    /// the numbers underneath it.
+    /// </summary>
+    /// <remarks>
+    /// The reason this is spelled out at all is that an agent reads this output too, and one
+    /// that cannot tell a confident match from a coincidence has to treat every candidate as
+    /// a stop -- which is how the guard turns into a formality that gets waved through. The
+    /// words are the ones the inbox uses, so nobody learns them twice.
+    /// </remarks>
+    private static string Grade(ExpenseMatchResponse match) =>
+        match.IsConfident ? "[yellow](same amount)[/]" : "[grey](similar amount)[/]";
 
     /// <summary>
     /// How far apart the two are on the axes that decided the suggestion, so a person can

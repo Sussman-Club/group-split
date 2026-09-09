@@ -453,9 +453,30 @@ groupsplit inbox dismiss-match <row-id> <transaction-id>   # not a match at all
 division are untouched: a card settling for six more than the receipt is not a correction
 anybody asked for. `dismiss-match` means the pair is never suggested again.
 
-Nothing has to wait for the refusal. `inbox list` marks a row `(duplicate?)` and counts them
-underneath, and `groupsplit inbox matches <row-id>` names what it matched and why -- how many
-days apart and how far the amounts are -- without filing anything.
+Nothing has to wait for the refusal. `inbox list` marks the rows and counts them underneath,
+and `groupsplit inbox matches <row-id>` names what each row matched and why -- how many days
+apart and how far the amounts are -- without filing anything.
+
+#### How sure the suggestion is
+
+A match comes back with a `confidence`, and it is worth reading before deciding how much of
+somebody's attention to spend on it. Measured against real spending, the amount-and-date test
+on its own lands on unrelated money 11.5% of the time; amounts that agree **to the cent** do
+so 0.18% of the time. Those are two different claims and they are marked as two:
+
+| `confidence` | What it means | `inbox list` | `inbox matches` |
+| --- | --- | --- | --- |
+| `Confident` | The amounts agree to the cent | `(duplicate?)` | `(same amount)` |
+| `Possible` | They differ by a tip, or a figure somebody rounded | `(similar)` | `(similar amount)` |
+
+**Filing is refused over both**, so both are worth answering. A tip added to a dinner is the
+likeliest duplicate there is and it is only ever `Possible` -- treating that as noise is how
+the same money ends up in the ledger twice. What the grade tells you is how confidently to
+put it to somebody: a confident match is worth interrupting them with, and a possible one is
+worth mentioning while they are already deciding.
+
+`inbox summary` counts the confident ones only, so a number read as "some of these are
+already recorded" is right about it. `inbox list` says how many merely look similar.
 
 The other order is asked from the other end. Somebody who typed the expense first wants to
 know when the card charge arrives, and the row is what they need the id of:

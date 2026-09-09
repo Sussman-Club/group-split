@@ -1,4 +1,4 @@
-﻿using GroupSplit.Shared;
+using GroupSplit.Shared;
 
 namespace GroupSplit.App.Shared.Services.Commands;
 
@@ -73,6 +73,6 @@ public interface IBankCommands
     /// only ever in this list because they ticked it themselves.
     /// </param>
     /// <returns>How many became expenses.</returns>
-    Task<int> KeepPersonalManyAsync(IReadOnlyList<(Guid Id, string Title, bool FileAnyway)> rows,
+    Task<int> KeepPersonalManyAsync(IReadOnlyList<(Guid Id, string Title)> rows,
         CancellationToken ct = default);
 }
