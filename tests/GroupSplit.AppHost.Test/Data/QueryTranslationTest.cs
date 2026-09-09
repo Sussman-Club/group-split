@@ -234,6 +234,11 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     /// Every key the inbox offers, in both directions. A key that does not translate is a
     /// 500 the moment somebody clicks that column, and nothing else would catch it.
     /// </summary>
+    /// <remarks>
+    /// The date key is the one to watch: it orders by the authorized date falling back to
+    /// the posting one, so what has to translate is a <c>COALESCE</c> of two date columns in
+    /// an <c>ORDER BY</c> -- which the in-memory provider would sort on the client.
+    /// </remarks>
     [Theory(Timeout = 120_000)]
     [InlineData("date")]
     [InlineData("amount")]

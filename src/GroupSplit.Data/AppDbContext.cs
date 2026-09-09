@@ -437,7 +437,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // The dedup key every upsert relies on: the provider's id, within the account.
             entity.HasIndex(row => new { row.LinkedAccountId, row.ProviderTransactionId }).IsUnique();
 
-            // The inbox: this person's accounts, this status, newest first.
+            // The inbox: this person's accounts, and this status.
+            //
+            // The date on the end no longer serves the listing. Both the span it narrows by
+            // and the order it is read in are the authorized date falling back to the
+            // posting one, which is a COALESCE no index on either column alone can answer --
+            // so a page of a span is filtered and sorted, over a few hundred rows an
+            // account, rather than read in stored order. Cheaper than the stored column that
+            // would restore it, and the date still earns its place here for the replay
+            // BankSyncService does over an account's posted rows.
             entity.HasIndex(row => new { row.LinkedAccountId, row.Status, row.Date });
         });
 

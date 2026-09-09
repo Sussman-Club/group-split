@@ -501,6 +501,66 @@ public class BankEndpointTest : IAsyncLifetime
         Assert.Equal("2026-09-15", Assert.Single(september).GetProperty("date").GetString());
     }
 
+    /// <summary>
+    /// Newest first means newest by the date on the rows. A charge authorized on the 25th of
+    /// September that posted on the 2nd of October is shown as the 25th, so it belongs below
+    /// the row showing the 28th -- ordering by the posting date put it at the top of a list
+    /// where nothing on screen said why.
+    /// </summary>
+    [Fact]
+    public async Task The_inbox_orders_by_the_date_it_shows()
+    {
+        var connection = await LinkAsync();
+
+        await RowAsync(connection, providerId: "posted-in-october",
+            date: new DateOnly(2026, 10, 2), authorizedDate: new DateOnly(2026, 9, 25));
+
+        await RowAsync(connection, providerId: "newest", date: new DateOnly(2026, 9, 28));
+        await RowAsync(connection, providerId: "oldest", date: new DateOnly(2026, 9, 20));
+
+        var september = await ItemsAsync("/inbox?From=2026-09-01&To=2026-09-30");
+
+        Assert.Equal(["2026-09-28", "2026-09-25", "2026-09-20"], SpentOn(september));
+    }
+
+    /// <summary>
+    /// The same order, read a page at a time: every row once, and the page boundary falling
+    /// where the dates on the page say it should. A sort the database cannot separate two
+    /// rows by is a row that arrives twice or never, so the tie-break has to hold across
+    /// requests as well as within one.
+    /// </summary>
+    [Fact]
+    public async Task Paging_a_narrowed_span_returns_each_row_once_in_that_order()
+    {
+        var connection = await LinkAsync();
+
+        await RowAsync(connection, providerId: "posted-in-october",
+            date: new DateOnly(2026, 10, 2), authorizedDate: new DateOnly(2026, 9, 25));
+
+        // Two rows on one day, which only the tie-break can order.
+        await RowAsync(connection, providerId: "same-day-a", date: new DateOnly(2026, 9, 28));
+        await RowAsync(connection, providerId: "same-day-b", date: new DateOnly(2026, 9, 28));
+        await RowAsync(connection, providerId: "oldest", date: new DateOnly(2026, 9, 20));
+
+        var whole = await ItemsAsync("/inbox?From=2026-09-01&To=2026-09-30");
+
+        var paged = new List<JsonElement>();
+
+        for (var page = 1; page <= 4; page++)
+            paged.AddRange(await ItemsAsync($"/inbox?From=2026-09-01&To=2026-09-30&Page={page}&PageSize=1"));
+
+        Assert.Equal(4, whole.Count);
+        Assert.Equal(["2026-09-28", "2026-09-28", "2026-09-25", "2026-09-20"], SpentOn(paged));
+        Assert.Equal(Ids(whole), Ids(paged));
+        Assert.Equal(4, Ids(paged).Distinct().Count());
+    }
+
+    private static List<string?> SpentOn(IEnumerable<JsonElement> rows) =>
+        rows.Select(row => row.GetProperty("spentOn").GetString()).ToList();
+
+    private static List<string?> Ids(IEnumerable<JsonElement> rows) =>
+        rows.Select(row => row.GetProperty("id").GetString()).ToList();
+
     private async Task<List<JsonElement>> ItemsAsync(string route)
     {
         var response = await _host.Client.GetAsync(route, Ct);
@@ -529,7 +589,7 @@ public class BankEndpointTest : IAsyncLifetime
     }
 
     private async Task<BankTransaction> RowAsync(BankConnection connection,
-        string providerId = "t1", DateOnly? date = null)
+        string providerId = "t1", DateOnly? date = null, DateOnly? authorizedDate = null)
     {
         using var scope = _host.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -539,6 +599,7 @@ public class BankEndpointTest : IAsyncLifetime
             LinkedAccountId = connection.Accounts.First().Id,
             ProviderTransactionId = providerId,
             Date = date ?? new DateOnly(2026, 9, 1),
+            AuthorizedDate = authorizedDate,
             Amount = 10m,
             Description = "LIDL",
             MerchantName = "Lidl",
