@@ -347,28 +347,6 @@ public static class TransactionApi
                     if (transactionUpdateRequest is null)
                         return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
-                    // Read before it is applied, because applying it destroys the
-                    // difference: a patch that said nothing about the shares and one that
-                    // set them to what they already were produce the same model, and they
-                    // mean opposite things. Silence means "divide it again the way the
-                    // category says", which is what an edit to the amount, the payer or the
-                    // category should do; naming them means those amounts, checked against
-                    // the (possibly also patched) total.
-                    //
-                    // Only a patch that says something about them gets them filled in, and
-                    // it needs that: "replace /splits/0/amount" has to have an index 0 to
-                    // replace. The model arrives without them precisely so that silence
-                    // stays silent.
-                    if (patchDocument.Touches("/splits"))
-                    {
-                        var current = await transactionService.GetDetails(id, ct);
-
-                        transactionUpdateRequest.Splits = current is null
-                            ? []
-                            : [.. current.Splits.Select(split =>
-                                new SplitInput { UserId = split.UserId, Amount = split.Amount })];
-                    }
-
                     patchDocument.ApplyTo(transactionUpdateRequest);
 
                     if (!PatchedModel.IsValid(transactionUpdateRequest, out var invalid))
@@ -376,14 +354,12 @@ public static class TransactionApi
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
-                    var transactions = await transactionService.Get(id, ct);
+                    var details = await transactionService.GetDetails(id, ct);
 
-                    var transactionResponse = await transactions.SelectDto().FirstOrDefaultAsync(ct);
-
-                    return Results.Ok(transactionResponse);
+                    return Results.Ok(details);
                 })
                 .WithName("UpdateTransaction")
-                .Produces<TransactionResponse>()
+                .Produces<TransactionDetailsResponse>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)

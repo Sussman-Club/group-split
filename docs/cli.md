@@ -512,12 +512,11 @@ than an expense, so nothing here has been paid back yet. Where you actually stan
 
 `transactions update` sends a JSON Patch of **only** the flags you passed, and that is
 load-bearing rather than an optimisation. The API reads the patch as well as applying it:
-saying nothing about the shares means "divide it again the way the category says", which is
-what an edit to the amount, the payer or the category should do. Naming them with `--split`
+saying nothing about the shares keeps the existing division. Naming them with `--split`
 means those exact amounts, checked against the total.
 
 ```bash
-groupsplit tx update <id> --amount 46.00                      # shares are recomputed
+groupsplit tx update <id> --name "New description"            # existing shares are preserved
 groupsplit tx update <id> --split <user-id>=30.00 --split <user-id>=16.00
 groupsplit tx update <id> --personal                          # take it out of its group
 groupsplit tx update <id> --description ""                    # clear the note

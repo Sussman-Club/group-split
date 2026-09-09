@@ -126,33 +126,27 @@ public class TransactionSplitPatchTest : IAsyncLifetime
     }
 
     /// <summary>
-    /// The headline of the whole arrangement: a patch that says nothing about the shares
-    /// gets them worked out again from the new amount, rather than keeping stale ones that
-    /// no longer add up.
+    /// Patching the amount alone without updating the shares is refused because the
+    /// existing shares no longer sum to the new amount.
     /// </summary>
     [Fact]
-    public async Task Patching_the_amount_alone_divides_it_again()
+    public async Task Patching_the_amount_alone_without_updating_splits_is_refused()
     {
         var (transactionId, me, other) = await AnEvenlySplitExpense();
 
-        var patched = await Client.PatchAsync($"/transactions/{transactionId}",
+        var response = await Client.PatchAsync($"/transactions/{transactionId}",
             PatchBody(("replace", "/amount", 250m)), Ct);
-        patched.EnsureSuccessStatusCode();
 
-        var details = await Details(transactionId);
+        var problem = await Refused(response, HttpStatusCode.UnprocessableEntity);
 
-        Assert.Equal(250m, details.Amount);
-        Assert.Equal(250m, details.Splits.Sum(split => split.Amount));
-        Assert.Equal(125m, ShareOf(details, me));
-        Assert.Equal(125m, ShareOf(details, other));
+        Assert.Equal(ErrorCodes.SplitsDoNotSumToAmount, problem.Code);
     }
 
     /// <summary>
-    /// The same thing for the other two fields a division depends on, because each of them
-    /// changes what everybody owed.
+    /// Patching the payer updates who paid while preserving the division.
     /// </summary>
     [Fact]
-    public async Task Patching_the_payer_alone_divides_it_again()
+    public async Task Patching_the_payer_alone_preserves_the_shares()
     {
         var (transactionId, _, other) = await AnEvenlySplitExpense();
 
@@ -285,13 +279,22 @@ public class TransactionSplitPatchTest : IAsyncLifetime
     }
 
     /// <summary>
-    /// A patch of something unrelated must not be read as a statement about the shares,
-    /// which is the segment-boundary case the reader is careful about.
+    /// A patch of something unrelated leaves existing custom shares intact without
+    /// resetting/re-splitting by category.
     /// </summary>
     [Fact]
     public async Task Patching_only_the_name_leaves_the_shares_alone()
     {
-        var (transactionId, me, _) = await AnEvenlySplitExpense();
+        var (transactionId, me, other) = await AnEvenlySplitExpense();
+
+        // Stating custom splits (70 / 30)
+        var customSplitsResponse = await Client.PatchAsync($"/transactions/{transactionId}",
+            PatchBody(("replace", "/splits", new[]
+            {
+                new { userId = me, amount = 70m },
+                new { userId = other, amount = 30m }
+            })), Ct);
+        customSplitsResponse.EnsureSuccessStatusCode();
 
         var patched = await Client.PatchAsync($"/transactions/{transactionId}",
             PatchBody(("replace", "/name", "Hotel, two nights")), Ct);
@@ -300,7 +303,8 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         var details = await Details(transactionId);
 
         Assert.Equal("Hotel, two nights", details.Name);
-        Assert.Equal(50m, ShareOf(details, me));
+        Assert.Equal(70m, ShareOf(details, me));
+        Assert.Equal(30m, ShareOf(details, other));
     }
 
     [Fact]

@@ -342,16 +342,10 @@ public class TransactionService(
                 PaidByUserId = t.User.Id,
                 GroupId = t.GroupId,
                 CategoryId = t.CategoryId,
-                // Unlike the splits below, this is filled in: a patch that says nothing
-                // about the shop means "leave it where it was spent", and an edit to the
-                // amount is no reason to forget that.
-                MerchantId = t.MerchantId
-                // Splits are deliberately absent. Null means "divide it again", and that is
-                // the only safe default for a model somebody is about to change the amount
-                // on: filled in here, an ordinary read-change-write would quietly mean
-                // "keep these exact shares" and fail the moment the amount moved. The one
-                // caller that needs them -- a patch addressing a share by index, which
-                // needs an index to address -- fills them in itself.
+                MerchantId = t.MerchantId,
+                Splits = t.GroupId == null
+                    ? null
+                    : t.Splits.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList()
             })
             .FirstOrDefaultAsync(ct);
 

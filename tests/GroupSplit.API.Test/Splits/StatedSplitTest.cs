@@ -277,36 +277,32 @@ public class StatedSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// The edit model leaves the shares out, and that is what makes the ordinary
-    /// read-change-write safe: change the amount, save, and the expense divides again.
+    /// The edit model carries the stored shares so that an ordinary edit preserves them.
     /// </summary>
-    /// <remarks>
-    /// Filling them in here would make silence mean "keep these exact shares", so raising
-    /// an amount by a pound would be refused for not adding up -- against a division the
-    /// caller never asked to keep. The only place that needs them is a patch addressing a
-    /// share by index, and that fills them in for itself.
-    /// </remarks>
     [Fact]
-    public async Task The_edit_model_leaves_the_shares_out_so_that_an_ordinary_edit_divides_again()
+    public async Task The_edit_model_carries_stored_shares()
     {
         var (groupId, self, other) = await GroupOfTwo();
 
-        var created = await Create(groupId, 100m, splits: null);
+        var created = await Create(groupId, 100m, splits: [Share(self, 70m), Share(other, 30m)]);
 
         var transactions = GetService<ITransactionService>();
         var model = await transactions.GetUpdateModel(created.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(model);
-        Assert.Null(model.Splits);
+        Assert.NotNull(model.Splits);
+        Assert.Equal(2, model.Splits.Count);
+        Assert.Equal(70m, model.Splits.Single(split => split.UserId == self).Amount);
+        Assert.Equal(30m, model.Splits.Single(split => split.UserId == other).Amount);
 
-        model.Amount = 250m;
+        model.Name = "Updated Name";
         await transactions.Update(created.Id, model, TestContext.Current.CancellationToken);
 
         var splits = await StoredSplitsOf(created.Id);
 
-        Assert.Equal(250m, splits.Sum(split => split.Amount));
-        Assert.Equal(125m, splits.Single(split => split.UserId == self).Amount);
-        Assert.Equal(125m, splits.Single(split => split.UserId == other).Amount);
+        Assert.Equal(100m, splits.Sum(split => split.Amount));
+        Assert.Equal(70m, splits.Single(split => split.UserId == self).Amount);
+        Assert.Equal(30m, splits.Single(split => split.UserId == other).Amount);
     }
 
     /// <summary>
