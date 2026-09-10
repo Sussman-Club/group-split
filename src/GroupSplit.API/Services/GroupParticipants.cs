@@ -8,16 +8,51 @@ namespace GroupSplit.API.Services;
 /// <summary>
 /// What one hand-over moved, so whoever asked for it can be told.
 /// </summary>
+/// <param name="RulesEmptied">
+/// How many of those rules have nobody left in them.
+/// </param>
+/// <remarks>
+/// <paramref name="RulesEmptied"/> is the one number here that is a warning rather than a
+/// receipt. A rule with nobody left in it has changed what it means: a shares or percentage
+/// rule stops dividing at all and refuses the next expense filed under it, and an even rule
+/// quietly becomes "between everybody", because naming nobody is how an even split says
+/// that. Neither is a state anybody asked for, and until this was counted neither was
+/// mentioned at the moment it was caused -- which
+/// <c>docs/split-rules-and-membership.md</c> named as the gap worth closing.
+/// </remarks>
 public record ParticipantHandover(
     int SharesMoved,
     decimal AmountOwed,
     int PaymentsMoved,
     decimal AmountPaid,
-    int RulesAffected)
+    int RulesAffected,
+    int RulesEmptied = 0)
 {
     public static readonly ParticipantHandover Nothing = new(0, 0m, 0, 0m, 0);
 
     public bool MovedAnything => SharesMoved > 0 || PaymentsMoved > 0 || RulesAffected > 0;
+}
+
+/// <summary>
+/// What a hand-over does with the rules that name the person moving.
+/// </summary>
+/// <remarks>
+/// The two directions are opposites, and one code path served both until it was noticed.
+/// Somebody <em>arriving</em> keeps their place in a rule -- the group wrote "Carlos gets
+/// one share" and meant it, and Carlos claiming his link is the group getting what it
+/// asked for. Somebody <em>leaving</em> loses it, because a rule that went on naming them
+/// would keep giving them a share of every later expense.
+/// </remarks>
+public enum RuleHandling
+{
+    /// <summary>The rules follow the person: their weight becomes the receiver's.</summary>
+    Transfer,
+
+    /// <summary>
+    /// The rules stop naming them. What was theirs is divided among the rest, since weights
+    /// are proportional and the division normalises by whatever total it is given.
+    /// </summary>
+    Prune
 }
 
 /// <summary>
@@ -125,10 +160,12 @@ public interface IGroupParticipants
     /// every transaction still sums to its own amount, which is the invariant the group's
     /// balances rest on, and the group's balances still sum to zero.
     /// <para>
-    /// Rules are the exception, and are pruned rather than merged: a rule is a template for
-    /// the next expense rather than a record of anything, and weights are proportional, so
-    /// dropping the name divides what was theirs among the rest. Exactly what happens when
-    /// a member leaves -- see <c>GroupService.DetachMember</c>.
+    /// The rules are the caller's to say, through <paramref name="rules"/>, because the two
+    /// directions want opposite things: somebody claiming their link should keep the place a
+    /// rule gave them, and somebody who is never coming should lose it. Passing the wrong
+    /// one is silent -- a claimed invitation whose rules were pruned leaves the new member
+    /// out of the templates that named them, and nothing says so -- which is why it is a
+    /// parameter and not a default.
     /// </para>
     /// <para>
     /// Does not save, so the caller can apply it together with whatever else the same
@@ -136,7 +173,7 @@ public interface IGroupParticipants
     /// </para>
     /// </remarks>
     Task<ParticipantHandover> HandOver(Guid groupId, Guid fromUserId, Guid toUserId,
-        CancellationToken ct = default);
+        RuleHandling rules, CancellationToken ct = default);
 }
 
 public sealed class GroupParticipants(AppDbContext context) : IGroupParticipants
@@ -210,7 +247,7 @@ public sealed class GroupParticipants(AppDbContext context) : IGroupParticipants
     }
 
     public async Task<ParticipantHandover> HandOver(Guid groupId, Guid fromUserId, Guid toUserId,
-        CancellationToken ct = default)
+        RuleHandling rules, CancellationToken ct = default)
     {
         if (fromUserId == toUserId)
             return ParticipantHandover.Nothing;
@@ -261,8 +298,80 @@ public sealed class GroupParticipants(AppDbContext context) : IGroupParticipants
                                   participant.UserId == fromUserId)
             .ToListAsync(ct);
 
+        var emptied = rules is RuleHandling.Prune
+            ? await Prune(named, ct)
+            : await Transfer(named, toUserId, ct);
+
+        return new ParticipantHandover(
+            shares.Count, amountOwed, paid.Count, amountPaid, named.Count, emptied);
+    }
+
+    /// <summary>
+    /// Moves the rule places to the receiver, and reports how many rules that emptied --
+    /// which, transferring, is none.
+    /// </summary>
+    /// <remarks>
+    /// Weights are added where the receiver already held one, for the same reason a share is:
+    /// a rule may hold only one opinion about a person's weight, and the unique index on
+    /// (rule, user) says so.
+    /// </remarks>
+    private async Task<int> Transfer(IReadOnlyList<SplitRuleParticipant> named, Guid toUserId,
+        CancellationToken ct)
+    {
+        if (named.Count == 0)
+            return 0;
+
+        var ruleIds = named.Select(participant => participant.SplitRuleId).ToList();
+
+        var theirs = await context.Set<SplitRuleParticipant>()
+            .Where(participant => ruleIds.Contains(participant.SplitRuleId) &&
+                                  participant.UserId == toUserId)
+            .ToDictionaryAsync(participant => participant.SplitRuleId, ct);
+
+        foreach (var place in named)
+        {
+            if (theirs.TryGetValue(place.SplitRuleId, out var mine))
+            {
+                mine.Weight += place.Weight;
+                context.Remove(place);
+            }
+            else
+            {
+                place.UserId = toUserId;
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Takes the rule places away, and reports how many rules are left naming nobody.
+    /// </summary>
+    /// <remarks>
+    /// The count is the point. A rule pruned to nothing has changed what it means -- a
+    /// shares or percentage rule stops dividing and refuses the next expense filed under it,
+    /// an even one silently becomes "between everybody" -- and this is the moment somebody
+    /// could still be told, which is what the standing gap in
+    /// <c>docs/split-rules-and-membership.md</c> asked for.
+    /// </remarks>
+    private async Task<int> Prune(IReadOnlyList<SplitRuleParticipant> named, CancellationToken ct)
+    {
         context.RemoveRange(named);
 
-        return new ParticipantHandover(shares.Count, amountOwed, paid.Count, amountPaid, named.Count);
+        if (named.Count == 0)
+            return 0;
+
+        var ruleIds = named.Select(participant => participant.SplitRuleId).ToList();
+
+        // Counted before the removals are saved, so it asks the database how many places
+        // each rule has rather than what is left after this.
+        var remaining = await context.Set<SplitRuleParticipant>()
+            .Where(participant => ruleIds.Contains(participant.SplitRuleId))
+            .GroupBy(participant => participant.SplitRuleId)
+            .Select(group => new { SplitRuleId = group.Key, Places = group.Count() })
+            .ToDictionaryAsync(row => row.SplitRuleId, row => row.Places, ct);
+
+        return named.Count(participant =>
+            remaining.GetValueOrDefault(participant.SplitRuleId) <= 1);
     }
 }

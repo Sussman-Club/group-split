@@ -55,13 +55,14 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     private Task<Data.Entities.Expense> AnExpense(Guid groupId, decimal amount,
-        Guid? payer = null, IReadOnlyList<SplitInput>? splits = null) =>
+        Guid? payer = null, IReadOnlyList<SplitInput>? splits = null, Guid? category = null) =>
         Transactions.Create(new CreateTransactionRequest
         {
             GroupId = groupId,
             Amount = amount,
             DateTime = DateTimeOffset.UtcNow,
             Name = "Rent",
+            CategoryId = category,
             PaidByUserId = payer,
             Splits = splits?.ToList()
         }, Ct).AsTask();
@@ -631,7 +632,7 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Withdrawn by the member who is left, because withdrawing is a thing a member of
         // the group does and the inviter is no longer one.
-        using var theirs = AsMember(other);
+        using var theirs = AsMember(other.Id);
 
         var closed = await theirs.ServiceProvider.GetRequiredService<IInvitationService>()
             .Withdraw(group.Id, invitation.Id, Ct);
@@ -794,15 +795,205 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Contains("Tickets", refused.Message);
     }
 
+    /// <summary>
+    /// Claiming keeps the place a rule gave them, where it used to take it away.
+    /// </summary>
+    /// <remarks>
+    /// One hand-over served both directions, and they want opposite things. Somebody
+    /// leaving loses their place, because a rule that went on naming them would keep giving
+    /// them a share of every later expense. Somebody <em>arriving</em> should keep it: the
+    /// group wrote "Carlos gets one share" and meant it, and Carlos claiming his link is the
+    /// group getting what it asked for.
+    /// <para>
+    /// Pruning on the way in was silent. The rule simply stopped naming the person who had
+    /// just joined, and the next expense under that category divided between everybody else.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Claiming_keeps_the_share_a_rule_gave_them()
+    {
+        var group = await AGroup();
+        var invitation = await Invite(group.Id, "Carlos");
+
+        var category = await CreateCategory(group.Id, "Tickets", new SharesSplitRuleDto
+        {
+            Shares = new Dictionary<Guid, int>
+            {
+                [TestUser().Id] = 2,
+                [invitation.ParticipantUserId] = 1
+            }
+        });
+
+        var (scope, carlos) = await Signing();
+
+        using (scope)
+        {
+            await scope.ServiceProvider.GetRequiredService<IInvitationService>()
+                .Claim(invitation.Token, Ct);
+        }
+
+        // The rule names the person who joined, with the weight it gave their stand-in.
+        var named = await DbContext.Set<SplitRuleParticipant>()
+            .AsNoTracking()
+            .Where(participant => participant.SplitRule.Group.Id == group.Id)
+            .ToListAsync(Ct);
+
+        Assert.Equal(2, named.Count);
+        Assert.Equal(1, named.Single(participant => participant.UserId == carlos.Id).Weight);
+
+        // And it still divides the way the group wrote it: two thirds to me, one to Carlos.
+        //
+        // Recorded from a scope of its own, which is not ceremony. This test's own context
+        // has been tracking those rule participants since it created them, and EF hands back
+        // what it is tracking rather than what the store now says -- so the splitter would
+        // divide by the weights as they were before the claim. Every request gets a fresh
+        // context; a test that reuses one is the only place this can bite.
+        using var fresh = AsMember(TestUser().Id);
+
+        var expense = await fresh.ServiceProvider.GetRequiredService<ITransactionService>()
+            .Create(new CreateTransactionRequest
+            {
+                GroupId = group.Id,
+                CategoryId = category,
+                Amount = 90m,
+                DateTime = DateTimeOffset.UtcNow,
+                Name = "Tickets"
+            }, Ct);
+
+        var stored = await DbContext.Set<TransactionSplit>()
+            .AsNoTracking()
+            .Where(split => split.TransactionId == expense.Id)
+            .ToListAsync(Ct);
+
+        Assert.Equal(60m, stored.Single(split => split.UserId == TestUser().Id).Amount);
+        Assert.Equal(30m, stored.Single(split => split.UserId == carlos.Id).Amount);
+    }
+
+    /// <summary>
+    /// A weight the claimer already held and one they inherit become one place.
+    /// </summary>
+    /// <remarks>
+    /// A rule may hold only one opinion about a person's weight, and the unique index on
+    /// (rule, user) says so -- the same reason two shares of one transaction are added
+    /// together rather than left as two rows.
+    /// </remarks>
+    [Fact]
+    public async Task Claiming_adds_to_a_rule_weight_the_claimer_already_held()
+    {
+        var group = await AGroup();
+
+        var (scope, carlos) = await Signing();
+
+        using (scope)
+        {
+            await JoinGroup(group.Id, carlos);
+
+            var invitation = await Invite(group.Id, "Carlos");
+
+            await CreateCategory(group.Id, "Tickets", new SharesSplitRuleDto
+            {
+                Shares = new Dictionary<Guid, int>
+                {
+                    [carlos.Id] = 1,
+                    [invitation.ParticipantUserId] = 2
+                }
+            });
+
+            await scope.ServiceProvider.GetRequiredService<IInvitationService>()
+                .Claim(invitation.Token, Ct);
+        }
+
+        var named = await DbContext.Set<SplitRuleParticipant>()
+            .AsNoTracking()
+            .Where(participant => participant.SplitRule.Group.Id == group.Id)
+            .ToListAsync(Ct);
+
+        Assert.Single(named);
+        Assert.Equal(carlos.Id, named[0].UserId);
+        Assert.Equal(3, named[0].Weight);
+    }
+
+    /// <summary>
+    /// Withdrawing says when it has left a rule naming nobody.
+    /// </summary>
+    /// <remarks>
+    /// The count is the point, and it is a warning rather than a receipt. A rule with
+    /// nobody left in it has changed what it means -- a shares rule refuses the next expense
+    /// filed under it, and an even one quietly starts dividing between everybody, since
+    /// naming nobody is how an even split says that. Neither is a state anybody asked for,
+    /// and this is the moment it can still be said to the person who caused it, which
+    /// <c>docs/split-rules-and-membership.md</c> had recorded as the standing gap.
+    /// </remarks>
+    [Fact]
+    public async Task Withdrawing_says_when_it_has_left_a_rule_naming_nobody()
+    {
+        var group = await AGroup();
+        var invitation = await Invite(group.Id, "Carlos");
+
+        // Named alone, which is an ordinary thing to write: "Carlos pays for the tickets".
+        await CreateCategory(group.Id, "Tickets", new SharesSplitRuleDto
+        {
+            Shares = new Dictionary<Guid, int> { [invitation.ParticipantUserId] = 1 }
+        });
+
+        var closed = await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+
+        Assert.Equal(1, closed.RulesAffected);
+        Assert.Equal(1, closed.RulesEmptied);
+    }
+
+    /// <summary>
+    /// A rule that still has somebody in it is not reported as emptied.
+    /// </summary>
+    [Fact]
+    public async Task Withdrawing_says_nothing_about_a_rule_that_still_names_somebody()
+    {
+        var group = await AGroup();
+        var invitation = await Invite(group.Id, "Carlos");
+
+        await CreateCategory(group.Id, "Tickets", new SharesSplitRuleDto
+        {
+            Shares = new Dictionary<Guid, int>
+            {
+                [TestUser().Id] = 2,
+                [invitation.ParticipantUserId] = 1
+            }
+        });
+
+        var closed = await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+
+        Assert.Equal(1, closed.RulesAffected);
+        Assert.Equal(0, closed.RulesEmptied);
+
+        // And what was theirs is divided among the rest rather than left as a hole, which is
+        // the doctrine a departure already follows.
+        var expense = await AnExpense(group.Id, 90m);
+
+        var stored = await DbContext.Set<TransactionSplit>()
+            .AsNoTracking()
+            .Where(split => split.TransactionId == expense.Id)
+            .ToListAsync(Ct);
+
+        Assert.Equal(90m, Assert.Single(stored).Amount);
+    }
+
     // ---- Fixtures ---------------------------------------------------------------------
 
     /// <summary>
     /// A scope acting as somebody who already has an account, for the tests where the act
     /// belongs to a member who is not the one the fixture signed in as.
     /// </summary>
-    private IServiceScope AsMember(Data.Entities.User user)
+    private IServiceScope AsMember(Guid userId)
     {
         var scope = GetService<IServiceScopeFactory>().CreateScope();
+
+        // Re-read inside the scope. Handing it an entity another context is tracking makes
+        // the second one refuse the moment it meets the same row again -- "another instance
+        // with the same key value is already being tracked" -- which is the whole reason
+        // these scopes exist: a request gets its own context and its own instances.
+        var user = scope.ServiceProvider.GetRequiredService<Data.AppDbContext>()
+            .Set<Data.Entities.User>()
+            .First(candidate => candidate.Id == userId);
 
         scope.ServiceProvider.GetRequiredService<ICurrentUserInitializer>().Initialize(user);
 

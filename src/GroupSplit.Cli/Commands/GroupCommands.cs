@@ -928,10 +928,25 @@ public static class GroupCommands
         table.AddRow("Payments moved", $"{closed.PaymentsMoved} ({closed.AmountPaid:N2})");
         table.AddRow("Rules pruned", closed.RulesAffected.ToString());
 
-        return new Rows(
+        var lines = new List<IRenderable>
+        {
             table,
             new Markup("\n[grey]No amount changed. Every transaction still sums to its own " +
-                       "amount, and the group's balances still sum to zero.[/]\n"));
+                       "amount, and the group's balances still sum to zero.[/]\n")
+        };
+
+        // The one thing here worth interrupting somebody about. A rule with nobody left in
+        // it has changed what it means, and this is the moment it can still be said.
+        if (closed.RulesEmptied > 0)
+        {
+            lines.Add(new Markup(
+                $"\n[yellow]{closed.RulesEmptied} split rule(s) now name nobody.[/] A shares or " +
+                "percentage rule like that refuses the next expense filed under it; an even one " +
+                "divides between everybody. Check them with [bold]groupsplit split-rules list " +
+                $"--group {closed.GroupId}[/].\n"));
+        }
+
+        return new Rows(lines);
     }
 
     private static IRenderable Render(GroupResponse group)

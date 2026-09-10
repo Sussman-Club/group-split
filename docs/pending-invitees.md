@@ -145,9 +145,14 @@ with a person who has not joined.
 `IInvitationService.Claim` is the one moment a position changes hands:
 
 1. the claimer joins the group;
-2. `HandOver` moves the stand-in's shares and the transactions it was down as having paid for
-   onto the claimer's account;
+2. `HandOver` moves the stand-in's shares, the transactions it was down as having paid for,
+   **and its places in the group's split rules** onto the claimer's account;
 3. the invitation and the stand-in both go.
+
+The rules are the half that is easy to get backwards, and was: one hand-over served both
+directions and pruned in both, so claiming an invitation took the new member out of the very
+templates that had named them, in silence. Arriving and leaving want opposite things, and
+`RuleHandling` makes the caller say which.
 
 No amount changes. Every transaction still divides into exactly its own amount, so the
 group's balances read the same on either side of it -- the same numbers under a different
@@ -176,7 +181,10 @@ Concretely, in `IGroupParticipants.HandOver`:
 - every share of theirs in that group moves to the absorber -- added into the absorber's own
   share where they already had one on the same transaction;
 - every transaction they were down as having paid for becomes the absorber's;
-- their place in the group's split rules goes. A rule is a template for the next expense
+- their place in the group's split rules goes, and the answer says how many rules that left
+  naming nobody -- the one number in it that is a warning rather than a receipt, since such a
+  rule refuses the next expense filed under it if it divides by shares or percentages, and
+  silently widens to everybody if it is even. A rule is a template for the next expense
   rather than a record of anything, and weights are proportional, so dropping the name
   divides what was theirs among the rest -- exactly what happens when a member leaves
   (`GroupService.DetachMember`).

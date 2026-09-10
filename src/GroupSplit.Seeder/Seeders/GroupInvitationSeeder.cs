@@ -17,12 +17,24 @@ namespace GroupSplit.Seeder.Seeders;
 /// looking, which is how the two ways in to a group came to be the least exercised part of
 /// the product.
 /// <para>
-/// Seeded in both directions on purpose, because they are different screens. Five are in
-/// groups the demo account is in, which is what the Invited card renders -- names, each with
+/// Seeded in both directions on purpose, because they are different screens. Two are in a
+/// group the demo account is in, which is what the Invited card renders -- names, each with
 /// a link to copy -- and one is in a group the demo account is <em>not</em> in, whose link is
 /// the only way to reach the claim page. That is what Book club is for in <c>groups.json</c>:
 /// claiming an invitation to a group you are already in is a state the app has nothing
 /// useful to show for.
+/// </para>
+/// <para>
+/// Both of the outgoing ones are in Ski trip, and which group that is was chosen rather than
+/// happened. An invited person holds a share of every expense in their group from the moment
+/// they are named, and nobody can settle up with them -- so a group with an invitation shows
+/// a balance that cannot be cleared, which is the truth and is exactly what the feature is
+/// for. It is also a residue, and the settlements in <c>settlements.json</c> were written to
+/// clear the balances the old division produced. Spread across Home, Five-a-side and Lisbon
+/// flat as well, that left four of the demo's groups failing to square up and reading as
+/// arithmetic bugs. One group carries it instead: Ski trip, the least busy of the active
+/// ones, where a pending invitee holding a balance reads as the story rather than as a
+/// defect, and the other groups settle as cleanly as they always did.
 /// </para>
 /// <para>
 /// One of them has no <c>InvitedByUserId</c>. The column is nullable so that an account

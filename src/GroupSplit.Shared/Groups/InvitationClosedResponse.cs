@@ -42,6 +42,17 @@ public enum InvitationOutcome
 /// expense, so what was theirs is simply divided among the rest -- the same thing that
 /// happens when a member leaves.
 /// </param>
+/// <param name="RulesEmptied">
+/// How many of those rules now name nobody at all, which is the one number here that is a
+/// warning rather than a receipt.
+/// </param>
+/// <remarks>
+/// A rule with nobody left in it has changed what it means. A shares or percentage rule
+/// stops dividing and refuses the next expense filed under it
+/// (<c>SPLIT_RULE_INVALID</c>); an even one quietly becomes "between everybody", since
+/// naming nobody is how an even split says that. Neither is a state anybody asked for, and
+/// this is the moment it can still be said to the person who caused it.
+/// </remarks>
 /// <param name="AbsorbedByUserId">
 /// Who took it all on, or null when there was nothing to take on.
 /// </param>
@@ -56,6 +67,7 @@ public record InvitationClosedResponse(
     int PaymentsMoved,
     decimal AmountPaid,
     int RulesAffected,
+    int RulesEmptied,
     Guid? AbsorbedByUserId,
     string? AbsorbedByUserName)
 {

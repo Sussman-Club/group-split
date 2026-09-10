@@ -247,7 +247,11 @@ public sealed class InvitationService(
         // The position moves onto their own account: their shares become the claimer's, and
         // the expenses the stand-in was down as having paid for become theirs. No amount
         // changes, so every transaction still divides into exactly its own amount.
-        var taken = await participants.HandOver(group.Id, invitation.ParticipantUserId, user.Id, ct);
+        // Transfer, not prune. The group wrote "Carlos gets one share" and meant it, so
+        // Carlos claiming his link is the group getting what it asked for -- and pruning
+        // here left the new member out of the very templates that named them, silently.
+        var taken = await participants.HandOver(
+            group.Id, invitation.ParticipantUserId, user.Id, RuleHandling.Transfer, ct);
 
         var standIn = invitation.ParticipantUserId;
         var name = invitation.Name;
@@ -318,7 +322,8 @@ public sealed class InvitationService(
 
         var moved = absorber is null
             ? ParticipantHandover.Nothing
-            : await participants.HandOver(invitation.GroupId, invitation.ParticipantUserId, absorber.Id, ct);
+            : await participants.HandOver(invitation.GroupId, invitation.ParticipantUserId,
+                absorber.Id, RuleHandling.Prune, ct);
 
         var standIn = invitation.ParticipantUserId;
 
@@ -357,6 +362,7 @@ public sealed class InvitationService(
             moved.PaymentsMoved,
             moved.AmountPaid,
             moved.RulesAffected,
+            moved.RulesEmptied,
             // Named only when they actually took something on, so a routine "no thanks"
             // does not read as though money had changed hands.
             moved.MovedAnything ? absorber?.Id : null,

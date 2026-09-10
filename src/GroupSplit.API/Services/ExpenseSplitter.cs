@@ -86,7 +86,12 @@ public class ExpenseSplitter(
         {
             return splitRules.Divide(rule, expense.Amount, payerId, members);
         }
-        catch (ArgumentException reason)
+        // Narrowed away from ArgumentNullException, which derives from this and means
+        // something else entirely: SplitCalculator.Divide opens by refusing a null weight
+        // list, and a handler that produced one is a defect. Reframed as a refusal it would
+        // blame a well-formed rule, tell somebody to go and edit it, and keep the fault out
+        // of the logs.
+        catch (ArgumentException reason) when (reason is not ArgumentNullException)
         {
             // A rule can be left with nothing to divide by. Everybody it named has gone --
             // a member who left, or somebody invited whose invitation was declined or

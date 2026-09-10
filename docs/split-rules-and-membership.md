@@ -74,6 +74,24 @@ about an incoherent template. `ExpenseSplitter` now turns the refusal into
 `SPLIT_RULE_INVALID`, naming the rule and saying the two ways out: edit it, or file the
 expense under nothing and have it divided evenly.
 
-The gap that remains is the timing. Nothing detects it at departure or withdrawal time, when
-it could still be said to the person doing it rather than to whoever records the next
-expense.
+Nor is the timing a gap any more, on the invitation paths at least. A hand-over counts the
+rules it left naming nobody and reports them, so declining or withdrawing says so at the
+moment it causes it -- in the CLI's output and in the app's snackbar -- rather than leaving
+it for whoever records the next expense. That count is the one number in
+`InvitationClosedResponse` that is a warning rather than a receipt.
+
+Two things it still does not cover. A member **leaving** goes through
+`GroupService.DetachMember`, which reports nothing, so a departure can still empty a rule in
+silence. And an **even** rule emptied this way does not refuse at all: naming nobody is how
+an even split says "between everybody", so it silently widens rather than failing, and the
+warning above is the only thing that mentions it.
+
+## Which way a rule moves depends on the direction
+
+Somebody **arriving** keeps their place in a rule. When an invitation is claimed the weight
+follows the person onto their own account -- added to a weight they already held, since a
+rule may hold only one opinion about somebody -- because the group wrote "Carlos gets one
+share" and meant it. One hand-over served both directions at first and pruned in both, so
+claiming an invitation quietly took the new member out of the very templates that had named
+them. `RuleHandling` is a parameter rather than a default for that reason: passing the wrong
+one is invisible.

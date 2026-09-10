@@ -91,8 +91,34 @@ public sealed class GroupCommands(
                     Severity.Info);
             }
 
+            WarnAboutEmptiedRules(closed);
+
             await changes.NotifyGroupsChangedAsync();
         }, "Could not withdraw the invitation.");
+
+    /// <summary>
+    /// Says so when answering an invitation left a split rule naming nobody.
+    /// </summary>
+    /// <remarks>
+    /// A warning and not a receipt. A rule with nobody left in it has changed what it means
+    /// -- a shares or percentage rule refuses the next expense filed under it, an even one
+    /// starts dividing between everybody -- and this is the moment somebody can still be
+    /// told, rather than whoever records the next expense finding out on their behalf.
+    /// </remarks>
+    private void WarnAboutEmptiedRules(InvitationClosedResponse closed)
+    {
+        if (closed.RulesEmptied == 0)
+            return;
+
+        snackbar.Add(
+            closed.RulesEmptied == 1
+                ? "One split rule now names nobody. Check it before the next expense: an even " +
+                  "rule like that divides between everybody, and any other kind will refuse."
+                : $"{closed.RulesEmptied} split rules now name nobody. Check them before the " +
+                  "next expense: an even rule like that divides between everybody, and any " +
+                  "other kind will refuse.",
+            Severity.Warning);
+    }
 
     public async Task<GroupJoinLinkResponse?> CreateJoinLinkAsync(Guid groupId, string groupName,
         CancellationToken ct = default)
@@ -279,6 +305,8 @@ public sealed class GroupCommands(
                     $"{closed.Name}. That is now {absorber}'s, with no amounts changed.",
                     Severity.Info);
             }
+
+            WarnAboutEmptiedRules(closed);
 
             await changes.NotifyGroupsChangedAsync();
         }, "Could not decline the invitation.");
