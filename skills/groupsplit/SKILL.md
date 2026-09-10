@@ -146,6 +146,10 @@ along when reporting a problem.
   cannot be is settled up with: every repayment naming one is refused with
   `SETTLEMENT_WITH_PENDING_INVITEE`, and their balance simply stands. Claiming, declining and
   withdrawing all move that position, and all say what moved -- report it.
+- **A lost link is recoverable only if it was opened.** `invitations list` answers the
+  invitations whose links this account has opened -- there is no address to match, so
+  nothing knows about one that was never followed. If the user never opened theirs, the
+  group has to send it again.
 - **An invitation link is a credential, not an id.** Whoever opens one takes on the shares
   recorded against that name, so it belongs to the person the user is sending it to and
   nowhere else. Do not paste one into a shared channel, a commit, an issue, or a transcript

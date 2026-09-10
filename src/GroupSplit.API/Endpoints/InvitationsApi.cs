@@ -31,6 +31,7 @@ public static class InvitationsApi
 
             group.WithTags("Invitations");
 
+            group.MapMine();
             group.MapDescribeInvitation();
             group.MapClaim();
             group.MapDecline();
@@ -43,6 +44,31 @@ public static class InvitationsApi
 
     extension(RouteGroupBuilder group)
     {
+        /// <summary>
+        /// The invitations the caller has opened and not yet answered.
+        /// </summary>
+        /// <remarks>
+        /// The route that used to answer "every invitation sent to my address", answering a
+        /// question it can still ask: every invitation whose link I have opened. Opening one
+        /// is what puts it here, so somebody who has lost the message the link arrived in
+        /// has a way back to it -- which without this they did not.
+        /// <para>
+        /// It carries the tokens. Holding one is what put the row here, so there is nothing
+        /// in the answer the caller has not already had in their hands.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapMine()
+        {
+            return group.MapGet(string.Empty, async (
+                    IInvitationService invitations,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await invitations.Mine(ct));
+                })
+                .WithName("GetMyInvitations")
+                .Produces<GroupInvitationResponse[]>();
+        }
+
         /// <summary>
         /// What a personal invitation link leads to, without claiming it.
         /// </summary>

@@ -45,10 +45,31 @@ public interface IInvitationService
     Task<IReadOnlyList<GroupInvitationResponse>> ForGroup(Guid groupId, CancellationToken ct = default);
 
     /// <summary>
+    /// The invitations the caller has opened and not yet answered, newest first.
+    /// </summary>
+    /// <remarks>
+    /// The invitee's own list. It used to be "every invitation sent to my address", and
+    /// there are no addresses any more -- so it is "every invitation whose link I have
+    /// opened" instead, which is what <see cref="Describe"/> writes down.
+    /// <para>
+    /// It carries the tokens, which is the point: this is the list somebody uses to get
+    /// back to a link they have already opened once and no longer have the message for.
+    /// Nothing is disclosed by it, since holding the token is what put the row there.
+    /// </para>
+    /// </remarks>
+    Task<IReadOnlyList<GroupInvitationResponse>> Mine(CancellationToken ct = default);
+
+    /// <summary>
     /// What the link says about itself, for the page somebody lands on after opening one.
     /// Says nothing about what is recorded against the person; see
     /// <see cref="InvitationClaimResponse"/>.
     /// </summary>
+    /// <remarks>
+    /// Remembers that the caller has seen it, so <see cref="Mine"/> can offer it again. A
+    /// read that writes, which is worth being uneasy about and is the right place all the
+    /// same: opening the link is exactly the event being recorded, and the alternative is a
+    /// second round trip from the one page that already knows.
+    /// </remarks>
     Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default);
 
     /// <summary>
@@ -155,11 +176,33 @@ public sealed class InvitationService(
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<GroupInvitationResponse>> Mine(CancellationToken ct = default)
+    {
+        var userId = userContext.User.Id;
+
+        // Answered invitations are absent because the row is gone, not because this filters
+        // them out: opening one is remembered against the invitation, and answering it
+        // deletes the invitation and cascades. So there is no state here that could drift
+        // out of step with whether the group is still waiting.
+        //
+        // Ordered before the projection, not after -- see the note on Project.
+        return await Project(
+                from opened in context.Set<InvitationOpened>()
+                join invitation in context.Set<GroupInvitation>()
+                    on opened.InvitationId equals invitation.Id
+                where opened.UserId == userId
+                orderby invitation.InvitedAt descending
+                select invitation)
+            .ToListAsync(ct);
+    }
+
     public async Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default)
     {
         var invitation = await Held(token, ct);
 
         var userId = userContext.User.Id;
+
+        await Remember(invitation.Id, userId, ct);
 
         return await context.Set<GroupInvitation>()
             .Where(candidate => candidate.Id == invitation.Id)
@@ -294,6 +337,37 @@ public sealed class InvitationService(
             // does not read as though money had changed hands.
             moved.MovedAnything ? absorber?.Id : null,
             moved.MovedAnything ? Describe(absorber) : null);
+    }
+
+    /// <summary>
+    /// Writes down that this account has seen this invitation, so it can be offered again.
+    /// </summary>
+    /// <remarks>
+    /// Once. Re-reading a link does not make the invitation newer, and the list is ordered
+    /// by when the group sent it rather than by when somebody last looked.
+    /// <para>
+    /// A stand-in is never here: nobody can sign in as one, so the caller is always a real
+    /// account. What can happen is a member of the group opening the link -- to check it
+    /// works, or because they were sent their own -- and there is no harm in that being
+    /// remembered; the claim page tells them they are already in.
+    /// </para>
+    /// </remarks>
+    private async Task Remember(Guid invitationId, Guid userId, CancellationToken ct)
+    {
+        var already = await context.Set<InvitationOpened>()
+            .AnyAsync(opened => opened.InvitationId == invitationId && opened.UserId == userId, ct);
+
+        if (already)
+            return;
+
+        context.Add(new InvitationOpened
+        {
+            InvitationId = invitationId,
+            UserId = userId,
+            OpenedAt = DateTimeOffset.UtcNow
+        });
+
+        await context.SaveChangesAsync(ct);
     }
 
     /// <summary>

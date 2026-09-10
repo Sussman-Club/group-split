@@ -112,6 +112,34 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(invitation => invitation.ParticipantUserId);
         });
 
+        modelBuilder.Entity<InvitationOpened>(entity =>
+        {
+            entity.HasKey(opened => new { opened.InvitationId, opened.UserId });
+
+            entity.Property(opened => opened.OpenedAt).IsRequired();
+
+            // Cascade from both parents, the way a bank match dismissal does, and for the
+            // same reason: the row is a fact about a pair and has nothing left to say once
+            // either half of it is gone. Answering an invitation deletes it, and this goes
+            // with it -- which is also what takes the invitation out of the invitee's list.
+            //
+            // Postgres is happy with two cascade paths into a leaf table.
+            entity.HasOne<GroupInvitation>()
+                .WithMany()
+                .HasForeignKey(opened => opened.InvitationId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(opened => opened.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The one read there is: what this account has opened and not yet answered.
+            entity.HasIndex(opened => opened.UserId);
+        });
+
         modelBuilder.Entity<GroupJoinLink>(entity =>
         {
             entity.Property(link => link.Token).HasMaxLength(64).IsRequired();

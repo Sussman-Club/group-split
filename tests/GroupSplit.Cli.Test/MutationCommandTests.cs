@@ -575,6 +575,37 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     /// <summary>
+    /// The way back to a link whose message is gone.
+    /// </summary>
+    /// <remarks>
+    /// Not "invitations sent to me", which nothing can answer without an address: the ones
+    /// whose link this account has opened. Opening one is what puts it in the list, so the
+    /// token is in the output -- it is what every other command here takes.
+    /// </remarks>
+    [Fact]
+    public async Task Invitations_list_shows_the_links_you_have_opened()
+    {
+        _api.Returns("/api/invitations", new[] { Invitation(Guid.NewGuid(), "Omar") });
+
+        var result = await Cli.RunAsync("invitations", "list", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("Omar", result.Stdout);
+        Assert.Contains("token-omar", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Invitations_list_is_empty_without_error_when_there_are_none()
+    {
+        _api.Returns("/api/invitations", Array.Empty<object>());
+
+        var result = await Cli.RunAsync("invitations", "list", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("No open invitations", result.Stdout);
+    }
+
+    /// <summary>
     /// A whole URL is taken as readily as the token inside it: what somebody has to hand is
     /// the link they were sent.
     /// </summary>

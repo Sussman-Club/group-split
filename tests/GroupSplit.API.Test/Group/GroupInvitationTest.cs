@@ -19,8 +19,9 @@ namespace GroupSplit.API.Test.Group;
 /// <para>
 /// It stopped being an address at all. A group names the person it is sharing costs with and
 /// gets a link to send them; whoever opens that link and claims it becomes that person. So
-/// the tests here are about tokens rather than about addresses, and there is no "my
-/// invitations" to read -- the link is how somebody finds out.
+/// the tests here are about tokens rather than about addresses. There is still a "my
+/// invitations" list, and it answers a question it can actually ask: not the ones sent to
+/// my address, but the ones whose link I have opened.
 /// </para>
 /// </remarks>
 public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
@@ -215,6 +216,93 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Single(joined);
         Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
+    }
+
+    /// <summary>
+    /// Opening a link is remembered, so somebody who wanders off can be offered it again.
+    /// </summary>
+    /// <remarks>
+    /// The hole this fills: open the link, sign in, go and look at something else without
+    /// answering, and the app -- which had just met you -- could not put the invitation back
+    /// in front of you. The only way back was the message the link arrived in.
+    /// </remarks>
+    [Fact]
+    public async Task Opening_a_link_puts_it_in_the_openers_own_list()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, _) = await AnotherPerson();
+
+        using (scope)
+        {
+            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
+
+            // Nothing until they open it. An invitation is not addressed to anybody.
+            Assert.Empty(await theirs.Mine(Ct));
+
+            await theirs.Describe(invitation.Token, Ct);
+
+            var mine = Assert.Single(await theirs.Mine(Ct));
+
+            Assert.Equal(invitation.Id, mine.Id);
+            Assert.Equal("Carlos", mine.Name);
+            Assert.Equal(group.Id, mine.GroupId);
+
+            // The token is in it, which is the whole point: this is the way back to a link
+            // whose message is gone.
+            Assert.Equal(invitation.Token, mine.Token);
+
+            // Reading it twice is not two invitations.
+            await theirs.Describe(invitation.Token, Ct);
+            Assert.Single(await theirs.Mine(Ct));
+        }
+
+        // And it is theirs alone -- opening a link tells nobody else anything.
+        Assert.Empty(await Invitations.Mine(Ct));
+    }
+
+    [Fact]
+    public async Task Answering_one_takes_it_out_of_the_list()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, _) = await AnotherPerson();
+
+        using (scope)
+        {
+            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
+
+            await theirs.Describe(invitation.Token, Ct);
+            Assert.Single(await theirs.Mine(Ct));
+
+            await theirs.Claim(invitation.Token, Ct);
+
+            // Not filtered out: the invitation is gone and the row cascaded with it, so
+            // there is no state here that could disagree about whether it is still open.
+            Assert.Empty(await theirs.Mine(Ct));
+        }
+    }
+
+    [Fact]
+    public async Task Withdrawing_one_takes_it_out_of_the_list_too()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, _) = await AnotherPerson();
+
+        using (scope)
+        {
+            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
+
+            await theirs.Describe(invitation.Token, Ct);
+
+            await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+
+            Assert.Empty(await theirs.Mine(Ct));
+        }
     }
 
     /// <summary>

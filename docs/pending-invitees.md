@@ -24,10 +24,14 @@ which is not how most people know the friend they went on the trip with.
 Now the group **names** the person and gets a **link** to send them, through whatever they
 actually talk on. Whoever opens that link and claims it becomes that person.
 
-What was given up, honestly: there is no "your invitations" list any more. With no address
-there is no account to hang one from, so an existing member of GroupSplit cannot be shown
-"The flat invited you" — the link is how anybody finds out. `GET /invitations` and
-`invitations list` are gone for that reason.
+What was given up, honestly: **nobody is told they have been invited.** With no address
+there is nothing to notify, so an existing GroupSplit user gets no badge and no email — the
+link is the whole of the introduction, and sending it is the group's job.
+
+There *is* still an invitee-side list, and it answers a question a link can support:
+**every invitation whose link I have opened.** `GET /invitations` and `invitations list`
+came back with that meaning, which is why `Describe` writes down who opened what -- see
+[the list](#the-list-of-links-you-have-opened) below.
 
 ## Membership and participation are different questions
 
@@ -87,6 +91,34 @@ somebody else inherits the debts recorded against that name. So:
 
 The web app copies the link rather than printing it on the page, for the same reason: a URL on
 screen is a URL in a screenshot.
+
+## The list of links you have opened
+
+Somebody opens their link, signs in, and goes to look at something else without claiming or
+declining. Nothing breaks -- the invitation stays pending, the link still works, the group
+still says it is waiting -- but until this, the app had no way to put it back in front of
+them. It had just met them, and threw that away; the only route back was the chat thread the
+link arrived in.
+
+So `Describe` records the pair in `InvitationOpened`: this account has seen this invitation.
+`Mine` reads it back, and the row is in "Waiting on you" on the home page and in
+`invitations list`.
+
+Three things about it are worth stating, because it looks like a lesser version of the
+address matching it replaces:
+
+- **It is not lesser.** Address matching found an invitation only when the group happened to
+  have the same address the person later signed up with. This finds it for whoever actually
+  opened the link, whatever their address is.
+- **It carries the tokens.** That is the point -- the list exists to get somebody back to a
+  link they no longer have the message for -- and it discloses nothing, since holding the
+  token is what put the row there.
+- **It cannot drift.** Answering an invitation deletes it and the rows cascade, so "still
+  open" is not a flag anybody has to remember to clear.
+
+It does not claim anything, and the row deliberately has no Accept button: claiming takes on
+whatever the group has recorded against that name, and the page that says so is `/claim`.
+One tap in a list is not somewhere to agree to a position nobody has been shown.
 
 ## The two invariants
 
@@ -201,20 +233,21 @@ here rather than left implicit.
 | Who is in the settlement plan | `DebtCalculationService.MinimizeTransactions` |
 | Who a repayment may name | `GroupService.Settle`, `SettlementService.RecordRepayment`, `TransactionService.Update` |
 | What a named person's participant is | `IGroupParticipants.StandInFor` |
+| What an account has open | `InvitationService.Mine`, written by `Describe` |
 | What happens when a link is claimed | `InvitationService.Claim`, `IGroupParticipants.HandOver` |
 | What happens when one is declined or withdrawn | `InvitationService.Close`, `IGroupParticipants.HandOver` |
 
 ## Known gaps
 
 - **Nobody is told they were invited.** The link is the whole of the notification, and
-  sending it is the group's job. Somebody who is already a GroupSplit user gets nothing in
-  the app -- no list, no badge -- which is the price of dropping the address, and the thing
-  most likely to be missed.
+  sending it is the group's job. An existing GroupSplit user gets no badge and no mail until
+  they open the link once -- after that it is in their own list and stays there. Closing this
+  properly means a channel to reach somebody on, which is a bigger question than invitations.
 - **A forwarded link can be claimed by the wrong person.** Single use limits the damage to
   one taking rather than many, and the claim page says whose name it is before anybody
   presses anything, but nothing verifies that the claimer is who the group meant. Binding a
   claim to something the group can check would be the next step.
-- **The ledger's search does not match an invitee's name.** It searches `User.FirstName` and
-  `LastName`, and a stand-in's name is in `FirstName`, so this one actually works -- but a
-  withdrawn invitation's name is gone from the rows it left behind, which now read as the
-  absorber's.
+- **A withdrawn invitation leaves no trace of the name.** The ledger searches
+  `User.FirstName`, and a stand-in's name lives there, so an open invitation is findable --
+  but withdrawing deletes the stand-in, and the rows it left behind read as the absorber's
+  with nothing to say they were somebody else's an hour ago.

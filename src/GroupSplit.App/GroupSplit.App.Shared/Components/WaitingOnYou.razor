@@ -1,12 +1,16 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Banking
+@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Settling
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 @inject ISettleStateService Settling
 @inject IInboxStateService Inbox
+@inject IInvitationsClient InvitationsClient
+@inject ApiErrorPresenter Errors
 @inject DataChangeNotifier Changes
+@inject LocalClock Clock
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -60,10 +64,38 @@
                 </div>
             }
 
-            @* Invitations used to be the third row here, and cannot be. An invitation is a
-               named person and a link now, not an address, so there is no account for a
-               list of them to hang from -- somebody learns of one by opening the link they
-               were sent, which lands on /claim. Nothing to wait on means nothing to show. *@
+            @* Invitations somebody has opened and not answered.
+
+               It used to be every invitation sent to their address, and there are no
+               addresses on an invitation now -- so this is the ones whose link they have
+               opened, which the API writes down as it happens. Without it, opening a link
+               and wandering off left the invitation reachable only through the chat thread
+               it arrived in.
+
+               No Accept button, where the old row had one. Claiming takes on whatever the
+               group has recorded against that name, and the page that says so is /claim --
+               a one-tap Accept out here would be agreeing to a position nobody had been
+               shown. *@
+            @foreach (var invitation in _invitations)
+            {
+                var pending = invitation;
+                <div class="gs-row" style="cursor: default">
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.PersonAddAlt" /></span>
+                    <div style="min-width: 0">
+                        <div class="title">
+                            <span>
+                                @(string.IsNullOrWhiteSpace(pending.InvitedByUserName)
+                                    ? $"You have been invited to {pending.GroupName} as {pending.Name}"
+                                    : $"{pending.InvitedByUserName} invited you to {pending.GroupName} as {pending.Name}")
+                            </span>
+                        </div>
+                        <div class="meta">Invited @Clock.Local(pending.InvitedAt).ToString("d MMM")</div>
+                    </div>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               Class="gs-btn-pill"
+                               Href="@($"/claim/{pending.Token}")">Open</MudButton>
+                </div>
+            }
         </div>
     </section>
 }
@@ -78,9 +110,12 @@
     /// How many decisions are waiting. The settling plan counts once however many people
     /// are in it, because going to Settle is one decision and the plan is what it is for.
     /// </summary>
+    private IReadOnlyList<GroupInvitationResponse> _invitations = [];
+
     private int Items =>
         (Plan is { } plan && (plan.YouPay.Count > 0 || plan.OwedToYou.Count > 0) ? 1 : 0)
-        + (Inbox.NewCount > 0 ? 1 : 0);
+        + (Inbox.NewCount > 0 ? 1 : 0)
+        + _invitations.Count;
 
     /// <summary>
     /// Leads with the payments rather than the debts, because that is the smaller number
@@ -123,7 +158,7 @@
 
     protected override void OnInitialized()
     {
-        Changes.GroupsChanged += ReRenderAsync;
+        Changes.GroupsChanged += ReloadAsync;
 
         // From the start, like every other reader of these two: subscribing after the
         // first render missed whatever the reads below announced before it.
@@ -137,20 +172,28 @@
         // one screen that says the duplicate count out loud, so it is the one that asks.
         await Settling.EnsureLoadedAsync();
         await Inbox.WantDuplicateCountAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        var loaded = _invitations;
+
+        await Errors.TryAsync(async () =>
+                loaded = [.. await InvitationsClient.GetMyInvitationsAsync()],
+            "Could not load your invitations.");
+
+        _invitations = loaded;
+        await InvokeAsync(StateHasChanged);
     }
 
     private void ReRender() => InvokeAsync(StateHasChanged);
 
-    /// <summary>
-    /// What a change to the groups now means here: nothing to re-read, only the counts
-    /// above to say again. It used to re-read the caller's invitations, which no longer
-    /// exist as a list.
-    /// </summary>
-    private Task ReRenderAsync() => InvokeAsync(StateHasChanged);
+
 
     public void Dispose()
     {
-        Changes.GroupsChanged -= ReRenderAsync;
+        Changes.GroupsChanged -= ReloadAsync;
         Settling.OnChanged -= ReRender;
         Inbox.OnChanged -= ReRender;
     }

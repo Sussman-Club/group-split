@@ -10,10 +10,11 @@ namespace GroupSplit.Cli.Commands;
 /// Answering an invitation somebody sent you, and the group links anyone may follow.
 /// </summary>
 /// <remarks>
-/// There is no listing here, and there used to be. An invitation was an email address, so
-/// the API could hand somebody every group waiting on them; it is a named person and a link
-/// now, with no account to hang such a list from -- the link is how you learn of it. So
-/// every command here takes the link you were sent.
+/// A link is how somebody learns of an invitation: it used to be an email address, so the
+/// API could hand out every group waiting on you, and a named person and a link have no
+/// address to match. What <c>list</c> answers instead is every invitation whose link you
+/// have already opened -- which is the way back to one when the message it arrived in is
+/// gone. Everything else here takes the link.
 /// </remarks>
 public static class InvitationCommands
 {
@@ -36,6 +37,7 @@ public static class InvitationCommands
     {
         var invitations = new Command("invitations", "Invitations and join links you were sent.");
 
+        invitations.Subcommands.Add(List());
         invitations.Subcommands.Add(Show());
         invitations.Subcommands.Add(Claim());
         invitations.Subcommands.Add(Decline());
@@ -43,6 +45,54 @@ public static class InvitationCommands
         invitations.Subcommands.Add(JoinByLink());
 
         return invitations;
+    }
+
+    /// <summary>
+    /// The invitations whose links you have opened and not yet answered.
+    /// </summary>
+    /// <remarks>
+    /// Not "every invitation sent to you", which nothing can answer any more: an invitation
+    /// names a person and carries a link, and there is no address to match against an
+    /// account. Opening a link is what puts it here, so this is the way back to one when the
+    /// message it arrived in is gone -- which is exactly the case somebody hits after
+    /// opening a link, signing in, and getting on with something else.
+    /// </remarks>
+    private static Command List()
+    {
+        var command = new Command("list", "List invitations you have opened and not answered.");
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var invitations = await new Api.InvitationsClient(context.ApiHttpClient).GetMyInvitationsAsync(ct);
+
+            context.Output.Write(invitations, value =>
+            {
+                if (value.Count == 0)
+                {
+                    return new Markup(Tables.Empty("open invitations") + "\n");
+                }
+
+                // The token, because it is what every other command here takes -- and
+                // because getting back to a link is the whole reason this exists.
+                var table = Tables.Grid("Group", "Invited as", "Invited by", "When", "Link token");
+
+                foreach (var invitation in value)
+                {
+                    table.AddRow(
+                        Markup.Escape(invitation.GroupName),
+                        Markup.Escape(invitation.Name),
+                        Markup.Escape(invitation.InvitedByUserName ?? "-"),
+                        invitation.InvitedAt.ToLocalTime().ToString("yyyy-MM-dd"),
+                        Markup.Escape(invitation.Token));
+                }
+
+                return table;
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
     }
 
     /// <summary>

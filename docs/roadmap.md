@@ -23,8 +23,9 @@ document at build time, so a new endpoint reaches the UI as a typed method.
 | UI | 5 pages, 11 dialogs; one command layer per aggregate behind every write |
 | Absent | bank data |
 
-What works end to end today: create a group and invite people to it by email, whether or
-not they have an account yet; define split rules and point categories at them; record an
+What works end to end today: create a group and name the people sharing its costs, each
+with a single-use link to join by, and start splitting with them before anybody has an
+account; define split rules and point categories at them; record an
 expense against a category or state its shares yourself, in a group or just for yourself;
 see per-member net balances, a minimised list of who pays whom and the group's whole
 history; settle up from either side, one member at a time or with everybody at once;

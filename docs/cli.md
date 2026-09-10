@@ -38,7 +38,7 @@ has to reach for `curl` and a bearer token to do.
 | `categories` | `list`, `create`, `update`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
-| `invitations` | `show`, `claim`, `decline`, `link`, `join` |
+| `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
 | `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
@@ -128,8 +128,9 @@ the group.
 
 The link is `<web-app>/claim/<token>`. There is no email: a group knows the friend it went on
 the trip with by name, not by address, and the link goes through whatever they actually talk
-on. There is also no listing on the receiving side -- with no address there is no account to
-hang one from -- so `invitations show <link>` is how anybody finds out what they were sent.
+on. Nobody is notified: sending the link is the group's job. Once somebody has opened theirs it
+is in `invitations list` and stays there until it is answered, but until then the link is the
+whole of the introduction.
 
 **Two ids, and they answer different questions.** The first withdraws the invitation. The
 second -- `participantUserId` -- is who you name in a split or as the payer, and it is the
@@ -161,10 +162,17 @@ in `groups settle`, `groups settle-between` or `settle pay` is refused with
 ### The receiving side
 
 ```bash
+groupsplit invitations list            # links you have opened and not answered
 groupsplit invitations show <link>     # what it leads to, claiming nothing
 groupsplit invitations claim <link>    # join as that person, taking on their position
 groupsplit invitations decline <link>  # turn it down
 ```
+
+`list` is not "invitations sent to me" — nothing can answer that without an address. It is
+every invitation whose link this account has **opened**, which the API writes down as it
+happens, and it carries the tokens. That makes it the way back to a link when the message it
+arrived in is gone — the case somebody hits after opening a link, signing in, and getting on
+with something else. The same list is the "Waiting on you" row on the web app's home page.
 
 All three take the whole URL as readily as the token inside it. `show` says the group, its
 size, who asked and which name the invitation was made out to -- and deliberately nothing

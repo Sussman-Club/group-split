@@ -167,15 +167,17 @@ Personal invitation links and group join links you were sent.
 
 | Command | |
 | --- | --- |
+| `invitations list` | The invitations whose links you have opened and not answered, with their tokens. Not "sent to me" -- there is no address to match. |
 | `invitations show <link>` | Show what a personal invitation link leads to, without claiming it. Says nothing about the money. |
 | `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name. Confirmation required. |
 | `invitations decline <link>` | Decline it. Confirmation required: anything the group recorded against that name goes to a member of it. |
 | `invitations link <link>` | Show which group a *join* link leads to, without joining. |
 | `invitations join <link>` | Join the group a join link leads to, as yourself. |
 
-There is no listing. An invitation is a named person and a link, not an address, so there is
-no account for a list of them to hang from -- every command here takes the link somebody was
-sent. All of them accept the whole URL as readily as the token inside it.
+`list` is the only command here that does not take a link, and it is how you find one: it
+answers every invitation whose link this account has opened, so it is the way back to one
+when the user no longer has the message. Everything else takes the link, and all of them
+accept the whole URL as readily as the token inside it.
 
 ### bank
 
@@ -376,6 +378,9 @@ Two things you cannot do with them:
   pay. If a user asks you to settle with one, say that rather than recording something else.
 - **`groups remove-member` is not how they go.** It answers `GROUP_MEMBER_NOT_JOINED`, since
   there is no membership to remove. `groups withdraw-invitation` is the act.
+
+**If the user has lost their own link**, `invitations list` has it -- provided they opened
+it at least once. If they never did, only the group can send it again.
 
 **The tokens are credentials.** A personal link is a claim on a position in the group's
 ledger: whoever opens it takes on the shares recorded against that name. Hand one to the user
