@@ -110,7 +110,13 @@ app.UseWhen(
                // webhook that was in fact refused on purpose.
                && !context.Request.Path.StartsWithSegments(WebAppExtensions.WebhookPrefix),
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
-app.UseDefaultHttpsRedirection();
+// The webhook prefix is exempt, and not because of the dev tunnel -- that points at the
+// HTTPS endpoint and needs nothing here. It is because of the shape a deployment has:
+// TLS stops at the proxy and the hop to this app is plain HTTP. Webhooks survive that
+// today only because a deployed app is given no HTTPS port, so the redirection is inert;
+// give it one and every webhook becomes a 307 the provider records as a failure. This
+// makes that an intention rather than an accident.
+app.UseDefaultHttpsRedirection(WebAppExtensions.WebhookPrefix);
 
 app.UseAuthentication();
 app.UseAuthorization();

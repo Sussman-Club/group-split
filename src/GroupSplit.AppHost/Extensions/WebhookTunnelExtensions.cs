@@ -33,6 +33,12 @@ public static class WebhookTunnelExtensions
         /// <c>/webhooks</c> forwarder carries the call through to the API unchanged. Tunnel
         /// the API directly and the forwarder -- the one hop a webhook makes that nothing
         /// else does -- is the one piece a local run would not exercise.
+        /// <para>
+        /// Its HTTPS endpoint, because that is the shape a deployment has too: a provider
+        /// calls an https origin. Pointed at the plain one, the app -- which in run mode
+        /// does have an HTTPS port, unlike a deployed one -- answered every webhook with a
+        /// 307 to localhost, and the tunnel delivered nothing it was built to deliver.
+        /// </para>
         /// </param>
         /// <remarks>
         /// Optional because it is not free: it needs the <c>devtunnel</c> CLI and a signed-in
@@ -67,11 +73,11 @@ public static class WebhookTunnelExtensions
                     Description = "Bank provider webhooks to a development machine",
                     Labels = ["groupsplit", "webhooks"]
                 })
-                .WithReference(web.GetEndpoint("http"), allowAnonymous: true);
+                .WithReference(web.GetEndpoint("https"), allowAnonymous: true);
 
             // The same setting a deployment fills from its public origin, so nothing below
             // the AppHost knows a tunnel is involved.
-            return api.WithEnvironment("Banking__PublicOrigin", tunnel.GetEndpoint(web, "http"));
+            return api.WithEnvironment("Banking__PublicOrigin", tunnel.GetEndpoint(web, "https"));
         }
     }
 }

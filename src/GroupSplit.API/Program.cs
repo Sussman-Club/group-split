@@ -87,7 +87,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseDefaultHttpsRedirection();
+// Exempt for the same reason the web app's copy is: the forwarder in front of this
+// prefers the HTTPS endpoint, but a fallback to the plain one must not turn a webhook
+// into a redirect the provider will record as a failure.
+app.UseDefaultHttpsRedirection(WebhooksApi.Prefix);
 
 app.UseAuthentication();
 app.UseMiddleware<CurrentUserMiddleware>();

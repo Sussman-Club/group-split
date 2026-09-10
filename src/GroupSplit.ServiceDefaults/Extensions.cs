@@ -200,10 +200,21 @@ public static class Extensions
         /// arrived on.
         /// </para>
         /// </summary>
-        public WebApplication UseDefaultHttpsRedirection()
+        /// <param name="alsoExempt">
+        /// Path prefixes to leave alone as well, for callers that cannot follow a redirect.
+        /// A bank provider's webhook is the case this exists for: it POSTs once, treats
+        /// anything but a 2xx as a failed delivery, and never sees the Location header. In
+        /// run mode the AppHost hands out an HTTPS endpoint, so a tunnel pointed at the
+        /// plain one turned every webhook into a 307 at localhost -- an address the sender
+        /// could not reach even if it had followed it.
+        /// </param>
+        public WebApplication UseDefaultHttpsRedirection(params string[] alsoExempt)
         {
+            var exempt = alsoExempt.Select(prefix => new PathString(prefix)).ToArray();
+
             app.UseWhen(
-                context => !IsHealthRequest(context),
+                context => !IsHealthRequest(context)
+                           && !exempt.Any(prefix => context.Request.Path.StartsWithSegments(prefix)),
                 branch => branch.UseHttpsRedirection());
 
             return app;

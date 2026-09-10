@@ -22,7 +22,11 @@ namespace GroupSplit.API.Endpoints;
 /// </remarks>
 public static class WebhooksApi
 {
-    private const string Prefix = "/webhooks";
+    /// <summary>
+    /// Public so the host can leave it out of HTTPS redirection: a provider POSTs once and
+    /// reads the status code, and a redirect is a failed delivery whatever it points at.
+    /// </summary>
+    public const string Prefix = "/webhooks";
 
     /// <summary>
     /// How much of an anonymous caller's body is read before it has proved anything. A
