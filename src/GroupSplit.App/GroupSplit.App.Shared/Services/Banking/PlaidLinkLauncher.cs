@@ -16,15 +16,33 @@ namespace GroupSplit.App.Shared.Services.Banking;
 /// useless without the server's own credentials.
 /// </para>
 /// </remarks>
-public sealed class PlaidLinkLauncher(IJSRuntime js) : IAsyncDisposable
+public sealed class PlaidLinkLauncher(IJSRuntime js) : IBankLinkLauncher, IAsyncDisposable
 {
     private DotNetObjectReference<Callback>? _callback;
 
-    /// <summary>
-    /// Shows the linking UI. Answers the public token when somebody links a bank, and null
-    /// when they close it, when it fails, or when the browser cannot run it at all.
-    /// </summary>
-    public async Task<string?> OpenAsync(string linkToken)
+    public Task<string?> OpenAsync(string linkToken, Guid? connectionId = null) =>
+        RunAsync("gs.plaid.open", linkToken, connectionId);
+
+    /// <remarks>
+    /// A different call from <see cref="OpenAsync"/>, not a repeat of it: Link has to be
+    /// re-created with the address the bank returned to, and opening a fresh session would
+    /// ask the person to sign in at their bank a second time.
+    /// </remarks>
+    public Task<string?> ResumeAsync(string linkToken) => RunAsync("gs.plaid.resume", linkToken);
+
+    public async Task<PendingBankLinkSession?> PendingAsync()
+    {
+        try
+        {
+            return await js.InvokeAsync<PendingBankLinkSession?>("gs.plaid.pending");
+        }
+        catch (Exception e) when (IsUnavailable(e))
+        {
+            return null;
+        }
+    }
+
+    private async Task<string?> RunAsync(string function, params object?[] arguments)
     {
         var callback = new Callback();
 
@@ -35,7 +53,7 @@ public sealed class PlaidLinkLauncher(IJSRuntime js) : IAsyncDisposable
 
         try
         {
-            await js.InvokeVoidAsync("gs.plaid.open", linkToken, _callback);
+            await js.InvokeVoidAsync(function, [.. arguments, _callback]);
         }
         catch (Exception e) when (IsUnavailable(e))
         {

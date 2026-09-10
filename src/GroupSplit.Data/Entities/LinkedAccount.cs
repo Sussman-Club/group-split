@@ -39,5 +39,19 @@ public class LinkedAccount : Entity
     /// </summary>
     public string Currency { get; set; } = Currencies.Default;
 
+    /// <summary>
+    /// The person withdrew this one account at the bank, leaving the rest of the connection
+    /// working. Nothing new will arrive for it; what it already brought in stays, because
+    /// that is still where the money went.
+    /// </summary>
+    /// <remarks>
+    /// Account-level revocation is a different thing from
+    /// <see cref="BankConnectionStatus.Revoked"/>, which is the whole connection. Without
+    /// this the account goes on looking healthy while its data quietly stops being real.
+    /// Cleared if the provider reports the account again, which is what re-sharing it looks
+    /// like from here.
+    /// </remarks>
+    public bool AccessRevoked { get; set; }
+
     public virtual ICollection<BankTransaction> Transactions { get; } = [];
 }

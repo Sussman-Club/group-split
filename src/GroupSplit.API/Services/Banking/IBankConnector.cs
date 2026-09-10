@@ -30,6 +30,18 @@ public interface IBankConnector
     Task<LinkSession> CreateLinkSessionAsync(LinkSessionRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// The accounts the provider will hand over under <paramref name="accessToken"/> right
+    /// now, which is not the same set as at linking: a person can share another one, or
+    /// withdraw one, at any time afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Split out from <see cref="ExchangeAsync"/> because reading the accounts used to be
+    /// welded to the exchange, and the exchange only happens on a fresh link -- so an
+    /// account added later was invisible for the life of the connection.
+    /// </remarks>
+    Task<IReadOnlyList<ImportedAccount>> AccountsAsync(string accessToken, CancellationToken ct = default);
+
+    /// <summary>
     /// Turns what the provider's UI handed back into a durable access token, and reads the
     /// institution and its accounts while the connection is fresh.
     /// </summary>
@@ -148,6 +160,24 @@ public abstract record WebhookEvent(string ProviderItemId);
 
 /// <summary>The provider has changes; run a sync.</summary>
 public sealed record SyncUpdatesAvailable(string ProviderItemId) : WebhookEvent(ProviderItemId);
+
+/// <summary>
+/// The bank has an account this connection is not importing. The provider cannot hand it
+/// over on its own: only the person can share it, through the linking UI in update mode.
+/// </summary>
+public sealed record NewAccountsAvailable(string ProviderItemId) : WebhookEvent(ProviderItemId);
+
+/// <summary>
+/// The connection will stop working soon -- a consent nearing expiry, an institution being
+/// migrated -- unless the person signs in again first.
+/// </summary>
+public sealed record SignInWillExpire(string ProviderItemId, string Reason) : WebhookEvent(ProviderItemId);
+
+/// <summary>
+/// The person withdrew one account at the bank, leaving the rest of the connection alone.
+/// </summary>
+public sealed record AccountAccessRevoked(string ProviderItemId, string ProviderAccountId)
+    : WebhookEvent(ProviderItemId);
 
 /// <summary>The token stopped working and the person has to sign in at the bank again.</summary>
 public sealed record LoginRequired(string ProviderItemId) : WebhookEvent(ProviderItemId);

@@ -521,6 +521,113 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// A connection the current user made through the fake provider, with one account,
     /// exactly as the exchange endpoint will write it.
     /// </summary>
+    /// <summary>
+    /// The bug this whole area exists for. Somebody shares a second account through update
+    /// mode, which mints no new item and so runs nothing on the linking path -- and every
+    /// row of that account used to be dropped with a log line, for the life of the
+    /// connection, while the card said the bank was healthy and last checked minutes ago.
+    /// </summary>
+    [Fact]
+    public async Task A_row_on_an_account_shared_after_linking_is_imported_rather_than_dropped()
+    {
+        var connection = await LinkAsync();
+
+        // What the provider says now: the account it was linked with, and the one shared
+        // since. Nothing has told this connection about the second one.
+        _bank.AnswerAccounts(
+        [
+            new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD"),
+            new ImportedAccount("acc-2", "Savings", "5678", "depository", "savings", "USD")
+        ]);
+
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m), Row("t2", 8m, account: "acc-2")]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        var rows = await Rows(connection);
+
+        Assert.Equal(["t1", "t2"], rows.Select(row => row.ProviderTransactionId).Order());
+
+        var saved = await ReloadWithAccounts(connection);
+
+        Assert.Contains(saved.Accounts, account => account.ProviderAccountId == "acc-2");
+
+        // Resolved, so there is nothing for the person to do and the card says nothing.
+        Assert.False(saved.AccountsNotShared);
+    }
+
+    /// <summary>
+    /// The provider is asked once however many pages meet an account it did not report, and
+    /// not at all when every account is known. Cheap, but not free.
+    /// </summary>
+    [Fact]
+    public async Task The_account_list_is_read_at_most_once_a_run_and_only_when_a_page_needs_it()
+    {
+        var connection = await LinkAsync();
+
+        _bank.Answer("cursor-1", added: [Row("t1", 1m)], hasMore: true);
+        _bank.Answer("cursor-2", added: [Row("t2", 2m)]);
+
+        await Sync(connection);
+
+        Assert.Equal(0, _bank.AccountReads);
+
+        // Two pages, both naming an account the provider will not admit to. Still one ask.
+        _bank.Answer("cursor-3", added: [Row("t3", 3m, account: "ghost")], hasMore: true);
+        _bank.Answer("cursor-4", added: [Row("t4", 4m, account: "ghost")]);
+
+        await Sync(connection);
+
+        Assert.Equal(1, _bank.AccountReads);
+    }
+
+    /// <summary>
+    /// Asking did not help: the provider does not report the account either, because the
+    /// person has not shared it. That is the one case where the rows really are dropped --
+    /// and the connection is flagged, so somebody other than the log knows.
+    /// </summary>
+    [Fact]
+    public async Task A_row_on_an_account_the_provider_will_not_share_flags_the_connection()
+    {
+        var connection = await LinkAsync();
+
+        _bank.AnswerAccounts([new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD")]);
+        _bank.Answer("cursor-1", added: [Row("mine", 12.50m), Row("theirs", 8m, account: "acc-2")]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        // The rows on accounts it does know are unaffected: one account nobody shared must
+        // not stop the rest of the connection importing.
+        Assert.Equal(["mine"], (await Rows(connection)).Select(row => row.ProviderTransactionId));
+
+        Assert.True((await Reload(connection)).AccountsNotShared);
+    }
+
+    /// <summary>
+    /// A provider that cannot answer must not take the run down with it. The accounts
+    /// already known keep importing, and the connection ends up flagged exactly as it would
+    /// have if the answer had come back without the account in it.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_that_cannot_list_its_accounts_does_not_stop_the_rows_that_are_fine()
+    {
+        var connection = await LinkAsync();
+
+        _bank.RefuseAccountsWith = BankSyncFailure.Transient;
+        _bank.Answer("cursor-1", added: [Row("mine", 12.50m), Row("theirs", 8m, account: "acc-2")]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        Assert.Equal(["mine"], (await Rows(connection)).Select(row => row.ProviderTransactionId));
+        Assert.True((await Reload(connection)).AccountsNotShared);
+    }
+
+    private Task<BankConnection> ReloadWithAccounts(BankConnection connection) =>
+        DbContext.Set<BankConnection>()
+            .Include(candidate => candidate.Accounts)
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == connection.Id, Ct);
+
     private async Task<BankConnection> LinkAsync()
     {
         var protector = GetService<IAccessTokenProtector>();

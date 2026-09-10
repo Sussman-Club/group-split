@@ -16,6 +16,8 @@ public static class PlaidExtensions
 
     private const string EnvironmentParameterName = "plaid-env";
 
+    private const string RedirectUriParameterName = "plaid-redirect-uri";
+
     private const string KeyRingCertificateParameterName = "bank-key-certificate";
 
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
@@ -24,10 +26,10 @@ public static class PlaidExtensions
         /// Gives a service the credentials it needs to link banks through Plaid, behind a
         /// switch.
         /// <para>
-        /// Four parameters: whether bank sync is on, the client id and secret it needs when
-        /// it is, and which Plaid environment to talk to. All optional, so a deployment that
-        /// never mentions Plaid gets an API that starts and reports bank sync as off rather
-        /// than a prompt for a credential nobody has.
+        /// Whether bank sync is on, the client id and secret it needs when it is, which
+        /// Plaid environment to talk to, and where an OAuth redirect returns. All optional,
+        /// so a deployment that never mentions Plaid gets an API that starts and reports
+        /// bank sync as off rather than a prompt for a credential nobody has.
         /// </para>
         /// <para>
         /// The switch is a parameter rather than something inferred here, because this
@@ -61,6 +63,22 @@ public static class PlaidExtensions
             var environment = builder.AddOptionalParameter(EnvironmentParameterName, "Sandbox")
                 .WithDescription("Which Plaid environment to talk to: Sandbox or Production.");
 
+            // Empty by default, and that is the working configuration: Plaid Link runs OAuth
+            // in a popup and never leaves the page. Setting it switches those institutions
+            // to a full-page redirect, which only works because the web app serves the
+            // return page -- so the value is not free text, and the API refuses one that
+            // points anywhere else.
+            var redirectUri = builder.AddOptionalParameter(RedirectUriParameterName, string.Empty)
+                // The path is BankLinkAddresses.OAuthReturnPath, written out because the
+                // AppHost references none of the application's projects and a description
+                // is documentation rather than behaviour -- the API's own validator is what
+                // refuses a value that disagrees with it.
+                .WithDescription(
+                    "Where a bank's own sign-in page returns to, for OAuth institutions. The public "
+                    + "origin followed by /bank/oauth, e.g. https://groupsplit.example.com/bank/oauth "
+                    + "-- and the same address registered in the Plaid dashboard. Leave empty to keep "
+                    + "the popup flow.");
+
             // What the Data Protection key ring is encrypted with. Optional, because
             // locally there is usually none and an unwrapped ring is the ordinary
             // development posture; required once bank sync is on, because a deployment
@@ -83,6 +101,7 @@ public static class PlaidExtensions
                 .WithEnvironment("Plaid__ClientId", clientId)
                 .WithEnvironment("Plaid__Secret", secret)
                 .WithEnvironment("Plaid__Environment", environment)
+                .WithEnvironment("Plaid__RedirectUri", redirectUri)
                 .WithEnvironment("Banking__KeyRingCertificate", keyCertificate);
         }
     }

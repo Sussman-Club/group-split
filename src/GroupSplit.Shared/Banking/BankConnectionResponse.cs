@@ -37,13 +37,22 @@ public sealed record BankConnectionResponse(
     BankConnectionState Status,
     DateTimeOffset LinkedAt,
     DateTimeOffset? LastSyncedAt,
-    IReadOnlyList<LinkedAccountResponse> Accounts)
+    IReadOnlyList<LinkedAccountResponse> Accounts,
+    bool AccountsNotShared = false,
+    bool SignInExpiring = false)
 {
     /// <summary>
     /// Whether the person has to sign in at their bank again before anything else works.
     /// The linked-banks card leads with this.
     /// </summary>
     public bool NeedsAttention => Status is BankConnectionState.LoginRequired or BankConnectionState.Revoked;
+
+    /// <summary>
+    /// Whether something here needs the person, without anything having broken: an account
+    /// the bank has and this connection does not, or a sign-in about to expire. Both are
+    /// resolved by the same "Sign in again", and both are invisible unless the card says so.
+    /// </summary>
+    public bool NeedsAttentionSoon => !NeedsAttention && (AccountsNotShared || SignInExpiring);
 }
 
 public sealed record LinkedAccountResponse(
@@ -52,4 +61,5 @@ public sealed record LinkedAccountResponse(
     string? Mask,
     string Type,
     string? Subtype,
-    string Currency);
+    string Currency,
+    bool AccessRevoked = false);

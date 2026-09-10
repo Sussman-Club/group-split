@@ -346,22 +346,74 @@
                 return this.script;
             },
 
-            async open(token, callback) {
-                await this.load();
+            // Where a link in flight is written down. An OAuth bank takes the
+            // whole browser to its own sign-in page, so the page that opened
+            // Link is gone by the time the person comes back and the token it
+            // was holding went with it. Session storage, so it belongs to this
+            // tab and leaves when the tab does.
+            key: "gs.plaid.pending",
 
-                // onSuccess and onExit are exclusive and one of them always runs,
-                // so the .NET side is always answered and never waits forever.
-                const handler = window.Plaid.create({
-                    token: token,
-                    onSuccess(publicToken) {
+            remember(token, connectionId) {
+                try {
+                    sessionStorage.setItem(this.key, JSON.stringify({ token, connectionId }));
+                } catch {
+                    // Private browsing, or storage switched off. Only the redirect
+                    // flow needs this; the popup one finishes on the page it started.
+                }
+            },
+
+            forget() {
+                try {
+                    sessionStorage.removeItem(this.key);
+                } catch { /* nothing was written */ }
+            },
+
+            pending() {
+                try {
+                    const held = sessionStorage.getItem(this.key);
+                    return held ? JSON.parse(held) : null;
+                } catch {
+                    return null;
+                }
+            },
+
+            // onSuccess and onExit are exclusive and one of them always runs, so
+            // the .NET side is always answered and never waits forever. Either
+            // way the session is over and what was written down is dropped.
+            handlers(callback) {
+                return {
+                    onSuccess: (publicToken) => {
+                        this.forget();
                         callback.invokeMethodAsync("OnSuccess", publicToken);
                     },
-                    onExit(error) {
+                    onExit: (error) => {
+                        this.forget();
                         callback.invokeMethodAsync("OnExit", error ? error.error_code : null);
                     }
-                });
+                };
+            },
 
-                handler.open();
+            async open(token, connectionId, callback) {
+                await this.load();
+
+                // Written down before it opens, because for an OAuth institution
+                // the next thing that happens is this page being navigated away.
+                this.remember(token, connectionId);
+
+                window.Plaid.create({ token, ...this.handlers(callback) }).open();
+            },
+
+            // Coming back from the bank's own sign-in page. Link is re-created
+            // with the token the session started with and the address it landed
+            // on, and picks up where it left off rather than starting again.
+            async resume(token, callback) {
+                await this.load();
+
+                window.Plaid.create({
+                    token,
+                    receivedRedirectUri: window.location.href,
+                    ...this.handlers(callback)
+                }).open();
             }
         }
     };

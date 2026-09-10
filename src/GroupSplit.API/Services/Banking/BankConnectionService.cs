@@ -58,6 +58,17 @@ public interface IBankConnectionService
     /// </summary>
     Task Unlink(Guid id, CancellationToken ct = default);
 
+    /// <summary>
+    /// Reads the provider's account list again for a connection that already exists, and
+    /// asks for a sync.
+    /// </summary>
+    /// <remarks>
+    /// What update mode ends in. Repairing or extending a connection through the linking
+    /// UI mints no new item and hands back no usable public token, so nothing on the
+    /// linking path runs -- and an account shared there would otherwise never be heard of.
+    /// </remarks>
+    Task<BankConnection> Refresh(Guid id, CancellationToken ct = default);
+
     /// <summary>The connection a provider's webhook named, or null if this is not ours.</summary>
     Task<BankConnection?> ForProviderItem(string provider, string providerItemId, CancellationToken ct = default);
 }
@@ -556,7 +567,7 @@ public sealed class BankConnectionService(
             existing.InstitutionName = item.InstitutionName;
             existing.Status = BankConnectionStatus.Active;
 
-            MergeAccounts(existing, item.Accounts);
+            MergeAccounts(existing, item.Accounts, dbContext);
 
             await dbContext.SaveChangesAsync(ct);
 
@@ -605,7 +616,7 @@ public sealed class BankConnectionService(
             LinkedAt = clock.GetUtcNow()
         };
 
-        MergeAccounts(created, item.Accounts);
+        MergeAccounts(created, item.Accounts, dbContext);
 
         dbContext.Add(created);
 
@@ -780,6 +791,64 @@ public sealed class BankConnectionService(
         await dbContext.SaveChangesAsync(ct);
     }
 
+    public async Task<BankConnection> Refresh(Guid id, CancellationToken ct = default)
+    {
+        var connection = await Existing(id, ct);
+        var connector = Required(connection.Provider);
+
+        var token = Readable(connection)
+            ?? throw new ConflictException(ErrorCodes.BankConnectionNeedsAttention,
+                "This bank's stored access cannot be read any more. Link it again to repair it.");
+
+        IReadOnlyList<ImportedAccount> accounts;
+
+        try
+        {
+            accounts = await Call(connection.Provider, "read the accounts",
+                () => connector.AccountsAsync(token, ct));
+        }
+        catch (BadGatewayException e) when (e.InnerException is BankSyncException
+                                            { Kind: BankSyncFailure.LoginRequired })
+        {
+            // Not the provider having a bad minute, which is what a bad gateway says and
+            // what the person would then be told: this item needs them, and the app already
+            // has a way of saying so. Marking it is also what puts "Sign in again" on the
+            // card, so refusing without marking would leave them nothing to press.
+            connection.Status = BankConnectionStatus.LoginRequired;
+            await dbContext.SaveChangesAsync(ct);
+
+            // The cause is not carried: ConflictException takes none, and both the connector
+            // and Call have already logged the provider's own code by the time this runs.
+            throw new ConflictException(ErrorCodes.BankConnectionNeedsAttention,
+                "This bank wants you to sign in again before it will say what accounts it has.");
+        }
+
+        MergeAccounts(connection, accounts, dbContext);
+
+        // Reading the accounts at all proves the token works, so whatever the connection was
+        // marked as before, it is working now.
+        connection.Status = BankConnectionStatus.Active;
+
+        // Less certain than the line above, and deliberately so. A refresh is what the card
+        // does at the end of update mode, and update mode is what renews a consent -- but
+        // the provider sends nothing to confirm a renewal, so this is the only signal there
+        // is. A refresh run on its own therefore clears a warning it did not resolve. The
+        // cost is bounded: the consent still lapses on its own schedule and arrives as
+        // LoginRequired, which is the state this was warning about in advance.
+        connection.SignInExpiring = false;
+
+        // A refresh is how update mode ends, so this is the moment the missing account was
+        // either shared or not. Cleared either way: the next sync to meet a row on an
+        // account still unknown puts it straight back.
+        connection.AccountsNotShared = false;
+
+        await dbContext.SaveChangesAsync(ct);
+
+        await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
+
+        return connection;
+    }
+
     public Task<BankConnection?> ForProviderItem(
         string provider, string providerItemId, CancellationToken ct = default) =>
         dbContext.Set<BankConnection>()
@@ -797,8 +866,11 @@ public sealed class BankConnectionService(
                 .. connection.Accounts
                     .OrderBy(account => account.Name)
                     .Select(account => new LinkedAccountResponse(
-                        account.Id, account.Name, account.Mask, account.Type, account.Subtype, account.Currency))
-            ]);
+                        account.Id, account.Name, account.Mask, account.Type, account.Subtype, account.Currency,
+                        account.AccessRevoked))
+            ],
+            connection.AccountsNotShared,
+            connection.SignInExpiring);
 
     private IQueryable<BankConnection> Owned() =>
         dbContext.Set<BankConnection>().Where(connection => connection.UserId == userContext.User.Id);
@@ -966,7 +1038,7 @@ public sealed class BankConnectionService(
         // inbox as something new, and the duplicate check cannot catch a single one.
         connection.AccountsRekeyed = true;
 
-        AdoptAccounts(connection, item.Accounts);
+        AdoptAccounts(connection, item.Accounts, dbContext);
 
         return superseded;
     }
@@ -984,17 +1056,23 @@ public sealed class BankConnectionService(
     /// nothing and is simply added, which is the same caution <see cref="SameAccount"/>
     /// takes for the same reason.
     /// </remarks>
-    private static void AdoptAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts) =>
-        Reconcile(connection, accounts, SameAccount);
+    private static void AdoptAccounts(
+        BankConnection connection,
+        IReadOnlyList<ImportedAccount> accounts,
+        AppDbContext dbContext) =>
+        Reconcile(connection, accounts, SameAccount, dbContext);
 
     /// <summary>
     /// Keeps the accounts the provider reports, adding new ones and refreshing the details of
     /// the ones already here. Nothing is removed: rows point at accounts, and an account the
     /// provider stopped listing still explains where last month's coffee came from.
     /// </summary>
-    private static void MergeAccounts(BankConnection connection, IReadOnlyList<ImportedAccount> accounts) =>
+    internal static void MergeAccounts(
+        BankConnection connection,
+        IReadOnlyList<ImportedAccount> accounts,
+        AppDbContext dbContext) =>
         Reconcile(connection, accounts,
-            (stored, incoming) => stored.ProviderAccountId == incoming.ProviderAccountId);
+            (stored, incoming) => stored.ProviderAccountId == incoming.ProviderAccountId, dbContext);
 
     /// <summary>
     /// The body both of those share: every reported account is either recognised by
@@ -1016,9 +1094,15 @@ public sealed class BankConnectionService(
     private static void Reconcile(
         BankConnection connection,
         IReadOnlyList<ImportedAccount> accounts,
-        Func<LinkedAccount, ImportedAccount, bool> recognises)
+        Func<LinkedAccount, ImportedAccount, bool> recognises,
+        AppDbContext dbContext)
     {
         var claimed = new HashSet<LinkedAccount>();
+
+        // Snapshotted before the loop adds to it. A newly created account is not claimed
+        // by anything -- it is what did the claiming -- so reading the collection
+        // afterwards would find it unmatched and retire it the instant it arrived.
+        var before = connection.Accounts.ToList();
 
         foreach (var account in accounts)
         {
@@ -1027,15 +1111,27 @@ public sealed class BankConnectionService(
 
             if (stored is null)
             {
-                connection.Accounts.Add(new LinkedAccount
+                var created = new LinkedAccount
                 {
+                    BankConnectionId = connection.Id,
                     ProviderAccountId = account.ProviderAccountId,
                     Name = account.Name,
                     Mask = account.Mask,
                     Type = account.Type,
                     Subtype = account.Subtype,
                     Currency = account.Currency
-                });
+                };
+
+                connection.Accounts.Add(created);
+
+                // Both, and the Add is the half that matters. Entity hands every instance an
+                // Id at construction, so a new account discovered through the navigation of
+                // an already-stored connection has a key that is not the default -- and EF
+                // reads that as "already in the store", stages an UPDATE, and fails the save
+                // with a concurrency exception when it turns out not to be. Only a graph
+                // hanging off a connection that is itself being added escapes it, which is
+                // why linking a bank for the first time never showed this.
+                dbContext.Add(created);
 
                 continue;
             }
@@ -1048,6 +1144,25 @@ public sealed class BankConnectionService(
             stored.Type = account.Type;
             stored.Subtype = account.Subtype;
             stored.Currency = account.Currency;
+
+            // The provider is handing it over again, so whatever was withdrawn has been
+            // shared back. Nothing else clears this: a revoked account stops being reported
+            // at all, so being here is the whole of the evidence.
+            stored.AccessRevoked = false;
+        }
+
+        // And the other direction. An account the provider has stopped reporting is one
+        // somebody unshared -- in update mode, or at the bank -- and it is kept rather than
+        // deleted for the reason above this method: rows point at it, and it still explains
+        // where last month's coffee came from.
+        //
+        // Kept is not the same as healthy, though, and that was the gap. Listed beside the
+        // accounts that are still importing, with nothing to tell them apart, it goes on
+        // looking connected for ever while nothing arrives for it again -- the same silence
+        // issue 233 was about, from the opposite end.
+        foreach (var stored in before.Where(candidate => !claimed.Contains(candidate)))
+        {
+            stored.AccessRevoked = true;
         }
     }
 }

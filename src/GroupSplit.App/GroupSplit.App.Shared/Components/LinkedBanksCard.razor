@@ -4,7 +4,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject IInboxStateService Inbox
 @inject IBankCommands Bank
-@inject PlaidLinkLauncher Link
+@inject IBankLinkLauncher Link
 @inject IDialogService DialogService
 @inject LocalClock Clock
 @implements IDisposable
@@ -49,7 +49,7 @@
                         <div style="min-width: 0">
                             <div class="title">
                                 <span>@connection.InstitutionName</span>
-                                @if (connection.NeedsAttention)
+                                @if (connection.NeedsAttention || connection.NeedsAttentionSoon)
                                 {
                                     <span class="gs-tag">Needs attention</span>
                                 }
@@ -72,10 +72,27 @@
                             }
                             else
                             {
+                                @*
+                                    Still working, so syncing is still offered. A connection
+                                    that only needs attention soon -- an account nobody
+                                    shared, a sign-in about to lapse -- goes on importing
+                                    everything it does have, and taking "Sync now" away from
+                                    it would make a warning look like a breakage.
+                                *@
                                 <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
                                            OnClick="@(() => SyncAsync(connection))">Sync now</MudButton>
-                                <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
-                                           OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+
+                                @if (connection.NeedsAttentionSoon)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               Class="gs-btn-pill" Disabled="@_busy"
+                                               OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
+                                               OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+                                }
                             }
                             <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
                                        Disabled="@_busy"
@@ -129,10 +146,32 @@
         {
             BankConnectionState.Revoked => $"{accounts} · access was withdrawn at the bank",
             BankConnectionState.LoginRequired => $"{accounts} · your bank wants you to sign in again",
+
+            // Nothing is broken in either of these, so they read as something to do rather
+            // than something that has gone wrong -- and each says what pressing "Sign in
+            // again" is for, because neither is guessable from the button alone.
+            _ when connection.AccountsNotShared =>
+                $"{accounts} · your bank has an account this is not importing. "
+                + "Sign in again and tick it to include it.",
+            _ when connection.SignInExpiring =>
+                $"{accounts} · this will stop working soon. Sign in again to keep it going.",
+
+            _ when connection.Accounts.Any(account => account.AccessRevoked) =>
+                $"{accounts} · access was withdrawn from "
+                + $"{Withdrawn(connection)}; the rest is still importing",
+
             _ => connection.LastSyncedAt is { } synced
                 ? $"{accounts} · last checked {Clock.Local(synced):d}"
                 : $"{accounts} · not checked yet"
         };
+    }
+
+    /// <summary>The accounts of a connection whose access was withdrawn one at a time.</summary>
+    private static string Withdrawn(BankConnectionResponse connection)
+    {
+        var revoked = connection.Accounts.Where(account => account.AccessRevoked).ToList();
+
+        return revoked.Count == 1 ? revoked[0].Name : $"{revoked.Count} of its accounts";
     }
 
     /// <summary>
@@ -159,7 +198,10 @@
             if (token is null)
                 return;
 
-            var publicToken = await Link.OpenAsync(token.Token);
+            // The connection travels with the token, because an OAuth institution takes
+            // the browser away and the page that comes back has to know whether it was
+            // linking a bank or repairing one. See Pages/BankOAuthReturn.razor.
+            var publicToken = await Link.OpenAsync(token.Token, connectionId);
 
             // Null means they closed it, which is an ordinary way out and says nothing.
             if (publicToken is null)
@@ -172,8 +214,8 @@
             else
             {
                 // Update mode returns no usable public token; the repair is the sign-in
-                // itself, so all that is left is to ask for the sync it was blocking.
-                await Bank.SyncAsync(connectionId.Value, "your bank");
+                // itself, so refresh accounts and ask for the sync it was blocking.
+                await Bank.RefreshAsync(connectionId.Value, "your bank");
             }
         }
         finally

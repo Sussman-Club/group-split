@@ -75,6 +75,7 @@ AppHost needs only a GitHub entry of the matching name.
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
 | `plaid-client-id`, `plaid-secret` | variable `PLAID_CLIENT_ID`; secret `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
+| `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no, empty keeps the popup flow | Where an OAuth bank returns to. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
 
 The optional ones are declared with
@@ -114,6 +115,33 @@ Whether bank sync is on is not a switch inside the API. The Plaid connector is r
 when credentials are present, and bank sync is available exactly when a connector answers,
 so `plaid-enabled` exists for the deployment's benefit: off, it sends an empty client id,
 which the API reads as no Plaid at all. The two ends cannot disagree about it.
+
+## Linking a bank that redirects
+
+Most institutions run their sign-in inside a popup: Plaid Link opens, the person signs in,
+and the page that opened it is still there to be answered. Some OAuth institutions take the
+whole browser to the bank's own site instead, and then the page that started the link is
+gone and the token it was holding went with it.
+
+Nothing needs configuring for the popup flow, which is what every deployment runs today.
+For the redirect flow, two addresses have to be the same one:
+
+1. Register `https://your-origin/bank/oauth` as a redirect URI in the Plaid dashboard.
+2. Set `plaid-redirect-uri` to exactly that.
+
+`/bank/oauth` is served by the web app and is not configurable — it is the page that picks
+the interrupted session back up, using the token the tab wrote down before Link opened. A
+value pointing anywhere else is refused when the API starts, because the alternative is
+somebody signing in at their bank and landing on a page that cannot finish what they
+started, with the bank believing it is connected.
+
+The two ends cannot check each other at runtime: Plaid matches the registered address
+exactly and refuses to mint a link token against one it does not recognise, so a mismatch
+in the dashboard is every OAuth bank failing to link.
+
+> Mobile is not covered by this. Plaid's OAuth on a native app goes through app-to-app
+> redirects and universal links, which is a different mechanism from the web return page
+> above.
 
 ## The bank access-token key ring
 

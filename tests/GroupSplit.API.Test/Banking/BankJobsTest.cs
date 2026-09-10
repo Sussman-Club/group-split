@@ -97,6 +97,85 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(TimeZoneInfo.Utc, cron.TimeZone);
     }
 
+    /// <summary>
+    /// The sweep that finds links a request never managed to store. Each row holds a live
+    /// provider item that belongs to no connection anybody can see, so what it does and
+    /// does not queue is the difference between finishing one and stranding it.
+    /// </summary>
+    [Fact]
+    public async Task The_pending_sweep_finishes_the_links_still_worth_trying()
+    {
+        var interrupted = await HeldAsync(startedMinutesAgo: 30, attempts: 0);
+        var triedOnce = await HeldAsync(startedMinutesAgo: 30, attempts: 1);
+
+        await GetService<SweepPendingBankLinksHandler>().HandleAsync(new SweepPendingBankLinks(), Ct);
+
+        Assert.Equal(
+            new[] { interrupted, triedOnce }.Order(),
+            _jobs.Jobs.OfType<CompletePendingBankLink>().Select(job => job.PendingLinkId).Order());
+
+        Assert.Empty(_jobs.Jobs.OfType<AbandonPendingBankLink>());
+    }
+
+    /// <summary>
+    /// Inside the grace period the request that started the link is still running, and
+    /// finishing it from underneath would have two things storing the same item.
+    /// </summary>
+    [Fact]
+    public async Task The_pending_sweep_leaves_a_link_the_request_may_still_be_holding()
+    {
+        await HeldAsync(startedMinutesAgo: 1, attempts: 0);
+
+        await GetService<SweepPendingBankLinksHandler>().HandleAsync(new SweepPendingBankLinks(), Ct);
+
+        Assert.Empty(_jobs.Jobs);
+    }
+
+    [Fact]
+    public async Task The_pending_sweep_gives_up_on_a_link_that_has_had_its_attempts()
+    {
+        var spent = await HeldAsync(startedMinutesAgo: 30, attempts: SweepPendingBankLinksHandler.MaxAttempts);
+
+        await GetService<SweepPendingBankLinksHandler>().HandleAsync(new SweepPendingBankLinks(), Ct);
+
+        Assert.Equal(spent, Assert.Single(_jobs.Jobs.OfType<AbandonPendingBankLink>()).PendingLinkId);
+        Assert.Empty(_jobs.Jobs.OfType<CompletePendingBankLink>());
+    }
+
+    /// <summary>
+    /// One row is never both. Asking for it to be finished and given up on at once would
+    /// have the give-up retiring the item at the provider while the finish is still storing
+    /// a connection that names it.
+    /// </summary>
+    [Fact]
+    public async Task The_pending_sweep_never_asks_for_one_link_to_be_both_finished_and_given_up_on()
+    {
+        var worthTrying = await HeldAsync(startedMinutesAgo: 30, attempts: SweepPendingBankLinksHandler.MaxAttempts - 1);
+        var spent = await HeldAsync(startedMinutesAgo: 30, attempts: SweepPendingBankLinksHandler.MaxAttempts);
+
+        await GetService<SweepPendingBankLinksHandler>().HandleAsync(new SweepPendingBankLinks(), Ct);
+
+        Assert.Equal(worthTrying, Assert.Single(_jobs.Jobs.OfType<CompletePendingBankLink>()).PendingLinkId);
+        Assert.Equal(spent, Assert.Single(_jobs.Jobs.OfType<AbandonPendingBankLink>()).PendingLinkId);
+    }
+
+    private async Task<Guid> HeldAsync(int startedMinutesAgo, int attempts)
+    {
+        var held = new PendingBankLink
+        {
+            User = GetService<ICurrentUser>().User,
+            Provider = FakeBankConnector.Name,
+            PublicTokenCiphertext = GetService<IAccessTokenProtector>().Protect("public-token"),
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-startedMinutesAgo),
+            Attempts = attempts
+        };
+
+        DbContext.Add(held);
+        await DbContext.SaveChangesAsync(Ct);
+
+        return held.Id;
+    }
+
     private async Task<BankConnection> LinkAsync(BankConnectionStatus status)
     {
         var connection = new BankConnection

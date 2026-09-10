@@ -1,0 +1,105 @@
+{
+  "accounts": [],
+  "added": [
+    {
+      "account_id": "acc-1",
+      "transaction_id": "txn-good",
+      "amount": 4.33,
+      "iso_currency_code": "USD",
+      "unofficial_currency_code": null,
+      "date": "2026-09-01",
+      "authorized_date": "2026-09-01",
+      "name": "SQ *BLUE BOTTLE",
+      "merchant_name": "Blue Bottle Coffee",
+      "pending": true,
+      "pending_transaction_id": null,
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_COFFEE",
+        "confidence_level": "VERY_HIGH"
+      }
+    },
+    {
+      "account_id": "acc-1",
+      "transaction_id": "txn-no-amount",
+      "amount": null,
+      "iso_currency_code": "USD",
+      "unofficial_currency_code": null,
+      "date": "2026-09-01",
+      "authorized_date": "2026-09-01",
+      "name": "SQ *BLUE BOTTLE",
+      "merchant_name": "Blue Bottle Coffee",
+      "pending": true,
+      "pending_transaction_id": null,
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_COFFEE",
+        "confidence_level": "VERY_HIGH"
+      }
+    },
+    {
+      "account_id": "acc-1",
+      "transaction_id": "txn-no-date",
+      "amount": 4.33,
+      "iso_currency_code": "USD",
+      "unofficial_currency_code": null,
+      "date": null,
+      "authorized_date": "2026-09-01",
+      "name": "SQ *BLUE BOTTLE",
+      "merchant_name": "Blue Bottle Coffee",
+      "pending": true,
+      "pending_transaction_id": null,
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_COFFEE",
+        "confidence_level": "VERY_HIGH"
+      }
+    },
+    {
+      "account_id": null,
+      "transaction_id": "txn-no-account",
+      "amount": 4.33,
+      "iso_currency_code": "USD",
+      "unofficial_currency_code": null,
+      "date": "2026-09-01",
+      "authorized_date": "2026-09-01",
+      "name": "SQ *BLUE BOTTLE",
+      "merchant_name": "Blue Bottle Coffee",
+      "pending": true,
+      "pending_transaction_id": null,
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_COFFEE",
+        "confidence_level": "VERY_HIGH"
+      }
+    },
+    {
+      "account_id": "acc-1",
+      "transaction_id": null,
+      "amount": 4.33,
+      "iso_currency_code": "USD",
+      "unofficial_currency_code": null,
+      "date": "2026-09-01",
+      "authorized_date": "2026-09-01",
+      "name": "SQ *BLUE BOTTLE",
+      "merchant_name": "Blue Bottle Coffee",
+      "pending": true,
+      "pending_transaction_id": null,
+      "payment_channel": "in store",
+      "personal_finance_category": {
+        "primary": "FOOD_AND_DRINK",
+        "detailed": "FOOD_AND_DRINK_COFFEE",
+        "confidence_level": "VERY_HIGH"
+      }
+    }
+  ],
+  "modified": [],
+  "removed": [],
+  "next_cursor": "cursor-malformed",
+  "has_more": false,
+  "request_id": "req-malformed"
+}

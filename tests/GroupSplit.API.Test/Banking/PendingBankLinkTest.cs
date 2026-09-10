@@ -123,6 +123,93 @@ public class PendingBankLinkTest : IAsyncLifetime
     }
 
     /// <summary>
+    /// The other half of the same row: a link killed before it even got as far as
+    /// exchanging, holding nothing but the public token.
+    /// </summary>
+    /// <remarks>
+    /// A public token outlives the request that fetched it by a few minutes, and inside
+    /// that window this finishes without anybody being asked to link their bank a second
+    /// time -- which is the difference between spending one of the provider's items and
+    /// spending none.
+    /// </remarks>
+    [Fact]
+    public async Task An_interrupted_link_is_finished_by_exchanging_the_public_token_it_held()
+    {
+        _bank.Answer("cursor-one");
+        _bank.AnswerExchange(FakeBankConnector.Item("item-exchanged", "token-exchanged"));
+
+        var pendingId = await HeldAsync(publicToken: "public-token-held");
+
+        using (var scope = _host.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IBankConnectionService>()
+                .CompletePending(pendingId, Ct);
+        }
+
+        using var check = _host.Services.CreateScope();
+        var dbContext = check.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var connection = Assert.Single(await dbContext.Set<BankConnection>().ToListAsync(Ct));
+
+        Assert.Equal("item-exchanged", connection.ProviderItemId);
+        Assert.Empty(await dbContext.Set<PendingBankLink>().ToListAsync(Ct));
+
+        // Nothing was handed back: the item that was exchanged is the one now stored.
+        Assert.Empty(_bank.RemovedTokens);
+    }
+
+    /// <summary>
+    /// The ordinary end of that window. An expired public token is not an error worth
+    /// shouting about -- the person links again, and that is the one case where an item
+    /// really is spent -- but the row has to survive to be tried again.
+    /// </summary>
+    [Fact]
+    public async Task A_public_token_that_will_no_longer_exchange_leaves_the_row_for_another_attempt()
+    {
+        _bank.RefuseExchange = true;
+
+        var pendingId = await HeldAsync(publicToken: "public-token-expired");
+
+        using (var scope = _host.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IBankConnectionService>()
+                .CompletePending(pendingId, Ct);
+        }
+
+        using var check = _host.Services.CreateScope();
+        var dbContext = check.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Empty(await dbContext.Set<BankConnection>().ToListAsync(Ct));
+
+        // Still there, and one attempt down. Five of those and the sweep gives up on it.
+        var pending = Assert.Single(await dbContext.Set<PendingBankLink>().ToListAsync(Ct));
+        Assert.Equal(pendingId, pending.Id);
+        Assert.Equal(1, pending.Attempts);
+    }
+
+    private async Task<Guid> HeldAsync(string publicToken)
+    {
+        var user = await SomebodyWhoExists();
+
+        using var scope = _host.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var protector = scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>();
+
+        var pending = new PendingBankLink
+        {
+            UserId = user,
+            Provider = FakeBankConnector.Name,
+            PublicTokenCiphertext = protector.Protect(publicToken),
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
+        };
+
+        dbContext.Add(pending);
+        await dbContext.SaveChangesAsync(Ct);
+
+        return pending.Id;
+    }
+
+    /// <summary>
     /// The sweep dispatches on what it read a moment ago, so by the time one of these runs
     /// the row may have been finished by the request that started it.
     /// </summary>

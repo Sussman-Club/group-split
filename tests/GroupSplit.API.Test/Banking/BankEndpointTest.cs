@@ -320,6 +320,259 @@ public class BankEndpointTest : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Refreshing_a_bank_connection_reads_accounts_updates_status_and_queues_a_sync()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+        await SetStatusAsync(connection.Id, BankConnectionStatus.LoginRequired);
+
+        _bank.Answer("cursor-refresh");
+        _bank.AnswerAccounts(
+        [
+            new ImportedAccount("acc-1", "Everyday (Updated)", "1234", "depository", "checking", "USD"),
+            new ImportedAccount("acc-2", "Savings", "5678", "depository", "savings", "USD")
+        ]);
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var refreshed = await response.Content.ReadFromJsonAsync<BankConnectionResponse>(Json, Ct);
+        Assert.NotNull(refreshed);
+        Assert.Equal(2, refreshed.Accounts.Count);
+        Assert.Equal(BankConnectionState.Active, refreshed.Status);
+
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var stored = await dbContext.Set<BankConnection>()
+            .Include(c => c.Accounts)
+            .FirstAsync(c => c.Id == connection.Id, Ct);
+
+        Assert.Equal(BankConnectionStatus.Active, stored.Status);
+        Assert.Equal(2, stored.Accounts.Count);
+        Assert.Contains(stored.Accounts, a => a.ProviderAccountId == "acc-1" && a.Name == "Everyday (Updated)");
+        Assert.Contains(stored.Accounts, a => a.ProviderAccountId == "acc-2" && a.Name == "Savings");
+
+        await WaitForSyncAsync();
+        Assert.NotEmpty(_bank.CursorsSeen);
+    }
+
+    /// <summary>
+    /// The provider cannot hand over an account nobody shared, so this notification is not
+    /// a cue to go and read the account list -- it is a cue to put the person in front of
+    /// update mode, which is the only thing that can resolve it.
+    /// </summary>
+    [Fact]
+    public async Task A_new_accounts_available_webhook_flags_the_connection_and_asks_the_provider_nothing()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.Webhook = _ => new NewAccountsAvailable("item-fake");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+
+        Assert.True(stored.AccountsNotShared);
+        Assert.Equal(BankConnectionStatus.Active, stored.Status);
+        Assert.Equal(0, _bank.AccountReads);
+
+        // And it reaches the person, which is the whole of the difference from a log line.
+        var mine = await MineAsync(connection.Id);
+        Assert.True(mine.AccountsNotShared);
+        Assert.True(mine.NeedsAttentionSoon);
+    }
+
+    [Theory]
+    [InlineData("the consent is about to expire")]
+    [InlineData("the institution is being migrated")]
+    public async Task A_warning_that_the_sign_in_will_expire_is_shown_without_stopping_the_syncs(string reason)
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.Webhook = _ => new SignInWillExpire("item-fake", reason);
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+
+        Assert.True(stored.SignInExpiring);
+
+        // Nothing has broken yet: an item that still works must go on syncing, or a warning
+        // about a future outage becomes one now.
+        Assert.Equal(BankConnectionStatus.Active, stored.Status);
+        Assert.True((await MineAsync(connection.Id)).NeedsAttentionSoon);
+    }
+
+    [Fact]
+    public async Task Signing_in_again_clears_the_warning_that_it_was_about_to_expire()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.Answer("cursor-repaired");
+        _bank.Webhook = _ => new SignInWillExpire("item-fake", "the consent is about to expire");
+
+        using var anonymous = _host.AnonymousClient();
+        using var warning = Signed("{}");
+        await anonymous.SendAsync(warning, Ct);
+
+        _bank.Webhook = _ => new LoginRepaired("item-fake");
+
+        using var repaired = Signed("{}");
+        await anonymous.SendAsync(repaired, Ct);
+
+        Assert.False((await ConnectionAsync(connection.Id)).SignInExpiring);
+    }
+
+    [Fact]
+    public async Task Access_withdrawn_from_one_account_marks_that_account_and_leaves_the_rest_working()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+        await AddAccountAsync(connection.Id, "acc-2", "Savings");
+
+        _bank.Webhook = _ => new AccountAccessRevoked("item-fake", "acc-2");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+
+        Assert.Equal(BankConnectionStatus.Active, stored.Status);
+        Assert.True(stored.Accounts.Single(a => a.ProviderAccountId == "acc-2").AccessRevoked);
+        Assert.False(stored.Accounts.Single(a => a.ProviderAccountId == "acc-1").AccessRevoked);
+
+        var mine = await MineAsync(connection.Id);
+        Assert.True(mine.Accounts.Single(a => a.Name == "Savings").AccessRevoked);
+    }
+
+    /// <summary>
+    /// The other direction of update mode: somebody unshares an account rather than
+    /// sharing one.
+    /// </summary>
+    /// <remarks>
+    /// The account is kept, because rows point at it and it still explains where last
+    /// month's coffee came from. What it must not do is go on looking healthy: listed
+    /// beside the accounts still importing, with nothing to tell them apart, it is the
+    /// same silence issue 233 was about seen from the opposite end -- nothing will ever
+    /// arrive for it again and nothing says so.
+    /// </remarks>
+    [Fact]
+    public async Task An_account_unshared_at_the_bank_is_kept_but_stops_looking_healthy()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+        await AddAccountAsync(connection.Id, "acc-2", "Savings");
+
+        _bank.Answer("cursor-unshared");
+
+        // Update mode, with Savings unticked. The provider stops reporting it.
+        _bank.AnswerAccounts(
+        [
+            new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD")
+        ]);
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+
+        // Kept: two accounts, not one.
+        Assert.Equal(2, stored.Accounts.Count);
+
+        Assert.True(stored.Accounts.Single(a => a.ProviderAccountId == "acc-2").AccessRevoked);
+        Assert.False(stored.Accounts.Single(a => a.ProviderAccountId == "acc-1").AccessRevoked);
+
+        // And the person can see which is which.
+        var mine = await MineAsync(connection.Id);
+        Assert.True(mine.Accounts.Single(a => a.Name == "Savings").AccessRevoked);
+        Assert.False(mine.Accounts.Single(a => a.Name == "Everyday").AccessRevoked);
+    }
+
+    /// <summary>
+    /// The provider reporting the account again is the whole of the evidence that it was
+    /// shared back: a revoked account stops being reported at all.
+    /// </summary>
+    [Fact]
+    public async Task Sharing_a_withdrawn_account_back_clears_the_mark_on_it()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+        await AddAccountAsync(connection.Id, "acc-2", "Savings");
+
+        _bank.Webhook = _ => new AccountAccessRevoked("item-fake", "acc-2");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+        await anonymous.SendAsync(request, Ct);
+
+        _bank.Answer("cursor-reshared");
+        _bank.AnswerAccounts(
+        [
+            new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD"),
+            new ImportedAccount("acc-2", "Savings", "5678", "depository", "savings", "USD")
+        ]);
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+        Assert.False(stored.Accounts.Single(a => a.ProviderAccountId == "acc-2").AccessRevoked);
+    }
+
+    /// <summary>
+    /// A refresh that the bank refuses because it wants a new sign-in is not the provider
+    /// having a bad minute, and must not be reported as one -- the person would be told to
+    /// try again shortly, for ever.
+    /// </summary>
+    [Fact]
+    public async Task Refreshing_a_bank_that_wants_a_new_sign_in_says_so_and_marks_the_connection()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.RefuseAccountsWith = BankSyncFailure.LoginRequired;
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal(ErrorCodes.BankConnectionNeedsAttention, problem.GetProperty("code").GetString());
+
+        // Marked, or the card offers nothing to press.
+        Assert.Equal(BankConnectionStatus.LoginRequired, (await ConnectionAsync(connection.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Refreshing_clears_the_flag_that_an_account_was_not_shared()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+        await FlagNotSharedAsync(connection.Id);
+
+        _bank.Answer("cursor-shared");
+        _bank.AnswerAccounts(
+        [
+            new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD"),
+            new ImportedAccount("acc-2", "Savings", "5678", "depository", "savings", "USD")
+        ]);
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+
+        Assert.False(stored.AccountsNotShared);
+        Assert.Equal(2, stored.Accounts.Count);
+    }
+
+    [Fact]
     public async Task A_bank_asking_for_a_fresh_sign_in_is_stored()
     {
         var connection = await LinkAsync(providerItemId: "item-fake");
@@ -412,6 +665,65 @@ public class BankEndpointTest : IAsyncLifetime
         Assert.Empty(await dbContext.Set<BankConnection>().ToListAsync(Ct));
     }
 
+    private async Task<List<BankConnection>> ConnectionsAsync()
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+
+        return await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .Set<BankConnection>()
+            .AsNoTracking()
+            .ToListAsync(Ct);
+    }
+
+    /// <summary>The connection as it is stored, with its accounts and nothing tracked.</summary>
+    private async Task<BankConnection> ConnectionAsync(Guid connectionId)
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        return await dbContext.Set<BankConnection>()
+            .Include(connection => connection.Accounts)
+            .AsNoTracking()
+            .FirstAsync(connection => connection.Id == connectionId, Ct);
+    }
+
+    /// <summary>The same connection as the person's own client sees it.</summary>
+    private async Task<BankConnectionResponse> MineAsync(Guid connectionId)
+    {
+        var response = await _host.Client.GetFromJsonAsync<BankConnectionsResponse>("/bank-connections", Json, Ct);
+
+        Assert.NotNull(response);
+
+        return response.Connections.Single(connection => connection.Id == connectionId);
+    }
+
+    private async Task AddAccountAsync(Guid connectionId, string providerAccountId, string name)
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        dbContext.Add(new LinkedAccount
+        {
+            BankConnectionId = connectionId,
+            ProviderAccountId = providerAccountId,
+            Name = name,
+            Type = "depository"
+        });
+
+        await dbContext.SaveChangesAsync(Ct);
+    }
+
+    private async Task FlagNotSharedAsync(Guid connectionId)
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var connection = await dbContext.Set<BankConnection>().FirstAsync(row => row.Id == connectionId, Ct);
+        connection.AccountsNotShared = true;
+
+        await dbContext.SaveChangesAsync(Ct);
+    }
+
     private async Task SetStatusAsync(Guid connectionId, BankConnectionStatus status)
     {
         await using var scope = _host.Services.CreateAsyncScope();
@@ -433,6 +745,246 @@ public class BankEndpointTest : IAsyncLifetime
             .FirstAsync(row => row.Id == connectionId, Ct)).Status;
     }
 
+    /// <summary>
+    /// A sync asked for on a connection the bank has stopped talking to. Refused here
+    /// rather than queued, because a job would read the same status, answer NotSyncable
+    /// and tell nobody -- the person would watch a spinner and get no explanation.
+    /// </summary>
+    [Theory]
+    [InlineData(BankConnectionStatus.LoginRequired)]
+    [InlineData(BankConnectionStatus.Revoked)]
+    public async Task Syncing_a_connection_that_needs_the_person_is_refused_and_says_so(BankConnectionStatus status)
+    {
+        var connection = await LinkAsync();
+        await SetStatusAsync(connection.Id, status);
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/sync", null, Ct);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal(ErrorCodes.BankConnectionNeedsAttention, problem.GetProperty("code").GetString());
+    }
+
+    /// <summary>
+    /// A connection whose provider this deployment no longer speaks -- one switched off,
+    /// one removed, or the seeder's demo data. It still has to be removable, or the row is
+    /// unremovable for ever.
+    /// </summary>
+    [Fact]
+    public async Task A_connection_whose_provider_is_not_configured_still_unlinks()
+    {
+        var connection = await LinkAsync(provider: "a-provider-nothing-here-speaks");
+
+        var response = await _host.Client.DeleteAsync($"/bank-connections/{connection.Id}", Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await ConnectionsAsync());
+
+        Assert.Contains(_host.Logs, entry => entry.Message.Contains("no connector is registered for it"));
+    }
+
+    /// <summary>
+    /// Access withdrawn from an account this connection never had. Nothing can be marked,
+    /// but the provider has just confirmed the bank has an account that is not ours -- the
+    /// same situation the flag exists for.
+    /// </summary>
+    [Fact]
+    public async Task Access_withdrawn_from_an_account_we_never_had_flags_the_connection_instead()
+    {
+        var connection = await LinkAsync(providerItemId: "item-fake");
+
+        _bank.Webhook = _ => new AccountAccessRevoked("item-fake", "acc-never-shared");
+
+        using var anonymous = _host.AnonymousClient();
+        using var request = Signed("{}");
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.SendAsync(request, Ct)).StatusCode);
+
+        var stored = await ConnectionAsync(connection.Id);
+
+        Assert.True(stored.AccountsNotShared);
+        Assert.DoesNotContain(stored.Accounts, account => account.AccessRevoked);
+    }
+
+    /// <summary>
+    /// A stored token the key ring can no longer open. Three readers meet it and each
+    /// answers differently on purpose; none of them may answer with a bare 500, and until
+    /// now nothing held them to that.
+    /// </summary>
+    /// <remarks>
+    /// It is a state a deployment can really be in -- a certificate replaced, a row edited
+    /// -- and the whole point of handling it is that the person is told what to do instead
+    /// of being shown a trace id.
+    /// </remarks>
+    [Fact]
+    public async Task A_connection_whose_token_cannot_be_read_cannot_be_repaired_and_says_why()
+    {
+        var connection = await LinkAsync(accessTokenCiphertext: "not-a-protected-token");
+
+        var response = await _host.Client.PostAsJsonAsync(
+            "/bank-connections/link-token", new LinkTokenRequest { ConnectionId = connection.Id }, Json, Ct);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal(ErrorCodes.BankConnectionUnrecoverable, problem.GetProperty("code").GetString());
+
+        // Marked, so the card stops offering a repair that cannot work and offers the one
+        // way out instead.
+        Assert.Equal(BankConnectionStatus.LoginRequired, (await ConnectionAsync(connection.Id)).Status);
+    }
+
+    [Fact]
+    public async Task A_connection_whose_token_cannot_be_read_refuses_a_refresh_and_says_why()
+    {
+        var connection = await LinkAsync(accessTokenCiphertext: "not-a-protected-token");
+
+        var response = await _host.Client.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal(ErrorCodes.BankConnectionNeedsAttention, problem.GetProperty("code").GetString());
+    }
+
+    /// <summary>
+    /// Unlinking is the one reader that carries on. The other two refuse and both point
+    /// here as the way out, so throwing would make the way out the one thing that does not
+    /// work -- and the item is stranded at the provider either way.
+    /// </summary>
+    [Fact]
+    public async Task A_connection_whose_token_cannot_be_read_still_unlinks_and_says_what_was_left_behind()
+    {
+        var connection = await LinkAsync(accessTokenCiphertext: "not-a-protected-token", providerItemId: "item-stranded");
+
+        var response = await _host.Client.DeleteAsync($"/bank-connections/{connection.Id}", Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // Gone from here, and never mentioned to the provider -- there was nothing to
+        // mention it with.
+        Assert.Empty(await ConnectionsAsync());
+        Assert.Empty(_bank.RemovedTokens);
+
+        // The item number is in the log, because it is all that is left of it.
+        Assert.Contains(_host.Logs, entry =>
+            entry.Message.Contains("has to be removed by hand") && entry.Message.Contains("item-stranded"));
+    }
+
+    /// <summary>
+    /// The four inbox routes nothing reached over HTTP: their binding, their status codes
+    /// and the round trip between them.
+    /// </summary>
+    /// <remarks>
+    /// Worth having at this level rather than against the service, for the same reason the
+    /// span test below is: <c>withDuplicates</c> is bound from the query string, and a
+    /// nullable bool that stops binding is exactly what a test calling the service directly
+    /// cannot see.
+    /// </remarks>
+    [Fact]
+    public async Task The_inbox_summary_counts_what_is_waiting()
+    {
+        var connection = await LinkAsync();
+
+        await RowAsync(connection, providerId: "one");
+        await RowAsync(connection, providerId: "two");
+
+        var summary = await _host.Client.GetFromJsonAsync<InboxSummaryResponse>("/inbox/summary", Json, Ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal(2, summary.NewCount);
+
+        // Not asked for, so not answered: counting possible duplicates is the expensive
+        // half and a client that did not want it must not pay for it.
+        Assert.Null(summary.PossibleDuplicates);
+    }
+
+    [Fact]
+    public async Task The_inbox_summary_counts_possible_duplicates_when_it_is_asked_to()
+    {
+        var connection = await LinkAsync();
+        await RowAsync(connection, providerId: "one");
+
+        var summary = await _host.Client.GetFromJsonAsync<InboxSummaryResponse>(
+            "/inbox/summary?withDuplicates=true", Json, Ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal(1, summary.NewCount);
+        Assert.Equal(0, summary.PossibleDuplicates);
+    }
+
+    [Fact]
+    public async Task A_row_can_be_asked_what_it_might_already_be()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        var response = await _host.Client.GetAsync($"/inbox/{row.Id}/matches", Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var matches = await response.Content.ReadFromJsonAsync<List<ExpenseMatchResponse>>(Json, Ct);
+        Assert.NotNull(matches);
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public async Task Asking_what_somebody_elses_row_might_be_is_a_404()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        using var stranger = _host.ClientForAnotherUser();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/inbox/{row.Id}/matches", Ct)).StatusCode);
+    }
+
+    /// <summary>
+    /// Ignoring takes the row out of the list without deleting it, and restoring puts it
+    /// back -- the undo the inbox promises.
+    /// </summary>
+    [Fact]
+    public async Task Ignoring_a_row_takes_it_out_of_the_inbox_and_restoring_brings_it_back()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        var ignored = await _host.Client.PostAsync($"/inbox/{row.Id}/ignore", null, Ct);
+        Assert.Equal(HttpStatusCode.NoContent, ignored.StatusCode);
+
+        Assert.Empty(await ItemsAsync("/inbox"));
+
+        var restored = await _host.Client.PostAsync($"/inbox/{row.Id}/restore", null, Ct);
+        Assert.Equal(HttpStatusCode.NoContent, restored.StatusCode);
+
+        Assert.Single(await ItemsAsync("/inbox"));
+    }
+
+    [Fact]
+    public async Task Restoring_a_row_that_was_never_ignored_changes_nothing_and_still_answers()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        var response = await _host.Client.PostAsync($"/inbox/{row.Id}/restore", null, Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Single(await ItemsAsync("/inbox"));
+    }
+
+    [Fact]
+    public async Task Ignoring_or_restoring_a_row_that_is_not_there_is_a_404()
+    {
+        var missing = Guid.NewGuid();
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await _host.Client.PostAsync($"/inbox/{missing}/ignore", null, Ct)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await _host.Client.PostAsync($"/inbox/{missing}/restore", null, Ct)).StatusCode);
+    }
+
     private static HttpContent Body(string json) =>
         new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -448,7 +1000,8 @@ public class BankEndpointTest : IAsyncLifetime
         return request;
     }
 
-    private async Task<BankConnection> LinkAsync(string? providerItemId = null)
+    private async Task<BankConnection> LinkAsync(
+        string? providerItemId = null, string? accessTokenCiphertext = null, string? provider = null)
     {
         using var scope = _host.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -460,10 +1013,12 @@ public class BankEndpointTest : IAsyncLifetime
         var connection = new BankConnection
         {
             UserId = me,
-            Provider = FakeBankConnector.Name,
+            Provider = provider ?? FakeBankConnector.Name,
             ProviderItemId = providerItemId ?? $"item-{Guid.NewGuid():N}",
             InstitutionName = "Fake Bank",
-            AccessTokenCiphertext = protector.Protect(FakeBankConnector.AccessToken),
+            // A ciphertext given verbatim is one the key ring cannot open, which is what
+            // the three readers of a stored token each have to cope with.
+            AccessTokenCiphertext = accessTokenCiphertext ?? protector.Protect(FakeBankConnector.AccessToken),
             LinkedAt = DateTimeOffset.UtcNow
         };
 

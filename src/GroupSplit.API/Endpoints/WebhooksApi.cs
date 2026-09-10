@@ -136,8 +136,7 @@ public static class WebhooksApi
     }
 
     /// <summary>
-    /// What each kind of notification means here. Only four do anything; the rest are
-    /// acknowledged so the provider stops resending them.
+    /// What each kind of notification means here.
     /// </summary>
     /// <remarks>
     /// A status is written and saved, and saved before any sync is asked for. Both halves
@@ -166,6 +165,31 @@ public static class WebhooksApi
                 await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
                 break;
 
+            // Plaid cannot hand over an account the person has not shared, so reading the
+            // account list here would return exactly what is already stored and a sync would
+            // find nothing. What this notification is actually for is putting the person in
+            // front of update mode, and the flag is what does that.
+            case NewAccountsAvailable:
+                connection.AccountsNotShared = true;
+                await dbContext.SaveChangesAsync(ct);
+                break;
+
+            // Nothing has broken yet, so the status stays Active and syncs keep running.
+            // The flag turns avoidable maintenance into something the person can see, which
+            // is the whole difference between this and the outage it becomes if ignored.
+            case SignInWillExpire expiring:
+                logger.LogInformation(
+                    "Bank connection {ConnectionId} will need a new sign-in: {Reason}.",
+                    connection.Id, expiring.Reason);
+
+                connection.SignInExpiring = true;
+                await dbContext.SaveChangesAsync(ct);
+                break;
+
+            case AccountAccessRevoked revoked:
+                await RevokeAccountAsync(connection, revoked.ProviderAccountId, dbContext, logger, ct);
+                break;
+
             case LoginRequired:
                 connection.Status = BankConnectionStatus.LoginRequired;
                 await dbContext.SaveChangesAsync(ct);
@@ -173,9 +197,14 @@ public static class WebhooksApi
 
             case LoginRepaired:
                 connection.Status = BankConnectionStatus.Active;
+
+                // Whatever the warning was about, the sign-in it asked for has happened.
+                connection.SignInExpiring = false;
                 await dbContext.SaveChangesAsync(ct);
 
-                // Whatever arrived while it was broken is waiting behind the cursor.
+                // Whatever arrived while it was broken is waiting behind the cursor. The
+                // accounts are not read here: update mode may have added one, and the sync
+                // picks that up itself the moment a row names an account it does not know.
                 await jobs.DispatchAsync(new SyncBankConnection(connection.Id), ct);
                 break;
 
@@ -185,8 +214,51 @@ public static class WebhooksApi
                 break;
 
             case UnhandledWebhook unhandled:
-                logger.LogDebug("Ignoring {Provider} webhook {Code}.", connection.Provider, unhandled.Code);
+                // Information, not debug. Everything this application does not act on
+                // arrives here, and a level that a production deployment filters out is how
+                // the one notification that mattered went unnoticed for the life of a
+                // connection.
+                logger.LogInformation("Ignoring {Provider} webhook {Code}.", connection.Provider, unhandled.Code);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Marks one account as withdrawn, leaving the connection and its other accounts alone.
+    /// </summary>
+    /// <remarks>
+    /// The rows it already brought in stay: that is still where the money went. What stops
+    /// is anything new, and saying so is the point -- an account nobody marks goes on
+    /// looking healthy while its data quietly stops being real.
+    /// </remarks>
+    private static async Task RevokeAccountAsync(
+        BankConnection connection,
+        string providerAccountId,
+        AppDbContext dbContext,
+        ILogger logger,
+        CancellationToken ct)
+    {
+        await dbContext.Entry(connection).Collection(c => c.Accounts).LoadAsync(ct);
+
+        var account = connection.Accounts
+            .FirstOrDefault(candidate => candidate.ProviderAccountId == providerAccountId);
+
+        if (account is null)
+        {
+            // An account this connection never had. Not an error -- it is one the person
+            // never shared -- but it is the same situation the flag exists for, and the
+            // provider has just confirmed the account is theirs and not ours.
+            logger.LogInformation(
+                "Bank connection {ConnectionId}: access was withdrawn from an account it does not know.",
+                connection.Id);
+
+            connection.AccountsNotShared = true;
+        }
+        else
+        {
+            account.AccessRevoked = true;
+        }
+
+        await dbContext.SaveChangesAsync(ct);
     }
 }

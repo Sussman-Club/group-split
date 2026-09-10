@@ -2,6 +2,7 @@ using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Services.Banking.Plaid;
 using Going.Plaid;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace GroupSplit.API.Extensions;
 
@@ -39,7 +40,13 @@ public static class PlaidServiceExtensions
             // binds to ASP.NET Core's own `environment` key, which locally reads
             // "Development" and points the client at a Plaid host that no longer exists.
             services.AddPlaid(section);
-            services.AddOptions<PlaidConnectorOptions>().Bind(section);
+
+            services.AddOptions<PlaidConnectorOptions>()
+                .Bind(section)
+                .ValidateOnStart();
+
+            services.TryAddEnumerable(
+                ServiceDescriptor.Singleton<IValidateOptions<PlaidConnectorOptions>, PlaidConnectorOptionsValidator>());
 
             // Everything this needs, registered here. The clock is also registered by
             // AddBankingServices, so relying on that would work today and break the moment

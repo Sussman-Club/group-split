@@ -438,4 +438,37 @@ public class DuplicateLinkTest : IAsyncLifetime
         // And nothing was retired: the first login is still linked and still works.
         Assert.Empty(_bank.RemovedTokens);
     }
+
+    /// <summary>
+    /// Linking the same item a second time, when the bank has an account it did not report
+    /// the first time.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the account-list problem, and the one the old code told people to
+    /// use: "picking up a new account is a re-link, not a sync". It was not, because the
+    /// merge here reached a stored connection through its navigation, and
+    /// <see cref="GroupSplit.Data.Entities.Entity"/> hands every instance an Id at
+    /// construction -- so EF read the new account as one it already had, staged an UPDATE
+    /// and failed the save. What the person saw was the link being "held safely" and
+    /// nothing needing doing, for ever, while the account never arrived.
+    /// </remarks>
+    [Fact]
+    public async Task Linking_the_same_item_again_picks_up_an_account_it_did_not_have()
+    {
+        _bank.Answer("cursor-one").Answer("cursor-two");
+
+        _bank.AnswerExchange(FakeBankConnector.Item("item-one", "token-one"))
+            .AnswerExchange(new LinkedItem("token-one", "item-one", "Fake Bank",
+            [
+                new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD"),
+                new ImportedAccount("acc-2", "Savings", "5678", "depository", "savings", "USD")
+            ]));
+
+        await Link();
+        await Link();
+
+        var connection = Assert.Single(await Connections());
+
+        Assert.Equal(["acc-1", "acc-2"], connection.Accounts.Select(a => a.ProviderAccountId).Order());
+    }
 }

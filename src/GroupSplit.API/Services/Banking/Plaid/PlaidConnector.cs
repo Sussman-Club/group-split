@@ -60,8 +60,9 @@ public sealed class PlaidConnector(
             Products = updating ? [] : [Products.Transactions],
             Transactions = updating ? null : new LinkTokenTransactions { DaysRequested = Options.DaysRequested },
             AccessToken = request.AccessToken,
+            Update = updating ? new LinkTokenCreateRequestUpdate { AccountSelectionEnabled = true } : null,
             Webhook = request.WebhookUrl,
-            RedirectUri = request.RedirectUri ?? Options.RedirectUri
+            RedirectUri = Address(request.RedirectUri) ?? Address(Options.RedirectUri)
         });
 
         Ensure(response, "create a link token");
@@ -69,6 +70,28 @@ public sealed class PlaidConnector(
         return new LinkSession(
             response.LinkToken,
             response.Expiration == default ? DateTimeOffset.UtcNow.AddMinutes(30) : response.Expiration);
+    }
+
+    /// <summary>
+    /// An address, or null when there is not one.
+    /// </summary>
+    /// <remarks>
+    /// Blank is how "not configured" arrives. Every optional parameter in the AppHost
+    /// resolves to an empty string when nobody sets it, and the rest of this application
+    /// already reads blank as absent -- an empty client id is what switches bank sync off.
+    /// Plaid draws no such distinction: it refuses <c>redirect_uri: ""</c> with
+    /// INVALID_FIELD, the same as it refuses an address nobody registered. Passing one
+    /// through would turn "this deployment has no redirect" into every link failing.
+    /// </remarks>
+    private static string? Address(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    public async Task<IReadOnlyList<ImportedAccount>> AccountsAsync(string accessToken, CancellationToken ct = default)
+    {
+        var accounts = await plaid.AccountsGetAsync(new AccountsGetRequest { AccessToken = accessToken });
+
+        Ensure(accounts, "read the accounts");
+
+        return accounts.Accounts.Select(ToAccount).ToList();
     }
 
     public async Task<LinkedItem> ExchangeAsync(string publicToken, CancellationToken ct = default)
@@ -135,9 +158,18 @@ public sealed class PlaidConnector(
         return (type, code) switch
         {
             ("TRANSACTIONS", "SYNC_UPDATES_AVAILABLE") => new SyncUpdatesAvailable(itemId),
+            ("ITEM", "NEW_ACCOUNTS_AVAILABLE") => new NewAccountsAvailable(itemId),
+            ("ITEM", "PENDING_DISCONNECT") => new SignInWillExpire(itemId, "the institution is being migrated"),
+            ("ITEM", "PENDING_EXPIRATION") => new SignInWillExpire(itemId, "the consent is about to expire"),
+            ("ITEM", "USER_ACCOUNT_REVOKED") => Text(root, "account_id") is { Length: > 0 } account
+                ? new AccountAccessRevoked(itemId, account)
+                : new UnhandledWebhook(itemId, $"{type}/{code} (no account_id)"),
             ("ITEM", "LOGIN_REPAIRED") => new LoginRepaired(itemId),
             ("ITEM", "USER_PERMISSION_REVOKED") => new PermissionRevoked(itemId),
-            ("ITEM", "ERROR") when ErrorCode(root) == "ITEM_LOGIN_REQUIRED" => new LoginRequired(itemId),
+
+            // The same codes Ensure treats as needing a person, because an item error
+            // arriving by webhook means exactly what one arriving from a failed call does.
+            ("ITEM", "ERROR") when NeedsSignIn(ErrorCode(root)) => new LoginRequired(itemId),
             _ => new UnhandledWebhook(itemId, $"{type}/{code}")
         };
     }
@@ -149,6 +181,7 @@ public sealed class PlaidConnector(
     private List<ImportedTransaction> Rows(IReadOnlyList<PlaidTransaction> transactions)
     {
         var rows = new List<ImportedTransaction>(transactions.Count);
+        var dropped = new List<string>();
 
         foreach (var transaction in transactions)
         {
@@ -157,7 +190,10 @@ public sealed class PlaidConnector(
                 || transaction.Date is not { } date
                 || transaction.Amount is not { } amount)
             {
-                logger.LogWarning("Skipping a Plaid transaction with no id, account, date or amount.");
+                // Named and counted. A warning that says only that something was dropped
+                // cannot be chased: there is no way to tell one bad row from a page of them,
+                // or to ask Plaid about the one that went missing.
+                dropped.Add(Missing(transaction));
                 continue;
             }
 
@@ -194,7 +230,31 @@ public sealed class PlaidConnector(
                 JsonSerializer.Serialize(transaction, SerializerOptions)));
         }
 
+        if (dropped.Count > 0)
+        {
+            logger.LogWarning(
+                "Skipped {Count} of {Total} Plaid transactions that were missing an id, account, date or "
+                + "amount: {Dropped}.", dropped.Count, transactions.Count, string.Join("; ", dropped));
+        }
+
         return rows;
+    }
+
+    /// <summary>What a dropped row was missing, and whatever of it can be quoted back.</summary>
+    private static string Missing(PlaidTransaction transaction)
+    {
+        var absent = new List<string>(4);
+
+        if (transaction.TransactionId is not { Length: > 0 }) absent.Add("id");
+        if (transaction.AccountId is not { Length: > 0 }) absent.Add("account");
+        if (transaction.Date is null) absent.Add("date");
+        if (transaction.Amount is null) absent.Add("amount");
+
+        var known = transaction.TransactionId is { Length: > 0 } id
+            ? id
+            : transaction.AccountId is { Length: > 0 } account ? $"account {account}" : "nothing to name it by";
+
+        return $"{known} (no {string.Join(", ", absent)})";
     }
 
     private static ImportedAccount ToAccount(Account account) =>
@@ -249,6 +309,21 @@ public sealed class PlaidConnector(
     /// The warning below is what makes it visible in the meantime.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Plaid's codes that mean the item needs a person rather than a retry. Shared by the
+    /// two places that meet them -- a failed call and an <c>ITEM: ERROR</c> webhook -- which
+    /// had drifted to one code on the webhook side and four on the other.
+    /// </summary>
+    private static readonly HashSet<string> SignInCodes = new(StringComparer.Ordinal)
+    {
+        "ITEM_LOGIN_REQUIRED",
+        "ITEM_NOT_FOUND",
+        "INVALID_ACCESS_TOKEN",
+        "ITEM_NOT_SUPPORTED"
+    };
+
+    private static bool NeedsSignIn(string? code) => code is not null && SignInCodes.Contains(code);
+
     private void Ensure(ResponseBase response, string what)
     {
         if (response.IsSuccessStatusCode)
@@ -264,10 +339,7 @@ public sealed class PlaidConnector(
         {
             // The item needs a person, not a retry. Marking the connection is what puts it
             // in front of one.
-            "ITEM_LOGIN_REQUIRED" => BankSyncFailure.LoginRequired,
-            "ITEM_NOT_FOUND" => BankSyncFailure.LoginRequired,
-            "INVALID_ACCESS_TOKEN" => BankSyncFailure.LoginRequired,
-            "ITEM_NOT_SUPPORTED" => BankSyncFailure.LoginRequired,
+            _ when NeedsSignIn(code) => BankSyncFailure.LoginRequired,
 
             "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION" => BankSyncFailure.RestartFromCursor,
 
