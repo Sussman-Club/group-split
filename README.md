@@ -265,3 +265,7 @@ dotnet test tests/GroupSplit.AppHost.Test
 - .NET 10 (ASP.NET Core, Blazor, MAUI)
 - PostgreSQL + Entity Framework Core
 - .NET Aspire for local orchestration
+
+## License
+
+MIT. See [LICENSE](LICENSE).
