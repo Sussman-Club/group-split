@@ -371,7 +371,26 @@
             pending() {
                 try {
                     const held = sessionStorage.getItem(this.key);
-                    return held ? JSON.parse(held) : null;
+
+                    if (!held)
+                        return null;
+
+                    // Checked rather than trusted. This is storage a person can
+                    // edit, and what it says crosses into .NET as a typed record:
+                    // a connectionId that is not a Guid fails to deserialise
+                    // there, which reaches the return page as an exception rather
+                    // than as the ordinary "nothing to pick up" it should be.
+                    const session = JSON.parse(held);
+                    const token = session?.token;
+                    const connectionId = session?.connectionId ?? null;
+
+                    if (typeof token !== "string" || token.length === 0)
+                        return null;
+
+                    if (connectionId !== null && typeof connectionId !== "string")
+                        return null;
+
+                    return { token, connectionId };
                 } catch {
                     return null;
                 }
@@ -400,7 +419,16 @@
                 // the next thing that happens is this page being navigated away.
                 this.remember(token, connectionId);
 
-                window.Plaid.create({ token, ...this.handlers(callback) }).open();
+                try {
+                    window.Plaid.create({ token, ...this.handlers(callback) }).open();
+                } catch (e) {
+                    // Nothing opened, so neither handler will ever run and neither
+                    // will drop what was just written. Left there, it outlives the
+                    // session it describes: the return page would find a token no
+                    // bank is holding and try to finish a link nobody started.
+                    this.forget();
+                    throw e;
+                }
             },
 
             // Coming back from the bank's own sign-in page. Link is re-created
@@ -409,11 +437,19 @@
             async resume(token, callback) {
                 await this.load();
 
-                window.Plaid.create({
-                    token,
-                    receivedRedirectUri: window.location.href,
-                    ...this.handlers(callback)
-                }).open();
+                try {
+                    window.Plaid.create({
+                        token,
+                        receivedRedirectUri: window.location.href,
+                        ...this.handlers(callback)
+                    }).open();
+                } catch (e) {
+                    // As above, and it matters more here: this is the only page
+                    // that reads what was written down, so an entry it could not
+                    // use would meet the same failure on every visit after.
+                    this.forget();
+                    throw e;
+                }
             }
         }
     };

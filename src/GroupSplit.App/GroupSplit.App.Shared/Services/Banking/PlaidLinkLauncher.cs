@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.JSInterop;
 
 namespace GroupSplit.App.Shared.Services.Banking;
@@ -30,13 +31,20 @@ public sealed class PlaidLinkLauncher(IJSRuntime js) : IBankLinkLauncher, IAsync
     /// </remarks>
     public Task<string?> ResumeAsync(string linkToken) => RunAsync("gs.plaid.resume", linkToken);
 
+    /// <remarks>
+    /// Reads storage a person can edit, so a value that will not become a
+    /// <see cref="PendingBankLinkSession"/> is answered the same way as no value at all.
+    /// The browser checks the shape first and this is the second half of that: there is
+    /// nothing the return page could do with a malformed session except say there is
+    /// nothing to pick up, which is what it says when there is none.
+    /// </remarks>
     public async Task<PendingBankLinkSession?> PendingAsync()
     {
         try
         {
             return await js.InvokeAsync<PendingBankLinkSession?>("gs.plaid.pending");
         }
-        catch (Exception e) when (IsUnavailable(e))
+        catch (Exception e) when (IsUnavailable(e) || e is JsonException)
         {
             return null;
         }
