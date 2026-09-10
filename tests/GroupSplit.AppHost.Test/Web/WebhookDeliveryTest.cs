@@ -57,12 +57,18 @@ public class WebhookDeliveryTest(AppHostFixture appHost)
     }
 
     /// <summary>
-    /// And it reaches the API, which refuses it. Unauthorized is the right answer to an
-    /// unsigned body and is the proof the request was carried through rather than answered
-    /// by the web app: nothing else on that origin refuses this way.
+    /// And it reaches the API rather than stopping at the web app.
     /// </summary>
+    /// <remarks>
+    /// Asked with a provider nothing will ever register, because the alternative is a test
+    /// that reads the environment rather than the code: with Plaid credentials configured
+    /// this path answers 401, without them 404, and a run has no say in which. A provider
+    /// the deployment does not speak is 404 either way, and only the API can produce it --
+    /// the web app forwards this prefix wholesale and is excluded from the status-code
+    /// pages that would otherwise turn a 404 here into its own HTML.
+    /// </remarks>
     [Fact(Timeout = 120_000)]
-    public async Task An_unsigned_webhook_reaches_the_api_and_is_refused_there()
+    public async Task A_webhook_for_a_provider_nobody_speaks_is_answered_by_the_api()
     {
         var ct = TestContext.Current.CancellationToken;
 
@@ -72,8 +78,15 @@ public class WebhookDeliveryTest(AppHostFixture appHost)
         };
 
         using var response = await http.PostAsync(
-            Path, new StringContent("{}", Encoding.UTF8, "application/json"), ct);
+            "/webhooks/nobody-speaks-this",
+            new StringContent("{}", Encoding.UTF8, "application/json"),
+            ct);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        // Bare, the way Results.NotFound() answers. The web app's own not-found is a
+        // rendered page, so HTML here would mean the forwarder never carried the call.
+        Assert.DoesNotContain("<html", await response.Content.ReadAsStringAsync(ct),
+            StringComparison.OrdinalIgnoreCase);
     }
 }
