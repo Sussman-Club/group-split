@@ -1055,12 +1055,19 @@ public sealed class BankConnectionService(
     /// what is matched on instead -- and an account with no mask on either side matches
     /// nothing and is simply added, which is the same caution <see cref="SameAccount"/>
     /// takes for the same reason.
+    /// <para>
+    /// And nothing is retired here, which is the other half of that caution. An account the
+    /// mask did not recognise has not been withdrawn -- it has been added again under a new
+    /// id, beside the row that holds its history -- so saying "access was withdrawn" of it
+    /// would be the same false statement this application is trying to stop making, pointed
+    /// the other way. Only a match on the provider's own id is evidence of absence.
+    /// </para>
     /// </remarks>
     private static void AdoptAccounts(
         BankConnection connection,
         IReadOnlyList<ImportedAccount> accounts,
         AppDbContext dbContext) =>
-        Reconcile(connection, accounts, SameAccount, dbContext);
+        Reconcile(connection, accounts, SameAccount, dbContext, retireUnreported: false);
 
     /// <summary>
     /// Keeps the accounts the provider reports, adding new ones and refreshing the details of
@@ -1072,7 +1079,8 @@ public sealed class BankConnectionService(
         IReadOnlyList<ImportedAccount> accounts,
         AppDbContext dbContext) =>
         Reconcile(connection, accounts,
-            (stored, incoming) => stored.ProviderAccountId == incoming.ProviderAccountId, dbContext);
+            (stored, incoming) => stored.ProviderAccountId == incoming.ProviderAccountId, dbContext,
+            retireUnreported: true);
 
     /// <summary>
     /// The body both of those share: every reported account is either recognised by
@@ -1091,11 +1099,18 @@ public sealed class BankConnectionService(
     /// all rather than a new one.
     /// </para>
     /// </remarks>
+    /// <param name="retireUnreported">
+    /// Whether an account the provider did not report should be marked withdrawn. Only when
+    /// <paramref name="recognises"/> matches on the provider's own account id: under any
+    /// looser key a stored account can go unmatched while the bank is still perfectly
+    /// happy to hand it over, and marking that one is worse than missing a real withdrawal.
+    /// </param>
     private static void Reconcile(
         BankConnection connection,
         IReadOnlyList<ImportedAccount> accounts,
         Func<LinkedAccount, ImportedAccount, bool> recognises,
-        AppDbContext dbContext)
+        AppDbContext dbContext,
+        bool retireUnreported)
     {
         var claimed = new HashSet<LinkedAccount>();
 
@@ -1160,6 +1175,11 @@ public sealed class BankConnectionService(
         // accounts that are still importing, with nothing to tell them apart, it goes on
         // looking connected for ever while nothing arrives for it again -- the same silence
         // issue 233 was about, from the opposite end.
+        //
+        // Only where the match was on the provider's account id, though. See the parameter.
+        if (!retireUnreported)
+            return;
+
         foreach (var stored in before.Where(candidate => !claimed.Contains(candidate)))
         {
             stored.AccessRevoked = true;

@@ -471,4 +471,41 @@ public class DuplicateLinkTest : IAsyncLifetime
 
         Assert.Equal(["acc-1", "acc-2"], connection.Accounts.Select(a => a.ProviderAccountId).Order());
     }
+
+    /// <summary>
+    /// Re-linking a bank one of whose accounts reports no mask leaves that account alone
+    /// rather than calling it withdrawn.
+    /// </summary>
+    /// <remarks>
+    /// The adopt path matches on the mask, so a maskless account matches nothing and is
+    /// added again under the new item's id -- the accepted cost documented on
+    /// <c>SameAccount</c>. What must not follow is the stored row being marked withdrawn
+    /// for having gone unmatched: nobody withdrew it, the bank is still handing it over,
+    /// and it is the row holding every transaction filed against that account. Saying
+    /// "access was withdrawn" of it is the same false statement about somebody's money
+    /// that issue 233 was about, pointed the other way.
+    /// </remarks>
+    [Fact]
+    public async Task Re_linking_leaves_an_account_with_no_mask_alone_rather_than_retiring_it()
+    {
+        _bank.Answer("cursor-one").Answer("cursor-two");
+
+        _bank.AnswerExchange(new LinkedItem("token-one", "item-one", "Fake Bank",
+            [
+                new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD"),
+                new ImportedAccount("acc-2", "Credit card", null, "credit", "credit card", "USD")
+            ]))
+            .AnswerExchange(new LinkedItem("token-two", "item-two", "Fake Bank",
+            [
+                new ImportedAccount("new-1", "Everyday", "1234", "depository", "checking", "USD"),
+                new ImportedAccount("new-2", "Credit card", null, "credit", "credit card", "USD")
+            ]));
+
+        await Link();
+        await Link();
+
+        var connection = Assert.Single(await Connections());
+
+        Assert.All(connection.Accounts, account => Assert.False(account.AccessRevoked));
+    }
 }
