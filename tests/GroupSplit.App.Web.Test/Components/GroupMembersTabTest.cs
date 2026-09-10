@@ -24,6 +24,17 @@ public class GroupMembersTabTest : ComponentTest
     private static readonly UserInfo Me = new(Guid.NewGuid(), "Anabel", "Benítez", "anabel@test.com");
     private static readonly UserInfo Omar = new(Guid.NewGuid(), "Omar", "Sussman", "omar@test.com");
 
+    /// <summary>
+    /// Somebody the group has named and is waiting on. The members listing carries them,
+    /// because they can be given a share -- so this tab has to know they are not a member.
+    /// </summary>
+    /// <remarks>
+    /// A name and no address: nobody has signed in as this person, which is the case
+    /// invitations exist for.
+    /// </remarks>
+    private static readonly UserInfo Daniel =
+        new(Guid.NewGuid(), "Daniel", null, null, IsPendingInvitee: true);
+
     private readonly Mock<IGroupsPageStateService> _state = new();
 
     public GroupMembersTabTest()
@@ -32,13 +43,13 @@ public class GroupMembersTabTest : ComponentTest
 
         _state
             .Setup(state => state.GetGroupMembersAsync(It.IsAny<CancellationToken>()))
-            .Returns(() => new[] { Me, Omar }.ToAsyncEnumerable());
+            .Returns(() => new[] { Me, Omar, Daniel }.ToAsyncEnumerable());
 
         _state
             .Setup(state => state.GetGroupInvitationsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([
-                new GroupInvitationResponse(Guid.NewGuid(), Group.Id, Group.Name, "daniel@test.com", "Anabel",
-                    DateTimeOffset.UtcNow)
+                new GroupInvitationResponse(Guid.NewGuid(), Group.Id, Group.Name, "Daniel",
+                    "demo-token", "Anabel", DateTimeOffset.UtcNow, Daniel.Id)
             ]);
 
         _state
@@ -62,8 +73,32 @@ public class GroupMembersTabTest : ComponentTest
         var tab = Render();
 
         Assert.Contains("Omar Sussman", tab.Markup);
-        Assert.Contains("daniel@test.com", tab.Markup);
+        Assert.Contains("Daniel", tab.Markup);
         Assert.Contains("1 waiting", tab.Markup);
+    }
+
+    /// <summary>
+    /// The members count is the people who joined, and the invitee is listed once.
+    /// </summary>
+    /// <remarks>
+    /// The listing behind this tab answers the wider question -- everybody the group may
+    /// record money against -- so it contains the person being waited on as well as the two
+    /// members. Counting them as a member would say three; showing them in both cards would
+    /// say Daniel twice, once as though he were in.
+    /// </remarks>
+    [Fact]
+    public void Somebody_still_to_answer_is_counted_as_invited_and_not_as_a_member()
+    {
+        var tab = Render();
+
+        var members = tab.FindAll(".gs-card")[0];
+
+        Assert.Equal("2", members.QuerySelector(".gs-card-title .gs-tag.neutral")!.TextContent.Trim());
+
+        // And they are in the other card, the one that is about the invitation, rather than
+        // in both.
+        Assert.DoesNotContain("Daniel", members.InnerHtml);
+        Assert.Contains("Daniel", tab.Markup);
     }
 
     /// <summary>

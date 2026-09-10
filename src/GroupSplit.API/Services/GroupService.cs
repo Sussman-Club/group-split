@@ -22,7 +22,8 @@ public record GroupMemberBalance(
     Guid UserId,
     string UserName,
     decimal AmountPaid,
-    decimal AmountOwed)
+    decimal AmountOwed,
+    bool IsPendingInvitee = false)
 {
     public decimal Balance => AmountPaid - AmountOwed;
 }
@@ -50,8 +51,16 @@ public interface IGroupService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the members of a group by ID
+    /// Everybody a group can point at: its members, and the people it has invited and is
+    /// still waiting on.
     /// </summary>
+    /// <remarks>
+    /// Wider than the name suggests, on purpose, because this is what every screen that
+    /// offers a choice of person reads -- a payer, a share, a rule's participants -- and an
+    /// invitee is choosable in all three. Which of them has actually joined is on the rows:
+    /// <see cref="UserInfo.IsPendingInvitee"/>. Nothing here decides who may read or change
+    /// the group; that is membership, and it is asked of <c>Group.Users</c> alone.
+    /// </remarks>
     Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default);
 
 
@@ -167,7 +176,10 @@ public interface IGroupService
     Task<IQueryable<Group>> Unarchive(Guid groupId, CancellationToken cancellationToken = default);
 }
 
-public class GroupService(ICurrentUser userContext, AppDbContext context) : IGroupService
+public class GroupService(
+    ICurrentUser userContext,
+    AppDbContext context,
+    IGroupParticipants participants) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -251,8 +263,12 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
 
     public async Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default)
     {
-        return from gr in await GetGroupById(groupId, cancellationToken)
-               from user in gr.Users
+        // Still scoped through the caller's own groups, so a group they are not in answers
+        // with nothing rather than with its roster.
+        var mine = await GetGroupById(groupId, cancellationToken);
+
+        return from user in participants.Of(groupId)
+               where mine.Any(candidate => candidate.Id == groupId)
                select user;
     }
 
@@ -274,6 +290,15 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
 
         if (user is null)
             throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
+
+        // The members list now shows the people the group is waiting on too, so this can be
+        // asked of one of them. They are not a member and there is nothing to remove:
+        // withdrawing the invitation is the act, and it says what becomes of anything
+        // recorded against them.
+        if (await participants.IsPendingInvitee(groupId, userId, cancellationToken))
+            throw new ConflictException(ErrorCodes.GroupMemberNotJoined,
+                "That person has been invited and has not joined, so there is no membership to " +
+                "remove. Withdraw the invitation instead.");
 
         var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
         var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
@@ -374,18 +399,26 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
         // the payer's paid rises and the payee's owed rises, which is what paying somebody
         // back does to a balance.
         return from @group in groups
-               from user in @group.Users
+               from user in context.Set<User>()
+               where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
+                     context.Set<GroupInvitation>().Any(invitation =>
+                         invitation.GroupId == @group.Id && invitation.ParticipantUserId == user.Id)
                select new GroupMemberBalance(
                    @group.Id,
                    @group.Name,
                    user.Id,
-                   user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
+                   // People.Display, written out longhand: this is built in SQL, so the
+                   // fallback to the address has to be too.
+                   user.FirstName == null && user.LastName == null
+                       ? user.Email ?? ""
+                       : user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
                    (from transaction in context.Set<Transaction>()
                     where transaction.GroupId == @group.Id && transaction.UserId == user.Id
                     select transaction.Amount).Sum(),
                    (from split in context.Set<TransactionSplit>()
                     where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
-                    select split.Amount).Sum());
+                    select split.Amount).Sum(),
+                   !user.Groups.Any(candidate => candidate.Id == @group.Id));
     }
 
     /// <summary>
@@ -395,19 +428,33 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
     /// </summary>
     private IQueryable<GroupNetBalance> NetBalances(IQueryable<Group> groupQuery)
     {
+        // Participants and not members, because the column has to add up. Shares are
+        // recorded against an invited address from the moment it is invited, so a listing of
+        // members alone would show a group whose balances did not sum to zero, with the
+        // missing side belonging to nobody on the page.
         var groupBalance =
                     from @group in groupQuery
-                    from user in @group.Users
+                    from user in context.Set<User>()
+                    where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
+                          context.Set<GroupInvitation>().Any(invitation =>
+                              invitation.GroupId == @group.Id && invitation.ParticipantUserId == user.Id)
                     select new GroupNetBalance
                     {
                         UserId = user.Id,
-                        UserName = user.FirstName + " " + user.LastName,
+                        // People.Display, in SQL. The surname is appended only when there is
+                        // one, where this used to add a space unconditionally: somebody the
+                        // group named has a first name and nothing else, and "Carlos " read
+                        // as a typo down the column.
+                        UserName = user.FirstName == null && user.LastName == null
+                            ? user.Email ?? ""
+                            : user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
                         AmountPaid = (from transaction in context.Set<Transaction>()
                                       where transaction.GroupId == @group.Id && transaction.User == user
                                       select transaction.Amount).Sum(),
                         AmountOwed = (from split in context.Set<TransactionSplit>()
                                       where split.Transaction.GroupId == @group.Id && split.User == user
-                                      select split.Amount).Sum()
+                                      select split.Amount).Sum(),
+                        IsPendingInvitee = !user.Groups.Any(candidate => candidate.Id == @group.Id)
                     } into balance
                     select new GroupNetBalance
                     {
@@ -415,7 +462,8 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
                         UserName = balance.UserName,
                         AmountPaid = balance.AmountPaid,
                         AmountOwed = balance.AmountOwed,
-                        Balance = balance.AmountPaid - balance.AmountOwed
+                        Balance = balance.AmountPaid - balance.AmountOwed,
+                        IsPendingInvitee = balance.IsPendingInvitee
                     };
 
         return groupBalance;
@@ -440,6 +488,16 @@ public class GroupService(ICurrentUser userContext, AppDbContext context) : IGro
 
         if (result is not { Group: { } resultGroup, User: var user })
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        // Before the missing-member check below, which is what somebody the group has
+        // invited and is waiting on would otherwise fall into: they are not in Users, so the
+        // join above finds nothing for them. Their balance is real and is on the group's
+        // balances page, so "not found" would be a lie about a person the caller can see.
+        // What is missing is the other end of the payment.
+        if (await participants.IsPendingInvitee(groupId, request.UserId, cancellationToken))
+            throw new ConflictException(ErrorCodes.SettlementWithPendingInvitee,
+                "That person has been invited to the group and has not joined yet, so there is " +
+                "nobody to settle up with. Their balance stands until they accept.");
 
         if (user is null)
             throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");

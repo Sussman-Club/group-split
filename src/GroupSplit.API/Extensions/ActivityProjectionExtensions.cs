@@ -41,8 +41,16 @@ public static class ActivityProjectionExtensions
                        Amount = transaction.Amount,
                        DateTime = transaction.DateTime,
                        PaidByUserId = transaction.UserId,
-                       PaidByUserName = transaction.User.FirstName +
-                                        (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       // People.Display, written out longhand because this is built in
+                       // SQL: somebody invited and not yet signed in has no name, only the
+                       // address the group typed in.
+                       PaidByUserName = transaction.User.FirstName == null && transaction.User.LastName == null
+                           ? transaction.User.Email ?? ""
+                           : transaction.User.FirstName +
+                             (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       PaidByIsPendingInvitee = transaction.Group != null &&
+                                                transaction.Group.Invitations.Any(invitation =>
+                                                    invitation.ParticipantUserId == transaction.UserId),
                        // A transfer has exactly one split, to whoever was paid, and that is
                        // what makes it a transfer. On an expense the shares say who carried
                        // it, and there is no single other party to name.
@@ -154,8 +162,16 @@ public static class ActivityProjectionExtensions
                        Amount = transaction.Amount,
                        DateTime = transaction.DateTime,
                        PaidByUserId = transaction.UserId,
-                       PaidByUserName = transaction.User.FirstName +
-                                        (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       // People.Display, written out longhand because this is built in
+                       // SQL: somebody invited and not yet signed in has no name, only the
+                       // address the group typed in.
+                       PaidByUserName = transaction.User.FirstName == null && transaction.User.LastName == null
+                           ? transaction.User.Email ?? ""
+                           : transaction.User.FirstName +
+                             (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       PaidByIsPendingInvitee = transaction.Group != null &&
+                                                transaction.Group.Invitations.Any(invitation =>
+                                                    invitation.ParticipantUserId == transaction.UserId),
                        PaidToUserId = transaction is Transfer
                            ? transaction.Splits.Select(split => (Guid?)split.UserId).FirstOrDefault()
                            : null,
@@ -217,8 +233,16 @@ public static class ActivityProjectionExtensions
                        Amount = transaction.Amount,
                        DateTime = transaction.DateTime,
                        PaidByUserId = transaction.UserId,
-                       PaidByUserName = transaction.User.FirstName +
-                                        (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       // People.Display, written out longhand because this is built in
+                       // SQL: somebody invited and not yet signed in has no name, only the
+                       // address the group typed in.
+                       PaidByUserName = transaction.User.FirstName == null && transaction.User.LastName == null
+                           ? transaction.User.Email ?? ""
+                           : transaction.User.FirstName +
+                             (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       PaidByIsPendingInvitee = transaction.Group != null &&
+                                                transaction.Group.Invitations.Any(invitation =>
+                                                    invitation.ParticipantUserId == transaction.UserId),
                        PaidToUserId = transaction is Transfer
                            ? transaction.Splits.Select(split => (Guid?)split.UserId).FirstOrDefault()
                            : null,

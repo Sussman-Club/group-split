@@ -40,7 +40,6 @@ public static class ErrorCodes
     // ---- Forbidden (403) ----------------------------------------------------------------
 
     public const string GroupCannotRemoveSelf = "GROUP_CANNOT_REMOVE_SELF";
-    public const string GroupInvitationNotYours = "GROUP_INVITATION_NOT_YOURS";
 
     // ---- Conflict (409): the request is well formed but the current state refuses it -----
 
@@ -49,9 +48,23 @@ public static class ErrorCodes
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
     public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";
     public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
+
+    /// <summary>
+    /// A repayment names somebody the group has invited and is still waiting on. Their
+    /// shares count in the group's balances, but there is no account on the other end of a
+    /// payment yet: the balance simply stands until they join.
+    /// </summary>
+    public const string SettlementWithPendingInvitee = "SETTLEMENT_WITH_PENDING_INVITEE";
+
     public const string SettlementNothingToSettle = "SETTLEMENT_NOTHING_TO_SETTLE";
-    public const string GroupInvitationAlreadySent = "GROUP_INVITATION_ALREADY_SENT";
-    public const string GroupMemberAlreadyJoined = "GROUP_MEMBER_ALREADY_JOINED";
+
+    /// <summary>
+    /// A membership was acted on for somebody who has been invited and has not joined.
+    /// They are choosable as a participant -- a payer, a share, a rule -- and are in the
+    /// group's members listing marked as waiting, so they can be reached by mistake here.
+    /// Withdrawing the invitation is the act that ends their part in the group.
+    /// </summary>
+    public const string GroupMemberNotJoined = "GROUP_MEMBER_NOT_JOINED";
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
     public const string GroupJoinLinkExpired = "GROUP_JOIN_LINK_EXPIRED";
     public const string GroupJoinLinkRevoked = "GROUP_JOIN_LINK_REVOKED";
@@ -72,6 +85,13 @@ public static class ErrorCodes
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
     public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";
+
+    /// <summary>
+    /// An invitation was asked for with nothing to make it out to. A name is the whole of
+    /// what a group knows about somebody who has not joined -- it is what every listing
+    /// shows them as -- so there is no sensible row to write without one.
+    /// </summary>
+    public const string GroupInvitationNoName = "GROUP_INVITATION_NO_NAME";
     public const string SplitsInvalid = "SPLITS_INVALID";
     public const string SplitOnAPersonalExpense = "SPLIT_ON_A_PERSONAL_EXPENSE";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";

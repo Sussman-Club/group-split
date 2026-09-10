@@ -1,7 +1,27 @@
+using GroupSplit.Shared;
+
 namespace GroupSplit.App.Shared.Extensions;
 
 public static class NameExtensions
 {
+    /// <summary>
+    /// What to call somebody in a list of a group's people, saying so when they have been
+    /// invited and have not joined.
+    /// </summary>
+    /// <remarks>
+    /// One helper rather than a marker per screen, because the marker has to be everywhere
+    /// a person can be chosen -- who paid, whose share, who a rule names -- and a screen
+    /// that forgot it would be offering an invitee as though they were a member. The name
+    /// itself falls back to the address, which is all a group knows about somebody who has
+    /// never signed in; see <see cref="UserInfo.FullName"/>.
+    /// </remarks>
+    public static string Label(this UserInfo? person) =>
+        person is null
+            ? string.Empty
+            : person.IsPendingInvitee
+                ? $"{person.FullName} (invited)"
+                : person.FullName;
+
     /// <summary>Up to two initials from a display name, e.g. "Anabel Benítez" → "AB".</summary>
     public static string Initials(this string? name) =>
         string.Concat(

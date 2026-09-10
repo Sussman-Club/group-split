@@ -68,7 +68,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<GroupInvitation>(entity =>
         {
-            entity.Property(invitation => invitation.Email).HasMaxLength(128).IsRequired();
+            entity.Property(invitation => invitation.Name).HasMaxLength(64).IsRequired();
+            entity.Property(invitation => invitation.Token).HasMaxLength(64).IsRequired();
             entity.Property(invitation => invitation.InvitedAt).IsRequired();
 
             entity.HasOne(invitation => invitation.Group)
@@ -77,6 +78,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Required, and restricted: this is who the group's money is recorded against
+            // while the address has not answered, so an invitation without one could hold
+            // shares belonging to nobody -- and losing the row would take them with it.
+            entity.HasOne(invitation => invitation.Participant)
+                .WithMany()
+                .HasForeignKey(invitation => invitation.ParticipantUserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
             // The inviter is a courtesy on the row the invitee reads ("Daniel asked you to
             // join"), so their account going away must not take the invitation with it.
             entity.HasOne(invitation => invitation.InvitedBy)
@@ -84,12 +94,22 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(invitation => invitation.InvitedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // One standing invitation per address per group. A second would be a second
-            // row in the group's "waiting on" list naming the same person.
-            entity.HasIndex(invitation => new { invitation.GroupId, invitation.Email }).IsUnique();
+            // The token is the whole lookup: somebody opens a URL and the only thing in it
+            // is this. Unique because two rows answering to one token would be two
+            // positions one link could claim.
+            entity.HasIndex(invitation => invitation.Token).IsUnique();
 
-            // How an invitee finds theirs: every group that has asked this address.
-            entity.HasIndex(invitation => invitation.Email);
+            // Read on every membership question a group asks -- who may be given a share,
+            // whose balance to show, whether this person has joined -- both by group and by
+            // participant alone.
+            //
+            // Unique on the pair, and that is the constraint that replaced one standing
+            // invitation per address: a stand-in is made for one invitation and nothing
+            // else, so a second row naming it would be two invitations for one person's
+            // money. Names are deliberately *not* unique -- two people can be called Dani.
+            entity.HasIndex(invitation => new { invitation.GroupId, invitation.ParticipantUserId }).IsUnique();
+
+            entity.HasIndex(invitation => invitation.ParticipantUserId);
         });
 
         modelBuilder.Entity<GroupJoinLink>(entity =>

@@ -96,6 +96,7 @@ public class SettlementService(
     ICurrentUser userContext,
     IGroupService groups,
     IDebtCalculationService debtCalculator,
+    IGroupParticipants participants,
     AppDbContext context) : ISettlementService
 {
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
@@ -158,6 +159,12 @@ public class SettlementService(
         if (request.FromUserId == request.ToUserId)
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
                 "A settlement needs two different people.");
+
+        // Before the two lookups below, which would report somebody the caller can see on
+        // the balances page as not being in the group at all. An invitee holds a position
+        // and has no account to pay or be paid; the position simply stands until they join.
+        await RefuseIfPendingInvitee(group.Id, request.FromUserId, cancellationToken);
+        await RefuseIfPendingInvitee(group.Id, request.ToUserId, cancellationToken);
 
         var from = group.Users.FirstOrDefault(member => member.Id == request.FromUserId)
                    ?? throw new NotFoundException(ErrorCodes.UserNotFound,
@@ -302,6 +309,17 @@ public class SettlementService(
     }
 
     /// <summary>
+    /// Refuses a repayment naming somebody the group has invited and is waiting on.
+    /// </summary>
+    private async Task RefuseIfPendingInvitee(Guid groupId, Guid userId, CancellationToken ct)
+    {
+        if (await participants.IsPendingInvitee(groupId, userId, ct))
+            throw new ConflictException(ErrorCodes.SettlementWithPendingInvitee,
+                "That person has been invited to the group and has not joined yet, so there is " +
+                "nobody to settle up with. Their balance stands until they accept.");
+    }
+
+    /// <summary>
     /// Both halves of the cross-group plan: what the caller owes by person, and what they
     /// are owed by person, each largest first.
     /// </summary>
@@ -329,7 +347,10 @@ public class SettlementService(
                     UserName = row.UserName,
                     AmountPaid = row.AmountPaid,
                     AmountOwed = row.AmountOwed,
-                    Balance = row.Balance
+                    Balance = row.Balance,
+                    // Carried through, so the minimisation can leave them out of the plan
+                    // while their row goes on making the group's column add up.
+                    IsPendingInvitee = row.IsPendingInvitee
                 })
                 .ToList();
 

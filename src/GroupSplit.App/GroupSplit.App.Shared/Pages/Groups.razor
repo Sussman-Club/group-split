@@ -30,14 +30,12 @@
 </div>
 
 <div class="gs-stack">
-    <InvitationsPanel Reveal="0" />
-
     @if (Active.Count == 0 && Archived.Count == 0)
     {
         <div class="gs-card gs-empty" style="padding: 64px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.Groups" />
             <h3>No group yet</h3>
-            <span>Create a group and invite the people you share costs with.</span>
+            <span>Create a group and name the people you share costs with.</span>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
                        StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">Create a group</MudButton>
         </div>

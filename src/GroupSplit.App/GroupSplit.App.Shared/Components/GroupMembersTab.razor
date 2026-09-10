@@ -1,12 +1,16 @@
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@using Microsoft.JSInterop
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsPageStateService GroupsService
 @inject IDialogService DialogService
 @inject DataChangeNotifier Changes
 @inject NavigationManager Nav
 @inject LocalClock Clock
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
 @implements IDisposable
 
 @*
@@ -22,11 +26,15 @@
     <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
         <div class="gs-card-title">
             <h2>Members</h2>
-            <span class="gs-tag neutral">@_members.Count</span>
+            <span class="gs-tag neutral">@_joined.Count</span>
         </div>
 
+        @* The people who have actually joined. The listing this comes from also carries the
+           ones the group is waiting on -- they can be given a share, so every screen that
+           chooses a person needs them -- but here they belong in the card next door, which
+           is about the invitation rather than about a membership. *@
         <div class="gs-list">
-            @foreach (var member in _members)
+            @foreach (var member in _joined)
             {
                 var person = member;
                 <div class="gs-row gs-row-tight-action" style="cursor: default">
@@ -66,7 +74,8 @@
     </div>
 
     @* The two ways in, stacked beside the members: the link somebody pastes into the
-       group's own chat, and the addresses the group is still waiting on. *@
+       group's own chat, and the people the group named and is still waiting on -- each with
+       a link of their own. *@
     <div class="gs-stack">
         <GroupJoinLinkCard GroupId="@GroupId" Reveal="1" />
 
@@ -76,11 +85,24 @@
                 <span class="gs-tag">@_pending.Count waiting</span>
             </div>
 
+            @* Said once, here, rather than on every row: an invitation is not only a person
+               to send a link to, it is a person the group can start recording money against,
+               which is why they turn up in the payer list and the split editor. *@
+            @if (_pending.Count > 0)
+            {
+                <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
+                    They can be given a share and can have paid for something already, and
+                    their balances count. Send each of them their own link: it works once, and
+                    whoever opens it becomes that person. Withdrawing an invitation hands
+                    whatever is recorded against them to a member.
+                </MudText>
+            }
+
             @if (_pending.Count == 0)
             {
                 <div class="gs-empty" style="padding: 24px">
-                    <MudIcon Icon="@Icons.Material.Rounded.MailOutline" />
-                    <span>Nobody is waiting to join. Invite by email and they will see it next time they sign in.</span>
+                    <MudIcon Icon="@Icons.Material.Rounded.PersonAddAlt" />
+                    <span>Nobody is waiting to join. Name whoever is sharing the costs and you can start splitting with them straight away.</span>
                 </div>
             }
             else
@@ -90,17 +112,28 @@
                     {
                         var pending = invitation;
                         <div class="gs-row gs-row-tight-action" style="cursor: default">
-                            <Avatar Name="@pending.Email" />
+                            <Avatar Name="@pending.Name" />
                             <div style="min-width: 0">
-                                <div class="title"><span>@pending.Email</span></div>
+                                <div class="title"><span>@pending.Name</span></div>
                                 <div class="meta">
                                     Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
                                 </div>
                             </div>
+                            @* The link is the whole point of the row: it is how this person
+                               ever becomes a member. Copied rather than shown, because it is
+                               a bearer credential on their position in the ledger and a URL
+                               on screen is a URL in a screenshot. *@
+                            <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")">
+                                <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.Link)"
+                                               Size="Size.Small"
+                                               Color="@(_copied == pending.Id ? Color.Success : Color.Default)"
+                                               aria-label="@($"Copy the invitation link for {pending.Name}")"
+                                               OnClick="@(() => CopyLinkAsync(pending))" />
+                            </MudTooltip>
                             <MudTooltip Text="Withdraw the invitation">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Close"
                                                Size="Size.Small"
-                                               aria-label="@($"Withdraw the invitation to {pending.Email}")"
+                                               aria-label="@($"Withdraw the invitation to {pending.Name}")"
                                                OnClick="@(() => WithdrawAsync(pending))" />
                             </MudTooltip>
                         </div>
@@ -117,6 +150,14 @@
     [Parameter] public UserInfo? UserInfo { get; set; }
 
     private List<UserInfo> _members = [];
+
+    /// <summary>
+    /// The members who have actually joined. What the API answers with is wider -- it
+    /// includes the people the group has invited, because they can be given a share -- and
+    /// the card above is about memberships.
+    /// </summary>
+    private List<UserInfo> _joined = [];
+
     private IReadOnlyList<GroupInvitationResponse> _pending = [];
 
     /// <summary>The group the lists were last read for, so they are not read again for it.</summary>
@@ -133,6 +174,9 @@
     /// Counts reads, so the answer to an older one cannot land over a newer one's.
     /// </summary>
     private int _version;
+
+    /// <summary>Whose link was last copied, so the row can say it landed.</summary>
+    private Guid? _copied;
 
     protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
 
@@ -157,6 +201,7 @@
             return;
 
         _members = members;
+        _joined = [.. members.Where(member => !member.IsPendingInvitee)];
         _pending = pending;
 
         await InvokeAsync(StateHasChanged);
@@ -170,7 +215,7 @@
 
         var dialog = await DialogService.ShowAsync<AddGroupMemberDialog>("Invite people", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<AddMemberRequest>();
+        var request = await dialog.GetReturnValueAsync<InviteToGroupRequest>();
 
         if (request is not null)
             await GroupsService.InviteToGroupAsync(request);
@@ -193,8 +238,65 @@
             await GroupsService.RemoveGroupMemberAsync(member.Id, member.FullName);
     }
 
-    private async Task WithdrawAsync(GroupInvitationResponse invitation) =>
-        await GroupsService.WithdrawInvitationAsync(invitation.Id, invitation.Email);
+    /// <summary>
+    /// Copies somebody's invitation link, built here rather than by the API.
+    /// </summary>
+    /// <remarks>
+    /// The address the app is published at is the browser's own, and an API that guessed it
+    /// would guess wrong for every deployment but the one it was configured for -- the same
+    /// reason the join link card builds its URL here.
+    /// </remarks>
+    private async Task CopyLinkAsync(GroupInvitationResponse invitation)
+    {
+        var url = $"{Nav.BaseUri.TrimEnd('/')}/claim/{invitation.Token}";
+        var copied = false;
+
+        try
+        {
+            copied = await JS.InvokeAsync<bool>("gs.copy", url);
+        }
+        catch (JSException)
+        {
+            // The clipboard is the browser's to refuse.
+        }
+
+        if (copied)
+        {
+            _copied = invitation.Id;
+            StateHasChanged();
+        }
+
+        Snackbar.Add(
+            copied
+                ? $"Link for {invitation.Name} copied. It works once."
+                : $"Could not copy it. The link is /claim/{invitation.Token}.",
+            copied ? Severity.Success : Severity.Warning);
+    }
+
+    /// <summary>
+    /// Withdrawing one, behind a confirmation, because it can move money.
+    /// </summary>
+    /// <remarks>
+    /// It used to be one tap, and rightly so: an invitation was a message, and taking back
+    /// a message somebody has not read costs nothing. It is more than that now -- shares
+    /// can be recorded against the address -- so the tap can change a member's balance, and
+    /// what happens is said before rather than only afterwards.
+    /// </remarks>
+    private async Task WithdrawAsync(GroupInvitationResponse invitation)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Withdraw the invitation to {invitation.Name}? Their link stops working, and anything already recorded against them -- shares, and anything they paid for -- goes to a member of the group. No amounts change." },
+            { x => x.ButtonText, "Withdraw" }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Withdraw invitation", parameters, options);
+
+        if (await dialog.ConfirmedAsync())
+            await GroupsService.WithdrawInvitationAsync(invitation.Id, invitation.Name);
+    }
 
     private async Task LeaveAsync()
     {

@@ -104,7 +104,7 @@
                                @bind-Value="editModel.PaidByUserId">
                         @foreach (var u in GroupUsers)
                         {
-                            <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                            <MudSelectItem T="Guid" Value="@u.Id">@u.Label()</MudSelectItem>
                         }
                     </MudSelect>
 

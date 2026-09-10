@@ -371,41 +371,249 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Groups_invitations_lists_the_addresses_a_group_is_waiting_on()
+    public async Task Groups_invitations_lists_the_people_a_group_is_waiting_on()
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/groups/{id}/invitations", new[]
-        {
-            new
-            {
-                id = Guid.NewGuid(), groupId = id, groupName = "The flat",
-                email = "omar@example.com", invitedByUserName = "Anabel",
-                invitedAt = DateTimeOffset.UtcNow
-            }
-        });
+        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar") });
 
         var result = await Cli.RunAsync("groups", "invitations", id.ToString(), "--output", "text");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains("omar@example.com", result.Stdout);
+        Assert.Contains("Omar", result.Stdout);
     }
 
+    /// <summary>
+    /// Inviting answers with the links, and the links are the point: they are how the
+    /// invitation reaches anybody at all.
+    /// </summary>
     [Fact]
-    public async Task Groups_withdraw_invitation_needs_no_confirmation_because_it_can_be_sent_again()
+    public async Task Groups_invite_takes_names_and_answers_with_a_link_each()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/invitations",
+            new[] { Invitation(id, "Omar"), Invitation(id, "Nuria") });
+
+        var result = await Cli.RunAsync(
+            "groups", "invite", id.ToString(), "Omar", "Nuria", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var body = _api.Requests.Single(r => r.Method == "POST").Json;
+
+        Assert.Equal("Omar", body.GetProperty("names")[0].GetString());
+        Assert.Equal("Nuria", body.GetProperty("names")[1].GetString());
+
+        Assert.Contains("Omar", result.Stdout);
+        Assert.Contains("token-omar", result.Stdout);
+    }
+
+    /// <summary>
+    /// Withdrawing needs confirming, and it did not used to.
+    /// </summary>
+    /// <remarks>
+    /// The old reason it needed none was that an unanswered invitation could be sent again,
+    /// so nothing was lost. That is still true of the invitation and is no longer the whole
+    /// story: an invited address is somebody the group can record money against, so
+    /// withdrawing can hand a fortnight of shares to a member and move their balance.
+    /// </remarks>
+    [Fact]
+    public async Task Groups_withdraw_invitation_asks_first_because_it_can_move_money()
     {
         var id = Guid.NewGuid();
         var invitation = Guid.NewGuid();
 
-        _api.NoContent($"/api/groups/{id}/invitations/{invitation}");
+        // Read before the gate, so the confirmation names the person rather than quoting
+        // a guid -- the same order `groups remove-member` reads its roster in.
+        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar", invitation) });
 
         var result = await Cli.RunAsync(
             "groups", "withdraw-invitation", id.ToString(), invitation.ToString());
 
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+        Assert.Contains("Omar", result.Json.GetProperty("summary").GetString()!);
+        Assert.Equal("groups.withdraw-invitation", result.Json.GetProperty("action").GetString());
+        Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task Groups_withdraw_invitation_says_whose_the_money_is_now()
+    {
+        var id = Guid.NewGuid();
+        var invitation = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar", invitation) });
+
+        _api.Returns($"/api/groups/{id}/invitations/{invitation}", new
+        {
+            invitationId = invitation, groupId = id, groupName = "The flat",
+            name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
+            sharesMoved = 3, amountOwed = 62.50m, paymentsMoved = 1, amountPaid = 40m,
+            rulesAffected = 1, absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
+        });
+
+        var result = await Cli.RunAsync(
+            "groups", "withdraw-invitation", id.ToString(), invitation.ToString(),
+            "--yes", "--output", "text");
+
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Equal("withdrawn", result.Json.GetProperty("status").GetString());
+        Assert.Contains("Omar", result.Stdout);
+        Assert.Contains("Anabel", result.Stdout);
         Assert.Contains(_api.Requests, r => r.Method == "DELETE");
     }
+
+    /// <summary>
+    /// The members listing has to say which of them have actually joined.
+    /// </summary>
+    /// <remarks>
+    /// It is what an agent reads to find the id to put in a split or name as the payer, and
+    /// an invited address is choosable for both -- while being nobody there is an account to
+    /// settle up with. Without the column the two are indistinguishable.
+    /// </remarks>
+    [Fact]
+    public async Task Groups_members_says_who_has_joined_and_who_was_only_invited()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members", new object[]
+        {
+            new
+            {
+                id = Guid.NewGuid(), firstName = "Anabel", lastName = "Benitez",
+                email = "anabel@test.com", isPendingInvitee = false
+            },
+            new
+            {
+                id = Guid.NewGuid(), firstName = (string?)null, lastName = (string?)null,
+                email = "omar@test.com", isPendingInvitee = true
+            }
+        });
+
+        var result = await Cli.RunAsync("groups", "members", id.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("joined", result.Stdout);
+        Assert.Contains("invited", result.Stdout);
+
+        // And the address stands in for the name they have not got.
+        Assert.Contains("omar@test.com", result.Stdout);
+    }
+
+    /// <summary>
+    /// Declining is gated for the same reason withdrawing is: it can move money.
+    /// </summary>
+    [Fact]
+    public async Task Invitations_decline_asks_first_and_names_the_group()
+    {
+        _api.Returns("/api/invitations/claims/token-omar", Claim());
+
+        var result = await Cli.RunAsync("invitations", "decline", "token-omar");
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+        Assert.Equal("invitations.decline", result.Json.GetProperty("action").GetString());
+        Assert.Contains("The flat", result.Json.GetProperty("summary").GetString()!);
+        Assert.DoesNotContain(_api.Requests, r => r.Method == "POST");
+    }
+
+    [Fact]
+    public async Task Invitations_decline_says_whose_the_money_is_now()
+    {
+        _api.Returns("/api/invitations/claims/token-omar", Claim());
+
+        _api.Returns("/api/invitations/claims/token-omar/decline", new
+        {
+            invitationId = Guid.NewGuid(), groupId = Guid.NewGuid(), groupName = "The flat",
+            name = "Omar", outcome = (int)InvitationOutcome.Declined,
+            sharesMoved = 2, amountOwed = 45m, paymentsMoved = 0, amountPaid = 0m,
+            rulesAffected = 0, absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
+        });
+
+        var result = await Cli.RunAsync(
+            "invitations", "decline", "token-omar", "--yes", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("declined", result.Stdout);
+        Assert.Contains("Anabel", result.Stdout);
+    }
+
+    /// <summary>
+    /// Claiming is gated because it takes on a position, not because it is hard to undo.
+    /// </summary>
+    [Fact]
+    public async Task Invitations_claim_asks_first_and_says_whose_name_it_is()
+    {
+        _api.Returns("/api/invitations/claims/token-omar", Claim());
+
+        var result = await Cli.RunAsync("invitations", "claim", "token-omar");
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+        Assert.Equal("invitations.claim", result.Json.GetProperty("action").GetString());
+        Assert.Contains("Omar", result.Json.GetProperty("summary").GetString()!);
+        Assert.DoesNotContain(_api.Requests, r => r.Method == "POST");
+    }
+
+    [Fact]
+    public async Task Invitations_claim_says_what_it_took_on()
+    {
+        var group = Guid.NewGuid();
+
+        _api.Returns("/api/invitations/claims/token-omar", Claim(group));
+
+        _api.Returns("/api/invitations/claims/token-omar", new
+        {
+            groupId = group, groupName = "The flat", memberCount = 3, name = "Omar",
+            sharesTaken = 3, amountOwed = 62.50m, paymentsTaken = 1, amountPaid = 40m
+        }, method: "POST");
+
+        var result = await Cli.RunAsync(
+            "invitations", "claim", "token-omar", "--yes", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("Omar", result.Stdout);
+        Assert.Contains("62.50", result.Stdout);
+    }
+
+    /// <summary>
+    /// A whole URL is taken as readily as the token inside it: what somebody has to hand is
+    /// the link they were sent.
+    /// </summary>
+    [Fact]
+    public async Task A_pasted_url_is_cut_down_to_its_token()
+    {
+        _api.Returns("/api/invitations/claims/token-omar", Claim());
+
+        var result = await Cli.RunAsync(
+            "invitations", "show", "https://groupsplit.example.com/claim/token-omar",
+            "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("The flat", result.Stdout);
+    }
+
+    private static object Claim(Guid? groupId = null) => new
+    {
+        invitationId = Guid.NewGuid(),
+        groupId = groupId ?? Guid.NewGuid(),
+        groupName = "The flat",
+        memberCount = 2,
+        name = "Omar",
+        invitedByUserName = "Anabel",
+        invitedAt = DateTimeOffset.UtcNow,
+        alreadyAMember = false
+    };
+
+    private static object Invitation(Guid groupId, string name, Guid? id = null) => new
+    {
+        id = id ?? Guid.NewGuid(),
+        groupId,
+        groupName = "The flat",
+        name,
+        token = $"token-{name.ToLowerInvariant()}",
+        invitedByUserName = "Anabel",
+        invitedAt = DateTimeOffset.UtcNow,
+        participantUserId = Guid.NewGuid()
+    };
 
     [Fact]
     public async Task Groups_balances_shows_what_to_pay_and_not_only_how_it_stands()

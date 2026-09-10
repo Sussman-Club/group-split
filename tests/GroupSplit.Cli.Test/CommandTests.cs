@@ -889,17 +889,6 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Invitations_list_is_empty_without_error_when_there_are_none()
-    {
-        _api.Returns("/api/invitations", Array.Empty<object>());
-
-        var result = await Cli.RunAsync("invitations", "list", "--output", "text");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains("No pending invitations", result.Stdout);
-    }
-
-    [Fact]
     public async Task Categories_and_split_rules_list()
     {
         _api.Returns("/api/categories", new[]

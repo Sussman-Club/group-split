@@ -125,7 +125,7 @@
                                    Placeholder="">
                             @foreach (var member in _members)
                             {
-                                <MudSelectItem T="Guid?" Value="@member.Id">@member.FullName</MudSelectItem>
+                                <MudSelectItem T="Guid?" Value="@member.Id">@member.Label()</MudSelectItem>
                             }
                         </MudSelect>
                     }

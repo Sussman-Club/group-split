@@ -173,16 +173,29 @@ public static class GroupApi
                 .Produces<TransactionSummaryResponse>();
         }
 
-        // A group the caller is not in answers with an empty list, like the transaction and
-        // rule listings above, so there is no 404 to declare here.
+        /// <summary>
+        /// Everybody the group can point at: its members, and the people it has invited and
+        /// is waiting on, the latter marked as such.
+        /// </summary>
+        /// <remarks>
+        /// One listing rather than two, because every screen that offers a choice of person
+        /// -- who paid, whose share, who a rule names -- reads this one, and an invitee is
+        /// choosable in all of them. A second endpoint for them would mean every such screen
+        /// merging two lists and inventing its own opinion about which people go in which.
+        /// <para>
+        /// A group the caller is not in answers with an empty list, like the transaction and
+        /// rule listings above, so there is no 404 to declare here.
+        /// </para>
+        /// </remarks>
         private RouteHandlerBuilder MapGetMembers()
         {
             return group.MapGet("{id:guid}/members", async (
                     Guid id,
                     IGroupService groupService,
+                    IGroupParticipants participants,
                     CancellationToken ct) =>
                 {
-                    var members = (await groupService.GetGroupMembers(id, ct)).SelectDto();
+                    var members = participants.Describe(await groupService.GetGroupMembers(id, ct), id);
                     var userResponse = await members.ToListAsync(ct);
                     return Results.Ok(userResponse);
                 })
@@ -191,15 +204,25 @@ public static class GroupApi
         }
 
         /// <summary>
-        /// Asks people to join, by email. There is no endpoint that puts somebody in a group
-        /// without their say-so any more: the one that did looked the address up and, when
-        /// nothing matched, dropped it and reported success.
+        /// Asks people to join, by name, minting a link for each.
         /// </summary>
+        /// <remarks>
+        /// There is no endpoint that puts somebody in a group without their say-so: the one
+        /// that did looked an email address up and, when nothing matched, dropped it and
+        /// reported success. Nor is there an address any more. A group knows the friend it
+        /// went on the trip with by name, not by email, and the answer carries a link per
+        /// person to send through whatever they actually talk on.
+        /// <para>
+        /// The links are in the answer, which is why this stays inside the group: they are
+        /// claims on positions in its ledger, so they belong to the people who can already
+        /// see that ledger.
+        /// </para>
+        /// </remarks>
         private RouteHandlerBuilder MapInvite()
         {
             return group.MapPost("{id:guid}/invitations", async (
                     Guid id,
-                    AddMemberRequest request,
+                    InviteToGroupRequest request,
                     IInvitationService invitations,
                     CancellationToken ct) =>
                 {
@@ -225,6 +248,16 @@ public static class GroupApi
                 .Produces<GroupInvitationResponse[]>();
         }
 
+        /// <summary>
+        /// Takes an invitation back, and says what became of anything recorded against the
+        /// address.
+        /// </summary>
+        /// <remarks>
+        /// A body where this used to answer 204. An invited address is a participant in the
+        /// group's money from the moment it is invited, so withdrawing can be the end of
+        /// somebody who was carrying shares -- and money that simply vanished would leave
+        /// the group's balances not adding up. The answer names the member it went to.
+        /// </remarks>
         private RouteHandlerBuilder MapWithdrawInvitation()
         {
             return group.MapDelete("{id:guid}/invitations/{invitationId:guid}", async (
@@ -233,11 +266,10 @@ public static class GroupApi
                     IInvitationService invitations,
                     CancellationToken ct) =>
                 {
-                    await invitations.Withdraw(id, invitationId, ct);
-                    return Results.NoContent();
+                    return Results.Ok(await invitations.Withdraw(id, invitationId, ct));
                 })
                 .WithName("WithdrawGroupInvitation")
-                .Produces(StatusCodes.Status204NoContent)
+                .Produces<InvitationClosedResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -538,15 +570,6 @@ public static class GroupApi
                     equals new { membership.GroupId, membership.UserId }
                 select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
                     membership.ArchivedAt != null);
-        }
-    }
-
-    extension(IQueryable<User> users)
-    {
-        private IQueryable<UserInfo> SelectDto()
-        {
-            return from user in users
-                select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
         }
     }
 

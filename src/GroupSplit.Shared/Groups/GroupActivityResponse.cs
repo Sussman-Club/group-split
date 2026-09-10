@@ -39,6 +39,14 @@ public record GroupActivityResponse
     public string PaidByUserName { get; init; } = "";
 
     /// <summary>
+    /// True when whoever paid has been invited to the group and has not joined yet. An
+    /// invitee can front money for the group from the moment they are asked, so their name
+    /// turns up in the ledger before they ever sign in -- and the ledger should say which
+    /// kind of person it is naming.
+    /// </summary>
+    public bool PaidByIsPendingInvitee { get; init; }
+
+    /// <summary>
     /// Who received it, on a transfer, and null on an expense -- where the money went to a
     /// shop rather than to a member, and the shares say who carried it.
     /// </summary>

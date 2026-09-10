@@ -1,6 +1,16 @@
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 
+@*
+    Asking people into a group, by name.
+
+    It used to ask for email addresses, and that limited a group to inviting people whose
+    address somebody happened to have -- which is not how most people know the friend they
+    went on the trip with. Naming somebody is enough: they become a person the group can
+    give a share to straight away, and what reaches them is a link, shown on the Members tab
+    once this closes.
+*@
+
 <MudDialog>
     <TitleContent>
         <MudText Typo="Typo.h5" Class="font-weight-bold">
@@ -9,30 +19,38 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="@_form" Model="@_model">
+        <MudText Typo="Typo.body2" Class="gs-muted" Style="padding-bottom: 8px">
+            Name whoever is sharing the costs. You can start splitting with them at once, and
+            send each of them a link when you are ready.
+        </MudText>
+
+        <MudForm @ref="@_form">
             <MudStack Row AlignItems="AlignItems.Center">
-                <MudTextField For="@(() => _currentInput.Email)"
-                              @bind-Value="_currentInput.Email"
-                              Label="User Email"
+                <MudTextField @bind-Value="_currentInput"
+                              Label="Name"
                               Variant="Variant.Outlined"
                               OnKeyDown="@HandleKeyDown"
                               Immediate
-                              Placeholder="Type an email..."/>
-                <MudIconButton Icon="@Icons.Material.Rounded.Add" OnClick="@AddMemberToList" Color="Color.Primary"/>
+                              Placeholder="Type a name…"/>
+                <MudIconButton Icon="@Icons.Material.Rounded.Add" OnClick="@AddNameToList"
+                               aria-label="Add this person"
+                               Color="Color.Primary"/>
             </MudStack>
         </MudForm>
+
         <MudChipSet T="string" Style="padding-top: 5px;">
-            @foreach (var userIdentifier in CurrentUsers)
+            @* Who is already here, so nobody is named twice by accident. *@
+            @foreach (var person in CurrentUsers)
             {
-                <MudChip T="UserInfo" Value=userIdentifier Variant="Variant.Filled" Color="Color.Primary">
-                    @userIdentifier.Email
+                <MudChip T="UserInfo" Value=person Variant="Variant.Filled" Color="Color.Primary">
+                    @person.Label()
                 </MudChip>
             }
-            @foreach (var userIdentifier in _model.UserIdentifiers)
+            @foreach (var name in _model.Names)
             {
-                <MudChip T="UserIdentifier" Value=userIdentifier CloseIcon="@Icons.Material.Rounded.Close"
+                <MudChip T="string" Value=name CloseIcon="@Icons.Material.Rounded.Close"
                          OnClose="@CloseChip" Variant="Variant.Outlined" Color="Color.Primary">
-                    @userIdentifier.Email
+                    @name
                 </MudChip>
             }
         </MudChipSet>
@@ -40,8 +58,9 @@
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit">
-            Submit
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@(_model.Names.Count == 0)" OnClick="@Submit">
+            Invite
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -57,49 +76,55 @@
         set;
     }
 
-    private UserIdentifier _currentInput = new() { Email = string.Empty };
+    private string _currentInput = string.Empty;
 
-    private readonly AddMemberRequest _model = new([]);
+    private readonly InviteToGroupRequest _model = new();
 
-    private async Task AddMemberToList()
+    /// <summary>
+    /// Adds the typed name to the list. Duplicates within this dialog are dropped, because
+    /// pressing Enter twice is not two people -- but two people really can share a name, so
+    /// nothing stops somebody naming a second Dani in a later invitation.
+    /// </summary>
+    private void AddNameToList()
     {
-        await _form.ValidateAsync();
-        if (!_form.IsValid) return;
+        var name = _currentInput.Trim();
 
-        var email = _currentInput.Email.Trim();
-
-        // Avoid duplicates (record equality already helps, but be explicit for case-insensitive)
-        if (_model.UserIdentifiers.Any(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)))
+        if (name.Length == 0)
             return;
 
-        _model.UserIdentifiers.Add(new UserIdentifier { Email = email });
+        if (_model.Names.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)))
+            return;
 
-        // Reset input (new instance so DataAnnotations re-run cleanly)
-        _currentInput = new UserIdentifier { Email = string.Empty };
+        _model.Names.Add(name);
+
+        _currentInput = string.Empty;
         StateHasChanged();
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
+    private void HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
-            await AddMemberToList();
+            AddNameToList();
     }
 
     private Task Submit()
     {
+        // Whatever is still in the box counts: somebody typing one name and pressing the
+        // button has not "forgotten" to press Enter first.
+        AddNameToList();
+
         MudDialog.Close(DialogResult.Ok(_model));
         return Task.CompletedTask;
     }
 
-    private void CloseChip(MudChip<UserIdentifier> chip)
+    private void CloseChip(MudChip<string> chip)
     {
         if (chip.Value is not null)
-            _model.UserIdentifiers.Remove(chip.Value);
+            _model.Names.Remove(chip.Value);
     }
 
     private void Cancel()
     {
         MudDialog.Cancel();
     }
-
 }

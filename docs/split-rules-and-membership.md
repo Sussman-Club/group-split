@@ -14,7 +14,8 @@ join groups and leave them. What does the rule mean then?
 - **A departing member is taken out of the rules that name them.** Not marked, not zeroed:
   the participant row goes. This happens on all three ways out -- removed by somebody else,
   leaving of their own accord, and deleting the account -- because all three go through
-  `GroupService.DetachMember`.
+  `GroupService.DetachMember`. A pending invitee whose invitation is declined or withdrawn is
+  pruned the same way, by `IGroupParticipants.HandOver`.
 - **They have to be settled up first.** A member with a non-zero balance in the group cannot
   be removed and cannot leave (`GROUP_MEMBER_NOT_SETTLED`), so a departure never leaves a
   debt behind with nobody to owe it.
@@ -23,7 +24,11 @@ join groups and leave them. What does the rule mean then?
   holding one share each divide the whole amount between them.
 - **A rule cannot be written naming somebody outside the group.** Create and update both
   refuse it (`RULE_USERS_NOT_IN_GROUP`), so the only way a rule names a non-member is a
-  client holding a rule it read before the membership moved.
+  client holding a rule it read before the membership moved. "Outside" means outside the
+  group's *participants*, though, which is wider than its members: somebody the group has
+  named and is waiting on may be named by a rule too, because the next expense is exactly the
+  one they need a share of -- see [pending-invitees.md](pending-invitees.md). If they never
+  join, the rule stops naming them, by the same pruning a departure does below.
 - **A new member is named by nothing.** Rules are not rewritten when somebody joins, so an
   expense divided by an existing percentage or shares rule gives them no share until the
   rule is edited. An even rule naming nobody -- the default -- includes them from the moment

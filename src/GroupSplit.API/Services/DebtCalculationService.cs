@@ -35,14 +35,23 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
     {
         var balances = netBalances.ToList();
         
+        // Somebody the group has invited and is waiting on is in the balances and out of
+        // the plan. Their share of the spending is real and their row has to be here for
+        // the column to add up, but a plan is a list of payments to make, and there is no
+        // account on the other end of a payment to them yet -- so a line naming one could
+        // not be recorded even if somebody tried. What is left is a plan that does not clear
+        // everybody, which is the truth: the group cannot square up with a person who has
+        // not joined.
+        var settleable = balances.Where(nb => !nb.IsPendingInvitee).ToList();
+
         var creditors = FilterAndSort(
-            balances,
+            settleable,
             nb => nb.Balance > 0,
             descending: true
         );
 
         var debtors = FilterAndSort(
-            balances,
+            settleable,
             nb => nb.Balance < 0,
             descending: false
         );

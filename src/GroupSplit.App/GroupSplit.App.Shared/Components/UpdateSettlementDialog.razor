@@ -46,7 +46,7 @@
                            @bind-Value="_editModel.PaidByUserId">
                     @foreach (var u in _groupUsers)
                     {
-                        <MudSelectItem T="Guid" Value="@u.Id">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        <MudSelectItem T="Guid" Value="@u.Id">@u.Label()</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -57,7 +57,7 @@
                            Validation="@(new Func<Guid?, IEnumerable<string>>(ValidatePaidTo))">
                     @foreach (var u in _groupUsers.Where(u => u.Id != _editModel.PaidByUserId))
                     {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)u.Id)">@($"{u.FirstName} {u.LastName}")</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)u.Id)">@u.Label()</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -114,7 +114,12 @@
         {
             if (Original.GroupId is { } groupId)
             {
-                _groupUsers = await GroupsClient.GetGroupMembersAsync(groupId);
+                // Members only. The listing includes the people the group has invited and
+                // is waiting on, and a settlement is money that actually changed hands
+                // between two accounts -- so offering one here would offer a payment the
+                // API refuses with SETTLEMENT_WITH_PENDING_INVITEE.
+                _groupUsers = [.. (await GroupsClient.GetGroupMembersAsync(groupId))
+                    .Where(user => !user.IsPendingInvitee)];
             }
 
             if (_paidToUserId is null)

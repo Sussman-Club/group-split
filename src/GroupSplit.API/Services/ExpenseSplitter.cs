@@ -35,7 +35,10 @@ public interface IExpenseSplitter
 /// sum to the amount they claim to divide.
 /// </para>
 /// </remarks>
-public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRules) : IExpenseSplitter
+public class ExpenseSplitter(
+    AppDbContext dbContext,
+    ISplitRuleHandler splitRules,
+    IGroupParticipants participants) : IExpenseSplitter
 {
     public Task WriteSplitsAsync(Expense expense, CancellationToken ct = default) =>
         WriteSplitsAsync(expense, given: null, ct);
@@ -103,7 +106,7 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
 
         if (given.Any(split => !members.Contains(split.UserId)))
             throw new ConflictException(ErrorCodes.SplitUserNotInGroup,
-                "A split names somebody who is not a member of the group.");
+                "A split names somebody who is neither a member of the group nor invited to it.");
 
         var total = given.Sum(split => split.Amount);
 
@@ -119,6 +122,15 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
         return [.. given.Select(split => new SplitAmount(split.UserId, split.Amount))];
     }
 
+    /// <summary>
+    /// Everybody this expense may be divided between.
+    /// </summary>
+    /// <remarks>
+    /// The group's participants and not only its members: somebody invited and still to
+    /// answer is choosable here, because spending does not wait for people to answer their
+    /// invitations. Their share is an ordinary share -- it is stored the same way, counted
+    /// in the same balances, and belongs to them the moment they accept.
+    /// </remarks>
     private async Task<IReadOnlyCollection<Guid>> MembersOf(Expense expense, CancellationToken ct)
     {
         var groupId = expense.Group?.Id ?? expense.GroupId;
@@ -126,11 +138,7 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
         if (groupId is null)
             return [expense.User?.Id ?? expense.UserId];
 
-        return await dbContext.Set<Group>()
-            .Where(@group => @group.Id == groupId)
-            .SelectMany(@group => @group.Users)
-            .Select(user => user.Id)
-            .ToListAsync(ct);
+        return await participants.IdsOf(groupId.Value, ct);
     }
 
     /// <summary>

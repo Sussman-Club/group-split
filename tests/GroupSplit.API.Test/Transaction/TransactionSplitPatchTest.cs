@@ -67,12 +67,12 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         // Two calls, because joining is now something the invitee agrees to: the group asks,
         // and they accept. There is no route left that puts somebody in a group without it.
         var invited = await Client.PostAsJsonAsync($"/groups/{groupId}/invitations",
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Json, Ct);
+            new InviteToGroupRequest { Names = ["Other"] }, Json, Ct);
         invited.EnsureSuccessStatusCode();
 
         var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
 
-        var accepted = await otherClient.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        var accepted = await otherClient.PostAsync($"/invitations/claims/{pending[0].Token}", null, Ct);
         accepted.EnsureSuccessStatusCode();
 
         var created = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
@@ -413,10 +413,10 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         var group2Id = (await group2Response.Content.ReadFromJsonAsync<GroupResponse>(Json, Ct))!.Id;
 
         var invited = await Client.PostAsJsonAsync($"/groups/{group2Id}/invitations",
-            new AddMemberRequest([new UserIdentifier { Email = other2.Email! }]), Json, Ct);
+            new InviteToGroupRequest { Names = ["Other two"] }, Json, Ct);
         invited.EnsureSuccessStatusCode();
         var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
-        var accepted = await other2Client.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        var accepted = await other2Client.PostAsync($"/invitations/claims/{pending[0].Token}", null, Ct);
         accepted.EnsureSuccessStatusCode();
 
         var response = await Client.PatchAsync($"/transactions/{transactionId}",
@@ -444,10 +444,10 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         var group2Id = (await group2Response.Content.ReadFromJsonAsync<GroupResponse>(Json, Ct))!.Id;
 
         var invited = await Client.PostAsJsonAsync($"/groups/{group2Id}/invitations",
-            new AddMemberRequest([new UserIdentifier { Email = other2.Email! }]), Json, Ct);
+            new InviteToGroupRequest { Names = ["Other two"] }, Json, Ct);
         invited.EnsureSuccessStatusCode();
         var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
-        var accepted = await other2Client.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        var accepted = await other2Client.PostAsync($"/invitations/claims/{pending[0].Token}", null, Ct);
         accepted.EnsureSuccessStatusCode();
 
         var response = await Client.PatchAsync($"/transactions/{transactionId}",
@@ -481,10 +481,10 @@ public class TransactionSplitPatchTest : IAsyncLifetime
         var groupId = (await groupResponse.Content.ReadFromJsonAsync<GroupResponse>(Json, Ct))!.Id;
 
         var invited = await Client.PostAsJsonAsync($"/groups/{groupId}/invitations",
-            new AddMemberRequest([new UserIdentifier { Email = other.Email! }]), Json, Ct);
+            new InviteToGroupRequest { Names = ["Other"] }, Json, Ct);
         invited.EnsureSuccessStatusCode();
         var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
-        var accepted = await otherClient.PostAsync($"/invitations/{pending[0].Id}/accept", null, Ct);
+        var accepted = await otherClient.PostAsync($"/invitations/claims/{pending[0].Token}", null, Ct);
         accepted.EnsureSuccessStatusCode();
 
         var created = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest

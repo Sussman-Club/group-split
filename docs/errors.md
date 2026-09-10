@@ -73,7 +73,7 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
-| `GROUP_INVITATION_NOT_FOUND` | The invitation does not exist, or has already been answered or withdrawn. |
+| `GROUP_INVITATION_NOT_FOUND` | No invitation answers to that token or id, or it has already been claimed, declined or withdrawn. A personal link works once, so a forwarded copy of a claimed one lands here -- and gets the same answer a mistyped URL does, deliberately: the alternative is telling whoever holds it that it used to be good. |
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
@@ -83,7 +83,6 @@ routing, authentication, model binding, an unhandled exception.
 | Code | When |
 | --- | --- |
 | `GROUP_CANNOT_REMOVE_SELF` | The member being removed is the caller. Leaving is `DELETE /groups/{id}/members/me`. |
-| `GROUP_INVITATION_NOT_YOURS` | The invitation was addressed to a different email than the caller's. A 403 rather than a 404, which would deny it exists. |
 
 ### Conflict (409)
 
@@ -95,12 +94,12 @@ routing, authentication, model binding, an unhandled exception.
 | `CATEGORY_IN_USE` | The category still has expenses filed under it. Move them first. | |
 | `SPLIT_RULE_NAME_TAKEN` | The group already has a split rule with that name. | |
 | `SPLIT_RULE_IN_USE` | The split rule is still the default of a category. Point the category elsewhere first. | |
-| `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is not a member of the group. | |
-| `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is not a member of the group. | |
+| `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is neither a member of the group nor invited to it. Somebody with a standing invitation is a participant in the group's money and may be the payer -- see [pending invitees](pending-invitees.md). | |
+| `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is neither a member of the group nor invited to it. | |
 | `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
+| `SETTLEMENT_WITH_PENDING_INVITEE` | The repayment names somebody the group has invited and is still waiting on. Their balance is real and is in the group's balances; what is missing is an account on the other end of a payment. The balance stands until they accept. | |
+| `GROUP_MEMBER_NOT_JOINED` | A membership was acted on -- removing a member -- for somebody who has been invited and has not joined. They are in the members listing, marked as waiting, so they can be reached here by mistake. Withdrawing the invitation is the act that ends their part in the group, and it says what becomes of anything recorded against them. | |
 | `SETTLEMENT_NOTHING_TO_SETTLE` | Squaring up when the caller owes nobody in the group and is owed by nobody. | |
-| `GROUP_INVITATION_ALREADY_SENT` | The address already has a standing invitation to this group. Inviting several people skips the ones already invited rather than raising this. | |
-| `GROUP_MEMBER_ALREADY_JOINED` | The address is already a member. Skipped in the same way. | |
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
 | `GROUP_JOIN_LINK_EXPIRED` | The join link is past its expiry. Somebody in the group makes a new one. | |
@@ -121,8 +120,9 @@ no `errors` member; the code is the whole message.
 | --- | --- |
 | `SPLIT_RULE_INVALID` | The split rule does not hold together: percentages that do not add up to 100, a share nobody holds, a member named twice. |
 | `SPLITS_INVALID` | The stated shares name nobody, or name somebody twice. Leaving them out entirely is how you ask for the category's division. |
-| `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is not a member of the group. |
+| `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is neither a member of the group nor invited to it. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | Shares were stated on an expense with no group. There is nobody to divide it with. |
+| `GROUP_INVITATION_NO_NAME` | An invitation was asked for with nothing to make it out to. A name is the whole of what a group knows about somebody who has not joined -- it is what every listing shows them as -- so there is no sensible row to write without one. |
 
 ### Unprocessable (422)
 

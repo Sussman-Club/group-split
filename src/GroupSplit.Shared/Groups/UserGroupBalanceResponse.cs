@@ -36,6 +36,19 @@ public record GroupNetBalance
     public decimal AmountPaid { get; set; }
     public decimal AmountOwed { get; set; }
     public decimal Balance { get; set; }
+
+    /// <summary>
+    /// True for somebody the group has invited and is still waiting on.
+    /// </summary>
+    /// <remarks>
+    /// Their row is here because the group's balances have to add up: shares are recorded
+    /// against an invited address from the moment it is invited, and a listing that left
+    /// them out would not sum to zero. What they are not in is <see
+    /// cref="UserGroupBalanceResponse.Plan"/> and the two slices of it -- there is no
+    /// account to pay yet, so a payment naming them could not be recorded, and a plan is a
+    /// list of things to do.
+    /// </remarks>
+    public bool IsPendingInvitee { get; set; }
 }
 
 public record DebtInfo

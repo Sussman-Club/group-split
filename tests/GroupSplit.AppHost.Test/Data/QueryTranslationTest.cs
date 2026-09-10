@@ -90,12 +90,6 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     [Fact(Timeout = 120_000)]
-    public async Task The_invitations_addressed_to_me_translate()
-    {
-        await Service<IInvitationService>().Mine(Ct);
-    }
-
-    [Fact(Timeout = 120_000)]
     public async Task A_groups_pending_invitations_translate()
     {
         await Service<IInvitationService>().ForGroup(await AGroupOfTheirs(), Ct);
@@ -311,6 +305,95 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     public async Task The_linked_banks_translate()
     {
         await Service<IBankConnectionService>().Mine(Ct);
+    }
+
+    /// <summary>
+    /// Who a group may record money against: its members, and the addresses it has invited
+    /// and is waiting on.
+    /// </summary>
+    /// <remarks>
+    /// One query over the users with an OR across two relationships -- a skip navigation to
+    /// the groups, and an exists over the invitations -- which is the shape the in-memory
+    /// provider is happiest to evaluate on the client and Npgsql has to turn into a real
+    /// predicate. Every expense written in a group goes through it, so it failing to
+    /// translate would be every split, not one screen.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task A_groups_participants_translate()
+    {
+        var group = await AGroupOfTheirs();
+        var participants = Service<IGroupParticipants>();
+
+        var people = await participants.Of(group).ToListAsync(Ct);
+
+        await participants.IdsOf(group, Ct);
+        await participants.Find(group, people[0].Id, Ct);
+        await participants.IsPendingInvitee(group, people[0].Id, Ct);
+    }
+
+    /// <summary>
+    /// The members listing, which is the participants above plus the flag that says which
+    /// of them have joined -- a second reach through the same skip navigation, inside a
+    /// constructor call.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_members_listing_translates()
+    {
+        var group = await AGroupOfTheirs();
+
+        var people = await Service<IGroupParticipants>()
+            .Describe(await Service<IGroupService>().GetGroupMembers(group, Ct), group)
+            .ToListAsync(Ct);
+
+        Assert.NotEmpty(people);
+    }
+
+    /// <summary>
+    /// Answering an invitation, over the real database: who takes over what it was holding,
+    /// and the writes that move it.
+    /// </summary>
+    /// <remarks>
+    /// The seed data has invitations with shares against them -- they are seeded before the
+    /// expenses on purpose -- so this is a hand-over that actually moves rows rather than
+    /// one that finds nothing to do. Checked afterwards for the invariant the whole thing
+    /// rests on: every transaction still divides into exactly its own amount.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task Withdrawing_an_invitation_translates_and_keeps_the_shares_adding_up()
+    {
+        var group = await AGroupOfTheirs();
+        var invitations = Service<IInvitationService>();
+
+        var pending = await invitations.ForGroup(group, Ct);
+
+        if (pending.Count == 0)
+        {
+            pending = await invitations.Invite(group,
+                new InviteToGroupRequest { Names = ["Translation check"] }, Ct);
+        }
+
+        // The claim page's read, over the real database: a constructor call reaching through
+        // two navigations and counting a third, which is the shape that does not translate.
+        var described = await invitations.Describe(pending[0].Token, Ct);
+
+        Assert.Equal(group, described.GroupId);
+
+        var closed = await invitations.Withdraw(group, pending[0].Id, Ct);
+
+        Assert.Equal(InvitationOutcome.Withdrawn, closed.Outcome);
+
+        var context = Service<AppDbContext>();
+
+        var transactions = await context.Set<Transaction>()
+            .Where(transaction => transaction.GroupId == group)
+            .Select(transaction => new
+            {
+                transaction.Amount,
+                Shares = transaction.Splits.Sum(split => split.Amount)
+            })
+            .ToListAsync(Ct);
+
+        Assert.All(transactions, row => Assert.Equal(row.Amount, row.Shares));
     }
 
     [Fact(Timeout = 120_000)]
