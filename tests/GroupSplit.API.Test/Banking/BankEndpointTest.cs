@@ -393,7 +393,7 @@ public class BankEndpointTest : IAsyncLifetime
     {
         var connection = await LinkAsync(providerItemId: "item-fake");
 
-        _bank.Webhook = _ => new SignInWillExpire("item-fake", reason);
+        _bank.Webhook = _ => new SignInWillExpire("item-fake", reason, DateTimeOffset.UtcNow.AddDays(7));
 
         using var anonymous = _host.AnonymousClient();
         using var request = Signed("{}");
@@ -416,7 +416,7 @@ public class BankEndpointTest : IAsyncLifetime
         var connection = await LinkAsync(providerItemId: "item-fake");
 
         _bank.Answer("cursor-repaired");
-        _bank.Webhook = _ => new SignInWillExpire("item-fake", "the consent is about to expire");
+        _bank.Webhook = _ => new SignInWillExpire("item-fake", "the consent is about to expire", null);
 
         using var anonymous = _host.AnonymousClient();
         using var warning = Signed("{}");

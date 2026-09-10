@@ -159,8 +159,17 @@ public sealed class PlaidConnector(
         {
             ("TRANSACTIONS", "SYNC_UPDATES_AVAILABLE") => new SyncUpdatesAvailable(itemId),
             ("ITEM", "NEW_ACCOUNTS_AVAILABLE") => new NewAccountsAvailable(itemId),
-            ("ITEM", "PENDING_DISCONNECT") => new SignInWillExpire(itemId, "the institution is being migrated"),
-            ("ITEM", "PENDING_EXPIRATION") => new SignInWillExpire(itemId, "the consent is about to expire"),
+            // Both carry the date they are about, and one carries Plaid's own reason.
+            // Reading them is the difference between "soon" and a day somebody can act on.
+            ("ITEM", "PENDING_DISCONNECT") => new SignInWillExpire(
+                itemId,
+                Text(root, "reason") ?? "the institution is being migrated",
+                When(root, "disconnect_time")),
+
+            ("ITEM", "PENDING_EXPIRATION") => new SignInWillExpire(
+                itemId,
+                "the consent is about to expire",
+                When(root, "consent_expiration_time")),
             ("ITEM", "USER_ACCOUNT_REVOKED") => Text(root, "account_id") is { Length: > 0 } account
                 ? new AccountAccessRevoked(itemId, account)
                 : new UnhandledWebhook(itemId, $"{type}/{code} (no account_id)"),
@@ -282,6 +291,10 @@ public sealed class PlaidConnector(
 
     private static string? Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    /// <summary>An ISO 8601 instant the provider sent, or null if it sent nothing usable.</summary>
+    private static DateTimeOffset? When(JsonElement root, string name) =>
+        Text(root, name) is { } text && DateTimeOffset.TryParse(text, out var parsed) ? parsed : null;
 
     private static string? ErrorCode(JsonElement root) =>
         root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object

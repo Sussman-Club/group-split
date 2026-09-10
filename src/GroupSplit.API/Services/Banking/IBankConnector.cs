@@ -171,7 +171,16 @@ public sealed record NewAccountsAvailable(string ProviderItemId) : WebhookEvent(
 /// The connection will stop working soon -- a consent nearing expiry, an institution being
 /// migrated -- unless the person signs in again first.
 /// </summary>
-public sealed record SignInWillExpire(string ProviderItemId, string Reason) : WebhookEvent(ProviderItemId);
+/// <param name="Reason">
+/// The provider's own words where it gave any. Kept rather than replaced with ours: it is
+/// the only thing that distinguishes one of these from another once it is in a log.
+/// </param>
+/// <param name="By">
+/// When it stops working, where the provider said. Null when it did not, which is not the
+/// same as soon.
+/// </param>
+public sealed record SignInWillExpire(string ProviderItemId, string Reason, DateTimeOffset? By)
+    : WebhookEvent(ProviderItemId);
 
 /// <summary>
 /// The person withdrew one account at the bank, leaving the rest of the connection alone.

@@ -179,8 +179,10 @@ public static class WebhooksApi
             // is the whole difference between this and the outage it becomes if ignored.
             case SignInWillExpire expiring:
                 logger.LogInformation(
-                    "Bank connection {ConnectionId} will need a new sign-in: {Reason}.",
-                    connection.Id, expiring.Reason);
+                    "Bank connection {ConnectionId} will need a new sign-in by {By}: {Reason}.",
+                    connection.Id,
+                    expiring.By?.ToString("u") ?? "an unstated date",
+                    expiring.Reason);
 
                 connection.SignInExpiring = true;
                 await dbContext.SaveChangesAsync(ct);

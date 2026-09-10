@@ -325,6 +325,46 @@ public class PlaidConnectorTest
         Assert.Equal("item-1", notification.ProviderItemId);
     }
 
+    /// <summary>
+    /// Both warnings say when, and one says why in the provider's own words. Reading them
+    /// is the difference between telling somebody "soon" and telling them a date.
+    /// </summary>
+    [Fact]
+    public void A_pending_expiration_carries_the_day_the_consent_runs_out()
+    {
+        var notification = Connector().ParseWebhook(
+            """{"webhook_type":"ITEM","webhook_code":"PENDING_EXPIRATION","item_id":"item-1","consent_expiration_time":"2026-10-03T10:11:12Z"}""");
+
+        var expiring = Assert.IsType<SignInWillExpire>(notification);
+
+        Assert.Equal(new DateTimeOffset(2026, 10, 3, 10, 11, 12, TimeSpan.Zero), expiring.By);
+    }
+
+    [Fact]
+    public void A_pending_disconnect_carries_the_providers_own_reason_and_date()
+    {
+        var notification = Connector().ParseWebhook(
+            """{"webhook_type":"ITEM","webhook_code":"PENDING_DISCONNECT","item_id":"item-1","reason":"INSTITUTION_MIGRATION","disconnect_time":"2026-10-03T10:11:12Z"}""");
+
+        var expiring = Assert.IsType<SignInWillExpire>(notification);
+
+        Assert.Equal("INSTITUTION_MIGRATION", expiring.Reason);
+        Assert.Equal(new DateTimeOffset(2026, 10, 3, 10, 11, 12, TimeSpan.Zero), expiring.By);
+    }
+
+    /// <summary>
+    /// A payload without them still means what it means. Absent is not the same as soon,
+    /// and a warning that cannot be parsed is a warning nobody gets.
+    /// </summary>
+    [Fact]
+    public void A_warning_that_names_no_date_is_still_a_warning()
+    {
+        var notification = Connector().ParseWebhook(
+            """{"webhook_type":"ITEM","webhook_code":"PENDING_EXPIRATION","item_id":"item-1"}""");
+
+        Assert.Null(Assert.IsType<SignInWillExpire>(notification).By);
+    }
+
     [Fact]
     public void An_account_revocation_carries_the_account_it_is_about()
     {
