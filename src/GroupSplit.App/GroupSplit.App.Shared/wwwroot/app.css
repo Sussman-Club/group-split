@@ -2044,13 +2044,28 @@ html:not([data-gs-ready]) .gs-group-card {
     background: var(--gs-teal-soft);
 }
 
+/*
+    A gap rather than a space in the markup. The name is followed by an "invited" tag on
+    the rows where somebody has not joined yet, and the space between the two cannot come
+    from the text: Razor drops the whitespace-only line before an @if block, so the tag
+    arrived against the last letter of the name. This is what .gs-row .title does with the
+    same pair, and the ellipsis moves down onto the name with it -- clipping has to happen
+    to the name and never to the tag, which is four hundred pixels of nothing followed by
+    a truncated word otherwise.
+*/
 .gs-split-who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.gs-split-who > span:not(.gs-tag) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.875rem;
-    font-weight: 600;
 }
 
 .gs-split.is-me .gs-split-who {
@@ -2580,6 +2595,17 @@ html:not([data-gs-ready]) .gs-group-card {
     font-weight: 700;
     font-size: 0.875rem;
     text-align: right;
+}
+
+/* A value that ends in a tag -- "Paid by Omar / invited" -- for the same reason as
+   .gs-split-who above: the gap has to come from the box, because the markup's own
+   whitespace does not survive. Still right-aligned, which a single child renders
+   identically to the block it was. */
+.gs-kv-row dd.gs-kv-tagged {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .gs-danger-zone {
