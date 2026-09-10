@@ -176,15 +176,28 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                @* Editing and deleting live on the row. *@
+                @* Opening, editing and deleting live on the row. *@
                 @* Titled, and not only for the header. On a phone the grid gives every cell
                    its own line with its label beside it, and a column with no title put two
                    unattached icons in a band of their own -- which row they belonged to was
                    anybody's guess. *@
                 <TemplateColumn Title="Actions" Sortable="false"
-                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                                HeaderStyle="width: 132px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            @* Expenses only, which is the same line the home page's lists
+                               take: a settlement is who paid whom and how much, and all
+                               three of those are already on the row. There is no division
+                               to go and look at, and the dialog is mostly the division. *@
+                            @if (context.Item.Kind is not ActivityKind.Transfer)
+                            {
+                                <MudTooltip Text="View details">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"View {Headline(context.Item)}")"
+                                                   OnClick="@(async () => await ViewAsync(context.Item))" />
+                                </MudTooltip>
+                            }
                             <MudTooltip Text="Edit">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Edit"
                                                Size="Size.Small"
@@ -475,6 +488,23 @@
 
         _spending = spending;
         _shares = shares;
+    }
+
+    /// <summary>
+    /// The one expense, and how it was divided. Expenses only -- see the note on the eye.
+    /// </summary>
+    /// <remarks>
+    /// Read-only, so nothing is announced when it closes and the grid is left alone. The
+    /// dialog reads the expense itself rather than being handed this row: a ledger row
+    /// carries the caller's share and not the other members', and the whole split is most
+    /// of what somebody opens this for.
+    /// </remarks>
+    private async Task ViewAsync(GroupLedgerEntryResponse entry)
+    {
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, entry.Id } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
     }
 
     private async Task EditAsync(GroupLedgerEntryResponse entry)

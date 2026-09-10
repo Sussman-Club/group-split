@@ -691,4 +691,50 @@ public class GroupLedgerTabTest : ComponentTest
         Assert.Equal("Nothing matches", heading);
         Assert.Equal("Nothing in last month.", blurb);
     }
+
+    // ---- opening one entry --------------------------------------------------------------
+
+    /// <summary>
+    /// An expense opens onto its details; a settlement has none to open.
+    /// </summary>
+    /// <remarks>
+    /// The eye is the only way in from this grid -- the rows are not links and their cells
+    /// hold their own controls. It is withheld from settlements on the same grounds the
+    /// home page's lists withhold it: a settlement is who paid whom and how much, all
+    /// three of which are already on the row, and the dialog is mostly the division of an
+    /// expense between people. A button that opens a screen with nothing new on it is
+    /// worse than no button.
+    /// </remarks>
+    [Fact]
+    public async Task An_expense_opens_its_details_and_a_settlement_has_none()
+    {
+        var expense = Expense(Guid.NewGuid());
+        _entries = [expense, Transfer(Guid.NewGuid())];
+
+        Guid? viewed = null;
+
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<TransactionDetailsDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<TransactionDetailsDialog>>(),
+                It.IsAny<DialogOptions>()))
+            .ReturnsAsync((string _, DialogParameters<TransactionDetailsDialog> parameters, DialogOptions _) =>
+            {
+                viewed = parameters.Get<Guid>(nameof(TransactionDetailsDialog.TransactionId));
+
+                return new DialogReference(Guid.NewGuid(), _dialogs.Object);
+            });
+
+        var tab = Render();
+
+        // Two rows, two edit buttons, and one eye between them.
+        tab.WaitForAssertion(() => Assert.Equal(2, Buttons(tab, "Edit ").Count));
+
+        var eyes = Buttons(tab, "View ");
+
+        Assert.Single(eyes);
+
+        await eyes[0].ClickAsync(new());
+
+        Assert.Equal(expense.Id, viewed);
+    }
 }
