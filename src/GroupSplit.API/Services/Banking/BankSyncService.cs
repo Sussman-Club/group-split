@@ -558,8 +558,9 @@ public sealed class BankSyncService(
     /// what makes asking cheaper than being wrong.
     /// </para>
     /// <para>
-    /// The dictionary is filled in place rather than rebuilt, because <see cref="Rekeying"/>
-    /// holds the same instance and a replacement would leave it looking at the old set.
+    /// The dictionary is filled in place rather than rebuilt, because it is the run's own
+    /// and every page after this one is applied through it -- and this method is handed it
+    /// rather than owning it, so a replacement made here would reach nothing.
     /// </para>
     /// </remarks>
     /// <returns>Whether the provider has now been asked, this run.</returns>
@@ -632,11 +633,17 @@ public sealed class BankSyncService(
     }
 
     /// <summary>The provider account ids a page names that the connection does not have.</summary>
+    /// <remarks>
+    /// The rows that would have been imported, and not the withdrawn ones. A removed row is
+    /// a transaction the bank has taken back: there is nothing to drop on the floor and so
+    /// nothing this is for. Counting those was worse than useless -- it spent the extra call
+    /// on a page that needed none, and then told somebody their bank had an account to share
+    /// on the strength of a transaction that no longer exists.
+    /// </remarks>
     private static List<string> Unknown(Dictionary<string, LinkedAccount> accounts, SyncPage page) =>
     [
         .. page.Added.Select(row => row.ProviderAccountId)
             .Concat(page.Modified.Select(row => row.ProviderAccountId))
-            .Concat(page.Removed.Select(row => row.ProviderAccountId))
             .Where(id => !accounts.ContainsKey(id))
             .Distinct()
     ];

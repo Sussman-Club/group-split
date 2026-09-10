@@ -515,12 +515,6 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Contains("\"t1\"", row.RawJson);
     }
 
-    // ---- setup ---------------------------------------------------------------------------
-
-    /// <summary>
-    /// A connection the current user made through the fake provider, with one account,
-    /// exactly as the exchange endpoint will write it.
-    /// </summary>
     /// <summary>
     /// The bug this whole area exists for. Somebody shares a second account through update
     /// mode, which mints no new item and so runs nothing on the linking path -- and every
@@ -604,6 +598,30 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
+    /// A withdrawn row on an account nobody here has is not a reason to ask the provider
+    /// anything, and not a reason to tell somebody their bank has an account to share.
+    /// </summary>
+    /// <remarks>
+    /// Only the rows that would have been imported count. A removed row is a transaction
+    /// the bank has taken back: nothing is being dropped on the floor, so there is nothing
+    /// for the flag to be about -- and the flag says "sign in again and tick the account",
+    /// which is a nonsense errand to send somebody on over a transaction that no longer
+    /// exists.
+    /// </remarks>
+    [Fact]
+    public async Task A_withdrawn_row_on_an_unknown_account_asks_nothing_and_flags_nothing()
+    {
+        var connection = await LinkAsync();
+
+        _bank.Answer("cursor-1", removed: [Removed("gone", account: "acc-2")]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        Assert.Equal(0, _bank.AccountReads);
+        Assert.False((await Reload(connection)).AccountsNotShared);
+    }
+
+    /// <summary>
     /// A provider that cannot answer must not take the run down with it. The accounts
     /// already known keep importing, and the connection ends up flagged exactly as it would
     /// have if the answer had come back without the account in it.
@@ -622,12 +640,18 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.True((await Reload(connection)).AccountsNotShared);
     }
 
+    // ---- setup ---------------------------------------------------------------------------
+
     private Task<BankConnection> ReloadWithAccounts(BankConnection connection) =>
         DbContext.Set<BankConnection>()
             .Include(candidate => candidate.Accounts)
             .AsNoTracking()
             .SingleAsync(candidate => candidate.Id == connection.Id, Ct);
 
+    /// <summary>
+    /// A connection the current user made through the fake provider, with one account,
+    /// exactly as the exchange endpoint will write it.
+    /// </summary>
     private async Task<BankConnection> LinkAsync()
     {
         var protector = GetService<IAccessTokenProtector>();
