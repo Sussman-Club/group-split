@@ -61,10 +61,19 @@ percentages says 50 and 50 -- which is the bug in
 [#184](https://github.com/Sussman-Club/group-split/issues/184), where the departed member's
 share stayed in the divisor and diluted everybody left.
 
-## Known gap
+## A rule can still be pruned down to nothing dividable
 
-A rule can be pruned down to nothing dividable: a shares rule where only the departing member
-held a share, or a rule naming them alone. The weights that survive are then all zero, or
-there are none, and `SplitCalculator.Divide` refuses both -- so the next expense filed under
-a category pointing at that rule fails with a 500 rather than a message anybody can act on.
-Nothing detects it at departure time, when it could still be said usefully.
+A shares rule where only the departing member held a share, or a rule naming them alone:
+the weights that survive are then all zero, or there are none, and `SplitCalculator.Divide`
+refuses both. Somebody invited and never joined leaves a rule the same way, since declining
+or withdrawing prunes their name too.
+
+What that costs has changed. It used to be a 500 with a trace id on the next expense filed
+under a category pointing at that rule -- a fault report for what is a coherent request
+about an incoherent template. `ExpenseSplitter` now turns the refusal into
+`SPLIT_RULE_INVALID`, naming the rule and saying the two ways out: edit it, or file the
+expense under nothing and have it divided evenly.
+
+The gap that remains is the timing. Nothing detects it at departure or withdrawal time, when
+it could still be said to the person doing it rather than to whoever records the next
+expense.

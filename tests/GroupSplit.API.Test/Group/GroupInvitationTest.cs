@@ -262,6 +262,28 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Empty(await Invitations.Mine(Ct));
     }
 
+    /// <summary>
+    /// A member of the group opening the link does not put it in their own list.
+    /// </summary>
+    /// <remarks>
+    /// Checking that a link works before sending it is a sensible thing to do, and it must
+    /// not fill the sender's own "waiting on you" with an invitation meant for somebody
+    /// else -- a decision they cannot make, and could only clear by answering on the
+    /// invitee's behalf.
+    /// </remarks>
+    [Fact]
+    public async Task A_member_checking_their_own_groups_link_is_not_waiting_on_it()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        // Opened by the inviter, who is a member of the group.
+        var described = await Invitations.Describe(invitation.Token, Ct);
+
+        Assert.True(described.AlreadyAMember);
+        Assert.Empty(await Invitations.Mine(Ct));
+    }
+
     [Fact]
     public async Task Answering_one_takes_it_out_of_the_list()
     {

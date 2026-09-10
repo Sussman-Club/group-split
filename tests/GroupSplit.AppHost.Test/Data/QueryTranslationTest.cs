@@ -349,6 +349,33 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
+    /// The invitee's own list, which is a join between two sets under a constructor call.
+    /// </summary>
+    /// <remarks>
+    /// <c>GET /invitations</c> is the query this whole test class was written for: it once
+    /// ordered by a member of a projected record, passed on the in-memory provider because
+    /// that one sorts the objects it has already built, and failed on Npgsql, which cannot
+    /// translate the constructor at all. It answers a different question now -- the
+    /// invitations whose links this account has opened -- and it is the same shape, so it
+    /// gets the same guard.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task The_invitations_I_have_opened_translate()
+    {
+        var group = await AGroupOfTheirs();
+        var invitations = Service<IInvitationService>();
+
+        var pending = await invitations.Invite(group,
+            new InviteToGroupRequest { Names = ["Translation check"] }, Ct);
+
+        // Opening one is what puts it in the list, and the write is a read's side effect --
+        // so this covers both halves.
+        await invitations.Describe(pending[0].Token, Ct);
+
+        await invitations.Mine(Ct);
+    }
+
+    /// <summary>
     /// Answering an invitation, over the real database: who takes over what it was holding,
     /// and the writes that move it.
     /// </summary>

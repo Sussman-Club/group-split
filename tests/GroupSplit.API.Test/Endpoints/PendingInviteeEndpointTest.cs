@@ -1,7 +1,9 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 
 namespace GroupSplit.API.Test.Endpoints;
 
@@ -123,6 +125,56 @@ public class PendingInviteeEndpointTest : IAsyncLifetime
         Assert.Equal(30m, theirs.Amount);
         Assert.True(theirs.IsPendingInvitee);
         Assert.Equal(90m, details.Splits.Sum(split => split.Amount));
+    }
+
+    /// <summary>
+    /// A name longer than the columns behind it is refused, not written.
+    /// </summary>
+    /// <remarks>
+    /// The name goes into two 64-character columns -- the invitation's, and the stand-in
+    /// account's first name. Bounded only there, an over-long one reached the database and
+    /// came back as a 500 with a trace id: a rejected input reported as a fault. The
+    /// annotation makes it the 400 it always was, with the field named.
+    /// </remarks>
+    [Fact]
+    public async Task A_name_too_long_for_its_column_is_a_refusal_and_not_a_fault()
+    {
+        var group = await CreateGroup();
+
+        var response = await Client.PostAsJsonAsync(
+            $"/groups/{group}/invitations",
+            new InviteToGroupRequest { Names = [new string('a', InviteToGroupRequest.NameLength + 1)] },
+            Json, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+
+        Assert.Equal(ErrorCodes.ValidationFailed, problem.GetProperty("code").GetString());
+        Assert.True(problem.TryGetProperty("errors", out _));
+
+        // And nothing was written: no invitation, and no stand-in for one.
+        Assert.Single(await Members(group));
+    }
+
+    /// <summary>The bound is on each entry, so a workable name beside a long one still lands.</summary>
+    [Fact]
+    public async Task A_name_at_the_limit_is_accepted()
+    {
+        var group = await CreateGroup();
+
+        var name = new string('a', InviteToGroupRequest.NameLength);
+
+        var response = await Client.PostAsJsonAsync(
+            $"/groups/{group}/invitations",
+            new InviteToGroupRequest { Names = [name] },
+            Json, Ct);
+
+        response.EnsureSuccessStatusCode();
+
+        var pending = await response.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct);
+
+        Assert.Equal(name, Assert.Single(pending!).Name);
     }
 
     [Fact]

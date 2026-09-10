@@ -6,6 +6,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GroupSplit.API.Services;
 
@@ -202,7 +203,19 @@ public sealed class InvitationService(
 
         var userId = userContext.User.Id;
 
-        await Remember(invitation.Id, userId, ct);
+        // Asked once and used twice: to answer the page, and to decide whether this is
+        // worth remembering.
+        var alreadyAMember = await context.Set<GroupMembership>()
+            .AnyAsync(membership => membership.GroupId == invitation.GroupId &&
+                                    membership.UserId == userId, ct);
+
+        // A member of the group is not somebody this invitation is waiting on. They open the
+        // link to check it works before sending it, which is a sensible thing to do and must
+        // not put an invitation meant for somebody else into their own "waiting on you" --
+        // a list of decisions they cannot make, and could only clear by answering on the
+        // invitee's behalf.
+        if (!alreadyAMember)
+            await Remember(invitation.Id, userId, ct);
 
         return await context.Set<GroupInvitation>()
             .Where(candidate => candidate.Id == invitation.Id)
@@ -216,7 +229,7 @@ public sealed class InvitationService(
                     ? null
                     : candidate.InvitedBy.FirstName + " " + candidate.InvitedBy.LastName,
                 candidate.InvitedAt,
-                candidate.Group.Users.Any(user => user.Id == userId)))
+                alreadyAMember))
             .FirstAsync(ct);
     }
 
@@ -311,14 +324,25 @@ public sealed class InvitationService(
 
         context.Remove(invitation);
 
-        // The stand-in goes too. Nothing points at it any more -- the invitation is gone and
-        // its position has moved -- and a row named after somebody who never joined, in no
-        // group and holding nothing, is only there to be found by a later query that has no
-        // business finding it.
-        var emptied = await context.Set<User>().FirstOrDefaultAsync(row => row.Id == standIn, ct);
+        // The stand-in goes too, but only once its position has actually moved. That
+        // condition is not tidiness: TransactionSplit.UserId and Transaction.UserId are
+        // required, so their foreign keys cascade, and deleting a stand-in that still holds
+        // shares would take those rows with it -- silently. The splits left on those
+        // expenses would stop summing to the amount and the group's balances would stop
+        // summing to zero, which is the one thing this whole design exists to prevent, and
+        // nothing would raise a word about it.
+        //
+        // So a hand-over having run is the precondition. It moves everything a stand-in can
+        // hold, because a stand-in can only ever be named inside its own group: every path
+        // that writes a payer or a share checks it against that group's participants, and
+        // there is nobody who could name one on a personal expense.
+        if (absorber is not null)
+        {
+            var emptied = await context.Set<User>().FirstOrDefaultAsync(row => row.Id == standIn, ct);
 
-        if (emptied is not null)
-            context.Remove(emptied);
+            if (emptied is not null)
+                context.Remove(emptied);
+        }
 
         await context.SaveChangesAsync(ct);
 
@@ -360,14 +384,31 @@ public sealed class InvitationService(
         if (already)
             return;
 
-        context.Add(new InvitationOpened
+        var row = context.Add(new InvitationOpened
         {
             InvitationId = invitationId,
             UserId = userId,
             OpenedAt = DateTimeOffset.UtcNow
         });
 
-        await context.SaveChangesAsync(ct);
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Somebody else's request wrote the same row between the check above and this,
+            // which is the answer this method wanted anyway. Two overlapping reads of one
+            // link are ordinary -- a double-clicked button, a page rendered on the server
+            // and again after hydration -- and neither of them should turn a read into a
+            // 500. The same race UserProvisioner catches on a first sign-in.
+            //
+            // The failed insert is detached rather than the tracker cleared: this runs
+            // inside a request that goes on to read, and clearing would take its entities
+            // with it.
+            row.State = EntityState.Detached;
+        }
     }
 
     /// <summary>

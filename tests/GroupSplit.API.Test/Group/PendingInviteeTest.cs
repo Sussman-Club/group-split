@@ -681,6 +681,119 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Balances(group.Id);
     }
 
+    /// <summary>
+    /// A group with nobody left to hand a position to keeps it rather than losing it.
+    /// </summary>
+    /// <remarks>
+    /// The narrow case a review caught, and the reason it matters is not how likely it is.
+    /// <c>TransactionSplit.UserId</c> and <c>Transaction.UserId</c> are required, so their
+    /// foreign keys cascade: deleting a stand-in that still holds shares takes those rows
+    /// with it, in silence. The splits left on those expenses would stop summing to the
+    /// amount and the group's balances would stop summing to zero -- the one thing this
+    /// design exists to prevent, arrived at by tidying up.
+    /// <para>
+    /// So closing an invitation deletes the stand-in only once its position has actually
+    /// moved. Here it cannot move: the group has no members, which an account deleting
+    /// itself can produce, since that detaches without the last-member check that leaving
+    /// applies.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Closing_an_invitation_with_nobody_to_absorb_it_keeps_the_shares()
+    {
+        var group = await AGroup();
+        var invitation = await Invite(group.Id, "Carlos");
+
+        var expense = await AnExpense(group.Id, 90m);
+
+        // The group empties. DetachMember is what an account deleting itself calls, and it
+        // asks nothing about who is left.
+        var tracked = await DbContext.Set<Data.Entities.Group>()
+            .Include(candidate => candidate.Users)
+            .FirstAsync(candidate => candidate.Id == group.Id, Ct);
+
+        var me = await DbContext.Set<Data.Entities.User>()
+            .FirstAsync(user => user.Id == TestUser().Id, Ct);
+
+        await Groups.DetachMember(tracked, me, Ct);
+        await DbContext.SaveChangesAsync(Ct);
+
+        // Declined by whoever holds the link, which needs no membership -- so this is
+        // reachable even with the group empty.
+        var (scope, _) = await Signing();
+
+        InvitationClosedResponse closed;
+
+        using (scope)
+        {
+            closed = await scope.ServiceProvider.GetRequiredService<IInvitationService>()
+                .Decline(invitation.Token, Ct);
+        }
+
+        // Nothing was handed anywhere, and the answer says so rather than claiming it was.
+        Assert.False(closed.MovedAnything);
+        Assert.Null(closed.AbsorbedByUserId);
+
+        // The shares are still there, and the expense still divides into exactly its own
+        // amount. Untracked: the decline ran in a scope of its own.
+        var stored = await DbContext.Set<TransactionSplit>()
+            .AsNoTracking()
+            .Where(split => split.TransactionId == expense.Id)
+            .ToListAsync(Ct);
+
+        Assert.Equal(2, stored.Count);
+        Assert.Equal(90m, stored.Sum(split => split.Amount));
+        Assert.Contains(stored, split => split.UserId == invitation.ParticipantUserId);
+
+        // And the row those shares belong to survives, because deleting it is what would
+        // have taken them.
+        Assert.NotNull(await DbContext.Set<Data.Entities.User>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == invitation.ParticipantUserId, Ct));
+    }
+
+    /// <summary>
+    /// A rule left with nothing to divide by says so, where it used to be a 500.
+    /// </summary>
+    /// <remarks>
+    /// Withdrawing takes the invitee out of the rules that named them, exactly as a
+    /// departure does, and a shares rule that named one person keeps none. SplitCalculator
+    /// refuses to divide by nothing, which is right of it -- but an ArgumentException is
+    /// nobody's domain error, so it reached the client as a 500, and the person it happened
+    /// to was somebody recording a dinner under that category.
+    /// </remarks>
+    [Fact]
+    public async Task An_expense_under_a_rule_that_names_nobody_is_refused_by_name()
+    {
+        var group = await AGroup();
+        var invitation = await Invite(group.Id, "Carlos");
+
+        // A rule naming the invitee and nobody else, which is an ordinary thing to write:
+        // "Carlos pays for the tickets".
+        var category = await CreateCategory(group.Id, "Tickets", new SharesSplitRuleDto
+        {
+            Shares = new Dictionary<Guid, int> { [invitation.ParticipantUserId] = 1 }
+        });
+
+        await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+
+        var refused = await Assert.ThrowsAsync<ValidationException>(() =>
+            Transactions.Create(new CreateTransactionRequest
+            {
+                GroupId = group.Id,
+                CategoryId = category,
+                Amount = 40m,
+                DateTime = DateTimeOffset.UtcNow,
+                Name = "Tickets"
+            }, Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.SplitRuleInvalid, refused.Code);
+
+        // Naming the rule is the useful half of the answer: there is nothing wrong with the
+        // expense, and the person has to know which template to go and fix.
+        Assert.Contains("Tickets", refused.Message);
+    }
+
     // ---- Fixtures ---------------------------------------------------------------------
 
     /// <summary>

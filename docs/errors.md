@@ -118,7 +118,7 @@ no `errors` member; the code is the whole message.
 
 | Code | When |
 | --- | --- |
-| `SPLIT_RULE_INVALID` | The split rule does not hold together: percentages that do not add up to 100, a share nobody holds, a member named twice. |
+| `SPLIT_RULE_INVALID` | The split rule does not hold together: percentages that do not add up to 100, a share nobody holds, a member named twice. Also raised when recording an expense whose category points at a rule that no longer divides between anybody -- everyone it named has left the group, or was invited and never joined -- since both take the name out of the rule rather than zeroing it. Carries `splitRuleId`, `splitRuleName` and `reason` in that case. |
 | `SPLITS_INVALID` | The stated shares name nobody, or name somebody twice. Leaving them out entirely is how you ask for the category's division. |
 | `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is neither a member of the group nor invited to it. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | Shares were stated on an expense with no group. There is nobody to divide it with. |

@@ -79,9 +79,34 @@ public class ExpenseSplitter(
 
         // No category, or a category that names no rule: evenly between the members. That
         // is the whole of what a group with no rules used to be unable to do.
-        return rule is null
-            ? SplitCalculator.DivideEvenly(expense.Amount, payerId, members)
-            : splitRules.Divide(rule, expense.Amount, payerId, members);
+        if (rule is null)
+            return SplitCalculator.DivideEvenly(expense.Amount, payerId, members);
+
+        try
+        {
+            return splitRules.Divide(rule, expense.Amount, payerId, members);
+        }
+        catch (ArgumentException reason)
+        {
+            // A rule can be left with nothing to divide by. Everybody it named has gone --
+            // a member who left, or somebody invited whose invitation was declined or
+            // withdrawn -- and both take the name out of the rule rather than zeroing it,
+            // so a shares rule that named one person keeps none. SplitCalculator says so by
+            // throwing, which is right of it: no participants, or weights summing to zero,
+            // is not a division it could carry out.
+            //
+            // What was wrong was where that surfaced. An ArgumentException is nobody's
+            // domain error, so it reached the client as a 500 with a trace id, and the
+            // person it happened to was somebody recording a dinner. The rule really is
+            // unusable and saying which one is the useful half of the answer.
+            throw new ValidationException(ErrorCodes.SplitRuleInvalid,
+                    $"\"{rule.Name}\" no longer divides between anybody, so an expense filed " +
+                    "under this category cannot be split by it. Edit the rule, or file the " +
+                    "expense under nothing to divide it evenly.")
+                .WithExtension("splitRuleId", rule.Id)
+                .WithExtension("splitRuleName", rule.Name)
+                .WithExtension("reason", reason.Message);
+        }
     }
 
     /// <summary>

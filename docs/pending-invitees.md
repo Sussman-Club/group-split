@@ -185,7 +185,11 @@ No amount changes. Every transaction still sums to its own amount, so the group'
 still sum to zero.
 
 **Who absorbs**: the member who sent the invitation, or -- if they have since left -- the
-group's longest-standing member. Not a choice the caller makes, and deliberately the same
+group's longest-standing member. A group with no members left has neither, and then nothing
+moves and the stand-in stays: its shares are worth more where they are than cascaded away by
+tidying up the row that holds them. `TransactionSplit.UserId` and `Transaction.UserId`
+cascade, so deleting a stand-in that still holds shares would take them silently, and a
+group nobody is in is not a column anybody is reading. Not a choice the caller makes, and deliberately the same
 rule on both sides: the group is present when it withdraws one and could be asked, but
 whoever declines is not in the group and could not be asked at all, and an outcome that
 depended on who pressed the button would be two rules for one event.
@@ -247,6 +251,11 @@ here rather than left implicit.
   one taking rather than many, and the claim page says whose name it is before anybody
   presses anything, but nothing verifies that the claimer is who the group meant. Binding a
   claim to something the group can check would be the next step.
+- **An account deleting itself can empty a group.** `AccountService.DeleteAccount` detaches
+  from every group without the last-member check `GroupService.Leave` applies, so a group
+  can end up with no members and a pending invitation nobody can absorb. Nothing is lost
+  when that happens -- see above -- but the group is then unreachable and holds a position
+  that can never move. The guard belongs on the deletion, not here.
 - **A withdrawn invitation leaves no trace of the name.** The ledger searches
   `User.FirstName`, and a stand-in's name lives there, so an open invitation is findable --
   but withdrawing deletes the stand-in, and the rows it left behind read as the absorber's

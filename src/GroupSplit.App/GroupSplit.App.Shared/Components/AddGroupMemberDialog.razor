@@ -26,9 +26,12 @@
 
         <MudForm @ref="@_form">
             <MudStack Row AlignItems="AlignItems.Center">
+                @* The same bound the API and the columns behind it hold, so somebody is
+                   stopped at the keyboard rather than at Save. *@
                 <MudTextField @bind-Value="_currentInput"
                               Label="Name"
                               Variant="Variant.Outlined"
+                              MaxLength="InviteToGroupRequest.NameLength"
                               OnKeyDown="@HandleKeyDown"
                               Immediate
                               Placeholder="Type a name…"/>

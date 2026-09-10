@@ -4,8 +4,8 @@ using GroupSplit.Shared.CustomValidationAttributes;
 namespace GroupSplit.API.Test.Validation;
 
 /// <summary>
-/// The two custom validation attributes guard every amount the API accepts, and neither
-/// had a test. Several of these pin behaviour that is surprising rather than desirable —
+/// The custom validation attributes guard every amount the API accepts, and two of them
+/// had no test. Several of these pin behaviour that is surprising rather than desirable —
 /// they are marked as such, so that changing the behaviour breaks a test that says what
 /// it was, instead of one that says it was correct.
 /// </summary>
@@ -150,5 +150,74 @@ public class MaxDecimalPlacesAttributeTests
     public void A_scale_too_large_to_express_fails_validation_rather_than_throwing()
     {
         Assert.False(new MaxDecimalPlacesAttribute(30).IsValid(1.5m));
+    }
+}
+
+/// <summary>
+/// The per-item bound on a list of strings, which the built-in attributes cannot express:
+/// they apply to the property, and the property is the list.
+/// </summary>
+/// <remarks>
+/// Written for the names an invitation is made out to. They go into two 64-character
+/// columns, and bounded only there an over-long one reached the database and came back as a
+/// 500 -- a rejected input reported as a fault, which is the same failure
+/// <see cref="MaxDecimalPlacesAttribute"/> was fixed for.
+/// </remarks>
+public class MaxItemLengthAttributeTests
+{
+    private static bool Valid(int length, object? value) =>
+        new MaxItemLengthAttribute(length).IsValid(value);
+
+    [Fact]
+    public void Every_entry_within_the_bound_passes()
+    {
+        Assert.True(Valid(4, new List<string> { "Ana", "Omar" }));
+    }
+
+    [Fact]
+    public void One_entry_over_the_bound_fails_however_many_are_under_it()
+    {
+        Assert.False(Valid(4, new List<string> { "Ana", "Omar", "Anabel" }));
+    }
+
+    /// <summary>
+    /// Measured after trimming, because that is what the service stores: a name padded out
+    /// to the limit with spaces is not an over-long name.
+    /// </summary>
+    [Fact]
+    public void Surrounding_space_does_not_count_towards_the_bound()
+    {
+        Assert.True(Valid(3, new List<string> { "  Ana  " }));
+    }
+
+    /// <summary>
+    /// Whether the list may be empty, and what an entry of nothing means, belong to the
+    /// request rather than here -- InviteToGroupRequest refuses a list that named nobody,
+    /// and the service trims and drops blanks.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Nothing_in_an_entry_is_somebody_elses_rule(string? entry)
+    {
+        Assert.True(Valid(3, new List<string?> { entry }));
+    }
+
+    [Fact]
+    public void Anything_that_is_not_a_collection_of_strings_is_left_alone()
+    {
+        Assert.True(Valid(3, null));
+        Assert.True(Valid(3, 42));
+
+        // A string is itself a sequence of characters, and measuring its letters against an
+        // item bound would refuse every string longer than the limit -- which is
+        // StringLengthAttribute's job and not this one's.
+        Assert.True(Valid(3, "a long single value"));
+    }
+
+    [Fact]
+    public void A_negative_bound_is_rejected_when_the_attribute_is_constructed()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new MaxItemLengthAttribute(-1));
     }
 }
