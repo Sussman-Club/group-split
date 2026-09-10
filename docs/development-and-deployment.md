@@ -135,6 +135,11 @@ value pointing anywhere else is refused when the API starts, because the alterna
 somebody signing in at their bank and landing on a page that cannot finish what they
 started, with the bank believing it is connected.
 
+"Anywhere else" is measured against `Banking:PublicOrigin` where a deployment sets it: the
+redirect has to be on that origin, and end in `/bank/oauth`. Without it — locally, where no
+public origin is given — only the path can be checked, so a value on the wrong host is
+caught by Plaid refusing the link token rather than by the API refusing to start.
+
 The two ends cannot check each other at runtime: Plaid matches the registered address
 exactly and refuses to mint a link token against one it does not recognise, so a mismatch
 in the dashboard is every OAuth bank failing to link.

@@ -1,4 +1,5 @@
 using GroupSplit.API.Extensions;
+using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Services.Banking.Plaid;
 using GroupSplit.Shared;
 using Microsoft.Extensions.Configuration;
@@ -104,9 +105,50 @@ public class PlaidRedirectUriTest
         Assert.Contains(BankLinkAddresses.OAuthReturnPath, e.Message);
     }
 
-    private static string? Failure(string? redirectUri)
+    /// <summary>
+    /// The path says the page is one this application serves; it says nothing about whose
+    /// application. That is what the public origin is for -- the same value a provider is
+    /// told to deliver webhooks to -- and a redirect on any other host is somebody signing
+    /// in at their bank and being handed to a page that is not ours.
+    /// </summary>
+    [Fact]
+    public void An_address_on_another_origin_is_refused_when_this_deployment_has_one()
     {
-        var result = new PlaidConnectorOptionsValidator()
+        var failure = Failure(
+            "https://somewhere-else.example.com" + BankLinkAddresses.OAuthReturnPath,
+            publicOrigin: "https://groupsplit.example.com");
+
+        Assert.NotNull(failure);
+        Assert.Contains("somewhere-else.example.com", failure);
+        Assert.Contains("groupsplit.example.com", failure);
+    }
+
+    [Fact]
+    public void The_deployments_own_origin_is_accepted()
+    {
+        Assert.Null(Failure(Good, publicOrigin: "https://groupsplit.example.com"));
+
+        // Still the app's own page, served under a prefix.
+        Assert.Null(Failure(
+            "https://groupsplit.example.com/app" + BankLinkAddresses.OAuthReturnPath,
+            publicOrigin: "https://groupsplit.example.com/"));
+    }
+
+    /// <summary>
+    /// No public origin is the development posture, and there is then nothing to compare
+    /// against: the path is all that can be checked, and it is checked.
+    /// </summary>
+    [Fact]
+    public void Without_a_public_origin_the_host_is_not_checked()
+    {
+        Assert.Null(Failure("https://somewhere-else.example.com" + BankLinkAddresses.OAuthReturnPath));
+    }
+
+    private static string? Failure(string? redirectUri, string? publicOrigin = null)
+    {
+        var banking = Options.Create(new BankingOptions { PublicOrigin = publicOrigin });
+
+        var result = new PlaidConnectorOptionsValidator(banking)
             .Validate(null, new PlaidConnectorOptions { RedirectUri = redirectUri });
 
         return result.Failed ? result.FailureMessage : null;
