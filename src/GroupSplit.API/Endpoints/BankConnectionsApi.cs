@@ -31,6 +31,7 @@ public static class BankConnectionsApi
             group.MapMine();
             group.MapLinkToken();
             group.MapLink();
+            group.MapRefresh();
             group.MapSync();
             group.MapUnlink();
 
@@ -97,6 +98,25 @@ public static class BankConnectionsApi
                 // worth reading: the bank granted access and storing it failed, and the
                 // answer says whether that access was handed back.
                 .ProducesProblem(StatusCodes.Status500InternalServerError)
+                .ProducesProblem(StatusCodes.Status502BadGateway);
+        }
+
+        private RouteHandlerBuilder MapRefresh()
+        {
+            return group.MapPost("{id:guid}/refresh", async (
+                    Guid id,
+                    IBankConnectionService connections,
+                    CancellationToken ct) =>
+                {
+                    var connection = await connections.Refresh(id, ct);
+                    var response = BankConnectionService.Describe(connection);
+
+                    return Results.Ok(response);
+                })
+                .WithName("RefreshBankConnection")
+                .Produces<BankConnectionResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status502BadGateway);
         }
 

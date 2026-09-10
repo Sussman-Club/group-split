@@ -56,6 +56,21 @@ public sealed class BankCommands(
             await changes.NotifyBankDataChangedAsync();
         }, "Could not unlink the bank.");
 
+    public async Task<BankConnectionResponse?> RefreshAsync(Guid connectionId, string institutionName,
+        CancellationToken ct = default)
+    {
+        BankConnectionResponse? refreshed = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            refreshed = await connections.RefreshBankConnectionAsync(connectionId, ct);
+            snackbar.Add($"Checking {institutionName} for accounts and new transactions.", Severity.Info);
+            await changes.NotifyBankDataChangedAsync();
+        }, "Could not refresh the bank connection.");
+
+        return done ? refreshed : null;
+    }
+
     public Task<bool> SyncAsync(Guid connectionId, string institutionName, CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {

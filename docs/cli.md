@@ -39,7 +39,7 @@ has to reach for `curl` and a bearer token to do.
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
 | `invitations` | `show`, `claim`, `decline`, `link`, `join` |
-| `bank` | `list`, `link-token`, `link`, `sync`, `unlink` |
+| `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
 | `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
 | `settle` | `plan`, `pay`, `history` |
@@ -511,6 +511,22 @@ groupsplit bank link <public-token>        # exchange what it gave back
 `--connection <id>` on `link-token` asks for an *update* token, which reopens an existing
 connection rather than adding a second copy of the same bank. That is what a connection
 showing `login required` needs; `groupsplit bank list` says which ones do.
+
+Update mode is also how somebody shares an account they did not share when they linked. It
+mints no new item and hands back no usable public token, so nothing on the linking path
+runs and this application would never hear about the account. `bank refresh` is what tells
+it:
+
+```bash
+groupsplit bank refresh <connection-id>    # re-read the accounts, then queue a sync
+```
+
+A connection listed as `account not shared` is one the bank has an account for that is not
+being imported -- either a sync met rows on it, or the provider said so. The way out is an
+update-mode sign-in with that account ticked, then `bank refresh`. `sign-in expiring` means
+the connection still works but will stop soon unless somebody signs in again, and an account
+whose `Access` column reads `withdrawn` has been revoked at the bank on its own; the rest of
+the connection carries on.
 
 Everything after linking is ordinary:
 

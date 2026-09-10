@@ -27,6 +27,9 @@ public interface IBankCommands
 
     Task<bool> UnlinkAsync(Guid connectionId, string institutionName, CancellationToken ct = default);
 
+    /// <summary>Refreshes accounts on an existing connection and asks for a sync.</summary>
+    Task<BankConnectionResponse?> RefreshAsync(Guid connectionId, string institutionName, CancellationToken ct = default);
+
     /// <summary>Asks for a sync. It runs in the background, so this says so rather than claiming it is done.</summary>
     Task<bool> SyncAsync(Guid connectionId, string institutionName, CancellationToken ct = default);
 

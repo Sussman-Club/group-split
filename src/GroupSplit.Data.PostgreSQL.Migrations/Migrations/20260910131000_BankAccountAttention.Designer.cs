@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    [Migration("20260910183158_PersonalInvitationLinks")]
-    partial class PersonalInvitationLinks
+    [Migration("20260910131000_BankAccountAttention")]
+    partial class BankAccountAttention
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -34,6 +34,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<string>("AccessTokenCiphertext")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("AccountsNotShared")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("AccountsRekeyed")
                         .ValueGeneratedOnAdd()
@@ -63,6 +66,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("SignInExpiring")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -265,6 +271,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
@@ -274,29 +285,13 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("InvitedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("ParticipantUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("Email");
 
                     b.HasIndex("InvitedByUserId");
 
-                    b.HasIndex("ParticipantUserId");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.HasIndex("GroupId", "ParticipantUserId")
+                    b.HasIndex("GroupId", "Email")
                         .IsUnique();
 
                     b.ToTable("GroupInvitation");
@@ -370,6 +365,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("AccessRevoked")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("BankConnectionId")
                         .HasColumnType("uuid");
@@ -847,17 +845,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("InvitedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("GroupSplit.Data.Entities.User", "Participant")
-                        .WithMany()
-                        .HasForeignKey("ParticipantUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Group");
 
                     b.Navigation("InvitedBy");
-
-                    b.Navigation("Participant");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.GroupJoinLink", b =>

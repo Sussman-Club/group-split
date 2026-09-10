@@ -31,6 +31,15 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     /// <summary>What each exchange answers with, in order. Empty means <see cref="Item"/>.</summary>
     private readonly Queue<LinkedItem> _items = new();
 
+    /// <summary>What each AccountsAsync answers with. Empty means default account.</summary>
+    private readonly Queue<IReadOnlyList<ImportedAccount>> _accountsAnswers = new();
+
+    /// <summary>When set, every account read refuses this way.</summary>
+    public BankSyncFailure? RefuseAccountsWith { get; set; }
+
+    /// <summary>How many times the account list has been asked for.</summary>
+    public int AccountReads { get; private set; }
+
     public string Provider => provider;
 
     /// <summary>The token each <see cref="RemoveAsync"/> call was made with, in order.</summary>
@@ -104,10 +113,50 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
         return Task.FromResult(new LinkSession("link-fake-token", DateTimeOffset.UtcNow.AddMinutes(30)));
     }
 
+    public FakeBankConnector AnswerAccounts(IReadOnlyList<ImportedAccount> accounts)
+    {
+        lock (_gate)
+            _accountsAnswers.Enqueue(accounts);
+
+        return this;
+    }
+
+    public Task<IReadOnlyList<ImportedAccount>> AccountsAsync(string accessToken, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            _tokensSeen.Add(accessToken);
+            AccountReads++;
+
+            if (RefuseAccountsWith is { } kind)
+                throw new BankSyncException(kind, $"Scripted {kind} reading the accounts.");
+
+            // The last answer stands rather than running out, because a sync asks for the
+            // list mid-run and a test that scripted one answer means it for that run.
+            return Task.FromResult(_accountsAnswers.Count > 1
+                ? _accountsAnswers.Dequeue()
+                : _accountsAnswers.Count == 1
+                    ? _accountsAnswers.Peek()
+                    : (IReadOnlyList<ImportedAccount>)
+                        [new ImportedAccount("acc-1", "Everyday", "1234", "depository", "checking", "USD")]);
+        }
+    }
+
+    /// <summary>
+    /// When set, every exchange refuses -- which is what an expired public token looks
+    /// like, and the ordinary end of the window a held link is trying to finish inside.
+    /// </summary>
+    public bool RefuseExchange { get; set; }
+
     public Task<LinkedItem> ExchangeAsync(string publicToken, CancellationToken ct = default)
     {
         lock (_gate)
+        {
+            if (RefuseExchange)
+                throw new BankSyncException(BankSyncFailure.Transient, "Scripted refusal exchanging a token.");
+
             return Task.FromResult(_items.Count > 0 ? _items.Dequeue() : Item());
+        }
     }
 
     /// <summary>

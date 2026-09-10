@@ -8,16 +8,20 @@ namespace GroupSplit.AppHost.Test.Base;
 /// they need it: a person to sign in as, and an access token short enough that a test can
 /// outlive one.
 /// </summary>
-public sealed class KeycloakAdmin(HttpClient client)
+public sealed class KeycloakAdmin(HttpClient client, string username, string password)
 {
     /// <summary>
-    /// Supplied to the AppHost as parameters rather than left to Aspire, which generates
-    /// the admin password and gives the tests no way to learn it. Not a secret: it reaches
-    /// a container that exists for the length of one test run.
+    /// What the AppHost is given when nothing else has said, rather than letting Aspire
+    /// generate a password the tests cannot read. Not a secret: on a fresh Keycloak it
+    /// reaches a container that exists for the length of one test run.
     /// </summary>
-    public const string Username = "admin";
+    /// <remarks>
+    /// A fallback and not an override, which is the whole of the distinction that matters
+    /// here. See <see cref="AppHostFixture"/>.
+    /// </remarks>
+    public const string DefaultUsername = "admin";
 
-    public const string Password = "admin-for-tests";
+    public const string DefaultPassword = "admin-for-tests";
 
     private const string Realm = "group-split";
 
@@ -106,8 +110,8 @@ public sealed class KeycloakAdmin(HttpClient client)
             {
                 ["grant_type"] = "password",
                 ["client_id"] = "admin-cli",
-                ["username"] = Username,
-                ["password"] = Password
+                ["username"] = username,
+                ["password"] = password
             }),
             ct);
 
@@ -115,7 +119,13 @@ public sealed class KeycloakAdmin(HttpClient client)
         {
             throw new InvalidOperationException(
                 "Could not authenticate against Keycloak as the admin the AppHost was given: "
-                + $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync(ct)}");
+                + $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync(ct)}."
+                + Environment.NewLine
+                + $"Signed in as '{username}'. Keycloak creates its admin once, when its database is "
+                + "empty, and this stack's database outlives `aspire stop` -- so on a machine that has "
+                + "run the AppHost normally the admin already exists with whatever password was "
+                + "configured then. If that password has since changed, drop the `keycloak` database "
+                + "on the `db-server` container and start again; the realm is re-imported with it.");
         }
 
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));

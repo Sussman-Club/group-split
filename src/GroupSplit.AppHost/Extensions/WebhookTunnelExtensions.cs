@@ -33,6 +33,19 @@ public static class WebhookTunnelExtensions
         /// <c>/webhooks</c> forwarder carries the call through to the API unchanged. Tunnel
         /// the API directly and the forwarder -- the one hop a webhook makes that nothing
         /// else does -- is the one piece a local run would not exercise.
+        /// <para>
+        /// Its HTTPS endpoint where it has one, because that is the shape a deployment has
+        /// too: a provider calls an https origin. Pointed at the plain one, an app that
+        /// does have an HTTPS port answered every webhook with a 307 to localhost, and the
+        /// tunnel delivered nothing it was built to deliver.
+        /// </para>
+        /// <para>
+        /// Where it has none -- the web app's <c>http</c> launch profile declares only the
+        /// plain one -- the plain one is right and safe, for the same reason it is in a
+        /// deployment: with no HTTPS port there is nothing for the redirection to redirect
+        /// to, so it stands aside and the webhook lands. Naming <c>https</c> unconditionally
+        /// does not degrade there, it throws before the AppHost has finished building.
+        /// </para>
         /// </param>
         /// <remarks>
         /// Optional because it is not free: it needs the <c>devtunnel</c> CLI and a signed-in
@@ -52,6 +65,16 @@ public static class WebhookTunnelExtensions
         public IResourceBuilder<T> WithWebhookTunnel<TFront>(IResourceBuilder<TFront> web)
             where TFront : IResourceWithEndpoints
         {
+            // Which of the fronted resource's endpoints a provider should be sent to. Asked
+            // rather than assumed: endpoints come from the launch profile, and the web app's
+            // `http` one declares no HTTPS at all -- so naming it unconditionally took the
+            // whole AppHost down before it finished building.
+            static string Reachable(IResourceBuilder<TFront> resource) =>
+                resource.Resource.Annotations.OfType<EndpointAnnotation>()
+                    .Any(endpoint => string.Equals(endpoint.Name, "https", StringComparison.OrdinalIgnoreCase))
+                    ? "https"
+                    : "http";
+
             var builder = api.ApplicationBuilder;
 
             if (!builder.Configuration.GetValue(EnabledKey, false))
@@ -67,11 +90,11 @@ public static class WebhookTunnelExtensions
                     Description = "Bank provider webhooks to a development machine",
                     Labels = ["groupsplit", "webhooks"]
                 })
-                .WithReference(web.GetEndpoint("http"), allowAnonymous: true);
+                .WithReference(web.GetEndpoint(Reachable(web)), allowAnonymous: true);
 
             // The same setting a deployment fills from its public origin, so nothing below
             // the AppHost knows a tunnel is involved.
-            return api.WithEnvironment("Banking__PublicOrigin", tunnel.GetEndpoint(web, "http"));
+            return api.WithEnvironment("Banking__PublicOrigin", tunnel.GetEndpoint(web, Reachable(web)));
         }
     }
 }

@@ -41,6 +41,11 @@ public class AppHostFixture : IAsyncLifetime
 
     private CancellationTokenSource? _watch;
 
+    /// <summary>The admin the AppHost was given, which is not always the default above.</summary>
+    private string _adminUsername = KeycloakAdmin.DefaultUsername;
+
+    private string _adminPassword = KeycloakAdmin.DefaultPassword;
+
     /// <summary>
     /// States a resource lands in when it is not coming back. A resource in one of these
     /// is the thing to look at; the resource a test was waiting on is usually just
@@ -81,8 +86,22 @@ public class AppHostFixture : IAsyncLifetime
 
         // Aspire generates the Keycloak admin password and gives a test no way to read it.
         // Supplied, so these tests can create an account and shorten the realm's token.
-        builder.Configuration["Parameters:keycloak-username"] = KeycloakAdmin.Username;
-        builder.Configuration["Parameters:keycloak-password"] = KeycloakAdmin.Password;
+        // Aspire generates the Keycloak admin password and gives a test no way to read it,
+        // so these fill it in -- but only when nothing else has.
+        //
+        // Overwriting was the bug. Keycloak creates its admin exactly once, into an empty
+        // database, and this stack's Keycloak lives in a Postgres database on a data
+        // volume that outlives `aspire stop`. On a machine that has run the AppHost
+        // normally, that admin already exists with the developer's own password from user
+        // secrets; handing Keycloak a different one here changes nothing at the container
+        // and leaves this fixture signing in with a password no admin has. Every test in
+        // the assembly then failed with `invalid_grant`, on any machine that had ever run
+        // the app -- and passed in CI, where the volume does not exist yet.
+        builder.Configuration["Parameters:keycloak-username"] ??= KeycloakAdmin.DefaultUsername;
+        builder.Configuration["Parameters:keycloak-password"] ??= KeycloakAdmin.DefaultPassword;
+
+        _adminUsername = builder.Configuration["Parameters:keycloak-username"]!;
+        _adminPassword = builder.Configuration["Parameters:keycloak-password"]!;
 
         // The render mode a deployment runs. appsettings.Development.json says
         // WebAssemblyFirst, so without this the browser tests exercise the one path
@@ -131,7 +150,12 @@ public class AppHostFixture : IAsyncLifetime
         // trailing slash matters too -- without it Uri resolution drops the last segment.
         var keycloak = new Uri(Application.GetEndpoint("keycloak", "http").AbsoluteUri.TrimEnd('/') + "/");
 
-        Keycloak = new KeycloakAdmin(new HttpClient { BaseAddress = keycloak });
+        // The credentials the AppHost was actually given, which are the developer's own
+        // where they had any.
+        Keycloak = new KeycloakAdmin(
+            new HttpClient { BaseAddress = keycloak },
+            _adminUsername,
+            _adminPassword);
 
         using var timeout = new CancellationTokenSource(ResourceTimeout);
 

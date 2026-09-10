@@ -71,6 +71,34 @@ public class BankConnection : Entity
     /// </remarks>
     public bool AccountsRekeyed { get; set; }
 
+    /// <summary>
+    /// The bank has an account this connection is not importing: one the person did not
+    /// share, or shared after linking and has not shared with us yet.
+    /// </summary>
+    /// <remarks>
+    /// Set by the provider saying so, and by a sync meeting a row on an account it does not
+    /// know after asking the provider for the account list again. It is a flag and not a
+    /// <see cref="BankConnectionStatus"/> because the connection is otherwise perfectly
+    /// healthy -- every account it does know keeps importing -- and the person is the only
+    /// one who can resolve it, through Link in update mode.
+    /// <para>
+    /// Cleared by a refresh, which is what that update mode ends in. A refresh that did not
+    /// actually resolve it earns the flag back on the next sync that meets the row again.
+    /// </para>
+    /// </remarks>
+    public bool AccountsNotShared { get; set; }
+
+    /// <summary>
+    /// The provider has warned that this connection will stop working soon -- a consent
+    /// nearing its expiry, or an institution being migrated -- and signing in again now
+    /// avoids an outage later.
+    /// </summary>
+    /// <remarks>
+    /// Also a flag rather than a status, and for the same reason: nothing has broken yet
+    /// and syncs must keep running. Cleared by the sign-in that resolves it.
+    /// </remarks>
+    public bool SignInExpiring { get; set; }
+
     public required DateTimeOffset LinkedAt { get; set; }
 
     /// <summary>
