@@ -310,7 +310,7 @@ else if (NotFound)
 
         var dialog = await DialogService.ShowAsync<AddGroupMemberDialog>("Invite people", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<AddMemberRequest>();
+        var request = await dialog.GetReturnValueAsync<InviteToGroupRequest>();
 
         if (request is not null)
             await GroupsService.InviteToGroupAsync(request, CancellationToken);

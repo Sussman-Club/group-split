@@ -30,7 +30,8 @@ public class SplitRuleService(
     ICurrentUser userContext,
     AppDbContext dbContext,
     ISplitRuleHandler handlers,
-    ISplitRuleFactory factory) : ISplitRuleService
+    ISplitRuleFactory factory,
+    IGroupParticipants participants) : ISplitRuleService
 {
     public Task<IQueryable<SplitRule>> List(Guid? groupId, CancellationToken ct = default)
     {
@@ -166,8 +167,15 @@ public class SplitRuleService(
 
     /// <summary>
     /// What the kind itself says is wrong, and then the one thing no handler can know:
-    /// whether the people it names are in the group.
+    /// whether the people it names belong to the group.
     /// </summary>
+    /// <remarks>
+    /// Participants and not members, so a rule may name somebody the group has invited and
+    /// is waiting on. A rule is the template the next expense is divided by, and the next
+    /// expense is exactly the one an invitee needs a share of -- the trip that prompted the
+    /// invitation. If they never join, the rule stops naming them, the same way it stops
+    /// naming a member who leaves.
+    /// </remarks>
     private async Task Validate(SplitRule rule, Group group, CancellationToken ct)
     {
         if (handlers.Invalid(rule) is { } complaint)
@@ -178,13 +186,13 @@ public class SplitRuleService(
 
         var named = weighted.Participants.Select(participant => participant.UserId).ToList();
 
-        var inGroup = await dbContext.Entry(group).Collection(g => g.Users).Query()
+        var known = await participants.Of(group.Id)
             .Where(user => named.Contains(user.Id))
             .CountAsync(ct);
 
-        if (inGroup != named.Count)
+        if (known != named.Count)
             throw new ValidationException(ErrorCodes.RuleUsersNotInGroup,
-                "Some people in the rule are not members of the group.");
+                "Some people in the rule are neither members of the group nor invited to it.");
     }
 
     private async Task RefuseDuplicateName(Guid groupId, string name, Guid? excluding, CancellationToken ct)

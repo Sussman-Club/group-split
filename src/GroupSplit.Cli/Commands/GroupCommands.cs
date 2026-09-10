@@ -138,7 +138,11 @@ public static class GroupCommands
 
     private static Command Members()
     {
-        var command = new Command("members", "List a group's members.") { GroupId };
+        var command = new Command("members",
+            "List a group's members, and the people it has invited and is waiting on.")
+        {
+            GroupId
+        };
 
         command.SetHandler(async (context, ct) =>
         {
@@ -151,14 +155,19 @@ public static class GroupCommands
                     return new Markup(Tables.Empty("members") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Name", "Email");
+                // The status column is not decoration. This listing is what an agent reads
+                // to find the id to put in a split or name as the payer, and an invited
+                // address is choosable for both -- while being nobody you can settle up
+                // with, and nobody who can see the group.
+                var table = Tables.Grid("Id", "Name", "Email", "Status");
 
                 foreach (var member in value)
                 {
                     table.AddRow(
                         member.Id.ToString(),
                         Markup.Escape(member.FullName),
-                        Markup.Escape(member.Email ?? "-"));
+                        Markup.Escape(member.Email ?? "-"),
+                        member.IsPendingInvitee ? "[yellow]invited[/]" : "joined");
                 }
 
                 return table;
@@ -232,8 +241,13 @@ public static class GroupCommands
 
                 foreach (var balance in value.NetBalances)
                 {
+                    // Somebody invited and still to answer is in this column, because the
+                    // column has to add up to zero, and out of the transfers below, because
+                    // there is no account to pay yet. The marker is what keeps that from
+                    // looking like a plan that forgot somebody.
                     table.AddRow(
-                        Markup.Escape(balance.UserName),
+                        Markup.Escape(balance.UserName) +
+                        (balance.IsPendingInvitee ? " [yellow](invited)[/]" : string.Empty),
                         balance.AmountPaid.ToString("N2"),
                         balance.AmountOwed.ToString("N2"),
                         Tables.Money(balance.Balance));
@@ -731,39 +745,56 @@ public static class GroupCommands
         return command;
     }
 
+    /// <summary>
+    /// Inviting people by name, which mints a link for each.
+    /// </summary>
+    /// <remarks>
+    /// By name rather than by email, because a group knows the friend it went on the trip
+    /// with by name. The links are the output that matters: they are how the invitation
+    /// reaches anybody, and each one works once.
+    /// </remarks>
     private static Command Invite()
     {
-        var emails = new Argument<string[]>("email")
+        var names = new Argument<string[]>("name")
         {
-            Description = "One or more email addresses to invite.",
+            Description = "One or more people to invite, by name.",
             Arity = ArgumentArity.OneOrMore
         };
 
-        var command = new Command("invite", "Invite people to a group by email.") { GroupId, emails };
+        var command = new Command("invite", "Invite people to a group by name, with a link each.")
+        {
+            GroupId, names
+        };
 
         command.SetHandler(async (context, ct) =>
         {
             var id = context.ParseResult.GetValue(GroupId);
-            var addresses = context.ParseResult.GetValue(emails) ?? [];
+            var invited = context.ParseResult.GetValue(names) ?? [];
 
-            var request = new AddMemberRequest(
-                addresses.Select(email => new UserIdentifier { Email = email }).ToHashSet());
+            var request = new InviteToGroupRequest { Names = [.. invited] };
 
             var invitations = await context.Groups.InviteToGroupAsync(id, request, ct);
 
             context.Output.Write(invitations, value =>
             {
-                var table = Tables.Grid("Invitation", "Email", "Group");
+                // The user id is in the table because it is the one an agent needs next: it
+                // names this person in a split or as the payer, without waiting for them to
+                // claim anything. The token is the thing to send them.
+                var table = Tables.Grid("Invitation", "Name", "User id", "Link token");
 
                 foreach (var invitation in value)
                 {
                     table.AddRow(
                         invitation.Id.ToString(),
-                        Markup.Escape(invitation.Email),
-                        Markup.Escape(invitation.GroupName));
+                        Markup.Escape(invitation.Name),
+                        invitation.ParticipantUserId.ToString(),
+                        Markup.Escape(invitation.Token));
                 }
 
-                return table;
+                return new Rows(
+                    table,
+                    new Markup("\n[grey]Send each person their own link. It works once, and " +
+                               "whoever opens it becomes that person in the group.[/]\n"));
             });
 
             return ExitCodes.Success;
@@ -796,13 +827,17 @@ public static class GroupCommands
                     return new Markup(Tables.Empty("outstanding invitations") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Email", "Invited by", "When");
+                // The id here withdraws the invitation. The id that names this person in a
+                // split or as a payer is a different one -- participantUserId, which is in
+                // the JSON alongside the link token, and which `groups members` lists them
+                // under, marked as invited. Three guids in one table is unreadable.
+                var table = Tables.Grid("Id", "Name", "Invited by", "When");
 
                 foreach (var invitation in value)
                 {
                     table.AddRow(
                         invitation.Id.ToString(),
-                        Markup.Escape(invitation.Email),
+                        Markup.Escape(invitation.Name),
                         Markup.Escape(invitation.InvitedByUserName ?? "-"),
                         invitation.InvitedAt.ToLocalTime().ToString("yyyy-MM-dd"));
                 }
@@ -833,18 +868,85 @@ public static class GroupCommands
             var id = context.ParseResult.GetValue(GroupId);
             var invitation = context.ParseResult.GetValue(invitationId);
 
-            await context.Groups.WithdrawGroupInvitationAsync(id, invitation, ct);
+            // Read first, so the confirmation can name the address and say what is
+            // riding on it. An invitation used to be a message and withdrawing it needed no
+            // gate; it is a participant in the group's money now, so it does.
+            var pending = await context.Groups.GetGroupInvitationsAsync(id, ct);
+            var withdrawn = pending.FirstOrDefault(candidate => candidate.Id == invitation);
+            var name = withdrawn?.Name ?? invitation.ToString();
 
-            // No confirmation: an unanswered invitation can be sent again, so nothing here
-            // is lost that `groups invite` cannot put back.
-            context.Output.Write(
-                new { status = "withdrawn", groupId = id, invitationId = invitation },
-                _ => new Markup("[green]Withdrawn.[/]\n"));
+            Confirmation.Require(
+                context,
+                action: "groups.withdraw-invitation",
+                summary: $"Withdraw the invitation to {name}?",
+                changes:
+                [
+                    $"Their link stops working, and {name} stops being someone this group " +
+                    "can give a share to.",
+                    "Anything already recorded against them -- shares, and anything they " +
+                    "paid for -- goes to a member of the group.",
+                    "No amount changes, and the group's balances still add up.",
+                    "They can be invited again, with a new link."
+                ],
+                confirmCommand: $"groupsplit groups withdraw-invitation {id} {invitation} --yes");
+
+            var closed = await context.Groups.WithdrawGroupInvitationAsync(id, invitation, ct);
+
+            context.Output.Write(closed, Closed);
 
             return ExitCodes.Success;
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// What happened to an invitation that was withdrawn or declined, and to the money that
+    /// was recorded against it.
+    /// </summary>
+    /// <remarks>
+    /// Shared with `invitations decline`, because the two commands are the same event from
+    /// the two sides and there is one answer to give about the money.
+    /// </remarks>
+    internal static IRenderable Closed(InvitationClosedResponse closed)
+    {
+        var table = Tables.KeyValue();
+
+        table.AddRow("Group", Markup.Escape(closed.GroupName));
+        table.AddRow("Name", Markup.Escape(closed.Name));
+        table.AddRow("Outcome", closed.Outcome.ToString().ToLowerInvariant());
+
+        if (!closed.MovedAnything)
+        {
+            table.AddRow("Money", "nothing was recorded against them");
+
+            return table;
+        }
+
+        table.AddRow("Now belongs to", Markup.Escape(closed.AbsorbedByUserName ?? "-"));
+        table.AddRow("Shares moved", $"{closed.SharesMoved} ({closed.AmountOwed:N2})");
+        table.AddRow("Payments moved", $"{closed.PaymentsMoved} ({closed.AmountPaid:N2})");
+        table.AddRow("Rules pruned", closed.RulesAffected.ToString());
+
+        var lines = new List<IRenderable>
+        {
+            table,
+            new Markup("\n[grey]No amount changed. Every transaction still sums to its own " +
+                       "amount, and the group's balances still sum to zero.[/]\n")
+        };
+
+        // The one thing here worth interrupting somebody about. A rule with nobody left in
+        // it has changed what it means, and this is the moment it can still be said.
+        if (closed.RulesEmptied > 0)
+        {
+            lines.Add(new Markup(
+                $"\n[yellow]{closed.RulesEmptied} split rule(s) now name nobody.[/] A shares or " +
+                "percentage rule like that refuses the next expense filed under it; an even one " +
+                "divides between everybody. Check them with [bold]groupsplit split-rules list " +
+                $"--group {closed.GroupId}[/].\n"));
+        }
+
+        return new Rows(lines);
     }
 
     private static IRenderable Render(GroupResponse group)

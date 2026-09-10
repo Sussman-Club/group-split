@@ -10,10 +10,21 @@ public class InvitationSeedDto
     public required Guid GroupId { get; init; }
 
     /// <summary>
-    /// The address that was asked. Most of these belong to nobody, which is the case
-    /// invitations exist for -- inviting a friend who has not signed up yet.
+    /// What the group calls them. The whole of what it knows: nobody has signed in as this
+    /// person, which is the case invitations exist for.
     /// </summary>
-    public required string Email { get; init; }
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// The token in their link, stated rather than generated so it is the same on every run
+    /// -- which is what lets a developer open <c>/claim/{token}</c> and see the claim page
+    /// without hunting through the database first.
+    /// </summary>
+    /// <remarks>
+    /// Demo tokens, and readable on purpose: a real one is 24 bytes from the cryptographic
+    /// generator, and these are fixtures in a database anybody can reset.
+    /// </remarks>
+    public required string Token { get; init; }
 
     /// <summary>
     /// Who asked, or null for one that outlived the account that sent it. The column is
@@ -21,6 +32,16 @@ public class InvitationSeedDto
     /// pending row with nobody to credit it to.
     /// </summary>
     public Guid? InvitedByUserId { get; init; }
+
+    /// <summary>
+    /// The id to give the stand-in account made for this person.
+    /// </summary>
+    /// <remarks>
+    /// Stated rather than generated so it is the same id on every run, which is what lets
+    /// the rest of the seed data name it -- an expense they paid for, a rule that gives them
+    /// a share.
+    /// </remarks>
+    public Guid? ParticipantUserId { get; init; }
 
     /// <summary>
     /// How long ago, rather than when.

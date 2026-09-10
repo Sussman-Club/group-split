@@ -42,18 +42,21 @@ public sealed class GroupCommands(
             await changes.NotifyGroupsChangedAsync();
         }, "Could not rename the group.");
 
-    public Task<bool> InviteAsync(Guid groupId, string groupName, AddMemberRequest request,
+    public Task<bool> InviteAsync(Guid groupId, string groupName, InviteToGroupRequest request,
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
             await groups.InviteToGroupAsync(groupId, request, ct);
 
-            var count = request.UserIdentifiers.Count;
+            var count = request.Names.Count;
 
+            // "Added" would be the wrong word and the old one: nothing has been sent
+            // anywhere. The group has named somebody it can start splitting with, and the
+            // link that reaches them is on the members page for whenever they want it.
             snackbar.Add(
                 count == 1
-                    ? $"Invited {request.UserIdentifiers.First().Email} to {groupName}."
-                    : $"Invited {count} people to {groupName}.",
+                    ? $"{request.Names[0]} added to {groupName}. Send them their link when you like."
+                    : $"{count} people added to {groupName}. Send each of them their link when you like.",
                 Severity.Success);
 
             // Nobody has joined yet, so the membership has not moved -- but the group's
@@ -61,14 +64,61 @@ public sealed class GroupCommands(
             await changes.NotifyGroupsChangedAsync();
         }, "Could not send the invitation.");
 
-    public Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string email,
+    /// <summary>
+    /// Takes an invitation back, saying what became of anything the group had already
+    /// recorded against the person it named.
+    /// </summary>
+    /// <remarks>
+    /// The second message is the whole reason this reads the answer at all. An invited
+    /// person can be carrying shares -- that is what inviting somebody makes possible --
+    /// and those go to a member rather than disappearing, which is a change to that
+    /// member's balance and has to be said out loud rather than left to be noticed.
+    /// </remarks>
+    public Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string name,
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
-            await groups.WithdrawGroupInvitationAsync(groupId, invitationId, ct);
-            snackbar.Add($"Invitation to {email} withdrawn.", Severity.Success);
+            var closed = await groups.WithdrawGroupInvitationAsync(groupId, invitationId, ct);
+
+            snackbar.Add($"Invitation to {name} withdrawn.", Severity.Success);
+
+            if (closed.MovedAnything && closed.AbsorbedByUserName is { } absorber)
+            {
+                snackbar.Add(
+                    $"What was recorded against {name} is now {absorber}'s: " +
+                    $"{closed.SharesMoved} share(s) and {closed.PaymentsMoved} payment(s). " +
+                    "No amounts changed.",
+                    Severity.Info);
+            }
+
+            WarnAboutEmptiedRules(closed);
+
             await changes.NotifyGroupsChangedAsync();
         }, "Could not withdraw the invitation.");
+
+    /// <summary>
+    /// Says so when answering an invitation left a split rule naming nobody.
+    /// </summary>
+    /// <remarks>
+    /// A warning and not a receipt. A rule with nobody left in it has changed what it means
+    /// -- a shares or percentage rule refuses the next expense filed under it, an even one
+    /// starts dividing between everybody -- and this is the moment somebody can still be
+    /// told, rather than whoever records the next expense finding out on their behalf.
+    /// </remarks>
+    private void WarnAboutEmptiedRules(InvitationClosedResponse closed)
+    {
+        if (closed.RulesEmptied == 0)
+            return;
+
+        snackbar.Add(
+            closed.RulesEmptied == 1
+                ? "One split rule now names nobody. Check it before the next expense: an even " +
+                  "rule like that divides between everybody, and any other kind will refuse."
+                : $"{closed.RulesEmptied} split rules now name nobody. Check them before the " +
+                  "next expense: an even rule like that divides between everybody, and any " +
+                  "other kind will refuse.",
+            Severity.Warning);
+    }
 
     public async Task<GroupJoinLinkResponse?> CreateJoinLinkAsync(Guid groupId, string groupName,
         CancellationToken ct = default)
@@ -195,27 +245,84 @@ public sealed class GroupCommands(
         return done ? settled : null;
     }
 
-    public async Task<GroupResponse?> AcceptInvitationAsync(Guid invitationId, string groupName,
+    /// <summary>
+    /// Claims a personal invitation: joins the group, as the person the group named.
+    /// </summary>
+    /// <remarks>
+    /// The second message is the whole reason this reads the answer. Claiming is not only
+    /// joining: whatever the group had recorded against that name -- shares, and anything
+    /// they were down as having paid for -- is the claimer's from this moment. No amount
+    /// changes, and their balance in the group does, so it is said rather than left to be
+    /// noticed on the next screen.
+    /// </remarks>
+    public async Task<InvitationClaimedResponse?> ClaimInvitationAsync(string token,
         CancellationToken ct = default)
     {
-        GroupResponse? joined = null;
+        InvitationClaimedResponse? claimed = null;
 
         var done = await errors.TryAsync(async () =>
         {
-            joined = await invitations.AcceptInvitationAsync(invitationId, ct);
-            snackbar.Add($"You have joined {joined.Name}.", Severity.Success);
-            await changes.NotifyGroupsChangedAsync();
-        }, $"Could not join {groupName}.");
+            claimed = await invitations.ClaimInvitationAsync(token, ct);
 
-        return done ? joined : null;
+            snackbar.Add($"You have joined {claimed.GroupName} as {claimed.Name}.", Severity.Success);
+
+            if (claimed.SharesTaken > 0 || claimed.PaymentsTaken > 0)
+            {
+                snackbar.Add(
+                    $"{claimed.SharesTaken} share(s) recorded against {claimed.Name} are yours now. " +
+                    "No amounts changed.",
+                    Severity.Info);
+            }
+
+            // Said separately because it is about the future and the sentence above is
+            // about the past. The shares are amounts already recorded; a rule place goes on
+            // giving them a share of every expense filed under that category, which is the
+            // part of a claim somebody would be most surprised to discover later.
+            if (claimed.TookOnARule)
+            {
+                snackbar.Add(
+                    claimed.RulesTaken == 1
+                        ? $"One split rule in {claimed.GroupName} names you now, so it will give "
+                          + "you a share of what gets filed under it."
+                        : $"{claimed.RulesTaken} split rules in {claimed.GroupName} name you now, "
+                          + "so they will give you a share of what gets filed under them.",
+                    Severity.Info);
+            }
+
+            await changes.NotifyGroupsChangedAsync();
+        }, "Could not claim the invitation.");
+
+        return done ? claimed : null;
     }
 
-    public Task<bool> DeclineInvitationAsync(Guid invitationId, string groupName,
+    /// <summary>
+    /// Turns an invitation down, saying so when the group had already been recording money
+    /// against the person it named.
+    /// </summary>
+    /// <remarks>
+    /// Whoever declines is entitled to know, even though it is not theirs to sort out: a
+    /// group that has been splitting the rent against that name for a fortnight has a
+    /// position in it, and "declined" alone would leave them wondering what happened to it.
+    /// It went to a member of the group, unchanged.
+    /// </remarks>
+    public Task<bool> DeclineInvitationAsync(string token, string groupName,
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
-            await invitations.DeclineInvitationAsync(invitationId, ct);
+            var closed = await invitations.DeclineInvitationAsync(token, ct);
+
             snackbar.Add($"Invitation to {groupName} declined.", Severity.Success);
+
+            if (closed.MovedAnything && closed.AbsorbedByUserName is { } absorber)
+            {
+                snackbar.Add(
+                    $"{groupName} had recorded {closed.SharesMoved} share(s) against " +
+                    $"{closed.Name}. That is now {absorber}'s, with no amounts changed.",
+                    Severity.Info);
+            }
+
+            WarnAboutEmptiedRules(closed);
+
             await changes.NotifyGroupsChangedAsync();
         }, "Could not decline the invitation.");
 }

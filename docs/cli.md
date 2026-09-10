@@ -38,7 +38,7 @@ has to reach for `curl` and a bearer token to do.
 | `categories` | `list`, `create`, `update`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `create`, `update`, `delete` |
-| `invitations` | `list`, `accept`, `decline`, `link`, `join` |
+| `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
 | `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
@@ -105,6 +105,119 @@ groupsplit settle history --json
 
 Every repayment you were party to, in any group, newest first. It answers "did I already pay
 this?", which used to mean opening each group's activity in turn.
+
+## People the group is waiting on
+
+A group names whoever is sharing the costs. That makes them somebody it can point at
+straight away -- they can be given a share and can be the payer of an expense from the
+moment they are named, which is the point, because the trip that prompted the invitation is
+already booked. What reaches them is a link.
+
+```bash
+groupsplit groups invite <group-id> Carlos Nuria
+```
+
+```
+ Invitation                            Name    User id                               Link token
+ f1a00001-0000-4000-8000-000000000001  Carlos  f1b00001-0000-4000-8000-000000000001  8wS3n...
+ f1a00002-0000-4000-8000-000000000002  Nuria   f1b00002-0000-4000-8000-000000000002  Qk1zv...
+
+Send each person their own link. It works once, and whoever opens it becomes that person in
+the group.
+```
+
+The link is `<web-app>/claim/<token>`. There is no email: a group knows the friend it went on
+the trip with by name, not by address, and the link goes through whatever they actually talk
+on. Nobody is notified: sending the link is the group's job. Once somebody has opened theirs it
+is in `invitations list` and stays there until it is answered, but until then the link is the
+whole of the introduction.
+
+**Two ids, and they answer different questions.** The first withdraws the invitation. The
+second -- `participantUserId` -- is who you name in a split or as the payer, and it is the
+same id `groups members` lists them under:
+
+```bash
+groupsplit groups members <group-id>
+```
+
+```
+ Id                                    Name              Email             Status
+ 0d1ac8ae-709c-4c4c-8f0f-0c7e951b3a52  Anabel Benítez    anabel@test.com   joined
+ f1b00001-0000-4000-8000-000000000001  Carlos            -                 invited
+```
+
+```bash
+groupsplit tx create --group <group-id> --amount 90 --name Rent \
+    --split <anabel-id>=60 --split <carlos-id>=30
+
+groupsplit tx create --group <group-id> --amount 40 --name Taxi --paid-by <carlos-id>
+```
+
+Their balance is in `groups balances`, marked `(invited)`, and it has to be: the column sums
+to zero only because every share belongs to somebody on the page. It is *not* in the
+transfers underneath it, because a plan is a list of payments somebody can make. Naming one
+in `groups settle`, `groups settle-between` or `settle pay` is refused with
+`SETTLEMENT_WITH_PENDING_INVITEE`.
+
+### The receiving side
+
+```bash
+groupsplit invitations list            # links you have opened and not answered
+groupsplit invitations show <link>     # what it leads to, claiming nothing
+groupsplit invitations claim <link>    # join as that person, taking on their position
+groupsplit invitations decline <link>  # turn it down
+```
+
+`list` is not "invitations sent to me" — nothing can answer that without an address. It is
+every invitation whose link this account has **opened**, which the API writes down as it
+happens, and it carries the tokens. That makes it the way back to a link when the message it
+arrived in is gone — the case somebody hits after opening a link, signing in, and getting on
+with something else. The same list is the "Waiting on you" row on the web app's home page.
+
+All three take the whole URL as readily as the token inside it. `show` says the group, its
+size, who asked and which name the invitation was made out to -- and deliberately nothing
+about the money: a link can be forwarded, and what is recorded against that name is the
+group's until somebody claims it.
+
+`claim` is gated by the [confirmation protocol](#confirming-changes), because it takes on a
+position rather than only joining a group: the shares recorded against that name, and the
+expenses they were down as having paid for, become the claimer's. No amount changes, and the
+claimer's balance does. Afterwards the link is spent -- claiming deletes the invitation the
+token lives on, so a forwarded copy gets the same 404 a mistyped URL does.
+
+Do not treat a personal link like a group join link. `groups link create` makes the group's
+open door: reusable, expiring, and it lets somebody in as *themselves*, claiming nothing.
+Forwarding one of those costs a group an unwanted member; forwarding a personal link hands
+somebody else's debts to a stranger.
+
+### Declining and withdrawing
+
+Both hand everything the person was holding -- their shares, and anything they were down as
+having paid for -- to one member of the group: whoever sent the invitation, or the group's
+longest-standing member if they have since left. No amount changes, and the group's balances
+still add up. Both go through the confirmation gate for that reason, and both print what
+moved:
+
+```bash
+groupsplit groups withdraw-invitation <group-id> <invitation-id> --yes
+groupsplit invitations decline <link> --yes
+```
+
+```
+ Group           The flat
+ Name            Carlos
+ Outcome         withdrawn
+ Now belongs to  Anabel Benítez
+ Shares moved    3 (62.50)
+ Payments moved  1 (40.00)
+ Rules pruned    1
+
+No amount changed. Every transaction still sums to its own amount, and the group's
+balances still sum to zero.
+```
+
+The whole design, and why it is this rather than a refusal, is in
+[pending-invitees.md](pending-invitees.md).
 
 ## Installing it
 

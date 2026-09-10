@@ -2044,13 +2044,28 @@ html:not([data-gs-ready]) .gs-group-card {
     background: var(--gs-teal-soft);
 }
 
+/*
+    A gap rather than a space in the markup. The name is followed by an "invited" tag on
+    the rows where somebody has not joined yet, and the space between the two cannot come
+    from the text: Razor drops the whitespace-only line before an @if block, so the tag
+    arrived against the last letter of the name. This is what .gs-row .title does with the
+    same pair, and the ellipsis moves down onto the name with it -- clipping has to happen
+    to the name and never to the tag, which is four hundred pixels of nothing followed by
+    a truncated word otherwise.
+*/
 .gs-split-who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.gs-split-who > span:not(.gs-tag) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.875rem;
-    font-weight: 600;
 }
 
 .gs-split.is-me .gs-split-who {
@@ -2344,6 +2359,61 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-auth-mark path:nth-child(2) { animation-delay: 90ms; }
 .gs-auth-mark path:nth-child(3) { animation-delay: 180ms; }
 
+/*
+    The two pages somebody reaches by following a link -- a group's join link, and a
+    personal invitation. They borrow .gs-auth-card above rather than having a surface of
+    their own, because they are the same kind of screen: outside the nav, before signing in,
+    and one button away from the hand-off that card was written for.
+
+    What they do not borrow is .gs-auth-backdrop. That claims the viewport and paints its
+    own gradient, which is right for a page whose layout is FullScreenLayout and wrong for
+    these, which render inside the app's own.
+*/
+.gs-link-landing {
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+}
+
+.gs-link-landing .gs-auth-card {
+    width: 100%;
+    max-width: 26rem;
+    padding: 40px 32px 32px;
+}
+
+.gs-link-landing-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    text-align: center;
+}
+
+.gs-link-landing-body h1 {
+    margin: 8px 0 6px;
+    font-size: 1.75rem;
+    font-weight: 800;
+}
+
+.gs-link-landing-body p {
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+/* Both actions on one line, and full width between them, so neither reads as the aside. */
+.gs-link-landing-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+@media (min-width: 480px) {
+    .gs-link-landing {
+        padding: 64px 16px;
+    }
+}
+
 @keyframes gs-mark-in {
     from {
         opacity: 0;
@@ -2525,6 +2595,17 @@ html:not([data-gs-ready]) .gs-group-card {
     font-weight: 700;
     font-size: 0.875rem;
     text-align: right;
+}
+
+/* A value that ends in a tag -- "Paid by Omar / invited" -- for the same reason as
+   .gs-split-who above: the gap has to come from the box, because the markup's own
+   whitespace does not survive. Still right-aligned, which a single child renders
+   identically to the block it was. */
+.gs-kv-row dd.gs-kv-tagged {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .gs-danger-zone {

@@ -1,9 +1,12 @@
+using System.Buffers.Text;
+using System.Security.Cryptography;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GroupSplit.API.Services;
 
@@ -11,88 +14,140 @@ namespace GroupSplit.API.Services;
 /// Asking somebody to join a group, and their answer.
 /// </summary>
 /// <remarks>
-/// Adding a member used to be a write the group made about somebody else: the address was
+/// Adding a member used to be a write the group made about somebody else: an address was
 /// looked up, and if an account had it, that account was in the group from that moment --
 /// and if none had, the address was silently dropped and the person who typed it was told
 /// the member had been added. Both halves are wrong. Joining a group is something a person
-/// agrees to, and an address with no account behind it is the ordinary case for a new
-/// group, not an error to swallow.
+/// agrees to.
+/// <para>
+/// It stopped being an address at all. Inviting somebody names them and mints a link, which
+/// the group sends however they actually talk to them; whoever opens that link and claims it
+/// becomes that person. An address was the handle, the display name and the invitee's own
+/// list all at once, and it limited a group to asking people whose email they happened to
+/// have.
+/// </para>
+/// <para>
+/// The link is heavier than a join link and is treated so. That one lets somebody in as
+/// themselves, claiming nothing; this one hands over a position in the group's ledger, so it
+/// is single use -- claiming removes the row the token lives on -- and it says nothing about
+/// the money before it is claimed.
+/// </para>
 /// </remarks>
 public interface IInvitationService
 {
     /// <summary>
-    /// Invites each address to a group the caller belongs to. Addresses already in the
-    /// group, or already invited, are skipped rather than refused: inviting five people of
-    /// whom one is already there should not fail for the other four.
+    /// Invites each named person to a group the caller belongs to, minting a link for each.
     /// </summary>
-    /// <returns>The group's pending invitations after the write.</returns>
-    Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId, AddMemberRequest request,
+    /// <returns>The group's pending invitations after the write, links included.</returns>
+    Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId, InviteToGroupRequest request,
         CancellationToken ct = default);
 
     /// <summary>Who a group is waiting on. Readable by its members.</summary>
     Task<IReadOnlyList<GroupInvitationResponse>> ForGroup(Guid groupId, CancellationToken ct = default);
 
-    /// <summary>The invitations addressed to the caller, whichever group sent them.</summary>
+    /// <summary>
+    /// The invitations the caller has opened and not yet answered, newest first.
+    /// </summary>
+    /// <remarks>
+    /// The invitee's own list. It used to be "every invitation sent to my address", and
+    /// there are no addresses any more -- so it is "every invitation whose link I have
+    /// opened" instead, which is what <see cref="Describe"/> writes down.
+    /// <para>
+    /// It carries the tokens, which is the point: this is the list somebody uses to get
+    /// back to a link they have already opened once and no longer have the message for.
+    /// Nothing is disclosed by it, since holding the token is what put the row there.
+    /// </para>
+    /// </remarks>
     Task<IReadOnlyList<GroupInvitationResponse>> Mine(CancellationToken ct = default);
 
-    /// <summary>Takes the caller up on one, which is the only way to join a group.</summary>
-    Task<Group> Accept(Guid invitationId, CancellationToken ct = default);
+    /// <summary>
+    /// What the link says about itself, for the page somebody lands on after opening one.
+    /// Says nothing about what is recorded against the person; see
+    /// <see cref="InvitationClaimResponse"/>.
+    /// </summary>
+    /// <remarks>
+    /// Remembers that the caller has seen it, so <see cref="Mine"/> can offer it again. A
+    /// read that writes, which is worth being uneasy about and is the right place all the
+    /// same: opening the link is exactly the event being recorded, and the alternative is a
+    /// second round trip from the one page that already knows.
+    /// </remarks>
+    Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default);
 
-    /// <summary>Turns one down. The row goes; the group may ask again.</summary>
-    Task Decline(Guid invitationId, CancellationToken ct = default);
+    /// <summary>
+    /// Claims one: the caller joins the group and becomes the person the invitation names.
+    /// </summary>
+    /// <remarks>
+    /// The one moment a position changes hands. Everything recorded against the stand-in --
+    /// its shares, and anything it was down as having paid for -- moves onto the caller's own
+    /// account, with no amount changed, and the invitation and the stand-in both go. So the
+    /// link works once: there is nothing left for a second holder of it to claim.
+    /// </remarks>
+    Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default);
 
-    /// <summary>Withdraws one the caller's group sent.</summary>
-    Task Withdraw(Guid groupId, Guid invitationId, CancellationToken ct = default);
+    /// <summary>
+    /// Turns one down, on behalf of whoever holds the link. The row goes, the group may ask
+    /// again, and anything recorded against the person is handed to a member -- see
+    /// <see cref="InvitationClosedResponse"/>.
+    /// </summary>
+    Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default);
+
+    /// <summary>Withdraws one the caller's group sent, on the same terms.</summary>
+    Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
+        CancellationToken ct = default);
 }
 
-public sealed class InvitationService(ICurrentUser userContext, AppDbContext context, IGroupJoiner joiner)
+public sealed class InvitationService(
+    ICurrentUser userContext,
+    AppDbContext context,
+    IGroupJoiner joiner,
+    IGroupParticipants participants)
     : IInvitationService
 {
-    public async Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId, AddMemberRequest request,
-        CancellationToken ct = default)
+    /// <summary>
+    /// Bytes of randomness behind a token, before encoding, matching the join link's. This
+    /// one guards more -- a position in a ledger rather than a seat in a group -- so it is
+    /// certainly not less.
+    /// </summary>
+    private const int TokenBytes = 24;
+
+    public async Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId,
+        InviteToGroupRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         var inviter = userContext.User;
         var group = await MemberGroup(groupId, ct);
 
-        var addresses = request.UserIdentifiers
-            .Select(identifier => Normalize(identifier.Email))
-            .Where(email => email.Length > 0)
-            .Distinct()
+        var names = request.Names
+            .Select(name => (name ?? string.Empty).Trim())
+            .Where(name => name.Length > 0)
             .ToList();
 
-        // Both sets in one round trip each, because "already there" and "already asked" are
-        // the two things that make an address a no-op and they are checked for every one.
-        var members = await context.Set<Group>()
-            .Where(candidate => candidate.Id == groupId)
-            .SelectMany(candidate => candidate.Users)
-            .Select(user => user.Email)
-            .ToListAsync(ct);
-
-        var alreadyMembers = members
-            .Where(email => email is not null)
-            .Select(email => Normalize(email!))
-            .ToHashSet();
-
-        var alreadyInvited = await context.Set<GroupInvitation>()
-            .Where(invitation => invitation.GroupId == groupId)
-            .Select(invitation => invitation.Email)
-            .ToListAsync(ct);
-
-        var pending = alreadyInvited.ToHashSet();
+        // Nothing usable in the list at all. Refused rather than answered with the group's
+        // existing invitations, which would read as success for a request that asked for
+        // something and got nothing.
+        if (names.Count == 0)
+            throw new ValidationException(ErrorCodes.GroupInvitationNoName,
+                "An invitation needs a name to make it out to.");
 
         var invitedAt = DateTimeOffset.UtcNow;
 
-        foreach (var email in addresses)
+        foreach (var name in names)
         {
-            if (alreadyMembers.Contains(email) || !pending.Add(email))
-                continue;
+            // The stand-in first, because the invitation is not merely a note that somebody
+            // was asked: it is what makes this person somebody the group can give a share
+            // to, which needs a row to give it to.
+            //
+            // One per invitation, and never an existing account -- there is no address to
+            // recognise one by, and claiming is what attaches a real person to it.
+            var participant = participants.StandInFor(name);
 
             context.Add(new GroupInvitation
             {
                 Group = group,
-                Email = email,
+                Name = name,
+                Token = NewToken(),
+                Participant = participant,
                 InvitedBy = inviter,
                 InvitedAt = invitedAt
             });
@@ -108,62 +163,129 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
     {
         var userId = userContext.User.Id;
 
-        // Scoped to the caller's own groups: who a group is waiting on is a list of
-        // addresses, and an address is a person.
+        // Scoped to the caller's own groups, and that scoping is load-bearing now rather
+        // than merely tidy: the rows carry the links, and a link is a claim on a position in
+        // this group's ledger.
         //
         // Ordered before the projection, not after -- see the note on Describe.
-        return await Describe(
+        return await Project(
                 from invitation in context.Set<GroupInvitation>()
                 where invitation.GroupId == groupId &&
                       invitation.Group.Users.Any(user => user.Id == userId)
-                orderby invitation.Email
+                orderby invitation.Name, invitation.InvitedAt
                 select invitation)
             .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<GroupInvitationResponse>> Mine(CancellationToken ct = default)
     {
-        var email = Normalize(userContext.User.Email ?? string.Empty);
+        var userId = userContext.User.Id;
 
-        // An account with no address on it has no way to be invited, and matching the empty
-        // string would hand it every invitation that was ever stored badly.
-        if (email.Length == 0)
-            return [];
-
-        return await Describe(
-                from invitation in context.Set<GroupInvitation>()
-                where invitation.Email == email
+        // Answered invitations are absent because the row is gone, not because this filters
+        // them out: opening one is remembered against the invitation, and answering it
+        // deletes the invitation and cascades. So there is no state here that could drift
+        // out of step with whether the group is still waiting.
+        //
+        // Ordered before the projection, not after -- see the note on Project.
+        return await Project(
+                from opened in context.Set<InvitationOpened>()
+                join invitation in context.Set<GroupInvitation>()
+                    on opened.InvitationId equals invitation.Id
+                where opened.UserId == userId
                 orderby invitation.InvitedAt descending
                 select invitation)
             .ToListAsync(ct);
     }
 
-    public async Task<Group> Accept(Guid invitationId, CancellationToken ct = default)
+    public async Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default)
+    {
+        var invitation = await Held(token, ct);
+
+        var userId = userContext.User.Id;
+
+        // Asked once and used twice: to answer the page, and to decide whether this is
+        // worth remembering.
+        var alreadyAMember = await context.Set<GroupMembership>()
+            .AnyAsync(membership => membership.GroupId == invitation.GroupId &&
+                                    membership.UserId == userId, ct);
+
+        // A member of the group is not somebody this invitation is waiting on. They open the
+        // link to check it works before sending it, which is a sensible thing to do and must
+        // not put an invitation meant for somebody else into their own "waiting on you" --
+        // a list of decisions they cannot make, and could only clear by answering on the
+        // invitee's behalf.
+        if (!alreadyAMember)
+            await Remember(invitation.Id, userId, ct);
+
+        return await context.Set<GroupInvitation>()
+            .Where(candidate => candidate.Id == invitation.Id)
+            .Select(candidate => new InvitationClaimResponse(
+                candidate.Id,
+                candidate.GroupId,
+                candidate.Group.Name,
+                candidate.Group.Users.Count,
+                candidate.Name,
+                candidate.InvitedBy == null
+                    ? null
+                    : candidate.InvitedBy.FirstName + " " + candidate.InvitedBy.LastName,
+                candidate.InvitedAt,
+                alreadyAMember))
+            .FirstAsync(ct);
+    }
+
+    public async Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default)
     {
         var user = userContext.User;
-        var invitation = await Addressed(invitationId, ct);
+        var invitation = await Held(token, ct);
 
         var group = await context.Set<Group>()
             .Include(candidate => candidate.Users)
             .FirstAsync(candidate => candidate.Id == invitation.GroupId, ct);
 
-        // Accepting one for a group they are already in is a state the invitation should
-        // not have been in; the row goes either way, so asking twice answers the same.
         await joiner.Join(group, user, ct);
 
+        // The position moves onto their own account: their shares become the claimer's, and
+        // the expenses the stand-in was down as having paid for become theirs. No amount
+        // changes, so every transaction still divides into exactly its own amount.
+        // Transfer, not prune. The group wrote "Carlos gets one share" and meant it, so
+        // Carlos claiming his link is the group getting what it asked for -- and pruning
+        // here left the new member out of the very templates that named them, silently.
+        var taken = await participants.HandOver(
+            group.Id, invitation.ParticipantUserId, user.Id, RuleHandling.Transfer, ct);
+
+        var standIn = invitation.ParticipantUserId;
+        var name = invitation.Name;
+
         context.Remove(invitation);
+
+        // The stand-in with it, now that nothing points at it. It exists to hold a position
+        // until somebody claims it, and this is that moment; leaving it would leave a row
+        // named after a person who is now in the group under their own account, turning up in
+        // nothing and explaining nothing.
+        var emptied = await context.Set<User>().FirstOrDefaultAsync(row => row.Id == standIn, ct);
+
+        if (emptied is not null)
+            context.Remove(emptied);
+
         await context.SaveChangesAsync(ct);
 
-        return group;
+        return new InvitationClaimedResponse(
+            group.Id,
+            group.Name,
+            group.Users.Count,
+            name,
+            taken.SharesMoved,
+            taken.AmountOwed,
+            taken.PaymentsMoved,
+            taken.AmountPaid,
+            taken.RulesAffected);
     }
 
-    public async Task Decline(Guid invitationId, CancellationToken ct = default)
-    {
-        context.Remove(await Addressed(invitationId, ct));
-        await context.SaveChangesAsync(ct);
-    }
+    public async Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default) =>
+        await Close(await Held(token, ct), InvitationOutcome.Declined, ct);
 
-    public async Task Withdraw(Guid groupId, Guid invitationId, CancellationToken ct = default)
+    public async Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
+        CancellationToken ct = default)
     {
         await MemberGroup(groupId, ct);
 
@@ -173,29 +295,159 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
                          ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
                              "That invitation was not found.");
 
-        context.Remove(invitation);
-        await context.SaveChangesAsync(ct);
+        return await Close(invitation, InvitationOutcome.Withdrawn, ct);
     }
 
     /// <summary>
-    /// The invitation, checked to be addressed to the caller. A 404 for one that is not
-    /// theirs would deny it exists; a 403 says what actually happened.
+    /// The half declining and withdrawing have in common: the invitation stops being
+    /// pending, and whatever it was holding stops belonging to a stand-in nobody will ever
+    /// sign in as.
     /// </summary>
-    private async Task<GroupInvitation> Addressed(Guid invitationId, CancellationToken ct)
+    /// <remarks>
+    /// One path for both, because the event is the same event -- the group is not getting
+    /// this member -- and what happens to the money cannot depend on which side said so.
+    /// What it must not do is quietly vanish: a group's balances sum to zero because every
+    /// share belongs to somebody in the listing, and dropping a participant who held shares
+    /// would leave the column not adding up with nothing to explain why. So the position
+    /// moves, in full, to one named member, and the answer says whose it now is.
+    /// </remarks>
+    private async Task<InvitationClosedResponse> Close(GroupInvitation invitation,
+        InvitationOutcome outcome, CancellationToken ct)
     {
-        var invitation = await context.Set<GroupInvitation>()
-                             .FirstOrDefaultAsync(candidate => candidate.Id == invitationId, ct)
-                         ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
-                             "That invitation was not found.");
+        var groupName = await context.Set<Group>()
+            .Where(candidate => candidate.Id == invitation.GroupId)
+            .Select(candidate => candidate.Name)
+            .FirstAsync(ct);
 
-        var email = Normalize(userContext.User.Email ?? string.Empty);
+        var absorber = await participants.Absorber(invitation, ct);
 
-        if (email.Length == 0 || invitation.Email != email)
-            throw new ForbiddenException(ErrorCodes.GroupInvitationNotYours,
-                "That invitation was sent to somebody else.");
+        var moved = absorber is null
+            ? ParticipantHandover.Nothing
+            : await participants.HandOver(invitation.GroupId, invitation.ParticipantUserId,
+                absorber.Id, RuleHandling.Prune, ct);
 
-        return invitation;
+        var standIn = invitation.ParticipantUserId;
+
+        context.Remove(invitation);
+
+        // The stand-in goes too, but only once its position has actually moved. That
+        // condition is not tidiness: TransactionSplit.UserId and Transaction.UserId are
+        // required, so their foreign keys cascade, and deleting a stand-in that still holds
+        // shares would take those rows with it -- silently. The splits left on those
+        // expenses would stop summing to the amount and the group's balances would stop
+        // summing to zero, which is the one thing this whole design exists to prevent, and
+        // nothing would raise a word about it.
+        //
+        // So a hand-over having run is the precondition. It moves everything a stand-in can
+        // hold, because a stand-in can only ever be named inside its own group: every path
+        // that writes a payer or a share checks it against that group's participants, and
+        // there is nobody who could name one on a personal expense.
+        if (absorber is not null)
+        {
+            var emptied = await context.Set<User>().FirstOrDefaultAsync(row => row.Id == standIn, ct);
+
+            if (emptied is not null)
+                context.Remove(emptied);
+        }
+
+        await context.SaveChangesAsync(ct);
+
+        return new InvitationClosedResponse(
+            invitation.Id,
+            invitation.GroupId,
+            groupName,
+            invitation.Name,
+            outcome,
+            moved.SharesMoved,
+            moved.AmountOwed,
+            moved.PaymentsMoved,
+            moved.AmountPaid,
+            moved.RulesAffected,
+            moved.RulesEmptied,
+            // Named only when they actually took something on, so a routine "no thanks"
+            // does not read as though money had changed hands.
+            moved.MovedAnything ? absorber?.Id : null,
+            moved.MovedAnything ? Describe(absorber) : null);
     }
+
+    /// <summary>
+    /// Writes down that this account has seen this invitation, so it can be offered again.
+    /// </summary>
+    /// <remarks>
+    /// Once. Re-reading a link does not make the invitation newer, and the list is ordered
+    /// by when the group sent it rather than by when somebody last looked.
+    /// <para>
+    /// A stand-in is never here: nobody can sign in as one, so the caller is always a real
+    /// account. What can happen is a member of the group opening the link -- to check it
+    /// works, or because they were sent their own -- and there is no harm in that being
+    /// remembered; the claim page tells them they are already in.
+    /// </para>
+    /// </remarks>
+    private async Task Remember(Guid invitationId, Guid userId, CancellationToken ct)
+    {
+        var already = await context.Set<InvitationOpened>()
+            .AnyAsync(opened => opened.InvitationId == invitationId && opened.UserId == userId, ct);
+
+        if (already)
+            return;
+
+        var row = context.Add(new InvitationOpened
+        {
+            InvitationId = invitationId,
+            UserId = userId,
+            OpenedAt = DateTimeOffset.UtcNow
+        });
+
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Somebody else's request wrote the same row between the check above and this,
+            // which is the answer this method wanted anyway. Two overlapping reads of one
+            // link are ordinary -- a double-clicked button, a page rendered on the server
+            // and again after hydration -- and neither of them should turn a read into a
+            // 500. The same race UserProvisioner catches on a first sign-in.
+            //
+            // The failed insert is detached rather than the tracker cleared: this runs
+            // inside a request that goes on to read, and clearing would take its entities
+            // with it.
+            row.State = EntityState.Detached;
+        }
+    }
+
+    /// <summary>
+    /// The invitation a token names.
+    /// </summary>
+    /// <remarks>
+    /// Holding the token is the whole authorisation, which is what makes it worth guarding:
+    /// there is no second check, because there is no account for the invitation to be
+    /// addressed to. A token that names nothing is a 404 -- and so is a token that has
+    /// already been claimed, because claiming deletes the row. That is the same answer a
+    /// mistyped link gets, and deliberately: the alternative is telling whoever holds a
+    /// forwarded link that it used to be good.
+    /// </remarks>
+    private async Task<GroupInvitation> Held(string token, CancellationToken ct)
+    {
+        var normalized = (token ?? string.Empty).Trim();
+
+        if (normalized.Length == 0)
+            throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
+                "That invitation link was not found.");
+
+        return await context.Set<GroupInvitation>()
+                   .FirstOrDefaultAsync(candidate => candidate.Token == normalized, ct)
+               ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
+                   "That invitation link was not found. It may already have been claimed.");
+    }
+
+    /// <summary>
+    /// What to call somebody: their name, or the address when nobody has told us one.
+    /// </summary>
+    private static string? Describe(User? user) =>
+        user is null ? null : People.Display(user);
 
     private async Task<Group> MemberGroup(Guid groupId, CancellationToken ct)
     {
@@ -218,21 +470,24 @@ public sealed class InvitationService(ICurrentUser userContext, AppDbContext con
     /// the in-memory provider the unit tests use, because that one evaluates anything it
     /// cannot translate rather than refusing.
     /// </remarks>
-    private static IQueryable<GroupInvitationResponse> Describe(IQueryable<GroupInvitation> invitations) =>
+    private static IQueryable<GroupInvitationResponse> Project(IQueryable<GroupInvitation> invitations) =>
         from invitation in invitations
         select new GroupInvitationResponse(
             invitation.Id,
             invitation.GroupId,
             invitation.Group.Name,
-            invitation.Email,
+            invitation.Name,
+            invitation.Token,
             invitation.InvitedBy == null
                 ? null
                 : invitation.InvitedBy.FirstName + " " + invitation.InvitedBy.LastName,
-            invitation.InvitedAt);
+            invitation.InvitedAt,
+            invitation.ParticipantUserId);
 
     /// <summary>
-    /// Addresses are stored and compared lower-cased. Case is not part of who somebody is,
-    /// and the alternative is a database-collation question in the middle of a join.
+    /// A URL-safe token from the cryptographic generator, never from <c>Guid.NewGuid</c>:
+    /// this is the whole of the authorisation, so it has to be unguessable rather than
+    /// merely unique.
     /// </summary>
-    private static string Normalize(string email) => email.Trim().ToLowerInvariant();
+    private static string NewToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(TokenBytes));
 }

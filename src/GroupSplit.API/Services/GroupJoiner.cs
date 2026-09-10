@@ -35,6 +35,11 @@ public sealed class GroupJoiner(AppDbContext context) : IGroupJoiner
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(user);
 
+        // Nothing here answers an invitation, and there is nothing for it to answer. An
+        // invitation names a person the group invented and holds a stand-in of its own, so a
+        // signed-in account is never the participant of a pending one -- the way in through
+        // an invitation is IInvitationService.Claim, which hands that stand-in's position
+        // over and then deletes both.
         if (group.Users.Any(member => member.Id == user.Id))
             return false;
 

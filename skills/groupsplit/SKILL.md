@@ -139,6 +139,22 @@ along when reporting a problem.
   server would apply and creates nothing.
 - **Do not print the output of `groupsplit auth token`.** It is a bearer token. It is for
   piping into another tool, not for a transcript.
+- **Somebody invited and still to answer counts as a person.** A group names whoever it is
+  sharing costs with -- there is no email invitation -- and from that moment they can be
+  given a share and can be the payer, so use their id (`participantUserId`, or the
+  `groups members` row where `isPendingInvitee` is true) as you would a member's. What they
+  cannot be is settled up with: every repayment naming one is refused with
+  `SETTLEMENT_WITH_PENDING_INVITEE`, and their balance simply stands. Claiming, declining and
+  withdrawing all move that position, and all say what moved -- report it.
+- **A lost link is recoverable only if it was opened.** `invitations list` answers the
+  invitations whose links this account has opened -- there is no address to match, so
+  nothing knows about one that was never followed. If the user never opened theirs, the
+  group has to send it again.
+- **An invitation link is a credential, not an id.** Whoever opens one takes on the shares
+  recorded against that name, so it belongs to the person the user is sending it to and
+  nowhere else. Do not paste one into a shared channel, a commit, an issue, or a transcript
+  you did not have to write it into, and do not confuse it with `groups link`, which is the
+  group's open door and claims nothing.
 - **Settle with a person, not a group.** `groupsplit settle plan` is the answer to "how do
   I clear this?": it adds every group's balance up per person, so one payment clears a
   friend you owe in two places. `groups settle` is still right when the user means one

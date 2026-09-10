@@ -15,70 +15,59 @@
     Where a shared link lands.
 
     Anonymous, because the person following one very often has no account yet -- that is the
-    case invitations exist for and the one an email to an unconfirmed address serves worst.
-    Signing in is a round trip through the identity provider, so the URL they were going to
-    is handed along as returnUrl and they come back here rather than to the home page, with
-    the link still in hand.
+    case invitations exist for. Signing in is a round trip through the identity provider, so
+    the URL they were going to is handed along as returnUrl and they come back here rather
+    than to the home page, with the link still in hand.
+
+    The card is shared with /claim, which is the other page reached this way. They are not
+    the same act -- this one lets somebody in as themselves, claiming nothing, where that
+    one hands over a position in a ledger -- but they are the same kind of screen, and
+    looking like two different products was doing nobody any favours.
 *@
 
 <PageTitle>Join a group - Group Split</PageTitle>
 
-<div class="gs-empty" style="padding-top: 64px; max-width: 32rem; margin: 0 auto">
-
-    @if (UserInfo is null)
-    {
-        <MudIcon Icon="@Icons.Material.Rounded.Groups" />
-        <h1 style="font-size: 1.375rem; margin: 0">You have been invited to a group</h1>
-        <span>Sign in, or create an account, and we will bring you straight back here to join.</span>
-
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+@if (UserInfo is null)
+{
+    <LinkLanding Title="You have been invited to a group"
+                 Subtitle="Sign in, or create an account, and we will bring you straight back here to join.">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                   FullWidth Size="Size.Large"
                    EndIcon="@Icons.Material.Rounded.ArrowForward"
                    OnClick="@(() => AuthService.Login($"/join/{Token}"))">Continue</MudButton>
-    }
-    else if (_loading)
-    {
-        <MudProgressCircular Color="Color.Primary" Indeterminate />
-        <span>Looking up the group…</span>
-    }
-    else if (_error is not null)
-    {
-        @* A link that has run out and one the group withdrew are different things to have
-           happened, and the message says which -- that is the whole reason the API keeps
-           them apart instead of answering "not found" to both. *@
-        <MudIcon Icon="@Icons.Material.Rounded.LinkOff" />
-        <h1 style="font-size: 1.375rem; margin: 0">This link will not let you in</h1>
-        <span>@_error</span>
-
-        <MudButton Variant="Variant.Text" Class="mt-4" Href="/"
+    </LinkLanding>
+}
+else if (_loading)
+{
+    <LinkLanding Title="You have been invited to a group">
+        <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
+            <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
+            <span>Looking up the group…</span>
+        </div>
+    </LinkLanding>
+}
+else if (_error is not null)
+{
+    @* A link that has run out and one the group withdrew are different things to have
+       happened, and the message says which -- that is the whole reason the API keeps them
+       apart instead of answering "not found" to both. *@
+    <LinkLanding Title="This link will not let you in" Subtitle="@_error">
+        <MudButton Variant="Variant.Text" Href="/"
                    StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
-    }
-    else if (_link is not null)
-    {
-        <Avatar Name="@_link.GroupName" />
-        <h1 style="font-size: 1.375rem; margin: 0">@_link.GroupName</h1>
-
-        <span>
-            @if (_link.AlreadyAMember)
-            {
-                @("You are already in this group.")
-            }
-            else
-            {
-                @(string.IsNullOrWhiteSpace(_link.CreatedByUserName)
-                    ? $"{Members(_link.MemberCount)} already. Join to start sharing expenses with them."
-                    : $"{_link.CreatedByUserName} shared this group with you. {Members(_link.MemberCount)} already.")
-            }
-        </span>
-
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+    </LinkLanding>
+}
+else if (_link is { } link)
+{
+    <LinkLanding Title="@link.GroupName" Subtitle="@Shared(link)">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                   FullWidth Size="Size.Large"
                    EndIcon="@Icons.Material.Rounded.ArrowForward"
                    Disabled="@_joining"
                    OnClick="@JoinAsync">
-            @(_link.AlreadyAMember ? $"Open {_link.GroupName}" : $"Join {_link.GroupName}")
+            @(link.AlreadyAMember ? $"Open {link.GroupName}" : $"Join {link.GroupName}")
         </MudButton>
-    }
-
-</div>
+    </LinkLanding>
+}
 
 @code {
     [Parameter] public string Token { get; set; } = string.Empty;
@@ -120,6 +109,13 @@
         _resolved = Token;
         _loading = false;
     }
+
+    private static string Shared(JoinLinkResponse link) =>
+        link.AlreadyAMember
+            ? "You are already in this group."
+            : string.IsNullOrWhiteSpace(link.CreatedByUserName)
+                ? $"{Members(link.MemberCount)} already. Join to start sharing expenses with them."
+                : $"{link.CreatedByUserName} shared this group with you. {Members(link.MemberCount)} already.";
 
     private async Task JoinAsync()
     {

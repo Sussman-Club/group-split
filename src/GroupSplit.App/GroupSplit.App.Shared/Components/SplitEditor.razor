@@ -42,7 +42,7 @@
                     <MudNumericField T="decimal"
                                      Value="@ShareOf(member.Id)"
                                      ValueChanged="@(share => SetShare(member.Id, share))"
-                                     Label="@member.FullName"
+                                     Label="@member.Label()"
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
                                      Adornment="Adornment.Start"
@@ -72,7 +72,11 @@
 </MudStack>
 
 @code {
-    /// <summary>Everyone who may be given a share: the members of the expense's group.</summary>
+    /// <summary>
+    /// Everyone who may be given a share: the group's members, and the people it has
+    /// invited and is waiting on -- who are marked as such on their field, since a share
+    /// against somebody who has not joined is an ordinary share and not an ordinary member.
+    /// </summary>
     [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
 
     /// <summary>What the shares have to add up to.</summary>

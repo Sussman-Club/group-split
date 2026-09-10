@@ -1,0 +1,175 @@
+@page "/claim/{Token}"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.Shared
+@attribute [AllowAnonymous]
+@inject IInvitationsClient Invitations
+@inject IGroupCommands GroupCommands
+@inject ApiErrorPresenter Errors
+@inject IAuthService AuthService
+@inject NavigationManager Nav
+
+@*
+    Where a personal invitation link lands.
+
+    The difference from /join is what is on the other end of the button. That one lets
+    somebody into a group as themselves, claiming nothing. This one hands them a position:
+    the shares the group has been recording against the person it named become theirs. So
+    the page says whose name it is before anybody presses anything, and the link works once.
+
+    Anonymous, because the person following one very often has no account yet -- that is the
+    case invitations exist for. Signing in is a round trip through the identity provider, so
+    the URL they were going to is handed along as returnUrl and they come back here rather
+    than to the home page, with the link still in hand.
+
+    Every state wears the same card, so the page does not change shape as it resolves: one
+    surface whose heading and body swap, rather than four different-looking screens.
+*@
+
+<PageTitle>Join a group - Group Split</PageTitle>
+
+@if (UserInfo is null)
+{
+    <LinkLanding Title="You have been invited"
+                 Subtitle="Sign in, or create an account, and we will bring you straight back here.">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                   FullWidth Size="Size.Large"
+                   EndIcon="@Icons.Material.Rounded.ArrowForward"
+                   OnClick="@(() => AuthService.Login($"/claim/{Token}"))">Continue</MudButton>
+    </LinkLanding>
+}
+else if (_loading)
+{
+    <LinkLanding Title="You have been invited">
+        <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
+            <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
+            <span>Looking up the invitation…</span>
+        </div>
+    </LinkLanding>
+}
+else if (_error is not null)
+{
+    @* Most often: somebody has already claimed it. A personal link works once, so a
+       forwarded copy of one lands here, and the message says so rather than implying the
+       URL was mistyped. *@
+    <LinkLanding Title="This invitation is no longer open" Subtitle="@_error">
+        <MudButton Variant="Variant.Text" Href="/"
+                   StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
+    </LinkLanding>
+}
+else if (_invitation is { } invitation)
+{
+    <LinkLanding Title="@invitation.GroupName" Subtitle="@Asked(invitation)">
+        @* Said plainly, because it is the whole difference between this and a join link:
+           somebody may be taking on a fortnight of shares. The amounts are deliberately not
+           here -- the link can be forwarded, and what the group has recorded is theirs
+           until this is claimed -- and the app says what moved the moment it is. *@
+        <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">
+            Anything the group has already recorded against @invitation.Name becomes yours:
+            their shares, and anything they are down as having paid for. No amounts change.
+        </MudAlert>
+
+        <div class="gs-link-landing-actions">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                       FullWidth Size="Size.Large"
+                       EndIcon="@Icons.Material.Rounded.ArrowForward"
+                       Disabled="@_busy"
+                       OnClick="@ClaimAsync">
+                @($"Join as {invitation.Name}")
+            </MudButton>
+
+            <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy" OnClick="@DeclineAsync">
+                Not me, or not joining
+            </MudButton>
+        </div>
+    </LinkLanding>
+}
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    private InvitationClaimResponse? _invitation;
+    private string? _error;
+    private bool _loading;
+    private bool _busy;
+
+    /// <summary>The token the state below belongs to, so it is not re-read on every render.</summary>
+    private string? _resolved;
+
+    /// <summary>
+    /// On every parameter set rather than only on initialise, because signing in is the
+    /// step in the middle: the person arrives here with no account, comes back with one,
+    /// and it is the cascading user changing that has to send this looking.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserInfo is null || _loading || _resolved == Token)
+            return;
+
+        _loading = true;
+        _error = null;
+
+        var failure = await Errors.CaptureAsync(async () =>
+            _invitation = await Invitations.GetInvitationClaimAsync(Token));
+
+        // Shown on the page rather than in a snackbar: this is the only thing on the page,
+        // and a message that scrolls away would leave nothing behind it.
+        if (failure is not null)
+        {
+            _invitation = null;
+            _error = failure.Message;
+        }
+
+        _resolved = Token;
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Who is asking and as whom, which is what somebody needs before they agree to it. The
+    /// inviter is nullable -- an account that has since been deleted leaves its invitations
+    /// behind -- so the sentence is built rather than interpolated blind.
+    /// </summary>
+    private static string Asked(InvitationClaimResponse invitation) =>
+        string.IsNullOrWhiteSpace(invitation.InvitedByUserName)
+            ? $"You have been invited as {invitation.Name}. {Members(invitation.MemberCount)} already."
+            : $"{invitation.InvitedByUserName} invited you as {invitation.Name}. {Members(invitation.MemberCount)} already.";
+
+    private async Task ClaimAsync()
+    {
+        if (_invitation is null) return;
+
+        _busy = true;
+
+        var claimed = await GroupCommands.ClaimInvitationAsync(Token);
+
+        _busy = false;
+
+        if (claimed is not null)
+            Nav.NavigateTo($"/groups/{claimed.GroupId}");
+    }
+
+    /// <summary>
+    /// Turning it down, which is a real answer and not only a way out of the page: it tells
+    /// the group not to wait, and hands what they had recorded to one of their members.
+    /// </summary>
+    private async Task DeclineAsync()
+    {
+        if (_invitation is null) return;
+
+        _busy = true;
+
+        var declined = await GroupCommands.DeclineInvitationAsync(Token, _invitation.GroupName);
+
+        _busy = false;
+
+        if (declined)
+            Nav.NavigateTo("/");
+    }
+
+    private static string Members(int count) =>
+        count == 1 ? "One person is in it" : $"{count} people are in it";
+}

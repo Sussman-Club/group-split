@@ -35,7 +35,10 @@ public interface IExpenseSplitter
 /// sum to the amount they claim to divide.
 /// </para>
 /// </remarks>
-public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRules) : IExpenseSplitter
+public class ExpenseSplitter(
+    AppDbContext dbContext,
+    ISplitRuleHandler splitRules,
+    IGroupParticipants participants) : IExpenseSplitter
 {
     public Task WriteSplitsAsync(Expense expense, CancellationToken ct = default) =>
         WriteSplitsAsync(expense, given: null, ct);
@@ -76,9 +79,47 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
 
         // No category, or a category that names no rule: evenly between the members. That
         // is the whole of what a group with no rules used to be unable to do.
-        return rule is null
-            ? SplitCalculator.DivideEvenly(expense.Amount, payerId, members)
-            : splitRules.Divide(rule, expense.Amount, payerId, members);
+        if (rule is null)
+            return SplitCalculator.DivideEvenly(expense.Amount, payerId, members);
+
+        try
+        {
+            return splitRules.Divide(rule, expense.Amount, payerId, members);
+        }
+        // Narrowed away from ArgumentNullException, which derives from this and means
+        // something else entirely: SplitCalculator.Divide opens by refusing a null weight
+        // list, and a handler that produced one is a defect. Reframed as a refusal it would
+        // blame a well-formed rule, tell somebody to go and edit it, and keep the fault out
+        // of the logs.
+        catch (ArgumentException exception) when (exception is not ArgumentNullException)
+        {
+            // A rule can be left with nothing to divide by. Everybody it named has gone --
+            // a member who left, or somebody invited whose invitation was declined or
+            // withdrawn -- and both take the name out of the rule rather than zeroing it,
+            // so a shares rule that named one person keeps none. SplitCalculator says so by
+            // throwing, which is right of it: no participants, or weights summing to zero,
+            // is not a division it could carry out.
+            //
+            // What was wrong was where that surfaced. An ArgumentException is nobody's
+            // domain error, so it reached the client as a 500 with a trace id, and the
+            // person it happened to was somebody recording a dinner. The rule really is
+            // unusable and saying which one is the useful half of the answer.
+            throw new ValidationException(ErrorCodes.SplitRuleInvalid,
+                    $"\"{rule.Name}\" no longer divides between anybody, so an expense filed " +
+                    "under this category cannot be split by it. Edit the rule, or file the " +
+                    "expense under nothing to divide it evenly.")
+                // The rule, and not the exception's own words. docs/errors.md keeps
+                // exception text out of a response, and moving it from detail into an
+                // extension member would be keeping the letter and losing the point:
+                // SplitCalculator's guard clauses would become part of the API's observable
+                // surface, so rewording one would be a client-visible change nobody had
+                // thought about. Nothing is lost by dropping it -- it says either "no
+                // participants" or "weights sum to zero", and the sentence above already
+                // says the rule divides between nobody. What a caller can act on is which
+                // rule it was.
+                .WithExtension("splitRuleId", rule.Id)
+                .WithExtension("splitRuleName", rule.Name);
+        }
     }
 
     /// <summary>
@@ -103,7 +144,7 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
 
         if (given.Any(split => !members.Contains(split.UserId)))
             throw new ConflictException(ErrorCodes.SplitUserNotInGroup,
-                "A split names somebody who is not a member of the group.");
+                "A split names somebody who is neither a member of the group nor invited to it.");
 
         var total = given.Sum(split => split.Amount);
 
@@ -119,6 +160,15 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
         return [.. given.Select(split => new SplitAmount(split.UserId, split.Amount))];
     }
 
+    /// <summary>
+    /// Everybody this expense may be divided between.
+    /// </summary>
+    /// <remarks>
+    /// The group's participants and not only its members: somebody invited and still to
+    /// answer is choosable here, because spending does not wait for people to answer their
+    /// invitations. Their share is an ordinary share -- it is stored the same way, counted
+    /// in the same balances, and belongs to them the moment they accept.
+    /// </remarks>
     private async Task<IReadOnlyCollection<Guid>> MembersOf(Expense expense, CancellationToken ct)
     {
         var groupId = expense.Group?.Id ?? expense.GroupId;
@@ -126,11 +176,7 @@ public class ExpenseSplitter(AppDbContext dbContext, ISplitRuleHandler splitRule
         if (groupId is null)
             return [expense.User?.Id ?? expense.UserId];
 
-        return await dbContext.Set<Group>()
-            .Where(@group => @group.Id == groupId)
-            .SelectMany(@group => @group.Users)
-            .Select(user => user.Id)
-            .ToListAsync(ct);
+        return await participants.IdsOf(groupId.Value, ct);
     }
 
     /// <summary>

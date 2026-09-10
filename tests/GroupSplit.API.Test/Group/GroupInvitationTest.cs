@@ -16,8 +16,13 @@ namespace GroupSplit.API.Test.Group;
 /// It used to be something a group did to them: an address was looked up, and an account
 /// with it was in the group from that moment -- while an address with no account behind it
 /// was silently dropped and the person who typed it was told the member had been added.
-/// The second half is what these are mostly about, because inviting somebody who has not
-/// signed up yet is the ordinary case for a new group and it did nothing at all.
+/// <para>
+/// It stopped being an address at all. A group names the person it is sharing costs with and
+/// gets a link to send them; whoever opens that link and claims it becomes that person. So
+/// the tests here are about tokens rather than about addresses. There is still a "my
+/// invitations" list, and it answers a question it can actually ask: not the ones sent to
+/// my address, but the ones whose link I have opened.
+/// </para>
 /// </remarks>
 public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
@@ -28,12 +33,12 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private Task<Data.Entities.Group> AGroup(string name = "Lisbon") =>
         Groups.CreateGroup(new CreateGroupRequest { Name = name }, Ct).AsTask();
 
-    private static AddMemberRequest Asking(params string[] emails) =>
-        new([.. emails.Select(email => new UserIdentifier { Email = email })]);
+    private static InviteToGroupRequest Asking(params string[] names) =>
+        new() { Names = [.. names] };
 
     /// <summary>
-    /// Everything the invitee does -- reading their invitations, accepting one -- happens as
-    /// them. A scope of their own is how a test is somebody else for a moment.
+    /// Everything the invitee does -- opening their link, claiming it -- happens as them. A
+    /// scope of their own is how a test is somebody else for a moment.
     /// </summary>
     private async Task<(IServiceScope Scope, Data.Entities.User User)> AnotherPerson()
     {
@@ -44,102 +49,143 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task An_address_with_no_account_behind_it_is_still_invited()
+    public async Task Inviting_somebody_names_them_and_mints_a_link()
     {
         var group = await AGroup();
 
-        var pending = await Invitations.Invite(group.Id, Asking("nobody@example.com"), Ct);
+        var pending = await Invitations.Invite(group.Id, Asking("Carlos"), Ct);
 
         var invitation = Assert.Single(pending);
 
-        Assert.Equal("nobody@example.com", invitation.Email);
+        Assert.Equal("Carlos", invitation.Name);
         Assert.Equal(group.Id, invitation.GroupId);
+        Assert.NotEmpty(invitation.Token);
 
-        // And nobody has joined: an invitation is not a membership.
-        var members = await (await Groups.GetGroupMembers(group.Id, Ct)).ToListAsync(Ct);
-        Assert.Single(members);
+        // Nobody has joined: an invitation is not a membership. Asked of the membership
+        // itself rather than of GetGroupMembers, which answers the wider question -- who the
+        // group may record money against -- and does include them, marked as waiting.
+        var joined = await DbContext.Set<GroupMembership>()
+            .Where(membership => membership.GroupId == group.Id)
+            .ToListAsync(Ct);
+
+        Assert.Single(joined);
+
+        var participants = await (await Groups.GetGroupMembers(group.Id, Ct)).ToListAsync(Ct);
+
+        Assert.Equal(2, participants.Count);
+        Assert.Contains(participants, person => person.Id == invitation.ParticipantUserId);
     }
 
+    /// <summary>
+    /// Two people really can be called Dani, and refusing the second would be the app
+    /// telling a group it has misremembered its own friends.
+    /// </summary>
     [Fact]
-    public async Task Addresses_are_matched_without_regard_to_case()
+    public async Task Two_people_may_share_a_name()
     {
         var group = await AGroup();
 
-        await Invitations.Invite(group.Id, Asking("Someone@Example.com"), Ct);
-        await Invitations.Invite(group.Id, Asking("someone@example.COM"), Ct);
+        await Invitations.Invite(group.Id, Asking("Dani"), Ct);
+        await Invitations.Invite(group.Id, Asking("Dani"), Ct);
 
         var pending = await Invitations.ForGroup(group.Id, Ct);
 
-        Assert.Single(pending);
-        Assert.Equal("someone@example.com", pending[0].Email);
+        Assert.Equal(2, pending.Count);
+
+        // Two people, not one named twice: separate stand-ins, so a share given to one is
+        // not a share given to the other.
+        Assert.Equal(2, pending.Select(invitation => invitation.ParticipantUserId).Distinct().Count());
+        Assert.Equal(2, pending.Select(invitation => invitation.Token).Distinct().Count());
     }
 
     [Fact]
-    public async Task Inviting_somebody_already_in_the_group_is_not_an_error_and_adds_nothing()
+    public async Task Inviting_several_people_at_once_makes_one_invitation_each()
     {
         var group = await AGroup();
-        var me = GetService<ICurrentUser>().User;
 
-        var pending = await Invitations.Invite(group.Id, Asking(me.Email!, "new@example.com"), Ct);
+        var pending = await Invitations.Invite(group.Id, Asking("Carlos", "Nuria", "Tomás"), Ct);
 
-        // The one who is already there is skipped; the other four of five would otherwise
-        // fail for the sake of one.
-        Assert.Single(pending);
-        Assert.Equal("new@example.com", pending[0].Email);
+        Assert.Equal(3, pending.Count);
+        Assert.Equal(3, pending.Select(invitation => invitation.Token).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Inviting_nobody_says_so_rather_than_answering_with_the_group()
+    {
+        var group = await AGroup();
+
+        var refusal = await Assert.ThrowsAsync<ValidationException>(() =>
+            Invitations.Invite(group.Id, Asking("   ", ""), Ct));
+
+        Assert.Equal(ErrorCodes.GroupInvitationNoName, refusal.Code);
+        Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
     }
 
     [Fact]
     public async Task Inviting_to_a_group_the_caller_is_not_in_is_a_404()
     {
         await Assert.ThrowsAsync<NotFoundException>(() =>
-            Invitations.Invite(Guid.NewGuid(), Asking("someone@example.com"), Ct));
+            Invitations.Invite(Guid.NewGuid(), Asking("Carlos"), Ct));
     }
 
     [Fact]
-    public async Task Accepting_puts_the_invitee_in_the_group_and_clears_the_invitation()
+    public async Task Claiming_puts_the_claimer_in_the_group_and_uses_the_link_up()
     {
         var group = await AGroup();
-        var (scope, invitee) = await AnotherPerson();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, claimer) = await AnotherPerson();
 
         using (scope)
         {
-            await Invitations.Invite(group.Id, Asking(invitee.Email!), Ct);
-
             var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
 
-            var mine = await theirs.Mine(Ct);
-            var invitation = Assert.Single(mine);
-            Assert.Equal(group.Id, invitation.GroupId);
+            var described = await theirs.Describe(invitation.Token, Ct);
 
-            var joined = await theirs.Accept(invitation.Id, Ct);
+            Assert.Equal(group.Id, described.GroupId);
+            Assert.Equal("Carlos", described.Name);
+            Assert.False(described.AlreadyAMember);
 
-            Assert.Equal(group.Id, joined.Id);
+            var claimed = await theirs.Claim(invitation.Token, Ct);
+
+            Assert.Equal(group.Id, claimed.GroupId);
+            Assert.Equal("Carlos", claimed.Name);
+
+            // Once. A forwarded copy of the link has nothing left to claim, and gets the
+            // same answer a mistyped one does.
+            var refusal = await Assert.ThrowsAsync<NotFoundException>(() =>
+                theirs.Claim(invitation.Token, Ct));
+
+            Assert.Equal(ErrorCodes.GroupInvitationNotFound, refusal.Code);
         }
 
         var members = await (await Groups.GetGroupMembers(group.Id, Ct)).ToListAsync(Ct);
-        Assert.Contains(members, member => member.Id == invitee.Id);
 
+        Assert.Contains(members, member => member.Id == claimer.Id);
         Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
+
+        // The stand-in goes with it: it existed to hold a position until somebody claimed
+        // it, and somebody has.
+        Assert.Null(await DbContext.Set<Data.Entities.User>()
+            .FirstOrDefaultAsync(user => user.Id == invitation.ParticipantUserId, Ct));
     }
 
     [Fact]
-    public async Task Joining_stamps_when_they_joined()
+    public async Task Claiming_stamps_when_they_joined()
     {
         var group = await AGroup();
-        var (scope, invitee) = await AnotherPerson();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, claimer) = await AnotherPerson();
 
         using (scope)
         {
-            await Invitations.Invite(group.Id, Asking(invitee.Email!), Ct);
-
-            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
-            var invitation = Assert.Single(await theirs.Mine(Ct));
-
-            await theirs.Accept(invitation.Id, Ct);
+            await scope.ServiceProvider.GetRequiredService<IInvitationService>()
+                .Claim(invitation.Token, Ct);
         }
 
         var membership = await DbContext.Set<GroupMembership>()
-            .FirstAsync(row => row.GroupId == group.Id && row.UserId == invitee.Id, Ct);
+            .FirstAsync(row => row.GroupId == group.Id && row.UserId == claimer.Id, Ct);
 
         Assert.NotEqual(default, membership.JoinedAt);
     }
@@ -148,58 +194,165 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Declining_clears_the_invitation_and_joins_nobody()
     {
         var group = await AGroup();
-        var (scope, invitee) = await AnotherPerson();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, _) = await AnotherPerson();
 
         using (scope)
         {
-            await Invitations.Invite(group.Id, Asking(invitee.Email!), Ct);
-
             var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
-            var invitation = Assert.Single(await theirs.Mine(Ct));
 
-            await theirs.Decline(invitation.Id, Ct);
+            var closed = await theirs.Decline(invitation.Token, Ct);
 
-            Assert.Empty(await theirs.Mine(Ct));
+            Assert.Equal(InvitationOutcome.Declined, closed.Outcome);
+            Assert.Equal("Carlos", closed.Name);
+
+            await Assert.ThrowsAsync<NotFoundException>(() => theirs.Describe(invitation.Token, Ct));
         }
 
-        var members = await (await Groups.GetGroupMembers(group.Id, Ct)).ToListAsync(Ct);
+        var joined = await DbContext.Set<GroupMembership>()
+            .Where(membership => membership.GroupId == group.Id)
+            .ToListAsync(Ct);
 
-        Assert.Single(members);
+        Assert.Single(joined);
         Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
     }
 
+    /// <summary>
+    /// Opening a link is remembered, so somebody who wanders off can be offered it again.
+    /// </summary>
+    /// <remarks>
+    /// The hole this fills: open the link, sign in, go and look at something else without
+    /// answering, and the app -- which had just met you -- could not put the invitation back
+    /// in front of you. The only way back was the message the link arrived in.
+    /// </remarks>
     [Fact]
-    public async Task An_invitation_addressed_to_somebody_else_cannot_be_accepted()
+    public async Task Opening_a_link_puts_it_in_the_openers_own_list()
     {
         var group = await AGroup();
-        var (scope, _) = await AnotherPerson();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
 
-        var pending = await Invitations.Invite(group.Id, Asking("stranger@example.com"), Ct);
-        var invitation = Assert.Single(pending);
+        var (scope, _) = await AnotherPerson();
 
         using (scope)
         {
             var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
 
-            // A 403 rather than a 404: pretending it does not exist would be a lie the
-            // invitee's own client could catch out by trying twice.
-            var refusal = await Assert.ThrowsAsync<ForbiddenException>(() => theirs.Accept(invitation.Id, Ct));
+            // Nothing until they open it. An invitation is not addressed to anybody.
+            Assert.Empty(await theirs.Mine(Ct));
 
-            Assert.Equal(ErrorCodes.GroupInvitationNotYours, refusal.Code);
+            await theirs.Describe(invitation.Token, Ct);
+
+            var mine = Assert.Single(await theirs.Mine(Ct));
+
+            Assert.Equal(invitation.Id, mine.Id);
+            Assert.Equal("Carlos", mine.Name);
+            Assert.Equal(group.Id, mine.GroupId);
+
+            // The token is in it, which is the whole point: this is the way back to a link
+            // whose message is gone.
+            Assert.Equal(invitation.Token, mine.Token);
+
+            // Reading it twice is not two invitations.
+            await theirs.Describe(invitation.Token, Ct);
+            Assert.Single(await theirs.Mine(Ct));
         }
+
+        // And it is theirs alone -- opening a link tells nobody else anything.
+        Assert.Empty(await Invitations.Mine(Ct));
+    }
+
+    /// <summary>
+    /// A member of the group opening the link does not put it in their own list.
+    /// </summary>
+    /// <remarks>
+    /// Checking that a link works before sending it is a sensible thing to do, and it must
+    /// not fill the sender's own "waiting on you" with an invitation meant for somebody
+    /// else -- a decision they cannot make, and could only clear by answering on the
+    /// invitee's behalf.
+    /// </remarks>
+    [Fact]
+    public async Task A_member_checking_their_own_groups_link_is_not_waiting_on_it()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        // Opened by the inviter, who is a member of the group.
+        var described = await Invitations.Describe(invitation.Token, Ct);
+
+        Assert.True(described.AlreadyAMember);
+        Assert.Empty(await Invitations.Mine(Ct));
+    }
+
+    [Fact]
+    public async Task Answering_one_takes_it_out_of_the_list()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, _) = await AnotherPerson();
+
+        using (scope)
+        {
+            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
+
+            await theirs.Describe(invitation.Token, Ct);
+            Assert.Single(await theirs.Mine(Ct));
+
+            await theirs.Claim(invitation.Token, Ct);
+
+            // Not filtered out: the invitation is gone and the row cascaded with it, so
+            // there is no state here that could disagree about whether it is still open.
+            Assert.Empty(await theirs.Mine(Ct));
+        }
+    }
+
+    [Fact]
+    public async Task Withdrawing_one_takes_it_out_of_the_list_too()
+    {
+        var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
+
+        var (scope, _) = await AnotherPerson();
+
+        using (scope)
+        {
+            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
+
+            await theirs.Describe(invitation.Token, Ct);
+
+            await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+
+            Assert.Empty(await theirs.Mine(Ct));
+        }
+    }
+
+    /// <summary>
+    /// A token nobody minted, and one that has been answered, are the same answer. The
+    /// alternative is telling whoever holds a forwarded link that it used to be good.
+    /// </summary>
+    [Fact]
+    public async Task A_token_that_names_nothing_is_a_404()
+    {
+        var refusal = await Assert.ThrowsAsync<NotFoundException>(() =>
+            Invitations.Describe("not-a-token", Ct));
+
+        Assert.Equal(ErrorCodes.GroupInvitationNotFound, refusal.Code);
     }
 
     [Fact]
     public async Task Withdrawing_takes_the_invitation_back()
     {
         var group = await AGroup();
+        var invitation = Assert.Single(await Invitations.Invite(group.Id, Asking("Carlos"), Ct));
 
-        var pending = await Invitations.Invite(group.Id, Asking("someone@example.com"), Ct);
-        var invitation = Assert.Single(pending);
+        var closed = await Invitations.Withdraw(group.Id, invitation.Id, Ct);
 
-        await Invitations.Withdraw(group.Id, invitation.Id, Ct);
-
+        Assert.Equal(InvitationOutcome.Withdrawn, closed.Outcome);
         Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
+
+        // And the link with it.
+        await Assert.ThrowsAsync<NotFoundException>(() => Invitations.Describe(invitation.Token, Ct));
     }
 
     [Fact]
@@ -214,34 +367,14 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// The case the old behaviour could not serve at all: somebody is invited before they
-    /// have an account, and the invitation is waiting when they make one.
+    /// The links are in the rows, and a link is a claim on a position in this group's
+    /// ledger -- so who may read the list is not a matter of tidiness.
     /// </summary>
-    [Fact]
-    public async Task An_invitation_sent_before_the_account_existed_is_waiting_afterwards()
-    {
-        var group = await AGroup();
-
-        // The address the next person to sign up will have. Nothing about the invitation
-        // knows that yet -- it is matched by address when they read it, which is what makes
-        // inviting somebody who has not signed up work at all.
-        var (scope, invitee) = await AnotherPerson();
-
-        using (scope)
-        {
-            await Invitations.Invite(group.Id, Asking(invitee.Email!), Ct);
-
-            var theirs = scope.ServiceProvider.GetRequiredService<IInvitationService>();
-
-            Assert.Single(await theirs.Mine(Ct));
-        }
-    }
-
     [Fact]
     public async Task The_group_only_shows_its_own_invitations_to_its_own_members()
     {
         var group = await AGroup();
-        await Invitations.Invite(group.Id, Asking("someone@example.com"), Ct);
+        await Invitations.Invite(group.Id, Asking("Carlos"), Ct);
 
         var (scope, _) = await AnotherPerson();
 

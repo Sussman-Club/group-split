@@ -147,23 +147,14 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
 
         var joined = await joiner.Join(group, user, ct);
 
-        // A standing invitation to the same group is answered by having joined it. Leaving
-        // it would show the group waiting on somebody who is already in it, and offer them
-        // a Join button for a group they are in.
-        var email = (user.Email ?? string.Empty).Trim().ToLowerInvariant();
-
-        var invitation = email.Length == 0
-            ? null
-            : await context.Set<GroupInvitation>()
-                .FirstOrDefaultAsync(candidate =>
-                    candidate.GroupId == group.Id && candidate.Email == email, ct);
-
-        if (invitation is not null)
-        {
-            context.Remove(invitation);
-            await context.SaveChangesAsync(ct);
-        }
-
+        // No standing invitation is answered by this, and none can be. This used to close
+        // the one addressed to the joiner's email, and there are no addresses any more: an
+        // invitation names a person the group made up and holds a stand-in of its own, which
+        // only claiming that invitation's own link attaches an account to. Somebody who was
+        // named *and* sent the group link comes in here as themselves, and the group is
+        // still waiting on the person it named -- which it should be, since nothing has told
+        // it the two are the same. Withdrawing the invitation is how it says so, and that
+        // hands the position over rather than dropping it.
         return new JoinedGroupResponse(group.Id, group.Name, group.Users.Count, !joined);
     }
 

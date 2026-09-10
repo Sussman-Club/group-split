@@ -43,6 +43,11 @@ public static class Extensions
             // developer's seeded balances are ones the app could have produced. Scoped,
             // like the API registers it, because it writes through the DbContext.
             builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+
+            // Who a group may divide an expense between, which the splitter asks: its
+            // members, and the people it has invited and is still waiting on.
+            builder.Services.AddScoped<IGroupParticipants, GroupParticipants>();
+
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 

@@ -57,7 +57,7 @@ Groups you belong to, their members and their balances.
 | `groups show <group-id>` | Show one group. |
 | `groups create <name>` | Create a group. |
 | `groups rename <group-id> <name>` | Rename a group. |
-| `groups members <group-id>` | List a group's members. |
+| `groups members <group-id>` | List a group's members, and the people it has invited and is waiting on. The `Status` column, and `isPendingInvitee` in JSON, say which. |
 | `groups remove-member <group-id> <user-id>` | Remove a member from a group. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
@@ -67,9 +67,9 @@ Groups you belong to, their members and their balances.
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
 | `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. |
-| `groups invite <group-id> <email>` | Invite people to a group by email. |
-| `groups invitations <group-id>` | List the invitations a group is still waiting on. |
-| `groups withdraw-invitation <group-id> <invitation-id>` | Withdraw an invitation nobody has answered. |
+| `groups invite <group-id> <name>...` | Name people the group is sharing costs with. Answers with a single-use link for each; there is no email. |
+| `groups invitations <group-id>` | List the people a group is still waiting on, with their links and the ids to name them by. |
+| `groups withdraw-invitation <group-id> <invitation-id>` | Withdraw an invitation nobody has answered. Confirmation required: their link stops working, and anything recorded against them goes to a member. |
 | `groups link show <group-id>` | Show a group's standing join link. |
 | `groups link create <group-id>` | Make a join link for a group. Any link the group already had stops working. |
 | `groups link revoke <group-id>` | Turn off a group's join link, so the URL stops working. |
@@ -163,15 +163,21 @@ Reusable rules describing how an expense is divided.
 
 ### invitations
 
-Group invitations addressed to you.
+Personal invitation links and group join links you were sent.
 
 | Command | |
 | --- | --- |
-| `invitations list` | List invitations waiting for your answer. |
-| `invitations accept <invitation-id>` | Accept an invitation and join the group. |
-| `invitations decline <invitation-id>` | Decline an invitation. |
-| `invitations link <link>` | Show which group a join link leads to, without joining. |
-| `invitations join <link>` | Join the group a link leads to. |
+| `invitations list` | The invitations whose links you have opened and not answered, with their tokens. Not "sent to me" -- there is no address to match. |
+| `invitations show <link>` | Show what a personal invitation link leads to, without claiming it. Says nothing about the money. |
+| `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name and their places in the group's split rules. Confirmation required. |
+| `invitations decline <link>` | Decline it. Confirmation required: anything the group recorded against that name goes to a member of it. |
+| `invitations link <link>` | Show which group a *join* link leads to, without joining. |
+| `invitations join <link>` | Join the group a join link leads to, as yourself. |
+
+`list` is the only command here that does not take a link, and it is how you find one: it
+answers every invitation whose link this account has opened, so it is the way back to one
+when the user no longer has the message. Everything else takes the link, and all of them
+accept the whole URL as readily as the token inside it.
 
 ### bank
 
@@ -339,11 +345,51 @@ with totals instead of rows -- ask them rather than paging a list to add it up y
 
 ### The two ways in to a group
 
-`groups invite <group-id> <email>...` sends invitations to named people; the recipient
-answers with `invitations accept` or `invitations decline`. A join link is the open door:
-`groups link create` mints one, `groups link show` reads it back, `groups link revoke` turns
-it off. On the receiving side, `invitations link <link>` says which group a link leads to
-**without joining**, and `invitations join <link>` joins. Check before you join.
+They are different doors and are not interchangeable.
+
+A **join link** is the group's open door: `groups link create` mints one, `groups link show`
+reads it back, `groups link revoke` turns it off. It is reusable, it expires, and it lets
+whoever follows it in **as themselves**, claiming nothing. On the receiving side,
+`invitations link <link>` says which group it leads to without joining, and
+`invitations join <link>` joins.
+
+A **personal invitation link** comes from `groups invite <group-id> <name>...`, one per
+person. It hands over a *position in the group's ledger*: the shares recorded against that
+name become the claimer's. So it works once, it says nothing about the money until claimed,
+and `invitations claim <link>` is gated by the confirmation protocol. Never suggest
+forwarding one, and never paste one where the group's join link would do.
+
+### Somebody who has been invited and has not answered
+
+`groups invite <group-id> <name>...` names people the group is sharing costs with. That makes
+them somebody it can point at at once, so **use their id the way you would a member's**: give
+them a share with `--split`, or name them with `--paid-by`. Do not wait for anybody to claim
+anything, and do not leave them out of a division the user described as including them.
+
+Their id is `participantUserId`, from `groups invitations`, and it is the id `groups members`
+lists them under with `isPendingInvitee` true. It is **not** the invitation's own id, which is
+only for withdrawing it, and not the token, which is the link to send them.
+
+Two things you cannot do with them:
+
+- **No repayment may name them.** `groups settle`, `groups settle-between`, `groups
+  settle-up` and `settle pay` all refuse with `SETTLEMENT_WITH_PENDING_INVITEE`. Their
+  balance is real and stands until somebody claims their link; there is simply no account to
+  pay. If a user asks you to settle with one, say that rather than recording something else.
+- **`groups remove-member` is not how they go.** It answers `GROUP_MEMBER_NOT_JOINED`, since
+  there is no membership to remove. `groups withdraw-invitation` is the act.
+
+**If the user has lost their own link**, `invitations list` has it -- provided they opened
+it at least once. If they never did, only the group can send it again.
+
+**The tokens are credentials.** A personal link is a claim on a position in the group's
+ledger: whoever opens it takes on the shares recorded against that name. Hand one to the user
+who asked for it and nowhere else -- never into a shared channel, a commit, an issue, or a
+transcript you did not have to write it into. Say "send Carlos his link" rather than pasting
+it unasked.
+
+Claiming, declining and withdrawing all move money, and all three answer with what moved and
+whose it is now. **Report that output**: it is somebody's balance that changed.
 
 ### Settling up
 

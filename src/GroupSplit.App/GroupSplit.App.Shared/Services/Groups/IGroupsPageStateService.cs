@@ -60,7 +60,7 @@ public interface IGroupsPageStateService
     Task<IReadOnlyList<GroupInvitationResponse>> GetGroupInvitationsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Asks people to join by email. Nobody is added until they accept.</summary>
-    Task<bool> InviteToGroupAsync(AddMemberRequest request, CancellationToken cancellationToken = default);
+    Task<bool> InviteToGroupAsync(InviteToGroupRequest request, CancellationToken cancellationToken = default);
 
     Task<bool> WithdrawInvitationAsync(Guid invitationId, string email, CancellationToken cancellationToken = default);
 

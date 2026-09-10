@@ -1,7 +1,6 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Banking
-@using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Settling
 @using GroupSplit.Shared
@@ -9,11 +8,10 @@
 @inject ISettleStateService Settling
 @inject IInboxStateService Inbox
 @inject IInvitationsClient InvitationsClient
-@inject IGroupCommands GroupCommands
 @inject ApiErrorPresenter Errors
 @inject DataChangeNotifier Changes
-@inject NavigationManager Nav
 @inject LocalClock Clock
+@inject NavigationManager Nav
 @implements IDisposable
 
 @*
@@ -66,30 +64,36 @@
                 </div>
             }
 
+            @* Invitations somebody has opened and not answered.
+
+               It used to be every invitation sent to their address, and there are no
+               addresses on an invitation now -- so this is the ones whose link they have
+               opened, which the API writes down as it happens. Without it, opening a link
+               and wandering off left the invitation reachable only through the chat thread
+               it arrived in.
+
+               No Accept button, where the old row had one. Claiming takes on whatever the
+               group has recorded against that name, and the page that says so is /claim --
+               a one-tap Accept out here would be agreeing to a position nobody had been
+               shown. *@
             @foreach (var invitation in _invitations)
             {
                 var pending = invitation;
                 <div class="gs-row" style="cursor: default">
-                    <Avatar Name="@pending.GroupName" />
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.PersonAddAlt" /></span>
                     <div style="min-width: 0">
                         <div class="title">
                             <span>
                                 @(string.IsNullOrWhiteSpace(pending.InvitedByUserName)
-                                    ? $"You have been asked to join {pending.GroupName}"
-                                    : $"{pending.InvitedByUserName} asked you to join {pending.GroupName}")
+                                    ? $"You have been invited to {pending.GroupName} as {pending.Name}"
+                                    : $"{pending.InvitedByUserName} invited you to {pending.GroupName} as {pending.Name}")
                             </span>
                         </div>
                         <div class="meta">Invited @Clock.Local(pending.InvitedAt).ToString("d MMM")</div>
                     </div>
-                    <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
-                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                   Disabled="@(_busy == pending.Id)"
-                                   OnClick="@(() => DeclineAsync(pending))">Decline</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                   Class="gs-btn-pill"
-                                   Disabled="@(_busy == pending.Id)"
-                                   OnClick="@(() => AcceptAsync(pending))">Accept</MudButton>
-                    </div>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               Class="gs-btn-pill"
+                               Href="@($"/claim/{pending.Token}")">Open</MudButton>
                 </div>
             }
         </div>
@@ -100,15 +104,14 @@
     /// <summary>Where this sits in the page's entrance sequence.</summary>
     [Parameter] public int Reveal { get; set; }
 
-    private IReadOnlyList<GroupInvitationResponse> _invitations = [];
-    private Guid? _busy;
-
     private SettlementPlanResponse? Plan => Settling.Plan;
 
     /// <summary>
     /// How many decisions are waiting. The settling plan counts once however many people
     /// are in it, because going to Settle is one decision and the plan is what it is for.
     /// </summary>
+    private IReadOnlyList<GroupInvitationResponse> _invitations = [];
+
     private int Items =>
         (Plan is { } plan && (plan.YouPay.Count > 0 || plan.OwedToYou.Count > 0) ? 1 : 0)
         + (Inbox.NewCount > 0 ? 1 : 0)
@@ -184,24 +187,9 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task AcceptAsync(GroupInvitationResponse invitation)
-    {
-        _busy = invitation.Id;
-        await GroupCommands.AcceptInvitationAsync(invitation.Id, invitation.GroupName);
-        _busy = null;
-
-        // Deliberately not opening the group: this strip is a queue, and being thrown into
-        // a group after one decision leaves the rest of it behind.
-    }
-
-    private async Task DeclineAsync(GroupInvitationResponse invitation)
-    {
-        _busy = invitation.Id;
-        await GroupCommands.DeclineInvitationAsync(invitation.Id, invitation.GroupName);
-        _busy = null;
-    }
-
     private void ReRender() => InvokeAsync(StateHasChanged);
+
+
 
     public void Dispose()
     {

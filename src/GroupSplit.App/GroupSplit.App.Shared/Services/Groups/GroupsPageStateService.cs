@@ -342,7 +342,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _groupsClient.GetGroupMembersAsAsyncEnumerable(SelectedGroup.Id, cancellationToken);
     }
 
-    public Task<bool> InviteToGroupAsync(AddMemberRequest request, CancellationToken cancellationToken = default)
+    public Task<bool> InviteToGroupAsync(InviteToGroupRequest request, CancellationToken cancellationToken = default)
     {
         var group = Selected();
 

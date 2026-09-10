@@ -21,6 +21,13 @@ public record TransactionResponse
 
     public Guid PaidByUserId { get; set; }
     public string PaidByUserName { get; set; } = "";
+
+    /// <summary>
+    /// True when whoever paid has been invited to the group and has not joined yet. An
+    /// invitee can front money for the group from the moment they are asked, and the label
+    /// beside their name is what keeps that from reading as a member who joined.
+    /// </summary>
+    public bool PaidByIsPendingInvitee { get; set; }
     public Guid? PaidToUserId { get; set; }
     public string? PaidToUserName { get; set; }
     /// <summary>What it was filed under, or null for an expense filed under nothing.</summary>

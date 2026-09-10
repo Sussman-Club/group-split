@@ -268,11 +268,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
@@ -282,13 +277,29 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("InvitedByUserId")
                         .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
-                    b.HasIndex("Email");
+                    b.Property<Guid>("ParticipantUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
 
                     b.HasIndex("InvitedByUserId");
 
-                    b.HasIndex("GroupId", "Email")
+                    b.HasIndex("ParticipantUserId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("GroupId", "ParticipantUserId")
                         .IsUnique();
 
                     b.ToTable("GroupInvitation");
@@ -355,6 +366,24 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("GroupUser", (string)null);
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.InvitationOpened", b =>
+                {
+                    b.Property<Guid>("InvitationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("InvitationId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("InvitationOpened");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.LinkedAccount", b =>
@@ -842,9 +871,17 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("InvitedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("GroupSplit.Data.Entities.User", "Participant")
+                        .WithMany()
+                        .HasForeignKey("ParticipantUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Group");
 
                     b.Navigation("InvitedBy");
+
+                    b.Navigation("Participant");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.GroupJoinLink", b =>
@@ -870,6 +907,21 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.Group", null)
                         .WithMany()
                         .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.InvitationOpened", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.GroupInvitation", null)
+                        .WithMany()
+                        .HasForeignKey("InvitationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

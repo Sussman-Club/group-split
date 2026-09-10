@@ -5,7 +5,7 @@ It helps groups track shared expenses, apply split rules, and settle balances wi
 
 ## What it does
 
-- Create groups and invite people to them by email
+- Create groups, name whoever is sharing the costs, and send each of them a link to join by
 - Record shared and personal expenses, split however you like
 - Split costs by category default, or state the shares on one expense
 - Calculate per-member balances, and settle up from either side
@@ -76,6 +76,14 @@ Rules name people, and people join groups and leave them. What a stored rule mea
 who is taken out of it, what happens to their share, and why a percentage rule can be left
 reading less than 100 -- is in
 [docs/split-rules-and-membership.md](docs/split-rules-and-membership.md).
+
+Spending does not wait for people to answer their invitations, so a group names whoever it is
+sharing costs with and can point at them at once: they can be given a share, they can be the
+payer, and their balance is in the group's column. Each of them gets a single-use link, and
+whoever opens it becomes that person -- there are no email invitations. What that means -- why
+membership and participation are different questions, why a personal link is guarded more
+heavily than a join link, and what becomes of a position when an invitation is claimed,
+declined or withdrawn -- is in [docs/pending-invitees.md](docs/pending-invitees.md).
 
 ## Errors
 

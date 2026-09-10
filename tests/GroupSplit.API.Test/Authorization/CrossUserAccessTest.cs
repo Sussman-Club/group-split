@@ -203,7 +203,7 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
             GetService<IInvitationService>().Invite(groupId,
-                new AddMemberRequest([new UserIdentifier { Email = me.Email! }]),
+                new InviteToGroupRequest { Names = ["me"] },
                 TestContext.Current.CancellationToken));
     }
 

@@ -158,6 +158,13 @@
                                     {
                                         <span class="gs-muted" style="font-weight: 500"> (you)</span>
                                     }
+                                    @* Their balance is real and is part of what makes this
+                                       column add up; what is missing is somebody to pay.
+                                       Which is why they are here and not in the plan. *@
+                                    @if (member.IsPendingInvitee)
+                                    {
+                                        <span class="gs-muted" style="font-weight: 500"> (invited)</span>
+                                    }
                                 </div>
                                 <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
                             </div>

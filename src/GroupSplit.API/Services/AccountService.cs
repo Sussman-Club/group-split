@@ -85,15 +85,12 @@ public sealed class AccountService(
             await groups.DetachMember(group, user, cancellationToken);
         }
 
-        // Invitations they sent keep pointing at them until the reference is cleared, which
-        // is the FK's own doing; the ones sent *to* them are found by address, and the
-        // address is about to be cleared, so they are taken out here rather than left
-        // matching nobody.
-        var addressed = await context.Set<GroupInvitation>()
-            .Where(invitation => invitation.Email == user.Email)
-            .ToListAsync(cancellationToken);
-
-        context.RemoveRange(addressed);
+        // Nothing to do about invitations sent *to* them: an invitation names a person the
+        // group made up and holds a stand-in of its own, and claiming one is what attaches a
+        // real account to it -- which deletes both. So no pending invitation can name this
+        // account, and there is no address left for one to match. The invitations they
+        // *sent* keep pointing at them until the reference is cleared, which is the FK's own
+        // doing.
 
         // Keycloak keeps the login -- deleting it there is a separate decision -- so
         // dropping the mapping is what stops a later sign-in resurrecting this account.

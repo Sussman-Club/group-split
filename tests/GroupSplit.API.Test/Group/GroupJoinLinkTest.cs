@@ -269,29 +269,32 @@ public class GroupJoinLinkTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// Both ways in at once: invited by address, and joining by link before the invitation
-    /// is ever read. The group must not be left waiting on somebody who is in it.
+    /// Both ways in at once: named in an invitation, and joining by the group's open link
+    /// before that invitation is ever claimed. The invitation stands.
     /// </summary>
+    /// <remarks>
+    /// It used to be closed here, because an invitation was an address and the joiner's
+    /// address matched it. A link names nobody in particular now, so nothing has told the
+    /// group that the person who walked in is the person it named -- and guessing from a
+    /// name would hand a stranger's position to whoever the group happened to call Carlos.
+    /// Withdrawing the invitation is how the group says so, and that hands the position over
+    /// rather than dropping it.
+    /// </remarks>
     [Fact]
-    public async Task Joining_by_link_answers_a_standing_invitation_to_the_same_group()
+    public async Task Joining_by_link_leaves_a_standing_invitation_alone()
     {
         var group = await AGroup();
         var link = await Links.Create(group.Id, Ct);
-        var (scope, invitee) = await AnotherPerson();
+        var (scope, _) = await AnotherPerson();
+
+        await Invitations.Invite(group.Id, new InviteToGroupRequest { Names = ["Carlos"] }, Ct);
 
         using (scope)
         {
-            await Invitations.Invite(group.Id,
-                new AddMemberRequest([new UserIdentifier { Email = invitee.Email! }]), Ct);
-
-            var theirs = scope.ServiceProvider.GetRequiredService<IJoinLinkService>();
-
-            await theirs.Accept(link.Token, Ct);
-
-            Assert.Empty(await scope.ServiceProvider.GetRequiredService<IInvitationService>().Mine(Ct));
+            await scope.ServiceProvider.GetRequiredService<IJoinLinkService>().Accept(link.Token, Ct);
         }
 
-        Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
+        Assert.Single(await Invitations.ForGroup(group.Id, Ct));
     }
 
     /// <summary>
@@ -299,16 +302,18 @@ public class GroupJoinLinkTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// and that invitation is still there to answer.
     /// </summary>
     [Fact]
-    public async Task Inviting_by_email_still_works_alongside_a_link()
+    public async Task Naming_somebody_still_works_alongside_a_group_link()
     {
         var group = await AGroup();
 
         await Links.Create(group.Id, Ct);
 
         var pending = await Invitations.Invite(group.Id,
-            new AddMemberRequest([new UserIdentifier { Email = "nobody@example.com" }]), Ct);
+            new InviteToGroupRequest { Names = ["Carlos"] }, Ct);
 
-        Assert.Equal("nobody@example.com", Assert.Single(pending).Email);
+        // Two doors, and they are different doors: the group's link lets anybody in as
+        // themselves, and Carlos's link hands over the position recorded against his name.
+        Assert.Equal("Carlos", Assert.Single(pending).Name);
         Assert.NotEmpty(await Links.ForGroup(group.Id, Ct));
     }
 }

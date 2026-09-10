@@ -45,20 +45,28 @@ public static class ErrorMessages
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
         [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
-        [ErrorCodes.GroupInvitationNotYours] = "That invitation was sent to somebody else.",
         [ErrorCodes.GroupJoinLinkNotFound] = "That join link is not one of ours. Check you copied the whole of it.",
         [ErrorCodes.GroupJoinLinkExpired] = "That join link has expired. Ask someone in the group for a new one.",
         [ErrorCodes.GroupJoinLinkRevoked] = "That join link has been withdrawn. Ask someone in the group for a new one.",
-        [ErrorCodes.GroupInvitationAlreadySent] = "That person has already been invited.",
-        [ErrorCodes.GroupMemberAlreadyJoined] = "That person is already in this group.",
         [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
+        [ErrorCodes.GroupInvitationNoName] = "An invitation needs a name to make it out to.",
+        [ErrorCodes.GroupMemberNotJoined] =
+            "That person has been invited and has not joined, so there is no membership to remove. " +
+            "Withdraw the invitation instead.",
         [ErrorCodes.TransactionGroupLeft] = "You are no longer in this transaction's group, so it cannot be changed.",
 
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",
-        [ErrorCodes.TransactionPayerNotInGroup] = "The person who paid is not a member of this group.",
-        [ErrorCodes.SplitUserNotInGroup] = "One of the shares names someone who is not in this group.",
+        [ErrorCodes.TransactionPayerNotInGroup] =
+            "The person who paid is neither a member of this group nor invited to it.",
+        [ErrorCodes.SplitUserNotInGroup] =
+            "One of the shares names someone who is neither in this group nor invited to it.",
         [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
+        // Their balance is real and on the page. What is missing is an account on the other
+        // end of the payment, which is why this is not "not a member of this group".
+        [ErrorCodes.SettlementWithPendingInvitee] =
+            "That person has been invited and has not joined yet, so there is nobody to pay. " +
+            "Their balance stands until they accept.",
         [ErrorCodes.SettlementNothingToSettle] = "You are already square with everybody in this group.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
         [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",

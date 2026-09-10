@@ -121,24 +121,32 @@ public class ApiUnitTest : IAsyncLifetime
     {
         var mock = new Mock<IHttpContextAccessor>();
         mock.Setup(a => a.HttpContext).Returns(() =>
+            new DefaultHttpContext
             {
-                var userClaims = sp.GetRequiredService<UserClaims>();
-
-                IEnumerable<Claim> claims = [
-                    new Claim(ClaimTypes.NameIdentifier, userClaims.UserId),
-                    new Claim(ClaimTypes.Email, userClaims.Email)
-                ];
-
-                var identity = new ClaimsIdentity(claims, "TestAuth");
-                var principal = new ClaimsPrincipal(identity);
-
-                return new DefaultHttpContext
-                {
-                    User = principal,
-                    RequestServices = sp
-                };
+                User = PrincipalFor(sp.GetRequiredService<UserClaims>()),
+                RequestServices = sp
             });
         return mock.Object;
+    }
+
+    /// <summary>
+    /// What Keycloak would send about somebody: their subject, and their address.
+    /// </summary>
+    /// <remarks>
+    /// Public so a test can provision a <em>named</em> account rather than only whoever the
+    /// fixture is. The address is the whole point of that: a group can invite an address
+    /// before anybody has signed up as it, so a test about invitations has to be able to
+    /// sign somebody in as that exact address afterwards.
+    /// </remarks>
+    internal static ClaimsPrincipal PrincipalFor(UserClaims userClaims)
+    {
+        IEnumerable<Claim> claims =
+        [
+            new Claim(ClaimTypes.NameIdentifier, userClaims.UserId),
+            new Claim(ClaimTypes.Email, userClaims.Email)
+        ];
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
     }
 
     /// <summary>

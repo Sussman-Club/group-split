@@ -30,11 +30,14 @@ public interface IGroupCommands
     Task<bool> RenameAsync(Guid groupId, JsonPatchDocument<CreateGroupRequest> patch,
         CancellationToken ct = default);
 
-    /// <summary>Asks people to join, by email. Nobody is added without accepting.</summary>
-    Task<bool> InviteAsync(Guid groupId, string groupName, AddMemberRequest request,
+    /// <summary>
+    /// Names people the group is sharing costs with, minting a link for each. Nobody is a
+    /// member until somebody claims their link.
+    /// </summary>
+    Task<bool> InviteAsync(Guid groupId, string groupName, InviteToGroupRequest request,
         CancellationToken ct = default);
 
-    Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string email,
+    Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string name,
         CancellationToken ct = default);
 
     /// <summary>
@@ -76,9 +79,17 @@ public interface IGroupCommands
     Task<SettleUpResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
         CancellationToken ct = default);
 
-    Task<GroupResponse?> AcceptInvitationAsync(Guid invitationId, string groupName,
+    /// <summary>
+    /// Claims a personal invitation link: joins the group as the person it names, taking on
+    /// whatever the group had recorded against that name.
+    /// </summary>
+    Task<InvitationClaimedResponse?> ClaimInvitationAsync(string token,
         CancellationToken ct = default);
 
-    Task<bool> DeclineInvitationAsync(Guid invitationId, string groupName,
+    /// <summary>
+    /// Turns one down. What was recorded against the name goes to a member of the group; the
+    /// answer says whose it is now.
+    /// </summary>
+    Task<bool> DeclineInvitationAsync(string token, string groupName,
         CancellationToken ct = default);
 }

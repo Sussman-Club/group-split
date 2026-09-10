@@ -1,42 +1,27 @@
 [
   {
-    "Id": "F1A00001-0000-4000-8000-000000000001",
-    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
-    "Email": "carlos@test.com",
-    "InvitedByUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
-    "DaysAgo": 2
-  },
-  {
-    "Id": "F1A00002-0000-4000-8000-000000000002",
-    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
-    "Email": "nuria@test.com",
-    "InvitedByUserId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
-    "DaysAgo": 9
-  },
-  {
     "Id": "F1A00003-0000-4000-8000-000000000003",
     "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
-    "Email": "tomas@test.com",
+    "Name": "Tomás",
+    "Token": "demo-invite-tomas",
+    "ParticipantUserId": "F1B00003-0000-4000-8000-000000000003",
     "InvitedByUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "DaysAgo": 1
   },
   {
-    "Id": "F1A00004-0000-4000-8000-000000000004",
-    "GroupId": "C2E86B57-1D40-49A3-B6F8-27C5D0E31A9B",
-    "Email": "iker@test.com",
-    "InvitedByUserId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
-    "DaysAgo": 16
-  },
-  {
     "Id": "F1A00005-0000-4000-8000-000000000005",
-    "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
-    "Email": "hannah@test.com",
+    "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
+    "Name": "Hannah",
+    "Token": "demo-invite-hannah",
+    "ParticipantUserId": "F1B00005-0000-4000-8000-000000000005",
     "DaysAgo": 5
   },
   {
     "Id": "F1A00006-0000-4000-8000-000000000006",
     "GroupId": "F0B00001-0000-4000-8000-00000000000B",
-    "Email": "anabel@test.com",
+    "Name": "Anabel",
+    "Token": "demo-invite-book-club",
+    "ParticipantUserId": "F1B00006-0000-4000-8000-000000000006",
     "InvitedByUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
     "DaysAgo": 3
   }
