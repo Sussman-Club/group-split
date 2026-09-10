@@ -77,10 +77,16 @@ public class BankEndpointTest : IAsyncLifetime
         using var stranger = _host.ClientForAnotherUser();
 
         var sync = await stranger.PostAsync($"/bank-connections/{connection.Id}/sync", null, Ct);
+        var refresh = await stranger.PostAsync($"/bank-connections/{connection.Id}/refresh", null, Ct);
         var unlink = await stranger.DeleteAsync($"/bank-connections/{connection.Id}", Ct);
 
         Assert.Equal(HttpStatusCode.NotFound, sync.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, refresh.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, unlink.StatusCode);
+
+        // Not merely refused: the stranger's refresh must not have reached the bank either,
+        // which is the difference between a scoped query and a check made after the work.
+        Assert.Equal(0, _bank.AccountReads);
     }
 
     [Fact]
