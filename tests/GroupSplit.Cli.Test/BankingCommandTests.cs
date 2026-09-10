@@ -115,6 +115,22 @@ public sealed class BankingCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Bank_refresh_calls_refresh_endpoint_and_reports_accounts()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/bank-connections/{id}/refresh", Connection("Monzo", id));
+
+        var result = await Cli.RunAsync("bank", "refresh", id.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal(id, result.Json.GetProperty("id").GetGuid());
+        Assert.Equal("Monzo", result.Json.GetProperty("institutionName").GetString());
+
+        var request = _api.Requests.Single(r => r.Path == $"/api/bank-connections/{id}/refresh");
+        Assert.Equal("POST", request.Method);
+    }
+
+    [Fact]
     public async Task Bank_unlink_without_a_terminal_exits_4_and_names_the_bank()
     {
         var id = Guid.NewGuid();

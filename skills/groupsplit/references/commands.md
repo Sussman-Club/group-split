@@ -177,11 +177,18 @@ Group invitations addressed to you.
 
 Linked banks: what is connected, syncing it, and unlinking.
 
+A connection's status is `active`, `login required`, `revoked`, or one of two that still
+sync: `account not shared` (the bank has an account this connection is not importing --
+sign in again with it ticked, then `bank refresh`) and `sign-in expiring` (it works, but
+not for much longer). An account's `Access` reads `withdrawn` when that one account was
+revoked at the bank and the rest of the connection is fine.
+
 | Command | |
 | --- | --- |
 | `bank list` | List the banks you have linked, and their accounts. |
 | `bank link-token` | Ask for a token that opens the provider's linking UI in a browser. `--connection <id>` repairs an existing connection rather than linking a new bank. |
 | `bank link <public-token>` | Finish linking a bank with the token its UI returned. |
+| `bank refresh <connection-id>` | Re-read the bank's accounts and queue a sync. Run after an update-mode sign-in that shared another account: nothing else tells the app about it. |
 | `bank sync <connection-id>` | Ask for a fresh pull of transactions from a bank. |
 | `bank unlink <connection-id>` | Unlink a bank and stop syncing it. |
 

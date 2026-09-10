@@ -149,6 +149,9 @@ public sealed class BankSyncService(
         var cursor = startCursor;
         var restarts = 0;
 
+        // At most one extra call to the provider per run, however many pages it takes.
+        var askedAgain = false;
+
         while (true)
         {
             SyncPage page;
@@ -178,6 +181,9 @@ public sealed class BankSyncService(
                 logger.LogWarning(e, "Bank connection {ConnectionId}: sync interrupted; the cursor stays where the run began.", connectionId);
                 return SyncOutcome.Interrupted;
             }
+
+            askedAgain = await ShareAccountsAsync(
+                connection, item, connector, accessToken, accounts, page, askedAgain, ct);
 
             await ApplyAsync(connection, accounts, rekeying, page, ct);
 
@@ -536,9 +542,116 @@ public sealed class BankSyncService(
         row.MerchantId = merchant?.Id;
     }
 
+    /// <summary>
+    /// Makes sure the accounts this run knows about are the ones the provider has, when a
+    /// page names one they are not.
+    /// </summary>
+    /// <remarks>
+    /// A row on an unknown account used to be dropped on the assumption that picking up a
+    /// new account is a re-link and not a sync. It is not: a person can share another
+    /// account through the linking UI in update mode, which mints no new item and so runs
+    /// nothing on the linking path -- and every row of that account was then skipped for
+    /// the life of the connection, with a log line as the only trace.
+    /// <para>
+    /// So the account list is read again, once per run and only when a page actually needs
+    /// it. <c>/accounts/get</c> and its equivalents cost no item at the provider, which is
+    /// what makes asking cheaper than being wrong.
+    /// </para>
+    /// <para>
+    /// The dictionary is filled in place rather than rebuilt, because it is the run's own
+    /// and every page after this one is applied through it -- and this method is handed it
+    /// rather than owning it, so a replacement made here would reach nothing.
+    /// </para>
+    /// </remarks>
+    /// <returns>Whether the provider has now been asked, this run.</returns>
+    private async Task<bool> ShareAccountsAsync(
+        BankConnection connection,
+        string item,
+        IBankConnector connector,
+        string accessToken,
+        Dictionary<string, LinkedAccount> accounts,
+        SyncPage page,
+        bool askedAgain,
+        CancellationToken ct)
+    {
+        var missing = Unknown(accounts, page);
+
+        if (missing.Count == 0)
+            return askedAgain;
+
+        // Both of the writes below are to the connection, so both answer the question every
+        // write in this file has to: has it been re-linked underneath this run? Account ids
+        // are minted per item, so merging the old item's list onto the new one would write
+        // accounts that no longer name anything -- and the flag would be about an item
+        // nobody is using. Answering once stops the reload happening per page as well.
+        if (await SupersededAsync(connection, item, ct))
+            return true;
+
+        if (!askedAgain)
+        {
+            try
+            {
+                var reported = await connector.AccountsAsync(accessToken, ct);
+
+                BankConnectionService.MergeAccounts(connection, reported, dbContext);
+                await dbContext.SaveChangesAsync(ct);
+
+                foreach (var account in connection.Accounts)
+                    accounts.TryAdd(account.ProviderAccountId, account);
+            }
+            catch (Exception e) when (e is BankSyncException or HttpRequestException)
+            {
+                // Not fatal to the run: the accounts already known keep importing. The rows
+                // that needed this are skipped below and the connection is flagged, which is
+                // the same place a provider that answered but still did not know them ends.
+                logger.LogWarning(e,
+                    "Bank connection {ConnectionId}: could not read the account list while a page named an "
+                    + "account it does not know.", connection.Id);
+            }
+
+            askedAgain = true;
+        }
+
+        missing = Unknown(accounts, page);
+
+        if (missing.Count == 0)
+            return askedAgain;
+
+        // The provider has accounts this connection is not importing, and only the person
+        // can hand them over. Flagged rather than logged: a warning nobody reads was how
+        // somebody's money came to be dropped on the floor while their bank was reported
+        // healthy and last checked five minutes ago.
+        logger.LogWarning(
+            "Bank connection {ConnectionId}: rows on {Count} account(s) it does not know ({Accounts}); skipped "
+            + "and the connection flagged. Sharing them is Link in update mode.",
+            connection.Id, missing.Count, string.Join(", ", missing));
+
+        connection.AccountsNotShared = true;
+        await dbContext.SaveChangesAsync(ct);
+
+        return askedAgain;
+    }
+
+    /// <summary>The provider account ids a page names that the connection does not have.</summary>
+    /// <remarks>
+    /// The rows that would have been imported, and not the withdrawn ones. A removed row is
+    /// a transaction the bank has taken back: there is nothing to drop on the floor and so
+    /// nothing this is for. Counting those was worse than useless -- it spent the extra call
+    /// on a page that needed none, and then told somebody their bank had an account to share
+    /// on the strength of a transaction that no longer exists.
+    /// </remarks>
+    private static List<string> Unknown(Dictionary<string, LinkedAccount> accounts, SyncPage page) =>
+    [
+        .. page.Added.Select(row => row.ProviderAccountId)
+            .Concat(page.Modified.Select(row => row.ProviderAccountId))
+            .Where(id => !accounts.ContainsKey(id))
+            .Distinct()
+    ];
+
     private void SkipUnknownAccount(BankConnection connection, string providerAccountId) =>
         logger.LogWarning(
-            "Bank connection {ConnectionId}: a row on an account this connection does not know ({ProviderAccountId}); skipped. Picking up a new account is a re-link, not a sync.",
+            "Bank connection {ConnectionId}: a row on an account this connection does not know "
+            + "({ProviderAccountId}); skipped.",
             connection.Id, providerAccountId);
 
     /// <summary>

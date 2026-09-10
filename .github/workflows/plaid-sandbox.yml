@@ -1,0 +1,126 @@
+name: Plaid sandbox
+
+# Nightly, and on demand. Not on push or pull_request, deliberately.
+#
+# What this catches is Plaid changing under us: the connector's own tests replay payloads
+# captured once and never since, and a recorded payload agrees with itself for ever. That
+# is a risk that moves with time rather than with commits, so a nightly run buys the whole
+# of it. Putting it on the merge gate would buy nothing extra and would import a network
+# call, a container stack and a provider's uptime into every pull request.
+#
+# It also cannot work on the gate: GitHub withholds secrets from pull requests opened from
+# forks, by design, so the job would have no credentials on exactly the changes most worth
+# checking. The test skips rather than fails when they are absent, which keeps that honest
+# everywhere rather than only here.
+on:
+  schedule:
+    # 04:17 UTC. Well clear of the daily bank sweep at midnight, and off the hour on
+    # purpose: GitHub queues everything scheduled on the hour together, so a job asking
+    # for the top of an hour waits behind the rest of the world's.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # One at a time. Each run creates an item at Plaid and removes it again; two runs
+  # overlapping would work, but serialising them keeps the sandbox account tidy and the
+  # failure output readable.
+  group: plaid-sandbox
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox:
+    name: Live Plaid sandbox
+    runs-on: ubuntu-latest
+
+    # Where the sandbox credentials live. An environment rather than repository secrets so
+    # this job can read those two and nothing else -- in particular none of the production
+    # environment's secrets, which a test has no business being able to see.
+    #
+    # It must have no required reviewers: a scheduled run has nobody to approve it and
+    # would sit waiting until it timed out.
+    environment: tests
+
+    # The stack comes up under Aspire's testing host before anything runs, so the budget is
+    # mostly image pulls on a cold runner, plus Plaid's own first pull of the history.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: |
+          dotnet restore tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
+          dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
+
+      - name: Build
+        run: |
+          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
+          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+
+      # The same certificate dance as the integration job in ci.yml, minus Chromium: the
+      # AppHost fixture brings the whole stack up and its health checks probe HTTPS
+      # endpoints, which a runner does not trust by default. Duplicated rather than shared
+      # because the alternative is refactoring the job that currently guards every merge.
+      - name: Install the Aspire CLI
+        run: |
+          dotnet tool install -g Aspire.Cli --version 13.5.3
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Trust the development certificate
+        run: |
+          set -euo pipefail
+          aspire certs trust --non-interactive
+          echo "SSL_CERT_DIR=/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust" >> "$GITHUB_ENV"
+
+      # Said out loud, because the alternative is a skip nobody notices. A run that
+      # silently tested nothing is worse than no run: it reports green every night while
+      # the thing it exists to catch goes unwatched.
+      - name: Check the credentials arrived
+        env:
+          CLIENT_ID: ${{ secrets.PLAID_CLIENT_ID }}
+          SECRET: ${{ secrets.PLAID_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLIENT_ID" ] || [ -z "$SECRET" ]; then
+            echo "::error::PLAID_CLIENT_ID and PLAID_SECRET are not set on the 'tests' environment, so the sandbox test would skip and this run would prove nothing."
+            exit 1
+          fi
+
+      # ASP.NET Core's own spelling: Plaid__ClientId is Plaid:ClientId, which is the key
+      # the API binds and Going.Plaid reads. The secrets keep GitHub's naming and are
+      # mapped here, the same way the deployment workflow maps them onto Parameters__*.
+      - name: Test
+        env:
+          Plaid__ClientId: ${{ secrets.PLAID_CLIENT_ID }}
+          Plaid__Secret: ${{ secrets.PLAID_SECRET }}
+        run: |
+          # The filter belongs past the `--`. Before it, the CLI resolves the value
+          # against the filesystem rather than handing it to the test platform.
+          dotnet test --project tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj \
+            -c Release --no-build --results-directory TestResults \
+            -- --filter-class "GroupSplit.AppHost.Test.Banking.PlaidSandboxTest" \
+               --report-trx --report-trx-filename plaid-sandbox.trx
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: plaid-sandbox-results
+          path: TestResults
+          if-no-files-found: warn

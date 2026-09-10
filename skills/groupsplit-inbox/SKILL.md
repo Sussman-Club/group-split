@@ -188,8 +188,14 @@ two bank rows for it. It watches the seam between the two paths.
 ```bash
 groupsplit bank list --json                 # linked accounts and their state
 groupsplit bank sync <connection-id>        # pull new rows
+groupsplit bank refresh <connection-id>     # re-read the accounts, then pull
 ```
 
 `BANK_CONNECTION_NEEDS_ATTENTION` means the user has to re-authorise with their bank; there
 is nothing to retry. `bank link` and `bank unlink` are the user's to run --
 `bank unlink` is confirmation-gated.
+
+A connection reading `account not shared` has money the app is not importing: the bank has
+an account the user never shared. Only they can fix it, in the linking UI in update mode
+with that account ticked -- then `bank refresh`. Rows missing from the inbox with no error
+anywhere are worth checking this for first.

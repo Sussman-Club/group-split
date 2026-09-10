@@ -34,6 +34,7 @@ public static class BankCommands
         bank.Subcommands.Add(List());
         bank.Subcommands.Add(LinkToken());
         bank.Subcommands.Add(Link());
+        bank.Subcommands.Add(Refresh());
         bank.Subcommands.Add(Sync());
         bank.Subcommands.Add(Unlink());
 
@@ -93,7 +94,7 @@ public static class BankCommands
             return table;
         }
 
-        var detail = Tables.Grid("Account", "Institution", "Number", "Type", "Currency");
+        var detail = Tables.Grid("Account", "Institution", "Number", "Type", "Currency", "Access");
 
         foreach (var (connection, account) in accounts)
         {
@@ -102,7 +103,8 @@ public static class BankCommands
                 Markup.Escape(connection.InstitutionName),
                 account.Mask is null ? "-" : Markup.Escape($"···{account.Mask}"),
                 Markup.Escape(account.Subtype is null ? account.Type : $"{account.Type}/{account.Subtype}"),
-                Markup.Escape(account.Currency));
+                Markup.Escape(account.Currency),
+                account.AccessRevoked ? "[red]withdrawn[/]" : "ok");
         }
 
         return new Rows(table, new Markup("\n[bold]Accounts[/]\n"), detail);
@@ -114,9 +116,14 @@ public static class BankCommands
     /// </summary>
     private static string Status(BankConnectionResponse connection) => connection.Status switch
     {
-        BankConnectionState.Active => "active",
         BankConnectionState.LoginRequired => "[yellow]login required[/]",
-        _ => "[red]revoked[/]"
+        BankConnectionState.Revoked => "[red]revoked[/]",
+
+        // Active, but with something for the person to do. Saying only "active" here is how
+        // an account that is not being imported stays invisible to anyone reading a listing.
+        _ when connection.AccountsNotShared => "[yellow]account not shared[/]",
+        _ when connection.SignInExpiring => "[yellow]sign-in expiring[/]",
+        _ => "active"
     };
 
     private static Command LinkToken()
@@ -183,6 +190,36 @@ public static class BankCommands
             context.Output.Write(connection, value => new Markup(
                 $"[green]Linked[/] {Markup.Escape(value.InstitutionName)} "
                 + $"({value.Accounts.Count} accounts) [grey]{value.Id}[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Reads the bank's account list again. What somebody runs after sharing another
+    /// account through the linking UI, which mints no new item and so tells this
+    /// application nothing on its own.
+    /// </summary>
+    private static Command Refresh()
+    {
+        var command = new Command("refresh", "Re-read a bank's accounts and queue a sync.")
+        {
+            ConnectionId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var id = context.ParseResult.GetValue(ConnectionId);
+
+            var connection = await new Api.BankConnectionsClient(context.ApiHttpClient).RefreshBankConnectionAsync(id, ct);
+
+            context.Output.Write(
+                connection,
+                value => new Markup(
+                    $"[green]Refreshed[/] {Markup.Escape(value.InstitutionName)}: "
+                    + $"{value.Accounts.Count} account(s). [grey]Sync queued.[/]\n"));
 
             return ExitCodes.Success;
         });

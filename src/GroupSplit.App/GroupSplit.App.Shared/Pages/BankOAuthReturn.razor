@@ -1,0 +1,92 @@
+@page "/bank/oauth"
+@using GroupSplit.App.Shared.Services.Banking
+@using GroupSplit.App.Shared.Services.Commands
+@inject IBankLinkLauncher Link
+@inject IBankCommands Bank
+@inject NavigationManager Nav
+
+@*
+    Where a bank's own sign-in page sends the person back to.
+
+    Most institutions run inside a popup and never come here: Link opens, they sign in, and
+    the page that opened it is still there to be answered. An OAuth institution takes the
+    whole browser instead, so the page that started the session is gone and its token went
+    with it -- which is what the tab wrote down before opening, and what this reads back.
+
+    The address is registered with the provider and cannot be discovered, so it is fixed:
+    /bank/oauth on the deployment's public origin. Nothing reaches it unless a deployment
+    has configured that redirect, which is why arriving here with nothing in hand is an
+    ordinary thing to say rather than an error.
+*@
+
+<PageTitle>Finishing with your bank - Group Split</PageTitle>
+
+<div class="gs-empty" style="padding-top: 64px; max-width: 32rem; margin: 0 auto">
+
+    @if (_nothingToFinish)
+    {
+        <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />
+        <h1 style="font-size: 1.375rem; margin: 0">There is no bank to finish linking</h1>
+        <span>
+            This page is where your bank sends you back to. Nothing is waiting in this tab,
+            so there is nothing to pick up — start again from your account.
+        </span>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+                   Href="/account" EndIcon="@Icons.Material.Rounded.ArrowForward">
+            Back to your account
+        </MudButton>
+    }
+    else
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate />
+        <span>Finishing with your bank…</span>
+    }
+
+</div>
+
+@code {
+    private bool _nothingToFinish;
+
+    /// <summary>
+    /// After the first render, because everything here is JavaScript: under prerendering
+    /// there is no browser to ask, and asking anyway is the one way this page can throw.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        var pending = await Link.PendingAsync();
+
+        if (pending is null)
+        {
+            _nothingToFinish = true;
+            StateHasChanged();
+
+            return;
+        }
+
+        var publicToken = await Link.ResumeAsync(pending.Token);
+
+        // Null is the ordinary way out: they closed it at the bank, or backed out. Nothing
+        // to say about that -- they are simply back where they started.
+        if (publicToken is not null)
+        {
+            if (pending.ConnectionId is { } connectionId)
+            {
+                // Update mode ends in a refresh, not an exchange: it hands back no usable
+                // public token, and an account shared in there is only heard of by asking.
+                await Bank.RefreshAsync(connectionId, "your bank");
+            }
+            else
+            {
+                await Bank.LinkAsync(publicToken);
+            }
+        }
+
+        // Either way this page has nothing left to be. The account page is where the
+        // linked banks are, and where the result of all of this shows up.
+        Nav.NavigateTo("/account");
+    }
+}
