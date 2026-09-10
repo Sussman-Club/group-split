@@ -207,6 +207,19 @@ public static class Extensions
         /// run mode the AppHost hands out an HTTPS endpoint, so a tunnel pointed at the
         /// plain one turned every webhook into a 307 at localhost -- an address the sender
         /// could not reach even if it had followed it.
+        /// <para>
+        /// An exempted prefix is answered over plain HTTP wherever a plain port is served,
+        /// so only give this a path whose caller authenticates itself by something other
+        /// than the transport, and only where the hop that reaches it is trusted. A bank
+        /// provider's webhook is both: it is signed over its own body, and it arrives from
+        /// the proxy that terminated TLS.
+        /// </para>
+        /// <para>
+        /// Callers pass a collection expression rather than leaning on the params
+        /// expansion: an extension member loses the array's element annotation on the way
+        /// out, and a single non-null string handed to it warns CS8620 for a nullability
+        /// difference that is not there.
+        /// </para>
         /// </param>
         public WebApplication UseDefaultHttpsRedirection(params string[] alsoExempt)
         {

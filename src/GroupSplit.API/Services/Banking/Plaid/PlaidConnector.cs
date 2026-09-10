@@ -304,6 +304,21 @@ public sealed class PlaidConnector(
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
+    /// Plaid's codes that mean the item needs a person rather than a retry. Shared by the
+    /// two places that meet them -- a failed call and an <c>ITEM: ERROR</c> webhook -- which
+    /// had drifted to one code on the webhook side and four on the other.
+    /// </summary>
+    private static readonly HashSet<string> SignInCodes = new(StringComparer.Ordinal)
+    {
+        "ITEM_LOGIN_REQUIRED",
+        "ITEM_NOT_FOUND",
+        "INVALID_ACCESS_TOKEN",
+        "ITEM_NOT_SUPPORTED"
+    };
+
+    private static bool NeedsSignIn(string? code) => code is not null && SignInCodes.Contains(code);
+
+    /// <summary>
     /// Turns a failed response into the exception the caller can act on.
     /// </summary>
     /// <remarks>
@@ -322,21 +337,6 @@ public sealed class PlaidConnector(
     /// The warning below is what makes it visible in the meantime.
     /// </para>
     /// </remarks>
-    /// <summary>
-    /// Plaid's codes that mean the item needs a person rather than a retry. Shared by the
-    /// two places that meet them -- a failed call and an <c>ITEM: ERROR</c> webhook -- which
-    /// had drifted to one code on the webhook side and four on the other.
-    /// </summary>
-    private static readonly HashSet<string> SignInCodes = new(StringComparer.Ordinal)
-    {
-        "ITEM_LOGIN_REQUIRED",
-        "ITEM_NOT_FOUND",
-        "INVALID_ACCESS_TOKEN",
-        "ITEM_NOT_SUPPORTED"
-    };
-
-    private static bool NeedsSignIn(string? code) => code is not null && SignInCodes.Contains(code);
-
     private void Ensure(ResponseBase response, string what)
     {
         if (response.IsSuccessStatusCode)

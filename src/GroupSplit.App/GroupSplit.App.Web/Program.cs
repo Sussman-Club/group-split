@@ -116,7 +116,7 @@ app.UseWhen(
 // today only because a deployed app is given no HTTPS port, so the redirection is inert;
 // give it one and every webhook becomes a 307 the provider records as a failure. This
 // makes that an intention rather than an accident.
-app.UseDefaultHttpsRedirection(WebAppExtensions.WebhookPrefix);
+app.UseDefaultHttpsRedirection([WebAppExtensions.WebhookPrefix]);
 
 app.UseAuthentication();
 app.UseAuthorization();

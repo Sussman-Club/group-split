@@ -90,7 +90,13 @@ if (app.Environment.IsDevelopment())
 // Exempt for the same reason the web app's copy is: the forwarder in front of this
 // prefers the HTTPS endpoint, but a fallback to the plain one must not turn a webhook
 // into a redirect the provider will record as a failure.
-app.UseDefaultHttpsRedirection(WebhooksApi.Prefix);
+//
+// What this leans on, said out loud because it is an assumption and not a fact of the
+// code: TLS reaches the proxy and the hop behind it is trusted. Nothing about a webhook is
+// secret enough to matter on that hop -- item and account ids, and a code -- and the
+// provider's signature over the body is what authenticates it, not the transport. Expose
+// this application's plain port to anywhere untrusted and that stops being true.
+app.UseDefaultHttpsRedirection([WebhooksApi.Prefix]);
 
 app.UseAuthentication();
 app.UseMiddleware<CurrentUserMiddleware>();
