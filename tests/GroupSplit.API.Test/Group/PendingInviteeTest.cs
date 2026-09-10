@@ -826,11 +826,20 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var (scope, carlos) = await Signing();
 
+        InvitationClaimedResponse claimed;
+
         using (scope)
         {
-            await scope.ServiceProvider.GetRequiredService<IInvitationService>()
+            claimed = await scope.ServiceProvider.GetRequiredService<IInvitationService>()
                 .Claim(invitation.Token, Ct);
         }
+
+        // Counted in the answer, because keeping the place quietly is how somebody joins a
+        // group and finds out weeks later that a category they never chose has been giving
+        // them a share of every expense filed under it. The shares and payments are the
+        // past; this is the part that goes on happening.
+        Assert.Equal(1, claimed.RulesTaken);
+        Assert.True(claimed.TookOnARule);
 
         // The rule names the person who joined, with the weight it gave their stand-in.
         var named = await DbContext.Set<SplitRuleParticipant>()

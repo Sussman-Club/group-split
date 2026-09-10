@@ -91,7 +91,7 @@ public class ExpenseSplitter(
         // list, and a handler that produced one is a defect. Reframed as a refusal it would
         // blame a well-formed rule, tell somebody to go and edit it, and keep the fault out
         // of the logs.
-        catch (ArgumentException reason) when (reason is not ArgumentNullException)
+        catch (ArgumentException exception) when (exception is not ArgumentNullException)
         {
             // A rule can be left with nothing to divide by. Everybody it named has gone --
             // a member who left, or somebody invited whose invitation was declined or
@@ -108,9 +108,17 @@ public class ExpenseSplitter(
                     $"\"{rule.Name}\" no longer divides between anybody, so an expense filed " +
                     "under this category cannot be split by it. Edit the rule, or file the " +
                     "expense under nothing to divide it evenly.")
+                // The rule, and not the exception's own words. docs/errors.md keeps
+                // exception text out of a response, and moving it from detail into an
+                // extension member would be keeping the letter and losing the point:
+                // SplitCalculator's guard clauses would become part of the API's observable
+                // surface, so rewording one would be a client-visible change nobody had
+                // thought about. Nothing is lost by dropping it -- it says either "no
+                // participants" or "weights sum to zero", and the sentence above already
+                // says the rule divides between nobody. What a caller can act on is which
+                // rule it was.
                 .WithExtension("splitRuleId", rule.Id)
-                .WithExtension("splitRuleName", rule.Name)
-                .WithExtension("reason", reason.Message);
+                .WithExtension("splitRuleName", rule.Name);
         }
     }
 

@@ -464,6 +464,72 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     /// <summary>
+    /// The warning about a rule left naming nobody has to reach the person who caused it.
+    /// </summary>
+    /// <remarks>
+    /// The count is the only thing in this receipt worth interrupting somebody about. A
+    /// rule with nobody in it has changed what it means -- a shares or percentage rule
+    /// refuses the next expense filed under it, an even one quietly divides between
+    /// everybody -- and this is the last moment it can be said to whoever caused it rather
+    /// than discovered by whoever records the next expense.
+    /// </remarks>
+    [Fact]
+    public async Task Groups_withdraw_invitation_warns_about_a_rule_left_naming_nobody()
+    {
+        var id = Guid.NewGuid();
+        var invitation = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar", invitation) });
+
+        _api.Returns($"/api/groups/{id}/invitations/{invitation}", new
+        {
+            invitationId = invitation, groupId = id, groupName = "The flat",
+            name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
+            sharesMoved = 1, amountOwed = 20m, paymentsMoved = 0, amountPaid = 0m,
+            rulesAffected = 1, rulesEmptied = 1,
+            absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
+        });
+
+        var result = await Cli.RunAsync(
+            "groups", "withdraw-invitation", id.ToString(), invitation.ToString(),
+            "--yes", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("name nobody", result.Stdout);
+
+        // And where to go and look, which is the point of saying it at all.
+        Assert.Contains("split-rules list", result.Stdout);
+    }
+
+    /// <summary>
+    /// A rule that still names somebody is not worth a warning.
+    /// </summary>
+    [Fact]
+    public async Task Groups_withdraw_invitation_says_nothing_about_a_rule_that_still_names_somebody()
+    {
+        var id = Guid.NewGuid();
+        var invitation = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar", invitation) });
+
+        _api.Returns($"/api/groups/{id}/invitations/{invitation}", new
+        {
+            invitationId = invitation, groupId = id, groupName = "The flat",
+            name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
+            sharesMoved = 1, amountOwed = 20m, paymentsMoved = 0, amountPaid = 0m,
+            rulesAffected = 1, rulesEmptied = 0,
+            absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
+        });
+
+        var result = await Cli.RunAsync(
+            "groups", "withdraw-invitation", id.ToString(), invitation.ToString(),
+            "--yes", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.DoesNotContain("name nobody", result.Stdout);
+    }
+
+    /// <summary>
     /// The members listing has to say which of them have actually joined.
     /// </summary>
     /// <remarks>
@@ -563,7 +629,8 @@ public sealed class MutationCommandTests : IDisposable
         _api.Returns("/api/invitations/claims/token-omar", new
         {
             groupId = group, groupName = "The flat", memberCount = 3, name = "Omar",
-            sharesTaken = 3, amountOwed = 62.50m, paymentsTaken = 1, amountPaid = 40m
+            sharesTaken = 3, amountOwed = 62.50m, paymentsTaken = 1, amountPaid = 40m,
+            rulesTaken = 2
         }, method: "POST");
 
         var result = await Cli.RunAsync(
@@ -572,6 +639,11 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal(ExitCodes.Success, result.ExitCode);
         Assert.Contains("Omar", result.Stdout);
         Assert.Contains("62.50", result.Stdout);
+
+        // The counts above are amounts already recorded. This one is the standing
+        // commitment: two rules will go on giving them a share of what is filed under
+        // them, which the shares and payments cannot say.
+        Assert.Contains("Rules naming you", result.Stdout);
     }
 
     /// <summary>

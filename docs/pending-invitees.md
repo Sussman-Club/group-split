@@ -158,6 +158,13 @@ No amount changes. Every transaction still divides into exactly its own amount, 
 group's balances read the same on either side of it -- the same numbers under a different
 name. The answer says what moved, because somebody's balance did.
 
+It counts the rule places separately, in `RulesTaken`, and the CLI and the app say that part
+in its own sentence. The shares and payments are the past: amounts already recorded, now
+theirs. A rule place is the future -- it goes on giving them a share of every expense filed
+under that category -- and it was the silent half of a claim until it was counted, which is
+how somebody joins a group and finds out a fortnight later that a category they never chose
+has been dividing itself onto them.
+
 Where the claimer already held a share of the same transaction, the two are added into one
 row: a transaction may hold only one opinion about what a person owed, and the unique index
 says so.

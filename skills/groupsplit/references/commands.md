@@ -169,7 +169,7 @@ Personal invitation links and group join links you were sent.
 | --- | --- |
 | `invitations list` | The invitations whose links you have opened and not answered, with their tokens. Not "sent to me" -- there is no address to match. |
 | `invitations show <link>` | Show what a personal invitation link leads to, without claiming it. Says nothing about the money. |
-| `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name. Confirmation required. |
+| `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name and their places in the group's split rules. Confirmation required. |
 | `invitations decline <link>` | Decline it. Confirmation required: anything the group recorded against that name goes to a member of it. |
 | `invitations link <link>` | Show which group a *join* link leads to, without joining. |
 | `invitations join <link>` | Join the group a join link leads to, as yourself. |

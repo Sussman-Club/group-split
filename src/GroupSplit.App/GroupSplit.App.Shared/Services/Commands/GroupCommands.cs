@@ -266,11 +266,26 @@ public sealed class GroupCommands(
 
             snackbar.Add($"You have joined {claimed.GroupName} as {claimed.Name}.", Severity.Success);
 
-            if (claimed.TookAnything)
+            if (claimed.SharesTaken > 0 || claimed.PaymentsTaken > 0)
             {
                 snackbar.Add(
                     $"{claimed.SharesTaken} share(s) recorded against {claimed.Name} are yours now. " +
                     "No amounts changed.",
+                    Severity.Info);
+            }
+
+            // Said separately because it is about the future and the sentence above is
+            // about the past. The shares are amounts already recorded; a rule place goes on
+            // giving them a share of every expense filed under that category, which is the
+            // part of a claim somebody would be most surprised to discover later.
+            if (claimed.TookOnARule)
+            {
+                snackbar.Add(
+                    claimed.RulesTaken == 1
+                        ? $"One split rule in {claimed.GroupName} names you now, so it will give "
+                          + "you a share of what gets filed under it."
+                        : $"{claimed.RulesTaken} split rules in {claimed.GroupName} name you now, "
+                          + "so they will give you a share of what gets filed under them.",
                     Severity.Info);
             }
 

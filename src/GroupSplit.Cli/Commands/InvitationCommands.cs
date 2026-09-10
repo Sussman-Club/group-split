@@ -170,7 +170,8 @@ public static class InvitationCommands
                         ? $"You are already in {invitation.GroupName}."
                         : $"You join {invitation.GroupName} ({invitation.MemberCount} members).",
                     $"Everything the group has recorded against {invitation.Name} becomes " +
-                    "yours: their shares, and anything they are down as having paid for.",
+                    "yours: their shares, anything they are down as having paid for, and " +
+                    "their places in the group's split rules.",
                     "No amount changes, but your balance in the group will.",
                     "The link stops working afterwards."
                 ],
@@ -192,6 +193,11 @@ public static class InvitationCommands
 
                     table.AddRow("Shares taken on", $"{value.SharesTaken} ({value.AmountOwed:N2})");
                     table.AddRow("Payments taken on", $"{value.PaymentsTaken} ({value.AmountPaid:N2})");
+
+                    // The row about the future rather than the past: a rule place gives
+                    // them a share of every expense filed under that category from here
+                    // on, which the two counts above cannot say.
+                    table.AddRow("Rules naming you", $"{value.RulesTaken}");
 
                     lines.Add(table);
                     lines.Add(new Markup("\n[grey]No amount changed. What was recorded against " +

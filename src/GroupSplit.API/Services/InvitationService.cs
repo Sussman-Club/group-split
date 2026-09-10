@@ -277,7 +277,8 @@ public sealed class InvitationService(
             taken.SharesMoved,
             taken.AmountOwed,
             taken.PaymentsMoved,
-            taken.AmountPaid);
+            taken.AmountPaid,
+            taken.RulesAffected);
     }
 
     public async Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default) =>

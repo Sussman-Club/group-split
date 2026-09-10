@@ -36,11 +36,15 @@ public record InvitationClaimResponse(
 /// </summary>
 /// <remarks>
 /// The counts are the whole reason this is not <see cref="JoinedGroupResponse"/>. Claiming a
-/// personal link is not only joining: it moves a position -- shares, and anything the person
-/// was down as having paid for -- from a stand-in onto the claimer's own account. No amount
-/// changes, and every transaction still divides into exactly its own amount, but somebody's
-/// balance has moved and the app should say so rather than leaving it to be noticed.
+/// personal link is not only joining: it moves a position -- shares, anything the person was
+/// down as having paid for, and their places in the group's split rules -- from a stand-in
+/// onto the claimer's own account. No amount changes, and every transaction still divides
+/// into exactly its own amount, but somebody's balance has moved and the app should say so
+/// rather than leaving it to be noticed.
 /// </remarks>
+/// <param name="RulesTaken">
+/// How many split rules now name the claimer where they named the stand-in.
+/// </param>
 public record InvitationClaimedResponse(
     Guid GroupId,
     string GroupName,
@@ -49,9 +53,23 @@ public record InvitationClaimedResponse(
     int SharesTaken,
     decimal AmountOwed,
     int PaymentsTaken,
-    decimal AmountPaid)
+    decimal AmountPaid,
+    int RulesTaken)
 {
     /// <summary>Whether the group had recorded anything against them before they claimed it.</summary>
     [JsonIgnore]
-    public bool TookAnything => SharesTaken > 0 || PaymentsTaken > 0;
+    public bool TookAnything => SharesTaken > 0 || PaymentsTaken > 0 || RulesTaken > 0;
+
+    /// <summary>
+    /// Whether claiming took on something that will go on happening, rather than only a
+    /// history.
+    /// </summary>
+    /// <remarks>
+    /// The shares and the payments are the past: amounts already recorded, now theirs. A rule
+    /// place is the future -- it gives them a share of every expense filed under that
+    /// category from here on -- so it is the half of a claim somebody would most want
+    /// pointed out, and the half that was silent until it was counted.
+    /// </remarks>
+    [JsonIgnore]
+    public bool TookOnARule => RulesTaken > 0;
 }
