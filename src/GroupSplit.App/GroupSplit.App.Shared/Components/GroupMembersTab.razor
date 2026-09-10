@@ -129,17 +129,23 @@
                                ever becomes a member. Copied rather than shown, because it is
                                a bearer credential on their position in the ledger, and a URL
                                on screen is a URL in a screenshot. *@
-                            <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                            <div class="gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
                                 <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")">
-                                    <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.Link)"
+                                    <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.ContentCopy)"
                                                    Size="Size.Small"
                                                    Color="@(_copied == pending.Id ? Color.Success : Color.Default)"
                                                    aria-label="@($"Copy the invitation link for {pending.Name}")"
                                                    OnClick="@(() => CopyLinkAsync(pending))" />
                                 </MudTooltip>
+                                @* The same icon and colour as removing a member, one card
+                                   over, because it is the same kind of act: this person
+                                   stops being part of the group. It was a plain grey close
+                                   cross, which reads as "dismiss this row" -- and what it
+                                   actually does is move somebody's money. *@
                                 <MudTooltip Text="Withdraw the invitation">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.Close"
+                                    <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
                                                    Size="Size.Small"
+                                                   Color="Color.Error"
                                                    aria-label="@($"Withdraw the invitation to {pending.Name}")"
                                                    OnClick="@(() => WithdrawAsync(pending))" />
                                 </MudTooltip>

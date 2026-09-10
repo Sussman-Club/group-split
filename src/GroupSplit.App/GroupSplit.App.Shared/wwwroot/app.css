@@ -2344,6 +2344,61 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-auth-mark path:nth-child(2) { animation-delay: 90ms; }
 .gs-auth-mark path:nth-child(3) { animation-delay: 180ms; }
 
+/*
+    The two pages somebody reaches by following a link -- a group's join link, and a
+    personal invitation. They borrow .gs-auth-card above rather than having a surface of
+    their own, because they are the same kind of screen: outside the nav, before signing in,
+    and one button away from the hand-off that card was written for.
+
+    What they do not borrow is .gs-auth-backdrop. That claims the viewport and paints its
+    own gradient, which is right for a page whose layout is FullScreenLayout and wrong for
+    these, which render inside the app's own.
+*/
+.gs-link-landing {
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+}
+
+.gs-link-landing .gs-auth-card {
+    width: 100%;
+    max-width: 26rem;
+    padding: 40px 32px 32px;
+}
+
+.gs-link-landing-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    text-align: center;
+}
+
+.gs-link-landing-body h1 {
+    margin: 8px 0 6px;
+    font-size: 1.75rem;
+    font-weight: 800;
+}
+
+.gs-link-landing-body p {
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+/* Both actions on one line, and full width between them, so neither reads as the aside. */
+.gs-link-landing-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+@media (min-width: 480px) {
+    .gs-link-landing {
+        padding: 64px 16px;
+    }
+}
+
 @keyframes gs-mark-in {
     from {
         opacity: 0;

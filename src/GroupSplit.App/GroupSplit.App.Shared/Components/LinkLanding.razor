@@ -1,0 +1,51 @@
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    The card somebody lands on after opening a link they were sent: a group's join link, or
+    a personal invitation of their own.
+
+    These two pages are the only surfaces in the app reached before signing in and outside
+    the nav, and they were the only two rendering as bare centred text on the page
+    background -- an icon, a sentence and a button floating in a screen of nothing, with
+    nothing to say what had sent them there. Somebody following a link out of a chat thread
+    may never have heard of Group Split, so the mark and the name are the first things here.
+
+    The chrome is the sign-in hand-off's, deliberately: that is the screen these pages send
+    people to next, and arriving somewhere that looks like where you have just been is the
+    cheapest reassurance a hand-off between two hosts can give. It also means no new card
+    CSS -- the surface, its gradient rule and the mark's entrance are already written for
+    .gs-auth-card.
+*@
+
+<div class="gs-link-landing">
+    <div class="gs-auth-card">
+        <div class="gs-link-landing-body">
+
+            <BrandMark Class="gs-auth-mark" Size="64" />
+
+            <div>
+                <div class="gs-eyebrow" style="color: var(--gs-teal)">Group Split</div>
+                <h1>@Title</h1>
+                @if (!string.IsNullOrWhiteSpace(Subtitle))
+                {
+                    <p class="gs-muted">@Subtitle</p>
+                }
+            </div>
+
+            @ChildContent
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// What the page is about, in a phrase somebody can agree to: the group's name once it
+    /// is known, and what they are being asked before that.
+    /// </summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>The sentence under it, or none while there is nothing useful to say.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
