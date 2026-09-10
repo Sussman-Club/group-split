@@ -67,7 +67,11 @@
                         HideSpinButtons="true"
                         Format="N2"/>
 
-                    <MudStack Row="true" Spacing="4">
+                    @* Side by side while there is room for two, stacked below 600px. On a
+                       phone the pair got about 140px each inside the dialog, part of which
+                       a picker spends on its own calendar or clock button, so both values
+                       were cut off mid-string. *@
+                    <MudStack Row="true" Spacing="4" Class="gs-field-pair">
                         <MudDatePicker
                             @bind-Date="_selectedDate"
                             Label="Date"

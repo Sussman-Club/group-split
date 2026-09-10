@@ -1,58 +1,75 @@
 @namespace GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Extensions
 
 @*
-    What a row leads with: who paid, and where.
+    What a row leads with: where the money went, and who paid.
 
-    Two facts and one 40px square, because a splitting app cannot give up either. The payer
-    is the fact the whole page is about -- "who is owed for this" -- so the avatar keeps the
-    square and the merchant's logo rides its corner. Swapping the avatar out for the logo
-    reads better and answers the wrong question; and it would make the first column mean
-    two different things down one list, since only an imported expense has a logo at all.
+    Two facts and one 40px tile. The place takes the tile and the payer rides its corner --
+    which is the reverse of how this was built, so the reason is worth writing down.
 
-    The badge is a rounded square where the avatar is a circle, and that is load-bearing
-    rather than decorative: a circle in that corner is where every app puts a presence dot,
-    so a round logo there reads as a status. Square is a place, circle is a person.
+    It used to be the other way round: the payer's avatar took the tile and the logo rode
+    the corner, on the argument that a splitting app is about who is owed. What that
+    argument missed is that swapping does not *lose* the payer, it moves it -- and the
+    corner was never big enough to hold a logo. On the grid rows the badge came out at
+    17px, under the 18px floor the note on it set, so a trolley and a coffee cup were the
+    same grey smudge: a badge spending a row's corner and giving nothing back. A face at
+    20px is still a face, because initials survive at sizes a pictogram does not.
 
-    With no payer -- the inbox, where nothing has been paid by anybody yet -- there is only
-    one fact to show, so the logo takes the tile itself and falls back to the shop's
-    initials in one.
+    Two more things fell out of it. The corner now holds a *circle*, and a circle in that
+    corner is what every app puts a presence dot in -- which is exactly right when the
+    thing there is a person. And the inbox already gave the logo the whole tile, having no
+    payer to show, so the ledger had been contradicting the inbox down the same column.
+
+    The payer is still on every row twice over: this badge, and the "Daniel Rivero paid"
+    line beside it. What it is not any more is the biggest thing in the column.
+
+    One size, because the column is one size. Everything that can lead a row -- this, and
+    the .gs-row-icon a settlement gets -- is 40px, so the left and right edges hold down
+    the page instead of stepping in and out by twelve pixels a row.
 *@
 
 @if (string.IsNullOrWhiteSpace(PaidByUserName))
 {
+    @* The inbox: nobody has paid yet, because filing it is the decision nobody has made. *@
     @if (Logo is { } only)
     {
-        <img class="gs-mark-solo" src="@only" alt="" width="40" height="40"
+        <img class="gs-mark-place" src="@only" alt="" width="40" height="40"
              title="@MerchantName" loading="lazy" />
     }
     else
     {
-        <Avatar Name="@MerchantName" Size="@Size" Class="tile" />
+        <Avatar Name="@MerchantName" Class="mark tile" />
     }
 }
-else if (Logo is { } badge)
+else if (Logo is { } place)
 {
     <span class="gs-mark">
-        <Avatar Name="@PaidByUserName" Size="@Size" />
-        <img class="gs-mark-badge" src="@badge" alt="" title="@MerchantName" loading="lazy" />
+        <img class="gs-mark-place" src="@place" alt="" width="40" height="40"
+             title="@MerchantName" loading="lazy" />
+        @* Not an Avatar: it is a fifth of the size, so it carries initials and a tone and
+           none of the rest. The tone comes off the same hash, so one person is the same
+           colour here as in the tile they get on the row below. *@
+        <span class="gs-mark-who @PaidByUserName.AvatarTone()" title="@PaidByUserName" aria-hidden="true">
+            @PaidByUserName.Initials()
+        </span>
     </span>
 }
 else
 {
-    <Avatar Name="@PaidByUserName" Size="@Size" />
+    @* Nothing imported this one, so there is no place to lead with and the payer keeps the
+       tile. Which is also the signal: a plain circle down this column means somebody typed
+       the expense in, a tile with a face on it means it came off a bank row. *@
+    <Avatar Name="@PaidByUserName" Class="mark" />
 }
 
 @code {
     /// <summary>Who paid, or null on a row where nobody has yet -- an imported bank row.</summary>
     [Parameter] public string? PaidByUserName { get; set; }
 
-    /// <summary>Where it was spent, when the row knows. The logo's tooltip and its fallback.</summary>
+    /// <summary>Where it was spent, when the row knows. The tile's tooltip and its fallback.</summary>
     [Parameter] public string? MerchantName { get; set; }
 
     [Parameter] public string? MerchantLogoUrl { get; set; }
-
-    /// <summary>Passed through to <see cref="Avatar"/>: "sm", "" (default), "lg" or "xl".</summary>
-    [Parameter] public string Size { get; set; } = "";
 
     /// <summary>
     /// Whitespace is no logo. The API sends null for a merchant without one and an empty

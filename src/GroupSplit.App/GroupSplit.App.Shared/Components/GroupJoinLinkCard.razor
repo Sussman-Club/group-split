@@ -61,16 +61,22 @@
             Expires @Clock.Local(_link.ExpiresAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(_link.CreatedByUserName) ? "" : $" · made by {_link.CreatedByUserName}")
         </div>
 
-        <div style="padding-top: 12px; display: flex; gap: 8px; flex-wrap: wrap">
+        @* The two you would reach for, then a hairline, then the one that cannot be
+           undone. All three were in one wrapping row, so which line the red one landed on
+           was down to how wide the screen happened to be. *@
+        <div class="gs-btn-row">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                        StartIcon="@Icons.Material.Rounded.ContentCopy"
                        Disabled="@_busy"
                        OnClick="@CopyAsync">Copy link</MudButton>
-            <MudButton Variant="Variant.Text"
+            <MudButton Variant="Variant.Text" Class="gs-btn-quiet"
                        StartIcon="@Icons.Material.Rounded.Autorenew"
                        Disabled="@_busy"
                        OnClick="@CreateAsync">New link</MudButton>
-            <MudButton Variant="Variant.Text" Color="Color.Error"
+        </div>
+
+        <div class="gs-btn-row is-destructive">
+            <MudButton Variant="Variant.Text" Class="gs-btn-danger"
                        StartIcon="@Icons.Material.Rounded.LinkOff"
                        Disabled="@_busy"
                        OnClick="@RevokeAsync">Turn it off</MudButton>

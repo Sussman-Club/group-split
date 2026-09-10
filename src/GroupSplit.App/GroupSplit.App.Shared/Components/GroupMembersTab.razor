@@ -29,7 +29,7 @@
             @foreach (var member in _members)
             {
                 var person = member;
-                <div class="gs-row" style="cursor: default">
+                <div class="gs-row gs-row-tight-action" style="cursor: default">
                     <Avatar Name="@person.FullName" />
                     <div style="min-width: 0">
                         <div class="title">
@@ -60,7 +60,7 @@
                        StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="@InviteAsync">Invite someone</MudButton>
             @* Leaving needs a settled balance, and the API says so -- the button is not
                hidden on a hunch about what the balance is. *@
-            <MudButton Variant="Variant.Text" Color="Color.Error"
+            <MudButton Variant="Variant.Text" Class="gs-btn-danger"
                        StartIcon="@Icons.Material.Rounded.Logout" OnClick="@LeaveAsync">Leave group</MudButton>
         </div>
     </div>
@@ -89,7 +89,7 @@
                     @foreach (var invitation in _pending)
                     {
                         var pending = invitation;
-                        <div class="gs-row" style="cursor: default">
+                        <div class="gs-row gs-row-tight-action" style="cursor: default">
                             <Avatar Name="@pending.Email" />
                             <div style="min-width: 0">
                                 <div class="title"><span>@pending.Email</span></div>

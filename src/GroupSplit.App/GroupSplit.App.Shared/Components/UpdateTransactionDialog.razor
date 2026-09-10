@@ -42,13 +42,17 @@
                     Immediate="true"
                     HideSpinButtons="true"/>
 
-                <MudStack Row="true" Spacing="4">
+                @* Stacked below 600px, for the reason the create dialog's pair gives: two
+                   pickers sharing a phone-width dialog clip both their values. Labels
+                   shortened to match, since "Transaction Date" over a field on a page
+                   about one transaction was saying it twice. *@
+                <MudStack Row="true" Spacing="4" Class="gs-field-pair">
                     <MudDatePicker @bind-Date="selectedDate"
-                                   Label="Transaction Date"
+                                   Label="Date"
                                    Variant="Variant.Outlined"/>
 
                     <MudTimePicker @bind-Time="selectedTime"
-                                   Label="Transaction Time"
+                                   Label="Time"
                                    Variant="Variant.Outlined"
                                    AmPm="true"/>
                 </MudStack>

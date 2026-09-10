@@ -45,6 +45,74 @@ public sealed class SelfDescriptionTests
         Assert.Equal("new|filed|ignored", status.GetProperty("type").GetString());
     }
 
+    /// <summary>
+    /// One flag, two meanings, and the schema is where an agent learns which.
+    /// </summary>
+    /// <remarks>
+    /// A single shared <c>Option</c> instance carried one description onto every command
+    /// that filters by group. On <c>list</c> and <c>summary</c> it selects a group's whole
+    /// ledger; on <c>monthly</c> and the <c>shares</c> commands it narrows the caller's own
+    /// rows. One wording had to be wrong for one of them, and the wrong one was the one
+    /// published -- so anything driving the CLI from the schema was misled with no error to
+    /// notice.
+    /// </remarks>
+    [Fact]
+    public async Task The_group_flag_is_described_per_command_rather_than_once_for_all()
+    {
+        var transactions = (await Cli.RunAsync("schema")).Json
+            .GetProperty("command").GetProperty("subcommands").EnumerateArray()
+            .Single(command => command.GetProperty("name").GetString() == "transactions");
+
+        string GroupDescription(params string[] path)
+        {
+            var command = transactions;
+
+            foreach (var name in path)
+            {
+                command = command.GetProperty("subcommands").EnumerateArray()
+                    .Single(candidate => candidate.GetProperty("name").GetString() == name);
+            }
+
+            return command.GetProperty("options").EnumerateArray()
+                .Single(option => option.GetProperty("name").GetString() == "--group")
+                .GetProperty("description").GetString()!;
+        }
+
+        // The two that read the group.
+        Assert.Contains("whoever paid", GroupDescription("list"));
+        Assert.Contains("whoever paid", GroupDescription("summary"));
+
+        // The three whose rows are the caller's by construction.
+        Assert.Contains("your own", GroupDescription("monthly"));
+        Assert.Contains("your own", GroupDescription("shares", "list"));
+        Assert.Contains("your own", GroupDescription("shares", "summary"));
+    }
+
+    /// <summary>
+    /// The listing's own description has to say whose expenses it covers. It read as though
+    /// it listed whatever matched the filter, which is how an empty answer came to be read
+    /// as "this group has no expenses" rather than "you paid for none of them".
+    /// </summary>
+    [Fact]
+    public async Task The_schema_says_the_plain_listing_is_your_own_and_where_a_group_ledger_is()
+    {
+        var transactions = (await Cli.RunAsync("schema")).Json
+            .GetProperty("command").GetProperty("subcommands").EnumerateArray()
+            .Single(command => command.GetProperty("name").GetString() == "transactions");
+
+        var descriptions = transactions.GetProperty("subcommands").EnumerateArray()
+            .Where(command => command.GetProperty("name").GetString() is "list" or "summary")
+            .Select(command => command.GetProperty("description").GetString()!)
+            .ToList();
+
+        Assert.Equal(2, descriptions.Count);
+        Assert.All(descriptions, description =>
+        {
+            Assert.Contains("you paid for", description);
+            Assert.Contains("--group", description);
+        });
+    }
+
     [Fact]
     public async Task The_schema_carries_the_exit_code_table_so_it_need_not_be_guessed()
     {

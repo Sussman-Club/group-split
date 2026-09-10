@@ -9,4 +9,5 @@ public sealed class SeederPaths
     public required string Settlements { get; init; }
     public required string BankConnections { get; init; }
     public required string Merchants { get; init; }
+    public required string Invitations { get; init; }
 }

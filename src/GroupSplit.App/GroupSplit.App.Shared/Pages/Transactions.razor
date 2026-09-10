@@ -27,26 +27,60 @@
     The three views are the page's title rather than a chip under it, and they are in the
     URL. A filter chip under a heading called "Expenses" is what produced the confusion in
     the first place.
+
+    Two controls, and each one has exactly one place on the page that reports it: the view
+    is the heading, the ledger is the eyebrow above it. That is not tidiness. Both used to
+    speak through the same words -- a view chip called "Everything you are in" over an
+    eyebrow that always read "Across every group", beside a ledger menu whose default was
+    "Everything" -- so a reader could not tell which control an answer had come from, and
+    the page contradicted itself outright whenever a single group was picked.
+
+    There was a chart here, two lines and the gap between them, captioned "the gap is how
+    much you are fronting". It is gone. A settlement is a transfer rather than an expense,
+    so the series never held a repayment: the gap ignored every penny anybody had paid
+    back, and somebody square with their flatmates still read months of being owed
+    hundreds. It is not relabellable -- there is no honest caption for the difference
+    between two figures that are both missing the same third one. Where somebody stands is
+    the balances, which the home page and the group's own tab already answer.
 *@
 
 <PageTitle>@ViewTitle - Group Split</PageTitle>
 
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">Across every group</div>
+        @* The eyebrow follows the ledger control, because it is the one thing on the page
+           that can contradict it. It read "Across every group" whatever was picked, so a
+           page narrowed to a single group carried a line saying it was not. *@
+        <div class="gs-eyebrow">@WhereEyebrow</div>
         <h1>@ViewTitle</h1>
         <p>@ViewBlurb</p>
     </div>
 </div>
 
 <div class="gs-stack">
-    <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which view">
-        @foreach (var (label, value) in Views)
+    @*
+        Whose money -- a question about you, not about a set.
+
+        The three chips were "Paid by you", "Your share" and "Everything you are in". The
+        middle two differ only by a flag nothing showed: one is your part of what other
+        people paid, the other is your part of everything, your own expenses included.
+        Neither label said which. And "Everything you are in" sat beside a ledger control
+        whose own default read "Everything" -- one word, two controls, two meanings, and
+        nothing on the page to say which of them somebody had moved.
+
+        Each chip now carries what it counts underneath itself, so the difference is on the
+        page rather than in whatever the reader happens to remember.
+    *@
+    <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Whose money">
+        @foreach (var (label, detail, value) in Views)
         {
             var view = value;
-            <button type="button" class="gs-chip @(_view == view ? "active" : "")"
+            <button type="button" class="gs-chip gs-chip-stacked @(_view == view ? "active" : "")"
                     aria-pressed="@(_view == view ? "true" : "false")"
-                    @onclick="@(() => SetViewAsync(view))">@label</button>
+                    @onclick="@(() => SetViewAsync(view))">
+                <span class="gs-chip-label">@label</span>
+                <span class="gs-chip-detail">@detail</span>
+            </button>
         }
     </div>
 
@@ -80,8 +114,10 @@
                 </button>
             </ActivatorContent>
             <ChildContent>
+                @* "All groups", not "Everything": that word was also the third view chip's,
+                   where it meant something else entirely. *@
                 <MudMenuItem OnClick="@(() => SetWhereAsync(AllLedgers))">
-                    <span class="gs-menu-item @(_where == AllLedgers ? "is-on" : "")">Everything</span>
+                    <span class="gs-menu-item @(_where == AllLedgers ? "is-on" : "")">All groups</span>
                 </MudMenuItem>
                 <MudMenuItem OnClick="@(() => SetWhereAsync(SharedOnly))">
                     <span class="gs-menu-item @(_where == SharedOnly ? "is-on" : "")">Shared only</span>
@@ -128,22 +164,14 @@
                       Class="gs-search" />
     </div>
 
-    <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
-        <div class="gs-card-title">
-            <h2>What you paid, and what it cost you</h2>
-            <span class="gs-muted" style="font-size: .8125rem">The gap is how much you are fronting.</span>
-        </div>
-        <ExposureChart Points="_months" />
-    </div>
-
     <div class="gs-stats">
-        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">@CountLabel</span>
             <span class="gs-stat-value gs-num" data-gs-count="@Count">@Count</span>
             <span class="gs-muted" style="font-size: .8125rem">@Describe()</span>
         </div>
-        <div class="gs-card gs-stat gs-reveal" style="--i: 2">
+        <div class="gs-card gs-stat gs-reveal" style="--i: 1">
             <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.Payments" /></span>
             @* The labels change with the view, because the figures do. "Total paid" over a
                list of other people's expenses would be describing a set nobody asked
@@ -154,7 +182,7 @@
         </div>
     </div>
 
-    <div class="gs-reveal" style="--i: 3">
+    <div class="gs-reveal" style="--i: 2">
         <MudDataGrid T="TransactionResponse"
                      @ref="_grid"
                      ServerData="LoadPageAsync"
@@ -177,8 +205,7 @@
                         <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
                             <MerchantMark PaidByUserName="@context.Item.PaidByUserName"
                                           MerchantName="@context.Item.MerchantName"
-                                          MerchantLogoUrl="@context.Item.MerchantLogoUrl"
-                                          Size="sm" />
+                                          MerchantLogoUrl="@context.Item.MerchantLogoUrl" />
                             <div style="min-width: 0">
                                 <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
                                 <div class="gs-muted" style="font-size: .75rem">@PaidBy(context.Item)</div>
@@ -233,41 +260,61 @@
 
                 @* Titled so the stacked layout a phone falls back to says which row these
                    belong to -- see the note on the ledger's. *@
+                @*
+                    Open, edit, delete -- on every row, not only the ones you paid for.
+
+                    They were gated on whether the caller was the payer, which is stricter
+                    than the API: a transaction is reachable by anybody in its group, and
+                    both write endpoints go through the same membership scope the reads do.
+                    So a shared expense somebody else entered with the wrong amount could be
+                    seen by four people and corrected by one, and the group's own ledger --
+                    which never gated these -- offered the buttons the You page withheld for
+                    the same row.
+                *@
                 <TemplateColumn Title="Actions" Sortable="false"
-                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                                HeaderStyle="width: 132px" CellStyle="padding: 8px">
                     <CellTemplate>
-                        @* Only on rows you recorded. They used to render on every row and
-                           the refusal arrived from the API after the click. *@
-                        @if (Mine(context.Item))
-                        {
-                            <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                                <MudTooltip Text="Edit">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.Edit"
-                                                   Size="Size.Small"
-                                                   aria-label="@($"Edit {context.Item.Name}")"
-                                                   OnClick="@(async () => await EditAsync(context.Item))" />
-                                </MudTooltip>
-                                <MudTooltip Text="Delete">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
-                                                   Size="Size.Small"
-                                                   Color="Color.Error"
-                                                   aria-label="@($"Delete {context.Item.Name}")"
-                                                   OnClick="@(async () => await DeleteAsync(context.Item))" />
-                                </MudTooltip>
-                            </div>
-                        }
+                        <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            @* The way into the details from this grid. Clicking the row
+                               does nothing here -- the row is not a link and its cells hold
+                               their own controls -- so without this the one screen about a
+                               single expense was reachable from the home page's lists and
+                               from nowhere on the page devoted to expenses. *@
+                            <MudTooltip Text="View details">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
+                                               Size="Size.Small"
+                                               aria-label="@($"View {context.Item.Name}")"
+                                               OnClick="@(async () => await ViewAsync(context.Item))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                               Size="Size.Small"
+                                               aria-label="@($"Edit {context.Item.Name}")"
+                                               OnClick="@(async () => await EditAsync(context.Item))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="@($"Delete {context.Item.Name}")"
+                                               OnClick="@(async () => await DeleteAsync(context.Item))" />
+                            </MudTooltip>
+                        </div>
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
             <NoRecordsContent>
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(IsNarrowed ? "Nothing matches" : "Nothing here yet")</h3>
-                    <span>
-                        @(IsNarrowed
-                            ? "Try a different name, group, category or date."
-                            : "Record an expense and it will show up here.")
-                    </span>
+                    @* Turns on what the reader narrowed, not on what the page is narrowed
+                       to -- the opening month is the page's own doing, and "Nothing
+                       matches" over a filter nobody set tells a brand-new account it has
+                       filtered its way into an empty list. *@
+                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing here yet")</h3>
+                    @* Says whose rows are missing, not just that rows are. Under "You paid",
+                       an empty list means nobody has recorded you paying for anything -- not
+                       that the group is empty, which is what it reads as. *@
+                    <span>@EmptyBlurb</span>
                 </div>
             </NoRecordsContent>
             <PagerContent>
@@ -295,11 +342,19 @@
 
     [Parameter, SupplyParameterFromQuery(Name = "view")] public string? ViewParameter { get; set; }
 
-    private static readonly (string Label, ExpenseView Value)[] Views =
+    /// <summary>
+    /// The chips, each with the line that says what it counts.
+    /// </summary>
+    /// <remarks>
+    /// The detail is part of the control rather than a tooltip: the difference between the
+    /// last two is the whole reason somebody picks one over the other, and a difference you
+    /// have to hover to find is one nobody finds.
+    /// </remarks>
+    private static readonly (string Label, string Detail, ExpenseView Value)[] Views =
     [
-        ("Paid by you", ExpenseView.PaidByYou),
-        ("Your share", ExpenseView.YourShare),
-        ("Everything you are in", ExpenseView.Everything)
+        ("You paid", "expenses you covered", ExpenseView.PaidByYou),
+        ("You owe", "your share of what others paid", ExpenseView.YourShare),
+        ("All yours", "your share of every expense", ExpenseView.Everything)
     ];
 
     /// <summary>
@@ -311,9 +366,27 @@
     private const string SharedOnly = "shared";
     private const string PersonalOnly = "personal";
 
-    private ExpenseView _view = ExpenseView.PaidByYou;
+    /// <summary>
+    /// "All yours" opens the page: every expense the caller has a share of, their own
+    /// included. "You paid" answers a narrower question than most people arrive with --
+    /// somebody who is not the household's main payer opened this page and saw almost
+    /// nothing, which is the same defect as the CLI's `--group`, one surface along.
+    /// </summary>
+    private ExpenseView _view = ExpenseView.Everything;
     private string _searchString = "";
-    private DateFilter _range = DateFilter.AllTime;
+    /// <summary>
+    /// The span the page opens on: the current month, not all time. An all-time listing
+    /// opens on a page of whatever is newest and totals a figure nobody asked about; a
+    /// month is the span somebody actually reviews, and the range chip says which one.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than inlined because the empty state has to tell this span apart from
+    /// one somebody picked. They can resolve to the same rows -- choosing "This month" off
+    /// the menu lands back here -- and that is fine: the same set gets the same sentence.
+    /// </remarks>
+    private static readonly DateFilter OpensOn = new(DateFilterPreset.ThisMonth);
+
+    private DateFilter _range = OpensOn;
     /// <summary>Which ledger the page is narrowed to: everything, shared, personal, or one group.</summary>
     private string _where = AllLedgers;
 
@@ -321,7 +394,6 @@
 
     private TransactionSummaryResponse? _paidSummary;
     private ExpenseShareSummaryResponse? _shareSummary;
-    private IReadOnlyList<MonthlyExposureResponse> _months = [];
 
     /// <summary>
     /// Counts reads of the figures, so the answer to a narrowing that has since been left
@@ -333,6 +405,19 @@
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
     private bool IsNarrowed => IsSearching || !_range.IsAllTime || _where != AllLedgers;
+
+    /// <summary>
+    /// Whether the reader narrowed this, as opposed to the page opening narrowed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsNarrowed"/> asks whether the listing is a slice, which it is from the
+    /// first frame now that the range starts at the current month -- so a heading keyed on
+    /// it says "Nothing matches" to somebody who has touched nothing. This asks the other
+    /// question: did anybody ask for this slice? The opening month does not count, and
+    /// neither does all time, which is the widest the page goes rather than a narrowing.
+    /// </remarks>
+    private bool IsNarrowedByHand =>
+        IsSearching || _where != AllLedgers || (!_range.IsAllTime && _range != OpensOn);
 
     /// <summary>The chosen group, when the choice is a group at all.</summary>
     private Guid? _groupId => Guid.TryParse(_where, out var id) ? id : null;
@@ -358,27 +443,96 @@
 
     private string ViewTitle => _view switch
     {
-        ExpenseView.YourShare => "Your share",
-        ExpenseView.Everything => "Everything you are in",
-        _ => "Paid by you"
+        ExpenseView.YourShare => "What you owe",
+        ExpenseView.Everything => "All yours",
+        _ => "What you paid"
     };
 
+    /// <summary>
+    /// One sentence, and it has to name the difference from the chip beside it.
+    /// </summary>
+    /// <remarks>
+    /// The old blurbs each described their own view truthfully and none of them said what
+    /// set it apart from its neighbour -- which is the only thing somebody choosing between
+    /// two of them needs to read.
+    /// <para>
+    /// Kept to two clauses, because below 560px the chips drop their own detail lines and
+    /// this is the only thing left explaining the difference. Four lines of it pushed the
+    /// figures off a phone screen; what went was everything that was true of all three
+    /// views -- the sort order, the paging -- and what stayed is the contrast.
+    /// </para>
+    /// </remarks>
     private string ViewBlurb => _view switch
     {
         ExpenseView.YourShare =>
-            "What other people's expenses cost you. Sorted by your share, largest first.",
+            "Your share of expenses somebody else paid for. Your share of your own is left "
+            + "out — that is money you already have.",
         ExpenseView.Everything =>
-            "Every expense you have a share of, across every group — the ones you paid for and the ones you owe on.",
-        _ => "Everything you have paid for, across every group. What it cost you is the next view along."
+            "Your share of every expense you are in, your own included. Wider than what you "
+            + "owe, and not a debt.",
+        _ => "Expenses you paid for, whoever owes a share of them. What each one actually "
+             + "cost you is under \"You owe\"."
     };
 
-    private string CountLabel => _view is ExpenseView.PaidByYou ? "Expenses" : "Expenses you are in";
+    /// <summary>
+    /// The line above the heading. It reports the ledger rather than the view, so each of
+    /// the two controls has exactly one place on the page that speaks for it.
+    /// </summary>
+    private string WhereEyebrow => _where switch
+    {
+        SharedOnly => "Shared expenses only",
+        PersonalOnly => "Personal expenses only",
+        AllLedgers => "Across every group",
+        _ => _groupId is { } id ? GroupName(id) : "Across every group"
+    };
+
+    private string CountLabel => _view is ExpenseView.PaidByYou ? "Expenses you paid" : "Expenses you are in";
+
+    /// <summary>
+    /// What an empty list means, which is never simply "there is nothing".
+    /// </summary>
+    /// <remarks>
+    /// Every view here is narrowed to the caller, and an empty answer under a narrowing
+    /// nobody has restated reads as an empty world: the same mistake the CLI made when
+    /// <c>--group</c> narrowed to the payer and a group of 1,411 expenses reported 2. When
+    /// one group is picked the group's own ledger is where the whole of it is, so that is
+    /// what this points at.
+    /// </remarks>
+    private string EmptyBlurb => (IsNarrowed, _view) switch
+    {
+        (true, _) when _groupId is { } id =>
+            $"Nothing of yours in {GroupName(id)}{ForSpan}. The whole of what this group "
+            + "has spent, whoever paid for it, is on the group's own ledger.",
+        // The page opens on the current month, so this is the *default* empty state rather
+        // than one somebody filtered their way into: it has to name the span and say how to
+        // leave it, or a quiet month reads as an empty account. Only for the opening month,
+        // though -- pointing at "All time" from a span somebody chose themselves is advice
+        // about a control they have already found.
+        (true, _) when !IsSearching && _where == AllLedgers && _range == OpensOn =>
+            $"Nothing for {Span}. This page opens on the current month — pick "
+            + "\"All time\" to see everything.",
+        (true, _) => $"Nothing{ForSpan} matches. Try a different name, group, category or date.",
+        (false, ExpenseView.PaidByYou) =>
+            "Nothing recorded with you as the payer yet. Expenses somebody else paid for are "
+            + "under \"You owe\".",
+        _ => "Nothing you have a share of yet. Record an expense and it will show up here."
+    };
+
+    /// <summary>The span in words, for a sentence rather than a chip.</summary>
+    private string Span => _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant();
+
+    /// <summary>
+    /// The span to hang on the end of a clause, or nothing at all when there is no span to
+    /// name. "Nothing for all time matches" is not a sentence anybody writes; the sentence
+    /// somebody writes about that set is "Nothing matches".
+    /// </summary>
+    private string ForSpan => _range.IsAllTime ? "" : $" for {Span}";
 
     private string TotalLabel => _view switch
     {
-        ExpenseView.YourShare => "Total owed",
+        ExpenseView.YourShare => "You owe",
         ExpenseView.Everything => "Your share",
-        _ => "Total paid"
+        _ => "You paid"
     };
 
     private int Count => _view is ExpenseView.PaidByYou
@@ -406,8 +560,8 @@
     {
         SharedOnly => "Shared only",
         PersonalOnly => "Personal only",
-        AllLedgers => "Everything",
-        _ => _groupId is { } id ? GroupName(id) : "Everything"
+        AllLedgers => "All groups",
+        _ => _groupId is { } id ? GroupName(id) : "All groups"
     };
 
     private string Describe()
@@ -415,7 +569,7 @@
         var said = new List<string>(3)
         {
             _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant(),
-            _where == AllLedgers ? "all groups" : WhereLabel.ToLowerInvariant()
+            WhereLabel.ToLowerInvariant()
         };
 
         if (IsSearching)
@@ -432,15 +586,9 @@
             ? "You paid"
             : $"{row.PaidByUserName} paid";
 
-    /// <summary>
-    /// Whether the row is the caller's to change. Read off the share flag where there is
-    /// one and off the payer otherwise, so the buttons say the same thing the API will.
-    /// </summary>
-    private bool Mine(TransactionResponse row) => row switch
-    {
-        ExpenseShareResponse share => share.PaidByYou,
-        _ => _view is ExpenseView.PaidByYou || row.PaidByUserId == Me
-    };
+    @* Whether the row was the caller's to change used to be worked out here, off the share
+       flag or the payer. It is not the question the API asks -- membership of the group is
+       -- so the rows it hid the buttons on were rows the server would have accepted. *@
 
     // ---------------------------------------------------------------- reading --
 
@@ -523,16 +671,26 @@
     }
 
     /// <summary>
-    /// The figures and the chart, over whatever the page is narrowed to. Both summaries are
-    /// read whichever view is on, because the labels change with the view but the narrowing
+    /// The figures, over whatever the page is narrowed to. Both summaries are read
+    /// whichever view is on, because the labels change with the view but the narrowing
     /// does not -- and switching view would otherwise show yesterday's figures for a frame.
     /// </summary>
+    /// <remarks>
+    /// There used to be a third read here, for a two-line chart of what the caller paid
+    /// against what their share came to, captioned "the gap is how much you are fronting".
+    /// The gap is not that: a settlement is a transfer rather than an expense, so the
+    /// series never contained a repayment, and somebody who had settled up in full still
+    /// read months of being owed hundreds. The chart is gone rather than relabelled --
+    /// there is no honest caption for a difference between two numbers that are both
+    /// missing the same third one. Where somebody stands is the balances, which the home
+    /// page and the group's own tab already show.
+    /// </remarks>
     private async Task ReadFiguresAsync()
     {
         var version = ++_figuresVersion;
 
-        // Read once, here: the three requests below have to describe one narrowing, and
-        // the fields can move while they are in flight.
+        // Read once, here: both requests below have to describe one narrowing, and the
+        // fields can move while they are in flight.
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
         var groupId = _groupId;
         var personal = _personal;
@@ -546,9 +704,6 @@
             from: bounds.From, to: bounds.To, groupId: groupId, personal: personal, search: search,
             owedOnly: owedOnly));
 
-        var months = await ReadAsync(() => TransactionsClient.GetMonthlyExposureAsync(
-            from: bounds.From, to: bounds.To, groupId: groupId, personal: personal, search: search));
-
         // Something else has been asked for since. Its answer is the one the cards are
         // waiting for; this one is about a narrowing nobody is looking at any more.
         if (version != _figuresVersion)
@@ -556,7 +711,6 @@
 
         _paidSummary = paid;
         _shareSummary = shares;
-        _months = months is null ? [] : [.. months];
 
         await InvokeAsync(StateHasChanged);
     }
@@ -577,10 +731,15 @@
         await BackToFirstPageAsync();
     }
 
+    /// <summary>
+    /// The default is the one with no query string, so "All yours" is the bare URL and the
+    /// other two name themselves. <c>?view=everything</c> is still honoured below, because
+    /// it is what the default used to be reached by and bookmarks outlive defaults.
+    /// </summary>
     private static string QueryFor(ExpenseView view) => view switch
     {
         ExpenseView.YourShare => "?view=share",
-        ExpenseView.Everything => "?view=everything",
+        ExpenseView.PaidByYou => "?view=paid",
         _ => ""
     };
 
@@ -626,6 +785,22 @@
     }
 
     // ---------------------------------------------------------------- writing --
+
+    /// <summary>
+    /// The one expense, and how it was divided.
+    /// </summary>
+    /// <remarks>
+    /// Read-only, so nothing is announced when it closes and the grid is left alone. The
+    /// dialog reads the expense itself rather than being handed this row: a listing row
+    /// carries no splits, and the split is most of what somebody opens this for.
+    /// </remarks>
+    private async Task ViewAsync(TransactionResponse row)
+    {
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, row.Id } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+    }
 
     private async Task EditAsync(TransactionResponse row)
     {
@@ -680,9 +855,9 @@
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
     /// <summary>
-    /// A write landed, from this page or any other. The figures and the chart are this
-    /// page's own reads and the grid asks the server for its rows, so neither moves on a
-    /// re-render alone: both are asked again.
+    /// A write landed, from this page or any other. The figures are this page's own read
+    /// and the grid asks the server for its rows, so neither moves on a re-render alone:
+    /// both are asked again.
     /// </summary>
     /// <remarks>
     /// This was written and never wired up. The page re-rendered when the state service
@@ -731,8 +906,10 @@
         _view = ViewParameter?.ToLowerInvariant() switch
         {
             "share" or "yourshare" => ExpenseView.YourShare,
-            "everything" => ExpenseView.Everything,
-            _ => ExpenseView.PaidByYou
+            "paid" or "paidbyyou" => ExpenseView.PaidByYou,
+            // "everything" is what the default used to be reached by. Still honoured, and
+            // still lands on the same view, so an old bookmark keeps working.
+            _ => ExpenseView.Everything
         };
 
     protected override void OnParametersSet() => ResolveView();

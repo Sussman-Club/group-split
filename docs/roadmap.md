@@ -472,10 +472,24 @@ which is what keeps a settlement out of a spending total now that both are in on
 `/transactions` keeps its path and is titled **You** -- your money across every group,
 where a group's Ledger is a group across people. Two pages called Expenses was the app's
 clearest usability defect. It gained the three views the API has served since phase 2
-(*Paid by you*, *Your share*, *Everything you are in*, in the URL), a group filter, and the
-one chart in the product: what you paid and what your share came to, by month. That last was refused earlier on the grounds that four people and
-eleven expenses is not a dataset -- which was reasoning from the seeder rather than from the
-migrated 42-month workbook.
+(*You paid*, *You owe*, *All yours*, in the URL) and a group filter.
+
+It also gained the one chart in the product -- what you paid against what your share came
+to, by month, under the caption "the gap is how much you are fronting" -- and has since
+lost it. The caption was the problem and it was not fixable by rewording: a settlement is a
+transfer rather than an expense, so the series never contained a repayment, and the gap
+therefore ignored every penny anybody had paid back. Somebody square with their flatmates
+read months of being owed hundreds. There is no honest caption for the difference between
+two figures that are both missing the same third one, so the chart is gone and the balances
+answer the question it was pretending to. `GET /transactions/monthly` and
+`groupsplit transactions monthly` remain, reporting the two figures the server actually
+gives and no derived third.
+
+The three views were also renamed, because the labels did not distinguish them: *Your
+share* and *Everything you are in* differ only by an owed-only flag nothing showed, and
+*Everything you are in* sat beside a ledger control whose own default read *Everything*.
+Each chip now carries a line saying what it counts, and the ledger control's default is
+*All groups*.
 
 **How do I clear it?** `/settle`, a new top-level destination. Every debt you are on either
 side of, across every group, as one minimised plan grouped **by person** rather than by

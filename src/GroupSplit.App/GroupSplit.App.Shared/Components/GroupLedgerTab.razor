@@ -113,14 +113,13 @@
                                kind is visible before any of the words are. *@
                             @if (context.Item.Kind is ActivityKind.Transfer)
                             {
-                                <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
+                                <span class="gs-row-icon transfer"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
                             }
                             else
                             {
                                 <MerchantMark PaidByUserName="@context.Item.PaidByUserName"
                                               MerchantName="@context.Item.MerchantName"
-                                              MerchantLogoUrl="@context.Item.MerchantLogoUrl"
-                                              Size="sm" />
+                                              MerchantLogoUrl="@context.Item.MerchantLogoUrl" />
                             }
                             <div style="min-width: 0">
                                 <div style="font-weight: 700; font-size: .9375rem">@Headline(context.Item)</div>
@@ -177,15 +176,28 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                @* Editing and deleting live on the row. *@
+                @* Opening, editing and deleting live on the row. *@
                 @* Titled, and not only for the header. On a phone the grid gives every cell
                    its own line with its label beside it, and a column with no title put two
                    unattached icons in a band of their own -- which row they belonged to was
                    anybody's guess. *@
                 <TemplateColumn Title="Actions" Sortable="false"
-                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
+                                HeaderStyle="width: 132px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            @* Expenses only, which is the same line the home page's lists
+                               take: a settlement is who paid whom and how much, and all
+                               three of those are already on the row. There is no division
+                               to go and look at, and the dialog is mostly the division. *@
+                            @if (context.Item.Kind is not ActivityKind.Transfer)
+                            {
+                                <MudTooltip Text="View details">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"View {Headline(context.Item)}")"
+                                                   OnClick="@(async () => await ViewAsync(context.Item))" />
+                                </MudTooltip>
+                            }
                             <MudTooltip Text="Edit">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Edit"
                                                Size="Size.Small"
@@ -206,12 +218,16 @@
             <NoRecordsContent>
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(IsNarrowed ? "Nothing matches" : "Nothing recorded yet")</h3>
-                    <span>
-                        @(IsNarrowed
-                            ? "Try a different name, category, person or date."
-                            : "Expenses and settlements in this group will show up here.")
-                    </span>
+                    @* Turns on what the reader narrowed, not on what the tab is narrowed
+                       to. The opening month is the tab's own doing, so keying this on
+                       IsNarrowed put "Nothing matches" over a group created a minute ago
+                       -- naming a filter nobody set. *@
+                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
+                    @* The tab opens on the current month, so an empty ledger is the default
+                       state for any group that has been quiet -- and "Nothing matches" over
+                       a span nobody chose reads as "this group is empty", which is the
+                       exact confusion the --group fix was about. Name the span. *@
+                    <span>@EmptyBlurb</span>
                 </div>
             </NoRecordsContent>
             <PagerContent>
@@ -242,7 +258,19 @@
     ];
 
     private string _searchString = "";
-    private DateFilter _range = DateFilter.AllTime;
+    /// <summary>
+    /// The span the tab opens on: the current month. A group's ledger going back three
+    /// years opens on a page of the newest twenty-five either way, so all-time bought
+    /// nothing but a "total spent" over a span nobody chose. The chip above the list says
+    /// which month, and widening is one tap.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than inlined because the empty state has to tell this span apart from
+    /// one somebody picked -- otherwise it offers "All time" to a reader already on it.
+    /// </remarks>
+    private static readonly DateFilter OpensOn = new(DateFilterPreset.ThisMonth);
+
+    private DateFilter _range = OpensOn;
     private MudDataGrid<GroupLedgerEntryResponse>? _grid;
     private bool _reloading;
 
@@ -254,7 +282,52 @@
 
     private bool IsNarrowed => IsSearching || !_range.IsAllTime || Kind is not null;
 
+    /// <summary>
+    /// Whether the reader narrowed this, as opposed to the tab opening narrowed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsNarrowed"/> asks whether the listing is a slice, which it is from the
+    /// first frame now that the range starts at the current month. This asks whether
+    /// anybody asked for the slice. The opening month does not count, and neither does all
+    /// time, which is the widest the tab goes rather than a narrowing.
+    /// </remarks>
+    private bool IsNarrowedByHand =>
+        IsSearching || Kind is not null || (!_range.IsAllTime && _range != OpensOn);
+
     private string? Search => IsSearching ? _searchString.Trim() : null;
+
+    /// <summary>The span in words, for a sentence rather than a chip.</summary>
+    private string Span => _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant();
+
+    /// <summary>
+    /// The span to hang on the end of a clause, or nothing at all when there is no span to
+    /// name. "No settlements in all time" is not a sentence anybody writes; the sentence
+    /// somebody writes about that set is "No settlements".
+    /// </summary>
+    private string InSpan => _range.IsAllTime ? "" : $" in {Span}";
+
+    /// <summary>
+    /// What an empty ledger means. Never simply "there is nothing": this tab opens on the
+    /// current month, so the commonest empty state is a quiet month in a group with years
+    /// of history behind it, and saying "nothing matches" about a span nobody picked is how
+    /// a populated group comes to look like an empty one.
+    /// </summary>
+    private string EmptyBlurb => (IsSearching, Kind) switch
+    {
+        // The default empty state: a quiet month in a group that may have years behind it.
+        // Names the span and says how to leave it.
+        (false, null) when _range == OpensOn =>
+            $"Nothing in {Span}. This tab opens on the current month — pick \"All time\" for "
+            + "the whole ledger.",
+        // Already at the widest the tab goes, so there is no span to name and nowhere to
+        // point. Offering "All time" from here was advice to do the thing they had done.
+        (false, null) when _range.IsAllTime =>
+            "Nothing recorded in this group yet. Expenses and settlements will show up here.",
+        (false, null) => $"Nothing in {Span}.",
+        (false, ActivityKind.Transfer) => $"No settlements{InSpan}.",
+        (false, ActivityKind.Expense) => $"Nothing spent{InSpan}.",
+        _ => $"Nothing{InSpan} matches. Try a different name, category, person or date."
+    };
 
     private int ExpenseCount => _spending?.Count ?? 0;
     private decimal Spent => _spending?.Total ?? 0m;
@@ -415,6 +488,23 @@
 
         _spending = spending;
         _shares = shares;
+    }
+
+    /// <summary>
+    /// The one expense, and how it was divided. Expenses only -- see the note on the eye.
+    /// </summary>
+    /// <remarks>
+    /// Read-only, so nothing is announced when it closes and the grid is left alone. The
+    /// dialog reads the expense itself rather than being handed this row: a ledger row
+    /// carries the caller's share and not the other members', and the whole split is most
+    /// of what somebody opens this for.
+    /// </remarks>
+    private async Task ViewAsync(GroupLedgerEntryResponse entry)
+    {
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, entry.Id } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
     }
 
     private async Task EditAsync(GroupLedgerEntryResponse entry)
