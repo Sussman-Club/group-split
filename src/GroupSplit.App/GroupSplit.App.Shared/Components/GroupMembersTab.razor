@@ -87,14 +87,16 @@
 
             @* Said once, here, rather than on every row: an invitation is not only a person
                to send a link to, it is a person the group can start recording money against,
-               which is why they turn up in the payer list and the split editor. *@
+               which is why they turn up in the payer list and the split editor.
+
+               Kept to two lines. It was four, which is more prose than the rows it
+               introduces and read as the card's content rather than its note. What is left
+               is the part somebody could not guess: that these people already count. *@
             @if (_pending.Count > 0)
             {
                 <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
-                    They can be given a share and can have paid for something already, and
-                    their balances count. Send each of them their own link: it works once, and
-                    whoever opens it becomes that person. Withdrawing an invitation hands
-                    whatever is recorded against them to a member.
+                    They count already — give them a share, or record what they paid. Their
+                    link works once, and whoever opens it becomes that person.
                 </MudText>
             }
 
@@ -119,23 +121,29 @@
                                     Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
                                 </div>
                             </div>
-                            @* The link is the whole point of the row: it is how this person
+                            @* Both buttons in one element, because the row is a three-column
+                               grid and only its third child is placed in the action column --
+                               a fourth child dropped onto a line of its own under the avatar.
+
+                               The link is the whole point of the row: it is how this person
                                ever becomes a member. Copied rather than shown, because it is
-                               a bearer credential on their position in the ledger and a URL
+                               a bearer credential on their position in the ledger, and a URL
                                on screen is a URL in a screenshot. *@
-                            <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")">
-                                <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.Link)"
-                                               Size="Size.Small"
-                                               Color="@(_copied == pending.Id ? Color.Success : Color.Default)"
-                                               aria-label="@($"Copy the invitation link for {pending.Name}")"
-                                               OnClick="@(() => CopyLinkAsync(pending))" />
-                            </MudTooltip>
-                            <MudTooltip Text="Withdraw the invitation">
-                                <MudIconButton Icon="@Icons.Material.Rounded.Close"
-                                               Size="Size.Small"
-                                               aria-label="@($"Withdraw the invitation to {pending.Name}")"
-                                               OnClick="@(() => WithdrawAsync(pending))" />
-                            </MudTooltip>
+                            <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                                <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")">
+                                    <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.Link)"
+                                                   Size="Size.Small"
+                                                   Color="@(_copied == pending.Id ? Color.Success : Color.Default)"
+                                                   aria-label="@($"Copy the invitation link for {pending.Name}")"
+                                                   OnClick="@(() => CopyLinkAsync(pending))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Withdraw the invitation">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Close"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"Withdraw the invitation to {pending.Name}")"
+                                                   OnClick="@(() => WithdrawAsync(pending))" />
+                                </MudTooltip>
+                            </div>
                         </div>
                     }
                 </div>
