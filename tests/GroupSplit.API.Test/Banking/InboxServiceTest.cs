@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Test.Base;
@@ -193,6 +193,215 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     // ---- setup ---------------------------------------------------------------------------
 
     /// <summary>A group of two with a category that divides evenly, which is the ordinary case.</summary>
+    // ---- A bill typed against the row, before anybody filed it -------------------------
+    //
+    // The reason a receipt may point at a bank row at all: the card is charged at the
+    // restaurant, the row lands in the inbox, and who had what is settled at the table while
+    // everybody still remembers. Filing has to carry that onto the expense *before* it
+    // divides it, because a category that divides by the bill reads the bill.
+
+    /// <summary>
+    /// An itemised category divides a filed row by the bill that was already on it.
+    /// </summary>
+    /// <remarks>
+    /// This failed for the whole of the feature's first shape: the carry-over ran after the
+    /// expense was created, and creating it is what divides it -- so filing answered "there
+    /// is no bill on it yet" about a bill the person had just typed.
+    /// </remarks>
+    [Fact]
+    public async Task Filing_into_an_itemized_category_divides_by_the_bill_already_on_the_row()
+    {
+        var (group, category, other) = await GroupWithItemizedCategory();
+        var row = await Row(amount: 30m);
+
+        await BillOn(row.Id, ("Steak", 20m, Self), ("Pasta", 10m, other.Id));
+
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest
+        {
+            GroupId = group.Id,
+            CategoryId = category
+        }, Ct);
+
+        var splits = await DbContext.Set<TransactionSplit>()
+            .Where(split => split.TransactionId == expense.Id)
+            .ToListAsync(Ct);
+
+        Assert.Equal(20m, splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(10m, splits.Single(split => split.UserId == other.Id).Amount);
+        Assert.Equal(30m, splits.Sum(split => split.Amount));
+    }
+
+    /// <summary>
+    /// Filing hands the bill from the row to the expense. Exactly one of the two owns it --
+    /// which is what the check constraint says and what makes both cascades coherent.
+    /// </summary>
+    [Fact]
+    public async Task Filing_moves_the_bill_off_the_row_and_onto_the_expense()
+    {
+        var (group, category, _) = await GroupWithEvenCategory();
+        var row = await Row(amount: 30m);
+
+        await BillOn(row.Id, ("Everything", 30m, Self));
+
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest
+        {
+            GroupId = group.Id,
+            CategoryId = category
+        }, Ct);
+
+        var bill = await DbContext.Set<Receipt>().AsNoTracking()
+            .FirstAsync(receipt => receipt.ExpenseId == expense.Id, Ct);
+
+        Assert.Null(bill.BankTransactionId);
+        Assert.Empty(await DbContext.Set<Receipt>().AsNoTracking()
+            .Where(receipt => receipt.BankTransactionId == row.Id).ToListAsync(Ct));
+    }
+
+    /// <summary>
+    /// Linking a row to an expense that already has a bill of its own leaves the row's bill
+    /// alone -- claims included.
+    /// </summary>
+    /// <remarks>
+    /// The claims are the point. Working out whether to take the bill used to prune it first,
+    /// against the group it was not being filed into, and the pruning was committed even when
+    /// the hand-over was declined -- so declining to take a bill silently un-claimed it.
+    /// </remarks>
+    [Fact]
+    public async Task Linking_to_an_expense_that_has_its_own_bill_leaves_the_rows_bill_untouched()
+    {
+        var (group, category, other) = await GroupWithEvenCategory();
+
+        var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            Name = "Dinner",
+            Amount = 30m,
+            DateTime = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+            GroupId = group.Id,
+            CategoryId = category
+        }, Ct);
+
+        await GetService<IReceiptService>().SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 30m,
+            Total = 30m,
+            Items = [new ReceiptItemInput { Name = "Its own", TotalPrice = 30m }]
+        }, Ct);
+
+        var row = await Row(amount: 30m);
+
+        // Claimed by somebody outside the destination group, which is what the pruning bug
+        // used to reach for.
+        var stranger = await CreateNewUser();
+        await BillOn(row.Id, ("Row's own", 30m, stranger.Id));
+
+        await Inbox.Link(row.Id, new LinkBankTransactionRequest { TransactionId = expense.Id }, Ct);
+
+        var rowsBill = await DbContext.Set<Receipt>().AsNoTracking()
+            .Include(receipt => receipt.Items)
+            .ThenInclude(item => item.Claims)
+            .FirstAsync(receipt => receipt.BankTransactionId == row.Id, Ct);
+
+        Assert.Single(rowsBill.Items.Single().Claims);
+        Assert.Equal(stranger.Id, rowsBill.Items.Single().Claims.Single().UserId);
+    }
+
+    /// <summary>
+    /// Filing a row without picking a group leaves its bill exactly where it was -- claims
+    /// and all.
+    /// </summary>
+    /// <remarks>
+    /// A personal expense is shared with nobody, so a bill on one could never be divided.
+    /// Taking it across used to prune every claim against an empty roster and commit that, so
+    /// somebody who itemised five lines at the table and filed the row personally lost all of
+    /// it without a word.
+    /// </remarks>
+    [Fact]
+    public async Task Filing_a_row_personally_leaves_its_bill_and_its_claims_on_the_row()
+    {
+        var row = await Row(amount: 30m);
+
+        await BillOn(row.Id, ("Everything", 30m, Self));
+
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        Assert.Null(expense.GroupId);
+
+        var bill = await DbContext.Set<Receipt>().AsNoTracking()
+            .Include(receipt => receipt.Items)
+            .ThenInclude(item => item.Claims)
+            .FirstAsync(receipt => receipt.BankTransactionId == row.Id, Ct);
+
+        Assert.Single(bill.Items.Single().Claims);
+        Assert.Null(bill.ExpenseId);
+    }
+
+    /// <summary>
+    /// A bill filing declined to take can be removed.
+    /// </summary>
+    /// <remarks>
+    /// Filing a row personally leaves its bill on the row, and the row is then filed -- which
+    /// file and link both refuse. Without a delete the bill would sit in the inbox forever
+    /// with overwriting it as the only thing anybody could do to it.
+    /// </remarks>
+    [Fact]
+    public async Task A_bill_left_behind_by_a_personal_filing_can_be_deleted()
+    {
+        var row = await Row(amount: 30m);
+
+        await BillOn(row.Id, ("Everything", 30m, Self));
+        await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        await GetService<IReceiptService>().DeleteForBankRow(row.Id, Ct);
+
+        Assert.Empty(await DbContext.Set<Receipt>().AsNoTracking()
+            .Where(receipt => receipt.BankTransactionId == row.Id).ToListAsync(Ct));
+    }
+
+    private Guid Self => GetService<ICurrentUser>().User.Id;
+
+    /// <summary>A bill typed against an imported row, before anybody files it.</summary>
+    private Task<Receipt> BillOn(Guid rowId, params (string Name, decimal Price, Guid Had)[] lines) =>
+        GetService<IReceiptService>().SaveForBankRow(rowId, new SaveReceiptRequest
+        {
+            Subtotal = lines.Sum(line => line.Price),
+            Total = lines.Sum(line => line.Price),
+            Items =
+            [
+                .. lines.Select(line => new ReceiptItemInput
+                {
+                    Name = line.Name,
+                    TotalPrice = line.Price,
+                    Claims = [new ReceiptClaimInput { UserId = line.Had }]
+                })
+            ]
+        }, Ct);
+
+    private async Task<(Data.Entities.Group Group, Guid Category, Data.Entities.User Other)>
+        GroupWithItemizedCategory()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(
+            new CreateGroupRequest { Name = "Dinners" }, Ct);
+
+        var other = await CreateNewUser();
+        await JoinGroup(group.Id, other);
+
+        var rule = await GetService<ISplitRuleService>().Create(new CreateSplitRuleRequest
+        {
+            GroupId = group.Id,
+            Name = "By the bill",
+            Definition = new ItemizedSplitRuleDto()
+        }, Ct);
+
+        var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
+        {
+            GroupId = group.Id,
+            Name = "Dinners out",
+            DefaultSplitRuleId = rule.Id
+        }, Ct);
+
+        return (group, category.Id, other);
+    }
+
     private async Task<(Data.Entities.Group Group, Guid Category, Data.Entities.User Other)> GroupWithEvenCategory()
     {
         var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Home" }, Ct);

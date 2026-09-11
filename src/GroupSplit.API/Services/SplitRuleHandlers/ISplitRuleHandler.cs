@@ -1,4 +1,5 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 
 namespace GroupSplit.API.Services.SplitRuleHandlers;
@@ -15,15 +16,28 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 public interface ISplitRuleHandler
 {
     /// <summary>
-    /// What each person owes on <paramref name="amount"/>.
+    /// What each person owes on <paramref name="transaction"/>.
     /// </summary>
     /// <remarks>
-    /// Whatever a handler does, the parts must sum to <paramref name="amount"/>. That is
-    /// what every balance in the group rests on, so it is checked where the result is
-    /// stored rather than trusted here.
+    /// Whatever a handler does, the parts must sum to the transaction's amount. That is what
+    /// every balance in the group rests on, so it is checked where the result is stored
+    /// rather than trusted here.
+    /// <para>
+    /// The transaction rather than an amount and a payer, which is what this took until
+    /// itemised rules needed more than those two. They were always the transaction's own --
+    /// no caller ever passed anything else -- so nothing is lost, and a caller can no longer
+    /// hand over an amount belonging to one expense and a payer belonging to another.
+    /// </para>
+    /// <para>
+    /// What a handler may read off it is whatever it needs and the caller has loaded, which
+    /// is a real coupling and not a free one: <see cref="ItemizedSplitRuleHandler"/> reads
+    /// <see cref="Expense.Receipt"/>, so every path that might divide has to load it.
+    /// <c>ExpenseSplitter.LoadBillIfItDividesByOne</c> is where that is arranged, by id, so
+    /// that no caller has to remember an Include.
+    /// </para>
     /// </remarks>
     IReadOnlyList<SplitAmount> Divide(
-        SplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members);
+        SplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members);
 
     /// <summary>
     /// What is wrong with the rule, or null when nothing is. A complaint rather than an
@@ -70,7 +84,7 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
     where TRule : SplitRuleVersion
 {
     IReadOnlyList<SplitAmount> Divide(
-        TRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members);
+        TRule rule, Transaction transaction, IReadOnlyCollection<Guid> members);
 
     string? Invalid(TRule rule);
 
@@ -79,8 +93,8 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
     bool SameAs(TRule rule, TRule other);
 
     IReadOnlyList<SplitAmount> ISplitRuleHandler.Divide(
-        SplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
-        Divide(Expected(ruleVersion), amount, payerId, members);
+        SplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members) =>
+        Divide(Expected(ruleVersion), transaction, members);
 
     string? ISplitRuleHandler.Invalid(SplitRuleVersion ruleVersion) => Invalid(Expected(ruleVersion));
 

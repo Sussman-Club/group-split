@@ -8,6 +8,7 @@ namespace GroupSplit.Shared;
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(EvenSplitRuleDto), typeDiscriminator: "even")]
+[JsonDerivedType(typeof(ItemizedSplitRuleDto), typeDiscriminator: "itemized")]
 [JsonDerivedType(typeof(PayerSplitRuleDto), typeDiscriminator: "payer")]
 [JsonDerivedType(typeof(PercentSplitRuleDto), typeDiscriminator: "percent")]
 [JsonDerivedType(typeof(SharesSplitRuleDto), typeDiscriminator: "shares")]
@@ -52,3 +53,20 @@ public record SharesSplitRuleDto : SplitRuleDto
 /// who paid and that is not known until the expense is written.
 /// </summary>
 public record PayerSplitRuleDto : SplitRuleDto;
+
+/// <summary>
+/// By the bill: each person owes the lines they claimed, plus their share of the tax and the
+/// tip in proportion to what they claimed.
+/// </summary>
+/// <remarks>
+/// Carries nothing, for a sharper version of the reason <see cref="PayerSplitRuleDto"/> does
+/// not: who owes what is on the receipt attached to the expense, which is different for every
+/// expense filed under this rule and is not known when the rule is written. Attaching the
+/// bill and saying who had which line are done against the expense, not here.
+/// <para>
+/// An expense filed under this with no receipt cannot be divided, and says so by name rather
+/// than falling back to an even split -- a silent fallback here would quietly charge five
+/// people equally for a dinner somebody itemised precisely to avoid that.
+/// </para>
+/// </remarks>
+public record ItemizedSplitRuleDto : SplitRuleDto;

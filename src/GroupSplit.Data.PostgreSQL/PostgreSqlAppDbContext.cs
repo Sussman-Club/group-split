@@ -36,5 +36,21 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
         {
             entity.Property(row => row.RawJson).HasColumnType("jsonb");
         });
+
+        // A receipt belongs to exactly one thing: the bank row it was typed against before
+        // anybody filed it, or the expense it was filed onto. Never both, and never neither.
+        //
+        // Exactly one rather than at least one, which is what this said first. Both links set
+        // is the state that made the delete rules incoherent -- two owners mean two cascade
+        // paths, and unlinking a bank would have had to decide whether a filed bill dies with
+        // the row it came from. Handing the receipt over at filing time, and saying so here,
+        // is what lets both foreign keys be plain cascades.
+        //
+        // num_nonnulls is Postgres's own, and says the thing directly rather than as a pair
+        // of XORed IS NULL tests that the next reader has to evaluate by hand.
+        modelBuilder.Entity<Receipt>()
+            .ToTable(table => table.HasCheckConstraint(
+                "CK_Receipt_BelongsToExactlyOne",
+                """num_nonnulls("ExpenseId", "BankTransactionId") = 1"""));
     }
 }

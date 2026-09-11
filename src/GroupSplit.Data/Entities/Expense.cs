@@ -29,4 +29,21 @@ public class Expense : Transaction
     public virtual Category? Category { get; set; }
 
     public Guid? CategoryId { get; set; }
+
+    /// <summary>
+    /// The itemised bill behind this, when there is one. Null for the ordinary expense
+    /// nobody photographed.
+    /// </summary>
+    /// <remarks>
+    /// Here so that a division can reach it. An <see cref="ItemizedSplitRuleVersion"/> is
+    /// answered from the receipt's claims rather than from anything on the version, so the
+    /// handler needs the expense to have it loaded -- which is why
+    /// <c>ExpenseSplitter</c> includes it on every read that might divide.
+    /// <para>
+    /// Nullable, and it stays nullable for an expense filed under an itemised rule: an
+    /// expense with no bill is not a broken row, it is one nobody has itemised yet, and the
+    /// division says so rather than the model forbidding it.
+    /// </para>
+    /// </remarks>
+    public virtual Receipt? Receipt { get; set; }
 }

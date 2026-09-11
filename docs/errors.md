@@ -77,6 +77,9 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
+| `RECEIPT_NOT_FOUND` | The expense, or the imported row, has no itemised bill on it. Also raised when dividing an expense whose category names an itemised rule and which nobody has attached a bill to -- the division says so by name rather than falling back to an even split. |
+| `TRANSACTION_NOT_FOUND` (on a receipt route) | The id names a repayment rather than an expense. A transfer is one member paying another back and has no items to divide, so the receipt routes read it as no expense of that id -- there is no separate code for it. |
+| `RECEIPT_ITEM_NOT_FOUND` | The line named is not on this receipt. |
 
 ### Forbidden (403)
 
@@ -127,6 +130,7 @@ no `errors` member; the code is the whole message.
 | `SPLIT_RULE_HISTORY_INVALID` | A written history does not describe a chain: no entries at all, dates that do not strictly increase, or a last entry starting after now. Each entry's window runs until the next one starts, so two entries sharing a date leave a version that was never what the rule said -- and one dated ahead leaves the open version starting in the future, which a new expense would still be divided by and a reattach would not. Carries `index` and `from`, plus `previousFrom` when it is the ordering that is wrong. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | Shares were stated on an expense with no group. There is nobody to divide it with. |
 | `GROUP_INVITATION_NO_NAME` | An invitation was asked for with nothing to make it out to. A name is the whole of what a group knows about somebody who has not joined -- it is what every listing shows them as -- so there is no sensible row to write without one. |
+| `RECEIPT_INVALID` | The bill could not describe a receipt at all: no lines, a line with a negative price, a line naming somebody twice, or a claim with no share in it. Distinct from `RECEIPT_DOES_NOT_ADD_UP`, which is a well-formed bill whose figures disagree. Carries `receiptItemId` where one line is at fault. |
 
 ### Unprocessable (422)
 
@@ -136,8 +140,11 @@ data saying something untrue. Distinct from a 400, which says a field is wrong, 
 
 | Code | When | Extra members |
 | --- | --- | --- |
-| `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The stated shares do not add up to the expense's amount. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
+| `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The shares do not add up to the expense's amount. Raised for shares a caller stated, and also for shares a *rule* produced -- the check moved onto the one path every division passes, because an itemised rule divides its receipt's total rather than the expense's amount and so is the first kind that can disagree with it. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
 | `BANK_TRANSACTION_IS_CREDIT` | The imported row is money coming in -- a refund, a deposit -- and an expense is money going out. It can be ignored; filing it needs a kind of transaction that does not exist yet. | `amount`, which is negative. |
+| `RECEIPT_DOES_NOT_ADD_UP` | A bill contradicts itself, or has stopped describing its expense: the subtotal, tax and tip do not come to the total, the lines do not come to the subtotal, or the total is not the expense's amount. The last one drifts apart after the bill is saved -- an edit to the amount, or an imported row linked to an expense recorded for a different figure -- so it is checked again at division time and names the bill rather than the shares. Caught before the division rather than after, because a refusal about the shares cannot say which half of the bill was mistyped. | The figures it compared: `subtotal`, `tax`, `tip`, `total`, or `itemTotal` and `subtotal`, or `total` and `amount`. |
+| `RECEIPT_TOO_LARGE_TO_DIVIDE` | A bill whose claimed subtotals are too large to weigh against each other in a 32-bit integer -- past roughly 21 million in the expense's currency. Kept apart from `RECEIPT_DOES_NOT_ADD_UP` deliberately: the figures agree perfectly, and telling somebody their bill does not add up would be both wrong and unactionable. | `subtotal`. |
+| `RECEIPT_ITEMS_UNCLAIMED` | Lines on the bill belong to nobody, so it cannot be divided yet. Refused rather than spread over everybody: a forgotten line and one the table really did share look identical from here, and charging five people for one person's steak is the kind of wrong nobody checks for afterwards. | `unclaimedItemIds` and `unclaimedItemNames`, so a client can say which without holding the whole receipt. |
 | `BANK_CONNECTION_UNRECOVERABLE` | The access this connection holds can no longer be read here, so it can be neither synced nor repaired in update mode -- both need the token. Removing it and linking the bank again is the way forward; the item is stranded at the provider either way. | |
 
 ### Bad gateway (502)

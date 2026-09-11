@@ -134,7 +134,7 @@
   {
     "Id": "CA7E000B-0000-4000-8000-00000000000B",
     "GroupId": "A7D41E28-6B93-4C50-8F21-D3E5A9B7C104",
-    "Category": "Après-ski",
+    "Category": "Apr\u00e8s-ski",
     "SplitRule": {
       "$type": "even",
       "Among": []
@@ -219,6 +219,22 @@
     "SplitRule": {
       "$type": "even",
       "Among": []
+    }
+  },
+  {
+    "Id": "CA7E0090-0000-4000-8000-000000000090",
+    "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
+    "Category": "Dinners out",
+    "SplitRule": {
+      "$type": "itemized"
+    }
+  },
+  {
+    "Id": "CA7E0091-0000-4000-8000-000000000091",
+    "GroupId": "B590CE87-CC57-4214-AE89-A420DB8656F9",
+    "Category": "Restaurants",
+    "SplitRule": {
+      "$type": "itemized"
     }
   }
 ]

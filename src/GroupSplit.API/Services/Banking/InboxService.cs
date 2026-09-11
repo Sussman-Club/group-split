@@ -90,7 +90,8 @@ public sealed class InboxService(
     ICurrentUser userContext,
     AppDbContext dbContext,
     ITransactionService transactions,
-    IDuplicateMatcher matcher) : IInboxService
+    IDuplicateMatcher matcher,
+    IReceiptService receipts) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {
@@ -174,6 +175,12 @@ public sealed class InboxService(
             }
         }
 
+        // Loaded before the expense is made, because Create divides it and an itemised rule
+        // divides by this. Claims naming somebody who is not in the destination group are
+        // dropped first -- the row belonged to one person and had no group to check against
+        // when it was typed.
+        var bill = await receipts.ForFiling(row.Id, request.GroupId, ct);
+
         var expense = await transactions.Create(new CreateTransactionRequest
         {
             GroupId = request.GroupId,
@@ -186,7 +193,7 @@ public sealed class InboxService(
             // A statement has a date and not an instant. Midnight UTC keeps it the day the
             // bank said, whichever zone it is later read in.
             DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
-        }, ct);
+        }, bill, ct);
 
         expense.BankTransaction = row;
         expense.BankTransactionId = row.Id;
@@ -273,6 +280,33 @@ public sealed class InboxService(
         // it keeps, because those were written down on purpose, but nobody typed a shop.
         expense.MerchantId = row.MerchantId;
         row.Status = BankTransactionStatus.Filed;
+
+        // A bill typed against the row before anybody linked it follows the row onto the
+        // expense -- but only when the expense has none of its own. Linking says these two
+        // are the same money, not that the row's account of it replaces one somebody has
+        // already written down, and a receipt has exactly one owner.
+        //
+        // It does not re-divide the expense either way. Linking changes where the money came
+        // from and not who owed what; dividing by the bill is its own call, and the
+        // category's rule can say to do it.
+        // Asked before the bill is loaded, not after, and that order is the fix for a bug:
+        // ForFiling prunes claims naming people who are not in the destination group, and
+        // Link ends in a save -- so calling it and then declining to take the bill committed
+        // the pruning to a receipt that stayed on the bank row, silently un-claiming lines
+        // against a group it was never filed into.
+        //
+        // Asked of the table rather than of expense.Receipt, which Mine does not load: an
+        // unloaded navigation reads null exactly like an expense that has no bill, and taking
+        // that for permission would point a second receipt at it and break the check
+        // constraint.
+        var alreadyHasOne = await dbContext.Set<Receipt>()
+            .AnyAsync(candidate => candidate.ExpenseId == expense.Id, ct);
+
+        if (!alreadyHasOne && await receipts.ForFiling(row.Id, expense.GroupId, ct) is { } bill)
+        {
+            bill.ExpenseId = expense.Id;
+            bill.BankTransactionId = null;
+        }
 
         await dbContext.SaveChangesAsync(ct);
 

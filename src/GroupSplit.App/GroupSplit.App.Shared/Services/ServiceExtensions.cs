@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Shared.Services.Banking;
+using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Groups;
@@ -43,6 +43,7 @@ public static class ServiceExtensions
             services.TryAddScoped<ICategoryCommands, CategoryCommands>();
             services.TryAddScoped<ISplitRuleCommands, SplitRuleCommands>();
             services.TryAddScoped<IMerchantCommands, MerchantCommands>();
+            services.TryAddScoped<IReceiptCommands, ReceiptCommands>();
 
             // Read by the inbox page and by the nav badge, so one service rather than two
             // that would each fetch the count.
@@ -71,6 +72,7 @@ public static class ServiceExtensions
             services.AddApiClient<ICategoriesClient, CategoriesClient>();
             services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
             services.AddApiClient<IMerchantsClient, MerchantsClient>();
+            services.AddApiClient<IReceiptsClient, ReceiptsClient>();
             services.AddApiClient<IBankConnectionsClient, BankConnectionsClient>();
             services.AddApiClient<IInboxClient, InboxClient>();
             
