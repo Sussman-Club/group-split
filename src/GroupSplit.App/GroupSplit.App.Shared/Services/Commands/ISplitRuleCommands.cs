@@ -53,9 +53,12 @@ public interface ISplitRuleCommands
         CancellationToken ct = default);
 
     /// <summary>
-    /// Removes a rule. Categories that divided by it fall back to an even split, and every
-    /// expense already recorded keeps the amounts it holds -- including the ones this rule
-    /// worked out.
+    /// Removes a rule nothing is using.
     /// </summary>
+    /// <remarks>
+    /// The API refuses one a category still points at, and one anything has ever been
+    /// divided by, rather than leaving an expense with amounts and no account of what
+    /// produced them -- so this is a refusal the person may well see.
+    /// </remarks>
     Task<bool> DeleteAsync(Guid ruleId, string name, CancellationToken ct = default);
 }

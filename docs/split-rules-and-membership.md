@@ -77,6 +77,11 @@ Provenance only, all three. None of them calls the splitter, and `ExpenseProvena
 serves the last two -- does not take it as a dependency, so that is structural rather than a
 promise.
 
+The last two are reachable from the app as well as the CLI: the group's **Splits** tab offers
+the reattach behind its dry run, and the edit dialog offers to correct which version divided
+one expense. Writing a rule's past wholesale stays a CLI command -- 42 months of a workbook
+are not re-lived one dialog at a time.
+
 Three edits, three effects, and none of them reaches the others: renaming a rule touches no
 version, pointing a category somewhere else touches no rule, and editing a division touches
 no category and nothing already recorded.
