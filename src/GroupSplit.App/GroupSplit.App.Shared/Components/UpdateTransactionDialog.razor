@@ -798,7 +798,15 @@
         // hand" means they are, and the control has to open on them -- otherwise a
         // correction to "these amounts are the expense's own" leaves the control claiming
         // the division was automatic, which is the false claim the strip exists to end.
-        _model.Splits = _chosen is null && _storedSplits.Count > 0 ? _storedSplits : null;
+        // Anything typed into the control below wins over what is stored: the editor sits
+        // under this panel and both are live, so somebody can state shares and then record
+        // that the shares are the expense's own -- which is a coherent pair of gestures, and
+        // overwriting theirs with the stored amounts discarded work they could watch
+        // disappear.
+        _model.Splits = _chosen is null
+            ? _model.Splits ?? (_storedSplits.Count > 0 ? _storedSplits : null)
+            : null;
+
         _openedWith = _model.Splits;
         _redivide = false;
 

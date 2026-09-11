@@ -73,7 +73,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         Services.AddSingleton(_login.Object);
 
         // The merchant picker reaches the API through the real command over a mocked
-        // client, the way ManageRulesDialogTest does.
+        // client, the way GroupSplitsTabTest does.
         Services.AddSingleton<IMerchantCommands, MerchantCommands>();
 
         // The transaction commands are mocked rather than real, and not for convenience:
@@ -657,9 +657,10 @@ public class UpdateTransactionDialogTest : ComponentTest
             .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
 
         // A rule divided it, so the reader has a rule and a history to resolve it against.
-        Categories
-            .Setup(client => client.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household")]);
+        // Through this class's own categories client, which it registers over the shared
+        // one -- the reader resolves whatever the container last had, so setting up the
+        // shared mock here would configure a client nothing asks.
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
 
         SplitRules
             .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
@@ -701,6 +702,69 @@ public class UpdateTransactionDialogTest : ComponentTest
         var operation = Assert.Single(patch!.Operations, op => Touches(op, "splits"));
 
         Assert.NotNull(operation.value);
+    }
+
+    /// <summary>
+    /// And the other direction: recording that a version divided it gives up the shares the
+    /// expense was holding, so the save states none.
+    /// </summary>
+    /// <remarks>
+    /// The two are one rule read both ways, and only one of them was pinned. Stated shares
+    /// and a rule's division are the two answers to the same question: an edit that sends
+    /// both says the rule produced these amounts and then pins them against it, which is the
+    /// shape <c>UpdateTransactionRequest</c> reads as "divide it exactly this way".
+    /// </remarks>
+    [Fact]
+    public async Task Recording_that_a_version_divided_it_gives_up_the_shares_it_was_holding()
+    {
+        var transactionId = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        // No version recorded, so the dialog opens holding the stored shares.
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId));
+
+        // Through this class's own categories client, which it registers over the shared
+        // one -- the reader resolves whatever the container last had, so setting up the
+        // shared mock here would configure a client nothing asks.
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
+                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
+                    new EvenSplitRuleDto())]));
+
+        _commands
+            .Setup(c => c.DivisionSourceAsync(transactionId, version, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await ToSplitStepAsync(provider);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
+            .ClickAsync(new MouseEventArgs());
+
+        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
+
+        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(version));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Record")
+            .ClickAsync(new MouseEventArgs());
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        Assert.NotNull(patch);
+
+        // Nothing about the shares at all: the expense is a rule's now, and the rule says
+        // what they are.
+        Assert.DoesNotContain(patch!.Operations, op => Touches(op, "splits"));
     }
 
     private static readonly Guid Household = Guid.NewGuid();

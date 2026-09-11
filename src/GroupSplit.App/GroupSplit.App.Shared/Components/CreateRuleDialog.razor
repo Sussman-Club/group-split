@@ -52,14 +52,21 @@
 
         _saving = true;
 
-        var created = await Rules.CreateAsync(new CreateSplitRuleRequest
-        {
-            GroupId = GroupId,
-            Name = _model.Name,
-            Definition = _model.Version
-        });
+        SplitRuleDetailsResponse? created;
 
-        _saving = false;
+        try
+        {
+            created = await Rules.CreateAsync(new CreateSplitRuleRequest
+            {
+                GroupId = GroupId,
+                Name = _model.Name,
+                Definition = _model.Version
+            });
+        }
+        finally
+        {
+            _saving = false;
+        }
 
         // Null is a refusal the presenter has already shown -- a name the group is using,
         // say. The dialog stays open on it, with what was typed still in the fields.

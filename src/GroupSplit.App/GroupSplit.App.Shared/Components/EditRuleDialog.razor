@@ -34,10 +34,22 @@
             </div>
 
             @* The consequence somebody cannot see from here: this rule may stand behind
-               more than the category they arrived from. *@
-            @if (UsedBy.Count > 1)
+               more than the category they arrived from. Null is not the same as none --
+               it is "nobody counted" -- and this dialog is a modal covering whatever notice
+               the screen behind it was showing, so the uncertainty has to be repeated. *@
+            @if (UsedBy is null)
             {
-                <div class="gs-notice is-warn mt-3">
+                <div class="gs-notice is-warn mt-3" role="alert">
+                    <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
+                    <div class="gs-notice-body">
+                        <strong>Could not check which categories divide by this rule</strong>
+                        <span>More than one may, and this changes what every one of them pre-fills.</span>
+                    </div>
+                </div>
+            }
+            else if (UsedBy.Count > 1)
+            {
+                <div class="gs-notice is-warn mt-3" role="alert">
                     <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                     <div class="gs-notice-body">
                         <strong>@UsedBy.Listed() all divide by this rule</strong>
@@ -65,10 +77,17 @@
     [Parameter] public Guid SplitRuleId { get; set; }
 
     /// <summary>
-    /// The categories that divide by this rule, named. Handed in rather than read, because
-    /// the screen that opens this dialog is already holding them.
+    /// The categories that divide by this rule, named -- or null when the caller could not
+    /// find out.
     /// </summary>
-    [Parameter] public IReadOnlyList<string> UsedBy { get; set; } = [];
+    /// <remarks>
+    /// Handed in rather than read, because the screen that opens this dialog is already
+    /// holding them. Nullable because the two answers are different: an empty list says one
+    /// category or none uses this rule and editing it is a local decision, while null says
+    /// nobody counted, and the reader is about to change a division that may pre-fill
+    /// several categories without being told it might.
+    /// </remarks>
+    [Parameter] public IReadOnlyList<string>? UsedBy { get; set; } = [];
 
     private RuleEditorForm.RuleEditorModel? _model;
     private RuleEditorForm _form = null!;
@@ -121,9 +140,10 @@
 
         EvenSplitRuleDto even => new EvenSplitRuleDto([.. even.Among]),
 
-        // Every kind the API can return is above. A new one reaching a client that predates
-        // it should not take the dialog down with it: it opens with no type chosen, which is
-        // what "say how you want this to divide" looks like.
+        // A kind this client predates. It opens as an even split with the kind selected,
+        // which is a division somebody can read and save -- not the blank form with a dead
+        // Save button that "no kind chosen" produces, and which is what an even rule itself
+        // used to open as before the editor learned that kind.
         _ => new EvenSplitRuleDto()
     };
 

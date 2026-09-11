@@ -1,6 +1,7 @@
 using AngleSharp.Dom;
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
@@ -237,18 +238,18 @@ public class GroupSplitsTabTest : ComponentTest
     /// disagree about the same fact.
     /// </summary>
     /// <remarks>
-    /// The name and the id are both nullable on the wire and were read by different halves
-    /// of this screen -- the caption off the name, the used-by tags and the delete gate off
-    /// the id. A response carrying one without the other put "no rule · evenly between
-    /// whoever is in the group" on a category and "Used by Dining out" on the rule it was
-    /// pointing at, on the same screen.
+    /// The caption used to read the name the categories listing carried alongside the id,
+    /// while the used-by tags and the delete gate read the id. The two lists are separate
+    /// reads, so they can disagree: a rule renamed between them leaves the category carrying
+    /// the old name, and the same screen then captions a category with a rule name that
+    /// appears nowhere in the column beside it.
     /// </remarks>
     [Fact]
     public async Task A_category_is_captioned_from_the_rule_it_points_at()
     {
         Categories
             .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new CategoryResponse(DiningOut, Flat, "Dining out", WhoeverPaid, null)]);
+            .ReturnsAsync([new CategoryResponse(DiningOut, Flat, "Dining out", WhoeverPaid, "What it used to be called")]);
 
         var tab = await RenderTabAsync();
 
@@ -258,8 +259,127 @@ public class GroupSplitsTabTest : ComponentTest
             Rule(tab, "Whoever paid").QuerySelectorAll(".gs-tag").Select(tag => tag.TextContent.Trim()));
     }
 
+    /// <summary>
+    /// A membership that could not be read leaves rules described by count, not by naming
+    /// everybody in them as a stranger to the group.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of the same defect in the rule history dialog, and it outlived the fix
+    /// there: this screen kept an empty dictionary where that one moved to null. Every
+    /// lookup then misses, and a weighted rule reads "By shares — someone not in the group
+    /// 3, someone not in the group 1" on the tab whose job is saying how the group divides.
+    /// </remarks>
+    [Fact]
+    public async Task A_membership_that_could_not_be_read_describes_rules_by_count()
+    {
+        SplitRules
+            .Setup(client => client.GetSplitRuleAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ARule(Household, "Household 3-way",
+                new SharesSplitRuleDto { Shares = { [Guid.NewGuid()] = 3, [Guid.NewGuid()] = 1 } }));
+
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the network went away"));
+
+        var tab = await RenderTabAsync();
+
+        var described = Rule(tab, "Household 3-way").QuerySelector(".meta")!.TextContent;
+
+        Assert.Contains("By shares, between 2", described, StringComparison.Ordinal);
+        Assert.DoesNotContain("not in the group", described, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And with the membership in hand, a rule's line names the people in it.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_is_described_with_the_people_it_names()
+    {
+        var ana = Guid.NewGuid();
+        var lu = Guid.NewGuid();
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ARule(Household, "Household 3-way",
+                new SharesSplitRuleDto { Shares = { [ana] = 3, [lu] = 1 } }));
+
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new UserInfo(ana, "Ana", "Benitez", null),
+                new UserInfo(lu, "Lu", "Ferrer", null)
+            ]);
+
+        var described = Rule(await RenderTabAsync(), "Household 3-way").QuerySelector(".meta")!.TextContent;
+
+        Assert.Contains("By shares — Ana Benitez 3, Lu Ferrer 1", described, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Delete is withheld on a rule a category still points at: the API refuses one in use,
+    /// and an action that can only fail is worse than none.
+    /// </summary>
+    [Fact]
+    public async Task Delete_is_withheld_on_a_rule_a_category_points_at()
+    {
+        var tab = await RenderTabAsync();
+
+        Assert.True(Delete(tab, "Household 3-way").HasAttribute("disabled"));
+
+        // And offered on one nothing points at, or the gate would just be "never".
+        Assert.False(Delete(tab, "Whoever paid").HasAttribute("disabled"));
+    }
+
     private static IElement Rule(IRenderedComponent<GroupSplitsTab> tab, string name) =>
         tab.FindAll(".gs-rule").Single(rule => rule.QuerySelector(".title")!.TextContent.Trim() == name);
+
+    /// <summary>
+    /// A rule that divides evenly can be opened, read and saved.
+    /// </summary>
+    /// <remarks>
+    /// The editor offered three kinds -- personal, percent, shares -- because until this tab
+    /// existed the only way to reach a rule was through the category that owned it, and every
+    /// category the app created made one of those three. The API has always had an even rule
+    /// and the CLI has always written one, so a group can hold one; opening it gave a form
+    /// with no kind selected, no fields, and a Save that validated to false and returned
+    /// without a word. An Edit button that opens a form nobody can save is the defect the
+    /// Delete button beside it is withheld to avoid.
+    /// </remarks>
+    [Fact]
+    public async Task An_even_rule_opens_with_its_kind_selected_and_saves()
+    {
+        SplitRules
+            .Setup(client => client.GetSplitRuleAsync(WhoeverPaid, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ARule(WhoeverPaid, "Whoever paid", new EvenSplitRuleDto()));
+
+        SplitRules
+            .Setup(client => client.UpdateSplitRuleAsync(WhoeverPaid, It.IsAny<UpdateSplitRuleRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, UpdateSplitRuleRequest request, CancellationToken _) =>
+                ARule(id, request.Name, request.Definition));
+
+        var (tab, provider) = await RenderWithDialogsAsync();
+
+        var editing = tab.FindAll("button")
+            .First(button => button.GetAttribute("aria-label") == "Edit Whoever paid")
+            .ClickAsync(new MouseEventArgs());
+
+        // The kind it already is, selected -- not an empty box the person has to guess at.
+        Assert.Equal(RuleType.Even, provider.FindComponent<MudSelect<RuleType?>>().Instance.Value);
+
+        await Button(provider, "Save").ClickAsync(new MouseEventArgs());
+        await editing;
+
+        // And Save saved, rather than validating to false and returning in silence.
+        SplitRules.Verify(client => client.UpdateSplitRuleAsync(
+            WhoeverPaid,
+            It.Is<UpdateSplitRuleRequest>(request => request.Definition is EvenSplitRuleDto),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static IElement Delete(IRenderedComponent<GroupSplitsTab> tab, string what) =>
+        tab.FindAll("button").First(button => button.GetAttribute("aria-label") == $"Delete {what}");
 
     private static IElement Edit(IRenderedComponent<GroupSplitsTab> tab, string category) =>
         tab.FindAll("button").First(button =>

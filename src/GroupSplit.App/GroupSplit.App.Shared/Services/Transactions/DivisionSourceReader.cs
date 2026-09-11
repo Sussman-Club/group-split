@@ -43,12 +43,20 @@ public sealed record DivisionSourceInfo(
     /// Whether the expense is filed under a category at all.
     /// </summary>
     /// <remarks>
-    /// Carried because <see cref="RuleUnknown"/> is reached three ways and one of them has
-    /// no category in it. Saying "the category it is filed under names a different rule now"
-    /// about an expense filed under nothing asserts a category that does not exist -- on the
-    /// component whose entire purpose is replacing a guess with a stated fact.
+    /// Carried because <see cref="RuleUnknown"/> is reached three ways, and the sentence that
+    /// fits one of them is a false assertion about the other two -- on the component whose
+    /// entire purpose is replacing a guess with a stated fact. The three are told apart by
+    /// this and <see cref="RuleId"/>: no category at all; a category that names no rule, or
+    /// that has since been deleted; and a category naming a rule whose history does not
+    /// contain the version the expense records.
     /// </remarks>
     public bool Filed => CategoryId is not null;
+
+    /// <summary>
+    /// Whether a rule was reached at all -- false for a category that names none, and for
+    /// one that is no longer there to ask.
+    /// </summary>
+    public bool Ruled => RuleId is not null;
 }
 
 /// <summary>

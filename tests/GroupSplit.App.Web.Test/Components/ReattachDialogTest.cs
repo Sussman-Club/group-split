@@ -154,6 +154,74 @@ public class ReattachDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// An apply whose answer never came back does not claim nothing was saved.
+    /// </summary>
+    /// <remarks>
+    /// The one thing that cannot be said after a timeout is "nothing saved yet": the server
+    /// may well have finished, and the figures on screen are a dry run taken before the
+    /// attempt. The dialog said it anyway, beside a count of what "would move", over an
+    /// operation that may already have moved it. Re-running the dry run is what settles it,
+    /// and it is safe to -- running twice writes the same answer.
+    /// </remarks>
+    [Fact]
+    public async Task An_apply_that_never_answered_says_the_outcome_is_unknown()
+    {
+        Answer(dryRun: true, changed: 812);
+
+        var dialog = await OpenAsync();
+
+        _transactions
+            .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("the request timed out"));
+
+        await dialog.FindAll("button")
+            .First(button => button.TextContent.Trim() == "Re-point 812 expenses")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.Equal("Unknown", dialog.Find(".gs-tag").TextContent.Trim());
+        Assert.DoesNotContain("nothing saved yet", dialog.Markup, StringComparison.Ordinal);
+        Assert.Contains("this may or may not have run", dialog.Markup, StringComparison.Ordinal);
+
+        // And a fresh dry run is what resolves it.
+        Answer(dryRun: true, changed: 0);
+
+        await dialog.FindAll("button").First(button => button.TextContent.Trim() == "Run it again")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.Equal("Dry run", dialog.Find(".gs-tag").TextContent.Trim());
+    }
+
+    /// <summary>
+    /// Expenses with no rule can move too, and the column says how many.
+    /// </summary>
+    /// <remarks>
+    /// One still holding a version under a category that now names no rule is pointed at
+    /// nothing, which is a change -- counted in the total and in no per-rule row. A dash
+    /// there would hide expenses about to lose the account of what divided them.
+    /// </remarks>
+    [Fact]
+    public async Task Expenses_with_no_rule_are_counted_when_they_move()
+    {
+        _transactions
+            .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReattachSummaryResponse(
+                Flat, true, Examined: 1411, Changed: 750, LeftWithoutAVersion: 285,
+                ByRule: [new ReattachedRuleSummary(Household, "Household 3-way", 1189, 743, 63)]));
+
+        var dialog = await OpenAsync();
+
+        var unruled = dialog.FindAll(".gs-counts-row.is-quiet").Single();
+
+        var cells = unruled.QuerySelectorAll("span").Select(cell => cell.TextContent.Trim()).ToArray();
+
+        // Seen, then moved: 222 of them, 7 of which lose a version they should not have had.
+        Assert.Equal("222", cells[1]);
+        Assert.Equal("7", cells[2]);
+    }
+
+    /// <summary>
     /// A group already pointing where it should is told so, and the button that would write
     /// is not offered.
     /// </summary>
