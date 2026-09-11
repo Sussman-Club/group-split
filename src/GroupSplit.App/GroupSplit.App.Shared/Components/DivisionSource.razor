@@ -67,7 +67,14 @@
             return "no rule divided this one";
 
         if (source.Version is not { } version)
-            return "the category it is filed under names a different rule now";
+        {
+            // Three situations reach here and they are not the same sentence. An expense
+            // filed under nothing has no category to have pointed anywhere, and saying it
+            // does asserts a category that does not exist.
+            return source.Filed
+                ? "the category it is filed under names a different rule now"
+                : "it is filed under no category, so the rule cannot be named from here";
+        }
 
         var from = Clock.Local(version.StartedAt);
 

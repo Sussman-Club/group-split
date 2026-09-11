@@ -65,6 +65,37 @@ public class ReattachDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// "No version fits" counts the expenses whose rule's history is too short, and nothing
+    /// else.
+    /// </summary>
+    /// <remarks>
+    /// It used to print `LeftWithoutAVersion`, which also counts every expense with no
+    /// category or a category naming no rule -- 222 of them here. Those end with no version
+    /// because there is nothing for them to point at, which is ordinary. So a group with
+    /// uncategorised spending and a complete rule history showed an alarming clay figure over
+    /// a table that itself said those expenses had no category: two numbers on one screen
+    /// contradicting each other, with the frightening one on top.
+    /// </remarks>
+    [Fact]
+    public async Task The_unfitted_figure_counts_only_what_a_rules_history_does_not_reach()
+    {
+        Answer(dryRun: true, changed: 812);
+
+        var dialog = await OpenAsync();
+
+        var unfitted = dialog.FindAll(".gs-figure-value")[2].TextContent.Trim();
+
+        Assert.Equal("63", unfitted);
+        Assert.NotEqual("285", unfitted);
+
+        // The row for those 222 is still drawn, because they are in the Examined total and a
+        // table that did not account for them would look wrong.
+        var unruled = dialog.FindAll(".gs-counts-row.is-quiet").Single();
+
+        Assert.Contains("222", unruled.TextContent, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The button names the number it is about to move, so the count is read before the
     /// click rather than reported after it.
     /// </summary>
@@ -132,7 +163,8 @@ public class ReattachDialogTest : ComponentTest
         _transactions
             .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ReattachSummaryResponse(Flat, true, 1411, 0, 0, []));
+            .ReturnsAsync(new ReattachSummaryResponse(Flat, true, 1411, 0, 0,
+                [new ReattachedRuleSummary(Household, "Household 3-way", 1411, 0, 0)]));
 
         var dialog = await OpenAsync();
 
@@ -143,12 +175,24 @@ public class ReattachDialogTest : ComponentTest
         Assert.True(apply.HasAttribute("disabled"));
     }
 
+    /// <summary>
+    /// A summary the service could actually produce.
+    /// </summary>
+    /// <remarks>
+    /// The figures have to hang together or the test proves nothing about a screen that
+    /// derives most of what it shows. 1,411 expenses, of which 1,189 are filed under a
+    /// category with a rule and 222 are not; `LeftWithoutAVersion` counts every expense that
+    /// ends up pointing at no version, which is those 222 plus the 63 the rule's history does
+    /// not reach back to. This fixture said 63, which no run of the service could return --
+    /// and it was built that way because the dialog was reading that field as though it meant
+    /// only the second group.
+    /// </remarks>
     private void Answer(bool dryRun, int changed) =>
         _transactions
             .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ReattachSummaryResponse(
-                Flat, dryRun, Examined: 1411, Changed: changed, LeftWithoutAVersion: 63,
+                Flat, dryRun, Examined: 1411, Changed: changed, LeftWithoutAVersion: 285,
                 ByRule: [new ReattachedRuleSummary(Household, "Household 3-way", 1189, changed, 63)]));
 
     private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync()

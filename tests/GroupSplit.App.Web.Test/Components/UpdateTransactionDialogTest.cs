@@ -634,6 +634,77 @@ public class UpdateTransactionDialogTest : ComponentTest
     private static bool Touches(Operation<UpdateTransactionRequest> operation, string member) =>
         string.Equals(operation.path, $"/{member}", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Correcting an expense to "these amounts are the expense's own" leaves the split
+    /// control holding them, so the next Save states them.
+    /// </summary>
+    /// <remarks>
+    /// Only the other direction was handled. Recording a version cleared the stated shares,
+    /// correctly; recording "by hand" did nothing, so the control went on claiming the
+    /// division was automatic -- the exact false claim the strip above it exists to end, and
+    /// now made false <em>by</em> a correction the person had just made. The consequence is
+    /// not cosmetic: with no shares in the patch the expense keeps whatever the server
+    /// decides, which is what "by hand" was being recorded to prevent.
+    /// </remarks>
+    [Fact]
+    public async Task Recording_that_the_amounts_are_its_own_leaves_the_control_holding_them()
+    {
+        var transactionId = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
+
+        // A rule divided it, so the reader has a rule and a history to resolve it against.
+        Categories
+            .Setup(client => client.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household")]);
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
+                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
+                    new EvenSplitRuleDto())]));
+
+        _commands
+            .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await ToSplitStepAsync(provider);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
+            .ClickAsync(new MouseEventArgs());
+
+        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
+
+        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Record")
+            .ClickAsync(new MouseEventArgs());
+
+        _commands.Verify(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        Assert.NotNull(patch);
+
+        // The amounts the expense is holding, stated -- not silence, which would leave the
+        // server free to divide it again.
+        var operation = Assert.Single(patch!.Operations, op => Touches(op, "splits"));
+
+        Assert.NotNull(operation.value);
+    }
+
+    private static readonly Guid Household = Guid.NewGuid();
+
     private static TransactionDetailsResponse Details(
         Guid id, Guid? merchantId = null, Guid? splitRuleVersionId = null) => new()
     {

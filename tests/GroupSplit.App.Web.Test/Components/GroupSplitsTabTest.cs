@@ -200,6 +200,64 @@ public class GroupSplitsTabTest : ComponentTest
             It.IsAny<Guid>(), It.IsAny<UpdateSplitRuleRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// A read that failed is not allowed to assert that there is nothing there.
+    /// </summary>
+    /// <remarks>
+    /// On a first load the list it keeps is the empty one it started with, and every claim
+    /// downstream of it then reads as a fact about the group: "No categories yet", "No
+    /// category uses it", and -- worst -- Delete enabled on rules a category still points
+    /// at, which is the action the tab's own tooltip logic exists to withhold. The snackbar
+    /// that named the failure has usually scrolled away by the time somebody reaches the
+    /// second column, so the state has to be on the screen.
+    /// </remarks>
+    [Fact]
+    public async Task A_failed_read_says_so_and_stops_the_screen_asserting_anything()
+    {
+        Categories
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the network went away"));
+
+        var tab = await RenderTabAsync();
+
+        Assert.Contains("This did not all load", tab.Markup, StringComparison.Ordinal);
+
+        // None of the three claims an empty list would otherwise have made.
+        Assert.DoesNotContain("No categories yet", tab.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("No category uses it", tab.Markup, StringComparison.Ordinal);
+
+        Assert.All(
+            tab.FindAll("button").Where(button =>
+                button.GetAttribute("aria-label")?.StartsWith("Delete ", StringComparison.Ordinal) == true),
+            button => Assert.True(button.HasAttribute("disabled")));
+    }
+
+    /// <summary>
+    /// A category's caption comes from the rule it points at, so the two columns cannot
+    /// disagree about the same fact.
+    /// </summary>
+    /// <remarks>
+    /// The name and the id are both nullable on the wire and were read by different halves
+    /// of this screen -- the caption off the name, the used-by tags and the delete gate off
+    /// the id. A response carrying one without the other put "no rule · evenly between
+    /// whoever is in the group" on a category and "Used by Dining out" on the rule it was
+    /// pointing at, on the same screen.
+    /// </remarks>
+    [Fact]
+    public async Task A_category_is_captioned_from_the_rule_it_points_at()
+    {
+        Categories
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(DiningOut, Flat, "Dining out", WhoeverPaid, null)]);
+
+        var tab = await RenderTabAsync();
+
+        Assert.Equal("divides by Whoever paid", tab.Find(".gs-row .meta").TextContent.Trim());
+
+        Assert.Equal(["Dining out"],
+            Rule(tab, "Whoever paid").QuerySelectorAll(".gs-tag").Select(tag => tag.TextContent.Trim()));
+    }
+
     private static IElement Rule(IRenderedComponent<GroupSplitsTab> tab, string name) =>
         tab.FindAll(".gs-rule").Single(rule => rule.QuerySelector(".title")!.TextContent.Trim() == name);
 

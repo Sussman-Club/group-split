@@ -49,7 +49,23 @@
         {
             <div class="gs-stack" style="gap: 18px">
 
-                @if (_usedBy.Count > 1)
+                @if (_usedBy is null)
+                {
+                    @* The uncertainty is the thing worth saying. An edit here can reach
+                       categories this dialog did not manage to count, and a missing warning
+                       reads as no warning. *@
+                    <div class="gs-notice is-warn">
+                        <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
+                        <div class="gs-notice-body">
+                            <strong>Could not check which categories divide by this rule</strong>
+                            <span>
+                                More than one may, and editing it would change what every one
+                                of them pre-fills.
+                            </span>
+                        </div>
+                    </div>
+                }
+                else if (_usedBy.Count > 1)
                 {
                     <div class="gs-notice is-warn">
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
@@ -97,7 +113,12 @@
                                     var weights = version.Definition.Weights(_names);
                                 }
 
-                                @if (weights.Count > 0)
+                                @* Rows only where the people can be named. Weights are
+                                   inherently per-person, so with no membership in hand every
+                                   row would read "someone not in the group" -- which is the
+                                   count fallback's whole job to avoid, and it only covers the
+                                   phrase. *@
+                                @if (_names is not null && weights.Count > 0)
                                 {
                                     <div>
                                         @foreach (var weight in weights)
@@ -136,16 +157,30 @@
 
                                 @if (!current)
                                 {
+                                    var departed = Departed(version);
+
                                     <div class="gs-version-foot">
                                         <span class="gs-version-count">
-                                            @(last ? "The oldest division recorded here" : "Superseded")
+                                            @(departed
+                                                ? "Names somebody no longer in the group"
+                                                : last ? "The oldest division recorded here" : "Superseded")
                                         </span>
-                                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                                                   Class="gs-btn-pill"
-                                                   Disabled="@_saving"
-                                                   OnClick="@(() => RestoreAsync(version))">
-                                            Divide this way again
-                                        </MudButton>
+
+                                        @* Not offered where it can only be refused. The
+                                           commonest reason a version was superseded at all is
+                                           a member leaving -- the server closes the versions
+                                           that name them -- and every one of those names
+                                           somebody the API will not accept in a rule now. *@
+                                        <MudTooltip Text="@(departed
+                                                              ? "This division names somebody who is no longer in the group"
+                                                              : "Make this what the rule says again")">
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                       Class="gs-btn-pill"
+                                                       Disabled="@(_saving || departed)"
+                                                       OnClick="@(() => RestoreAsync(version))">
+                                                Divide this way again
+                                            </MudButton>
+                                        </MudTooltip>
                                     </div>
                                 }
                             </div>
@@ -168,13 +203,31 @@
 
     private SplitRuleHistoryResponse? _history;
 
-    /// <summary>Who the group's members are, so a version names people rather than ids.</summary>
-    private Dictionary<Guid, string> _names = [];
+    /// <summary>
+    /// Who the group's people are, so a version names them rather than printing ids.
+    /// </summary>
+    /// <remarks>
+    /// Null until the read succeeds, and null again if it fails -- never an empty dictionary.
+    /// The phrases degrade to counts on null; handed an empty one they take the named branch
+    /// and report every person in the rule as no longer in the group, which is a read
+    /// failure dressed up as a fact about the group.
+    /// </remarks>
+    private Dictionary<Guid, string>? _names;
 
-    /// <summary>The categories that divide by this rule.</summary>
-    private IReadOnlyList<string> _usedBy = [];
+    /// <summary>
+    /// The categories that divide by this rule, or null when that could not be read.
+    /// </summary>
+    /// <remarks>
+    /// The difference matters because the absence of the warning below is read as "nothing
+    /// to warn about". Somebody about to change a division that several categories pre-fill
+    /// from should not learn that from silence.
+    /// </remarks>
+    private IReadOnlyList<string>? _usedBy;
 
     private bool _saving;
+
+    /// <summary>Whether anything here wrote, so the screen behind knows to re-read.</summary>
+    private bool _wrote;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -193,7 +246,12 @@
 
         if (history is null)
         {
-            MudDialog.Cancel();
+            // Only on the way in. A re-read after an edit that succeeded is a refresh, and
+            // closing the dialog on it would take away the screen somebody is working in --
+            // immediately after telling them their change was saved.
+            if (_history is null)
+                MudDialog.Cancel();
+
             return;
         }
 
@@ -202,7 +260,15 @@
         await Errors.CaptureAsync(async () =>
         {
             var members = await GroupsClient.GetGroupMembersAsync(history.GroupId);
-            _names = members.ToDictionary(member => member.Id, member => member.FullName);
+
+            // Label, not FullName: this list is the group's participants, which includes
+            // people invited who have not joined, and a rule may name one. DistinctBy
+            // because a duplicate id would throw out of a block written to be quiet, and
+            // ArgumentException is not an API failure -- it would escape to the error
+            // boundary and take the page behind this dialog down.
+            _names = members
+                .DistinctBy(member => member.Id)
+                .ToDictionary(member => member.Id, member => member.Label());
         });
 
         await Errors.CaptureAsync(async () =>
@@ -253,6 +319,11 @@
     {
         if (older is null) return [];
 
+        // Per-person, so it needs the people. Without them every chip would name the same
+        // stranger twice over; the shapes below still say what moved.
+        if (_names is null)
+            return [(older.Definition.Ratio() + " → " + version.Definition.Ratio(), "")];
+
         var now = version.Definition.Weights(_names);
         var before = older.Definition.Weights(_names);
 
@@ -269,9 +340,14 @@
 
             if (from == to) continue;
 
+            // Coalesced, and this is the whole of the finding it fixes: somebody the older
+            // version did not name has a null share, `to > from` is false against null
+            // whichever way it leans, and a member being *added* to a rule -- the commonest
+            // transition there is after a departure -- was drawn in clay, the colour that
+            // means a share was cut.
             moved.Add((
                 $"{weight.Name} {Percent(from)} → {Percent(to)}",
-                to > from ? "is-up" : "is-down"));
+                (to ?? 0m) > (from ?? 0m) ? "is-up" : "is-down"));
         }
 
         // Somebody the older version named and this one does not: their share went to zero,
@@ -285,6 +361,18 @@
     private static string Percent(decimal? share) => share is { } value ? $"{value:0.#}%" : "none";
 
     /// <summary>
+    /// Whether a version names somebody the group no longer has, which is what makes it
+    /// impossible to put back: the API refuses a rule naming a non-participant.
+    /// </summary>
+    /// <remarks>
+    /// Unknown counts as fine. When the membership could not be read there is nothing to
+    /// check against, and disabling on an absence would hide the action on every version of
+    /// every rule for the sake of a read that failed -- the refusal, if it comes, says why.
+    /// </remarks>
+    private bool Departed(SplitRuleVersionResponse version) =>
+        _names is { } names && version.Definition.Weights().Any(weight => !names.ContainsKey(weight.UserId));
+
+    /// <summary>
     /// Makes an older division what the rule says again.
     /// </summary>
     /// <remarks>
@@ -294,7 +382,7 @@
     /// </remarks>
     private async Task RestoreAsync(SplitRuleVersionResponse version)
     {
-        if (_history is not { } history || _saving) return;
+        if (_history is not { } history || _saving || Departed(version)) return;
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
@@ -311,17 +399,28 @@
             return;
 
         _saving = true;
+        StateHasChanged();
 
-        var saved = await Rules.UpdateAsync(history.Id, new UpdateSplitRuleRequest
+        SplitRuleDetailsResponse? saved;
+
+        try
         {
-            Name = history.Name,
-            Definition = version.Definition
-        });
-
-        _saving = false;
+            saved = await Rules.UpdateAsync(history.Id, new UpdateSplitRuleRequest
+            {
+                Name = history.Name,
+                Definition = version.Definition
+            });
+        }
+        finally
+        {
+            _saving = false;
+        }
 
         if (saved is not null)
+        {
+            _wrote = true;
             await LoadAsync();
+        }
     }
 
     private async Task EditAsync()
@@ -332,7 +431,7 @@
         {
             { dialog => dialog.GroupId, history.GroupId },
             { dialog => dialog.SplitRuleId, history.Id },
-            { dialog => dialog.UsedBy, _usedBy }
+            { dialog => dialog.UsedBy, _usedBy ?? [] }
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
@@ -340,8 +439,19 @@
         var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
 
         if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
+        {
+            _wrote = true;
             await LoadAsync();
+        }
     }
 
-    private void Close() => MudDialog.Close();
+    /// <summary>
+    /// Closes, saying whether anything was written.
+    /// </summary>
+    /// <remarks>
+    /// The screen behind this reloads on a true and not otherwise. It used to reload
+    /// whatever happened, so merely looking at a rule's history cost the Splits tab a
+    /// listing plus a read per rule.
+    /// </remarks>
+    private void Close() => MudDialog.Close(DialogResult.Ok(_wrote));
 }

@@ -189,6 +189,129 @@ public class RuleHistoryDialogTest : ComponentTest
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// Somebody added to a rule went up, and is drawn as having gone up.
+    /// </summary>
+    /// <remarks>
+    /// The older version does not name them, so their previous share is null, and `to > from`
+    /// against a null is false whichever way it leans -- so a member being *added* was drawn
+    /// in clay, the colour that means a share was cut. It is the commonest transition a rule
+    /// has after a departure, and the colour is the whole point of the row.
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_the_older_version_did_not_name_reads_as_an_increase()
+    {
+        var marta = Guid.NewGuid();
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, Flat, "Household 3-way",
+            [
+                new SplitRuleVersionResponse(Current, Closed, null, new EvenSplitRuleDto([Ana, Lu, marta])),
+                new SplitRuleVersionResponse(Previous, Opened, Closed, new EvenSplitRuleDto([Ana, Lu]))
+            ]));
+
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new UserInfo(Ana, "Ana", "Benitez", null),
+                new UserInfo(Lu, "Lu", "Ferrer", null),
+                new UserInfo(marta, "Marta", "Ruiz", null)
+            ]);
+
+        var dialog = await OpenAsync();
+
+        var added = dialog.Find(".gs-version.is-current")
+            .QuerySelectorAll(".gs-delta")
+            .Single(delta => delta.TextContent.Contains("Marta", StringComparison.Ordinal));
+
+        Assert.Contains("none → 33.3%", added.TextContent, StringComparison.Ordinal);
+        Assert.Contains("is-up", added.ClassName!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A division naming somebody who has gone cannot be put back, so it is not offered.
+    /// </summary>
+    /// <remarks>
+    /// This is the commonest superseded version there is: the server closes the versions that
+    /// name a departing member, so every one of them names somebody the API will now refuse
+    /// in a rule. The button was offered on exactly those, over a confirmation promising the
+    /// rule "will divide by this again from now on", and the only possible outcome was a
+    /// refusal.
+    /// </remarks>
+    [Fact]
+    public async Task A_division_naming_somebody_who_has_gone_is_not_offered_again()
+    {
+        var departed = Guid.NewGuid();
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, Flat, "Household 3-way",
+            [
+                new SplitRuleVersionResponse(Current, Closed, null, new EvenSplitRuleDto([Ana, Lu])),
+
+                new SplitRuleVersionResponse(Previous, Opened, Closed,
+                    new SharesSplitRuleDto { Shares = { [Ana] = 1, [Lu] = 1, [departed] = 1 } })
+            ]));
+
+        var dialog = await OpenAsync();
+
+        var button = dialog.FindAll("button")
+            .Single(candidate => candidate.TextContent.Trim() == "Divide this way again");
+
+        Assert.True(button.HasAttribute("disabled"));
+
+        Assert.Contains("Names somebody no longer in the group", dialog.Markup, StringComparison.Ordinal);
+
+        // And nothing is sent if it is reached anyway.
+        SplitRules.Verify(client => client.UpdateSplitRuleAsync(
+            It.IsAny<Guid>(), It.IsAny<UpdateSplitRuleRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A membership that could not be read degrades to counts, and does not report everybody
+    /// in the rule as a stranger to the group.
+    /// </summary>
+    /// <remarks>
+    /// The failure is deliberately quiet -- a version with unnamed people in it is still worth
+    /// reading, and a snackbar about a sentence would be noise. What made it a defect was the
+    /// empty dictionary downstream: every lookup missed, and the timeline asserted that the
+    /// whole membership of the rule was gone, on the screen whose purpose is saying who was on
+    /// what.
+    /// </remarks>
+    [Fact]
+    public async Task A_membership_that_could_not_be_read_names_nobody_rather_than_stranding_everybody()
+    {
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the network went away"));
+
+        var dialog = await OpenAsync();
+
+        Assert.DoesNotContain("not in the group", dialog.Markup, StringComparison.Ordinal);
+
+        // The count is what not knowing looks like.
+        Assert.Contains("By shares, between 2", dialog.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And a failed count of the categories says so, because the absence of that warning is
+    /// read as "there is nothing to warn about" immediately before an edit with fan-out.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_count_of_the_categories_is_said_rather_than_left_blank()
+    {
+        Categories
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the network went away"));
+
+        var dialog = await OpenAsync();
+
+        Assert.Contains("Could not check which categories divide by this rule", dialog.Markup,
+            StringComparison.Ordinal);
+    }
+
     private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync()
     {
         var provider = Render<MudDialogProvider>();
