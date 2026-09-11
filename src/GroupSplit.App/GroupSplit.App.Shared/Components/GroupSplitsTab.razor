@@ -41,6 +41,22 @@
         </MudButton>
     </div>
 
+    @if (_stale)
+    {
+        <div class="gs-notice is-warn">
+            <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
+            <div class="gs-notice-body">
+                <strong>This did not all load</strong>
+                <span>What is below may be out of date, and deleting a rule is held back
+                    until it can be checked against the categories again.</span>
+            </div>
+            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                       OnClick="@LoadAsync">
+                Try again
+            </MudButton>
+        </div>
+    }
+
     <div class="gs-splits-grid">
 
         <div class="gs-card gs-card-pad">
@@ -53,7 +69,9 @@
                 </MudButton>
             </div>
 
-            @if (_categories.Count == 0)
+            @* Only where the emptiness was read rather than assumed: "none" is a claim, and
+               a failed read is not entitled to make it. *@
+            @if (_categories.Count == 0 && !_stale)
             {
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.Sell"/>
@@ -71,11 +89,12 @@
 
                             <span style="min-width: 0">
                                 <span class="title"><span>@category.Name</span></span>
-                                <span class="meta">
-                                    @(category.DefaultSplitRuleName is { Length: > 0 } rule
-                                        ? $"divides by {rule}"
-                                        : "no rule · evenly between whoever is in the group")
-                                </span>
+                                @* From the id, not the name beside it. Both are nullable on
+                                   the wire, and reading the caption off one while the
+                                   used-by tags and the delete gate read the other let the
+                                   same screen say "no rule" on a category and "Used by
+                                   Groceries" on the rule it points at. *@
+                                <span class="meta">@DividesBy(category)</span>
                             </span>
 
                             <span class="gs-row-actions gs-inline" style="gap: 2px">
@@ -103,7 +122,7 @@
                 </MudButton>
             </div>
 
-            @if (_rules.Count == 0)
+            @if (_rules.Count == 0 && !_stale)
             {
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.AccountTree"/>
@@ -133,12 +152,14 @@
                                        API refuses to delete a rule in use, and an action
                                        that can only fail is worse than none. Re-point the
                                        categories and it comes back. *@
-                                    <MudTooltip Text="@(used.Count > 0
-                                                          ? "In use by a category"
-                                                          : "Delete this rule")">
+                                    <MudTooltip Text="@(_stale
+                                                          ? "Held back until the categories can be read again"
+                                                          : used.Count > 0
+                                                              ? "In use by a category"
+                                                              : "Delete this rule")">
                                         <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                        Color="Color.Error"
-                                                       Disabled="@(used.Count > 0)"
+                                                       Disabled="@(_stale || used.Count > 0)"
                                                        aria-label="@($"Delete {rule.Name}")"
                                                        OnClick="@(() => DeleteRuleAsync(rule))"/>
                                     </MudTooltip>
@@ -150,7 +171,7 @@
                             </span>
 
                             <div class="gs-inline" style="gap: 6px">
-                                @if (used.Count == 0)
+                                @if (used.Count == 0 && !_stale)
                                 {
                                     <span class="gs-tag neutral">No category uses it</span>
                                 }
@@ -180,6 +201,19 @@
     private IReadOnlyList<SplitRuleResponse> _rules = [];
 
     /// <summary>
+    /// Whether what is on screen is what the server last said.
+    /// </summary>
+    /// <remarks>
+    /// One flag doing three jobs, all of them the same job really: an unread list must not
+    /// be allowed to speak. It suppresses both empty states, because "none" is a claim a
+    /// failed read cannot make; it disables deleting a rule, because the join that decides
+    /// whether one is in use is the very thing that did not load; and it puts a line on the
+    /// screen with a way to try again, because the snackbar has scrolled away by the time
+    /// somebody reaches the second column.
+    /// </remarks>
+    private bool _stale;
+
+    /// <summary>
     /// What each rule currently divides by, for the line under its name. Read one call per
     /// rule -- the listing carries only names -- and missing for any that failed, which
     /// costs the line and not the row.
@@ -196,14 +230,27 @@
         var rules = await Rules.ForGroupAsync(GroupId);
 
         // Null is a failure the presenter has shown. Keep whatever is on screen rather than
-        // emptying the lists, which would read as a group that has no categories.
+        // emptying the lists, which would read as a group that has no categories -- but
+        // remember that it was kept, because an empty list that is merely unread must not go
+        // on to assert anything. On a first load "whatever is on screen" is nothing at all,
+        // which is how a failed read came to print "No categories yet", claim that no
+        // category used any rule, and enable Delete on rules a category still points at.
+        _stale = categories is null || rules is null;
+
         if (categories is not null) _categories = [.. categories.OrderBy(row => row.Name)];
-        if (rules is not null) _rules = rules;
+        if (rules is not null) _rules = [.. rules.OrderBy(row => row.Name)];
 
         await Errors.CaptureAsync(async () =>
         {
             var members = await GroupsClient.GetGroupMembersAsync(GroupId);
-            _names = members.ToDictionary(member => member.Id, member => member.FullName);
+
+            // Label, not FullName: a rule may name somebody invited who has not joined, and
+            // a screen that forgets the mark offers them as a member. DistinctBy so a
+            // duplicate id cannot throw ArgumentException out of a quiet block and take the
+            // group page down with it.
+            _names = members
+                .DistinctBy(member => member.Id)
+                .ToDictionary(member => member.Id, member => member.Label());
         });
 
         await LoadDefinitionsAsync();
@@ -231,7 +278,11 @@
             return details;
         }));
 
-        _definitions = read.OfType<SplitRuleDetailsResponse>().ToDictionary(details => details.Id);
+        // Merged rather than replaced, for the reason the lists are kept above: a refresh
+        // whose reads failed would otherwise blank the description under every rule that had
+        // one a second ago, with nothing on screen to say why.
+        foreach (var details in read.OfType<SplitRuleDetailsResponse>())
+            _definitions[details.Id] = details;
     }
 
     private string Describe(Guid ruleId)
@@ -249,6 +300,26 @@
     /// </summary>
     private IReadOnlyList<string> UsedBy(Guid ruleId) =>
         [.. _categories.Where(category => category.DefaultSplitRuleId == ruleId).Select(category => category.Name)];
+
+    /// <summary>
+    /// What a category divides by, named from the rule it points at rather than from the
+    /// name the listing carried alongside the id.
+    /// </summary>
+    private string DividesBy(CategoryResponse category)
+    {
+        if (category.DefaultSplitRuleId is not { } ruleId)
+            return "no rule · evenly between whoever is in the group";
+
+        var named = _rules.FirstOrDefault(rule => rule.Id == ruleId)?.Name
+                    ?? category.DefaultSplitRuleName;
+
+        // Pointed at a rule this screen could not name -- the rules list failed, or it was
+        // deleted between the two reads. Saying so beats printing "no rule", which is a
+        // different state with a different division behind it.
+        return named is { Length: > 0 }
+            ? $"divides by {named}"
+            : "divides by a rule that is not in this list";
+    }
 
     private static string Initials(string name) => name.Initials();
 
@@ -359,11 +430,13 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+        var dialog = await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
 
-        // It can edit the rule, or send a past division back into service, so what is on
-        // this screen may be a version old by the time it closes.
-        await LoadAsync();
+        // Only when it wrote. It can edit the rule or send a past division back into
+        // service, and then this screen is a version behind -- but merely reading a history
+        // used to cost a listing and a read per rule on the way out.
+        if (await dialog.GetReturnValueAsync<bool>())
+            await LoadAsync();
     }
 
     private async Task RepointAsync()

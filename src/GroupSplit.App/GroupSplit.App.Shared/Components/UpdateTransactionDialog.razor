@@ -232,10 +232,18 @@
                                     </MudRadio>
                                 </MudRadioGroup>
 
+                                @* Hedged, because both outcomes are conditional and the
+                                   unhedged versions were wrong in the commonest cases. An
+                                   amount edit is refused only where the stored shares are
+                                   not what a division would produce -- shares that happen to
+                                   equal an even split are re-divided, which is the tradeoff
+                                   ExpenseSplitter states and docs/cli.md spells out. And a
+                                   version whose division does not reproduce these amounts is
+                                   not applied either: that edit is refused for not summing. *@
                                 <div class="gs-muted" style="font-size: .75rem">
                                     @(_chosen is null
-                                        ? "A later edit to the amount will be refused rather than restate shares somebody set."
-                                        : "A later edit to the amount will be divided again by that version.")
+                                        ? "Shares only this expense could have arrived at are then kept, and an edit to the amount is refused rather than restating them."
+                                        : "If that version's division is what these amounts are, a later edit to the amount follows it.")
                                 </div>
 
                                 <div class="gs-inline" style="justify-content: flex-end; gap: 8px">
@@ -353,12 +361,17 @@
     /// Whether the strip describes the expense in front of the person.
     /// </summary>
     /// <remarks>
-    /// It describes what is <em>stored</em>, and moving the expense to another group
-    /// rewrites that on save -- the shares name the old group's members and the endpoint
-    /// drops them. So it goes away rather than describing an expense that is about to stop
+    /// It describes what is <em>stored</em>, and moving the expense rewrites that on save --
+    /// to another group, where the shares name the old group's members and the endpoint
+    /// drops them, or to another category, where the save divides it by a different rule
+    /// altogether. So it goes away rather than describing an expense that is about to stop
     /// existing in that form.
     /// </remarks>
-    private bool ShowSource => IsShared && _model.GroupId == Original.GroupId && _source is not null;
+    private bool ShowSource =>
+        IsShared
+        && _model.GroupId == Original.GroupId
+        && _model.CategoryId == Original.CategoryId
+        && _source is not null;
 
     /// <summary>
     /// Whether there is another answer to give. A hand-split expense under a category that
@@ -554,6 +567,13 @@
         // shares the save is about to keep.
         _model.Splits = _redivide ? null : _openedWith;
 
+        // Filing it elsewhere is the one edit that reaches a different rule, so what divided
+        // it stops being a settled question and the panel that corrects it is closed. It
+        // describes the expense as stored; the save is about to give it another rule's
+        // division, and correcting the old one on the way there records provenance the same
+        // save then discards.
+        _correcting = false;
+
         await RefreshPreviewAsync();
     }
 
@@ -729,9 +749,10 @@
     /// <remarks>
     /// Not folded into the dialog's Save, and the CLI does the same thing for the same
     /// reason: this is a different request about a different question. Save decides what the
-    /// shares <em>become</em>; this describes what produced the ones already there, and the
-    /// two contradict each other -- the API refuses a patch that states shares alongside a
-    /// division source, so sending them together would fail the whole edit.
+    /// shares <em>become</em>; this describes what produced the ones already there. There is
+    /// no field for it on <c>UpdateTransactionRequest</c> at all, and that is the point --
+    /// a patch field could quietly re-divide an expense as a side effect of an edit about
+    /// something else, so provenance got a route of its own.
     /// </remarks>
     private async Task RecordSourceAsync()
     {
@@ -739,37 +760,65 @@
             return;
 
         _recording = true;
+        StateHasChanged();
 
-        var recorded = await Transactions.DivisionSourceAsync(Original.Id, _chosen, _model.Name);
+        bool recorded;
 
-        _recording = false;
+        try
+        {
+            // The expense's own name, not the field: step one may be holding a rename
+            // nobody has saved, and this sentence is about what the server just did to the
+            // expense as it stands.
+            recorded = await Transactions.DivisionSourceAsync(Original.Id, _chosen, Original.Name);
+        }
+        finally
+        {
+            _recording = false;
+        }
 
         if (!recorded)
         {
+            // The panel stays open, because the panel is where the retry lives.
             StateHasChanged();
             return;
         }
 
         _correcting = false;
 
-        // Read back rather than patched in place: which version an expense records decides
-        // which side the split control opens on, and the reader is what turns the id into
-        // the sentence above the shares.
-        _source = await Source.ReadAsync(
-            Original.GroupId!.Value, _model.CategoryId, _chosen, withHistory: true);
+        // Local state follows the write, not the read-back below.
+        //
+        // The server has accepted this. Inferring it back from a read -- which can fail on
+        // its own -- meant a successful correction was silently reversed by the next Save:
+        // the read returned null, _chosen reverted to the version the expense used to
+        // record, the stated shares were left in place, and CreatePatch then sent them as an
+        // explicit /splits operation, which is the opposite answer to "a rule divided this".
+        //
+        // Both directions, because they are both answers to the same question. Recording a
+        // version means the shares below are no longer the expense's own; recording "by
+        // hand" means they are, and the control has to open on them -- otherwise a
+        // correction to "these amounts are the expense's own" leaves the control claiming
+        // the division was automatic, which is the false claim the strip exists to end.
+        _model.Splits = _chosen is null && _storedSplits.Count > 0 ? _storedSplits : null;
+        _openedWith = _model.Splits;
+        _redivide = false;
 
-        _chosen = _source?.VersionId;
+        // Against the category the expense is actually filed under, not the one step one is
+        // holding unsaved: this endpoint moves no category, so resolving the version through
+        // a pending pick reads a different rule's history and reports the version it just
+        // wrote as belonging to some other rule.
+        var refreshed = await Source.ReadAsync(
+            Original.GroupId!.Value, Original.CategoryId, _chosen, withHistory: true);
 
-        // Stated shares and a rule's division are the two answers to the same question. If
-        // this expense is now a rule's, the ones typed into the control below are no longer
-        // what it holds.
-        if (_chosen is not null)
+        if (refreshed is not null)
         {
-            _model.Splits = null;
-            _openedWith = null;
+            _source = refreshed;
+            _chosen = _source.VersionId;
         }
 
-        StateHasChanged();
+        // What the shares would come to now, which is the figure the Save button is about to
+        // act on. Without this the preview above kept the old version's division -- 540/360
+        // under a rule the expense no longer records -- and Save then wrote 450/450.
+        await RefreshPreviewAsync();
     }
 
     /// <summary>

@@ -44,11 +44,32 @@
             else
             {
                 <div class="gs-inline" style="gap: 8px">
-                    <span class="gs-tag @(_applied ? "" : "neutral")">@(_applied ? "Done" : "Dry run")</span>
+                    <span class="gs-tag @(_applied ? "" : _unsure ? "clay" : "neutral")">
+                        @(_applied ? "Done" : _unsure ? "Unknown" : "Dry run")
+                    </span>
                     <span class="gs-provenance-when">
-                        @(_applied ? "saved" : "nothing saved yet") · @_ran.ToString("d MMM yyyy, HH:mm")
+                        @(_applied
+                            ? "saved"
+                            : _unsure
+                                ? "we did not get an answer — this may or may not have run"
+                                : "nothing saved yet") · @_ran.ToString("d MMM yyyy, HH:mm")
                     </span>
                 </div>
+
+                @if (_unsure)
+                {
+                    <div class="gs-notice is-warn">
+                        <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
+                        <div class="gs-notice-body">
+                            <strong>Run the dry run again to see where things stand</strong>
+                            <span>
+                                The figures below were worked out before that attempt. Running
+                                it twice changes nothing the second time, so re-pointing again
+                                is safe either way.
+                            </span>
+                        </div>
+                    </div>
+                }
 
                 <div class="gs-figures">
                     <div class="gs-figure">
@@ -59,11 +80,17 @@
                         <span class="gs-eyebrow">@(_applied ? "Moved" : "Would move")</span>
                         <span class="gs-figure-value gs-num" style="color: var(--gs-teal)">@summary.Changed</span>
                     </div>
+                    @* The rules' own figure, not LeftWithoutAVersion.
+                       That one counts every expense that ends with no version, including
+                       ones that never had a rule to point at -- normal, not a gap -- so a
+                       group with uncategorised spending and a complete history showed an
+                       alarming red count over a table saying those same expenses had no
+                       category. This is the number the warning below acts on. *@
                     <div class="gs-figure">
                         <span class="gs-eyebrow">No version fits</span>
-                        <span class="gs-figure-value gs-num @(summary.LeftWithoutAVersion > 0 ? "" : "is-quiet")"
-                              style="@(summary.LeftWithoutAVersion > 0 ? "color: var(--gs-clay)" : "")">
-                            @summary.LeftWithoutAVersion
+                        <span class="gs-figure-value gs-num @(Unfitted(summary) > 0 ? "" : "is-quiet")"
+                              style="@(Unfitted(summary) > 0 ? "color: var(--gs-clay)" : "")">
+                            @Unfitted(summary)
                         </span>
                     </div>
                 </div>
@@ -92,14 +119,18 @@
                             </div>
                         }
 
-                        @* Expenses no rule could have divided. Counted in the total above,
-                           so leaving them out of the table would make it look wrong. *@
+                        @* Expenses no rule could have divided. Counted in the totals above,
+                           so leaving them out of the table would make it look wrong -- and
+                           they can move: one still holding a version from a category that
+                           now names no rule is pointed at nothing, which is a change. The
+                           API counts that in Changed and in no per-rule row, so the figure
+                           is what the rows do not account for. *@
                         @if (Unruled(summary) > 0)
                         {
                             <div class="gs-counts-row is-quiet">
                                 <span class="gs-counts-what">No category, or a category with no rule</span>
                                 <span>@Unruled(summary)</span>
-                                <span>—</span>
+                                <span>@UnruledChanged(summary)</span>
                                 <span>—</span>
                             </div>
                         }
@@ -112,7 +143,9 @@
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                         <div class="gs-notice-body">
                             <strong>
-                                @(thin.Sum(rule => rule.Uncovered)) expenses are older than the
+                                @(Unfitted(summary) == 1
+                                    ? "One expense is older"
+                                    : $"{Unfitted(summary)} expenses are older") than the
                                 history that has been written for their rule
                             </strong>
                             <span>
@@ -171,6 +204,9 @@
     private bool _busy;
     private bool _applied;
 
+    /// <summary>An apply whose answer never came back, so the server's state is unknown.</summary>
+    private bool _unsure;
+
     /// <summary>
     /// The dry run happens on open. It saves nothing, and it is the only thing that can
     /// answer the question somebody opened this to ask.
@@ -184,9 +220,16 @@
         _busy = true;
         StateHasChanged();
 
-        var summary = await Transactions.ReattachAsync(GroupId, dryRun: true);
+        ReattachSummaryResponse? summary;
 
-        _busy = false;
+        try
+        {
+            summary = await Transactions.ReattachAsync(GroupId, dryRun: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
 
         // Null is a failure the presenter has shown. The dialog keeps whatever it last had,
         // which is either nothing or a previous run, rather than blanking on the reader.
@@ -194,6 +237,9 @@
         {
             _summary = summary;
             _ran = Clock.Local(DateTimeOffset.UtcNow);
+
+            // A fresh answer is exactly what settles an apply nobody heard back from.
+            _unsure = false;
         }
 
         StateHasChanged();
@@ -206,15 +252,31 @@
         _busy = true;
         StateHasChanged();
 
-        var summary = await Transactions.ReattachAsync(GroupId, dryRun: false);
+        ReattachSummaryResponse? summary;
 
-        _busy = false;
+        try
+        {
+            summary = await Transactions.ReattachAsync(GroupId, dryRun: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
 
         if (summary is not null)
         {
             _summary = summary;
             _ran = Clock.Local(DateTimeOffset.UtcNow);
             _applied = true;
+        }
+        else
+        {
+            // The one thing that cannot be said now is "nothing saved yet". A request that
+            // did not come back may still have run -- a timeout says nothing about whether
+            // the server finished -- and the figures on screen are a dry run taken before
+            // it. Re-running the dry run is what settles it, and it is safe to: the
+            // operation writes the same answer however many times it runs.
+            _unsure = true;
         }
 
         StateHasChanged();
@@ -226,6 +288,22 @@
     /// </summary>
     private static int Unruled(ReattachSummaryResponse summary) =>
         summary.Examined - summary.ByRule.Sum(rule => rule.Examined);
+
+    /// <summary>How many of those move anyway, by being pointed at nothing.</summary>
+    private static int UnruledChanged(ReattachSummaryResponse summary) =>
+        summary.Changed - summary.ByRule.Sum(rule => rule.Changed);
+
+    /// <summary>
+    /// Expenses whose rule has a history that does not reach back to them.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>LeftWithoutAVersion</c>, which also counts every expense with no category or a
+    /// category naming no rule. Those end with no version because there is nothing for them
+    /// to point at, which is ordinary; these end with no version because the history is
+    /// short, which is the thing worth fixing.
+    /// </remarks>
+    private static int Unfitted(ReattachSummaryResponse summary) =>
+        summary.ByRule.Sum(rule => rule.Uncovered);
 
     /// <summary>The rules whose written history does not reach back as far as their expenses.</summary>
     private static IReadOnlyList<ReattachedRuleSummary> Uncovered(ReattachSummaryResponse summary) =>

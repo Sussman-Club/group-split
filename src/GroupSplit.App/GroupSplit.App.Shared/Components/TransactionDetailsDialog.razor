@@ -299,13 +299,28 @@
         _versions = _source?.Versions.Count ?? 0;
     }
 
-    private Task ShowHistoryAsync(Guid ruleId)
+    /// <summary>
+    /// The rule's history, and a re-read if it changed anything.
+    /// </summary>
+    /// <remarks>
+    /// That dialog can edit the rule or put an old division back into service, and either
+    /// opens a new version -- which supersedes the one this expense records. Without the
+    /// re-read the strip above would go on saying "Current" over a version that stopped
+    /// being current while the person was looking at the proof.
+    /// </remarks>
+    private async Task ShowHistoryAsync(Guid ruleId)
     {
         var parameters = new DialogParameters<RuleHistoryDialog> { { dialog => dialog.SplitRuleId, ruleId } };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        return DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+        var dialog = await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+
+        if (!await dialog.GetReturnValueAsync<bool>())
+            return;
+
+        await ReadSourceAsync();
+        StateHasChanged();
     }
 
     private void Close() => MudDialog.Close();

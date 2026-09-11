@@ -24,6 +24,7 @@ namespace GroupSplit.App.Shared.Services.Transactions;
 /// </param>
 public sealed record DivisionSourceInfo(
     Guid? VersionId,
+    Guid? CategoryId,
     Guid? RuleId,
     string? RuleName,
     SplitRuleVersionResponse? Version,
@@ -37,6 +38,17 @@ public sealed record DivisionSourceInfo(
 
     /// <summary>A rule produced them and the rule cannot be named from here.</summary>
     public bool RuleUnknown => VersionId is not null && Version is null;
+
+    /// <summary>
+    /// Whether the expense is filed under a category at all.
+    /// </summary>
+    /// <remarks>
+    /// Carried because <see cref="RuleUnknown"/> is reached three ways and one of them has
+    /// no category in it. Saying "the category it is filed under names a different rule now"
+    /// about an expense filed under nothing asserts a category that does not exist -- on the
+    /// component whose entire purpose is replacing a guess with a stated fact.
+    /// </remarks>
+    public bool Filed => CategoryId is not null;
 }
 
 /// <summary>
@@ -63,14 +75,19 @@ public sealed class DivisionSourceReader(
     /// needs every version rather than the one it holds. It costs a read on an expense
     /// nothing divided, which is why it is not the default.
     /// </param>
-    /// <returns>Null when a read failed, or when there is nothing to say.</returns>
+    /// <returns>
+    /// Null when, and only when, a read failed. "Nothing divided it" is an answer and comes
+    /// back as a record like any other -- callers rely on that to tell a failure apart from
+    /// an expense whose shares are its own, and the distinction is the whole reason a
+    /// failure here can afford to stay quiet.
+    /// </returns>
     public async Task<DivisionSourceInfo?> ReadAsync(Guid groupId, Guid? categoryId, Guid? versionId,
         bool withHistory = false, CancellationToken ct = default)
     {
         // Nothing divided it and nobody is offering to change that: the answer needs no
         // server at all.
         if (versionId is null && !withHistory)
-            return new DivisionSourceInfo(null, null, null, null, []);
+            return new DivisionSourceInfo(null, categoryId, null, null, null, []);
 
         Guid? ruleId = null;
 
@@ -89,7 +106,7 @@ public sealed class DivisionSourceReader(
         // or filed under one that has since been deleted. Any version the expense holds
         // belongs to a rule that cannot be reached from here, which is its own answer.
         if (ruleId is not { } rule)
-            return new DivisionSourceInfo(versionId, null, null, null, []);
+            return new DivisionSourceInfo(versionId, categoryId, null, null, null, []);
 
         SplitRuleHistoryResponse? history = null;
 
@@ -106,6 +123,7 @@ public sealed class DivisionSourceReader(
 
         return new DivisionSourceInfo(
             versionId,
+            categoryId,
             rule,
             history.Name,
             version,

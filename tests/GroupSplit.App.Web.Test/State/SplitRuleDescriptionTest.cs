@@ -118,17 +118,44 @@ public class SplitRuleDescriptionTest
     }
 
     /// <summary>
-    /// Somebody the rule still names who has left the group. The server takes a departing
-    /// member out of the rules that name them, so this is a form or a superseded version
-    /// read against a membership that has moved since -- and it says so rather than printing
-    /// a bare id.
+    /// Somebody the rule names who is not in the membership handed in.
     /// </summary>
+    /// <remarks>
+    /// The phrase says only that, and deliberately not that they left. Both are reachable --
+    /// a superseded version read against a membership that has moved since, and a live rule
+    /// read against a members list that is simply incomplete -- and the second is what a
+    /// caller who passes what it managed to load would produce. Claiming a departure there
+    /// would be a read failure dressed up as a fact about the group.
+    /// </remarks>
     [Fact]
-    public void Somebody_the_membership_no_longer_holds_is_said_to_have_left()
+    public void Somebody_the_membership_does_not_hold_is_not_claimed_to_have_left()
     {
         var shares = new SharesSplitRuleDto { Shares = { [Ana] = 2, [Guid.NewGuid()] = 1 } };
 
-        Assert.Contains("someone who has left", shares.Summary(Names), StringComparison.Ordinal);
+        Assert.Contains("someone not in the group", shares.Summary(Names), StringComparison.Ordinal);
+        Assert.DoesNotContain("left", shares.Summary(Names), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And a caller whose membership read failed passes null, not an empty dictionary.
+    /// </summary>
+    /// <remarks>
+    /// The distinction is the whole of a real defect: an empty-but-not-null dictionary takes
+    /// the named branch and renders every person in the rule as somebody not in the group,
+    /// on the screens whose purpose is saying who was on what. Null degrades to a count,
+    /// which is what not knowing looks like.
+    /// </remarks>
+    [Fact]
+    public void No_membership_at_all_degrades_to_a_count_rather_than_naming_nobody()
+    {
+        var shares = new SharesSplitRuleDto { Shares = { [Ana] = 2, [Lu] = 1 } };
+
+        Assert.Equal("By shares, between 2", shares.Summary(null));
+
+        // The empty dictionary is a different answer, and callers must not send it for
+        // "could not load": it means a group whose membership really is empty.
+        Assert.DoesNotContain("between 2", shares.Summary(new Dictionary<Guid, string>()),
+            StringComparison.Ordinal);
     }
 
     /// <summary>The shape alone, for a row too narrow for the phrase.</summary>

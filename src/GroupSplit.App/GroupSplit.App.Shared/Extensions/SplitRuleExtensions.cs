@@ -137,8 +137,18 @@ public static class SplitRuleExtensions
     private static IEnumerable<KeyValuePair<Guid, T>> Ordered<T>(Dictionary<Guid, T> held) where T : struct =>
         held.OrderByDescending(entry => Convert.ToDecimal(entry.Value)).ThenBy(entry => entry.Key);
 
+    /// <summary>
+    /// What to call somebody a division names, when the membership is in hand.
+    /// </summary>
+    /// <remarks>
+    /// The fallback says what is actually known -- this id is not in the list -- rather than
+    /// the stronger claim that they left. A caller whose membership read failed must pass
+    /// null rather than an empty dictionary: every phrase above degrades to a count on null,
+    /// and an empty dictionary instead took the named branch and rendered every person in
+    /// the rule as a departure, on the one screen whose purpose is saying who was on what.
+    /// </remarks>
     private static string Named(IReadOnlyDictionary<Guid, string>? names, Guid id) =>
-        names is not null && names.TryGetValue(id, out var name) ? name : "someone who has left";
+        names is not null && names.TryGetValue(id, out var name) ? name : "someone not in the group";
 
     /// <summary>33.30 is 33.3, and 50.00 is 50 -- trailing zeroes are not precision.</summary>
     private static string Trimmed(decimal value) => value.ToString("0.##");
@@ -147,13 +157,8 @@ public static class SplitRuleExtensions
     /// "Ana, Lu and Marta" for a list somebody reads as a sentence, or plain commas where
     /// each entry already carries a figure and the "and" would read as part of it.
     /// </summary>
-    private static string Listed(IEnumerable<string> parts, string? separator = null)
-    {
-        var all = parts.ToArray();
-
-        if (separator is not null || all.Length < 2)
-            return string.Join(separator ?? ", ", all);
-
-        return $"{string.Join(", ", all[..^1])} and {all[^1]}";
-    }
+    private static string Listed(IEnumerable<string> parts, string? separator = null) =>
+        separator is not null
+            ? string.Join(separator, parts)
+            : parts.ToArray().Listed();
 }
