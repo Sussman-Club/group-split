@@ -40,6 +40,7 @@ public static class DomainServiceExtensions
             services.AddScoped<ISplitRuleService, SplitRuleService>();
             services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
             services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
+            services.AddScoped<IReceiptService, ReceiptService>();
             services.AddBankingServices();
 
             return services;
@@ -54,6 +55,7 @@ public static class DomainServiceExtensions
             routes.MapUserApi();
             routes.MapInvitationsApi();
             routes.MapTransaction();
+            routes.MapReceiptsApi();
             routes.MapCategoriesApi();
             routes.MapSplitRulesApi();
             routes.MapMerchantsApi();

@@ -3,8 +3,10 @@
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Users
+@using GroupSplit.App.Shared.Services.Commands
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
+@inject IReceiptCommands Receipts
 @inject ApiErrorPresenter Errors
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
@@ -180,6 +182,97 @@
                         </div>
                     </div>
                 }
+
+                @*
+                    The bill, for the expenses that have one.
+
+                    Below the split rather than above it, and that ordering is the whole
+                    point: the shares are what somebody owes and the bill is why. Anyone
+                    opening this is here for the figure first; the lines answer the next
+                    question, which is why mine is the big one.
+
+                    Absent entirely when there is no receipt, which is nearly every expense.
+                    An empty heading on hundreds of ordinary expenses would be furniture
+                    explaining a feature they do not use.
+                *@
+                @if (receipt is { Items.Count: > 0 } bill)
+                {
+                    <div>
+                        <div class="gs-card-title" style="margin-bottom: 10px">
+                            <h3 style="margin: 0; font-size: 1rem">On the bill</h3>
+                            @if (bill.UnclaimedItemCount > 0)
+                            {
+                                @* The one state worth flagging: a line nobody has claimed
+                                   means the expense cannot be divided by this bill yet, so
+                                   the shares above came from somewhere else. *@
+                                <span class="gs-tag">@bill.UnclaimedItemCount unclaimed</span>
+                            }
+                        </div>
+
+                        <div class="gs-splits">
+                            @foreach (var item in bill.Items)
+                            {
+                                <div class="gs-split">
+                                    <span class="gs-split-who" style="flex-direction: column; align-items: flex-start; gap: 2px">
+                                        <span>
+                                            @item.Name
+                                            @if (item.Quantity != 1)
+                                            {
+                                                <span class="gs-muted">&times;@item.Quantity</span>
+                                            }
+                                        </span>
+                                        @* How the line divides. The three states have to be
+                                           told apart or a shared line reads as one somebody
+                                           forgot: both name nobody, and only one of them is
+                                           stopping the bill being divided. *@
+                                        <span class="gs-muted" style="font-size: .75rem">
+                                            @Divided(item)
+                                        </span>
+                                    </span>
+                                    <span class="gs-split-amount gs-num">@item.TotalPrice.ToMoney()</span>
+                                </div>
+                            }
+                        </div>
+
+                        @*
+                            The figures at the bottom of the paper. Tax and tip appear only
+                            when there are any: a supermarket receipt has neither, and two
+                            rows of 0.00 say nothing.
+                        *@
+                        <dl class="gs-kv" style="margin-top: 10px">
+                            <div class="gs-kv-row">
+                                <dt>Items</dt>
+                                <dd class="gs-num">@bill.Subtotal.ToMoney()</dd>
+                            </div>
+
+                            @if (bill.Tax != 0)
+                            {
+                                <div class="gs-kv-row">
+                                    <dt>Tax</dt>
+                                    <dd class="gs-num">@bill.Tax.ToMoney()</dd>
+                                </div>
+                            }
+
+                            @if (bill.Tip != 0)
+                            {
+                                <div class="gs-kv-row">
+                                    <dt>Tip</dt>
+                                    <dd class="gs-num">@bill.Tip.ToMoney()</dd>
+                                </div>
+                            }
+                        </dl>
+
+                        @if (bill.Tax != 0 || bill.Tip != 0)
+                        {
+                            @* Said once, here, because it is the part people expect to be
+                               wrong: the extras follow what each person had rather than
+                               being divided by the number of people at the table. *@
+                            <p class="gs-muted" style="margin: 8px 0 0; font-size: .75rem">
+                                Tax and tip are shared out in proportion to what each person had.
+                            </p>
+                        }
+                    </div>
+                }
             </div>
         }
     </DialogContent>
@@ -194,6 +287,7 @@
     [Parameter] public Guid TransactionId { get; set; }
 
     private TransactionDetailsResponse? details;
+    private ReceiptResponse? receipt;
 
     /// <summary>
     /// Who is reading, so the dialog can say "You" and single their share out.
@@ -215,6 +309,46 @@
         Me is { } me
             ? details?.Splits.FirstOrDefault(split => split.UserId == me)?.Amount
             : null;
+
+    /// <summary>
+    /// How one line divides, in a caption under its name.
+    /// </summary>
+    /// <remarks>
+    /// "Shared" and "not claimed yet" both have an empty claim list and mean opposite things:
+    /// one is a line the table agreed on, the other is the reason the bill cannot be divided.
+    /// Reading them the same way would make the unclaimed warning above look like a bug.
+    /// </remarks>
+    private string Divided(ReceiptItemResponse item) => item.Split switch
+    {
+        ReceiptItemSplit.Evenly => "shared by everyone",
+        _ when item.Claims.Count == 0 => "not claimed yet",
+        _ => Who(item)
+    };
+
+    /// <summary>
+    /// Who had one line, by name.
+    /// </summary>
+    /// <remarks>
+    /// Names come from the expense's own splits rather than from a second request: anybody
+    /// who claimed a line owes something, so they are in that list by construction. The id
+    /// is the fallback for the case that should not arise, shortened because a full guid in
+    /// a caption is noise.
+    /// <para>
+    /// A weight is shown only when it is not one. Two names side by side is a line two
+    /// people shared; a weight against one of them says they had more of it, and printing
+    /// it against every ordinary claim would bury that in punctuation.
+    /// </para>
+    /// </remarks>
+    private string Who(ReceiptItemResponse item) =>
+        string.Join(", ", item.Claims.Select(claim =>
+        {
+            var name = claim.UserId == Me
+                ? "You"
+                : details?.Splits.FirstOrDefault(split => split.UserId == claim.UserId)?.UserName
+                  ?? claim.UserId.ToString()[..8];
+
+            return claim.Weight == 1 ? name : $"{name} x{claim.Weight}";
+        }));
 
     private string SplitHeadline => details is { Splits.Count: var count } && count > 0
         ? $"Split between {count} {(count == 1 ? "person" : "people")}"
@@ -241,6 +375,12 @@
             MudDialog.Cancel();
             return;
         }
+
+        // After the expense and never in parallel with it: most expenses have no bill, and
+        // this returns null for that as readily as for a failure -- so there is nothing to
+        // race and nothing to report. A dialog that showed its subject is not worth
+        // interrupting over a section that simply will not appear.
+        receipt = await Receipts.GetAsync(TransactionId);
 
         // The title has to be told separately, and this is not belt and braces.
         //

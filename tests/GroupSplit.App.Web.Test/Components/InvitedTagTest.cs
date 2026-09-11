@@ -1,5 +1,6 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,13 @@ public class InvitedTagTest : ComponentTest
     private readonly Mock<ITransactionsClient> _transactions = new();
     private readonly Mock<IUserLogin> _login = new();
 
+    /// <summary>
+    /// The dialog reads the expense's bill as well now. Left answering null, which is what
+    /// an expense with no receipt gets and what these cases are about -- the tag beside a
+    /// name, which no bill is involved in.
+    /// </summary>
+    private readonly Mock<IReceiptCommands> _receipts = new();
+
     public InvitedTagTest()
     {
         _login.SetupGet(login => login.User)
@@ -43,6 +51,7 @@ public class InvitedTagTest : ComponentTest
 
         Services.AddSingleton(_transactions.Object);
         Services.AddSingleton(_login.Object);
+        Services.AddSingleton(_receipts.Object);
     }
 
     /// <summary>

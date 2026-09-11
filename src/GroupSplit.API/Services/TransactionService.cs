@@ -46,6 +46,22 @@ public interface ITransactionService
     ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Records an expense that already has an itemised bill.
+    /// </summary>
+    /// <param name="bill">
+    /// The receipt to attach before the expense is divided. Only filing an imported row
+    /// passes one: the bill was typed against the row at the table, and a category that
+    /// divides by the bill has to read it on the very first division -- which happens inside
+    /// this call, before any caller could attach it afterwards.
+    /// </param>
+    /// <remarks>
+    /// An overload rather than an optional parameter on the one above, so that the dozens of
+    /// existing <c>Create(request, ct)</c> calls keep meaning what they meant.
+    /// </remarks>
+    ValueTask<Expense> Create(CreateTransactionRequest request, Receipt? bill,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// What <paramref name="request"/> would be divided into if it were saved, without
     /// saving it.
     /// </summary>
@@ -214,7 +230,10 @@ public class TransactionService(
     /// by it, and otherwise evenly. There is no longer such a thing as a group you cannot
     /// record against, which is what four of the error codes this replaces were for.
     /// </remarks>
-    public async ValueTask<Expense> Create(CreateTransactionRequest request,
+    public ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default) =>
+        Create(request, bill: null, ct);
+
+    public async ValueTask<Expense> Create(CreateTransactionRequest request, Receipt? bill,
         CancellationToken ct = default)
     {
         var currentUser = userContext.User;
@@ -245,6 +264,20 @@ public class TransactionService(
             MerchantId = await MerchantFor(request.MerchantId, ct),
             User = payer
         };
+
+        // Before the division and not after it. An itemised rule reads the bill off the
+        // expense, so a row itemised at the table and then filed into a category that divides
+        // by the bill was refused for having no bill -- the carry-over ran afterwards, which
+        // is thirty lines too late.
+        //
+        // Re-pointed here rather than by the caller, because the expense's id does not exist
+        // until this method builds it.
+        if (bill is not null)
+        {
+            bill.ExpenseId = expense.Id;
+            bill.BankTransactionId = null;
+            expense.Receipt = bill;
+        }
 
         await splitter.WriteSplitsAsync(expense, request.Splits, ct);
 
@@ -381,6 +414,21 @@ public class TransactionService(
 
         var draft = new Expense
         {
+            // The expense's own id, not a fresh one. A draft is this expense as it would be,
+            // and anything the division looks up by id has to find the same rows the save
+            // will: an itemised rule reads the receipt attached to the expense, and a draft
+            // carrying a new guid finds none and is refused for having no bill -- while the
+            // save of the identical request divides perfectly.
+            //
+            // Safe because the draft is never attached: Replace only touches the change
+            // tracker for an expense that is already tracked, and this one stays detached.
+            // EF keys its reference map by object identity and writes the key-based identity
+            // map only when tracking starts, so two instances sharing a primary key sit side
+            // by side without complaint -- until one of them is attached. Anything that later
+            // wants to save a preview draft has to build it with a fresh id again, or it will
+            // meet a duplicate-key tracking exception here rather than wherever it went
+            // wrong.
+            Id = existing.Id,
             Amount = request.Amount,
             Currency = group?.Currency ?? Currencies.Default,
             DateTime = request.DateTime.ToUniversalTime(),

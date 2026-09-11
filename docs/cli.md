@@ -37,6 +37,7 @@ has to reach for `curl` and a bearer token to do.
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `reattach`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
+| `receipts` | `show`, `set`, `claim`, `preview`, `divide`, `delete` |
 | `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
 | `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
@@ -51,8 +52,11 @@ arguments, so this table can go stale and that one cannot.
 
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
-`groups settle`. `bank unlink`, `categories delete`, `split-rules delete` and
-`merchants delete` do the same. `merchants update` is the one command whose confirmation is
+`groups settle`. `bank unlink`, `categories delete`, `split-rules delete`,
+`merchants delete` and `receipts delete` do the same. `receipts divide` goes further and
+reads the division itself, so the prompt lists what each person ends up owing rather than
+saying the shares will change -- it is money moving between people's balances, and the
+figures are the thing worth reading before agreeing to them. `merchants update` is the one command whose confirmation is
 conditional on which field is being changed: a merchant belongs to no group, so renaming one
 is felt by every group that has spent there and the prompt carries the count, while giving
 one a logo needs no agreement from anybody.
@@ -710,6 +714,121 @@ Your share of your own dinner is money you already have -- you are owed the rest
 so `64.00` is not a debt and `45.00` is. Both are gross: a settlement is a transfer rather
 than an expense, so nothing here has been paid back yet. Where you actually stand is
 `groupsplit users position`.
+
+## Splitting a bill by its items
+
+For the dinner where nobody ate the same thing. An even split is wrong for it, a percentage
+rule is a guess at it, and typing five amounts by hand means adding the column up yourself
+and then working out everybody's share of the tax and the tip -- which is the part people get
+wrong.
+
+Transcribe the bill first. The subtotal and the total default to the lines added up and the
+extras added on, so on an ordinary receipt you type the lines and the two figures at the
+bottom:
+
+```bash
+groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00   --item "Steak=22.00@3f25c1a8-...-444455556666"   --item "Risotto=16.50@9ab77d10-...-111122223333"   --item "Wine=18.00@3f25c1a8-...-444455556666,9ab77d10-...-111122223333"
+```
+
+A line reads `<name>=<price>[x<qty>][@<who>]`. After the `@` come user ids, comma-separated,
+each optionally `*<weight>` -- so `@alice,bob` is a bottle shared evenly and `@alice*2,bob`
+is one where Alice had twice as much.
+
+`@even` is the other thing a line can say: **the table's, rather than anybody's in
+particular.** That is not the same as naming everybody, which says the same thing today and a
+different thing the moment somebody joins or leaves -- and on the usual bill, where two
+things were somebody's and the rest was shared, it saves typing four ids on every other line.
+`--rest-even` says it for every line you did not claim:
+
+```bash
+groupsplit receipts set 7c1e... --tip 8.00 --rest-even \
+  --item "Ribeye=26.00@<ana>" \
+  --item "Oysters=14.00@<carl>" \
+  --item "Bread and olives=12.00" \
+  --item "Paella=28.00"
+```
+
+A line with no `@` and no `--rest-even` belongs to nobody yet, which is the ordinary state of
+a bill somebody is still working through:
+
+```bash
+groupsplit receipts claim 7c1e... <line-id> --user 3f25c1a8-...-444455556666
+groupsplit receipts claim 7c1e... <line-id> --even
+```
+
+`receipts show` lists the lines with their ids, who has claimed each, and what each
+claimant's part of it comes to. Nothing has touched the ledger yet -- `preview` says what the
+division would be, and `divide` is what stores it:
+
+```bash
+groupsplit receipts preview 7c1e...
+groupsplit receipts divide 7c1e...
+```
+
+### How the tax and the tip are shared out
+
+In proportion to what each person claimed, which is the only division of them that does not
+depend on who ordered the expensive thing: somebody holding a quarter of the food owes a
+quarter of both. It falls out of one calculation rather than two, so there is a single
+rounding and a single remainder -- truncated to the cent, with the leftover going to whoever
+paid, exactly as in every other division GroupSplit does.
+
+`preview` shows both halves per person, the items and the total, so the apportioning can be
+checked rather than taken on trust.
+
+### What it refuses
+
+A bill that does not describe the money it claims to, before dividing anything rather than
+after:
+
+- lines that do not come to the subtotal, or a subtotal, tax and tip that do not come to the
+  total (`RECEIPT_DOES_NOT_ADD_UP`)
+- a total that is not the expense's amount (the same code -- the bill has to be the expense's
+  own money)
+- any line nobody has claimed and that is not marked `@even` (`RECEIPT_ITEMS_UNCLAIMED`,
+  carrying the names)
+
+The last one is refused rather than spread over everybody on purpose. A line somebody forgot
+to claim and a line the table really did share look identical from here, and quietly charging
+five people for one person's steak is the kind of wrong nobody checks for afterwards.
+
+### Itemising before the charge is filed
+
+A bill can be typed against an imported bank row that nobody has filed yet, so a dinner can
+be divided up at the table while everybody still remembers who had what:
+
+```bash
+groupsplit receipts set <bank-row-id> --bank-row --tip 6.00 --item "Wine=18.00@..."
+groupsplit receipts delete <bank-row-id> --bank-row
+```
+
+Filing the row **into a group** carries the bill onto the expense it becomes. Filed into your
+own ledger instead, the bill is left on the row: a personal expense is shared with nobody, so
+a bill on one could never be divided, and `receipts delete --bank-row` is how you are rid of
+one you no longer want. It does not divide it -- filing
+already decided the division, from the category's rule or from shares the command stated, and
+overriding that because a receipt happened to be attached would make `inbox file` mean two
+different things. `receipts divide` is still the call that moves money, or the category can
+name a rule that divides by the bill.
+
+A claim naming somebody who turns out not to be in the destination group is dropped rather
+than refusing the filing, and its line goes back to unclaimed -- which `divide` then refuses
+until somebody says who had it.
+
+### Making it a group's default
+
+A split rule can be `itemized`, so a category points at "divide it by the bill" the way it
+points at any other division:
+
+```bash
+groupsplit split-rules create --group <id> --name "By the bill" --itemized
+groupsplit categories update <category-id> --split-rule <rule-id>
+```
+
+An expense filed under that category with a receipt on it divides by the receipt, and records
+which version of the rule did it. One with no receipt is refused by name -- `RECEIPT_NOT_FOUND`
+-- rather than quietly falling back to an even split, which is the thing somebody itemising a
+dinner was trying to avoid.
 
 ## Editing an expense
 

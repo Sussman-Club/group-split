@@ -228,6 +228,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<SharesSplitRuleVersion>();
 
+        // Not optional, and quiet about it if forgotten: EF discovers a derived type only
+        // where the model names it, so an unregistered kind is not a mapping error -- it is
+        // stored as its base, read back as its base, and dispatched to the wrong handler.
+        // Which looks like a rule that divides evenly for no reason anybody can see.
+        modelBuilder.Entity<ItemizedSplitRuleVersion>();
+
         modelBuilder.Entity<SplitRuleVersion>().HasIndex("Discriminator");
 
         modelBuilder.Entity<SplitRuleParticipant>(entity =>
@@ -560,6 +566,100 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // One row per place. The resolver reads this index before every insert, so a
             // sync that meets Lidl on forty rows creates one merchant and links forty.
             entity.HasIndex(merchant => merchant.NormalizedName).IsUnique();
+        });
+
+        modelBuilder.Entity<Receipt>(entity =>
+        {
+            // The same precision the ledger keeps, and for the same reason: the division
+            // truncates to the cent and hands the leftover to the payer, so a figure
+            // carrying a third decimal would push a fraction nobody can pay onto somebody
+            // on every bill it appears in.
+            entity.Property(receipt => receipt.Subtotal).IsRequired().HasPrecision(18, 2);
+            entity.Property(receipt => receipt.Tax).IsRequired().HasPrecision(18, 2);
+            entity.Property(receipt => receipt.Tip).IsRequired().HasPrecision(18, 2);
+            entity.Property(receipt => receipt.Total).IsRequired().HasPrecision(18, 2);
+
+            // Both cascade, and that is only coherent because a receipt has exactly one
+            // owner at a time: it belongs to the bank row it was typed against until filing
+            // hands it to the expense, which clears the other link. TransactionService.Create
+            // and InboxService.Link are where the hand-over happens.
+            //
+            // Set-null was the mistake it replaces. Deleting an expense nulled the link, and
+            // a bill somebody typed onto a typed expense then had nothing left to belong to
+            // -- so the check constraint refused the delete and the expense could never be
+            // removed at all. Unlinking a bank did the same to an unfiled bill, taking the
+            // whole sync save down with it.
+            //
+            // Nothing is lost by cascading. Where the bill came from is recorded on the
+            // ledger, in Transaction.BankTransactionId, which is where that fact has always
+            // lived; and a bill is one expense's, so an expense that is gone takes it.
+            entity.HasOne(receipt => receipt.Expense)
+                .WithOne(expense => expense.Receipt)
+                .HasForeignKey<Receipt>(receipt => receipt.ExpenseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(receipt => receipt.BankTransaction)
+                .WithOne()
+                .HasForeignKey<Receipt>(receipt => receipt.BankTransactionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One bill per expense and one per bank row. The nulls are the ordinary case on
+            // each -- an unfiled receipt has no expense, a typed one has no bank row -- and
+            // a unique index lets them through, exactly as the one behind
+            // Transaction.BankTransactionId does.
+            entity.HasIndex(receipt => receipt.ExpenseId).IsUnique();
+            entity.HasIndex(receipt => receipt.BankTransactionId).IsUnique();
+
+            // A receipt belongs to exactly one thing -- an expense, or the bank row it was
+            // typed against. That invariant is stated to the database rather than here, in
+            // PostgreSqlAppDbContext, because a check constraint is the only thing that can
+            // hold it and it needs the provider's SQL to say so.
+        });
+
+        modelBuilder.Entity<ReceiptItem>(entity =>
+        {
+            entity.Property(item => item.Name).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.UnitPrice).IsRequired().HasPrecision(18, 2);
+            entity.Property(item => item.TotalPrice).IsRequired().HasPrecision(18, 2);
+
+            // Three decimals, unlike the money columns: a quantity is weighed as well as
+            // counted, and 0.250 kg is an ordinary line on a bill.
+            entity.Property(item => item.Quantity).IsRequired().HasPrecision(18, 3);
+
+            // Stored as the number, like every other enum here. A line's division is read
+            // on every division of the bill and never searched on, so it needs no index.
+            entity.Property(item => item.Division).IsRequired();
+
+            entity.HasOne(item => item.Receipt)
+                .WithMany(receipt => receipt.Items)
+                .HasForeignKey(item => item.ReceiptId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(item => item.ReceiptId);
+        });
+
+        modelBuilder.Entity<ReceiptItemClaim>(entity =>
+        {
+            entity.HasOne(claim => claim.ReceiptItem)
+                .WithMany(item => item.Claims)
+                .HasForeignKey(claim => claim.ReceiptItemId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict, not cascade: a claim is what produced somebody's share of the
+            // expense, and losing it silently would leave shares no longer explained by the
+            // bill they came from. Removing a member from a group is an act that already
+            // has to reckon with their balance; this makes it reckon with their claims too.
+            entity.HasOne(claim => claim.User)
+                .WithMany()
+                .HasForeignKey(claim => claim.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One row per person per line: a second would be two opinions about how much of
+            // the bottle they had. Sharing is expressed by the weight, not by more rows.
+            entity.HasIndex(claim => new { claim.ReceiptItemId, claim.UserId }).IsUnique();
         });
 
         modelBuilder.Entity<UserIdentity>(entity =>

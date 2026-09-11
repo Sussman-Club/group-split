@@ -73,11 +73,65 @@ public class TransactionSeeder(
             Merchant = await MerchantAsync(dto.Merchant, ct)
         };
 
+        // Before the division, and in memory rather than saved first: an itemised rule reads
+        // the bill off the expense, and ExpenseSplitter only goes looking in the table for
+        // one the navigation does not already carry. Attached here, a seeded expense divides
+        // by its own bill on the first pass with nothing written yet.
+        if (dto.Receipt is { } bill)
+            expense.Receipt = Bill(bill, expense);
+
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.
         await splitter.WriteSplitsAsync(expense, ct);
 
         return expense;
+    }
+
+    /// <summary>
+    /// The seeded bill, with its figures worked out from its lines.
+    /// </summary>
+    /// <remarks>
+    /// The subtotal is the lines added up and the total is that plus the extras, so the seed
+    /// file cannot state a receipt that disagrees with itself. What it can still state is one
+    /// that disagrees with the <em>expense</em>, and that is left to fail: the division
+    /// refuses a bill whose total is not the expense's amount, by name and with both figures,
+    /// which is a better thing for a seed run to say than a balance nobody checked.
+    /// </remarks>
+    private static Receipt Bill(ReceiptSeedDto dto, Expense expense)
+    {
+        var subtotal = dto.Items.Sum(line => line.Price);
+
+        var receipt = new Receipt
+        {
+            ExpenseId = expense.Id,
+            Subtotal = subtotal,
+            Tax = dto.Tax,
+            Tip = dto.Tip,
+            Total = subtotal + dto.Tax + dto.Tip
+        };
+
+        foreach (var line in dto.Items)
+        {
+            var item = new ReceiptItem
+            {
+                Name = line.Name,
+                TotalPrice = line.Price,
+                Quantity = line.Quantity,
+                UnitPrice = line.Quantity == 0
+                    ? line.Price
+                    : decimal.Round(line.Price / line.Quantity, 2),
+                Division = line.Shared
+                    ? ReceiptItemDivision.Evenly
+                    : ReceiptItemDivision.Claimed
+            };
+
+            foreach (var (userId, weight) in line.Had)
+                item.Claims.Add(new ReceiptItemClaim { UserId = userId, Weight = weight });
+
+            receipt.Items.Add(item);
+        }
+
+        return receipt;
     }
 
     /// <summary>
