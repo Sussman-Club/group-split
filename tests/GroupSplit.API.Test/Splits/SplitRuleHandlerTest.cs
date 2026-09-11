@@ -9,7 +9,7 @@ namespace GroupSplit.API.Test.Splits;
 
 /// <summary>
 /// A rule is data; what it does is its handler's. Everything here goes through the
-/// dispatcher holding a base-typed <see cref="SplitRule"/>, because that is the only way
+/// dispatcher holding a base-typed <see cref="SplitRuleVersion"/>, because that is the only way
 /// callers will ever hold one -- if dispatch works anywhere else and not there, it does not
 /// work.
 /// </summary>
@@ -29,7 +29,7 @@ public class SplitRuleHandlerTest
         splits.SingleOrDefault(split => split.UserId == userId).Amount;
 
     private static T Naming<T>(T rule, params (Guid UserId, int Weight)[] participants)
-        where T : WeightedSplitRule
+        where T : WeightedSplitRuleVersion
     {
         foreach (var (userId, weight) in participants)
             rule.Participants.Add(new SplitRuleParticipant { UserId = userId, Weight = weight });
@@ -40,9 +40,9 @@ public class SplitRuleHandlerTest
     [Fact]
     public void An_even_rule_naming_nobody_divides_between_the_current_members()
     {
-        SplitRule rule = new EvenSplitRule { Name = "Even" };
+        SplitRuleVersion ruleVersion = new EvenSplitRuleVersion();
 
-        var splits = Handler.Divide(rule, 100.00m, Alice, Members);
+        var splits = Handler.Divide(ruleVersion, 100.00m, Alice, Members);
 
         Assert.Equal(3, splits.Count);
         Assert.Equal(33.34m, AmountFor(splits, Alice));
@@ -56,9 +56,9 @@ public class SplitRuleHandlerTest
     [Fact]
     public void An_even_rule_follows_the_membership()
     {
-        SplitRule rule = new EvenSplitRule { Name = "Even" };
+        SplitRuleVersion ruleVersion = new EvenSplitRuleVersion();
 
-        var afterOmarJoins = Handler.Divide(rule, 100.00m, Alice, [..Members, Guid.NewGuid()]);
+        var afterOmarJoins = Handler.Divide(ruleVersion, 100.00m, Alice, [..Members, Guid.NewGuid()]);
 
         Assert.Equal(4, afterOmarJoins.Count);
         Assert.Equal(25.00m, AmountFor(afterOmarJoins, Bob));
@@ -67,9 +67,9 @@ public class SplitRuleHandlerTest
     [Fact]
     public void An_even_rule_naming_people_divides_between_only_those()
     {
-        SplitRule rule = Naming(new EvenSplitRule { Name = "Trip" }, (Alice, 1), (Bob, 1));
+        SplitRuleVersion ruleVersion = Naming(new EvenSplitRuleVersion(), (Alice, 1), (Bob, 1));
 
-        var splits = Handler.Divide(rule, 100.00m, Alice, Members);
+        var splits = Handler.Divide(ruleVersion, 100.00m, Alice, Members);
 
         Assert.Equal(2, splits.Count);
         Assert.Equal(0m, AmountFor(splits, Carol));
@@ -83,8 +83,8 @@ public class SplitRuleHandlerTest
     [Fact]
     public void Shares_and_the_percentages_they_amount_to_divide_alike()
     {
-        SplitRule shares = Naming(new SharesSplitRule { Name = "Shares" }, (Alice, 2), (Bob, 1), (Carol, 1));
-        SplitRule percent = Naming(new PercentSplitRule { Name = "Percent" },
+        SplitRuleVersion shares = Naming(new SharesSplitRuleVersion(), (Alice, 2), (Bob, 1), (Carol, 1));
+        SplitRuleVersion percent = Naming(new PercentSplitRuleVersion(),
             (Alice, 5000), (Bob, 2500), (Carol, 2500));
 
         var bySplits = Handler.Divide(shares, 220.50m, Bob, Members).OrderBy(split => split.UserId).ToArray();
@@ -97,30 +97,95 @@ public class SplitRuleHandlerTest
     [Fact]
     public void Percentages_that_do_not_add_up_are_refused()
     {
-        SplitRule rule = Naming(new PercentSplitRule { Name = "Percent" }, (Alice, 5000), (Bob, 2500));
+        SplitRuleVersion ruleVersion = Naming(new PercentSplitRuleVersion(), (Alice, 5000), (Bob, 2500));
 
-        Assert.Equal("Percentages must add up to 100%.", Handler.Invalid(rule));
+        Assert.Equal("Percentages must add up to 100%.", Handler.Invalid(ruleVersion));
     }
 
     [Fact]
     public void A_member_named_twice_is_refused()
     {
-        SplitRule rule = Naming(new SharesSplitRule { Name = "Shares" }, (Alice, 1), (Alice, 2));
+        SplitRuleVersion ruleVersion = Naming(new SharesSplitRuleVersion(), (Alice, 1), (Alice, 2));
 
-        Assert.Equal("A member may appear in a rule only once.", Handler.Invalid(rule));
+        Assert.Equal("A member may appear in a rule only once.", Handler.Invalid(ruleVersion));
     }
 
     [Fact]
     public void A_coherent_rule_has_nothing_wrong_with_it()
     {
-        Assert.Null(Handler.Invalid(Naming(new PercentSplitRule { Name = "P" }, (Alice, 6000), (Bob, 4000))));
-        Assert.Null(Handler.Invalid(Naming(new SharesSplitRule { Name = "S" }, (Alice, 2), (Bob, 1))));
-        Assert.Null(Handler.Invalid(new EvenSplitRule { Name = "E" }));
+        Assert.Null(Handler.Invalid(Naming(new PercentSplitRuleVersion(), (Alice, 6000), (Bob, 4000))));
+        Assert.Null(Handler.Invalid(Naming(new SharesSplitRuleVersion(), (Alice, 2), (Bob, 1))));
+        Assert.Null(Handler.Invalid(new EvenSplitRuleVersion()));
+    }
+
+    /// <summary>
+    /// A version goes on naming whoever it named, but dividing by it pays only people who
+    /// are still there.
+    /// </summary>
+    /// <remarks>
+    /// The whole of the departed-member bug, at the level it was fixed. A superseded version
+    /// names the people the rule named at the time -- that is what makes an old expense
+    /// divisible again by the rule it had -- and dividing by one handed a share to somebody
+    /// who has left the group. Their share lands on a person the group's balances no longer
+    /// list, so the column stops summing to zero.
+    /// <para>
+    /// Every proportional kind, because the intersection is the base class's and not each
+    /// handler's: shares and percent read stored weights, an even rule naming people reads
+    /// its participants, and all three went through the same door.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_weighted_rule_gives_nothing_to_somebody_who_is_no_longer_a_participant()
+    {
+        SplitRuleVersion shares = Naming(new SharesSplitRuleVersion(), (Alice, 1), (Bob, 1));
+        SplitRuleVersion percent = Naming(new PercentSplitRuleVersion(), (Alice, 5000), (Bob, 5000));
+        SplitRuleVersion even = Naming(new EvenSplitRuleVersion(), (Alice, 1), (Bob, 1));
+
+        // Bob has gone; Alice is the group.
+        foreach (var ruleVersion in new[] { shares, percent, even })
+        {
+            var splits = Handler.Divide(ruleVersion, 200.00m, Alice, [Alice]);
+
+            Assert.Equal(200.00m, Assert.Single(splits).Amount);
+            Assert.Equal(Alice, splits[0].UserId);
+        }
+    }
+
+    /// <summary>
+    /// And a version naming nobody who is left divides between nobody, which the calculator
+    /// refuses rather than inventing a division.
+    /// </summary>
+    /// <remarks>
+    /// <c>ExpenseSplitter</c> is what turns this into a refusal naming the rule, rather than
+    /// a 500 in front of somebody recording a dinner. Checked here as the exception it turns
+    /// into, and in <c>DepartedParticipantTest</c> as the sentence a caller reads.
+    /// </remarks>
+    [Fact]
+    public void A_version_naming_only_people_who_have_gone_divides_between_nobody()
+    {
+        SplitRuleVersion ruleVersion = Naming(new SharesSplitRuleVersion(), (Bob, 1), (Carol, 2));
+
+        Assert.Throws<ArgumentException>(() => Handler.Divide(ruleVersion, 200.00m, Alice, [Alice]));
+    }
+
+    /// <summary>
+    /// Somebody invited and still to answer keeps their weight: they are a participant, and
+    /// a share against them is an ordinary share.
+    /// </summary>
+    [Fact]
+    public void A_rule_still_weighs_a_participant_who_has_not_joined_yet()
+    {
+        SplitRuleVersion ruleVersion = Naming(new SharesSplitRuleVersion(), (Alice, 1), (Bob, 1));
+
+        // Bob is an unanswered invitation, which is what IGroupParticipants hands in.
+        var splits = Handler.Divide(ruleVersion, 200.00m, Alice, [Alice, Bob]);
+
+        Assert.Equal(100.00m, AmountFor(splits, Bob));
     }
 
     /// <summary>
     /// The case the participant-weight shape could not express, and the reason nothing about
-    /// weights is declared on <see cref="SplitRule"/>: a fixed amount does not scale with
+    /// weights is declared on <see cref="SplitRuleVersion"/>: a fixed amount does not scale with
     /// the bill, so no weight stands for it.
     /// </summary>
     /// <remarks>
@@ -128,30 +193,33 @@ public class SplitRuleHandlerTest
     /// with its own data, a handler, and a registration -- and not one line changed in the
     /// base, the dispatcher, or any existing handler.
     /// </remarks>
-    private sealed class FixedThenEvenSplitRule : SplitRule
+    private sealed class FixedThenEvenSplitRuleVersion : SplitRuleVersion
     {
         public required Guid FixedUserId { get; init; }
 
         public required decimal FixedAmount { get; init; }
     }
 
-    private sealed class FixedThenEvenSplitRuleHandler : ISplitRuleHandler<FixedThenEvenSplitRule>
+    private sealed class FixedThenEvenSplitRuleHandler : ISplitRuleHandler<FixedThenEvenSplitRuleVersion>
     {
         public IReadOnlyList<SplitAmount> Divide(
-            FixedThenEvenSplitRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members)
+            FixedThenEvenSplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members)
         {
-            var rest = members.Where(member => member != rule.FixedUserId).ToArray();
+            var rest = members.Where(member => member != ruleVersion.FixedUserId).ToArray();
 
-            var evenly = SplitCalculator.Divide(amount - rule.FixedAmount, payerId,
+            var evenly = SplitCalculator.Divide(amount - ruleVersion.FixedAmount, payerId,
                 [..rest.Select(member => new SplitWeight(member, 1))]);
 
-            return [new SplitAmount(rule.FixedUserId, rule.FixedAmount), ..evenly];
+            return [new SplitAmount(ruleVersion.FixedUserId, ruleVersion.FixedAmount), ..evenly];
         }
 
-        public string? Invalid(FixedThenEvenSplitRule rule) =>
-            rule.FixedAmount < 0 ? "A fixed amount cannot be negative." : null;
+        public string? Invalid(FixedThenEvenSplitRuleVersion ruleVersion) =>
+            ruleVersion.FixedAmount < 0 ? "A fixed amount cannot be negative." : null;
 
-        public SplitRuleDto ToDto(FixedThenEvenSplitRule rule) => new EvenSplitRuleDto();
+        public SplitRuleDto ToDto(FixedThenEvenSplitRuleVersion ruleVersion) => new EvenSplitRuleDto();
+
+        public bool SameAs(FixedThenEvenSplitRuleVersion ruleVersion, FixedThenEvenSplitRuleVersion other) =>
+            ruleVersion.FixedUserId == other.FixedUserId && ruleVersion.FixedAmount == other.FixedAmount;
     }
 
     [Fact]
@@ -159,17 +227,16 @@ public class SplitRuleHandlerTest
     {
         var provider = new ServiceCollection()
             .AddSplitRuleServices()
-            .AddSingleton<ISplitRuleHandler<FixedThenEvenSplitRule>, FixedThenEvenSplitRuleHandler>()
+            .AddSingleton<ISplitRuleHandler<FixedThenEvenSplitRuleVersion>, FixedThenEvenSplitRuleHandler>()
             .BuildServiceProvider();
 
-        SplitRule rule = new FixedThenEvenSplitRule
+        SplitRuleVersion ruleVersion = new FixedThenEvenSplitRuleVersion
         {
-            Name = "Carol pays ten",
             FixedUserId = Carol,
             FixedAmount = 10.00m
         };
 
-        var splits = provider.GetRequiredService<ISplitRuleHandler>().Divide(rule, 100.00m, Alice, Members);
+        var splits = provider.GetRequiredService<ISplitRuleHandler>().Divide(ruleVersion, 100.00m, Alice, Members);
 
         Assert.Equal(10.00m, AmountFor(splits, Carol));
         Assert.Equal(45.00m, AmountFor(splits, Bob));
@@ -183,14 +250,14 @@ public class SplitRuleHandlerTest
     [Fact]
     public void A_rule_with_no_handler_says_so()
     {
-        SplitRule rule = new FixedThenEvenSplitRule
+        SplitRuleVersion ruleVersion = new FixedThenEvenSplitRuleVersion
         {
-            Name = "Unregistered", FixedUserId = Carol, FixedAmount = 1m
+            FixedUserId = Carol, FixedAmount = 1m
         };
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => Handler.Divide(rule, 10m, Alice, Members));
+            () => Handler.Divide(ruleVersion, 10m, Alice, Members));
 
-        Assert.Contains(nameof(FixedThenEvenSplitRule), exception.Message);
+        Assert.Contains(nameof(FixedThenEvenSplitRuleVersion), exception.Message);
     }
 }

@@ -9,10 +9,10 @@ namespace GroupSplit.Data.Entities;
 /// is known when the expense is written and not before, so no list of participants could
 /// express it.
 /// <para>
-/// It extends <see cref="SplitRule"/> directly rather than
-/// <see cref="WeightedSplitRule"/>, which is the whole reason the base declares nothing
+/// It extends <see cref="SplitRuleVersion"/> directly rather than
+/// <see cref="WeightedSplitRuleVersion"/>, which is the whole reason the base declares nothing
 /// about weights: a kind that does not divide in proportion needs to change nothing to
 /// exist.
 /// </para>
 /// </remarks>
-public sealed class PayerSplitRule : SplitRule;
+public sealed class PayerSplitRuleVersion : SplitRuleVersion;

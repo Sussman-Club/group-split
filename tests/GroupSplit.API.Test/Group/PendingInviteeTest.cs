@@ -182,7 +182,7 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         }, Ct);
 
         var named = await DbContext.Set<SplitRuleParticipant>()
-            .Where(participant => participant.SplitRuleId == rule.Id)
+            .Where(participant => participant.SplitRuleVersion.SplitRuleId == rule.Id)
             .ToListAsync(Ct);
 
         Assert.Contains(named, participant => participant.UserId == invitation.ParticipantUserId);
@@ -559,7 +559,8 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(1, closed.RulesAffected);
 
         var named = await DbContext.Set<SplitRuleParticipant>()
-            .Where(participant => participant.SplitRuleId == rule.Id)
+            .Where(participant => participant.SplitRuleVersion.SplitRuleId == rule.Id &&
+                                  participant.SplitRuleVersion.SupersededAt == null)
             .ToListAsync(Ct);
 
         Assert.Single(named);
@@ -844,7 +845,8 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // The rule names the person who joined, with the weight it gave their stand-in.
         var named = await DbContext.Set<SplitRuleParticipant>()
             .AsNoTracking()
-            .Where(participant => participant.SplitRule.Group.Id == group.Id)
+            .Where(participant => participant.SplitRuleVersion.SplitRule.Group.Id == group.Id &&
+                                  participant.SplitRuleVersion.SupersededAt == null)
             .ToListAsync(Ct);
 
         Assert.Equal(2, named.Count);
@@ -914,7 +916,8 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var named = await DbContext.Set<SplitRuleParticipant>()
             .AsNoTracking()
-            .Where(participant => participant.SplitRule.Group.Id == group.Id)
+            .Where(participant => participant.SplitRuleVersion.SplitRule.Group.Id == group.Id &&
+                                  participant.SplitRuleVersion.SupersededAt == null)
             .ToListAsync(Ct);
 
         Assert.Single(named);

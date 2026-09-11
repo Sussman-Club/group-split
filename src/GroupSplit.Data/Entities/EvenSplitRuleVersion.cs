@@ -9,4 +9,4 @@ namespace GroupSplit.Data.Entities;
 /// somebody joins instead of freezing today's membership into weights. Naming people
 /// narrows it -- "evenly, but only between the three of us who were on the trip".
 /// </remarks>
-public sealed class EvenSplitRule : WeightedSplitRule;
+public sealed class EvenSplitRuleVersion : WeightedSplitRuleVersion;

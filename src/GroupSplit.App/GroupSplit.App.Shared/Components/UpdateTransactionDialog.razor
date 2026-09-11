@@ -1,172 +1,268 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ITransactionsClient TransactionsClient
 @inject ICategoriesClient CategoriesClient
+@inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 
+@*
+    Editing an expense, in the two steps the create dialog uses.
+
+    It was one long form with the split at the bottom, which is the shape the create
+    dialog was taken apart for: the division is the decision the app exists for and it was
+    the last thing on a screen people scrolled past. The two now match field for field, so
+    somebody who has recorded an expense already knows where everything is.
+
+    The one real difference is underneath. An edit is divided again by the version of the
+    rule the expense was *written under*, not by whatever the rule says today -- so the
+    preview here asks a different endpoint from the create dialog's, and says so when the
+    rule has moved on since.
+*@
+
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">
-            Edit Transaction
-        </MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="form" Model="@editModel">
-            <MudStack Spacing="3">
+        <div class="gs-steps" role="list" aria-label="Steps">
+            <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
+                <span class="dot">1</span> What
+            </span>
+            <span class="gs-step-line"></span>
+            <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
+                <span class="dot">2</span> Split
+            </span>
+        </div>
 
-                <MudTextField @bind-Value="editModel.Name"
-                              Label="Name"
-                              Variant="Variant.Outlined"
-                              Immediate="true"/>
+        @if (Step == 1)
+        {
+            <MudForm @ref="_form" Model="@_model">
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_model.Name"
+                                  For="@(() => _model.Name)"
+                                  Label="Name"
+                                  Variant="Variant.Outlined"
+                                  Immediate="true"/>
 
-                <MudTextField @bind-Value="editModel.Description"
-                              Label="Description"
-                              Variant="Variant.Outlined"
-                              Lines="3"
-                              Immediate="true"/>
+                    <MudTextField @bind-Value="_model.Description"
+                                  For="@(() => _model.Description)"
+                                  Label="Description"
+                                  Variant="Variant.Outlined"
+                                  Lines="2"
+                                  Immediate="true"/>
 
-                <MudNumericField
-                    @bind-Value="editModel.Amount"
-                    For="@(() => editModel.Amount)"
-                    Label="Amount"
-                    Variant="Variant.Outlined"
-                    Adornment="Adornment.Start"
-                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                    AdornmentColor="Color.Primary"
-                    Immediate="true"
-                    HideSpinButtons="true"/>
+                    <MudNumericField @bind-Value="_model.Amount"
+                                     For="@(() => _model.Amount)"
+                                     Label="Amount"
+                                     Variant="Variant.Outlined"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                     AdornmentColor="Color.Primary"
+                                     HideSpinButtons="true"
+                                     Immediate="true"
+                                     Format="N2"/>
 
-                @* Stacked below 600px, for the reason the create dialog's pair gives: two
-                   pickers sharing a phone-width dialog clip both their values. Labels
-                   shortened to match, since "Transaction Date" over a field on a page
-                   about one transaction was saying it twice. *@
-                <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                    <MudDatePicker @bind-Date="selectedDate"
-                                   Label="Date"
-                                   Variant="Variant.Outlined"/>
+                    @* Stacked below 600px, for the reason the create dialog's pair gives:
+                       two pickers sharing a phone-width dialog clip both their values. *@
+                    <MudStack Row="true" Spacing="4" Class="gs-field-pair">
+                        <MudDatePicker @bind-Date="_selectedDate"
+                                       Label="Date"
+                                       Variant="Variant.Outlined"/>
 
-                    <MudTimePicker @bind-Time="selectedTime"
-                                   Label="Time"
-                                   Variant="Variant.Outlined"
-                                   AmPm="true"/>
-                </MudStack>
+                        <MudTimePicker @bind-Time="_selectedTime"
+                                       Label="Time"
+                                       Variant="Variant.Outlined"
+                                       AmPm="true"/>
+                    </MudStack>
 
-                @* Where it belongs. Changing this is how an expense moves: a personal one is
-                   shared by giving it a group, a shared one taken back by choosing Personal.
-                   The category, the payer and the shares below all belong to whichever group
-                   this says, so they are reloaded -- and any stated shares dropped -- when it
-                   changes. *@
-                <MudSelect T="Guid?" Label="Group"
-                           Variant="Variant.Outlined"
-                           @bind-Value="editModel.GroupId"
-                           @bind-Value:after="OnGroupChangedAsync"
-                           Clearable="false">
-                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
-                    @foreach (var group in _groups)
-                    {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
-                    }
-                </MudSelect>
-
-                @if (editModel.GroupId != Original.GroupId)
-                {
-                    <MudAlert Severity="Severity.Info" Dense="true">
-                        @(editModel.GroupId is null
-                            ? "This will become your own expense: no category, nothing owed by anybody."
-                            : "This will be divided among the members of the group you picked.")
-                    </MudAlert>
-                }
-
-                @* Categories, payers and shares all belong to a group. A personal expense
-                   has none, so the fields that would be about one are absent rather than
-                   present and empty. *@
-                @if (IsShared)
-                {
-                    <MudSelect T="Guid?" Label="Category"
-                               @bind-Value="editModel.CategoryId"
-                               Clearable="true"
-                               Variant="Variant.Outlined">
-                        @foreach (var c in GroupCategories)
-                        {
-                            <MudSelectItem T="Guid?" Value="@c.CategoryId">@c.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-
-                    <MudSelect T="Guid" Label="Paid By"
+                    @* Where it belongs. Changing this is how an expense moves: a personal
+                       one is shared by giving it a group, a shared one taken back by
+                       choosing Personal. The category, the payer and the shares all belong
+                       to whichever group this says, so they are reloaded -- and any stated
+                       shares dropped -- when it changes. *@
+                    <MudSelect T="Guid?" Label="Group"
                                Variant="Variant.Outlined"
-                               Disabled="@(!GroupUsers.Any())"
-                               @bind-Value="editModel.PaidByUserId">
-                        @foreach (var u in GroupUsers)
+                               @bind-Value="_model.GroupId"
+                               @bind-Value:after="OnGroupChangedAsync"
+                               Clearable="false">
+                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
+                        @foreach (var group in _groups)
                         {
-                            <MudSelectItem T="Guid" Value="@u.Id">@u.Label()</MudSelectItem>
+                            <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
                         }
                     </MudSelect>
 
-                    <MudDivider/>
+                    @if (_model.GroupId != Original.GroupId)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            @(_model.GroupId is null
+                                ? "This will become your own expense: no category, nothing owed by anybody."
+                                : "This will be divided among the members of the group you picked.")
+                        </MudAlert>
+                    }
 
-                    <SplitEditor Members="@GroupUsers.ToList()"
-                                 Amount="@editModel.Amount"
-                                 PayerId="@editModel.PaidByUserId"
-                                 Stored="@storedSplits"
-                                 @bind-Value="editModel.Splits"/>
-                }
-                else
+                    @* Categories and payers belong to a group. A personal expense has none,
+                       so the fields that would be about one are absent rather than present
+                       and empty. The place is not: you can spend at Lidl on your own. *@
+                    @if (IsShared)
+                    {
+                        @* The rule beside the name, because "Groceries" says nothing about
+                           how Groceries is divided and the person picking is choosing both. *@
+                        <MudSelect T="Guid?" Label="Category"
+                                   Variant="Variant.Outlined"
+                                   @bind-Value="_model.CategoryId"
+                                   @bind-Value:after="OnCategoryChanged"
+                                   Clearable="true">
+                            @foreach (var category in _categories)
+                            {
+                                <MudSelectItem T="Guid?" Value="@category.CategoryId">
+                                    @category.Name <span class="gs-muted">· @category.Splits</span>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+
+                    <MerchantPicker @bind-Value="_model.MerchantId"/>
+
+                    @if (IsShared)
+                    {
+                        <MudSelect T="Guid" Label="Paid by"
+                                   Variant="Variant.Outlined"
+                                   Disabled="@(!_members.Any())"
+                                   @bind-Value="_model.PaidByUserId">
+                            @foreach (var member in _members)
+                            {
+                                <MudSelectItem T="Guid" Value="@member.Id">@member.Label()</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </MudStack>
+            </MudForm>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                    <div class="gs-inline" style="justify-content: space-between">
+                        <div>
+                            <div class="gs-eyebrow">@_model.Name</div>
+                            <div class="gs-muted" style="font-size: .8125rem">@Where</div>
+                        </div>
+                        <Money Value="_model.Amount" Class="gs-money"/>
+                    </div>
+                </div>
+
+                @if (!IsShared)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         A personal expense is not shared with anybody, so there is nothing to divide.
                     </MudAlert>
                 }
-
+                else
+                {
+                    <SplitEditor Members="@_members"
+                                 Amount="@_model.Amount"
+                                 PayerId="@_model.PaidByUserId"
+                                 Stored="@_storedSplits"
+                                 Value="@_model.Splits"
+                                 ValueChanged="@OnSplitsChangedAsync"
+                                 Preview="@_preview"
+                                 PreviewError="@_previewError"/>
+                }
             </MudStack>
-        </MudForm>
+        }
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@loading" OnClick="Submit">Save</MudButton>
+
+        @if (Step == 2)
+        {
+            <MudButton Variant="Variant.Text" OnClick="@Back">Back</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                       OnClick="Submit">Save</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                       OnClick="@NextAsync">Next</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
-    // incoming full transaction
+    /// <summary>The row the edit was opened from.</summary>
     [Parameter] public TransactionResponse Original { get; set; } = null!;
 
-    private bool loading = false;
-    private MudForm form = null!;
+    private MudForm _form = null!;
 
-    /// <summary>Whether the expense will belong to a group after this edit. Null means personal.</summary>
-    private bool IsShared => editModel.GroupId is not null;
+    private int Step { get; set; } = 1;
+
+    /// <summary>Whether the expense will belong to a group after this edit.</summary>
+    private bool IsShared => _model.GroupId is not null;
+
+    private UpdateTransactionRequest _model = new();
 
     private ICollection<GroupResponse> _groups = [];
+    private ICollection<CategoryInfo> _categories = [];
+    private IReadOnlyList<UserInfo> _members = [];
 
-    // The editable model (your UpdateTransactionRequest)
-    private UpdateTransactionRequest editModel = new();
+    private DateTime? _selectedDate;
+    private TimeSpan? _selectedTime;
 
-    private DateTime? selectedDate;
-    private TimeSpan? selectedTime;
+    private SplitPreviewResponse? _preview;
+    private string? _previewError;
 
-    // Category & users come from the original transaction's GroupId
-    private ICollection<CategoryInfo> GroupCategories = [];
-    private ICollection<UserInfo> GroupUsers = [];
+    /// <summary>
+    /// What the expense is divided into today, which is where the editor starts from when
+    /// somebody takes the division over. The grid hands this dialog a listing row, which
+    /// carries no shares, so they are read rather than passed in -- one path whichever
+    /// list the edit was opened from.
+    /// </summary>
+    private IReadOnlyList<SplitInput> _storedSplits = [];
 
-    // What the expense is actually divided into today, which is where the editor starts
-    // from when somebody turns it on. The grid hands this dialog a listing row, which
-    // carries no shares, so they are read rather than passed in -- one path whichever
-    // list the edit was opened from.
-    private IReadOnlyList<SplitInput> storedSplits = [];
+    /// <summary>
+    /// Whether the person has asked for the division to be worked out again, which is what
+    /// choosing "Automatically" means on an expense that already has shares.
+    /// </summary>
+    /// <remarks>
+    /// Tracked rather than read off <c>_model.Splits</c>, because "no shares stated" is two
+    /// different answers here and only one of them is an instruction. Opening the dialog and
+    /// changing a name states none, and the save must leave the division alone -- that is
+    /// the whole of what 47c6904 fixed, and sending an explicit re-divide on every edit
+    /// would be the same bulk re-division through another door. Touching the toggle is the
+    /// other answer, and the only one that sends <c>/splits</c> as null.
+    /// </remarks>
+    private bool _redivide;
+
+    /// <summary>
+    /// What <c>_model.Splits</c> held when the dialog opened: the expense's own shares when
+    /// nothing divided them, and null when a rule did.
+    /// </summary>
+    /// <remarks>
+    /// Kept so that putting the category back where it was puts the division back too. The
+    /// pick clears the stated shares, and without this the clearing outlived the pick --
+    /// somebody who picked Rent and changed their mind lost the shares they had typed.
+    /// </remarks>
+    private IReadOnlyList<SplitInput>? _openedWith;
+
+    private string Where => _model.GroupId is null
+        ? "Personal"
+        : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
 
     protected override async Task OnInitializedAsync()
     {
-        // Initialize edit model from original
-        editModel = new UpdateTransactionRequest
+        _model = new UpdateTransactionRequest
         {
             Name = Original.Name,
             Description = Original.Description,
@@ -174,6 +270,7 @@
             DateTime = Original.DateTime,
             GroupId = Original.GroupId,
             CategoryId = Original.CategoryId,
+            MerchantId = Original.MerchantId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -181,12 +278,11 @@
         // whatever offset it arrived with -- UTC -- and re-saving that at the local offset
         // moved the expense by the zone difference on every edit.
         var shown = Clock.Local(Original.DateTime);
-        selectedDate = shown.Date;
-        selectedTime = shown.TimeOfDay;
+        _selectedDate = shown.Date;
+        _selectedTime = shown.TimeOfDay;
 
-        // Load categories + users for the transaction's group. Without them there is
-        // nothing to edit against, so a failed load closes the dialog once the presenter
-        // has said why.
+        // Without the group's categories and members there is nothing to edit against, so
+        // a failed load closes the dialog once the presenter has said why.
         var loaded = await Errors.TryAsync(async () =>
         {
             _groups = await GroupsClient.GetGroupsAsync();
@@ -195,20 +291,46 @@
 
             var details = await TransactionsClient.GetTransactionAsync(Original.Id);
 
+            // The listing row carries no merchant id and, opened from some lists, no
+            // category either. The detail read has both, and is the same read the splits
+            // come from.
             if (Original.CategoryId is null && details.CategoryId is not null)
             {
                 Original.CategoryId = details.CategoryId;
                 Original.Category = details.Category;
-                editModel.CategoryId = details.CategoryId;
+                _model.CategoryId = details.CategoryId;
+            }
+
+            if (Original.MerchantId is null && details.MerchantId is not null)
+            {
+                Original.MerchantId = details.MerchantId;
+                _model.MerchantId = details.MerchantId;
             }
 
             // A category that has since been deleted still names what this expense was
             // filed under, so it stays in the list rather than silently reading as none.
-            if (editModel.CategoryId is { } original && GroupCategories.All(x => x.CategoryId != original))
-                GroupCategories.Add(new CategoryInfo(original, Original.Category ?? details.Category ?? "(removed)"));
+            if (_model.CategoryId is { } filed && _categories.All(row => row.CategoryId != filed))
+                _categories.Add(new CategoryInfo(filed, Original.Category ?? details.Category ?? "(removed)", null));
 
-            storedSplits = [.. details.Splits.Select(split =>
+            _storedSplits = [.. details.Splits.Select(split =>
                 new SplitInput { UserId = split.UserId, Amount = split.Amount })];
+
+            // Which side the split control opens on, and it is a question only the API can
+            // answer: the amounts alone do not say who decided them. A rule version means a
+            // rule divided it, so "Automatically" is the truth and the caption naming that
+            // rule is too. No version means the shares are the expense's own -- typed by
+            // hand, or divided evenly under no rule -- and the control opens on them, where
+            // before it claimed every expense had been divided automatically and wrote
+            // "Divided evenly" over shares somebody had set 70/30.
+            //
+            // The even case is shown as "By hand" too, because the model does not record the
+            // difference and the amounts are what will be kept either way. Choosing
+            // "Automatically" is how the division is asked for again, and that is exactly
+            // what it does.
+            if (details.SplitRuleVersionId is null && details.GroupId is not null && _storedSplits.Count > 0)
+                _model.Splits = _storedSplits;
+
+            _openedWith = _model.Splits;
         }, "Could not load the group.");
 
         if (!loaded)
@@ -225,14 +347,16 @@
     {
         if (groupId is { } id)
         {
-            GroupCategories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(id)
-                .Select(x => new CategoryInfo(x.Id, x.Name)).ToListAsync();
-            GroupUsers = await GroupsClient.GetGroupMembersAsync(id);
+            _categories = await CategoriesClient.GetCategoriesAsAsyncEnumerable(id)
+                .Select(category => new CategoryInfo(category.Id, category.Name, category.DefaultSplitRuleName))
+                .ToListAsync();
+
+            _members = [.. await GroupsClient.GetGroupMembersAsync(id)];
         }
         else
         {
-            GroupCategories = [];
-            GroupUsers = [];
+            _categories = [];
+            _members = [];
         }
     }
 
@@ -242,30 +366,142 @@
     /// when they are in the new group and otherwise becomes the caller, which is the only
     /// payer a personal expense can have and the likeliest for a shared one.
     /// </summary>
+    /// <remarks>
+    /// The place survives a move, unlike everything else here: where the money was spent is
+    /// a fact about the spending and not about who is sharing it.
+    /// </remarks>
     private async Task OnGroupChangedAsync()
     {
-        var loaded = await Errors.TryAsync(() => LoadGroupAsync(editModel.GroupId), "Could not load the group.");
+        var loaded = await Errors.TryAsync(() => LoadGroupAsync(_model.GroupId), "Could not load the group.");
 
         if (!loaded)
             return;
 
-        editModel.CategoryId = null;
-        editModel.Splits = null;
-        storedSplits = [];
+        _model.CategoryId = null;
+        _model.Splits = null;
+        _storedSplits = [];
 
-        if (GroupUsers.All(user => user.Id != editModel.PaidByUserId) && Login.User is { } me)
-            editModel.PaidByUserId = me.Id;
+        // Nothing to put back: the shares it opened with name the old group's members, and
+        // the endpoint drops them on a move.
+        _openedWith = null;
+        _preview = null;
+
+        // Not an ask to divide it again: a move does that on its own, because the shares
+        // name the old group's members and the endpoint drops them. The toggle returns to
+        // "Automatically" because there is nothing left to show on the other side of it.
+        _redivide = false;
+
+        if (_members.All(user => user.Id != _model.PaidByUserId) && Login.User is { } me)
+            _model.PaidByUserId = me.Id;
 
         StateHasChanged();
     }
 
-    private async Task Submit()
+    /// <summary>
+    /// Filing it somewhere else divides it the way the new category says.
+    /// </summary>
+    /// <remarks>
+    /// The alternative is the one the issue behind this was raised about: a category picker
+    /// that changes a label and nothing else, so somebody moves an expense from Rent to
+    /// Groceries, sees Groceries' rule named on the row, and keeps Rent's two-to-one
+    /// division for ever. Asking to re-divide is what makes the pick mean what it says.
+    /// <para>
+    /// It is not final. Step two still offers "By hand", pre-filled with what the expense
+    /// currently holds, so overriding afterwards costs one click -- which is the other half
+    /// of what was asked for.
+    /// </para>
+    /// <para>
+    /// Somewhere else, though, and not merely "the picker fired". Every other field in
+    /// <c>CreatePatch</c> is sent only when it ended up different and this one has to
+    /// be too, because the operation it sends is the one that moves money: picking Rent,
+    /// changing your mind and picking Food again used to leave the ask latched on, so the
+    /// save discarded hand-typed shares and re-divided an expense for a net edit of
+    /// nothing. Clearing the field with the X and re-picking did the same.
+    /// </para>
+    /// </remarks>
+    private async Task OnCategoryChanged()
     {
-        await form.ValidateAsync();
-        if (!form.IsValid)
+        _redivide = _model.CategoryId != Original.CategoryId;
+
+        // Back where it started means back to what it opened holding, so that undoing the
+        // pick undoes the whole of it rather than leaving step two on "Automatically" over
+        // shares the save is about to keep.
+        _model.Splits = _redivide ? null : _openedWith;
+
+        await RefreshPreviewAsync();
+    }
+
+    /// <summary>
+    /// Step one is the whole of what makes an expense; step two only decides how it is
+    /// carried. So the form is validated here, on the way through, rather than at the Save
+    /// button two screens later.
+    /// </summary>
+    private async Task NextAsync()
+    {
+        await _form.ValidateAsync();
+
+        if (!_form.IsValid)
             return;
 
-        editModel.DateTime = Clock.At(selectedDate ?? Clock.Today, selectedTime ?? TimeSpan.Zero);
+        ApplyDate();
+
+        Step = 2;
+
+        await RefreshPreviewAsync();
+    }
+
+    private void Back() => Step = 1;
+
+    /// <summary>
+    /// The editor's answer, which arrives only when somebody has acted on it: amounts they
+    /// are typing, or null for the moment they choose "Automatically".
+    /// </summary>
+    /// <remarks>
+    /// That null is the one thing the dialog cannot infer, and the reason <c>_redivide</c>
+    /// exists: it means "work it out again", while the null the model starts with means
+    /// "say nothing", and the API reads those as opposite instructions.
+    /// </remarks>
+    private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
+    {
+        _model.Splits = splits;
+        _redivide = splits is null;
+        await RefreshPreviewAsync();
+    }
+
+    /// <summary>
+    /// Asks the API what this edit would come to. The endpoint the edit uses, not the one
+    /// the create dialog uses: this one divides by the version of the rule the expense was
+    /// written under, which is what the save will do.
+    /// </summary>
+    private async Task RefreshPreviewAsync()
+    {
+        if (!IsShared)
+        {
+            _preview = null;
+            _previewError = null;
+            return;
+        }
+
+        _preview = null;
+        _previewError = null;
+        StateHasChanged();
+
+        var preview = await Transactions.PreviewUpdateAsync(Original.Id, _model, _redivide);
+
+        _preview = preview;
+        _previewError = preview is null
+            ? "These shares do not add up yet, so there is nothing to show."
+            : null;
+
+        StateHasChanged();
+    }
+
+    private void ApplyDate() =>
+        _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+
+    private void Submit()
+    {
+        ApplyDate();
 
         var original = new UpdateTransactionRequest
         {
@@ -275,18 +511,25 @@
             DateTime = Original.DateTime,
             GroupId = Original.GroupId,
             CategoryId = Original.CategoryId,
+            MerchantId = Original.MerchantId,
             PaidByUserId = Original.PaidByUserId
         };
 
-        var patch = CreatePatch(original, editModel);
-        MudDialog.Close(DialogResult.Ok(patch));
+        MudDialog.Close(DialogResult.Ok(CreatePatch(original, _model, _redivide)));
     }
 
     private void Cancel() => MudDialog.Cancel();
 
+    /// <param name="redivide">
+    /// Whether the person asked for the division to be worked out again. It cannot be read
+    /// off <paramref name="updated"/>: an edit that leaves the shares alone and one that
+    /// asks for new ones both arrive with none stated, and only the second is an
+    /// instruction.
+    /// </param>
     static JsonPatchDocument<UpdateTransactionRequest> CreatePatch(
         UpdateTransactionRequest original,
-        UpdateTransactionRequest updated)
+        UpdateTransactionRequest updated,
+        bool redivide)
     {
         var patch = new JsonPatchDocument<UpdateTransactionRequest>();
 
@@ -308,18 +551,41 @@
         if (original.CategoryId != updated.CategoryId)
             patch.Replace(x => x.CategoryId, updated.CategoryId);
 
+        if (original.MerchantId != updated.MerchantId)
+            patch.Replace(x => x.MerchantId, updated.MerchantId);
+
         if (original.PaidByUserId != updated.PaidByUserId)
             patch.Replace(x => x.PaidByUserId, updated.PaidByUserId);
 
-        // Only when the person stated the division themselves. Saying nothing here is not
-        // the same as sending the shares unchanged: the API reads the operations, and
-        // silence about them means "divide it again the way the category says", which is
-        // what an edit to the amount, the payer or the category should do.
+        // The one member that is an instruction rather than a value, and it has three
+        // answers instead of two. The API reads the operations, not the applied model:
+        //
+        //   amounts    -- divide it exactly this way
+        //   null, sent -- divide it again the way the category says
+        //   nothing    -- keep the shares it has
+        //
+        // The last is what an untouched dialog sends, and it is the default for a reason: an
+        // edit that says nothing about the money must not move any. Sending the re-divide on
+        // every edit is precisely the bulk pass that moved 1,394.72 onto one member on
+        // 2026-09-08, and the operation below is emitted only when somebody chose it.
         if (updated.Splits is not null)
             patch.Replace(x => x.Splits, updated.Splits);
+        else if (redivide)
+            patch.Replace(x => x.Splits, null);
 
         return patch;
     }
 
-    internal record CategoryInfo(Guid CategoryId, string Name);
+    /// <summary>
+    /// A category as the select shows it: what it is called, and how it divides.
+    /// </summary>
+    /// <param name="Rule">
+    /// The rule it points at, or null when it names none -- which is not a gap but an
+    /// answer, and <see cref="Splits"/> says it in words.
+    /// </param>
+    internal record CategoryInfo(Guid CategoryId, string Name, string? Rule)
+    {
+        /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
+        public string Splits => Rule is { Length: > 0 } named ? named : "even split";
+    }
 }

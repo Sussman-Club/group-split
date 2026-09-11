@@ -13,8 +13,9 @@ namespace GroupSplit.App.Shared.Services.Commands;
 /// second message about the rule behind it would be the same news twice.
 /// <para>
 /// They still announce, like every other write. What a rule change moves is the next
-/// expense's pre-fill and nothing already recorded, because an expense holds the amounts it
-/// was divided into.
+/// expense's pre-fill and nothing already recorded: an expense holds both the amounts it
+/// was divided into and the version of the rule that divided them, and editing a rule opens
+/// a new version rather than touching either.
 /// </para>
 /// </remarks>
 public interface ISplitRuleCommands
@@ -31,9 +32,19 @@ public interface ISplitRuleCommands
     Task<SplitRuleDetailsResponse?> CreateAsync(CreateSplitRuleRequest request, CancellationToken ct = default);
 
     /// <summary>
-    /// Replaces a rule's name and division. A PUT rather than a patch, so the caller hands
-    /// over the whole of what the rule is to become.
+    /// Every division the rule has stood for, newest first -- what the editor shows so the
+    /// person can see that saving adds to a history rather than overwriting one.
     /// </summary>
+    Task<SplitRuleHistoryResponse?> HistoryAsync(Guid ruleId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets a rule's name and the division it stands for from now on. A PUT rather than a
+    /// patch, so the caller hands over the whole of what the rule is to become.
+    /// </summary>
+    /// <remarks>
+    /// Adds a version when the division has actually changed, and none when only the name
+    /// has. Expenses already recorded keep pointing at the version that divided them.
+    /// </remarks>
     Task<SplitRuleDetailsResponse?> UpdateAsync(Guid ruleId, UpdateSplitRuleRequest request,
         CancellationToken ct = default);
 }

@@ -5,7 +5,7 @@ namespace GroupSplit.Seeder.Seeders.DTOs;
 /// </summary>
 /// <remarks>
 /// Carries no id, unlike every other seed type. A transfer is only ever built through
-/// <c>Transfer.Between</c> -- the factory is what guarantees the single split that makes
+/// <c>Group.SettlementBetween</c> -- the factory is what guarantees the single split that makes
 /// the balances come out right -- and that factory does not take one. Rather than widen a
 /// domain type for a seeder's convenience, the seeder matches on what actually identifies
 /// a repayment: who paid whom, how much, in which group, when.

@@ -1,0 +1,119 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@namespace GroupSplit.App.Shared.Components
+@inject IMerchantCommands Merchants
+
+@*
+    Where an expense was spent, on the two dialogs that write one.
+
+    A type-ahead rather than a select, because the list is every place anybody has ever
+    shopped and is shared across groups -- a dropdown of it would be unusable by the second
+    month of bank sync.
+
+    It can add one, and that is not a convenience. The sync writes this table on its own
+    from what a provider says, so a group with no bank linked has nothing in it at all: a
+    field that could only pick from an empty list would be a field nobody could ever fill,
+    on exactly the spending -- cash, the same shop every week -- the manual path exists for.
+    The add is a button somebody presses, not a save on blur, so a typo becomes a shared
+    row only when it was meant to.
+*@
+
+<MudAutocomplete T="MerchantResponse"
+                 Label="@Label"
+                 Value="@_selected"
+                 ValueChanged="@OnSelectedAsync"
+                 SearchFunc="@SearchAsync"
+                 ToStringFunc="@(merchant => merchant?.Name ?? string.Empty)"
+                 Variant="Variant.Outlined"
+                 Clearable="true"
+                 ResetValueOnEmptyText="true"
+                 CoerceText="true"
+                 MinCharacters="0"
+                 Placeholder="Anywhere in particular?">
+    <ItemTemplate Context="merchant">
+        <div class="gs-inline" style="gap: 10px">
+            @if (!string.IsNullOrWhiteSpace(merchant.LogoUrl))
+            {
+                <img class="gs-mark-inline" src="@merchant.LogoUrl" alt="" width="20" height="20" loading="lazy"/>
+            }
+            <span>@merchant.Name</span>
+        </div>
+    </ItemTemplate>
+
+    <NoItemsTemplate>
+        @if (_searched is { Length: > 0 } name)
+        {
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.AddBusiness"
+                       FullWidth="true"
+                       OnClick="@(() => AddAsync(name))">
+                Add "@name"
+            </MudButton>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="pa-2">Type a name to find a place, or to add one.</MudText>
+        }
+    </NoItemsTemplate>
+</MudAutocomplete>
+
+@code {
+    /// <summary>The place this expense names, or null for the ordinary case of none.</summary>
+    [Parameter] public Guid? Value { get; set; }
+
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+
+    [Parameter] public string Label { get; set; } = "Where";
+
+    private MerchantResponse? _selected;
+
+    /// <summary>
+    /// What was last typed, so the empty state can offer to add it by name. The search
+    /// term is not otherwise readable from here -- <c>NoItemsTemplate</c> takes no context
+    /// -- and it is the only thing that makes that button say something useful.
+    /// </summary>
+    private string? _searched;
+
+    /// <summary>
+    /// The id this opened on, so that a re-render supplying parameters again does not
+    /// re-fetch a name that has not changed -- or worse, overwrite a pick the person has
+    /// just made with the one the caller opened with.
+    /// </summary>
+    private Guid? _resolved;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Value == _resolved)
+            return;
+
+        _resolved = Value;
+
+        _selected = Value is { } id ? await Merchants.GetAsync(id) : null;
+    }
+
+    private async Task<IEnumerable<MerchantResponse>> SearchAsync(string? value, CancellationToken ct)
+    {
+        _searched = value?.Trim();
+
+        return await Merchants.SearchAsync(_searched, ct);
+    }
+
+    private async Task OnSelectedAsync(MerchantResponse? merchant)
+    {
+        _selected = merchant;
+        _resolved = merchant?.Id;
+
+        await ValueChanged.InvokeAsync(merchant?.Id);
+    }
+
+    private async Task AddAsync(string name)
+    {
+        var created = await Merchants.CreateAsync(name);
+
+        if (created is null)
+            return;
+
+        await OnSelectedAsync(created);
+    }
+}

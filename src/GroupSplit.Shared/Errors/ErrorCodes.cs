@@ -73,6 +73,32 @@ public static class ErrorCodes
     public const string CategoryInUse = "CATEGORY_IN_USE";
     public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";
     public const string SplitRuleInUse = "SPLIT_RULE_IN_USE";
+
+    /// <summary>
+    /// A rule's history was written in wholesale, and the rule has already been through more
+    /// than one version. Writing a history is only defined for a rule that has stood for one
+    /// division since it was made: anything else would have to decide what becomes of the
+    /// windows already there and of the expenses pointing into them, and that is a different
+    /// operation from this one.
+    /// </summary>
+    public const string SplitRuleAlreadyHasHistory = "SPLIT_RULE_ALREADY_HAS_HISTORY";
+
+    /// <summary>
+    /// The last entry of a history is not the division the rule stands for now. It has to be:
+    /// that entry becomes the open version, and the open version is the row already-recorded
+    /// expenses point at, so it is reused rather than replaced. Correcting what the rule says
+    /// today is the ordinary update, and it comes first.
+    /// </summary>
+    public const string SplitRuleHistoryEndsElsewhere = "SPLIT_RULE_HISTORY_ENDS_ELSEWHERE";
+
+    /// <summary>
+    /// An expense was pointed at a version of a rule belonging to some other group. Which
+    /// division produced an expense's shares is a fact about its own group's money, and a
+    /// version from elsewhere describes one that group's members cannot see. Says the same
+    /// thing whether the version exists or not, so nothing is learned about another group's
+    /// rules by guessing ids.
+    /// </summary>
+    public const string SplitRuleVersionNotInGroup = "SPLIT_RULE_VERSION_NOT_IN_GROUP";
     public const string BankSyncUnavailable = "BANK_SYNC_UNAVAILABLE";
     public const string BankTransactionAlreadyFiled = "BANK_TRANSACTION_ALREADY_FILED";
     public const string BankConnectionNeedsAttention = "BANK_CONNECTION_NEEDS_ATTENTION";
@@ -95,6 +121,14 @@ public static class ErrorCodes
     public const string SplitsInvalid = "SPLITS_INVALID";
     public const string SplitOnAPersonalExpense = "SPLIT_ON_A_PERSONAL_EXPENSE";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";
+
+    /// <summary>
+    /// A rule's history does not describe a chain: no entries at all, or dates that do not
+    /// strictly increase. Each entry's window runs until the next entry starts, so two
+    /// entries sharing a date leave a version that was never what the rule said, and an entry
+    /// that goes backwards leaves one that ended before it began.
+    /// </summary>
+    public const string SplitRuleHistoryInvalid = "SPLIT_RULE_HISTORY_INVALID";
 
     // ---- Unprocessable (422): the request is understood and coherent, and still cannot --
     // ---- be carried out, because acting on it would break an invariant ------------------

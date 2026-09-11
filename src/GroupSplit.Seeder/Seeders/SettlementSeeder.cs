@@ -1,5 +1,6 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
@@ -17,7 +18,8 @@ namespace GroupSplit.Seeder.Seeders;
 /// not a profile anybody recognises.
 /// <para>
 /// It runs after the expenses so the dates interleave the way they would have happened,
-/// and it writes through <see cref="Transfer.Between"/> rather than constructing a row --
+/// and it writes through <see cref="TransferExtensions.SettlementBetween"/> rather than
+/// constructing a row --
 /// the factory is what guarantees the single split to the recipient that makes both
 /// balances move.
 /// </para>
@@ -43,7 +45,7 @@ public class SettlementSeeder(
         if (group is null || from is null || to is null)
             return null;
 
-        return Transfer.Between(group, from, to, dto.Amount, dto.DateTime, dto.Description);
+        return group.SettlementBetween(from, to, dto.Amount, dto.DateTime, dto.Description);
     }
 
     /// <summary>

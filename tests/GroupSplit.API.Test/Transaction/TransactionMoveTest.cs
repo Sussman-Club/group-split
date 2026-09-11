@@ -176,10 +176,13 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var request = Moving(expense, to) with
         {
+            // Not the even 10/10 the expense already holds: shares identical to the stored
+            // ones read as silence, and silence on a move asks for the destination's own
+            // division. These are somebody naming the old group's members on purpose.
             Splits =
             [
-                new SplitInput { UserId = Me, Amount = 10m },
-                new SplitInput { UserId = oldOther, Amount = 10m }
+                new SplitInput { UserId = Me, Amount = 15m },
+                new SplitInput { UserId = oldOther, Amount = 5m }
             ]
         };
 

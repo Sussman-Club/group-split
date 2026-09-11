@@ -1,7 +1,7 @@
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
-/// One member's weight in one split rule.
+/// One member's weight in one version of one split rule.
 /// </summary>
 /// <remarks>
 /// One weight column rather than a nullable shares column beside a nullable percentage
@@ -17,9 +17,9 @@ namespace GroupSplit.Data.Entities;
 /// </remarks>
 public class SplitRuleParticipant : Entity
 {
-    public virtual WeightedSplitRule SplitRule { get; set; } = null!;
+    public virtual WeightedSplitRuleVersion SplitRuleVersion { get; set; } = null!;
 
-    public Guid SplitRuleId { get; set; }
+    public Guid SplitRuleVersionId { get; set; }
 
     public virtual User User { get; set; } = null!;
 

@@ -39,4 +39,21 @@ public interface ITransactionCommands
     /// </remarks>
     Task<SplitPreviewResponse?> PreviewAsync(CreateTransactionRequest request,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// The same, for an expense that already exists.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="PreviewAsync"/> with the edited values: an edit is divided again by
+    /// the version of the rule the expense was written under, so a preview built as though
+    /// it were a new expense would show today's rule and the save would then produce
+    /// different numbers.
+    /// </remarks>
+    /// <param name="redivide">
+    /// True when the person has asked for the division to be worked out again, which is the
+    /// dialog's "Automatically". False -- the default -- previews what an edit that says
+    /// nothing about the shares does, which is keep them.
+    /// </param>
+    Task<SplitPreviewResponse?> PreviewUpdateAsync(Guid transactionId, UpdateTransactionRequest request,
+        bool redivide = false, CancellationToken ct = default);
 }

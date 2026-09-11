@@ -98,6 +98,125 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal(anabel, operation.GetProperty("value")[0].GetProperty("userId").GetGuid());
     }
 
+    /// <summary>
+    /// <c>--redivide</c> sends the one operation that asks the endpoint to work the shares
+    /// out again: <c>/splits</c> replaced by an explicit null.
+    /// </summary>
+    /// <remarks>
+    /// The third of the three answers a patch can give about the division, and the only one
+    /// that moves money without naming amounts. Silence keeps the stored shares -- that is
+    /// what 47c6904 made it mean, after a bulk pass reading silence the other way moved
+    /// 1,394.72 onto one member -- so the operation below has to be emitted on this flag
+    /// and on nothing else.
+    /// </remarks>
+    [Fact]
+    public async Task Transactions_update_redivide_asks_for_the_division_again_as_an_explicit_null()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", Transaction("Dinner"));
+
+        await Cli.RunAsync("transactions", "update", id.ToString(), "--redivide");
+
+        var operation = Assert.Single(Patch(id).EnumerateArray());
+
+        Assert.Equal("replace", operation.GetProperty("op").GetString());
+        Assert.Equal("/splits", operation.GetProperty("path").GetString(), ignoreCase: true);
+        Assert.Equal(JsonValueKind.Null, operation.GetProperty("value").ValueKind);
+    }
+
+    /// <summary>
+    /// And beside a changed amount, which is the edit the flag exists for: the amount alone
+    /// is refused because the stored shares no longer sum to it, and this is how somebody
+    /// says what should happen to them instead.
+    /// </summary>
+    [Fact]
+    public async Task Transactions_update_redivide_travels_beside_the_field_that_moved()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", Transaction("Dinner"));
+
+        await Cli.RunAsync("transactions", "update", id.ToString(), "--amount", "120", "--redivide");
+
+        var paths = Patch(id).EnumerateArray()
+            .Select(operation => operation.GetProperty("path").GetString()!.ToLowerInvariant())
+            .ToList();
+
+        Assert.Equal(["/amount", "/splits"], paths);
+    }
+
+    /// <summary>
+    /// The preview is asked the same question, or it would show the shares being replaced
+    /// rather than the ones about to be stored.
+    /// </summary>
+    /// <remarks>
+    /// The preview endpoint takes a whole expense rather than the patch, so it cannot see
+    /// the null operation above: a body with no shares is exactly what a save that keeps
+    /// them looks like. <c>?redivide=true</c> is the one place the difference can be said,
+    /// and on a changed amount it is the difference between a preview and a refusal.
+    /// </remarks>
+    [Fact]
+    public async Task Transactions_update_redivide_asks_the_preview_for_the_division_again()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+
+        _api.Returns($"/api/transactions/{id}/preview", new
+        {
+            ruleName = "Rent",
+            ruleSupersededAt = (DateTimeOffset?)null,
+            splits = new[] { new { userId = Guid.NewGuid(), userName = "Omar", amount = 600m } }
+        });
+
+        var result = await Cli.RunAsync(
+            "transactions", "update", id.ToString(), "--amount", "1200", "--redivide",
+            "--preview", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var preview = _api.Requests.Single(request => request.Path == $"/api/transactions/{id}/preview");
+
+        Assert.Equal("true", preview.Parameter("redivide"));
+
+        // A preview changes nothing, whatever it was asked.
+        Assert.DoesNotContain(_api.Requests, request => request.Method == "PATCH");
+    }
+
+    /// <summary>
+    /// Stating the shares and asking for them to be worked out are opposite instructions,
+    /// so naming both is refused rather than one of them winning.
+    /// </summary>
+    [Fact]
+    public async Task Split_and_redivide_contradict_each_other_and_nothing_is_sent()
+    {
+        var result = await Cli.RunAsync(
+            "transactions", "update", Guid.NewGuid().ToString(),
+            "--split", $"{Guid.NewGuid()}=42.50", "--redivide");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Contains("contradict", result.Error.GetProperty("error").GetString());
+
+        // Refused before the read the patch is built from, so an expense nobody may edit
+        // cannot answer this with a different failure.
+        Assert.Empty(_api.Requests);
+    }
+
+    /// <summary>
+    /// On its own it is a whole edit. "Divide this the way its category says" is a change
+    /// somebody means without touching any other field.
+    /// </summary>
+    [Fact]
+    public async Task Redivide_alone_is_enough_of_an_edit_to_be_sent()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", Transaction("Dinner"));
+
+        var result = await Cli.RunAsync("transactions", "update", id.ToString(), "--redivide");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(_api.Requests, request => request.Method == "PATCH");
+    }
+
     [Theory]
     [InlineData("--group", "--personal")]
     [InlineData("--category-id", "--no-category")]
@@ -835,6 +954,155 @@ public sealed class MutationCommandTests : IDisposable
             change => change!.Contains("Refused"));
     }
 
+    /// <summary>
+    /// Previewing an edit asks the endpoint made for one, and changes nothing.
+    /// </summary>
+    /// <remarks>
+    /// Not the create preview with the edited values: an edit is divided again by the
+    /// version of the rule the expense was written under, so the two endpoints answer
+    /// differently and only this one answers what the save will do.
+    /// </remarks>
+    [Fact]
+    public async Task Transactions_update_preview_asks_the_edit_endpoint_and_changes_nothing()
+    {
+        var id = Guid.NewGuid();
+        var omar = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+
+        _api.Returns($"/api/transactions/{id}/preview", new
+        {
+            ruleName = "Rent",
+            ruleSupersededAt = (DateTimeOffset?)null,
+            splits = new[] { new { userId = omar, userName = "Omar", amount = 400m } }
+        });
+
+        var result = await Cli.RunAsync(
+            "transactions", "update", id.ToString(), "--amount", "1200", "--preview", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("Rent", result.Stdout);
+        Assert.Contains("400.00", result.Stdout);
+
+        // The whole expense, not a patch: the edited amount reaches the endpoint on a body
+        // that also carries everything the flags did not touch.
+        var body = _api.Requests.Single(request => request.Path == $"/api/transactions/{id}/preview").Json;
+
+        Assert.Equal(1200m, body.GetProperty("amount").GetDecimal());
+        Assert.Equal("Rent", body.GetProperty("name").GetString());
+
+        Assert.DoesNotContain(_api.Requests, request => request.Method == "PATCH");
+    }
+
+    /// <summary>
+    /// And it previews what the save does, which is leave the shares where they are.
+    /// </summary>
+    /// <remarks>
+    /// The preview endpoint takes a whole expense, so it cannot tell an edit that states no
+    /// shares from one that asks for them again; <c>?redivide=true</c> is how the app's
+    /// "Automatically" says which it means, and <c>--redivide</c> is the only thing that
+    /// makes this command say it. Omitting
+    /// <c>--split</c> on <c>transactions update</c> keeps the stored shares -- it has meant
+    /// that since 2026-09-09 -- so a preview that showed the category's rule dividing the
+    /// expense afresh would show numbers the save is not going to store, and on a changed
+    /// amount it would show a success where the save is refused.
+    /// </remarks>
+    [Fact]
+    public async Task Transactions_update_preview_does_not_ask_for_the_division_again()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+
+        _api.Returns($"/api/transactions/{id}/preview", new
+        {
+            ruleName = "Rent",
+            ruleSupersededAt = (DateTimeOffset?)null,
+            splits = new[] { new { userId = Guid.NewGuid(), userName = "Omar", amount = 900m } }
+        });
+
+        await Cli.RunAsync("transactions", "update", id.ToString(), "--name", "Rent, March",
+            "--preview", "--output", "text");
+
+        var preview = _api.Requests.Single(request => request.Path == $"/api/transactions/{id}/preview");
+
+        Assert.Null(preview.Parameter("redivide"));
+    }
+
+    /// <summary>
+    /// And when the version that divided it is no longer current, the preview says so --
+    /// which is the ordinary case on an edit and the one that otherwise reads as the
+    /// server getting the rule wrong.
+    /// </summary>
+    [Fact]
+    public async Task Transactions_update_preview_says_when_the_rule_has_changed_since()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+
+        _api.Returns($"/api/transactions/{id}/preview", new
+        {
+            ruleName = "Rent",
+            ruleSupersededAt = DateTimeOffset.UtcNow.AddDays(-30),
+            splits = new[] { new { userId = Guid.NewGuid(), userName = "Omar", amount = 400m } }
+        });
+
+        var result = await Cli.RunAsync(
+            "transactions", "update", id.ToString(), "--amount", "1200", "--preview", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("the rule has changed since", result.Stdout);
+    }
+
+    /// <summary>
+    /// A settlement has one split, to the recipient, so there is no division to preview.
+    /// Refused where the command already knows the kind, rather than at the API, which can
+    /// only answer that no expense has that id.
+    /// </summary>
+    [Fact]
+    public async Task Previewing_an_edit_to_a_settlement_says_there_is_nothing_to_divide()
+    {
+        var id = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}",
+            new { id, name = "Settle up", amount = 50m, kind = (int)ActivityKind.Transfer });
+
+        var result = await Cli.RunAsync(
+            "transactions", "update", id.ToString(), "--amount", "60", "--preview");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Contains("not divided", result.Error.GetProperty("error").GetString());
+        Assert.DoesNotContain(_api.Requests, request => request.Path.EndsWith("/preview"));
+    }
+
+    /// <summary>
+    /// An edit sends what moved, and nothing else -- which is what keeps <c>--name</c> from
+    /// quietly re-dividing the expense.
+    /// </summary>
+    [Fact]
+    public async Task Transactions_update_sends_only_the_fields_that_actually_moved()
+    {
+        var id = Guid.NewGuid();
+        var group = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id, name = "Rent", amount = 900m, groupId = group, description = "March"
+        });
+
+        // The name it already has, and a new amount.
+        await Cli.RunAsync("transactions", "update", id.ToString(), "--name", "Rent", "--amount", "950");
+
+        var patch = _api.Requests.Single(request => request.Method == "PATCH").Json;
+
+        var paths = patch.EnumerateArray()
+            .Select(operation => operation.GetProperty("path").GetString()!.ToLowerInvariant())
+            .ToList();
+
+        Assert.Equal(["/amount"], paths);
+    }
+
     // ---- split rules -----------------------------------------------------------------
 
     [Fact]
@@ -933,7 +1201,7 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Split_rules_delete_promises_that_recorded_expenses_keep_their_shares()
+    public async Task Split_rules_delete_says_it_will_be_refused_once_anything_was_divided_by_it()
     {
         var id = Guid.NewGuid();
         _api.Returns($"/api/split-rules/{id}", Rule("By room size", Guid.NewGuid(), id, Guid.NewGuid()));
@@ -943,8 +1211,85 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
         Assert.Contains(
             result.Json.GetProperty("changes").EnumerateArray().Select(change => change.GetString()),
-            change => change!.Contains("keep the shares"));
+            change => change!.Contains("Refused"));
     }
+
+    /// <summary>
+    /// A rule is a chain of divisions, and reading an old expense means reading the one it
+    /// was divided by rather than the one the rule is on now.
+    /// </summary>
+    [Fact]
+    public async Task Split_rules_versions_lists_every_division_the_rule_has_stood_for()
+    {
+        var id = Guid.NewGuid();
+        var omar = Guid.NewGuid();
+
+        _api.Returns($"/api/split-rules/{id}/versions", new
+        {
+            id,
+            groupId = Guid.NewGuid(),
+            name = "By room size",
+            versions = new[]
+            {
+                new
+                {
+                    id = Guid.NewGuid(),
+                    startedAt = DateTimeOffset.UtcNow,
+                    supersededAt = (DateTimeOffset?)null,
+                    definition = new Dictionary<string, object>
+                    {
+                        ["$type"] = "shares",
+                        ["shares"] = new Dictionary<string, int> { [omar.ToString()] = 1 }
+                    }
+                },
+                new
+                {
+                    id = Guid.NewGuid(),
+                    startedAt = DateTimeOffset.UtcNow.AddDays(-30),
+                    supersededAt = (DateTimeOffset?)DateTimeOffset.UtcNow,
+                    definition = new Dictionary<string, object>
+                    {
+                        ["$type"] = "shares",
+                        ["shares"] = new Dictionary<string, int> { [omar.ToString()] = 3 }
+                    }
+                }
+            }
+        });
+
+        var result = await Cli.RunAsync("split-rules", "versions", id.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        // Every division, and not just the one it is on. The assertion here used to be
+        // `Contains("now")` alone, which the open version prints on its own -- so a listing
+        // that dropped the superseded row entirely, which is the only failure this test is
+        // named for, passed it.
+        var divisions = LastColumnOf(result.Stdout);
+
+        Assert.Contains("1 share", divisions, StringComparison.Ordinal);
+        Assert.Contains("3 shares", divisions, StringComparison.Ordinal);
+
+        // And they are told apart: the current one says "now" rather than a date, which is
+        // the difference a reader is looking for, and exactly one version is open.
+        Assert.Equal(2, result.Stdout.Split("now").Length);
+    }
+
+    /// <summary>
+    /// The right-hand column of a rendered table, its cells run together.
+    /// </summary>
+    /// <remarks>
+    /// Read cell by cell rather than by searching the output, because the table is sized to
+    /// whatever width the console reports and a cell wide enough to wrap -- a guid beside a
+    /// division, here -- is broken across lines at some of them and not others. Asserting on
+    /// the raw text passes on the machine it was written on and fails on the next.
+    /// </remarks>
+    private static string LastColumnOf(string stdout) =>
+        string.Join(' ', stdout
+            .Split('\n')
+            .Select(line => line.Split('│'))
+            .Where(cells => cells.Length > 2)
+            .Select(cells => cells[^2].Trim())
+            .Where(cell => cell.Length > 0));
 
     // ---- the account itself ----------------------------------------------------------
 
@@ -1090,6 +1435,7 @@ public sealed class MutationCommandTests : IDisposable
     private static object Rule(string name, Guid groupId, Guid? id = null, Guid? member = null) => new
     {
         id = id ?? Guid.NewGuid(), groupId, name,
+        versionId = Guid.NewGuid(), changedAt = DateTimeOffset.UtcNow,
         definition = new Dictionary<string, object>
         {
             ["$type"] = "shares",

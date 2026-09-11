@@ -18,51 +18,11 @@ namespace GroupSplit.Data.Entities;
 public class Transfer : Transaction
 {
     /// <summary>
-    /// For EF, and to keep <see cref="Between"/> the only way anybody else can make one.
+    /// For EF, and internal so that <see cref="TransferExtensions"/> stays the only way
+    /// anybody else can make one -- a transfer built field by field is a transfer whose
+    /// single split somebody forgot.
     /// </summary>
-    private Transfer()
+    internal Transfer()
     {
-    }
-
-    /// <summary>
-    /// Money moving from one member to another, as a single row with a single split.
-    /// </summary>
-    /// <remarks>
-    /// The one split -- to the recipient, for the whole amount -- is what makes the
-    /// balances come out right: the payer's <c>paid</c> rises by the amount and the
-    /// recipient's <c>owed</c> rises by it, so the payer's net goes up and the
-    /// recipient's goes down, which is exactly what paying somebody back means. It is
-    /// also the invariant that has no second chance, so nothing outside this type is
-    /// allowed to construct a transfer and forget it.
-    /// </remarks>
-    /// <param name="description">
-    /// What the payer wants remembered about it -- "cash", "bank transfer, ref 4821". The
-    /// column was always here and nothing ever set it, so a group's activity could say that
-    /// Loraine paid Daniel 40 and never how.
-    /// </param>
-    public static Transfer Between(Group group, User from, User to, decimal amount, DateTimeOffset date,
-        string? description = null)
-    {
-        ArgumentNullException.ThrowIfNull(group);
-        ArgumentNullException.ThrowIfNull(from);
-        ArgumentNullException.ThrowIfNull(to);
-
-        if (from == to)
-            throw new ArgumentException("A transfer needs two different people.", nameof(to));
-
-        var transfer = new Transfer
-        {
-            Group = group,
-            Amount = amount,
-            Currency = group.Currency,
-            DateTime = date,
-            Name = "Settlement",
-            Description = description,
-            User = from
-        };
-
-        transfer.Splits.Add(new TransactionSplit { User = to, Amount = amount });
-
-        return transfer;
     }
 }

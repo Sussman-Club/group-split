@@ -320,9 +320,15 @@ public class StatedSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var model = await transactions.GetUpdateModel(created.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(model);
 
-        // The old amount's shares against the new amount: refused.
+        // Shares that add up to the old amount, stated against the new one: refused.
+        //
+        // Deliberately not the 50/50 the expense already holds. Amounts identical to the
+        // stored ones are not a statement the service can tell from silence -- the edit
+        // model carries the stored shares into every edit -- and silence on an expense a
+        // rule divided asks for the division again rather than for a refusal. Here somebody
+        // is saying something, and what they said does not add up.
         model.Amount = 120m;
-        model.Splits = [Share(self, 50m), Share(other, 50m)];
+        model.Splits = [Share(self, 40m), Share(other, 60m)];
 
         var failure = await Assert.ThrowsAsync<UnprocessableException>(() =>
             transactions.Update(created.Id, model, TestContext.Current.CancellationToken).AsTask());

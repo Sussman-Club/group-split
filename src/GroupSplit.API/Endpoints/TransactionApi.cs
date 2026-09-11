@@ -33,7 +33,10 @@ public static class TransactionApi
             group.MapBankMatches();
             group.MapCreate();
             group.MapPreviewSplits();
+            group.MapPreviewUpdatedSplits();
             group.MapUpdate();
+            group.MapSetDivisionSource();
+            group.MapReattach();
             group.MapDelete();
 
             return group;
@@ -334,6 +337,48 @@ public static class TransactionApi
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
+        /// <summary>
+        /// The same preview, for an expense that already exists.
+        /// </summary>
+        /// <remarks>
+        /// A POST with the whole edited expense in the body rather than the patch the save
+        /// sends, because a preview has nothing to patch against -- the dialog holds the
+        /// edited model already and a patch would have to be applied to something first
+        /// just to be read back.
+        /// <para>
+        /// Its own route and not <c>preview</c> with an id, because the two answer
+        /// different questions: this one divides by the version the expense was written
+        /// under, and that is what the edit dialog has to show or its numbers disagree with
+        /// the save it is previewing.
+        /// </para>
+        /// <para>
+        /// <c>?redivide=true</c> asks the other question the dialog can put: what dividing
+        /// it again by its rule would come to. A query parameter rather than a field on the
+        /// request, because the request is the save contract and "no shares" means keep them
+        /// there -- a second way to say otherwise inside it is how a patch nobody read
+        /// carefully re-divides 733 expenses. Absent it, this answers as <c>PATCH</c> treats
+        /// silence.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapPreviewUpdatedSplits()
+        {
+            return group.MapPost("{id:guid}/preview", async (
+                    Guid id,
+                    UpdateTransactionRequest request,
+                    ITransactionService transactionService,
+                    CancellationToken ct,
+                    bool redivide = false) =>
+                {
+                    return Results.Ok(await transactionService.PreviewUpdate(id, request, redivide, ct));
+                })
+                .WithName("PreviewUpdatedTransactionSplits")
+                .Produces<SplitPreviewResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
         private RouteHandlerBuilder MapUpdate()
         {
             return group.MapPatch("{id:guid}", async (
@@ -369,6 +414,66 @@ public static class TransactionApi
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
+        /// <summary>
+        /// Records what divided one expense, or -- with null -- that its shares are its own.
+        /// </summary>
+        /// <remarks>
+        /// Provenance, and not a division. Not one share moves: the amounts stay exactly as
+        /// they are and only the account of what produced them changes. It is its own route
+        /// rather than a field on the patch for that reason -- the patch is where a division
+        /// is decided, and a field there that looked like provenance and quietly re-divided
+        /// is the shape of the 2026-09-08 incident.
+        /// <para>
+        /// What it does change is what a later edit does. An expense recorded as a rule's is
+        /// worked out again when its amount or its payer moves; one whose shares are its own
+        /// is left alone.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapSetDivisionSource()
+        {
+            return group.MapPut("{id:guid}/division-source", async (
+                    Guid id,
+                    SetDivisionSourceRequest request,
+                    IExpenseProvenance provenance,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    await provenance.SetDivisionSource(id, request, ct);
+
+                    return Results.Ok(await transactionService.GetDetails(id, ct));
+                })
+                .WithName("SetTransactionDivisionSource")
+                .Produces<TransactionDetailsResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        /// <summary>
+        /// Points a group's expenses at the version of their rule that was in force on the
+        /// day each was spent.
+        /// </summary>
+        /// <remarks>
+        /// For a back catalogue whose provenance was guessed. A migration out of a workbook
+        /// pointed every categorised expense at its category's only version, because at the
+        /// time that was the only one; once the rule's real history is written, the dates on
+        /// the rows are enough to sort out which version each expense actually fell under.
+        /// <para>
+        /// It divides nothing. The splitter is not on this path at all -- the one column it
+        /// writes is the version pointer -- so the group's balances are the same afterwards
+        /// to the cent. <c>dryRun</c> answers the same summary and saves none of it.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapReattach()
+        {
+            return group.MapPost("reattach", async (
+                    ReattachTransactionsRequest request,
+                    IExpenseProvenance provenance,
+                    CancellationToken ct) => Results.Ok(await provenance.Reattach(request, ct)))
+                .WithName("ReattachTransactions")
+                .Produces<ReattachSummaryResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         /// <summary>
@@ -416,6 +521,7 @@ public static class TransactionApi
                                      (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
                     CategoryId = transaction.CategoryId,
                     Category = transaction.Category != null ? transaction.Category.Name : null,
+                    MerchantId = transaction.MerchantId,
                     MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
                     MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null
                 };
@@ -533,6 +639,7 @@ public static class TransactionApi
                     PaidByYou = expense.UserId == userId,
                     CategoryId = expense.CategoryId,
                     Category = expense.Category != null ? expense.Category.Name : null,
+                    MerchantId = expense.MerchantId,
                     MerchantName = expense.Merchant != null ? expense.Merchant.Name : null,
                     MerchantLogoUrl = expense.Merchant != null ? expense.Merchant.LogoUrl : null
                 };

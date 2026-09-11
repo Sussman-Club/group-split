@@ -101,6 +101,9 @@
                         }
                     </MudSelect>
 
+                    @* The rule beside the name, because "Groceries" says nothing about how
+                       Groceries is divided and the person picking is choosing both. The
+                       split step then shows what it came to, to the cent. *@
                     <MudSelect T="Guid?"
                                Label="Category"
                                Variant="Variant.Outlined"
@@ -110,9 +113,17 @@
                                Placeholder="">
                         @foreach (var category in _categories)
                         {
-                            <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">@category.Name</MudSelectItem>
+                            <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">
+                                @category.Name <span class="gs-muted">· @Divides(category)</span>
+                            </MudSelectItem>
                         }
                     </MudSelect>
+
+                    @* Where, not how it divides -- which is the category above. It buys
+                       the place's mark on the row and makes the shop searchable, and the
+                       CLI has been able to set it since merchants existed while this
+                       dialog could not. *@
+                    <MerchantPicker @bind-Value="_model.MerchantId"/>
 
                     @if (!DisablePayingUserSelection && _groupId is not null)
                     {
@@ -153,50 +164,17 @@
                 }
                 else
                 {
+                    @* One component and one list of people: editable when the person is
+                       stating the division, read-only when the API worked it out. It used
+                       to be two -- fields here and an "Everyone's share" echo underneath --
+                       so splitting by hand showed every member twice. *@
                     <SplitEditor Members="@_members"
                                  Amount="@_model.Amount"
                                  PayerId="@_model.PaidByUserId"
                                  Value="@_model.Splits"
-                                 ValueChanged="@OnSplitsChangedAsync"/>
-
-                    @* What is actually going to be stored. Shown for the ordinary case as
-                       well as the stated one, because "as the category says" is exactly the
-                       case where nobody can tell what it says without being told. *@
-                    <div>
-                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Everyone's share</MudText>
-                        @if (_previewError is { Length: > 0 })
-                        {
-                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_previewError</MudAlert>
-                        }
-                        else if (_preview is null)
-                        {
-                            <MudText Typo="Typo.caption">Working it out…</MudText>
-                        }
-                        else
-                        {
-                            @if (_preview.RuleName is { Length: > 0 } rule)
-                            {
-                                <MudText Typo="Typo.caption">Divided by the "@rule" rule.</MudText>
-                            }
-                            else if (_model.Splits is null)
-                            {
-                                <MudText Typo="Typo.caption">Divided evenly.</MudText>
-                            }
-
-                            <div class="gs-list" style="margin-top: 4px">
-                                @foreach (var share in _preview.Splits)
-                                {
-                                    <div class="gs-row" style="cursor: default; padding: 8px 4px">
-                                        <Avatar Name="@share.UserName" Size="sm" />
-                                        <div style="min-width: 0">
-                                            <div class="title"><span>@share.UserName</span></div>
-                                        </div>
-                                        <Money Value="share.Amount" />
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
+                                 ValueChanged="@OnSplitsChangedAsync"
+                                 Preview="@_preview"
+                                 PreviewError="@_previewError"/>
                 }
             </MudStack>
         }
@@ -262,6 +240,10 @@
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
+
+    /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
+    private static string Divides(CategoryResponse category) =>
+        category.DefaultSplitRuleName is { Length: > 0 } rule ? rule : "even split";
 
     private string Where => _groupId is null
         ? "Personal"

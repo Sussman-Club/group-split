@@ -22,6 +22,11 @@ public interface ICategoryService
 /// Half of what the old rule was. The other half -- how to divide -- is a
 /// <see cref="SplitRule"/> a category may point at, which is what lets Groceries, Utilities
 /// and Cleaning share one rule and change in one place when a roommate moves out.
+/// <para>
+/// The rule and not one of its versions, so the two edits stay apart: pointing a category
+/// somewhere else says nothing about what any rule contains, and editing a rule says nothing
+/// about which categories follow it.
+/// </para>
 /// </remarks>
 public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) : ICategoryService
 {
@@ -65,9 +70,9 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         category.Name = request.Name;
 
         // Re-pointing a category at a different rule changes what the next expense is
-        // pre-filled with, and nothing already recorded: past expenses hold the amounts
-        // they were divided into, which is what the rule versions were for and could not
-        // quite guarantee.
+        // pre-filled with, and nothing already recorded: a past expense holds both the
+        // amounts it was divided into and the version that divided them, neither of which
+        // this touches.
         category.DefaultSplitRule = await RuleOf(category.Group, request.DefaultSplitRuleId, ct);
 
         await dbContext.SaveChangesAsync(ct);

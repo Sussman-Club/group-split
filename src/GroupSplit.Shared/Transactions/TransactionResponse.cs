@@ -36,8 +36,19 @@ public record TransactionResponse
     public string? Category { get; set; }
 
     /// <summary>
-    /// Where it was spent, for an expense filed from a bank row that named a place, and
-    /// null for one somebody typed in. See <see cref="GroupActivityResponse.MerchantName"/>.
+    /// Where it was spent, or null for none.
+    /// </summary>
+    /// <remarks>
+    /// The id and not only the name, because the name alone cannot be edited back: a
+    /// dialog that reads a transaction and writes it again had no way to say "leave the
+    /// place as it is" and no way to show which row the name belonged to, so the field was
+    /// writable through the API and the CLI and unreachable from the app.
+    /// </remarks>
+    public Guid? MerchantId { get; set; }
+
+    /// <summary>
+    /// The place's name, for an expense filed from a bank row that named one, or one
+    /// somebody chose by hand. See <see cref="GroupActivityResponse.MerchantName"/>.
     /// </summary>
     public string? MerchantName { get; set; }
 

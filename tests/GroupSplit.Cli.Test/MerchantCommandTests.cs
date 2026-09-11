@@ -257,7 +257,13 @@ public sealed class MerchantCommandTests : IDisposable
     public async Task An_expense_can_forget_where_it_was_spent()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Weekly shop", amount = 40m });
+
+        // Naming a place it actually has, which is what forgetting one presupposes. The
+        // update builds the request from the expense and sends the difference, so a stub
+        // with no merchant on it would be asking to clear something already clear -- the
+        // case below.
+        _api.Returns($"/api/transactions/{id}",
+            new { id, name = "Weekly shop", amount = 40m, merchantId = Guid.NewGuid() });
 
         var result = await Cli.RunAsync("transactions", "update", id.ToString(), "--no-merchant");
 
@@ -268,6 +274,30 @@ public sealed class MerchantCommandTests : IDisposable
 
         Assert.Equal("/merchantId", operation.GetProperty("path").GetString(), ignoreCase: true);
         Assert.Equal(System.Text.Json.JsonValueKind.Null, operation.GetProperty("value").ValueKind);
+    }
+
+    /// <summary>
+    /// Forgetting a place an expense never had succeeds and sends nothing.
+    /// </summary>
+    /// <remarks>
+    /// The update sends the difference rather than whatever was named, so a flag that
+    /// moves nothing produces no operation. It still succeeds, which is the half that
+    /// matters: a script running the same command twice is not making a mistake the second
+    /// time.
+    /// </remarks>
+    [Fact]
+    public async Task Forgetting_a_place_it_never_had_changes_nothing_and_says_so_kindly()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", new { id, name = "Weekly shop", amount = 40m });
+
+        var result = await Cli.RunAsync("transactions", "update", id.ToString(), "--no-merchant");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var patch = Assert.Single(_api.Requests, request => request.Method == "PATCH");
+
+        Assert.Empty(patch.Json.EnumerateArray());
     }
 
     [Fact]

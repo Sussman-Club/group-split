@@ -2,6 +2,7 @@ using GroupSplit.Data;
 using GroupSplit.API.Errors;
 using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -179,7 +180,8 @@ public interface IGroupService
 public class GroupService(
     ICurrentUser userContext,
     AppDbContext context,
-    IGroupParticipants participants) : IGroupService
+    IGroupParticipants participants,
+    ISplitRuleRevisions revisions) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -325,28 +327,26 @@ public class GroupService(
     /// proportional and the division normalises by whatever total it is given, so what was
     /// theirs is redistributed among the rest rather than leaving a hole.
     /// <para>
-    /// This used to close every affected rule version instead, and needed two queries to do
-    /// it, because a shares version recorded its members in a different collection from the
-    /// percentage version it derived from and the first query never saw them. One
-    /// participants table, one query.
+    /// A new version of each rule that named them, rather than their places deleted out of
+    /// the version those rules are on. The rule has to stop naming them going forward; the
+    /// version an expense from last March was divided by has to go on saying what it said in
+    /// March, or that expense can no longer be divided again by the rule it had. Both are
+    /// true of a new version and neither is true of an edited one.
     /// </para>
     /// <para>
-    /// Recorded expenses are untouched: they hold the amounts they were divided into, so a
-    /// departure cannot restate what anybody owed last March.
+    /// Recorded expenses are untouched either way: they hold both the amounts they were
+    /// divided into and the version that divided them, so a departure cannot restate what
+    /// anybody owed.
     /// </para>
     /// </remarks>
     public async Task DetachMember(Group group, User user, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(user);
+
         group.Users.Remove(user);
 
-        var named = await (
-                from participant in context.Set<SplitRuleParticipant>()
-                where participant.SplitRule.Group == @group && participant.UserId == user.Id
-                select participant
-            )
-            .ToListAsync(cancellationToken);
-
-        context.RemoveRange(named);
+        await revisions.WithoutParticipant(group.Id, user.Id, toUserId: null, cancellationToken);
     }
 
     public async Task<IQueryable<Transaction>> GetGroupActivity(Guid groupId,
@@ -525,7 +525,7 @@ public class GroupService(
         // in September.
         var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
 
-        var transfer = Transfer.Between(resultGroup, from, to, request.Amount, date,
+        var transfer = resultGroup.SettlementBetween(from, to, request.Amount, date,
             request.Description?.Trim() is { Length: > 0 } note ? note : null);
 
         context.Add(transfer);

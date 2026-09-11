@@ -9,4 +9,4 @@ namespace GroupSplit.Data.Entities;
 /// these as a <c>double</c>, which is how 33.33 came to be 33.329999999999998 and why the
 /// arithmetic needed an epsilon to decide whether a rule added up.
 /// </remarks>
-public sealed class PercentSplitRule : WeightedSplitRule;
+public sealed class PercentSplitRuleVersion : WeightedSplitRuleVersion;

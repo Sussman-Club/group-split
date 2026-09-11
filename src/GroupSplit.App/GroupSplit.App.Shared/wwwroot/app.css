@@ -706,6 +706,34 @@ html:not([data-gs-ready]) .gs-group-card {
     transition: color var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
 }
 
+/* Text-labelled segments. Equal columns rather than content-width ones, because the
+   thumb's position and width are (100% - padding) / n -- it can only line up with
+   segments that are all the same size, and "Automatically" is twice "By hand". */
+.gs-seg.gs-seg-labels {
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+}
+
+.gs-seg-labels .gs-seg-btn {
+    width: auto;
+    padding: 0 14px;
+    font-family: inherit;
+    font-size: .8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.gs-seg-btn:disabled {
+    cursor: default;
+    opacity: .5;
+}
+
+.gs-seg-btn:disabled:hover {
+    color: var(--gs-muted);
+    transform: none;
+}
+
 .gs-seg-btn .mud-icon-root {
     width: 18px;
     height: 18px;

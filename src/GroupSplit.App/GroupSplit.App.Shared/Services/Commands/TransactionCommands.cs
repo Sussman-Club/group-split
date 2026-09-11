@@ -105,4 +105,23 @@ public sealed class TransactionCommands(
             return null;
         }
     }
+
+    public async Task<SplitPreviewResponse?> PreviewUpdateAsync(Guid transactionId,
+        UpdateTransactionRequest request, bool redivide = false, CancellationToken ct = default)
+    {
+        try
+        {
+            // Absent rather than false when nobody asked for it. The endpoint defaults the
+            // flag to false, so the two are the same answer -- but a `bool` flowing into
+            // the client's `bool?` put `?redivide=false` on every ordinary preview, and a
+            // log full of those reads as the app asking for something it is not asking
+            // for. The CLI carries the same `? true : null`.
+            return await transactions.PreviewUpdatedTransactionSplitsAsync(
+                transactionId, request, redivide ? true : null, ct);
+        }
+        catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
+        {
+            return null;
+        }
+    }
 }

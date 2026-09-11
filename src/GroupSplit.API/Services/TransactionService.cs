@@ -57,6 +57,38 @@ public interface ITransactionService
     /// arithmetic is exactly what the reshape was for getting rid of.
     /// </remarks>
     Task<SplitPreviewResponse> Preview(CreateTransactionRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// What an edit to an existing expense would divide it into, without saving it.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="Preview"/> with the expense's current values: an edit re-divides by
+    /// the version of the rule the expense was written under, and only a preview that
+    /// starts from the stored version can show the numbers the save will actually produce.
+    /// <para>
+    /// Expenses only. A settlement is not divided, so there is nothing here to show for
+    /// one, and it answers as a missing transaction does -- the same answer every other
+    /// expense-only surface gives it.
+    /// </para>
+    /// </remarks>
+    /// <param name="redivide">
+    /// True to show what dividing it again by its rule would come to, rather than what
+    /// <c>PATCH</c> does with an edit that says nothing about the shares -- which is keep
+    /// them. False is the default because it is what silence means, and the preview's whole
+    /// job is to reproduce the save.
+    /// <para>
+    /// It exists because the edit dialog has a control that means exactly this, and the
+    /// request body cannot carry it: an <see cref="UpdateTransactionRequest"/> with no
+    /// shares is the save contract for "keep them", and giving it a second way to say
+    /// something else would put the instruction that caused the 2026-09-08 incident back
+    /// inside the model the save is built from.
+    /// </para>
+    /// </param>
+    /// <exception cref="NotFoundException">
+    /// No expense with that id is the caller's to read, or the id names a settlement.
+    /// </exception>
+    Task<SplitPreviewResponse> PreviewUpdate(Guid id, UpdateTransactionRequest request,
+        bool redivide = false, CancellationToken ct = default);
     Task<UpdateTransactionRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
     Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default);
     ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request, CancellationToken ct = default);
@@ -254,15 +286,160 @@ public class TransactionService(
 
         await splitter.WriteSplitsAsync(draft, request.Splits, ct);
 
-        var named = draft.Splits.Select(split => split.UserId).ToList();
+        return await Describe(draft, group?.Id, ct);
+    }
+
+    /// <summary>
+    /// What an edit would be divided into, for an expense that already exists.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Preview"/> for one reason, and it is the reason the edit
+    /// dialog could not simply borrow that one: an edit is divided again by the version of
+    /// the rule the expense was <em>written under</em>, and a draft built from scratch has
+    /// no such version, so it would be shown today's rule and the save would then produce
+    /// different numbers. Carrying the version across is the whole of the difference.
+    /// <para>
+    /// Everything else is <see cref="Update"/>'s own resolution, in the same order, so a
+    /// preview that refuses is the refusal the save would have met -- shown at the step
+    /// where there is still a field on screen to fix it in.
+    /// </para>
+    /// </remarks>
+    public async Task<SplitPreviewResponse> PreviewUpdate(Guid id, UpdateTransactionRequest request,
+        bool redivide = false, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Expenses only, like every other surface that means "expenses". A transfer is one
+        // split to the recipient and has no division to preview; dividing it as though it
+        // were an expense would answer a question nobody asked, and confidently.
+        var existing = await ScopedTransaction(id)
+            .OfType<Expense>()
+            .Include(expense => expense.Splits)
+            .ThenInclude(split => split.User)
+            .Include(expense => expense.SplitRuleVersion)
+            .ThenInclude(version => version!.SplitRule)
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+        // Where Update asks it, and for the same answer. Reading is broader than changing --
+        // somebody who has left still sees what they paid there -- so without this the group
+        // lookup below reports the group missing, and a caller previewing the edit is told
+        // the group is gone (404) where the save would tell them they are (409). Same
+        // question, same step, same code.
+        await RefuseIfLeft(existing, ct);
+
+        var group = request.GroupId == existing.GroupId
+            ? await GroupFor(existing.GroupId, ct)
+            : await GroupFor(request.GroupId, ct);
+
+        var payer = await ParticipantOf(group, request.PaidByUserId, ct)
+                    ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                        group is null
+                            ? "A personal expense can only have been paid by you."
+                            : "The paying user is neither a member of the group nor invited to it.");
+
+        var category = await CategoryFor(group, request.CategoryId, ct);
+
+        // Silence about the shares is read here exactly as the PATCH reads it, and that is
+        // the whole job: the model a patch is applied to carries the expense's current
+        // shares, so an edit that says nothing about them carries them forward.
+        //
+        // Reproducing that rather than dividing afresh is what makes this a preview. An
+        // edit to the amount alone is refused by the save, because shares that summed to
+        // the old total do not sum to the new one, and a preview that quietly re-divided
+        // would promise a success the save will not give. Refusing here means the person
+        // meets it while there is still a flag to add.
+        //
+        // Three edits are not carried forward into. A move to another group, where the
+        // shares name people who may not be in the destination. An expense with no group on
+        // either side, whose single share the splitter refuses by name while the save of the
+        // very same edit sails through, because GetUpdateModel hands it no shares at all;
+        // group-less is excluded outright rather than left to "the group did not change",
+        // which is also true of two nulls and made every preview of a personal edit fail.
+        // And an explicit ask to divide it again, which is the one instruction silence
+        // cannot carry -- see the parameter.
+        var stated = request.Splits;
+
+        if (!redivide && stated is null && existing.GroupId is not null && group?.Id == existing.GroupId)
+        {
+            stated = [.. existing.Splits.Select(split =>
+                new SplitInput { UserId = split.UserId, Amount = split.Amount })];
+        }
+
+        // And then the save's own reading of that silence, which is the other half of
+        // reproducing it: shares a rule produced follow the inputs they were produced from,
+        // so an edit that moves one of those inputs divides again rather than carrying
+        // amounts that no longer answer anything. Asked of the stored expense, which this
+        // method never mutates, so it is the same question Update asks before it does.
+        if (!redivide &&
+            SaysNothingNew(existing.Splits, stated) &&
+            InputsMoved(existing, request) &&
+            await splitter.DivisionCameFromItsRule(existing, ct))
+        {
+            stated = null;
+        }
+
+        var draft = new Expense
+        {
+            Amount = request.Amount,
+            Currency = group?.Currency ?? Currencies.Default,
+            DateTime = request.DateTime.ToUniversalTime(),
+            Name = request.Name,
+            GroupId = group?.Id,
+            CategoryId = category?.Id,
+            UserId = payer.Id,
+
+            // The one line this method exists for. The splitter keeps it when it is still a
+            // version of the category's rule and reaches for the current one otherwise,
+            // which is exactly what the save does.
+            SplitRuleVersionId = existing.SplitRuleVersionId,
+
+            // The version itself and not only its id, because the answer names the rule that
+            // divided it and cannot load one from an id it was handed.
+            SplitRuleVersion = existing.SplitRuleVersion
+        };
+
+        // What it is divided into today, so the splitter can tell a division that changed
+        // from one merely carried forward -- the difference between an edit that loses the
+        // rule behind the expense and one that keeps it. Copies, because these belong to
+        // the stored expense and the draft is about to have its own written over them.
+        foreach (var split in existing.Splits)
+            draft.Splits.Add(new TransactionSplit { UserId = split.UserId, Amount = split.Amount });
+
+        await splitter.WriteSplitsAsync(draft, stated, ct);
+
+        return await Describe(draft, group?.Id, ct);
+    }
+
+    /// <summary>
+    /// A divided draft as the wire sees it: who owes what, under whose name, and which
+    /// version of which rule decided.
+    /// </summary>
+    /// <remarks>
+    /// The rule is read off the version the splitter settled on, and not off the category.
+    /// The two disagree in the cases that matter most: shares somebody typed have no rule
+    /// behind them at all and used to be reported under the category's, and an edit may be
+    /// divided by a version the rule has moved on from.
+    /// </remarks>
+    private Task<SplitPreviewResponse> Describe(Expense draft, Guid? groupId, CancellationToken ct) =>
+        Describe(groupId,
+            [.. draft.Splits.Select(split => new SplitAmount(split.UserId, split.Amount))],
+            draft.SplitRuleVersion,
+            ct);
+
+    /// <inheritdoc cref="Describe(Expense, Guid?, CancellationToken)"/>
+    private async Task<SplitPreviewResponse> Describe(
+        Guid? groupId, IReadOnlyList<SplitAmount> splits, SplitRuleVersion? version, CancellationToken ct)
+    {
+        var named = splits.Select(split => split.UserId).ToList();
 
         var names = await dbContext.Set<User>()
             .Where(user => named.Contains(user.Id))
             .ToDictionaryAsync(user => user.Id, People.Display, ct);
 
-        var waiting = await PendingInviteesIn(group?.Id, ct);
+        var waiting = await PendingInviteesIn(groupId, ct);
 
-        var splits = draft.Splits
+        var described = splits
             .Select(split => new TransactionSplitResponse(
                 split.UserId,
                 names.GetValueOrDefault(split.UserId, string.Empty),
@@ -270,22 +447,7 @@ public class TransactionService(
                 waiting.Contains(split.UserId)))
             .ToList();
 
-        return new SplitPreviewResponse(splits, await RuleNameFor(category, ct));
-    }
-
-    /// <summary>
-    /// The rule the category points at, by name, so the preview can say why the numbers
-    /// came out the way they did. Null when the division was even.
-    /// </summary>
-    private async Task<string?> RuleNameFor(Category? category, CancellationToken ct)
-    {
-        if (category?.DefaultSplitRuleId is not { } ruleId)
-            return null;
-
-        return await dbContext.Set<SplitRule>()
-            .Where(rule => rule.Id == ruleId)
-            .Select(rule => rule.Name)
-            .FirstOrDefaultAsync(ct);
+        return new SplitPreviewResponse(described, version?.SplitRule.Name, version?.SupersededAt);
     }
 
     public async Task<TransactionDetailsResponse?> GetDetails(Guid id, CancellationToken ct = default)
@@ -342,9 +504,11 @@ public class TransactionService(
             PaidToUserName = recipientSplit?.UserName,
             CategoryId = expense?.CategoryId,
             Category = expense?.Category?.Name,
+            MerchantId = transaction.MerchantId,
             MerchantName = transaction.Merchant?.Name,
             MerchantLogoUrl = transaction.Merchant?.LogoUrl,
-            Splits = splits
+            Splits = splits,
+            SplitRuleVersionId = transaction.SplitRuleVersionId
         };
     }
 
@@ -443,6 +607,14 @@ public class TransactionService(
 
         var expense = (Expense)transaction;
 
+        // Asked before a single field moves, because both questions are about the expense as
+        // it stands and neither can be asked afterwards: the first re-runs the division the
+        // stored shares came from, and the second is a comparison against values that are
+        // about to be overwritten.
+        var cameFromRule = await splitter.DivisionCameFromItsRule(expense, ct);
+        var inputsMoved = InputsMoved(expense, request);
+        var saysNothingNew = SaysNothingNew(expense.Splits, request.Splits);
+
         // The destination, which is the group it is already in unless the request moves it.
         // Resolved the way a create resolves its group -- one of the caller's, or none for
         // personal -- so moving into a group the caller is not in is the same 404 as
@@ -484,11 +656,63 @@ public class TransactionService(
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
         // edit for which keeping the old split would be right -- unless the caller stated
         // the division itself, which is the one case where keeping it is the whole point.
-        await splitter.WriteSplitsAsync(expense, request.Splits, ct);
+        await splitter.WriteSplitsAsync(
+            expense,
+            cameFromRule && inputsMoved && saysNothingNew ? null : request.Splits,
+            ct);
 
         await dbContext.SaveChangesAsync(ct);
 
         return expense;
+    }
+
+    /// <summary>
+    /// Whether the edit changes something the division was worked out from: the amount, the
+    /// payer, the category or the group.
+    /// </summary>
+    /// <remarks>
+    /// The other three fields an edit can touch -- the name, the description, the merchant
+    /// and the date -- say nothing about who owed what, so an edit confined to them must
+    /// leave the shares exactly where they are. That is the shape of the 2026-09-08 incident
+    /// and the reason this is asked at all.
+    /// <para>
+    /// Asked of the stored expense against the request, and so only answerable before the
+    /// request is applied to it.
+    /// </para>
+    /// </remarks>
+    private static bool InputsMoved(Expense expense, UpdateTransactionRequest request) =>
+        expense.Amount != request.Amount ||
+        expense.UserId != request.PaidByUserId ||
+        expense.CategoryId != request.CategoryId ||
+        expense.GroupId != request.GroupId;
+
+    /// <summary>
+    /// Whether the shares the request carries are the ones the expense already holds, and so
+    /// are silence about the division rather than a statement of it.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint carries the stored shares into every patch that says nothing about them
+    /// -- which is what keeps a rename from re-dividing anything -- so by the time a request
+    /// reaches here "keep these" and "make them exactly these" look identical, and the only
+    /// thing that tells them apart is whether the amounts differ from what is stored.
+    /// <para>
+    /// Which matters in one place and matters a great deal there: shares somebody typed
+    /// alongside a new amount are their decision about who carries it, and re-dividing over
+    /// the top of them would overrule it silently. Two divisions that agree to the cent are
+    /// the same division, so treating those as silence costs nothing.
+    /// </para>
+    /// </remarks>
+    private static bool SaysNothingNew(
+        ICollection<TransactionSplit> stored, IReadOnlyList<SplitInput>? stated)
+    {
+        if (stated is null)
+            return true;
+
+        if (stated.Count != stored.Count)
+            return false;
+
+        return stated.All(share => stored.Any(held =>
+            held.UserId == share.UserId && held.Amount == share.Amount));
     }
 
     /// <summary>

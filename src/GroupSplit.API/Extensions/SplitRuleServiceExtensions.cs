@@ -22,10 +22,10 @@ public static class SplitRuleServiceExtensions
     {
         public IServiceCollection AddSplitRuleServices()
         {
-            services.AddSplitRuleHandler<EvenSplitRule, EvenSplitRuleDto, EvenSplitRuleHandler>();
-            services.AddSplitRuleHandler<PayerSplitRule, PayerSplitRuleDto, PayerSplitRuleHandler>();
-            services.AddSplitRuleHandler<PercentSplitRule, PercentSplitRuleDto, PercentSplitRuleHandler>();
-            services.AddSplitRuleHandler<SharesSplitRule, SharesSplitRuleDto, SharesSplitRuleHandler>();
+            services.AddSplitRuleHandler<EvenSplitRuleVersion, EvenSplitRuleDto, EvenSplitRuleHandler>();
+            services.AddSplitRuleHandler<PayerSplitRuleVersion, PayerSplitRuleDto, PayerSplitRuleHandler>();
+            services.AddSplitRuleHandler<PercentSplitRuleVersion, PercentSplitRuleDto, PercentSplitRuleHandler>();
+            services.AddSplitRuleHandler<SharesSplitRuleVersion, SharesSplitRuleDto, SharesSplitRuleHandler>();
 
             // The dispatcher, which knows no kind by name: it makes the generic interface
             // from the runtime type and asks for it. Registered under both directions,
@@ -40,11 +40,11 @@ public static class SplitRuleServiceExtensions
         }
 
         /// <summary>
-        /// Registers one kind's handler under the entity it reads and the DTO it builds
-        /// from, which are the two keys the dispatcher looks it up by.
+        /// Registers one kind's handler under the version entity it reads and the DTO it
+        /// builds from, which are the two keys the dispatcher looks it up by.
         /// </summary>
         private IServiceCollection AddSplitRuleHandler<TRule, TDto, THandler>()
-            where TRule : SplitRule
+            where TRule : SplitRuleVersion
             where TDto : SplitRuleDto
             where THandler : class, ISplitRuleHandler<TRule>, ISplitRuleFactory<TDto>
         {

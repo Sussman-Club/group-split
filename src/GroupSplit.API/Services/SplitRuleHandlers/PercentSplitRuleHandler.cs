@@ -19,7 +19,7 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 /// </para>
 /// </remarks>
 public class PercentSplitRuleHandler
-    : WeightedSplitRuleHandler<PercentSplitRule>, ISplitRuleFactory<PercentSplitRuleDto>
+    : WeightedSplitRuleHandler<PercentSplitRuleVersion>, ISplitRuleFactory<PercentSplitRuleDto>
 {
     /// <summary>100%, in hundredths.</summary>
     public const int Total = 10_000;
@@ -27,31 +27,31 @@ public class PercentSplitRuleHandler
     private const int PerPercent = 100;
 
     protected override IReadOnlyList<SplitWeight> WeightsFor(
-        PercentSplitRule rule, IReadOnlyCollection<Guid> members) => StoredWeights(rule);
+        PercentSplitRuleVersion ruleVersion, IReadOnlyCollection<Guid> members) => StoredWeights(ruleVersion);
 
-    public override SplitRuleDto ToDto(PercentSplitRule rule) =>
+    public override SplitRuleDto ToDto(PercentSplitRuleVersion ruleVersion) =>
         new PercentSplitRuleDto
         {
-            Percentages = rule.Participants.ToDictionary(
+            Percentages = ruleVersion.Participants.ToDictionary(
                 participant => participant.UserId,
                 participant => participant.Weight / (decimal)PerPercent)
         };
 
-    public SplitRule FromDto(string name, PercentSplitRuleDto definition) =>
-        Naming(new PercentSplitRule { Name = name },
+    public SplitRuleVersion FromDto(PercentSplitRuleDto definition) =>
+        Naming(new PercentSplitRuleVersion(),
             definition.Percentages.Select(entry => new KeyValuePair<Guid, int>(
                 entry.Key,
                 // Rounded once, here, and never again: from this point the rule is whole
                 // hundredths and the arithmetic is exact.
                 (int)Math.Round(entry.Value * PerPercent, MidpointRounding.AwayFromZero))));
 
-    public override string? Invalid(PercentSplitRule rule) =>
-        base.Invalid(rule)
-        ?? (rule.Participants.Count == 0 ? "A percentage rule must name somebody." : null)
-        ?? (rule.Participants.Any(participant => participant.Weight < 0)
+    public override string? Invalid(PercentSplitRuleVersion ruleVersion) =>
+        base.Invalid(ruleVersion)
+        ?? (ruleVersion.Participants.Count == 0 ? "A percentage rule must name somebody." : null)
+        ?? (ruleVersion.Participants.Any(participant => participant.Weight < 0)
             ? "A percentage cannot be negative."
             : null)
-        ?? (rule.Participants.Sum(participant => participant.Weight) != Total
+        ?? (ruleVersion.Participants.Sum(participant => participant.Weight) != Total
             ? "Percentages must add up to 100%."
             : null);
 }

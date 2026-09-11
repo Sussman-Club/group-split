@@ -31,8 +31,13 @@ public class CategorySeeder(
         if (group is null)
             return null;
 
-        var rule = splitRules.FromDto(dto.Category, dto.SplitRule);
-        rule.Group = group;
+        // A rule and its first version, which is what a rule that has never been edited is.
+        var rule = new SplitRule
+        {
+            Group = group,
+            Name = dto.Category,
+            Versions = { splitRules.FromDto(dto.SplitRule) }
+        };
 
         return new Category
         {

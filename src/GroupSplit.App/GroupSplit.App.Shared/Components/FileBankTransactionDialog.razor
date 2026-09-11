@@ -117,50 +117,17 @@
             }
             else
             {
+                @* One component and one list of people, as the create and edit dialogs
+                   have: editable when the division is being stated, read-only when the API
+                   worked it out. There used to be an "Everyone's share" block under this
+                   one, so stating a division drew every member twice. *@
                 <SplitEditor Members="@_members"
                              Amount="@Row.Amount"
                              PayerId="@null"
                              Value="@_splits"
-                             ValueChanged="@OnSplitsChangedAsync"/>
-
-                @* What is actually going to be stored, asked of the API rather than worked
-                   out here, so the preview cannot disagree with the save. *@
-                <div>
-                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Everyone's share</MudText>
-
-                    @if (_previewError is { Length: > 0 })
-                    {
-                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_previewError</MudAlert>
-                    }
-                    else if (_preview is null)
-                    {
-                        <MudText Typo="Typo.caption">Working it out…</MudText>
-                    }
-                    else
-                    {
-                        @if (_preview.RuleName is { Length: > 0 } rule)
-                        {
-                            <MudText Typo="Typo.caption">Divided by the "@rule" rule.</MudText>
-                        }
-                        else if (_splits is null)
-                        {
-                            <MudText Typo="Typo.caption">Divided evenly.</MudText>
-                        }
-
-                        <div class="gs-list" style="margin-top: 4px">
-                            @foreach (var share in _preview.Splits)
-                            {
-                                <div class="gs-row" style="cursor: default; padding: 8px 4px">
-                                    <Avatar Name="@share.UserName" Size="sm" />
-                                    <div style="min-width: 0">
-                                        <div class="title"><span>@share.UserName</span></div>
-                                    </div>
-                                    <Money Value="share.Amount" />
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
+                             ValueChanged="@OnSplitsChangedAsync"
+                             Preview="@_preview"
+                             PreviewError="@_previewError"/>
             }
         </MudStack>
     </DialogContent>

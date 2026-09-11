@@ -50,10 +50,32 @@ public record UpdateTransactionRequest
     /// <remarks>
     /// This is the one field a JSON Patch has to be read for rather than merely applied.
     /// The model handed to a patch carries the splits the expense already has, so an
-    /// operation may address one of them -- but a patch that says nothing about them means
-    /// "recompute", not "keep these", because an edit to the amount, the payer or the
-    /// category changes what everybody owed. The endpoint tells those apart by looking at
-    /// the operations before applying them, and clears this when none touched it.
+    /// operation may address one of them.
+    /// <para>
+    /// What a patch that says nothing about them means is <em>never restate a division
+    /// somebody made</em>. The endpoint clears this only when the patch moves the expense
+    /// between groups, where the shares name people who may not be in the destination;
+    /// every other edit carries them forward, and shares a person typed are then stored back
+    /// exactly as they were -- so changing the amount alone on one of those is refused,
+    /// because shares that summed to the old total do not sum to the new one.
+    /// </para>
+    /// <para>
+    /// That is the opposite of what this comment used to claim, and the reversal was
+    /// deliberate: silence meant "divide it again" until 2026-09-09, and the day before
+    /// that a merchant-linking pass over 733 expenses re-divided every one of them from
+    /// their category's rule and moved 1,394.72 onto one member. Keeping what somebody
+    /// decided is the fix for that, and a metadata edit still cannot move money.
+    /// </para>
+    /// <para>
+    /// A division <em>nobody</em> decided is treated as what it is: the output of a rule --
+    /// or of an even split under no rule, which the app worked out just as surely -- over the
+    /// expense's amount, payer, category and group. When an edit moves one of those four, the
+    /// division is worked out again from the new values, by the version the expense was
+    /// written under. It takes both halves: shares that reproduce the expense's own division,
+    /// <em>and</em> an input having moved. Neither an absent operation on its own nor an
+    /// input moving on its own is enough, which is what keeps the 2026-09-08 shape
+    /// unreachable. See <c>TransactionSplitPatchTest</c> for the behaviour as it stands.
+    /// </para>
     /// </remarks>
     public IReadOnlyList<SplitInput>? Splits { get; set; }
 

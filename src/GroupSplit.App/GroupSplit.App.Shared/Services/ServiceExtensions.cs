@@ -42,6 +42,7 @@ public static class ServiceExtensions
             // the dialog that edits them together writes to both.
             services.TryAddScoped<ICategoryCommands, CategoryCommands>();
             services.TryAddScoped<ISplitRuleCommands, SplitRuleCommands>();
+            services.TryAddScoped<IMerchantCommands, MerchantCommands>();
 
             // Read by the inbox page and by the nav badge, so one service rather than two
             // that would each fetch the count.
@@ -69,6 +70,7 @@ public static class ServiceExtensions
             services.AddApiClient<IInvitationsClient, InvitationsClient>();
             services.AddApiClient<ICategoriesClient, CategoriesClient>();
             services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
+            services.AddApiClient<IMerchantsClient, MerchantsClient>();
             services.AddApiClient<IBankConnectionsClient, BankConnectionsClient>();
             services.AddApiClient<IInboxClient, InboxClient>();
             
