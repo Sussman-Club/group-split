@@ -210,8 +210,10 @@ Everything lives under
   newer API never produces a blank. A test checks every code in the catalog has an entry.
 - **`ApiErrorPresenter`** owns what happens next. `TryAsync(call, "Could not save the expense.")`
   runs the call and, on failure, shows the message as an error snackbar and returns `false`.
-  `CaptureAsync(call)` returns the `ApiError` without showing it, for a dialog that wants
-  the message inline and to stay open (see `ManageRulesDialog`). Anything that is not an API
+  `CaptureAsync(call)` returns the `ApiError` without showing it, for a caller that wants
+  the message inline, or none at all: `DivisionSourceReader` describes figures already on
+  screen, so a failure there leaves the line off rather than raising a snackbar about a
+  sentence. Anything that is not an API
   failure is rethrown: a bug belongs to the `ErrorBoundary` in `MainLayout`, not to a snackbar.
 - The page state services run every write through the presenter and return `Task<bool>`;
   the pages need only the answer.

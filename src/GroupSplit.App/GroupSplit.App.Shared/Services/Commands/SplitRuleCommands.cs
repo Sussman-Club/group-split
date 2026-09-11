@@ -95,7 +95,7 @@ public sealed class SplitRuleCommands(
         errors.TryAsync(async () =>
         {
             await rules.DeleteSplitRuleAsync(ruleId, ct);
-            snackbar.Add($"{name} deleted. Expenses it divided keep their split.", Severity.Success);
+            snackbar.Add($"{name} deleted.", Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not delete the split.");
 }

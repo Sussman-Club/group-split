@@ -21,9 +21,13 @@ namespace GroupSplit.App.Web.Test.State;
 /// Groceries until it was reloaded.
 /// <para>
 /// So each of these asks two things of a write: that it announced, which is what makes the
-/// pages catch up, and what it put in front of the person. The category speaks and the rule
-/// beside it stays quiet, because a person editing "how Groceries is split" pressed one
-/// button and changed one thing as far as they are concerned.
+/// pages catch up, and what it put in front of the person.
+/// </para>
+/// <para>
+/// A rule used to stay quiet here, because it was only ever written as the division behind a
+/// category and the category's own message covered both. The group's Splits tab edits them
+/// apart -- one rule may stand behind several categories -- so a rule now speaks for itself,
+/// and both of its messages say the same second thing: that nothing already recorded moved.
 /// </para>
 /// </remarks>
 public class CategoryAndRuleCommandTest

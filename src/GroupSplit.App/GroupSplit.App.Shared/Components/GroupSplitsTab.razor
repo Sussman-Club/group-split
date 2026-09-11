@@ -129,10 +129,19 @@
                                     <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
                                                    aria-label="@($"Edit {rule.Name}")"
                                                    OnClick="@(() => EditRuleAsync(rule, used))"/>
-                                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
-                                                   Color="Color.Error"
-                                                   aria-label="@($"Delete {rule.Name}")"
-                                                   OnClick="@(() => DeleteRuleAsync(rule))"/>
+                                    @* Not offered while a category still points at it: the
+                                       API refuses to delete a rule in use, and an action
+                                       that can only fail is worse than none. Re-point the
+                                       categories and it comes back. *@
+                                    <MudTooltip Text="@(used.Count > 0
+                                                          ? "In use by a category"
+                                                          : "Delete this rule")">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       Disabled="@(used.Count > 0)"
+                                                       aria-label="@($"Delete {rule.Name}")"
+                                                       OnClick="@(() => DeleteRuleAsync(rule))"/>
+                                    </MudTooltip>
                                 </span>
                             </div>
 
@@ -265,9 +274,12 @@
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
+            @* The API refuses a category that still has expenses filed under it rather than
+               taking a group's spending history with it, so what this can promise is only
+               what it leaves alone. *@
             { dialog => dialog.ContentText,
-                $"Delete the category '{category.Name}'? Expenses filed under it keep their "
-                + "splits, and the rule it divides by is left alone." },
+                $"Delete the category '{category.Name}'? One with expenses filed under it "
+                + "cannot be deleted. The rule it divides by is left alone either way." },
             { dialog => dialog.ButtonText, "Delete" },
             { dialog => dialog.Color, Color.Error }
         };
@@ -310,17 +322,24 @@
             await LoadAsync();
     }
 
+    /// <summary>
+    /// Removes a rule nothing points at.
+    /// </summary>
+    /// <remarks>
+    /// The API refuses one that anything has been divided by, as well as one a category
+    /// still names, so that an expense is never left holding amounts with no account of
+    /// where they came from. The categories are checked here, which is why the button is not
+    /// offered while any of them point at it; the expenses are not, so the refusal is one
+    /// somebody may still meet, and the message names the reason.
+    /// </remarks>
     private async Task DeleteRuleAsync(SplitRuleResponse rule)
     {
-        var used = UsedBy(rule.Id);
-
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { dialog => dialog.ContentText,
-                used.Count == 0
-                    ? $"Delete the split rule '{rule.Name}'? Expenses it divided keep their splits."
-                    : $"Delete the split rule '{rule.Name}'? {string.Join(", ", used)} would divide "
-                      + "evenly instead. Expenses it divided keep their splits." },
+                $"Delete the split rule '{rule.Name}'? If anything was ever divided by it, "
+                + "this is refused rather than leaving those expenses without an account of "
+                + "what produced their shares." },
             { dialog => dialog.ButtonText, "Delete" },
             { dialog => dialog.Color, Color.Error }
         };
