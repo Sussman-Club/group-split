@@ -1,0 +1,347 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@namespace GroupSplit.App.Shared.Components
+@inject ISplitRuleCommands Rules
+@inject ICategoriesClient CategoriesClient
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject IDialogService DialogService
+@inject LocalClock Clock
+
+@*
+    Every division a rule has stood for, and when.
+
+    This is what "What it used to be (3)" became -- a collapsed panel in the edit dialog
+    whose entries read "By shares, between 3", which names neither who was on what nor what
+    it came to. A rule's history is the record an expense points at, so it is worth reading:
+    the window each version stood for, who it named and what they held, what one edit moved,
+    and a way back to a division the group has used before.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <div class="gs-dialog-head">
+            <div style="min-width: 0">
+                <div class="gs-eyebrow">Split rule</div>
+                <h2 class="gs-dialog-title">@(_history?.Name ?? "Split rule")</h2>
+            </div>
+
+            @if (_history is not null)
+            {
+                <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.Edit"
+                           OnClick="@EditAsync">
+                    Edit the split
+                </MudButton>
+            }
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_history is not { } history)
+        {
+            <div class="gs-empty" style="padding: 32px">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            </div>
+        }
+        else
+        {
+            <div class="gs-stack" style="gap: 18px">
+
+                @if (_usedBy.Count > 1)
+                {
+                    <div class="gs-notice is-warn">
+                        <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
+                        <div class="gs-notice-body">
+                            <strong>@_usedBy.Listed() all divide by this rule</strong>
+                            <span>
+                                Editing it changes what every one of them pre-fills, from now
+                                on. Expenses already recorded keep the split they were saved
+                                with.
+                            </span>
+                        </div>
+                    </div>
+                }
+
+                <div class="gs-timeline">
+                    @for (var index = 0; index < history.Versions.Count; index++)
+                    {
+                        var version = history.Versions[index];
+                        var older = index + 1 < history.Versions.Count ? history.Versions[index + 1] : null;
+                        var current = version.SupersededAt is null;
+                        var last = index == history.Versions.Count - 1;
+
+                        <div class="gs-version @(current ? "is-current" : "")" @key="version.Id">
+                            <div class="gs-version-rail">
+                                <span class="gs-version-dot"></span>
+                                @if (!last)
+                                {
+                                    <span class="gs-version-line"></span>
+                                }
+                            </div>
+
+                            <div class="gs-version-body">
+                                <div class="gs-version-head">
+                                    <span class="gs-inline" style="gap: 8px">
+                                        <span class="gs-version-when">@Window(version)</span>
+                                        @if (current)
+                                        {
+                                            <span class="gs-tag">Current</span>
+                                        }
+                                    </span>
+                                    <span class="gs-version-count">@version.Definition.Ratio()</span>
+                                </div>
+
+                                @{
+                                    var weights = version.Definition.Weights(_names);
+                                }
+
+                                @if (weights.Count > 0)
+                                {
+                                    <div>
+                                        @foreach (var weight in weights)
+                                        {
+                                            <div class="gs-weight" @key="weight.UserId">
+                                                <Avatar Name="@weight.Name" Size="sm"/>
+                                                <span class="gs-weight-who">@weight.Name</span>
+                                                <span class="gs-weight-held">@weight.Held</span>
+                                                <span class="gs-weight-share">
+                                                    @(weight.Share is { } share ? $"{share:0.#}%" : "—")
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    @* A division that names nobody -- the whole group evenly,
+                                       or all on whoever paid -- has no per-person row to draw,
+                                       and the phrase says the whole of it. *@
+                                    <MudText Typo="Typo.body2">@version.Definition.Summary(_names)</MudText>
+                                }
+
+                                @if (Deltas(version, older) is { Count: > 0 } deltas)
+                                {
+                                    <div class="gs-version-foot">
+                                        <span class="gs-inline" style="gap: 6px">
+                                            <span class="gs-version-count">What changed</span>
+                                            @foreach (var delta in deltas)
+                                            {
+                                                <span class="gs-delta @delta.Class">@delta.Text</span>
+                                            }
+                                        </span>
+                                    </div>
+                                }
+
+                                @if (!current)
+                                {
+                                    <div class="gs-version-foot">
+                                        <span class="gs-version-count">
+                                            @(last ? "The oldest division recorded here" : "Superseded")
+                                        </span>
+                                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                   Class="gs-btn-pill"
+                                                   Disabled="@_saving"
+                                                   OnClick="@(() => RestoreAsync(version))">
+                                            Divide this way again
+                                        </MudButton>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid SplitRuleId { get; set; }
+
+    private SplitRuleHistoryResponse? _history;
+
+    /// <summary>Who the group's members are, so a version names people rather than ids.</summary>
+    private Dictionary<Guid, string> _names = [];
+
+    /// <summary>The categories that divide by this rule.</summary>
+    private IReadOnlyList<string> _usedBy = [];
+
+    private bool _saving;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    /// <summary>
+    /// The history, and then the two things that turn ids into sentences.
+    /// </summary>
+    /// <remarks>
+    /// The history is the subject: without it there is nothing to show and the dialog
+    /// closes, once the presenter has said why. The other two are read quietly -- a version
+    /// with unnamed people in it is still worth reading, and a failure to count the
+    /// categories should not take the history off the screen.
+    /// </remarks>
+    private async Task LoadAsync()
+    {
+        var history = await Rules.HistoryAsync(SplitRuleId);
+
+        if (history is null)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        _history = history;
+
+        await Errors.CaptureAsync(async () =>
+        {
+            var members = await GroupsClient.GetGroupMembersAsync(history.GroupId);
+            _names = members.ToDictionary(member => member.Id, member => member.FullName);
+        });
+
+        await Errors.CaptureAsync(async () =>
+        {
+            var categories = await CategoriesClient.GetCategoriesAsync(history.GroupId);
+
+            _usedBy =
+            [
+                .. categories
+                    .Where(category => category.DefaultSplitRuleId == SplitRuleId)
+                    .Select(category => category.Name)
+                    .Order()
+            ];
+        });
+
+        StateHasChanged();
+        MudDialog.StateHasChanged();
+    }
+
+    /// <summary>The window a version stood for, as a person would write it.</summary>
+    private string Window(SplitRuleVersionResponse version)
+    {
+        var from = Clock.Local(version.StartedAt);
+
+        if (version.SupersededAt is not { } until)
+            return $"Since {Day(from)}";
+
+        var to = Clock.Local(until);
+
+        return from.Year == to.Year
+            ? $"{from:d MMM} – {Day(to)}"
+            : $"{Day(from)} – {Day(to)}";
+    }
+
+    private static string Day(DateTimeOffset when) => when.ToString("d MMM yyyy");
+
+    /// <summary>
+    /// What one edit moved, per person, against the version it replaced.
+    /// </summary>
+    /// <remarks>
+    /// Proportions rather than the weights themselves: 2, 2, 1 becoming 1, 1, 1 is not
+    /// obviously a change to anybody's position, and 40% becoming 33.3% is. Where one side
+    /// names nobody -- evenly between the whole group, or all on whoever paid -- there is no
+    /// per-person comparison to make and the shapes are named instead.
+    /// </remarks>
+    private IReadOnlyList<(string Text, string Class)> Deltas(
+        SplitRuleVersionResponse version, SplitRuleVersionResponse? older)
+    {
+        if (older is null) return [];
+
+        var now = version.Definition.Weights(_names);
+        var before = older.Definition.Weights(_names);
+
+        if (now.Count == 0 || before.Count == 0)
+            return [(older.Definition.Ratio() + " → " + version.Definition.Ratio(), "")];
+
+        var was = before.ToDictionary(weight => weight.UserId, weight => weight.Share);
+        var moved = new List<(string, string)>();
+
+        foreach (var weight in now)
+        {
+            var from = was.GetValueOrDefault(weight.UserId);
+            var to = weight.Share;
+
+            if (from == to) continue;
+
+            moved.Add((
+                $"{weight.Name} {Percent(from)} → {Percent(to)}",
+                to > from ? "is-up" : "is-down"));
+        }
+
+        // Somebody the older version named and this one does not: their share went to zero,
+        // which is the largest move of the lot and the one most worth saying.
+        foreach (var gone in before.Where(weight => now.All(held => held.UserId != weight.UserId)))
+            moved.Add(($"{gone.Name} {Percent(gone.Share)} → none", "is-down"));
+
+        return moved;
+    }
+
+    private static string Percent(decimal? share) => share is { } value ? $"{value:0.#}%" : "none";
+
+    /// <summary>
+    /// Makes an older division what the rule says again.
+    /// </summary>
+    /// <remarks>
+    /// An ordinary edit, deliberately: it opens a new version dated now rather than
+    /// reopening the old one. Nothing already recorded moves, and the rule's history gains
+    /// an entry saying the group went back -- which is what happened.
+    /// </remarks>
+    private async Task RestoreAsync(SplitRuleVersionResponse version)
+    {
+        if (_history is not { } history || _saving) return;
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { dialog => dialog.ContentText,
+                $"{history.Name} will divide by this again from now on. Expenses already "
+                + "recorded keep the split they were saved with." },
+            { dialog => dialog.ButtonText, "Use this division" },
+            { dialog => dialog.Color, Color.Primary }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Divide this way again", parameters);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        _saving = true;
+
+        var saved = await Rules.UpdateAsync(history.Id, new UpdateSplitRuleRequest
+        {
+            Name = history.Name,
+            Definition = version.Definition
+        });
+
+        _saving = false;
+
+        if (saved is not null)
+            await LoadAsync();
+    }
+
+    private async Task EditAsync()
+    {
+        if (_history is not { } history) return;
+
+        var parameters = new DialogParameters<EditRuleDialog>
+        {
+            { dialog => dialog.GroupId, history.GroupId },
+            { dialog => dialog.SplitRuleId, history.Id },
+            { dialog => dialog.UsedBy, _usedBy }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
+
+        if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
+            await LoadAsync();
+    }
+
+    private void Close() => MudDialog.Close();
+}

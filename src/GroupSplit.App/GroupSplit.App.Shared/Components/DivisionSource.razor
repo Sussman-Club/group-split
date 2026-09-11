@@ -1,0 +1,101 @@
+@using GroupSplit.App.Shared.Services.Transactions
+@namespace GroupSplit.App.Shared.Components
+@inject LocalClock Clock
+
+@*
+    Where an expense's shares came from, stated rather than guessed at.
+
+    The dialog that shows an expense used to work this out from the amounts: three equal
+    figures got the word "evenly", and anything else got nothing at all. That reading is
+    wrong in both directions -- a two-to-one rule on an amount that happens to divide
+    equally reads as even, and shares somebody typed by hand to be equal read as a rule's --
+    and it is exactly the guess the version id on the response exists to end.
+
+    Pure presentation: DivisionSourceReader does the joining, because the dialog that
+    corrects this needs the same answer and neither should ask twice.
+*@
+
+@if (Info is { } source)
+{
+    <div class="gs-provenance @(source.ByHand ? "is-own" : "")">
+        <MudIcon Icon="@(source.ByHand ? Icons.Material.Outlined.DriveFileRenameOutline : Icons.Material.Outlined.AccountTree)" />
+
+        <div class="gs-provenance-body">
+            <span class="gs-provenance-what">@What(source)</span>
+            <span class="gs-provenance-when">@When(source)</span>
+        </div>
+
+        <span class="gs-tag @TagClass(source)">@TagText(source)</span>
+
+        @Action
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// What divided it, already resolved. Null renders nothing: the read failed, or this is
+    /// a personal expense, where there are no rules to have divided anything.
+    /// </summary>
+    [Parameter] public DivisionSourceInfo? Info { get; set; }
+
+    /// <summary>The right-hand slot, for a caller offering to correct what this says.</summary>
+    [Parameter] public RenderFragment? Action { get; set; }
+
+    /// <remarks>
+    /// The unreachable case is tested before the name, and the order is the whole of it: the
+    /// rule whose name is in hand is the one the category points at <em>now</em>, and when
+    /// the recorded version is not one of its own, that name belongs to a different division
+    /// from the one that produced these figures. Naming it would be a more confident lie
+    /// than the guess this line replaced.
+    /// </remarks>
+    private string What(DivisionSourceInfo source) => source switch
+    {
+        { ByHand: true } => "Amounts set by hand",
+        { RuleUnknown: true } => "Divided by a split rule",
+        { RuleName: { Length: > 0 } rule } => $"Divided by {rule}",
+        _ => "Divided by a split rule"
+    };
+
+    /// <summary>
+    /// The window the version stood for. It is the whole point of the line: an expense
+    /// divided by what the rule said in March is not divided by what it says now, and the
+    /// dates are how somebody sees that without opening the rule.
+    /// </summary>
+    private string When(DivisionSourceInfo source)
+    {
+        if (source.ByHand)
+            return "no rule divided this one";
+
+        if (source.Version is not { } version)
+            return "the category it is filed under names a different rule now";
+
+        var from = Clock.Local(version.StartedAt);
+
+        if (version.SupersededAt is not { } until)
+            return $"the version in force since {Day(from)}";
+
+        var to = Clock.Local(until);
+
+        // "1 Mar – 12 Aug 2026" rather than the year twice. Two years stay two years.
+        return from.Year == to.Year
+            ? $"the version in force {from.ToString("d MMM")} – {Day(to)}"
+            : $"the version in force {Day(from)} – {Day(to)}";
+    }
+
+    private static string Day(DateTimeOffset when) => when.ToString("d MMM yyyy");
+
+    private static string TagText(DivisionSourceInfo source) => source switch
+    {
+        { ByHand: true } => "By hand",
+        { RuleUnknown: true } => "Another rule",
+        { Superseded: true } => "Edited since",
+        _ => "Current"
+    };
+
+    private static string TagClass(DivisionSourceInfo source) => source switch
+    {
+        { ByHand: true } or { RuleUnknown: true } => "neutral",
+        { Superseded: true } => "clay",
+        _ => ""
+    };
+}

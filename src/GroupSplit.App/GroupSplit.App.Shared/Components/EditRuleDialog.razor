@@ -5,50 +5,55 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">Edit Rule</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Edit split rule</MudText>
     </TitleContent>
 
     <DialogContent>
-        <MudText Typo="Typo.body2" Class="mb-4">
-            Configure how this category should be split in the group.
-        </MudText>
-        <RuleEditorForm
-            @ref="_form"
-            GroupId="GroupId"
-            Model="_model"
-        />
-
-        @* Saying it here, where the decision is made. A person editing a split reasonably
-           fears they are about to restate what everyone owed last month; they are not, and
-           the sentence costs less than the support question. *@
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">
-            Changing the split starts a new version of it. Expenses already recorded keep the
-            split they were saved with.
-        </MudAlert>
-
-        @if (_past.Count > 0)
+        @if (_model is null)
         {
-            <MudExpansionPanels Elevation="0" Class="mt-3">
-                <MudExpansionPanel Text="@($"What it used to be ({_past.Count})")">
-                    <MudStack Spacing="2">
-                        @foreach (var version in _past)
-                        {
-                            <div @key="version.Id" class="gs-inline" style="justify-content: space-between">
-                                <MudText Typo="Typo.caption">@Describe(version.Definition)</MudText>
-                                <MudText Typo="Typo.caption" Class="gs-muted">
-                                    until @version.SupersededAt?.ToLocalTime().ToString("d MMM yyyy")
-                                </MudText>
-                            </div>
-                        }
-                    </MudStack>
-                </MudExpansionPanel>
-            </MudExpansionPanels>
+            <div class="gs-empty" style="padding: 32px">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            </div>
+        }
+        else
+        {
+            <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model"/>
+
+            @* Said here, where the decision is made. A person editing a division reasonably
+               fears they are about to restate what everyone owed last month; they are not,
+               and the sentence costs less than the support question. *@
+            <div class="gs-notice mt-4">
+                <MudIcon Icon="@Icons.Material.Outlined.History"/>
+                <div class="gs-notice-body">
+                    <strong>Changing the division starts a new version of it</strong>
+                    <span>
+                        Expenses already recorded keep the split they were saved with, and go
+                        on naming the version that produced it.
+                    </span>
+                </div>
+            </div>
+
+            @* The consequence somebody cannot see from here: this rule may stand behind
+               more than the category they arrived from. *@
+            @if (UsedBy.Count > 1)
+            {
+                <div class="gs-notice is-warn mt-3">
+                    <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
+                    <div class="gs-notice-body">
+                        <strong>@UsedBy.Listed() all divide by this rule</strong>
+                        <span>Editing it changes what every one of them pre-fills, from now on.</span>
+                    </div>
+                </div>
+            }
         }
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit">Edit</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@(_model is null || _saving)" OnClick="@Submit">
+            Save
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -56,110 +61,97 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public Guid GroupId { get; set; }
-    [Parameter] public RuleEditorForm.RuleEditorModel OriginalModel { get; set; } = null!;
+
+    [Parameter] public Guid SplitRuleId { get; set; }
 
     /// <summary>
-    /// The rule behind the category, when it has one. Null for a category that divides
-    /// evenly by naming no rule -- there is no history to show, because there is nothing yet
-    /// to have a history.
+    /// The categories that divide by this rule, named. Handed in rather than read, because
+    /// the screen that opens this dialog is already holding them.
     /// </summary>
-    [Parameter] public Guid? SplitRuleId { get; set; }
+    [Parameter] public IReadOnlyList<string> UsedBy { get; set; } = [];
 
-    private RuleEditorForm.RuleEditorModel _model = new();
+    private RuleEditorForm.RuleEditorModel? _model;
     private RuleEditorForm _form = null!;
-
-    // The superseded ones only. What it says now is the form above.
-    private IReadOnlyList<SplitRuleVersionResponse> _past = [];
+    private bool _saving;
 
     /// <summary>
-    /// A copy to edit, and then what the rule used to be.
+    /// A copy to edit, so cancelling leaves the rule as it was on the screen behind.
     /// </summary>
-    /// <remarks>
-    /// One method and not a sync <c>OnInitialized</c> beside it, though Blazor would run
-    /// both: the copy has to exist before the first render and the history does not, which
-    /// is a difference the ordering of two overrides states only to a reader who already
-    /// knows the lifecycle. Everything above the await runs before the first render anyway,
-    /// so the split bought nothing.
-    /// </remarks>
     protected override async Task OnInitializedAsync()
     {
+        var rule = await Rules.GetAsync(SplitRuleId);
+
+        if (rule is null)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
         _model = new RuleEditorForm.RuleEditorModel
         {
-            Category = OriginalModel.Category,
-            Version = CloneVersion(OriginalModel.Version)
+            Name = rule.Name,
+            Version = CloneVersion(rule.Definition)
         };
-
-        if (SplitRuleId is not { } ruleId)
-            return;
-
-        var history = await Rules.HistoryAsync(ruleId);
-
-        // Null is a read that failed, and the presenter has already said so. The dialog is
-        // still worth showing: editing the split does not depend on knowing what it was.
-        if (history is null)
-            return;
-
-        _past = [..history.Versions.Where(version => version.SupersededAt is not null)];
 
         StateHasChanged();
     }
 
-    private static string Describe(SplitRuleDto definition) => definition switch
-    {
-        PercentSplitRuleDto percent => $"By percentage, between {percent.Percentages.Count}",
-        SharesSplitRuleDto shares => $"By shares, between {shares.Shares.Count}",
-        EvenSplitRuleDto { Among.Count: 0 } => "Evenly, between the whole group",
-        EvenSplitRuleDto even => $"Evenly, between {even.Among.Count}",
-        PayerSplitRuleDto => "All on whoever paid",
-        _ => "A split"
-    };
-
     /// <summary>
-    /// The division to edit, copied so that cancelling leaves the caller's model alone.
+    /// The division to edit, copied so nothing else on screen moves while it is edited.
     /// </summary>
     /// <remarks>
-    /// An even split reaches here two ways -- a category that names no rule, which
-    /// ManageRulesDialog hands over as one, and a rule that genuinely is one -- and used to
-    /// meet the default arm and throw as the dialog initialised, so neither could be opened
-    /// at all. The form has no *Even* type to select, so it opens with none chosen and
-    /// stays invalid until somebody picks one, which is what "this divides evenly, say how
-    /// you want it to divide" looks like.
+    /// The dictionaries are the reason. <see cref="RuleEditorForm"/> binds its fields
+    /// straight through the indexer, so sharing an instance with the caller's list would
+    /// edit the row behind the dialog as somebody typed -- and leave it edited after
+    /// Cancel.
     /// </remarks>
-    private static SplitRuleDto CloneVersion(SplitRuleDto source)
+    private static SplitRuleDto CloneVersion(SplitRuleDto source) => source switch
     {
-        return source switch
+        PercentSplitRuleDto percent => new PercentSplitRuleDto
         {
-            PercentSplitRuleDto p => new PercentSplitRuleDto
-            {
-                Percentages = p.Percentages.ToDictionary(x => x.Key, x => x.Value)
-            },
+            Percentages = percent.Percentages.ToDictionary(entry => entry.Key, entry => entry.Value)
+        },
 
-            SharesSplitRuleDto s => new SharesSplitRuleDto
-            {
-                Shares = s.Shares.ToDictionary(x => x.Key, x => x.Value)
-            },
+        SharesSplitRuleDto shares => new SharesSplitRuleDto
+        {
+            Shares = shares.Shares.ToDictionary(entry => entry.Key, entry => entry.Value)
+        },
 
-            PayerSplitRuleDto => new PayerSplitRuleDto(),
+        PayerSplitRuleDto => new PayerSplitRuleDto(),
 
-            EvenSplitRuleDto even => new EvenSplitRuleDto([..even.Among]),
+        EvenSplitRuleDto even => new EvenSplitRuleDto([.. even.Among]),
 
-            _ => throw new NotSupportedException("Unsupported rule version type")
-        };
-    }
+        // Every kind the API can return is above. A new one reaching a client that predates
+        // it should not take the dialog down with it: it opens with no type chosen, which is
+        // what "say how you want this to divide" looks like.
+        _ => new EvenSplitRuleDto()
+    };
 
     private async Task Submit()
     {
+        if (_model is null || _saving) return;
+
         await _form.Validate();
 
         if (!_form.IsValid)
             return;
 
-        // The edited model, whole. Categories and split rules are replaced with PUT
-        // rather than patched, so there is nothing to be gained by working out which half
-        // moved -- and the dialog no longer has to keep a JSON Patch document in step with
-        // the shape of the request.
-        MudDialog.Close(DialogResult.Ok(_model));
+        _saving = true;
+
+        // A PUT, so the whole of what the rule is to become goes over: the API adds a
+        // version when the division actually moved and none when only the name did.
+        var saved = await Rules.UpdateAsync(SplitRuleId, new UpdateSplitRuleRequest
+        {
+            Name = _model.Name,
+            Definition = _model.Version
+        });
+
+        _saving = false;
+
+        if (saved is not null)
+            MudDialog.Close(DialogResult.Ok(saved));
     }
+
 
     private void Cancel() => MudDialog.Cancel();
 }

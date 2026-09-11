@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Transactions
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
@@ -10,6 +11,7 @@
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@inject DivisionSourceReader Source
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 
 @*
@@ -168,6 +170,85 @@
                 }
                 else
                 {
+                    @* What produced the shares this expense is holding, and a way to correct
+                       it. The fact decides what an edit does -- an expense recorded as a
+                       rule's follows that rule when the amount or the payer moves, and one
+                       whose shares are its own is refused rather than restated -- and until
+                       now a client could create it wrongly and never put it right. *@
+                    @if (ShowSource)
+                    {
+                        <DivisionSource Info="@_source">
+                            <Action>
+                                @if (Correctable)
+                                {
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                               Class="gs-btn-pill"
+                                               OnClick="@(() => _correcting = !_correcting)">
+                                        @(_correcting ? "Close" : "Correct")
+                                    </MudButton>
+                                }
+                            </Action>
+                        </DivisionSource>
+                    }
+
+                    @if (_correcting && _source is { } source)
+                    {
+                        <div class="gs-card gs-card-pad" style="padding: 16px">
+                            <MudStack Spacing="3">
+                                <div>
+                                    <div style="font-weight: 700; font-size: .875rem">
+                                        What produced these amounts?
+                                    </div>
+                                    <div class="gs-muted" style="font-size: .75rem">
+                                        Provenance only — no share moves. It decides what happens
+                                        the next time the amount or the payer changes.
+                                    </div>
+                                </div>
+
+                                <MudRadioGroup T="Guid?" Value="@_chosen" ValueChanged="@OnChosenChanged">
+                                    @if (source.Versions.Count > 0)
+                                    {
+                                        <div style="font-weight: 700; font-size: .875rem; margin-bottom: 4px">
+                                            A version of @source.RuleName divided them
+                                        </div>
+
+                                        @foreach (var version in source.Versions)
+                                        {
+                                            <div class="gs-inline" style="gap: 8px; flex-wrap: nowrap"
+                                                 @key="version.Id">
+                                                <MudRadio T="Guid?" Value="@((Guid?)version.Id)" Dense="true">
+                                                    @VersionWindow(version)
+                                                </MudRadio>
+                                                <span class="gs-provenance-when">@version.Definition.Ratio()</span>
+                                            </div>
+                                        }
+                                    }
+
+                                    <MudRadio T="Guid?" Value="@((Guid?)null)" Dense="true">
+                                        These amounts are the expense&rsquo;s own
+                                    </MudRadio>
+                                </MudRadioGroup>
+
+                                <div class="gs-muted" style="font-size: .75rem">
+                                    @(_chosen is null
+                                        ? "A later edit to the amount will be refused rather than restate shares somebody set."
+                                        : "A later edit to the amount will be divided again by that version.")
+                                </div>
+
+                                <div class="gs-inline" style="justify-content: flex-end; gap: 8px">
+                                    <MudButton Variant="Variant.Text" OnClick="@(() => _correcting = false)">
+                                        Cancel
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                                               Disabled="@(_recording || _chosen == source.VersionId)"
+                                               OnClick="@RecordSourceAsync">
+                                        Record
+                                    </MudButton>
+                                </div>
+                            </MudStack>
+                        </div>
+                    }
+
                     <SplitEditor Members="@_members"
                                  Amount="@_model.Amount"
                                  PayerId="@_model.PaidByUserId"
@@ -256,6 +337,33 @@
     /// </remarks>
     private IReadOnlyList<SplitInput>? _openedWith;
 
+    /// <summary>What divided the expense as it stands, resolved to a rule and a window.</summary>
+    private DivisionSourceInfo? _source;
+
+    private bool _correcting;
+    private bool _recording;
+
+    /// <summary>Which version the correction panel is proposing; null for "the expense's own".</summary>
+    private Guid? _chosen;
+
+    /// <summary>
+    /// Whether the strip describes the expense in front of the person.
+    /// </summary>
+    /// <remarks>
+    /// It describes what is <em>stored</em>, and moving the expense to another group
+    /// rewrites that on save -- the shares name the old group's members and the endpoint
+    /// drops them. So it goes away rather than describing an expense that is about to stop
+    /// existing in that form.
+    /// </remarks>
+    private bool ShowSource => IsShared && _model.GroupId == Original.GroupId && _source is not null;
+
+    /// <summary>
+    /// Whether there is another answer to give. A hand-split expense under a category that
+    /// names no rule has nothing to be pointed at, so the button would open a panel offering
+    /// only what is already true.
+    /// </summary>
+    private bool Correctable => _source is { Versions.Count: > 0 } or { ByHand: false };
+
     private string Where => _model.GroupId is null
         ? "Personal"
         : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
@@ -331,6 +439,16 @@
                 _model.Splits = _storedSplits;
 
             _openedWith = _model.Splits;
+
+            // With the history, because the panel this feeds offers to point the expense at
+            // a different version of the same rule.
+            if (details.GroupId is { } group)
+            {
+                _source = await Source.ReadAsync(
+                    group, details.CategoryId, details.SplitRuleVersionId, withHistory: true);
+
+                _chosen = _source?.VersionId;
+            }
         }, "Could not load the group.");
 
         if (!loaded)
@@ -574,6 +692,76 @@
             patch.Replace(x => x.Splits, null);
 
         return patch;
+    }
+
+    private void OnChosenChanged(Guid? versionId)
+    {
+        _chosen = versionId;
+        StateHasChanged();
+    }
+
+    /// <summary>The window a version stood for, for the option that offers it.</summary>
+    private string VersionWindow(SplitRuleVersionResponse version)
+    {
+        var from = Clock.Local(version.StartedAt);
+
+        if (version.SupersededAt is not { } until)
+            return $"since {from:d MMM yyyy}";
+
+        var to = Clock.Local(until);
+
+        return from.Year == to.Year
+            ? $"{from:d MMM} – {to:d MMM yyyy}"
+            : $"{from:d MMM yyyy} – {to:d MMM yyyy}";
+    }
+
+    /// <summary>
+    /// Records what produced the shares, on its own and now.
+    /// </summary>
+    /// <remarks>
+    /// Not folded into the dialog's Save, and the CLI does the same thing for the same
+    /// reason: this is a different request about a different question. Save decides what the
+    /// shares <em>become</em>; this describes what produced the ones already there, and the
+    /// two contradict each other -- the API refuses a patch that states shares alongside a
+    /// division source, so sending them together would fail the whole edit.
+    /// </remarks>
+    private async Task RecordSourceAsync()
+    {
+        if (_source is not { } source || _recording || _chosen == source.VersionId)
+            return;
+
+        _recording = true;
+
+        var recorded = await Transactions.DivisionSourceAsync(Original.Id, _chosen, _model.Name);
+
+        _recording = false;
+
+        if (!recorded)
+        {
+            StateHasChanged();
+            return;
+        }
+
+        _correcting = false;
+
+        // Read back rather than patched in place: which version an expense records decides
+        // which side the split control opens on, and the reader is what turns the id into
+        // the sentence above the shares.
+        _source = await Source.ReadAsync(
+            Original.GroupId!.Value, _model.CategoryId, _chosen, withHistory: true);
+
+        _chosen = _source?.VersionId;
+
+        // Stated shares and a rule's division are the two answers to the same question. If
+        // this expense is now a rule's, the ones typed into the control below are no longer
+        // what it holds.
+        if (_chosen is not null)
+        {
+            _model.Splits = null;
+            _openedWith = null;
+        }
+
+        StateHasChanged();
     }
 
     /// <summary>

@@ -1,0 +1,362 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@namespace GroupSplit.App.Shared.Components
+@inject ICategoryCommands Categories
+@inject ISplitRuleCommands Rules
+@inject ISplitRulesClient RulesClient
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject IDialogService DialogService
+@inject LocalClock Clock
+
+@*
+    How a group divides what it spends: the labels, and the divisions they point at.
+
+    Two lists, because they are two things. This replaces a dialog called "Manage Rules"
+    that managed categories -- one row per category, with the division behind it edited in
+    the same form and written under the category's own name. A rule never appeared, so the
+    thing the model is built for could not be asked for: Groceries and Utilities dividing by
+    one "Household 3-way", changed in one place. Worse, renaming a category renamed the rule
+    behind it, which in a group where two categories shared one would have renamed the
+    division under both.
+*@
+
+<div class="gs-stack" style="gap: 24px">
+
+    <div class="gs-page-head" style="margin-bottom: 0">
+        <div>
+            <div class="gs-eyebrow">Splits</div>
+            <p style="margin-top: 4px">
+                The divisions this group keeps, and the labels that point at them.
+            </p>
+        </div>
+
+        @* Provenance maintenance, and it belongs beside the rules rather than on a
+           transaction: what it corrects is which version each expense claims divided it. *@
+        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                   StartIcon="@Icons.Material.Outlined.Restore"
+                   OnClick="@RepointAsync">
+            Re-point past expenses
+        </MudButton>
+    </div>
+
+    <div class="gs-splits-grid">
+
+        <div class="gs-card gs-card-pad">
+            <div class="gs-card-title">
+                <h3>Categories</h3>
+                <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.Add"
+                           OnClick="@(() => EditCategoryAsync(null))">
+                    New category
+                </MudButton>
+            </div>
+
+            @if (_categories.Count == 0)
+            {
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Outlined.Sell"/>
+                    <h3>No categories yet</h3>
+                    <span>An expense filed under none is divided evenly between the group.</span>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var category in _categories)
+                    {
+                        <div class="gs-row gs-row-has-actions" @key="category.Id">
+                            <span class="gs-avatar sm tile ink">@Initials(category.Name)</span>
+
+                            <span style="min-width: 0">
+                                <span class="title"><span>@category.Name</span></span>
+                                <span class="meta">
+                                    @(category.DefaultSplitRuleName is { Length: > 0 } rule
+                                        ? $"divides by {rule}"
+                                        : "no rule · evenly between whoever is in the group")
+                                </span>
+                            </span>
+
+                            <span class="gs-row-actions gs-inline" style="gap: 2px">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                               aria-label="@($"Edit {category.Name}")"
+                                               OnClick="@(() => EditCategoryAsync(category))"/>
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="@($"Delete {category.Name}")"
+                                               OnClick="@(() => DeleteCategoryAsync(category))"/>
+                            </span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="gs-card gs-card-pad">
+            <div class="gs-card-title">
+                <h3>Split rules</h3>
+                <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.Add"
+                           OnClick="@CreateRuleAsync">
+                    New rule
+                </MudButton>
+            </div>
+
+            @if (_rules.Count == 0)
+            {
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Outlined.AccountTree"/>
+                    <h3>No rules yet</h3>
+                    <span>Without one, every category here divides evenly.</span>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var rule in _rules)
+                    {
+                        var used = UsedBy(rule.Id);
+
+                        <div class="gs-rule" @key="rule.Id">
+                            <div class="gs-rule-head">
+                                <span class="title"><span>@rule.Name</span></span>
+
+                                <span class="gs-inline" style="gap: 2px">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small"
+                                                   aria-label="@($"History of {rule.Name}")"
+                                                   OnClick="@(() => ShowHistoryAsync(rule.Id))"/>
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                                   aria-label="@($"Edit {rule.Name}")"
+                                                   OnClick="@(() => EditRuleAsync(rule, used))"/>
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   aria-label="@($"Delete {rule.Name}")"
+                                                   OnClick="@(() => DeleteRuleAsync(rule))"/>
+                                </span>
+                            </div>
+
+                            <span class="meta">
+                                @Describe(rule.Id)
+                            </span>
+
+                            <div class="gs-inline" style="gap: 6px">
+                                @if (used.Count == 0)
+                                {
+                                    <span class="gs-tag neutral">No category uses it</span>
+                                }
+                                else
+                                {
+                                    <span class="gs-provenance-when">Used by</span>
+                                    @foreach (var name in used)
+                                    {
+                                        <span class="gs-tag" @key="name">@name</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid GroupId { get; set; }
+
+    [Parameter] public string GroupName { get; set; } = "";
+
+    private IReadOnlyList<CategoryResponse> _categories = [];
+    private IReadOnlyList<SplitRuleResponse> _rules = [];
+
+    /// <summary>
+    /// What each rule currently divides by, for the line under its name. Read one call per
+    /// rule -- the listing carries only names -- and missing for any that failed, which
+    /// costs the line and not the row.
+    /// </summary>
+    private Dictionary<Guid, SplitRuleDetailsResponse> _definitions = [];
+
+    private Dictionary<Guid, string> _names = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var categories = await Categories.ForGroupAsync(GroupId);
+        var rules = await Rules.ForGroupAsync(GroupId);
+
+        // Null is a failure the presenter has shown. Keep whatever is on screen rather than
+        // emptying the lists, which would read as a group that has no categories.
+        if (categories is not null) _categories = [.. categories.OrderBy(row => row.Name)];
+        if (rules is not null) _rules = rules;
+
+        await Errors.CaptureAsync(async () =>
+        {
+            var members = await GroupsClient.GetGroupMembersAsync(GroupId);
+            _names = members.ToDictionary(member => member.Id, member => member.FullName);
+        });
+
+        await LoadDefinitionsAsync();
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The division behind each rule, all at once.
+    /// </summary>
+    /// <remarks>
+    /// One read per rule, because the listing endpoint returns names and ids only. They go
+    /// together rather than in sequence, and a failure is read and not shown: this fills in
+    /// a line of description under a row that is perfectly usable without it, and one
+    /// snackbar per rule would be the loudest possible way to say so.
+    /// </remarks>
+    private async Task LoadDefinitionsAsync()
+    {
+        var read = await Task.WhenAll(_rules.Select(async rule =>
+        {
+            SplitRuleDetailsResponse? details = null;
+
+            await Errors.CaptureAsync(async () => details = await RulesClient.GetSplitRuleAsync(rule.Id));
+
+            return details;
+        }));
+
+        _definitions = read.OfType<SplitRuleDetailsResponse>().ToDictionary(details => details.Id);
+    }
+
+    private string Describe(Guid ruleId)
+    {
+        if (!_definitions.TryGetValue(ruleId, out var details))
+            return "";
+
+        return $"{details.Definition.Summary(_names)} · since {Clock.Local(details.ChangedAt):d MMM yyyy}";
+    }
+
+    /// <summary>
+    /// Which categories divide by a rule. The join is here rather than on the API because
+    /// both halves are already on this screen, and it is the fact that makes editing a rule
+    /// something to think about.
+    /// </summary>
+    private IReadOnlyList<string> UsedBy(Guid ruleId) =>
+        [.. _categories.Where(category => category.DefaultSplitRuleId == ruleId).Select(category => category.Name)];
+
+    private static string Initials(string name) => name.Initials();
+
+    private async Task EditCategoryAsync(CategoryResponse? category)
+    {
+        var parameters = new DialogParameters<CategoryDialog>
+        {
+            { dialog => dialog.GroupId, GroupId },
+            { dialog => dialog.Category, category },
+            { dialog => dialog.Rules, _rules }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<CategoryDialog>(
+            category is null ? "New category" : "Edit category", parameters, options);
+
+        if (await dialog.GetReturnValueAsync<CategoryResponse>() is not null)
+            await LoadAsync();
+    }
+
+    private async Task DeleteCategoryAsync(CategoryResponse category)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { dialog => dialog.ContentText,
+                $"Delete the category '{category.Name}'? Expenses filed under it keep their "
+                + "splits, and the rule it divides by is left alone." },
+            { dialog => dialog.ButtonText, "Delete" },
+            { dialog => dialog.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete category", parameters);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        if (await Categories.DeleteAsync(category.Id, category.Name))
+            await LoadAsync();
+    }
+
+    private async Task CreateRuleAsync()
+    {
+        var parameters = new DialogParameters<CreateRuleDialog> { { dialog => dialog.GroupId, GroupId } };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("New split rule", parameters, options);
+
+        if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
+            await LoadAsync();
+    }
+
+    private async Task EditRuleAsync(SplitRuleResponse rule, IReadOnlyList<string> usedBy)
+    {
+        var parameters = new DialogParameters<EditRuleDialog>
+        {
+            { dialog => dialog.GroupId, GroupId },
+            { dialog => dialog.SplitRuleId, rule.Id },
+            { dialog => dialog.UsedBy, usedBy }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
+
+        if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
+            await LoadAsync();
+    }
+
+    private async Task DeleteRuleAsync(SplitRuleResponse rule)
+    {
+        var used = UsedBy(rule.Id);
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { dialog => dialog.ContentText,
+                used.Count == 0
+                    ? $"Delete the split rule '{rule.Name}'? Expenses it divided keep their splits."
+                    : $"Delete the split rule '{rule.Name}'? {string.Join(", ", used)} would divide "
+                      + "evenly instead. Expenses it divided keep their splits." },
+            { dialog => dialog.ButtonText, "Delete" },
+            { dialog => dialog.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete split rule", parameters);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        if (await Rules.DeleteAsync(rule.Id, rule.Name))
+            await LoadAsync();
+    }
+
+    private async Task ShowHistoryAsync(Guid ruleId)
+    {
+        var parameters = new DialogParameters<RuleHistoryDialog> { { dialog => dialog.SplitRuleId, ruleId } };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+
+        // It can edit the rule, or send a past division back into service, so what is on
+        // this screen may be a version old by the time it closes.
+        await LoadAsync();
+    }
+
+    private async Task RepointAsync()
+    {
+        var parameters = new DialogParameters<ReattachDialog>
+        {
+            { dialog => dialog.GroupId, GroupId },
+            { dialog => dialog.GroupName, GroupName }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        await DialogService.ShowAsync<ReattachDialog>("Re-point past expenses", parameters, options);
+    }
+}

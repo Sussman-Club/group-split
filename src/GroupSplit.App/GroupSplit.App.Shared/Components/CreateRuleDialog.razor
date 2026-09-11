@@ -1,45 +1,70 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@namespace GroupSplit.App.Shared.Components
+@inject ISplitRuleCommands Rules
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">Create Rule</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">New split rule</MudText>
     </TitleContent>
 
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-4">
-            Configure how this category should be split in the group.
+            A division the group keeps, for its categories to point at. Several categories
+            may divide by the same one.
         </MudText>
-        <RuleEditorForm
-            @ref="_form"
-            GroupId="GroupId"
-            Model="_model"
-        />
+
+        <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model"/>
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit">Create</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@_saving" OnClick="@Submit">
+            Create
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
     [Parameter] public Guid GroupId { get; set; }
 
     private readonly RuleEditorForm.RuleEditorModel _model = new();
     private RuleEditorForm _form = null!;
+    private bool _saving;
 
+    /// <summary>
+    /// Writes the rule and closes with it, so the caller can point something at it.
+    /// </summary>
+    /// <remarks>
+    /// The write is here rather than in the caller because there is one of them now. It used
+    /// to hand back a model: a category and its rule were created together, and only the
+    /// caller knew whether the category already had one to edit instead.
+    /// </remarks>
     private async Task Submit()
     {
         await _form.Validate();
 
-        if (!_form.IsValid)
+        if (!_form.IsValid || _saving)
             return;
 
-        // The model, not a request: a category and its split are two writes now, and which
-        // two depends on whether the category already had a rule -- which is the calling
-        // dialog's to know, not this form's.
-        MudDialog.Close(DialogResult.Ok(_model));
+        _saving = true;
+
+        var created = await Rules.CreateAsync(new CreateSplitRuleRequest
+        {
+            GroupId = GroupId,
+            Name = _model.Name,
+            Definition = _model.Version
+        });
+
+        _saving = false;
+
+        // Null is a refusal the presenter has already shown -- a name the group is using,
+        // say. The dialog stays open on it, with what was typed still in the fields.
+        if (created is not null)
+            MudDialog.Close(DialogResult.Ok(created));
     }
 
     private void Cancel() => MudDialog.Cancel();
