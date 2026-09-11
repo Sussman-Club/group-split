@@ -124,4 +124,47 @@ public sealed class TransactionCommands(
             return null;
         }
     }
+
+    public Task<bool> DivisionSourceAsync(Guid transactionId, Guid? splitRuleVersionId, string name,
+        CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await transactions.SetTransactionDivisionSourceAsync(
+                transactionId, new SetDivisionSourceRequest(splitRuleVersionId), ct);
+
+            // Says the part somebody would otherwise have to test to find out. The figures
+            // on screen do not move, so a bare "updated" would read as nothing happening.
+            snackbar.Add(
+                splitRuleVersionId is null
+                    ? $"{name}'s shares are recorded as its own. No amount moved."
+                    : $"Recorded what divided {name}. No amount moved.",
+                Severity.Success);
+
+            // Nothing a listing prints has changed, and it is told anyway: an expense's
+            // division source decides what its next edit does, and the dialogs that make
+            // that edit read it from the listings.
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not record what divided the expense.");
+
+    public async Task<ReattachSummaryResponse?> ReattachAsync(Guid groupId, bool dryRun,
+        CancellationToken ct = default)
+    {
+        ReattachSummaryResponse? summary = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            summary = await transactions.ReattachTransactionsAsync(
+                new ReattachTransactionsRequest { GroupId = groupId, DryRun = dryRun }, ct);
+
+            if (dryRun) return;
+
+            snackbar.Add(
+                $"{summary.Changed} {(summary.Changed == 1 ? "expense" : "expenses")} re-pointed. No amount moved.",
+                Severity.Success);
+
+            await changes.NotifyTransactionsChangedAsync();
+        }, dryRun ? "Could not work out what would change." : "Could not re-point the expenses.");
+
+        return done ? summary : null;
+    }
 }

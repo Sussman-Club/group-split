@@ -2,12 +2,15 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.App.Shared.Services.Users
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
 @inject ApiErrorPresenter Errors
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
+@inject DivisionSourceReader Source
+@inject IDialogService DialogService
 
 @*
     One expense, and how it was divided. Reading only.
@@ -148,12 +151,14 @@
                     <div>
                         <div class="gs-card-title" style="margin-bottom: 10px">
                             <h3 style="margin: 0; font-size: 1rem">@SplitHeadline</h3>
-                            @* Said in a word rather than left to be worked out by comparing
-                               a column of near-identical figures. *@
-                            @if (IsEven)
-                            {
-                                <span class="gs-tag neutral">evenly</span>
-                            }
+                        </div>
+
+                        @* What produced the figures below, which the figures themselves do
+                           not say. This used to be an "evenly" tag worked out by comparing
+                           the amounts to each other; see DivisionSource for why that reading
+                           was wrong in both directions. *@
+                        <div style="margin-bottom: 10px">
+                            <DivisionSource Info="@_source" />
                         </div>
 
                         @* A row per person and nothing else. There was a bar under each one
@@ -178,6 +183,21 @@
                                 </div>
                             }
                         </div>
+
+                        @* Only where there is a history to open. A rule that has stood for
+                           one division since it was made has nothing to show that the line
+                           above has not already said. *@
+                        @if (_source is { RuleId: { } rule, RuleName: { Length: > 0 } name }
+                             && _versions > 1)
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       Class="gs-btn-quiet mt-3"
+                                       EndIcon="@Icons.Material.Rounded.ArrowForward"
+                                       OnClick="@(() => ShowHistoryAsync(rule))">
+                                See how @name has changed
+                            </MudButton>
+                        }
                     </div>
                 }
             </div>
@@ -220,13 +240,14 @@
         ? $"Split between {count} {(count == 1 ? "person" : "people")}"
         : "Split";
 
+    /// <summary>What divided it, once the version it records has been resolved to a rule.</summary>
+    private DivisionSourceInfo? _source;
+
     /// <summary>
-    /// Whether every share is the same to the penny, which is worth saying in one word
-    /// rather than leaving somebody to compare a column of identical figures.
+    /// How many divisions that rule has stood for, which decides whether there is a history
+    /// worth offering. Zero until the expense has loaded, and zero for one nothing divided.
     /// </summary>
-    private bool IsEven =>
-        details is { Splits.Count: > 1 } loaded
-        && loaded.Splits.Select(split => split.Amount).Distinct().Count() == 1;
+    private int _versions;
 
     // Failures go through the presenter, which names the reason the API gave; a dialog
     // that cannot load its subject has nothing to show, so it closes.
@@ -242,6 +263,8 @@
             return;
         }
 
+        await ReadSourceAsync();
+
         // The title has to be told separately, and this is not belt and braces.
         //
         // TitleContent is hoisted out of this component and rendered in the dialog
@@ -251,6 +274,38 @@
         // placeholder and without this the dialog stays headed "Expense" over a body full
         // of the thing it is refusing to name.
         MudDialog.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Resolves the version the expense records into a rule and a window.
+    /// </summary>
+    /// <remarks>
+    /// A personal expense is skipped outright: rules belong to groups, so there is nothing
+    /// to resolve and the strip renders nothing. The history is asked for only when a
+    /// version is actually recorded, which keeps an expense somebody split by hand to one
+    /// round trip -- the one that loaded it.
+    /// </remarks>
+    private async Task ReadSourceAsync()
+    {
+        if (details is not { } loaded) return;
+
+        if (loaded.GroupId is not { } group)
+            return;
+
+        _source = await Source.ReadAsync(
+            group, loaded.CategoryId, loaded.SplitRuleVersionId,
+            withHistory: loaded.SplitRuleVersionId is not null);
+
+        _versions = _source?.Versions.Count ?? 0;
+    }
+
+    private Task ShowHistoryAsync(Guid ruleId)
+    {
+        var parameters = new DialogParameters<RuleHistoryDialog> { { dialog => dialog.SplitRuleId, ruleId } };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        return DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
     }
 
     private void Close() => MudDialog.Close();

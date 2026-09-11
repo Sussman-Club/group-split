@@ -67,7 +67,7 @@ public class RuleEditorFormTest : ComponentTest
 
     private IRenderedComponent<RuleEditorForm> Render(SplitRuleDto version)
     {
-        var model = new RuleEditorForm.RuleEditorModel { Category = "Food", Version = version };
+        var model = new RuleEditorForm.RuleEditorModel { Name = "Food", Version = version };
 
         return Render<RuleEditorForm>(parameters => parameters
             .AddCascadingValue(Mock.Of<IMudDialogInstance>())
@@ -161,7 +161,7 @@ public class RuleEditorFormTest : ComponentTest
 
     private static RuleEditorForm.RuleEditorModel SharesModel() => new()
     {
-        Category = "Food",
+        Name = "Food",
         Version = new SharesSplitRuleDto
         {
             Shares = new Dictionary<Guid, int> { [Alice.Id] = 1, [Bob.Id] = 1, [Carol.Id] = 1 }
@@ -201,7 +201,7 @@ public class RuleEditorFormTest : ComponentTest
     {
         var model = new RuleEditorForm.RuleEditorModel
         {
-            Category = "Food",
+            Name = "Food",
             // 6 of 7 and 1 of 7: 85.71 and 14.29 round to 100.00 exactly, so nudge it with
             // a third member holding nothing at all.
             Version = new SharesSplitRuleDto
@@ -261,7 +261,7 @@ public class RuleEditorFormTest : ComponentTest
 
         var model = new RuleEditorForm.RuleEditorModel
         {
-            Category = "Food",
+            Name = "Food",
             Version = new SharesSplitRuleDto
             {
                 Shares = new Dictionary<Guid, int> { [Alice.Id] = 1, [Bob.Id] = 1, [Carol.Id] = 5 }

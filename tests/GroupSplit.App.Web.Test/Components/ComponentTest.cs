@@ -1,6 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Errors;
+using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
@@ -58,7 +59,33 @@ public abstract class ComponentTest : BunitContext
         // The production default. A test wanting a different answer registers its own after
         // this one, which is the point of the policy being a registration at all.
         Services.AddSingleton<IRemainderPolicy, LargestShareRemainderPolicy>();
+
+        // Two dialogs say where an expense's shares came from, and the reader that answers
+        // that joins a category to a rule to a version. Registered here, with clients that
+        // answer "nothing", so a test about something else does not have to stand up three
+        // services to render a dialog. A test that cares registers its own clients after
+        // this constructor has run, and the later registration is the one resolved.
+        Categories
+            .Setup(client => client.GetCategoriesAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) =>
+                new SplitRuleHistoryResponse(id, Guid.Empty, "", []));
+
+        Services.AddSingleton(Categories.Object);
+        Services.AddSingleton(SplitRules.Object);
+        Services.AddSingleton<DivisionSourceReader>();
     }
+
+    /// <summary>
+    /// The categories client the <see cref="DivisionSourceReader"/> reads through, for a
+    /// test that wants the strip above an expense's shares to say something.
+    /// </summary>
+    protected Mock<ICategoriesClient> Categories { get; } = new();
+
+    protected Mock<ISplitRulesClient> SplitRules { get; } = new();
 
     /// <summary>Set up so a test can assert what a failure did or did not put in front of anybody.</summary>
     protected Mock<ISnackbar> Snackbar { get; } = new();

@@ -2117,6 +2117,383 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 
+/* ---------------------------------------------------------- provenance ---- */
+
+/*
+    Where an expense's shares came from, said outright rather than guessed at. It sits
+    above the shares themselves, in both the dialog that shows an expense and the one that
+    edits it, and it is the same strip in each -- which is why it is a component and these
+    are classes rather than a paragraph written twice.
+*/
+.gs-provenance {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+}
+
+.gs-provenance .mud-icon-root {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    color: var(--gs-teal);
+}
+
+/* A division nobody's rule produced. The mark is quieter because the fact is quieter. */
+.gs-provenance.is-own .mud-icon-root {
+    color: var(--gs-muted);
+}
+
+.gs-provenance-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.gs-provenance-what {
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.gs-provenance-when {
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+}
+
+/* ------------------------------------------------------------- notices ---- */
+
+/*
+    A fact worth stating in place, in the colour of its consequence. Not MudAlert: that
+    draws a filled banner with an icon column sized for a sentence, and these are two lines
+    under a heading.
+*/
+.gs-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+}
+
+.gs-notice.is-warn {
+    background: var(--gs-clay-soft);
+    border-color: var(--gs-clay-glow);
+}
+
+.gs-notice .mud-icon-root {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    color: var(--gs-muted);
+}
+
+.gs-notice.is-warn .mud-icon-root {
+    color: var(--gs-clay-deep);
+}
+
+.gs-notice-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.gs-notice-body strong {
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.gs-notice-body span {
+    font-size: 0.8125rem;
+    color: var(--gs-ink-2);
+    line-height: 1.45;
+    text-wrap: pretty;
+}
+
+/* -------------------------------------------------- a rule's own history ---- */
+
+/*
+    Every division a rule has stood for, newest first. A rail down the left because these
+    are one chain and not three cards: the dot says which one the rule says now, and the
+    line says the next one is what it said before that.
+*/
+.gs-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.gs-version {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 14px;
+}
+
+.gs-version-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+}
+
+.gs-version-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--gs-surface);
+    border: 2px solid var(--gs-line-strong);
+}
+
+.gs-version.is-current .gs-version-dot {
+    background: var(--gs-teal);
+    border-color: transparent;
+    box-shadow: 0 0 0 4px var(--gs-teal-glow);
+}
+
+.gs-version-line {
+    flex: 1 1 auto;
+    width: 2px;
+    background: var(--gs-line);
+    margin-top: 6px;
+}
+
+.gs-version-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+}
+
+.gs-version.is-current .gs-version-body {
+    border-color: var(--gs-line-strong);
+}
+
+.gs-version-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.gs-version-when {
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.gs-version-count {
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+}
+
+.gs-version-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    border-top: 1px solid var(--gs-line);
+}
+
+/* One person's weight in a version, and what it comes to as a proportion. */
+.gs-weight {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.gs-weight-who {
+    font-size: 0.875rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-weight-held {
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-weight-share {
+    font-size: 0.875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 58px;
+    text-align: right;
+}
+
+/*
+    What one edit moved, per person. Clay for a share that fell and teal for one that rose,
+    which is the same reading as every other figure in the app.
+*/
+.gs-delta {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: var(--gs-radius-pill);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    background: var(--gs-surface-3);
+    color: var(--gs-muted);
+}
+
+.gs-delta.is-up {
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+}
+
+.gs-delta.is-down {
+    background: var(--gs-clay-soft);
+    color: var(--gs-clay-deep);
+}
+
+:root[data-theme="dark"] .gs-delta.is-down {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-delta.is-down {
+        color: var(--gs-clay);
+    }
+}
+
+/* ------------------------------------------------------- the splits tab ---- */
+
+/*
+    Two lists side by side on a desktop and stacked on a phone: a group's categories, and
+    the divisions they point at. Not a 50/50 grid at every width -- a rule row carries a
+    sentence and a row of tags, and at tablet widths both columns end up wrapping every
+    line.
+*/
+.gs-splits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px;
+    align-items: start;
+}
+
+/*
+    A rule is three lines, not one: what it is called, what it does, and which categories
+    divide by it. So it is a block rather than a .gs-row, whose grid puts everything on one
+    line and clips what does not fit.
+*/
+.gs-rule {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 0;
+}
+
+.gs-rule + .gs-rule {
+    border-top: 1px solid var(--gs-line);
+}
+
+.gs-rule-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.gs-rule .title {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.gs-rule .title span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-rule .meta {
+    color: var(--gs-muted);
+    font-size: 0.8125rem;
+}
+
+/* --------------------------------------------------------- count tables ---- */
+
+/*
+    A few rows of figures with a heading over each column. Not MudTable: these are read as
+    a block and never sorted, paged or selected, and the grid keeps the numbers in one
+    column whatever the names beside them do.
+*/
+.gs-counts {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-counts-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 72px);
+    gap: 10px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--gs-line);
+}
+
+.gs-counts-row:last-child {
+    border-bottom: 0;
+}
+
+.gs-counts-row.is-head {
+    padding: 0 0 8px;
+}
+
+.gs-counts-row > span:not(:first-child) {
+    text-align: right;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-counts-row.is-head > span:not(:first-child) {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gs-muted);
+}
+
+.gs-counts-what {
+    font-size: 0.875rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-counts-row.is-quiet .gs-counts-what,
+.gs-counts-row.is-quiet > span {
+    font-weight: 400;
+    color: var(--gs-muted);
+}
+
+
 /* --------------------------------------------------------------- inputs ---- */
 
 .mud-input-control .mud-input.mud-input-outlined .mud-input-outlined-border {

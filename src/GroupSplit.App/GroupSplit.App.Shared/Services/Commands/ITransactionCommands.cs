@@ -56,4 +56,37 @@ public interface ITransactionCommands
     /// </param>
     Task<SplitPreviewResponse?> PreviewUpdateAsync(Guid transactionId, UpdateTransactionRequest request,
         bool redivide = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records what produced an expense's shares: a version of a split rule, or nobody --
+    /// the amounts are the expense's own.
+    /// </summary>
+    /// <remarks>
+    /// Provenance and nothing else; not one share moves. What it changes is what a later
+    /// edit does, so it announces like any other write -- an expense recorded as a rule's
+    /// follows that rule when its amount or payer changes, and one whose shares are its own
+    /// has no rule to be re-billed under.
+    /// </remarks>
+    /// <param name="splitRuleVersionId">The version that divided it, or null for by hand.</param>
+    /// <param name="name">The expense, so the sentence names what was recorded.</param>
+    Task<bool> DivisionSourceAsync(Guid transactionId, Guid? splitRuleVersionId, string name,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Points a group's expenses at the version of their rule that was in force on the day
+    /// they were spent.
+    /// </summary>
+    /// <remarks>
+    /// For a back catalogue that arrived from somewhere with no notion of versions: the
+    /// migration pointed every categorised expense at its rule's only version, so an expense
+    /// from 2023 claims to have been divided by a ratio agreed this year. The dates are what
+    /// sorts it out, and they are already on the rows.
+    /// <para>
+    /// It moves no money -- not one share is read, let alone written -- so a dry run
+    /// announces nothing and saves nothing, and only a real one tells the pages.
+    /// </para>
+    /// </remarks>
+    /// <param name="dryRun">True to work out the answer and report it without saving it.</param>
+    /// <returns>What it did, or would do; null when the call failed.</returns>
+    Task<ReattachSummaryResponse?> ReattachAsync(Guid groupId, bool dryRun, CancellationToken ct = default);
 }

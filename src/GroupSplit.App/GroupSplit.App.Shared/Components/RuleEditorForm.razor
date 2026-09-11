@@ -11,9 +11,10 @@
 
 <MudForm @ref="_form" Model="@Model">
     <MudStack Spacing="3">
-        <MudTextField @bind-Value="Model.Category"
-                      For="@(() => Model.Category)"
-                      Label="Category"
+        <MudTextField @bind-Value="Model.Name"
+                      For="@(() => Model.Name)"
+                      Label="@NameLabel"
+                      HelperText="@NameHelp"
                       Variant="Variant.Outlined"
                       Immediate="true"/>
 
@@ -124,6 +125,15 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid GroupId { get; set; }
     [Parameter] public RuleEditorModel Model { get; set; } = null!;
+
+    /// <summary>
+    /// What the name field is called. A rule has a name of its own now -- it is not the
+    /// category's, because several categories may divide by one rule and renaming one of
+    /// them must not rename the division behind the others.
+    /// </summary>
+    [Parameter] public string NameLabel { get; set; } = "Rule name";
+
+    [Parameter] public string? NameHelp { get; set; } = "What the group calls this division, e.g. \"Household 3-way\".";
 
     private MudForm _form;
 
@@ -396,18 +406,21 @@
     }
 
     /// <summary>
-    /// A category and the division it defaults to, edited together.
+    /// A split rule: a name the group gives a division, and the division itself.
     /// </summary>
     /// <remarks>
-    /// They are two rows now -- a category pointing at a split rule -- but a group still
-    /// thinks of them as one thing ("Groceries is split four ways"), so the form still asks
-    /// for one thing. The dialog around it does the two writes.
+    /// It used to be a category and the division behind it, edited together and written
+    /// twice, because a group says "Groceries is split four ways" and thinks of them as one
+    /// thing. They are not one thing: a rule can stand behind several categories, and
+    /// editing the division under Groceries then changed how Utilities divided too -- while
+    /// renaming Groceries renamed the rule out from under it. Categories are pointed at
+    /// rules on the group's Splits tab now, and this form edits only the rule.
     /// </remarks>
     public record RuleEditorModel
     {
-        [Required(ErrorMessage = "Category is required")]
-        [StringLength(64, ErrorMessage = "Category must be less than 64 characters.")]
-        public string Category { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+        public string Name { get; set; } = string.Empty;
 
         [Required] public SplitRuleDto Version { get; set; } = null!;
     }
