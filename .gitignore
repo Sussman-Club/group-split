@@ -487,3 +487,7 @@ aspire-output/
 
 # Local copy of deploy secrets (never commit)
 .deploy-secrets.local
+
+# Agents folders
+.agents/
+.claude/
