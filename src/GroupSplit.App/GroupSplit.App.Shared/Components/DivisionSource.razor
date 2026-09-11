@@ -68,12 +68,15 @@
 
         if (source.Version is not { } version)
         {
-            // Three situations reach here and they are not the same sentence. An expense
-            // filed under nothing has no category to have pointed anywhere, and saying it
-            // does asserts a category that does not exist.
-            return source.Filed
-                ? "the category it is filed under names a different rule now"
-                : "it is filed under no category, so the rule cannot be named from here";
+            // Three situations reach here and no two of them are the same sentence. Only the
+            // last is a category pointing elsewhere; saying so about the other two asserts a
+            // category that does not exist, or a rule the category never named.
+            return source switch
+            {
+                { Filed: false } => "it is filed under no category, so the rule cannot be named from here",
+                { Ruled: false } => "the category it is filed under names no rule of its own",
+                _ => "the category it is filed under names a different rule now"
+            };
         }
 
         var from = Clock.Local(version.StartedAt);

@@ -187,8 +187,19 @@ public class DivisionSourceCommandTest
         Assert.Equal("1 expense re-pointed. No amount moved.", message);
     }
 
+    /// <summary>
+    /// A summary whose figures can co-occur.
+    /// </summary>
+    /// <remarks>
+    /// An empty <c>ByRule</c> means no expense is filed under a category naming a rule, in
+    /// which case every one of the 1,411 is left without a version -- not 63. The command
+    /// reads only <c>Changed</c>, so an impossible shape here masks nothing today; it is
+    /// written straight because the identical shape one file away is what let a dialog
+    /// misread the same field for a whole review round.
+    /// </remarks>
     private static ReattachSummaryResponse ASummary(bool dryRun, int changed) =>
-        new(Flat, dryRun, Examined: 1411, Changed: changed, LeftWithoutAVersion: 63, ByRule: []);
+        new(Flat, dryRun, Examined: 1411, Changed: changed, LeftWithoutAVersion: 285,
+            ByRule: [new ReattachedRuleSummary(Guid.NewGuid(), "Household 3-way", 1189, changed, 63)]);
 
     private sealed class TestNavigationManager : NavigationManager
     {

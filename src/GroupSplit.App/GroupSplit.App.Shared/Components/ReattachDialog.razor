@@ -34,7 +34,20 @@
                 group is identical afterwards.
             </MudText>
 
-            @if (_summary is not { } summary)
+            @* A spinner says "still working", which after a failed read is a claim about
+               this dialog that is not true: nothing is working, and the first read has
+               nothing to fall back on. Same shape as the Splits tab's stale banner. *@
+            @if (_summary is null && !_busy)
+            {
+                <div class="gs-notice is-warn" role="alert">
+                    <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
+                    <div class="gs-notice-body">
+                        <strong>Could not work out what would change</strong>
+                        <span>Nothing has been saved. Try again below.</span>
+                    </div>
+                </div>
+            }
+            else if (_summary is not { } summary)
             {
                 <div class="gs-empty" style="padding: 32px">
                     <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
@@ -58,7 +71,7 @@
 
                 @if (_unsure)
                 {
-                    <div class="gs-notice is-warn">
+                    <div class="gs-notice is-warn" role="alert">
                         <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
                         <div class="gs-notice-body">
                             <strong>Run the dry run again to see where things stand</strong>
@@ -97,23 +110,28 @@
 
                 @if (summary.ByRule.Count > 0)
                 {
-                    <div class="gs-counts">
-                        <div class="gs-counts-row is-head">
-                            <span class="gs-eyebrow">Rule</span>
-                            <span>Seen</span>
-                            <span>@(_applied ? "Moved" : "Would")</span>
-                            <span>Unfit</span>
+                    <div class="gs-counts" role="table" aria-label="What would move, by rule">
+                        @* Roles rather than a bare grid of divs. Four columns of figures read
+                           aloud as an undifferentiated run -- "Household 3-way 1189 743 63" --
+                           and the last of them is the one the warning below acts on. *@
+                        <div class="gs-counts-row is-head" role="row">
+                            <span class="gs-eyebrow" role="columnheader">Rule</span>
+                            <span role="columnheader">Seen</span>
+                            <span role="columnheader">@(_applied ? "Moved" : "Would")</span>
+                            <span role="columnheader">Unfit</span>
                         </div>
 
                         @foreach (var rule in summary.ByRule)
                         {
-                            <div class="gs-counts-row" @key="rule.SplitRuleId">
-                                <span class="gs-counts-what">@rule.SplitRuleName</span>
-                                <span>@rule.Examined</span>
-                                <span style="@(rule.Changed > 0 ? "font-weight: 700; color: var(--gs-teal)" : "")">
+                            <div class="gs-counts-row" role="row" @key="rule.SplitRuleId">
+                                <span class="gs-counts-what" role="cell">@rule.SplitRuleName</span>
+                                <span role="cell">@rule.Examined</span>
+                                <span role="cell"
+                                      style="@(rule.Changed > 0 ? "font-weight: 700; color: var(--gs-teal)" : "")">
                                     @rule.Changed
                                 </span>
-                                <span style="@(rule.Uncovered > 0 ? "font-weight: 700; color: var(--gs-clay)" : "")">
+                                <span role="cell"
+                                      style="@(rule.Uncovered > 0 ? "font-weight: 700; color: var(--gs-clay)" : "")">
                                     @rule.Uncovered
                                 </span>
                             </div>
@@ -127,11 +145,11 @@
                            is what the rows do not account for. *@
                         @if (Unruled(summary) > 0)
                         {
-                            <div class="gs-counts-row is-quiet">
-                                <span class="gs-counts-what">No category, or a category with no rule</span>
-                                <span>@Unruled(summary)</span>
-                                <span>@UnruledChanged(summary)</span>
-                                <span>—</span>
+                            <div class="gs-counts-row is-quiet" role="row">
+                                <span class="gs-counts-what" role="cell">No category, or a category with no rule</span>
+                                <span role="cell">@Unruled(summary)</span>
+                                <span role="cell">@UnruledChanged(summary)</span>
+                                <span role="cell">—</span>
                             </div>
                         }
                     </div>
@@ -139,7 +157,7 @@
 
                 @if (Uncovered(summary) is { Count: > 0 } thin)
                 {
-                    <div class="gs-notice is-warn">
+                    <div class="gs-notice is-warn" role="alert">
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                         <div class="gs-notice-body">
                             <strong>
@@ -268,6 +286,12 @@
             _summary = summary;
             _ran = Clock.Local(DateTimeOffset.UtcNow);
             _applied = true;
+
+            // A run that came back settles an earlier one that did not. Left set, the "this
+            // may or may not have run" notice sat under a "Done · saved" badge, on figures
+            // from the run that did come back -- and with the retry button gone there was no
+            // way to clear it.
+            _unsure = false;
         }
         else
         {

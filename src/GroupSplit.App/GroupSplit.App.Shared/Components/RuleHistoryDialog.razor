@@ -54,7 +54,7 @@
                     @* The uncertainty is the thing worth saying. An edit here can reach
                        categories this dialog did not manage to count, and a missing warning
                        reads as no warning. *@
-                    <div class="gs-notice is-warn">
+                    <div class="gs-notice is-warn" role="alert">
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                         <div class="gs-notice-body">
                             <strong>Could not check which categories divide by this rule</strong>
@@ -67,7 +67,7 @@
                 }
                 else if (_usedBy.Count > 1)
                 {
-                    <div class="gs-notice is-warn">
+                    <div class="gs-notice is-warn" role="alert">
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                         <div class="gs-notice-body">
                             <strong>@_usedBy.Listed() all divide by this rule</strong>
@@ -226,9 +226,6 @@
 
     private bool _saving;
 
-    /// <summary>Whether anything here wrote, so the screen behind knows to re-read.</summary>
-    private bool _wrote;
-
     protected override Task OnInitializedAsync() => LoadAsync();
 
     /// <summary>
@@ -256,6 +253,11 @@
         }
 
         _history = history;
+
+        // Cleared before each attempt, so a refresh that fails says "not known" rather than
+        // going on showing what the first load happened to get.
+        _names = null;
+        _usedBy = null;
 
         await Errors.CaptureAsync(async () =>
         {
@@ -417,10 +419,7 @@
         }
 
         if (saved is not null)
-        {
-            _wrote = true;
             await LoadAsync();
-        }
     }
 
     private async Task EditAsync()
@@ -431,7 +430,12 @@
         {
             { dialog => dialog.GroupId, history.GroupId },
             { dialog => dialog.SplitRuleId, history.Id },
-            { dialog => dialog.UsedBy, _usedBy ?? [] }
+
+            // Null travels, rather than being flattened to an empty list on the way. Empty
+            // means "one category uses it" and null means "we could not find out", and the
+            // dialog it lands in is a modal covering the notice that says so -- so flattening
+            // it took the fan-out warning away at the one moment it is worth having.
+            { dialog => dialog.UsedBy, _usedBy }
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
@@ -439,19 +443,8 @@
         var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
 
         if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
-        {
-            _wrote = true;
             await LoadAsync();
-        }
     }
 
-    /// <summary>
-    /// Closes, saying whether anything was written.
-    /// </summary>
-    /// <remarks>
-    /// The screen behind this reloads on a true and not otherwise. It used to reload
-    /// whatever happened, so merely looking at a rule's history cost the Splits tab a
-    /// listing plus a read per rule.
-    /// </remarks>
-    private void Close() => MudDialog.Close(DialogResult.Ok(_wrote));
+    private void Close() => MudDialog.Close();
 }

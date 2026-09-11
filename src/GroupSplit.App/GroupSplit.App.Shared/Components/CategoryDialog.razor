@@ -93,20 +93,27 @@
 
         _saving = true;
 
-        var saved = Category is { } editing
-            ? await Categories.UpdateAsync(editing.Id, new UpdateCategoryRequest
-            {
-                Name = _model.Name,
-                DefaultSplitRuleId = _model.SplitRuleId
-            })
-            : await Categories.CreateAsync(new CreateCategoryRequest
-            {
-                GroupId = GroupId,
-                Name = _model.Name,
-                DefaultSplitRuleId = _model.SplitRuleId
-            });
+        CategoryResponse? saved;
 
-        _saving = false;
+        try
+        {
+            saved = Category is { } editing
+                ? await Categories.UpdateAsync(editing.Id, new UpdateCategoryRequest
+                {
+                    Name = _model.Name,
+                    DefaultSplitRuleId = _model.SplitRuleId
+                })
+                : await Categories.CreateAsync(new CreateCategoryRequest
+                {
+                    GroupId = GroupId,
+                    Name = _model.Name,
+                    DefaultSplitRuleId = _model.SplitRuleId
+                });
+        }
+        finally
+        {
+            _saving = false;
+        }
 
         if (saved is not null)
             MudDialog.Close(DialogResult.Ok(saved));

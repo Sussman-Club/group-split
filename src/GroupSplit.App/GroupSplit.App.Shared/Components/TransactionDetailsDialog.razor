@@ -314,11 +314,12 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        var dialog = await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
 
-        if (!await dialog.GetReturnValueAsync<bool>())
-            return;
-
+        // Unconditionally, and not off the dialog's answer: it carries none when somebody
+        // dismisses it with the corner button, which is also a way to leave it after an edit
+        // that saved. One read is cheaper than a strip that goes on saying "Current" over a
+        // version that stopped being current while the person was looking at the proof.
         await ReadSourceAsync();
         StateHasChanged();
     }

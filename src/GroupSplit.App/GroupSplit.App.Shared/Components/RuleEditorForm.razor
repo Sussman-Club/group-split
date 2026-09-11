@@ -29,6 +29,10 @@
                 Personal (payer owes full amount)
             </MudSelectItem>
 
+            <MudSelectItem T="RuleType?" Value="RuleType.Even">
+                Evenly, between everyone in the group
+            </MudSelectItem>
+
             <MudSelectItem T="RuleType?" Value="RuleType.Percent">
                 Percent split
             </MudSelectItem>
@@ -181,6 +185,7 @@
             PercentSplitRuleDto => RuleType.Percent,
             SharesSplitRuleDto => RuleType.Shares,
             PayerSplitRuleDto => RuleType.Personal,
+            EvenSplitRuleDto => RuleType.Even,
             _ => _ruleType
         };
 
@@ -235,6 +240,11 @@
         Model.Version = _ruleType switch
         {
             RuleType.Personal => new PayerSplitRuleDto(),
+
+            // Naming nobody, which is what makes it keep dividing evenly when somebody
+            // joins. Listing today's members instead would freeze them in, and that is the
+            // shares rule one row down.
+            RuleType.Even => new EvenSplitRuleDto(),
 
             RuleType.Percent when Model.Version is SharesSplitRuleDto shares => new PercentSplitRuleDto
             {

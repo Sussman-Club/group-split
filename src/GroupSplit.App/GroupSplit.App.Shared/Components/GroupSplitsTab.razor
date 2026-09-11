@@ -9,6 +9,8 @@
 @inject ApiErrorPresenter Errors
 @inject IDialogService DialogService
 @inject LocalClock Clock
+@inject DataChangeNotifier Changes
+@implements IDisposable
 
 @*
     How a group divides what it spends: the labels, and the divisions they point at.
@@ -43,7 +45,7 @@
 
     @if (_stale)
     {
-        <div class="gs-notice is-warn">
+        <div class="gs-notice is-warn" role="alert">
             <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
             <div class="gs-notice-body">
                 <strong>This did not all load</strong>
@@ -170,8 +172,15 @@
                                 @Describe(rule.Id)
                             </span>
 
+                            @* Three states, not two. "Used by" with nothing after it is what
+                               the two-state version drew whenever the categories had not
+                               loaded -- a label introducing an empty list. *@
                             <div class="gs-inline" style="gap: 6px">
-                                @if (used.Count == 0 && !_stale)
+                                @if (_stale)
+                                {
+                                    <span class="gs-tag neutral">Not checked</span>
+                                }
+                                else if (used.Count == 0)
                                 {
                                     <span class="gs-tag neutral">No category uses it</span>
                                 }
@@ -220,9 +229,39 @@
     /// </summary>
     private Dictionary<Guid, SplitRuleDetailsResponse> _definitions = [];
 
-    private Dictionary<Guid, string> _names = [];
+    /// <summary>
+    /// Who the group's people are, so a rule's line names them rather than printing ids.
+    /// </summary>
+    /// <remarks>
+    /// Null until the read succeeds, and null if it fails -- never an empty dictionary. The
+    /// phrases degrade to a count on null; handed an empty one they take the named branch
+    /// and every weighted rule reads "By shares — someone not in the group 3, someone not in
+    /// the group 1", which is a read failure dressed up as a fact about the group.
+    /// </remarks>
+    private Dictionary<Guid, string>? _names;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    /// <summary>
+    /// Loads, and then keeps up by listening rather than by asking after each dialog.
+    /// </summary>
+    /// <remarks>
+    /// Every write here goes through a command, and every command announces -- so the screen
+    /// re-reads when something changed, wherever the change was made. Re-reading after each
+    /// dialog instead meant reading the dialog's answer, and a dialog closed with the corner
+    /// button or Escape carries no answer at all: the reload was skipped after an edit that
+    /// had already been saved, and asking for the answer as a <c>bool</c> unboxed a null and
+    /// threw. <see cref="DialogExtensions.ConfirmedAsync"/> documents that trap; this avoids
+    /// needing to read a result in the first place.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+    {
+        Changes.TransactionsChanged += OnDataChangedAsync;
+
+        await LoadAsync();
+    }
+
+    private Task OnDataChangedAsync() => InvokeAsync(LoadAsync);
+
+    public void Dispose() => Changes.TransactionsChanged -= OnDataChangedAsync;
 
     private async Task LoadAsync()
     {
@@ -337,8 +376,6 @@
         var dialog = await DialogService.ShowAsync<CategoryDialog>(
             category is null ? "New category" : "Edit category", parameters, options);
 
-        if (await dialog.GetReturnValueAsync<CategoryResponse>() is not null)
-            await LoadAsync();
     }
 
     private async Task DeleteCategoryAsync(CategoryResponse category)
@@ -360,8 +397,7 @@
         if (!await dialog.ConfirmedAsync())
             return;
 
-        if (await Categories.DeleteAsync(category.Id, category.Name))
-            await LoadAsync();
+        await Categories.DeleteAsync(category.Id, category.Name);
     }
 
     private async Task CreateRuleAsync()
@@ -372,8 +408,6 @@
 
         var dialog = await DialogService.ShowAsync<CreateRuleDialog>("New split rule", parameters, options);
 
-        if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
-            await LoadAsync();
     }
 
     private async Task EditRuleAsync(SplitRuleResponse rule, IReadOnlyList<string> usedBy)
@@ -382,15 +416,17 @@
         {
             { dialog => dialog.GroupId, GroupId },
             { dialog => dialog.SplitRuleId, rule.Id },
-            { dialog => dialog.UsedBy, usedBy }
+
+            // Null while the categories are unread, because the empty list here means the
+            // same thing the screen behind refuses to let it mean: deleting is held back for
+            // exactly this reason, and editing is the more consequential of the two.
+            { dialog => dialog.UsedBy, _stale ? null : usedBy }
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
         var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
 
-        if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
-            await LoadAsync();
     }
 
     /// <summary>
@@ -420,8 +456,7 @@
         if (!await dialog.ConfirmedAsync())
             return;
 
-        if (await Rules.DeleteAsync(rule.Id, rule.Name))
-            await LoadAsync();
+        await Rules.DeleteAsync(rule.Id, rule.Name);
     }
 
     private async Task ShowHistoryAsync(Guid ruleId)
@@ -430,13 +465,11 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        var dialog = await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
-
-        // Only when it wrote. It can edit the rule or send a past division back into
-        // service, and then this screen is a version behind -- but merely reading a history
-        // used to cost a listing and a read per rule on the way out.
-        if (await dialog.GetReturnValueAsync<bool>())
-            await LoadAsync();
+        // Nothing to read on the way out. It can edit the rule or send a past division back
+        // into service, and both of those announce, which is what brings this screen up to
+        // date -- including when the dialog is dismissed with the corner button, which
+        // carries no answer to read.
+        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
     }
 
     private async Task RepointAsync()

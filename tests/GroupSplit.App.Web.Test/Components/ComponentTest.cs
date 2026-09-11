@@ -69,10 +69,19 @@ public abstract class ComponentTest : BunitContext
             .Setup(client => client.GetCategoriesAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
+        // A rule that has stood for one division since it was made, which is the smallest
+        // thing the server can return: every rule has at least one version by construction,
+        // and exactly one of them is open. A chain of none is a shape no run of the API
+        // produces, and a test inheriting it would drive the reader into "that version
+        // belongs to some other rule" through a response that cannot happen.
         SplitRules
             .Setup(client => client.GetSplitRuleVersionsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid id, CancellationToken _) =>
-                new SplitRuleHistoryResponse(id, Guid.Empty, "", []));
+                new SplitRuleHistoryResponse(id, Guid.Empty, "A split",
+                [
+                    new SplitRuleVersionResponse(
+                        Guid.NewGuid(), DateTimeOffset.UtcNow.AddYears(-1), null, new EvenSplitRuleDto())
+                ]));
 
         Services.AddSingleton(Categories.Object);
         Services.AddSingleton(SplitRules.Object);
