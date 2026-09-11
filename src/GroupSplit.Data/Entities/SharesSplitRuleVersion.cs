@@ -11,4 +11,4 @@ namespace GroupSplit.Data.Entities;
 /// division normalises by their total, so 2:1:1 divides exactly as well as 50/25/25 and
 /// there is nothing to convert or to round twice.
 /// </remarks>
-public sealed class SharesSplitRule : WeightedSplitRule;
+public sealed class SharesSplitRuleVersion : WeightedSplitRuleVersion;

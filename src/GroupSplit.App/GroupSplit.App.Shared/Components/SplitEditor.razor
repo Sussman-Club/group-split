@@ -5,68 +5,171 @@
 @*
     How one expense is divided, for the two dialogs that write one.
 
-    Off, it sends nothing and the API divides by the category's rule -- which is what
-    nearly every expense wants, and why that is the default rather than a choice the
-    person has to make every time. On, it sends the amounts shown, and they have to add
-    up: the API refuses a set that does not, because nothing else re-derives the division
-    and a set that does not sum makes every balance in the group wrong.
+    Two ways to answer, and one list of people either way. That second part is the whole
+    shape of this component and it was not always true: the editable fields lived here and
+    a read-only "Everyone's share" list lived in the dialog underneath, so the moment
+    somebody split by hand every member appeared twice -- once as a field they were typing
+    in and once as a row echoing what they had just typed, four rows of chrome for two
+    people. Now the list *is* the answer: editable when the person is stating it,
+    read-only when the API worked it out.
 
-    So the remaining line is the whole of this component's job. It is the only thing
-    standing between someone typing three numbers and a refusal they would otherwise meet
-    at the Save button.
+    The choice used to be a switch whose label changed with its state, which is the one
+    control nobody can read -- "Split it myself" beside a toggle tells you neither what is
+    true now nor what clicking will do. Two named options, one of them lit, says both.
+
+    On, it sends the amounts shown, and they have to add up: the API refuses a set that
+    does not, because nothing else re-derives the division and a set that does not sum
+    makes every balance in the group wrong. The remaining line is what stands between
+    somebody typing three numbers and meeting that refusal at the Save button.
+
+    Off, this states nothing and the dialog decides what that means -- which differs
+    between the two of them, and is why the answer travels as null rather than as a
+    division. Creating, there is nothing to keep and the API divides by the category's
+    rule. Editing, the shares the expense already has are kept unless somebody actually
+    chose Off, which the edit dialog sends as an ask to divide it again; silence on an edit
+    has meant "keep them" since a bulk pass that read it the other way re-divided 733
+    expenses.
 *@
 
 <MudStack Spacing="2">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
         <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Split</MudText>
-        <MudSwitch T="bool"
-                   Value="@Custom"
-                   ValueChanged="@OnCustomChanged"
-                   Color="Color.Primary"
-                   Label="@(Custom ? "Split it myself" : "As the category says")"/>
+
+        @* The app's own segmented control, not MudBlazor's toggle group: the theme
+           switcher established this shape and a second, differently-drawn two-option
+           selector in the same product reads as a component from somewhere else. The
+           filled thumb says which side is chosen, so no tick is needed beside it. *@
+        <div class="gs-seg gs-seg-labels"
+             role="radiogroup"
+             aria-label="How to divide it"
+             style="--gs-seg-n: 2; --gs-seg-i: @(Custom ? 1 : 0)">
+            <span class="gs-seg-thumb" aria-hidden="true"></span>
+
+            <button type="button"
+                    class="gs-seg-btn @(Custom ? "" : "active")"
+                    role="radio"
+                    aria-checked="@(Custom ? "false" : "true")"
+                    disabled="@(!Members.Any())"
+                    @onclick="@(() => OnCustomChanged(false))">
+                Automatically
+            </button>
+
+            <button type="button"
+                    class="gs-seg-btn @(Custom ? "active" : "")"
+                    role="radio"
+                    aria-checked="@(Custom ? "true" : "false")"
+                    disabled="@(!Members.Any())"
+                    @onclick="@(() => OnCustomChanged(true))">
+                By hand
+            </button>
+        </div>
     </MudStack>
 
-    @if (Custom)
+    @if (!Members.Any())
     {
-        @if (!Members.Any())
+        <MudAlert Severity="Severity.Info" Dense="true">
+            Pick a group first, and its members can be given a share.
+        </MudAlert>
+    }
+    else if (Custom)
+    {
+        @* One field per person, and nothing repeating them below: what is typed here is
+           what will be stored, so there is nothing for a second list to add. *@
+        <MudStack Spacing="1">
+            @foreach (var member in Members)
+            {
+                <MudNumericField T="decimal"
+                                 @key="member.Id"
+                                 Value="@ShareOf(member.Id)"
+                                 ValueChanged="@(share => SetShare(member.Id, share))"
+                                 Label="@member.Label()"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                 HideSpinButtons="true"
+                                 Immediate="true"
+                                 Format="N2"/>
+            }
+        </MudStack>
+
+        <MudAlert Severity="@(Assigned ? Severity.Success : Severity.Warning)" Dense="true">
+            @if (Assigned)
+            {
+                <text>Every cent of @Amount.ToMoney() is assigned.</text>
+            }
+            else if (Remaining > 0)
+            {
+                <text>@Remaining.ToMoney() still to assign.</text>
+            }
+            else
+            {
+                <text>@((-Remaining).ToMoney()) more than the expense comes to.</text>
+            }
+        </MudAlert>
+
+        @* Only once the column adds up. Until then the line above is saying the same
+           thing more usefully, and two warnings about one problem read as two problems --
+           but a set that sums and is still refused (naming somebody who is not in the
+           group, say) would otherwise be silent until the Save button. *@
+        @if (Assigned && PreviewError is { Length: > 0 } refused)
         {
+            <MudAlert Severity="Severity.Warning" Dense="true">@refused</MudAlert>
+        }
+    }
+    else
+    {
+        @* Worked out by the API, which is the same code the save runs -- so this is what
+           will be stored and not a second copy of the arithmetic that has to agree with
+           it. Said out loud, because "as the category says" is exactly the case where
+           nobody can tell what it says without being told. *@
+        <MudText Typo="Typo.caption">@Explanation</MudText>
+
+        @if (Superseded is { } changed)
+        {
+            @* What it does, and what the two options here do about it. The remedy this
+               used to offer -- "file it under the category again" -- could not work: an
+               expense keeps the version it was written under for as long as that version
+               belongs to the rule its category names, so re-picking the same category
+               reaches the same version it already has. *@
             <MudAlert Severity="Severity.Info" Dense="true">
-                Pick a group first, and its members can be given a share.
+                The rule has changed since this was recorded. It stays divided the way it
+                was on @changed.ToLocalTime().ToString("d MMM yyyy"), and
+                <strong>Automatically</strong> divides it again by that same version rather
+                than by the rule as it stands now &mdash; nobody correcting an expense is
+                re-billed under a division agreed afterwards. To set the shares yourself,
+                choose <strong>By hand</strong>.
             </MudAlert>
+        }
+
+        @if (PreviewError is { Length: > 0 })
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">@PreviewError</MudAlert>
+        }
+        else if (Preview is null)
+        {
+            <MudText Typo="Typo.caption">Working it out…</MudText>
         }
         else
         {
-            <MudStack Spacing="1">
-                @foreach (var member in Members)
+            <div class="gs-list">
+                @foreach (var share in Preview.Splits)
                 {
-                    <MudNumericField T="decimal"
-                                     Value="@ShareOf(member.Id)"
-                                     ValueChanged="@(share => SetShare(member.Id, share))"
-                                     Label="@member.Label()"
-                                     Variant="Variant.Outlined"
-                                     Margin="Margin.Dense"
-                                     Adornment="Adornment.Start"
-                                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                     HideSpinButtons="true"
-                                     Immediate="true"
-                                     Format="N2"/>
+                    <div class="gs-row" @key="share.UserId" style="cursor: default; padding: 8px 4px">
+                        <Avatar Name="@share.UserName" Size="sm"/>
+                        <div style="min-width: 0">
+                            <div class="title">
+                                <span>@share.UserName</span>
+                                @if (share.IsPendingInvitee)
+                                {
+                                    <span class="gs-tag">invited</span>
+                                }
+                            </div>
+                        </div>
+                        <Money Value="share.Amount"/>
+                    </div>
                 }
-            </MudStack>
-
-            <MudAlert Severity="@(Assigned ? Severity.Success : Severity.Warning)" Dense="true">
-                @if (Assigned)
-                {
-                    <text>Every cent of @Amount.ToMoney() is assigned.</text>
-                }
-                else if (Remaining > 0)
-                {
-                    <text>@Remaining.ToMoney() still to assign.</text>
-                }
-                else
-                {
-                    <text>@((-Remaining).ToMoney()) more than the expense comes to.</text>
-                }
-            </MudAlert>
+            </div>
         }
     }
 </MudStack>
@@ -89,25 +192,59 @@
     [Parameter] public Guid? PayerId { get; set; }
 
     /// <summary>
-    /// The stated division, or null to leave it to the category. Null is not "no shares";
-    /// it is "don't send any", which is a different instruction and the ordinary one.
+    /// The stated division, or null to leave it to the dialog. Null is not "no shares"; it
+    /// is "don't state any", which is a different instruction and the ordinary one.
     /// </summary>
+    /// <remarks>
+    /// Non-null is also what puts the control on "By hand", so an edit dialog that opens on
+    /// the expense's own shares opens by handing them in here. Whether it should is the
+    /// dialog's question and not this component's: the amounts do not say who chose them.
+    /// </remarks>
     [Parameter] public IReadOnlyList<SplitInput>? Value { get; set; }
 
     [Parameter] public EventCallback<IReadOnlyList<SplitInput>?> ValueChanged { get; set; }
 
     /// <summary>
-    /// What to start from when the switch is turned on: the expense's current shares, on
-    /// an edit. Absent on a create, where there is nothing stored yet and the even
-    /// starting point below is used instead.
+    /// What to start from when the person takes the division over: the expense's current
+    /// shares, on an edit. Absent on a create, where there is nothing stored yet and the
+    /// even starting point below is used instead.
     /// </summary>
     [Parameter] public IReadOnlyList<SplitInput>? Stored { get; set; }
+
+    /// <summary>
+    /// What the API says this comes to, which is what the automatic division is shown as.
+    /// Null while the answer is still in flight.
+    /// </summary>
+    /// <remarks>
+    /// Passed in rather than fetched here, because the preview covers the whole expense --
+    /// its amount, its payer, its group -- and this component knows about the division
+    /// only. The dialog owns the request; this owns how the answer reads.
+    /// </remarks>
+    [Parameter] public SplitPreviewResponse? Preview { get; set; }
+
+    /// <summary>Why there is no preview, when the API refused to give one.</summary>
+    [Parameter] public string? PreviewError { get; set; }
 
     private bool Custom => Value is not null;
 
     private decimal Remaining => Amount - (Value?.Sum(split => split.Amount) ?? 0m);
 
     private bool Assigned => Remaining == 0m;
+
+    /// <summary>
+    /// When the version that divided it is no longer what the rule says. Only ever set on
+    /// an edit, and only when the rule has been changed since the expense was written.
+    /// </summary>
+    private DateTimeOffset? Superseded => Preview?.RuleSupersededAt;
+
+    /// <summary>
+    /// Why the numbers are what they are, in one line. The rule when there is one, and
+    /// otherwise the thing an absent rule means -- which is a real answer and not a
+    /// fallback, and reads better than leaving the caption out.
+    /// </summary>
+    private string Explanation => Preview?.RuleName is { Length: > 0 } rule
+        ? $"Divided by the \"{rule}\" rule."
+        : "Divided evenly between everyone in the group.";
 
     private decimal ShareOf(Guid userId) =>
         Value?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
@@ -133,7 +270,7 @@
     }
 
     /// <summary>
-    /// What the fields hold the moment the switch goes on.
+    /// What the fields hold the moment the person takes the division over.
     /// </summary>
     /// <remarks>
     /// The expense's own shares when it has some, which is the useful case on an edit:

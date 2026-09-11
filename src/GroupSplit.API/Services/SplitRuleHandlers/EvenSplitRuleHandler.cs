@@ -11,24 +11,29 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 /// in the group now, which keeps it dividing evenly after somebody joins instead of
 /// freezing today's members into weights; naming people narrows it instead. Stored weights
 /// are ignored either way -- "even" is what makes it even.
+/// <para>
+/// Naming people narrows it to those of them who are still participants: the intersection
+/// is the base class's, so an old version that still names somebody who has left does not
+/// pay them. Naming nobody needs no such trimming -- the membership is where it started.
+/// </para>
 /// </remarks>
 public class EvenSplitRuleHandler
-    : WeightedSplitRuleHandler<EvenSplitRule>, ISplitRuleFactory<EvenSplitRuleDto>
+    : WeightedSplitRuleHandler<EvenSplitRuleVersion>, ISplitRuleFactory<EvenSplitRuleDto>
 {
     protected override IReadOnlyList<SplitWeight> WeightsFor(
-        EvenSplitRule rule, IReadOnlyCollection<Guid> members)
+        EvenSplitRuleVersion ruleVersion, IReadOnlyCollection<Guid> members)
     {
-        var among = rule.Participants.Count > 0
-            ? rule.Participants.Select(participant => participant.UserId)
+        var among = ruleVersion.Participants.Count > 0
+            ? ruleVersion.Participants.Select(participant => participant.UserId)
             : members;
 
         return [..among.Select(userId => new SplitWeight(userId, 1))];
     }
 
-    public override SplitRuleDto ToDto(EvenSplitRule rule) =>
-        new EvenSplitRuleDto([..rule.Participants.Select(participant => participant.UserId)]);
+    public override SplitRuleDto ToDto(EvenSplitRuleVersion ruleVersion) =>
+        new EvenSplitRuleDto([..ruleVersion.Participants.Select(participant => participant.UserId)]);
 
-    public SplitRule FromDto(string name, EvenSplitRuleDto definition) =>
-        Naming(new EvenSplitRule { Name = name },
+    public SplitRuleVersion FromDto(EvenSplitRuleDto definition) =>
+        Naming(new EvenSplitRuleVersion(),
             definition.Among.Select(userId => new KeyValuePair<Guid, int>(userId, 1)));
 }

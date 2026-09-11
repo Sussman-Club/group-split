@@ -502,6 +502,44 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
+    /// Split rules and the chain of versions behind them: the listing, one rule with its
+    /// whole history, and the rewrite a departure performs.
+    /// </summary>
+    /// <remarks>
+    /// The reason this one is here is the downcast. Participants hang off
+    /// <c>WeightedSplitRuleVersion</c> and not off the base, so every read of them is
+    /// <c>(version as WeightedSplitRuleVersion)!.Participants</c> inside a predicate or an
+    /// Include -- a TPH cast the in-memory provider simply runs in memory and Npgsql has to
+    /// turn into a discriminator test. Two of those are in the path an expense takes every
+    /// time one is created.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task Split_rules_and_their_versions_translate()
+    {
+        var group = await AGroupOfTheirs();
+        var rules = Service<ISplitRuleService>();
+
+        var listed = await (await rules.List(group, Ct)).ToListAsync(Ct);
+
+        // Asserted, unusually for this file, because the two reads below are inside the
+        // loop: a seed with no rules in it would pass this test without running them.
+        Assert.NotEmpty(listed);
+
+        foreach (var rule in listed)
+        {
+            await rules.GetDetails(rule.Id, Ct);
+            await rules.GetHistory(rule.Id, Ct);
+        }
+
+        // The predicate with the downcast in it, which is what takes a departing member out
+        // of the rules that name them. Nobody is leaving here -- a user id nothing names
+        // matches nothing -- and the query still has to translate to find that out.
+        await Service<ISplitRuleRevisions>()
+            .WithoutParticipant(group, Guid.NewGuid(), toUserId: null, Ct);
+
+    }
+
+    /// <summary>
     /// Squaring up, on the real database. The unit suite runs on EF's in-memory provider,
     /// which evaluates on the client whatever it cannot translate rather than refusing.
     /// </summary>

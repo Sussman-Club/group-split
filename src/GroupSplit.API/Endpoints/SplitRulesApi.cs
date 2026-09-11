@@ -24,6 +24,8 @@ public static class SplitRulesApi
 
             group.MapListSplitRules();
             group.MapGetSplitRule();
+            group.MapGetSplitRuleHistory();
+            group.MapSetSplitRuleHistory();
             group.MapCreateSplitRule();
             group.MapUpdateSplitRule();
             group.MapDeleteSplitRule();
@@ -57,6 +59,52 @@ public static class SplitRulesApi
                 .WithName("GetSplitRule")
                 .Produces<SplitRuleDetailsResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Every division the rule has stood for, so a member can see what an expense from
+        /// last March was actually divided by rather than what the rule says today.
+        /// </summary>
+        private RouteHandlerBuilder MapGetSplitRuleHistory()
+        {
+            return group.MapGet("/{id:guid}/versions", async (
+                    Guid id,
+                    ISplitRuleService rules,
+                    CancellationToken ct) => Results.Ok(await rules.GetHistory(id, ct)))
+                .WithName("GetSplitRuleVersions")
+                .Produces<SplitRuleHistoryResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Writes the divisions a rule stood for before it was recorded here, oldest first.
+        /// </summary>
+        /// <remarks>
+        /// A <c>PUT</c> on the same collection the <c>GET</c> above reads, because it states
+        /// the whole of it: the rule's history becomes exactly these entries, and sending
+        /// them twice writes the same chain rather than two.
+        /// <para>
+        /// For a rule that has stood for one division since it was made, which is what a
+        /// migration leaves behind and what a rule created here starts as. It refuses
+        /// anything else, and it refuses a history whose last entry is not the division the
+        /// rule stands for now -- that entry becomes the open version, and the open version
+        /// is the row every recorded expense already points at. For the same reason it
+        /// refuses an entry dated after now: the open version would start in the future,
+        /// where a new expense is still divided by it and a reattach no longer finds it.
+        /// </para>
+        /// </remarks>
+        private RouteHandlerBuilder MapSetSplitRuleHistory()
+        {
+            return group.MapPut("/{id:guid}/versions", async (
+                    Guid id,
+                    List<SplitRuleVersionInput> versions,
+                    ISplitRuleService rules,
+                    CancellationToken ct) => Results.Ok(await rules.SetHistory(id, versions, ct)))
+                .WithName("SetSplitRuleVersions")
+                .Produces<SplitRuleHistoryResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         private RouteHandlerBuilder MapCreateSplitRule()

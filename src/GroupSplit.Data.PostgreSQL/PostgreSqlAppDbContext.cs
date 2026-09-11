@@ -19,6 +19,17 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
                 );
         });
 
+        // At most one current version per rule. A partial index because that is the only
+        // way to say "unique among the rows that matter" -- every superseded version of a
+        // rule shares its SplitRuleId, so an unfiltered unique index would forbid a second
+        // edit. The alternative is a check in the service, which is a check two concurrent
+        // edits can both pass.
+        modelBuilder.Entity<SplitRuleVersion>()
+            .HasIndex(version => version.SplitRuleId)
+            .IsUnique()
+            .HasFilter("\"SupersededAt\" IS NULL")
+            .HasDatabaseName("IX_SplitRuleVersion_SplitRuleId_Current");
+
         // The provider's row verbatim, queryable when a field it holds is wanted later
         // without adding a column for it. Text on every other provider.
         modelBuilder.Entity<BankTransaction>(entity =>

@@ -23,16 +23,30 @@ public interface ISplitRuleHandler
     /// stored rather than trusted here.
     /// </remarks>
     IReadOnlyList<SplitAmount> Divide(
-        SplitRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members);
+        SplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members);
 
     /// <summary>
     /// What is wrong with the rule, or null when nothing is. A complaint rather than an
     /// exception, so a handler needs none of the API's exception types.
     /// </summary>
-    string? Invalid(SplitRule rule);
+    string? Invalid(SplitRuleVersion ruleVersion);
 
     /// <summary>The rule as the client sees it.</summary>
-    SplitRuleDto ToDto(SplitRule rule);
+    SplitRuleDto ToDto(SplitRuleVersion ruleVersion);
+
+    /// <summary>
+    /// Whether two versions say the same thing, and so whether editing a rule into
+    /// <paramref name="other"/> is a change at all.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the kind rather than answered by comparing DTOs, because what counts as the
+    /// same division is the kind's business: an even rule naming nobody and one naming
+    /// everybody divide alike today and would stop agreeing the moment somebody joins, so
+    /// they are not the same rule. A kind that got this wrong would leave a rule's history
+    /// either littered with versions that changed nothing or missing the one edit that
+    /// mattered.
+    /// </remarks>
+    bool SameAs(SplitRuleVersion ruleVersion, SplitRuleVersion other);
 }
 
 /// <summary>
@@ -41,7 +55,11 @@ public interface ISplitRuleHandler
 /// </summary>
 public interface ISplitRuleFactory
 {
-    SplitRule FromDto(string name, SplitRuleDto definition);
+    /// <summary>
+    /// A version of whatever kind <paramref name="definition"/> is, belonging to no rule
+    /// yet. The name is the rule's and not the version's, so it is not asked for here.
+    /// </summary>
+    SplitRuleVersion FromDto(SplitRuleDto definition);
 }
 
 /// <summary>
@@ -49,7 +67,7 @@ public interface ISplitRuleFactory
 /// dispatcher, and exist so an implementation only ever writes the typed ones.
 /// </summary>
 public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
-    where TRule : SplitRule
+    where TRule : SplitRuleVersion
 {
     IReadOnlyList<SplitAmount> Divide(
         TRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members);
@@ -58,28 +76,33 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
 
     SplitRuleDto ToDto(TRule rule);
 
+    bool SameAs(TRule rule, TRule other);
+
     IReadOnlyList<SplitAmount> ISplitRuleHandler.Divide(
-        SplitRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
-        Divide(Expected(rule), amount, payerId, members);
+        SplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
+        Divide(Expected(ruleVersion), amount, payerId, members);
 
-    string? ISplitRuleHandler.Invalid(SplitRule rule) => Invalid(Expected(rule));
+    string? ISplitRuleHandler.Invalid(SplitRuleVersion ruleVersion) => Invalid(Expected(ruleVersion));
 
-    SplitRuleDto ISplitRuleHandler.ToDto(SplitRule rule) => ToDto(Expected(rule));
+    SplitRuleDto ISplitRuleHandler.ToDto(SplitRuleVersion ruleVersion) => ToDto(Expected(ruleVersion));
 
-    private static TRule Expected(SplitRule rule) =>
-        rule as TRule ?? throw new InvalidOperationException(
-            $"Expected {typeof(TRule).Name}, got {rule.GetType().Name}.");
+    bool ISplitRuleHandler.SameAs(SplitRuleVersion ruleVersion, SplitRuleVersion other) =>
+        other is TRule typed && SameAs(Expected(ruleVersion), typed);
+
+    private static TRule Expected(SplitRuleVersion ruleVersion) =>
+        ruleVersion as TRule ?? throw new InvalidOperationException(
+            $"Expected {typeof(TRule).Name}, got {ruleVersion.GetType().Name}.");
 }
 
 /// <inheritdoc cref="ISplitRuleFactory"/>
 public interface ISplitRuleFactory<in TDto> : ISplitRuleFactory
     where TDto : SplitRuleDto
 {
-    SplitRule FromDto(string name, TDto definition);
+    SplitRuleVersion FromDto(TDto definition);
 
-    SplitRule ISplitRuleFactory.FromDto(string name, SplitRuleDto definition) =>
+    SplitRuleVersion ISplitRuleFactory.FromDto(SplitRuleDto definition) =>
         definition is not TDto typedDefinition
             ? throw new InvalidOperationException(
                 $"Expected {typeof(TDto).Name}, got {definition.GetType().Name}.")
-            : FromDto(name, typedDefinition);
+            : FromDto(typedDefinition);
 }

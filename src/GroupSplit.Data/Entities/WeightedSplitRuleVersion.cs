@@ -16,7 +16,7 @@ namespace GroupSplit.Data.Entities;
 /// table and no join.
 /// </para>
 /// </remarks>
-public abstract class WeightedSplitRule : SplitRule
+public abstract class WeightedSplitRuleVersion : SplitRuleVersion
 {
     /// <summary>
     /// Who the rule names, and with what weight. What a weight means is the subtype's to

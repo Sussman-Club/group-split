@@ -9,13 +9,98 @@ last March.
 Which leaves one question this document exists to answer: a rule names people, and people
 join groups and leave them. What does the rule mean then?
 
+## Split rules are versioned
+
+A `SplitRule` is a name a group owns and a category points at. What it *says* is a
+`SplitRuleVersion`: the people, the weights, and the window it was the answer in
+(`StartedAt`, and `SupersededAt` once it stops being). A rule has one open version at a
+time, which the database enforces with a partial unique index rather than the service
+enforcing it with a check two concurrent edits can both pass.
+
+A version is never edited. Every path that changes what a rule says closes the version that
+was current and opens a new one -- editing it from the app or the CLI, and a member leaving,
+which is the one change that happens without anybody editing anything.
+
+Every transaction records the version that divided it, in `Transaction.SplitRuleVersionId`.
+Null there is not a gap: a transfer, a personal expense, an expense filed under nothing or
+under a category that names no rule, and an expense whose shares somebody typed in by hand
+all divide by something other than a rule, and an invented row would say otherwise.
+
+The pair is the point, and neither half replaces the other:
+
+| | Says | Survives |
+| --- | --- | --- |
+| `TransactionSplit` rows | What each person owed | An edit to the rule |
+| `Transaction.SplitRuleVersionId` | Which division produced those amounts | An edit to the amount |
+
+So an expense that is divided again is divided by the version it was written under, not by
+what its category's rule says today -- nobody correcting a figure is asking to be re-billed
+under a division agreed afterwards. Filing it under a different category is the edit that
+does ask for that, and gets that category's current version.
+
+Being divided again takes two things, and it takes both. `PATCH /transactions/{id}` reads
+silence about `/splits` as *never restate a division somebody made*, so the API first asks
+whether the stored shares are the ones the expense's own version reproduces -- a rule's, or
+an even split under no rule, which the app worked out just as surely. Shares a person typed
+fail that and are kept whatever the edit; changing the amount on one of those is refused
+rather than re-divided, because the shares that summed to the old total do not sum to the new
+one. Second, the edit has to move something the division was worked out *from*: the amount,
+the payer, the category or the group. A name, a note, a date or a merchant moves nothing,
+whatever divided it -- which is the 2026-09-08 shape, and it is unreachable because an absent
+operation on its own is never enough.
+
+Asking outright is still an explicit `/splits` operation with null, and it means something
+the two conditions above cannot: discard the shares it holds and divide by the category's rule
+whatever the edit touched. Not by that rule **as it reads now** -- an expense that still
+records a version is divided again by that version, the same one an amount edit would use, so
+a rule edited since is not applied retroactively by asking. What reaches a rule as it stands
+is filing the expense under another category, and an expense somebody split by hand, which
+records no version at all. The edit dialog's **Automatically** sends it, `transactions update
+--redivide` sends it from the CLI, and `POST /transactions/{id}/preview?redivide=true` shows
+beforehand what it would come to.
+A division carried forward unchanged keeps the version behind it, so provenance survives
+every edit that is not about the money.
+
+### Writing a past the app did not live through
+
+A rule imported from somewhere else arrives holding one version, dated whenever the import
+ran, and every expense imported with it points at that one -- so a 2023 grocery bill claims a
+ratio agreed in 2026. Three things put that right, and none of them touches a stored amount:
+
+| | |
+| --- | --- |
+| `PUT /split-rules/{id}/versions` | States the divisions a rule stood for, oldest first, each with the date it started. Only for a rule that has stood for one division since it was made; the last entry has to be that division, and its row is reused rather than replaced, because recorded expenses already point at it. |
+| `POST /transactions/reattach` | Points every expense in a group at the version whose window contains its date. Writes `SplitRuleVersionId` and nothing else, so the group's balances are identical afterwards. `dryRun` reports without saving. |
+| `PUT /transactions/{id}/division-source` | The same for one expense, stated by hand. Null means the amounts are the expense's own. |
+
+Provenance only, all three. None of them calls the splitter, and `ExpenseProvenance` -- which
+serves the last two -- does not take it as a dependency, so that is structural rather than a
+promise.
+
+Three edits, three effects, and none of them reaches the others: renaming a rule touches no
+version, pointing a category somewhere else touches no rule, and editing a division touches
+no category and nothing already recorded.
+
+A rule that anything has been divided by cannot be deleted. The service refuses it in words
+first (`SPLIT_RULE_IN_USE`), and the foreign key from `Transaction` refuses it underneath, so
+an expense cannot be left with amounts and no account of where they came from.
+
 ## What is true now
 
-- **A departing member is taken out of the rules that name them.** Not marked, not zeroed:
-  the participant row goes. This happens on all three ways out -- removed by somebody else,
-  leaving of their own accord, and deleting the account -- because all three go through
-  `GroupService.DetachMember`. A pending invitee whose invitation is declined or withdrawn is
-  pruned the same way, by `IGroupParticipants.HandOver`.
+- **A departing member is taken out of the rules that name them -- by a new version of
+  each.** Not marked, not zeroed, and not deleted out of the version the rule is on: the
+  current version closes and a new one opens without them. This happens on all three ways
+  out -- removed by somebody else, leaving of their own accord, and deleting the account --
+  because all three go through `GroupService.DetachMember`. A pending invitee whose
+  invitation is declined or withdrawn is handled the same way, by
+  `IGroupParticipants.HandOver`. Both go through `ISplitRuleRevisions`, which is the only
+  place a rule changes without somebody editing it.
+
+  Editing the version in place would have been shorter and would have broken the guarantee
+  above: an expense recorded last March points at that row, and "divide it again by the rule
+  it had" is only true while the row still says what it said in March. The rule's history
+  gains an entry saying the group changed shape, which is a better record than the silent
+  deletion it replaces.
 - **They have to be settled up first.** A member with a non-zero balance in the group cannot
   be removed and cannot leave (`GROUP_MEMBER_NOT_SETTLED`), so a departure never leaves a
   debt behind with nobody to owe it.

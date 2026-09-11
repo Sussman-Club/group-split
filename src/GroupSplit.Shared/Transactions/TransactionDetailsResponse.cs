@@ -21,4 +21,22 @@ public record TransactionSplitResponse(
 public record TransactionDetailsResponse : TransactionResponse
 {
     public List<TransactionSplitResponse> Splits { get; init; } = [];
+
+    /// <summary>
+    /// The version of the rule that divided it, or null when no rule did -- shares somebody
+    /// typed, or an even division under no rule at all.
+    /// </summary>
+    /// <remarks>
+    /// Carried so a client can tell where the shares above came from, which the amounts
+    /// alone do not say. The edit dialog needs it to open its split control on the truth:
+    /// without it every expense read as automatically divided, and "Divided by the Rent
+    /// rule" sat over amounts somebody had typed by hand.
+    /// <para>
+    /// Null is two answers rather than one, and the model does not separate them: an even
+    /// division records no version either. A client that has to choose treats null as
+    /// "these amounts are the expense's own", which is true of both -- the automatic
+    /// division is reachable from there by asking for it.
+    /// </para>
+    /// </remarks>
+    public Guid? SplitRuleVersionId { get; init; }
 }

@@ -122,6 +122,45 @@ public class GroupLeaveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal("Groceries", details!.Name);
     }
 
+    /// <summary>
+    /// Previewing that edit refuses the way the save does, rather than reporting the group
+    /// missing.
+    /// </summary>
+    /// <remarks>
+    /// The preview is worth having only because it meets the save's refusal while there is
+    /// still a field on screen to fix it in, so answering a different refusal is worse than
+    /// answering none. A leaver can still read the expense -- it is their own record -- and
+    /// without the membership check the group lookup is the first thing to notice anything
+    /// is wrong and calls the group missing: a 404 about the group, for a caller whose
+    /// problem is that they left it.
+    /// </remarks>
+    [Fact]
+    public async Task Previewing_an_edit_in_a_group_I_left_refuses_the_way_the_save_does()
+    {
+        var (groupId, expenseId, _) = await ASettledGroupWithMyExpense();
+        var me = GetService<ICurrentUser>().User;
+
+        await Groups.Leave(groupId, Ct);
+
+        var request = new UpdateTransactionRequest
+        {
+            Name = "Groceries, again",
+            Amount = 20m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id,
+            GroupId = groupId
+        };
+
+        var preview = await Assert.ThrowsAsync<ConflictException>(() =>
+            Transactions.PreviewUpdate(expenseId, request, ct: Ct));
+
+        var save = await Assert.ThrowsAsync<ConflictException>(() =>
+            Transactions.Update(expenseId, request, Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.TransactionGroupLeft, preview.Code);
+        Assert.Equal(save.Code, preview.Code);
+    }
+
     [Fact]
     public async Task Leaving_with_a_balance_is_refused_and_names_it()
     {

@@ -114,6 +114,8 @@ public class ManageRulesDialogTest : ComponentTest
         Id = id,
         GroupId = Trip,
         Name = name,
+        VersionId = Guid.NewGuid(),
+        ChangedAt = DateTimeOffset.UtcNow,
         Definition = new PayerSplitRuleDto()
     };
 
@@ -259,6 +261,82 @@ public class ManageRulesDialogTest : ComponentTest
         Assert.Equal(["Food"], Rows(provider));
         Assert.Equal(2, _announced);
         Assert.Contains("Food", Assert.Single(_said).Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Editing a split adds to its history rather than overwriting it, and the dialog is
+    /// where somebody can see that -- both the promise and the divisions it has been
+    /// through.
+    /// </summary>
+    /// <remarks>
+    /// The fear this answers is a real one: a person changing how rent is split is entitled
+    /// to wonder whether they have just restated what everybody owed last month. They have
+    /// not, and the dialog is the only place that can say so at the moment they are asking.
+    /// </remarks>
+    [Fact]
+    public async Task Editing_a_split_shows_what_it_used_to_be_and_promises_nothing_recorded_moves()
+    {
+        _rules
+            .Setup(client => client.GetSplitRuleVersionsAsync(GroceriesRule, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(GroceriesRule, Trip, "Groceries",
+            [
+                new SplitRuleVersionResponse(
+                    Guid.NewGuid(), DateTimeOffset.UtcNow, null, new PayerSplitRuleDto()),
+                new SplitRuleVersionResponse(
+                    Guid.NewGuid(),
+                    DateTimeOffset.UtcNow.AddDays(-30),
+                    DateTimeOffset.UtcNow,
+                    new SharesSplitRuleDto { Shares = new Dictionary<Guid, int> { [Guid.NewGuid()] = 2 } })
+            ]));
+
+        var provider = await OpenAsync();
+
+        var editing = RowButton(provider, 0).ClickAsync(new MouseEventArgs());
+
+        provider.WaitForAssertion(() =>
+            Assert.Contains("What it used to be (1)", provider.Markup, StringComparison.Ordinal));
+
+        Assert.Contains("starts a new version of it", provider.Markup, StringComparison.Ordinal);
+        Assert.Contains("Expenses already recorded keep", provider.Markup, StringComparison.Ordinal);
+
+        // The superseded one, and not the one it is on now -- which is the form above it.
+        Assert.Contains("By shares, between 1", provider.Markup, StringComparison.Ordinal);
+
+        await Button(provider, "Cancel").ClickAsync(new MouseEventArgs());
+        await editing;
+    }
+
+    /// <summary>
+    /// A category that divides evenly can be opened for editing at all.
+    /// </summary>
+    /// <remarks>
+    /// The regression test for a dialog that threw as it initialised. Two categories reach
+    /// the editor holding an even division -- one that names no rule, which this dialog
+    /// hands over as <c>EvenSplitRuleDto</c> on purpose, and one whose rule genuinely is an
+    /// even one -- and <c>CloneVersion</c> knew three kinds out of four, so both hit the
+    /// default arm and threw before a single field was rendered.
+    /// </remarks>
+    [Fact]
+    public async Task A_category_that_divides_evenly_opens_for_editing()
+    {
+        _categories
+            .Setup(client => client.GetCategoriesAsync(Trip, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => [new CategoryResponse(Groceries, Trip, "Groceries", null, null)]);
+
+        var provider = await OpenAsync();
+
+        var editing = RowButton(provider, 0).ClickAsync(new MouseEventArgs());
+
+        // The form is there, holding the category's name. It offers no *Even* type to pick,
+        // so it opens with none chosen -- which is the editor asking how this should divide
+        // from now on, and is a world away from throwing.
+        provider.WaitForAssertion(() =>
+            Assert.Contains("Rule Type", provider.Markup, StringComparison.Ordinal));
+
+        Assert.Equal("Groceries", provider.FindAll("input").First().GetAttribute("value"));
+
+        await Button(provider, "Cancel").ClickAsync(new MouseEventArgs());
+        await editing;
     }
 
     [Fact]

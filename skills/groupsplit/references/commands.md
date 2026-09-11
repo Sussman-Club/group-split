@@ -83,12 +83,13 @@ Expenses and settlements.
 | `transactions list` | The expenses **you** paid for, newest first. With `--group`, the group's whole ledger. |
 | `transactions show <transaction-id>` | Show one transaction and how it was split. |
 | `transactions create <name> <amount>` | Record an expense. |
-| `transactions update <transaction-id>` | Change an expense. Only what you name is sent. |
+| `transactions update <transaction-id>` | Change an expense. Only what moved is sent; `--redivide` asks for a fresh division, `--preview` shows the result without changing anything. |
 | `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. |
 | `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. |
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
+| `transactions reattach --group <group-id>` | Point a group's expenses at the version of their rule in force when each was spent. Moves no money. `--dry-run` reports and saves nothing; the real run is exit-4 gated. |
 | `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. |
 
 ### users
@@ -156,10 +157,19 @@ Reusable rules describing how an expense is divided.
 | Command | |
 | --- | --- |
 | `split-rules list` | List split rules. |
-| `split-rules show <rule-id>` | Show one rule and the division it stands for. |
+| `split-rules show <rule-id>` | Show one rule and the division it stands for now. |
+| `split-rules versions <rule-id>` | Show every division the rule has stood for, and when each stopped. |
 | `split-rules create <name>` | Create a split rule. |
-| `split-rules update <rule-id>` | Change a rule's name or how it divides. |
-| `split-rules delete <rule-id>` | Delete a split rule. |
+| `split-rules update <rule-id>` | Rename a rule, or change how it divides from now on. |
+| `split-rules versions set <rule-id> --file <history.json>` | Write the divisions a rule stood for *before* it was recorded here. `--dry-run` prints the chain and sends nothing; the real run is exit-4 gated. |
+| `split-rules delete <rule-id>` | Delete a split rule. Refused once an expense has been divided by it. |
+
+A rule is a name with a history behind it. Editing how it divides starts a new version and
+closes the one before it; renaming it starts none. Every expense records the version that
+divided it, so editing a rule changes what the *next* expense is pre-filled with and nothing
+already recorded -- and editing an old expense's amount re-divides it by the version it was
+written under, not by what the rule says today. Filing it under another category is what
+moves it onto a different rule.
 
 ### invitations
 
@@ -266,12 +276,78 @@ groupsplit split-rules create "Two thirds me" --group $G --percent $ME=66.67 --p
 groupsplit categories create "Rent" --group $G --rule $RULE_ID --json
 ```
 
+`update` takes the same flags and means "from now on". To answer *how was this expense
+actually divided*, read `split-rules versions <rule-id>` rather than `show`: `show` is what
+the rule says today, and an expense from March may have been divided by an earlier entry.
+
+#### Writing a rule's past: `versions set`
+
+Only for a rule imported with no history -- one that has stood for a single division since it
+was made. The file is a JSON array, oldest first, of `{"from", "definition"}` where the
+definition is the same `$type` shape `split-rules show` prints:
+
+```json
+[
+  { "from": "2023-03-01", "definition": { "$type": "shares", "shares": { "<user-id>": 3 } } },
+  { "from": "2026-01-01", "definition": { "$type": "even" } }
+]
+```
+
+A `from` with no offset is midnight UTC. Each entry runs until the next starts, so the dates
+must strictly increase, no entry may start in the future, and the **last entry has to be how
+the rule divides today** -- it is the row every recorded expense already points at, and it is
+reused rather than replaced. The refusals are `SPLIT_RULE_ALREADY_HAS_HISTORY`,
+`SPLIT_RULE_HISTORY_ENDS_ELSEWHERE` and `SPLIT_RULE_HISTORY_INVALID`.
+
+Then run `transactions reattach --group <group-id>` to point the expenses at the right
+entries. That pass moves no money at all -- only which version each expense names -- so the
+group's balances are identical afterwards. To say it for a single expense instead, use
+`transactions update <id> --divided-by <version-id>` or `--hand-split` (the amounts are the
+expense's own). Those two contradict each other and contradict `--split` and `--redivide`.
+
+Either one alongside an ordinary edit is two requests -- the edit, then the record of what
+divided it -- so a failure says which half landed ("the edit was saved, but recording what
+divided it was not"). Run the same command again: it reads the expense first and sends only
+what still differs, so nothing is applied twice.
+
 ### Setting exact shares: `--split`
 
 `transactions update --split <user-id>=<amount>` and `inbox file --split <user-id>=<amount>`
 take money, not percentages or share counts, and are repeatable. They set the division
-outright. Omit the flag and the division is re-derived from the category's rule -- which is
-what you want unless the user has given you per-person figures.
+outright.
+
+On `transactions update`, omitting the flag **never restates a division somebody typed**. It
+has not re-derived those since 2026-09-09 -- a bulk pass that assumed otherwise re-divided 733
+expenses. What it does with a division *nobody* typed depends on what the edit touches:
+
+| The expense's shares were | You change | What happens |
+| --- | --- | --- |
+| typed by somebody | anything but the amount | kept exactly as they are |
+| typed by somebody | the amount | **refused** (`SPLITS_DO_NOT_SUM_TO_AMOUNT`): those shares no longer add up |
+| worked out by a rule (or evenly, under none) | the name, note, date or merchant | kept exactly as they are |
+| worked out by a rule (or evenly, under none) | the amount, payer, category or group | worked out again at the new values |
+
+Two consequences worth holding on to:
+
+- Changing the amount on its own is **refused** (`SPLITS_DO_NOT_SUM_TO_AMOUNT`) on an expense
+  somebody split by hand, because the old shares do not add up to the new total. Either pass
+  `--split` for every member alongside `--amount` (read the current shares from
+  `transactions show` first), or pass `--redivide`. On an expense a rule divided it simply
+  works.
+- Changing the category re-divides an expense a rule divided, by the new category's rule, and
+  leaves a hand-typed division alone.
+
+`--redivide` discards the shares the expense holds and asks its category's rule to divide it
+again -- **by the version the expense records**, not by the rule as it reads today. 90.00
+recorded under a two-to-one rule comes back 60.00 / 30.00 even after that rule has been
+changed to one-to-one. To reach a rule as it stands now, file the expense under a different
+category (`--category-id`): the version it holds belongs to a rule it is then no longer filed
+under, so the new category's current rule decides. An expense somebody split by hand records
+no version -- stating shares gives up the one it had -- so `--redivide` there has nothing to
+go back to and does divide by the rule as it reads now.
+
+`--split` and `--redivide` contradict each other. Prefer `--split` when the user gave you
+per-person figures and `--redivide` when they said "just split it the usual way".
 
 ### Changing an expense
 
@@ -286,10 +362,24 @@ between "leave it" and "clear it":
 | File it under a category | `--category-id <category-id>` |
 | File it under nothing, so it divides evenly | `--no-category` |
 
-### Before creating an expense
+### Before writing anything: `--preview`
 
 `transactions create ... --preview` shows the split the server would apply and creates
 nothing. Use it whenever the division matters, and show the result before committing.
+
+`transactions update ... --preview` does the same for an edit, and changes nothing:
+
+```bash
+groupsplit tx update <id> --amount 120.00 --preview --json
+```
+
+It reproduces the save exactly, refusals included -- so an amount changed on its own comes
+back refused here rather than after the fact, which is the moment to add `--split`.
+
+The rule it names is the version that divided **this** expense, which may not be the rule as
+it reads now; when the rule has been edited since, the output says so and gives the date it
+stopped being current. `--preview` on a settlement is refused: a settlement is one payment to
+one person and has no division to show.
 
 ### Filtering and paging
 

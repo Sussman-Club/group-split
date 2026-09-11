@@ -49,8 +49,9 @@ public enum RuleHandling
     Transfer,
 
     /// <summary>
-    /// The rules stop naming them. What was theirs is divided among the rest, since weights
-    /// are proportional and the division normalises by whatever total it is given.
+    /// The rules stop naming them, from their next version on. What was theirs is divided
+    /// among the rest, since weights are proportional and the division normalises by
+    /// whatever total it is given.
     /// </summary>
     Prune
 }
@@ -168,6 +169,11 @@ public interface IGroupParticipants
     /// parameter and not a default.
     /// </para>
     /// <para>
+    /// Either way the rules change by gaining a version rather than by being edited, through
+    /// <see cref="ISplitRuleRevisions"/>: the version an expense was divided by has to go on
+    /// saying what it said when the expense was written.
+    /// </para>
+    /// <para>
     /// Does not save, so the caller can apply it together with whatever else the same
     /// action changes -- an invitation being removed, an account being anonymised.
     /// </para>
@@ -176,7 +182,7 @@ public interface IGroupParticipants
         RuleHandling rules, CancellationToken ct = default);
 }
 
-public sealed class GroupParticipants(AppDbContext context) : IGroupParticipants
+public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions revisions) : IGroupParticipants
 {
     public IQueryable<User> Of(Guid groupId) =>
         context.Set<User>()
@@ -293,85 +299,10 @@ public sealed class GroupParticipants(AppDbContext context) : IGroupParticipants
             transaction.UserId = toUserId;
         }
 
-        var named = await context.Set<SplitRuleParticipant>()
-            .Where(participant => participant.SplitRule.Group.Id == groupId &&
-                                  participant.UserId == fromUserId)
-            .ToListAsync(ct);
-
-        var emptied = rules is RuleHandling.Prune
-            ? await Prune(named, ct)
-            : await Transfer(named, toUserId, ct);
+        var rewrite = await revisions.WithoutParticipant(
+            groupId, fromUserId, rules is RuleHandling.Transfer ? toUserId : null, ct);
 
         return new ParticipantHandover(
-            shares.Count, amountOwed, paid.Count, amountPaid, named.Count, emptied);
-    }
-
-    /// <summary>
-    /// Moves the rule places to the receiver, and reports how many rules that emptied --
-    /// which, transferring, is none.
-    /// </summary>
-    /// <remarks>
-    /// Weights are added where the receiver already held one, for the same reason a share is:
-    /// a rule may hold only one opinion about a person's weight, and the unique index on
-    /// (rule, user) says so.
-    /// </remarks>
-    private async Task<int> Transfer(IReadOnlyList<SplitRuleParticipant> named, Guid toUserId,
-        CancellationToken ct)
-    {
-        if (named.Count == 0)
-            return 0;
-
-        var ruleIds = named.Select(participant => participant.SplitRuleId).ToList();
-
-        var theirs = await context.Set<SplitRuleParticipant>()
-            .Where(participant => ruleIds.Contains(participant.SplitRuleId) &&
-                                  participant.UserId == toUserId)
-            .ToDictionaryAsync(participant => participant.SplitRuleId, ct);
-
-        foreach (var place in named)
-        {
-            if (theirs.TryGetValue(place.SplitRuleId, out var mine))
-            {
-                mine.Weight += place.Weight;
-                context.Remove(place);
-            }
-            else
-            {
-                place.UserId = toUserId;
-            }
-        }
-
-        return 0;
-    }
-
-    /// <summary>
-    /// Takes the rule places away, and reports how many rules are left naming nobody.
-    /// </summary>
-    /// <remarks>
-    /// The count is the point. A rule pruned to nothing has changed what it means -- a
-    /// shares or percentage rule stops dividing and refuses the next expense filed under it,
-    /// an even one silently becomes "between everybody" -- and this is the moment somebody
-    /// could still be told, which is what the standing gap in
-    /// <c>docs/split-rules-and-membership.md</c> asked for.
-    /// </remarks>
-    private async Task<int> Prune(IReadOnlyList<SplitRuleParticipant> named, CancellationToken ct)
-    {
-        context.RemoveRange(named);
-
-        if (named.Count == 0)
-            return 0;
-
-        var ruleIds = named.Select(participant => participant.SplitRuleId).ToList();
-
-        // Counted before the removals are saved, so it asks the database how many places
-        // each rule has rather than what is left after this.
-        var remaining = await context.Set<SplitRuleParticipant>()
-            .Where(participant => ruleIds.Contains(participant.SplitRuleId))
-            .GroupBy(participant => participant.SplitRuleId)
-            .Select(group => new { SplitRuleId = group.Key, Places = group.Count() })
-            .ToDictionaryAsync(row => row.SplitRuleId, row => row.Places, ct);
-
-        return named.Count(participant =>
-            remaining.GetValueOrDefault(participant.SplitRuleId) <= 1);
+            shares.Count, amountOwed, paid.Count, amountPaid, rewrite.Rules, rewrite.Emptied);
     }
 }

@@ -34,10 +34,10 @@ has to reach for `curl` and a bearer token to do.
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
-| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
+| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `reattach`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
-| `split-rules` | `list`, `show`, `create`, `update`, `delete` |
+| `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
 | `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
 | `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
@@ -715,8 +715,15 @@ than an expense, so nothing here has been paid back yet. Where you actually stan
 
 `transactions update` sends a JSON Patch of **only** the flags you passed, and that is
 load-bearing rather than an optimisation. The API reads the patch as well as applying it:
-saying nothing about the shares keeps the existing division. Naming them with `--split`
+saying nothing about the shares keeps a division somebody typed. Naming them with `--split`
 means those exact amounts, checked against the total.
+
+A division **nobody typed** is treated differently, and the difference is worth knowing.
+Shares a rule worked out -- or an even division under no rule, which the app worked out just
+as surely -- follow the things they were worked out from: change the amount, the payer, the
+category or the group and they are worked out again at the new values. Change only the name,
+the note, the date or the merchant and nothing moves, whatever divided it. So the rule is not
+"silence keeps the shares" but "silence never restates a decision somebody made".
 
 ```bash
 groupsplit tx update <id> --name "New description"            # existing shares are preserved
@@ -728,8 +735,140 @@ groupsplit tx update <id> --description ""                    # clear the note
 So a command that names nothing is refused (exit code 3) rather than sent as an empty patch,
 which the server would accept as a successful no-op.
 
-`--group` and `--personal` contradict each other, as do `--category-id` and `--no-category`;
-either pair is refused before anything is sent.
+`--group` and `--personal` contradict each other, as do `--category-id` and `--no-category`
+and `--merchant-id` and `--no-merchant`; any such pair is refused before anything is sent.
+
+The patch carries what actually **moved**, not every flag you passed: the command reads the
+expense first and sends the difference. Setting a field to the value it already holds is a
+success that changes nothing, so the same command can be run twice.
+
+### Before changing one
+
+`transactions update ... --preview` shows the division the server would end up with and
+changes nothing:
+
+```bash
+groupsplit tx update <id> --amount 120.00 --preview
+```
+
+Two things it is worth knowing before reading the output.
+
+**Changing the amount alone is refused on an expense somebody split by hand** -- by the
+preview and by the save alike, and that is the point of previewing. Those shares are that
+person's record, nothing can work them out again, and carried onto the new total they no
+longer add up to it, so the answer is `SPLITS_DO_NOT_SUM_TO_AMOUNT`. Two ways past it, and
+they say different things:
+
+```bash
+groupsplit tx update <id> --amount 120.00 --split $ME=80 --split $YOU=40   # these amounts
+groupsplit tx update <id> --amount 120.00 --redivide                       # the category decides
+```
+
+`--redivide` discards the shares the expense holds and divides it again by its category's
+rule. It is the only way to ask for that on an expense somebody split by hand: saying nothing
+about those shares keeps them, which is what stops a rename or a merchant fix from quietly
+restating a division somebody made. The two contradict each other and passing both is
+refused.
+
+On an expense a rule divided, `--amount` alone is accepted and the shares follow it, so
+`--redivide` is not needed for that -- what it is still for there is discarding a division
+somebody typed and asking for the rule's again.
+
+**It does not divide by the rule as it reads today.** An expense that still records a version
+is divided again by that version, however many times the rule has been edited since: 90.00
+recorded under a two-to-one rule comes back 60.00 / 30.00 after that rule is changed to
+one-to-one, not 45.00 / 45.00. Filing it under a **different** category is what reaches a
+different rule, because the version it holds belongs to a rule it is no longer filed under --
+so `--category-id` is the flag for "divide it by what we agreed since", not `--redivide`.
+
+An expense somebody split by hand records no version at all: stating shares gives up the one
+it had, which is the whole of what `--hand-split` says. `--redivide` on one of those has no
+version to go back to and does divide by the rule as it reads now.
+
+**The rule named in the output may not be the rule as it reads today.** An expense records
+the version of the split rule that divided it, and the preview names that one; when the rule
+has been edited since, the line says so and gives the date it stopped being current.
+
+`--preview` on a settlement is refused: a settlement is one payment to one person and has no
+division to show.
+
+### Saying what divided it
+
+Two flags record **where an expense's shares came from**, and neither moves a penny:
+
+```bash
+groupsplit tx update <id> --hand-split              # these amounts are the expense's own
+groupsplit tx update <id> --divided-by <version-id> # this version of a rule worked them out
+```
+
+Version ids come from `groupsplit split-rules versions <rule-id>`.
+
+They exist because that fact decides what a later edit does -- an expense recorded as a
+rule's follows the rule when its amount or payer changes, and one whose shares are its own has
+no rule to be re-billed under, so an amount edit is refused rather than restating them (unless
+those shares happen to be an even division, which the app made and would make again) -- and
+because a migration can only guess at it. They contradict each other, and
+they contradict `--split` and `--redivide`: those two decide what the shares **become**, and
+these two only describe what produced the shares already there. Any such pair is refused
+before anything is sent.
+
+Either flag alongside an ordinary edit is **two requests**: the edit, then the record of what
+divided it. If the second one fails the error says so -- "the edit was saved, but recording
+what divided it was not" -- and re-running the same command is the fix. It is safe: the
+command reads the expense first and sends only what still differs, so the half that landed
+produces no operation the second time.
+
+## Rewriting what a rule used to say
+
+Editing a rule opens a new version dated now, which is right for a decision made now and no
+use for a rule whose past happened in a spreadsheet. `split-rules versions set` states that
+past outright, from a file:
+
+```jsonc
+// history.json -- oldest first
+[
+  { "from": "2023-03-01", "definition": { "$type": "shares", "shares": { "<user-id>": 3, "<user-id>": 2 } } },
+  { "from": "2024-08-01", "definition": { "$type": "shares", "shares": { "<user-id>": 2, "<user-id>": 1 } } },
+  { "from": "2026-01-01", "definition": { "$type": "even" } }
+]
+```
+
+```bash
+groupsplit split-rules versions set <rule-id> --file history.json --dry-run   # print the chain
+groupsplit split-rules versions set <rule-id> --file history.json            # exit 4, then --yes
+```
+
+A `from` with no offset means midnight UTC, not midnight wherever you happen to be: these
+dates are the boundaries that decide which version an expense falls under. Each entry runs
+until the next one starts, so the dates must strictly increase.
+
+Deliberately narrow, and it refuses rather than guesses:
+
+| | |
+| --- | --- |
+| `SPLIT_RULE_ALREADY_HAS_HISTORY` | The rule has been through more than one version already. Only a rule that has stood for one division since it was made can have its past written wholesale. |
+| `SPLIT_RULE_HISTORY_ENDS_ELSEWHERE` | The last entry is not how the rule divides today. It has to be: that entry **is** the row every recorded expense already points at, and it is reused rather than replaced. Correct the rule with `split-rules update` first. |
+| `SPLIT_RULE_HISTORY_INVALID` | No entries, or dates that do not move forward. |
+
+## Re-pointing a back catalogue
+
+Writing a history says what a rule stood for and when. `transactions reattach` says which of
+those each expense actually fell under:
+
+```bash
+groupsplit transactions reattach --group <group-id> --dry-run   # the summary, saving nothing
+groupsplit transactions reattach --group <group-id>             # exit 4, then --yes
+```
+
+Every expense filed under a category with a rule is pointed at the version whose window
+contains its date. One older than its rule's history is left pointing at nothing, and the
+summary counts those separately -- that figure is how you find out the history does not go
+back far enough.
+
+**It moves no money.** Not one share is read, let alone written; the only thing that changes
+is which version each expense names, so every balance in the group is identical afterwards.
+Running it twice changes nothing the second time, so it is safe to run again once a history
+is corrected.
 
 ## Output
 

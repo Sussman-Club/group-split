@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
@@ -130,7 +131,7 @@ public class SettlementService(
 
         foreach (var payment in payments)
         {
-            context.Add(Transfer.Between(group, members[payment.FromUserId], members[payment.ToUserId],
+            context.Add(group.SettlementBetween(members[payment.FromUserId], members[payment.ToUserId],
                 payment.Amount, date, description));
         }
 
@@ -182,7 +183,7 @@ public class SettlementService(
 
         var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
 
-        context.Add(Transfer.Between(group, from, to, request.Amount, date, description));
+        context.Add(group.SettlementBetween(from, to, request.Amount, date, description));
 
         await context.SaveChangesAsync(cancellationToken);
 
@@ -258,7 +259,7 @@ public class SettlementService(
 
         foreach (var allocation in allocations)
         {
-            context.Add(Transfer.Between(groups[allocation.GroupId], from, to, allocation.Amount, date,
+            context.Add(groups[allocation.GroupId].SettlementBetween(from, to, allocation.Amount, date,
                 description));
         }
 

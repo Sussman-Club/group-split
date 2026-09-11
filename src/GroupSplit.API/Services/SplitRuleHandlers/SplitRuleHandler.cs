@@ -26,27 +26,39 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 public class SplitRuleHandler(IServiceProvider provider) : ISplitRuleHandler, ISplitRuleFactory
 {
     public IReadOnlyList<SplitAmount> Divide(
-        SplitRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
-        For(rule).Divide(rule, amount, payerId, members);
+        SplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
+        For(ruleVersion).Divide(ruleVersion, amount, payerId, members);
 
-    public string? Invalid(SplitRule rule) => For(rule).Invalid(rule);
+    public string? Invalid(SplitRuleVersion ruleVersion) => For(ruleVersion).Invalid(ruleVersion);
 
-    public SplitRuleDto ToDto(SplitRule rule) => For(rule).ToDto(rule);
+    public SplitRuleDto ToDto(SplitRuleVersion ruleVersion) => For(ruleVersion).ToDto(ruleVersion);
 
-    public SplitRule FromDto(string name, SplitRuleDto definition)
+    /// <summary>
+    /// Two versions of different kinds are never the same division, which is answered here
+    /// rather than by each handler: a handler is only ever asked about its own kind.
+    /// </summary>
+    public bool SameAs(SplitRuleVersion ruleVersion, SplitRuleVersion other)
+    {
+        ArgumentNullException.ThrowIfNull(ruleVersion);
+        ArgumentNullException.ThrowIfNull(other);
+
+        return ruleVersion.GetType() == other.GetType() && For(ruleVersion).SameAs(ruleVersion, other);
+    }
+
+    public SplitRuleVersion FromDto(SplitRuleDto definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
         var factoryType = typeof(ISplitRuleFactory<>).MakeGenericType(definition.GetType());
 
-        return ((ISplitRuleFactory)provider.GetRequiredService(factoryType)).FromDto(name, definition);
+        return ((ISplitRuleFactory)provider.GetRequiredService(factoryType)).FromDto(definition);
     }
 
-    private ISplitRuleHandler For(SplitRule rule)
+    private ISplitRuleHandler For(SplitRuleVersion ruleVersion)
     {
-        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(ruleVersion);
 
-        var handlerType = typeof(ISplitRuleHandler<>).MakeGenericType(rule.GetType());
+        var handlerType = typeof(ISplitRuleHandler<>).MakeGenericType(ruleVersion.GetType());
 
         return (ISplitRuleHandler)provider.GetRequiredService(handlerType);
     }

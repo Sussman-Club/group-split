@@ -193,30 +193,50 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
         });
 
+        modelBuilder.Entity<SplitRuleVersion>(entity =>
+        {
+            entity.HasOne(version => version.SplitRule)
+                .WithMany(rule => rule.Versions)
+                .HasForeignKey(version => version.SplitRuleId)
+                .IsRequired()
+                // A rule's versions go when the rule does. Nothing is lost by that, because
+                // a rule with a transaction pointing at any of its versions cannot be
+                // deleted at all -- Transaction below restricts it, and the service says so
+                // in words first.
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // "What does this rule say now" is the commonest read there is -- every
+            // category listing and every expense created under one -- and it is the
+            // version whose SupersededAt is null. That there is only ever one of those is
+            // a partial unique index, which is provider-specific and therefore lives in
+            // PostgreSqlAppDbContext.
+            entity.HasIndex(version => new { version.SplitRuleId, version.SupersededAt });
+        });
+
         // TPH, like Transaction: how a rule divides is which type it is -- answered by the
         // handler registered for that type, not by a Kind column and a switch. One table,
         // and the participants are declared once, on the middle layer that has them.
         //
         // Declared before the discriminator is indexed, because until EF has been told the
         // subtypes exist there is no hierarchy and therefore no discriminator to index.
-        modelBuilder.Entity<WeightedSplitRule>();
-        modelBuilder.Entity<EvenSplitRule>();
+        modelBuilder.Entity<WeightedSplitRuleVersion>();
+        modelBuilder.Entity<EvenSplitRuleVersion>();
 
-        modelBuilder.Entity<PayerSplitRule>();
+        modelBuilder.Entity<PayerSplitRuleVersion>();
 
-        modelBuilder.Entity<PercentSplitRule>();
+        modelBuilder.Entity<PercentSplitRuleVersion>();
 
-        modelBuilder.Entity<SharesSplitRule>();
+        modelBuilder.Entity<SharesSplitRuleVersion>();
 
-        modelBuilder.Entity<SplitRule>().HasIndex("Discriminator");
+        modelBuilder.Entity<SplitRuleVersion>().HasIndex("Discriminator");
 
         modelBuilder.Entity<SplitRuleParticipant>(entity =>
         {
             entity.Property(participant => participant.Weight).IsRequired();
 
-            entity.HasOne(participant => participant.SplitRule)
-                .WithMany(rule => rule.Participants)
-                .HasForeignKey(participant => participant.SplitRuleId)
+            entity.HasOne(participant => participant.SplitRuleVersion)
+                .WithMany(version => version.Participants)
+                .HasForeignKey(participant => participant.SplitRuleVersionId)
                 .IsRequired();
 
             entity.HasOne(participant => participant.User)
@@ -224,7 +244,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(participant => participant.UserId)
                 .IsRequired();
 
-            entity.HasIndex(participant => new { participant.SplitRuleId, participant.UserId }).IsUnique();
+            entity.HasIndex(participant => new { participant.SplitRuleVersionId, participant.UserId }).IsUnique();
         });
 
         modelBuilder.Entity<Category>(entity =>
@@ -313,6 +333,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne(transaction => transaction.Merchant)
                 .WithMany(merchant => merchant.Transactions)
                 .HasForeignKey(transaction => transaction.MerchantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Restrict, not cascade or set-null: the version a transaction was divided by
+            // is the only record of which division produced its splits, so deleting it
+            // would quietly turn a recalculable expense into an unexplained set of amounts.
+            // A rule nothing has been recorded under still deletes, versions and all.
+            entity.HasOne(transaction => transaction.SplitRuleVersion)
+                .WithMany(version => version.Transactions)
+                .HasForeignKey(transaction => transaction.SplitRuleVersionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(transaction => transaction.DateTime);

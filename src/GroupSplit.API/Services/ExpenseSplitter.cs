@@ -18,6 +18,24 @@ public interface IExpenseSplitter
     /// says when that is null.
     /// </summary>
     Task WriteSplitsAsync(Expense expense, IReadOnlyList<SplitInput>? given, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether the shares the expense holds are the ones its own rule produces -- that is,
+    /// whether a rule divided it or a person did.
+    /// </summary>
+    /// <remarks>
+    /// The model does not record which, and cannot: the endpoint carries stored shares into
+    /// every edit, so "stated" arrives for a rename as readily as for a hand-typed split,
+    /// and the version an expense points at may have been guessed by the migration that
+    /// introduced versions. Re-running the division and comparing is the one answer that
+    /// does not depend on either.
+    /// <para>
+    /// Asked <em>before</em> an edit is applied, while the expense still holds the amount
+    /// and the payer its shares were worked out from. Afterwards the question cannot be
+    /// asked at all.
+    /// </para>
+    /// </remarks>
+    Task<bool> DivisionCameFromItsRule(Expense expense, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -61,30 +79,61 @@ public class ExpenseSplitter(
 
         var members = await MembersOf(expense, ct);
 
-        var splits = given is null
-            ? await DividedByRule(expense, payerId, members, ct)
-            : AsStated(given, expense.Amount, members);
+        if (given is not null)
+        {
+            var stated = AsStated(given, expense.Amount, members);
 
-        Replace(expense, splits);
+            // Amounts somebody typed are their own record: there is no rule behind them,
+            // and claiming one would make a later edit re-divide by a division nobody
+            // chose. Cleared rather than left, because an expense that had a rule and now
+            // has stated shares no longer has one.
+            //
+            // Only when they actually say something different, though. Since 47c6904 the
+            // PATCH endpoint carries the expense's stored shares into every edit that says
+            // nothing about them -- which is what keeps a rename from re-dividing it -- so
+            // a division arrives stated for the ordinary rename as much as for the split
+            // somebody typed, and this cannot tell the two apart by looking at it. What it
+            // can tell is whether the division changed: amounts identical to the stored
+            // ones are not a new division, so they are not a new answer to where the
+            // division came from either. Clearing on those erased the version the first
+            // time anybody edited a name, and the version is the only record of which rule
+            // divided the expense.
+            if (!IsWhatItAlreadyHolds(expense, stated))
+            {
+                expense.SplitRuleVersion = null;
+                expense.SplitRuleVersionId = null;
+            }
+
+            Replace(expense, stated);
+            return;
+        }
+
+        Replace(expense, await DividedByRule(expense, payerId, members, ct));
     }
 
     /// <summary>
-    /// The division the expense's category calls for, or an even one when it has no
-    /// category or the category names no rule.
+    /// The division the expense's rule calls for -- see <see cref="VersionFor"/> for which
+    /// version of it -- or an even one when it has no category or the category names no
+    /// rule. Records the version on the expense either way, including as null.
     /// </summary>
     private async Task<IReadOnlyList<SplitAmount>> DividedByRule(
         Expense expense, Guid payerId, IReadOnlyCollection<Guid> members, CancellationToken ct)
     {
-        var rule = await DefaultRuleFor(expense, ct);
+        var version = await VersionFor(expense, ct);
+
+        expense.SplitRuleVersion = version;
+        expense.SplitRuleVersionId = version?.Id;
 
         // No category, or a category that names no rule: evenly between the members. That
         // is the whole of what a group with no rules used to be unable to do.
-        if (rule is null)
+        if (version is null)
             return SplitCalculator.DivideEvenly(expense.Amount, payerId, members);
+
+        var rule = version.SplitRule;
 
         try
         {
-            return splitRules.Divide(rule, expense.Amount, payerId, members);
+            return splitRules.Divide(version, expense.Amount, payerId, members);
         }
         // Narrowed away from ArgumentNullException, which derives from this and means
         // something else entirely: SplitCalculator.Divide opens by refusing a null weight
@@ -95,10 +144,15 @@ public class ExpenseSplitter(
         {
             // A rule can be left with nothing to divide by. Everybody it named has gone --
             // a member who left, or somebody invited whose invitation was declined or
-            // withdrawn -- and both take the name out of the rule rather than zeroing it,
-            // so a shares rule that named one person keeps none. SplitCalculator says so by
-            // throwing, which is right of it: no participants, or weights summing to zero,
-            // is not a division it could carry out.
+            // withdrawn -- and both open a version that does not name them rather than
+            // zeroing them, so a shares rule that named one person keeps none. It can also
+            // be an older version that *does* still name them, which is exactly what an old
+            // expense is divided by when it is edited: the version is history and goes on
+            // saying what it said, but the division only pays people who are still
+            // participants, so a version naming nobody who is left comes to the same empty
+            // hand. SplitCalculator says so by throwing, which is right of it: no
+            // participants, or weights summing to zero, is not a division it could carry
+            // out.
             //
             // What was wrong was where that surfaced. An ArgumentException is nobody's
             // domain error, so it reached the client as a 500 with a trace id, and the
@@ -120,6 +174,77 @@ public class ExpenseSplitter(
                 .WithExtension("splitRuleId", rule.Id)
                 .WithExtension("splitRuleName", rule.Name);
         }
+    }
+
+    /// <summary>
+    /// Whether the stated division is the one the expense already holds: the same people,
+    /// for the same amounts.
+    /// </summary>
+    /// <remarks>
+    /// Not "is this what the rule would give". Two divisions that agree to the cent are the
+    /// same division whoever worked them out, and the only question here is whether this
+    /// one is a change -- because a division that did not change cannot have changed where
+    /// it came from.
+    /// </remarks>
+    public async Task<bool> DivisionCameFromItsRule(Expense expense, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(expense);
+
+        if (expense.Splits.Count == 0)
+            return false;
+
+        var payerId = expense.User?.Id ?? expense.UserId;
+        var members = await MembersOf(expense, ct);
+        var version = await HeldVersion(expense, ct);
+
+        IReadOnlyList<SplitAmount> wouldBe;
+
+        try
+        {
+            // No version is not "no rule ran". An expense under no category, or under one
+            // naming no rule, was divided evenly -- which is a division the app made and
+            // not one a person typed, and it has to follow the amount the same way.
+            wouldBe = version is null
+                ? SplitCalculator.DivideEvenly(expense.Amount, payerId, members)
+                : splitRules.Divide(version, expense.Amount, payerId, members);
+        }
+        catch (ArgumentException)
+        {
+            // A version that can no longer divide between anybody explains nothing, so the
+            // shares are the expense's own as far as this is concerned. Refusing here would
+            // turn "which of the two is it" into an error on a path that only wanted to
+            // know whether to leave the shares alone.
+            return false;
+        }
+
+        return IsWhatItAlreadyHolds(expense, wouldBe);
+    }
+
+    /// <summary>The version the expense was written under, loaded if it is not already.</summary>
+    private async Task<SplitRuleVersion?> HeldVersion(Expense expense, CancellationToken ct)
+    {
+        // Read by id even when the navigation is loaded, because a loaded version is not
+        // necessarily a divisible one: a weighted version divides by its participants, and a
+        // caller that included the version without them hands over a rule that appears to
+        // name nobody -- which this would read as "no rule could have produced these shares"
+        // and answer false to, on exactly the expenses where the answer matters most.
+        if (expense.SplitRuleVersionId is { } id)
+            return await Versions().FirstOrDefaultAsync(version => version.Id == id, ct);
+
+        return expense.SplitRuleVersion;
+    }
+
+    private static bool IsWhatItAlreadyHolds(Expense expense, IReadOnlyList<SplitAmount> stated)
+    {
+        if (expense.Splits.Count != stated.Count)
+            return false;
+
+        // A share at a time rather than through a dictionary keyed by member: the ids in
+        // stated are distinct by the time this runs, but the stored rows are whatever is in
+        // the table, and a defect that put a member in twice would turn this check into a
+        // 500 on an edit rather than a false.
+        return stated.All(share => expense.Splits.Any(stored =>
+            stored.UserId == share.UserId && stored.Amount == share.Amount));
     }
 
     /// <summary>
@@ -180,10 +305,24 @@ public class ExpenseSplitter(
     }
 
     /// <summary>
-    /// The rule the expense's category points at, with its participants, or null when
-    /// there is no category or it names no rule.
+    /// The version to divide by: the one this expense was already written under when that
+    /// is still a version of the rule its category names, and otherwise whatever that rule
+    /// says now. Null when there is no category or it names no rule.
     /// </summary>
-    private async Task<SplitRule?> DefaultRuleFor(Expense expense, CancellationToken ct)
+    /// <remarks>
+    /// The whole of "divide it again by the rule it had at the time". An expense whose
+    /// amount or payer is edited is re-divided by the version it was created under, even
+    /// when the rule has been edited twice since -- because what changed is the expense, and
+    /// nobody editing an amount is asking to be re-billed under a rule agreed later.
+    /// <para>
+    /// Moving it to another category is the case where that reasoning runs out: the version
+    /// it holds belongs to a rule this expense is no longer filed under, so it is divided by
+    /// the new category's rule as it stands, exactly as a fresh expense there would be. The
+    /// test is which rule the version belongs to and not whether it is the current one,
+    /// which is what keeps an edit from silently re-billing under a newer version.
+    /// </para>
+    /// </remarks>
+    private async Task<SplitRuleVersion?> VersionFor(Expense expense, CancellationToken ct)
     {
         var categoryId = expense.Category?.Id ?? expense.CategoryId;
 
@@ -198,12 +337,34 @@ public class ExpenseSplitter(
         if (ruleId is null)
             return null;
 
-        // Loaded as a rule in its own right rather than reached through the category: an
-        // Include cannot follow a Select that changed what the query is about.
-        return await dbContext.Set<SplitRule>()
-            .Include(rule => (rule as WeightedSplitRule)!.Participants)
-            .FirstOrDefaultAsync(rule => rule.Id == ruleId, ct);
+        // The one it already holds, when that is still a version of this category's rule.
+        if (expense.SplitRuleVersionId is { } writtenUnder)
+        {
+            var kept = await Versions()
+                .FirstOrDefaultAsync(version =>
+                    version.Id == writtenUnder && version.SplitRuleId == ruleId, ct);
+
+            if (kept is not null)
+                return kept;
+        }
+
+        return await Versions()
+            .FirstOrDefaultAsync(version =>
+                version.SplitRuleId == ruleId && version.SupersededAt == null, ct);
     }
+
+    /// <summary>
+    /// Versions loaded the way a division needs them: the participants it weighs by, and
+    /// the rule whose name a refusal has to quote.
+    /// </summary>
+    /// <remarks>
+    /// Read as versions in their own right rather than reached through the category, because
+    /// an Include cannot follow a Select that changed what the query is about.
+    /// </remarks>
+    private IQueryable<SplitRuleVersion> Versions() =>
+        dbContext.Set<SplitRuleVersion>()
+            .Include(version => (version as WeightedSplitRuleVersion)!.Participants)
+            .Include(version => version.SplitRule);
 
     /// <summary>
     /// Swaps the stored splits for the ones just worked out.
@@ -218,19 +379,26 @@ public class ExpenseSplitter(
     /// </remarks>
     private void Replace(Expense expense, IReadOnlyList<SplitAmount> splits)
     {
+        var expenseIsTracked = dbContext.Entry(expense).State is not EntityState.Detached;
+
         // Materialised first: marking a child deleted makes EF take it out of this very
         // collection, and a collection cannot be enumerated while it is being emptied.
         var superseded = expense.Splits.ToList();
 
         if (superseded.Count > 0)
         {
-            dbContext.RemoveRange(superseded);
+            // Only a tracked expense's shares are the context's to delete. A detached one is
+            // a draft -- the update preview builds one carrying the stored division, so
+            // IsWhatItAlreadyHolds has something to compare against -- and its shares are
+            // copies that were never read from the table. Handing those to Remove would attach
+            // deletions of rows the context has never seen, and the next save on the scope
+            // would try to carry them out.
+            if (expenseIsTracked)
+                dbContext.RemoveRange(superseded);
 
             foreach (var split in superseded)
                 expense.Splits.Remove(split);
         }
-
-        var expenseIsTracked = dbContext.Entry(expense).State is not EntityState.Detached;
 
         foreach (var split in splits)
         {

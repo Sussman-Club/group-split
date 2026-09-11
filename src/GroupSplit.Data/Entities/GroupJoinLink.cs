@@ -58,7 +58,4 @@ public class GroupJoinLink : Entity
 
     /// <summary>When it was withdrawn, or null while it still stands.</summary>
     public DateTimeOffset? RevokedAt { get; set; }
-
-    /// <summary>Whether it will still let somebody in at <paramref name="now"/>.</summary>
-    public bool IsActive(DateTimeOffset now) => RevokedAt is null && ExpiresAt > now;
 }

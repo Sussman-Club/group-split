@@ -50,7 +50,10 @@ public static class Problems
         [ErrorCodes.CategoryNameTaken] = "Category name already in use",
         [ErrorCodes.CategoryInUse] = "Category still has expenses filed under it",
         [ErrorCodes.SplitRuleNameTaken] = "Rule name already in use",
-        [ErrorCodes.SplitRuleInUse] = "Rule is still the default for a category",
+        [ErrorCodes.SplitRuleInUse] = "Rule is still in use",
+        [ErrorCodes.SplitRuleAlreadyHasHistory] = "Rule already has a history",
+        [ErrorCodes.SplitRuleHistoryEndsElsewhere] = "The history does not end where the rule stands",
+        [ErrorCodes.SplitRuleVersionNotInGroup] = "That version belongs to another group",
         [ErrorCodes.BankSyncUnavailable] = "Bank sync is not available",
         [ErrorCodes.BankTransactionAlreadyFiled] = "This row has already been filed",
         [ErrorCodes.BankConnectionNeedsAttention] = "The bank connection needs signing in again",
@@ -60,6 +63,7 @@ public static class Problems
         [ErrorCodes.SplitsInvalid] = "The shares are not valid",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares do not add up to the amount",
         [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group",
+        [ErrorCodes.SplitRuleHistoryInvalid] = "The history is not a chain",
         [ErrorCodes.BankTransactionIsCredit] = "Money coming in cannot be filed as an expense",
 
         [ErrorCodes.BankProviderUnavailable] = "The bank service did not answer"

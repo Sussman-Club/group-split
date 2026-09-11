@@ -101,6 +101,7 @@ public static class TransactionCommands
         transactions.Subcommands.Add(Monthly());
         transactions.Subcommands.Add(Shares());
         transactions.Subcommands.Add(BankMatches());
+        transactions.Subcommands.Add(Reattach());
         transactions.Subcommands.Add(Delete());
 
         return transactions;
@@ -303,7 +304,7 @@ public static class TransactionCommands
             {
                 var split = await context.Transactions.PreviewTransactionSplitsAsync(request, ct);
 
-                context.Output.Write(split, RenderSplits);
+                context.Output.Write(split, value => RenderSplits(value, "created"));
 
                 return ExitCodes.Success;
             }
@@ -321,14 +322,30 @@ public static class TransactionCommands
     }
 
     /// <summary>
-    /// An edit, sent as a JSON Patch of only what was named.
+    /// An edit, sent as a JSON Patch of only what changed.
     /// </summary>
     /// <remarks>
-    /// Only what was named, because the endpoint reads the patch as well as applying it:
-    /// silence about the shares means "divide it again the way the category says", which is
-    /// what an edit to the amount, the payer or the category should do. Sending every field
-    /// every time would make <c>--name</c> quietly recompute the division -- so a flag that
-    /// was not passed contributes no operation at all.
+    /// Only what changed, because the endpoint reads the patch as well as applying it:
+    /// silence about the shares means "keep the ones it has", so an edit that names no
+    /// division moves no money. That is what 47c6904 settled, after a pass that read the
+    /// silence the other way re-divided 733 expenses and moved 1,394.72 onto one member.
+    /// Asking for the division to be worked out again is <c>--redivide</c>, which sends the
+    /// one operation that says so -- <c>replace /splits null</c> -- and <c>--split</c> is
+    /// how you state the shares yourself. Sending every field every time would put a
+    /// division in every patch, so a field nobody moved contributes no operation at all.
+    /// <para>
+    /// Built by reading the expense, applying the flags to it and comparing -- which is
+    /// what the app's edit dialog does, and is the reason it is done that way here. A
+    /// <c>--preview</c> needs a whole request rather than a patch, and the alternative was
+    /// two readings of what <c>--no-category</c> and friends mean, sitting side by side and
+    /// free to drift. One reading, two outputs.
+    /// </para>
+    /// <para>
+    /// It costs a read on every update, which is the price of the single reading. The guard
+    /// below still refuses on "no flag named" rather than on "no operation produced", so
+    /// setting a field to the value it already holds stays a success and not an error --
+    /// which is what a script re-running the same command is doing.
+    /// </para>
     /// </remarks>
     private static Command Update()
     {
@@ -364,17 +381,36 @@ public static class TransactionCommands
                           + "Without this the existing division is kept.",
             AllowMultipleArgumentsPerToken = true
         };
+        var redivide = new Option<bool>("--redivide")
+        {
+            Description = "Discard the shares it holds and divide it again by its category's rule. "
+                          + "Uses the version that divided the expense, where it still records "
+                          + "one, rather than the rule as it reads today."
+        };
+        var preview = new Option<bool>("--preview")
+        {
+            Description = "Show the split the server would apply without changing anything."
+        };
+        var handSplit = new Option<bool>("--hand-split")
+        {
+            Description = "Record that the shares it holds are its own, so no rule works them out again."
+        };
+        var dividedBy = new Option<Guid?>("--divided-by")
+        {
+            Description = "Record which version of a rule divided it, from `groupsplit split-rules versions <rule-id>`."
+        };
 
         var command = new Command("update", "Change an expense. Only what you name is sent.")
         {
             TransactionId, name, amount, date, description,
-            group, personal, category, noCategory, merchant, noMerchant, paidBy, splits
+            group, personal, category, noCategory, merchant, noMerchant, paidBy, splits, redivide,
+            handSplit, dividedBy, preview
         };
 
         command.SetHandler(async (context, ct) =>
         {
             var parse = context.ParseResult;
-            var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+            var id = parse.GetValue(TransactionId);
 
             if (parse.GetResult(group) is not null && parse.GetValue(personal))
             {
@@ -397,31 +433,68 @@ public static class TransactionCommands
                     "Pass one or the other.");
             }
 
-            if (parse.GetValue(name) is { } newName) patch.Replace(request => request.Name, newName);
-            if (parse.GetValue(amount) is { } newAmount) patch.Replace(request => request.Amount, newAmount);
-            if (parse.GetValue(date) is { } newDate) patch.Replace(request => request.DateTime, newDate);
-            if (parse.GetValue(paidBy) is { } payer) patch.Replace(request => request.PaidByUserId, payer);
+            if (parse.GetValue(splits) is { Length: > 0 } && parse.GetValue(redivide))
+            {
+                throw CliException.Input(
+                    "--split and --redivide contradict each other.",
+                    "Pass --split to state the shares yourself, or --redivide to let the category decide.");
+            }
 
-            // Read through GetResult, not the value: --description "" is a caller clearing
-            // the note, and it arrives indistinguishable from absent otherwise.
-            if (parse.GetResult(description) is not null)
-                patch.Replace(request => request.Description, parse.GetValue(description));
+            if (parse.GetValue(handSplit) && parse.GetResult(dividedBy) is not null)
+            {
+                throw CliException.Input(
+                    "--hand-split and --divided-by contradict each other.",
+                    "Pass --hand-split to say the shares are the expense's own, or --divided-by "
+                    + "to name the version that worked them out.");
+            }
 
-            if (parse.GetValue(personal)) patch.Replace(request => request.GroupId, null);
-            else if (parse.GetValue(group) is { } newGroup) patch.Replace(request => request.GroupId, newGroup);
+            // The two pairs below say opposite things about the same fact. --split and
+            // --redivide decide what the shares become; these two record what produced the
+            // shares it already has and move nothing. Naming one of each in a single command
+            // would be saying a division was a rule's in the same breath as typing it out.
+            var recordsTheSource = parse.GetValue(handSplit) || parse.GetResult(dividedBy) is not null;
 
-            if (parse.GetValue(noCategory)) patch.Replace(request => request.CategoryId, null);
-            else if (parse.GetValue(category) is { } newCategory)
-                patch.Replace(request => request.CategoryId, newCategory);
+            if (recordsTheSource && parse.GetValue(splits) is { Length: > 0 })
+            {
+                throw CliException.Input(
+                    "--split contradicts --hand-split and --divided-by.",
+                    "--split sets the shares; the other two only record what worked out the "
+                    + "shares it already has. Run them as two commands if you mean both.");
+            }
 
-            if (parse.GetValue(noMerchant)) patch.Replace(request => request.MerchantId, null);
-            else if (parse.GetValue(merchant) is { } newMerchant)
-                patch.Replace(request => request.MerchantId, newMerchant);
+            if (recordsTheSource && parse.GetValue(redivide))
+            {
+                throw CliException.Input(
+                    "--redivide contradicts --hand-split and --divided-by.",
+                    "--redivide works the shares out again; the other two only record what "
+                    + "worked out the shares it already has. Run them as two commands if you mean both.");
+            }
 
-            if (parse.GetValue(splits) is { Length: > 0 } given)
-                patch.Replace(request => request.Splits, Pairs.Splits("--split", given));
+            // Named, not changed. A flag set to the value the expense already holds
+            // produces no operation, and refusing that as "nothing to change" would fail a
+            // script running the same command twice.
+            var named =
+                parse.GetResult(name) is not null ||
+                parse.GetResult(amount) is not null ||
+                parse.GetResult(date) is not null ||
+                parse.GetResult(description) is not null ||
+                parse.GetResult(group) is not null ||
+                parse.GetResult(category) is not null ||
+                parse.GetResult(merchant) is not null ||
+                parse.GetResult(paidBy) is not null ||
+                parse.GetValue(personal) ||
+                parse.GetValue(noCategory) ||
+                parse.GetValue(noMerchant) ||
+                parse.GetValue(splits) is { Length: > 0 } ||
+                parse.GetValue(redivide) ||
+                recordsTheSource ||
 
-            if (patch.Operations.Count == 0)
+                // On its own, because "how would this divide if I saved it as it stands"
+                // is a real question and the only place the answer is available: a save
+                // re-divides, and this is what it would come to.
+                parse.GetValue(preview);
+
+            if (!named)
             {
                 throw CliException.Input(
                     "Nothing to change.",
@@ -429,19 +502,189 @@ public static class TransactionCommands
                     + "See: groupsplit transactions update --help");
             }
 
-            var updated = await context.Transactions.UpdateTransactionAsync(
-                parse.GetValue(TransactionId), patch, ct);
+            var current = await context.Transactions.GetTransactionAsync(id, ct);
+
+            if (parse.GetValue(preview) && current.Kind is ActivityKind.Transfer)
+            {
+                throw CliException.Input(
+                    "A settlement is not divided, so there is nothing to preview.",
+                    "Drop --preview to make the change, or see: groupsplit settlements --help");
+            }
+
+            var edited = Edited(parse);
+
+            if (parse.GetValue(preview))
+            {
+                // Asked exactly when the save would ask it, which is what makes the
+                // preview a preview: --redivide sends `replace /splits null`, and
+                // `?redivide=true` is the only way to tell the preview endpoint the same
+                // thing -- it takes a whole expense, so a body with no shares is
+                // indistinguishable from a save that keeps them.
+                //
+                // Absent rather than false when nobody asked. The endpoint defaults the
+                // flag to false, so the two are the same answer, and the absence is the
+                // one that reads as silence on the wire.
+                var split = await context.Transactions.PreviewUpdatedTransactionSplitsAsync(
+                    id, edited, parse.GetValue(redivide) ? true : null, ct);
+
+                context.Output.Write(split, value => RenderSplits(value, "changed"));
+
+                return ExitCodes.Success;
+            }
+
+            var patch = Patch(current, edited, parse.GetValue(redivide));
+            var updated = await context.Transactions.UpdateTransactionAsync(id, patch, ct);
+
+            // After the edit, and as its own request, because it is a different kind of
+            // change: the patch decides what the shares become, and this records what
+            // produced the ones it ends up with. Putting it in the patch body would give the
+            // save contract a second field about the division, which is the shape that
+            // re-divided 733 expenses.
+            if (recordsTheSource)
+            {
+                try
+                {
+                    updated = await context.Transactions.SetTransactionDivisionSourceAsync(
+                        id, new SetDivisionSourceRequest(parse.GetValue(dividedBy)), ct);
+                }
+                // Both kinds, because the failure can be raised on either side of the
+                // mapper: the generated client throws ApiException and only the top-level
+                // handler turns one into the envelope, which is too late to know an edit
+                // came first.
+                catch (Exception failure) when (failure is ApiException or CliException)
+                {
+                    // Two requests, so there is a state between them, and the exit code alone
+                    // cannot say which side of it the command stopped on. Reported as the
+                    // second call's own failure it reads as "nothing happened", which would
+                    // send somebody looking for an edit that is already saved. Naming the
+                    // half that landed is the difference between that and re-running, which
+                    // is safe: Patch diffs against a freshly read expense, so the fields that
+                    // already moved produce no operation the second time.
+                    var mapped = failure as CliException
+                                 ?? ApiErrorMapper.Map((ApiException)failure);
+
+                    throw new CliException(
+                        mapped.Error with
+                        {
+                            Message = patch.Operations.Count > 0
+                                ? "The edit was saved, but recording what divided it was not: "
+                                  + mapped.Error.Message
+                                : "There was nothing to edit, and recording what divided it "
+                                  + "failed: " + mapped.Error.Message,
+                            Remediation = string.Join(' ',
+                                new[]
+                                {
+                                    mapped.Error.Remediation,
+                                    "Then run the same command again: it reads the expense first "
+                                    + "and sends only what still differs, so nothing is applied twice."
+                                }.Where(sentence => !string.IsNullOrWhiteSpace(sentence)))
+                        },
+                        mapped.ExitCode,
+                        failure);
+                }
+            }
 
             context.Output.Write(updated, value => new Markup(
                 $"[green]Updated[/] {Markup.Escape(value.Name)} ({value.Amount:N2}).\n"));
 
             return ExitCodes.Success;
+
+            // The one place the flags are read. Everything below works off what it returns,
+            // so the preview and the save cannot disagree about what --no-category meant.
+            UpdateTransactionRequest Edited(System.CommandLine.ParseResult from) => new()
+            {
+                Name = from.GetValue(name) ?? current.Name,
+                Amount = from.GetValue(amount) ?? current.Amount,
+                DateTime = from.GetValue(date) ?? current.DateTime,
+
+                // Read through GetResult, not the value: --description "" is a caller
+                // clearing the note, and it arrives indistinguishable from absent otherwise.
+                Description = from.GetResult(description) is not null
+                    ? from.GetValue(description)
+                    : current.Description,
+
+                GroupId = from.GetValue(personal) ? null : from.GetValue(group) ?? current.GroupId,
+                CategoryId = from.GetValue(noCategory) ? null : from.GetValue(category) ?? current.CategoryId,
+                MerchantId = from.GetValue(noMerchant) ? null : from.GetValue(merchant) ?? current.MerchantId,
+                PaidByUserId = from.GetValue(paidBy) ?? current.PaidByUserId,
+
+                // Null unless somebody stated them. Null alone is not "divide it again" --
+                // the endpoint keeps the stored shares when a patch says nothing about them
+                // -- which is what --redivide is for, and it is carried separately rather than
+                // an absence: the endpoint takes silence about the shares as "keep the ones
+                // it has", so every other edit here leaves the division exactly as it was.
+                // It meant "divide it again" until 47c6904, and a bulk edit that believed
+                // that moved 1,394.72 onto one member -- so an edit to the amount alone is
+                // refused rather than silently re-divided, and --split is how you say what
+                // it becomes.
+                Splits = from.GetValue(splits) is { Length: > 0 } given
+                    ? Pairs.Splits("--split", given)
+                    : null
+            };
         });
 
         return command;
     }
 
-    private static IRenderable RenderSplits(SplitPreviewResponse preview)
+    /// <summary>
+    /// The difference between the expense as it stands and as it is to become, as the
+    /// operations that carry it.
+    /// </summary>
+    /// <remarks>
+    /// The shares are the member that is not a comparison. <paramref name="edited"/> holds
+    /// them only when somebody stated them, and stating them always sends them -- there is
+    /// nothing to compare against, because the endpoint reads the absence of the operation
+    /// rather than the value.
+    /// </remarks>
+    private static JsonPatchDocument<UpdateTransactionRequest> Patch(
+        TransactionResponse current, UpdateTransactionRequest edited, bool redivide)
+    {
+        var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+
+        if (current.Name != edited.Name) patch.Replace(request => request.Name, edited.Name);
+        if (current.Amount != edited.Amount) patch.Replace(request => request.Amount, edited.Amount);
+        if (current.DateTime != edited.DateTime) patch.Replace(request => request.DateTime, edited.DateTime);
+
+        if (current.Description != edited.Description)
+            patch.Replace(request => request.Description, edited.Description);
+
+        if (current.GroupId != edited.GroupId) patch.Replace(request => request.GroupId, edited.GroupId);
+
+        if (current.CategoryId != edited.CategoryId)
+            patch.Replace(request => request.CategoryId, edited.CategoryId);
+
+        if (current.MerchantId != edited.MerchantId)
+            patch.Replace(request => request.MerchantId, edited.MerchantId);
+
+        if (current.PaidByUserId != edited.PaidByUserId)
+            patch.Replace(request => request.PaidByUserId, edited.PaidByUserId);
+
+        // Three answers, not two. Shares stated means those amounts; --redivide means an
+        // explicit null, which is the only way to ask the endpoint to work them out again;
+        // and saying nothing means the expense keeps the shares it has.
+        if (edited.Splits is not null)
+            patch.Replace(request => request.Splits, edited.Splits);
+        else if (redivide)
+            patch.Replace(request => request.Splits, null);
+
+        return patch;
+    }
+
+    /// <summary>
+    /// A division the server worked out, and what worked it out.
+    /// </summary>
+    /// <param name="nothing">
+    /// What the preview did not do -- "created" or "changed". The same shape of answer
+    /// comes back from both commands and the reassurance has to name the one they ran.
+    /// </param>
+    /// <remarks>
+    /// The rule line carries a second clause when the version that divided it has been
+    /// superseded, which is the common case previewing an edit: the expense is divided
+    /// again by the version it was written under, so the numbers will not match the rule as
+    /// it reads today and somebody comparing the two deserves to be told why rather than
+    /// left to find the discrepancy.
+    /// </remarks>
+    private static IRenderable RenderSplits(SplitPreviewResponse preview, string nothing)
     {
         var table = Tables.Grid("Member", "Share");
 
@@ -450,9 +693,16 @@ public static class TransactionCommands
             table.AddRow(Markup.Escape(split.UserName), split.Amount.ToString("N2"));
         }
 
+        var rule = $"Rule: [bold]{Markup.Escape(preview.RuleName ?? "default")}[/]";
+
+        if (preview.RuleSupersededAt is { } superseded)
+        {
+            rule += $" [grey](as it stood until {superseded.ToLocalTime():d MMM yyyy}; "
+                    + "the rule has changed since)[/]";
+        }
+
         return new Rows(
-            new Markup($"[grey]Preview only. Nothing was created.[/] "
-                       + $"Rule: [bold]{Markup.Escape(preview.RuleName ?? "default")}[/]\n"),
+            new Markup($"[grey]Preview only. Nothing was {nothing}.[/] {rule}\n"),
             table);
     }
 
@@ -851,6 +1101,106 @@ public static class TransactionCommands
                         + $"[grey]  groupsplit inbox link <row-id> {id}[/]\n"
                         + "[grey]Not a match:[/]\n"
                         + $"[grey]  groupsplit inbox dismiss-match <row-id> {id}[/]\n"));
+            });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Points a group's expenses at the version of their rule that was in force on the day
+    /// each was spent.
+    /// </summary>
+    /// <remarks>
+    /// The second half of writing a rule's history, and useless without it: the history says
+    /// what the rule stood for and when, and this says which of those an expense actually
+    /// fell under. A migration out of a workbook pointed every categorised expense at the
+    /// only version there was, so a 2023 grocery bill claims a ratio agreed in 2026.
+    /// <para>
+    /// It moves no money. Not one share is read, let alone written -- the only thing that
+    /// changes is which version each expense names -- so the group's balances are the same
+    /// afterwards to the cent. It stops for a confirmation anyway, because it rewrites the
+    /// history of an entire ledger and <c>--dry-run</c> is right there.
+    /// </para>
+    /// </remarks>
+    private static Command Reattach()
+    {
+        var group = new Option<Guid>("--group")
+        {
+            Description = "The group whose expenses to re-point.",
+            Required = true
+        };
+
+        var dryRun = new Option<bool>("--dry-run")
+        {
+            Description = "Work out what would change and report it without saving anything."
+        };
+
+        var command = new Command(
+            "reattach",
+            "Point a group's expenses at the version of their rule in force when each was spent.")
+        {
+            group, dryRun
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var groupId = parse.GetValue(group);
+            var dry = parse.GetValue(dryRun);
+
+            if (!dry)
+            {
+                Confirmation.Require(
+                    context,
+                    action: "transactions.reattach",
+                    summary: $"Re-point every expense in group {groupId} at the rule version of its own date?",
+                    changes:
+                    [
+                        "Each expense filed under a category with a rule points at the version "
+                        + "that was in force on the day it was spent.",
+                        "An expense older than its rule's history is left pointing at nothing.",
+                        "No share and no balance changes: only which version each expense names.",
+                        $"See it first with: groupsplit transactions reattach --group {groupId} --dry-run"
+                    ],
+                    confirmCommand: $"groupsplit transactions reattach --group {groupId} --yes");
+            }
+
+            var summary = await context.Transactions.ReattachTransactionsAsync(
+                new ReattachTransactionsRequest { GroupId = groupId, DryRun = dry }, ct);
+
+            context.Output.Write(summary, value =>
+            {
+                var heading = value.DryRun
+                    ? "[grey]Dry run. Nothing was saved.[/]"
+                    : "[green]Reattached.[/]";
+
+                var totals = new Markup(
+                    $"{heading} [bold]{value.Examined}[/] expenses examined, "
+                    + $"[bold]{value.Changed}[/] re-pointed, "
+                    + $"[bold]{value.LeftWithoutAVersion}[/] left with no version.\n"
+                    + "[grey]No share and no balance changed.[/]\n");
+
+                if (value.ByRule.Count == 0)
+                {
+                    return new Rows(totals, new Markup(
+                        Tables.Empty("expenses filed under a category with a rule") + "\n"));
+                }
+
+                var table = Tables.Grid("Rule", "Examined", "Re-pointed", "No version");
+
+                foreach (var rule in value.ByRule)
+                {
+                    table.AddRow(
+                        Markup.Escape(rule.SplitRuleName),
+                        rule.Examined.ToString(),
+                        rule.Changed.ToString(),
+                        rule.Uncovered.ToString());
+                }
+
+                return new Rows(totals, table);
             });
 
             return ExitCodes.Success;

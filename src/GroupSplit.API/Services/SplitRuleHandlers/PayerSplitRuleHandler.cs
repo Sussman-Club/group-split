@@ -11,16 +11,21 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 /// participants, no weights, no arithmetic. It does not go through
 /// <see cref="SplitCalculator"/> at all, because there is nothing to divide.
 /// </remarks>
-public class PayerSplitRuleHandler : ISplitRuleHandler<PayerSplitRule>, ISplitRuleFactory<PayerSplitRuleDto>
+public class PayerSplitRuleHandler : ISplitRuleHandler<PayerSplitRuleVersion>, ISplitRuleFactory<PayerSplitRuleDto>
 {
     public IReadOnlyList<SplitAmount> Divide(
-        PayerSplitRule rule, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
+        PayerSplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
         [new SplitAmount(payerId, amount)];
 
-    public string? Invalid(PayerSplitRule rule) => null;
+    public string? Invalid(PayerSplitRuleVersion ruleVersion) => null;
 
-    public SplitRuleDto ToDto(PayerSplitRule rule) => new PayerSplitRuleDto();
+    public SplitRuleDto ToDto(PayerSplitRuleVersion ruleVersion) => new PayerSplitRuleDto();
 
-    public SplitRule FromDto(string name, PayerSplitRuleDto definition) =>
-        new PayerSplitRule { Name = name };
+    /// <summary>
+    /// Always. A payer rule carries nothing, so there is nothing two of them could differ
+    /// in -- and an edit that leaves it a payer rule is not an edit.
+    /// </summary>
+    public bool SameAs(PayerSplitRuleVersion ruleVersion, PayerSplitRuleVersion other) => true;
+
+    public SplitRuleVersion FromDto(PayerSplitRuleDto definition) => new PayerSplitRuleVersion();
 }

@@ -43,6 +43,17 @@ public sealed class SplitRuleCommands(
         return done ? rule : null;
     }
 
+    public async Task<SplitRuleHistoryResponse?> HistoryAsync(Guid ruleId, CancellationToken ct = default)
+    {
+        SplitRuleHistoryResponse? history = null;
+
+        var done = await errors.TryAsync(
+            async () => history = await rules.GetSplitRuleVersionsAsync(ruleId, ct),
+            "Could not load what this split used to be.");
+
+        return done ? history : null;
+    }
+
     public async Task<SplitRuleDetailsResponse?> CreateAsync(CreateSplitRuleRequest request,
         CancellationToken ct = default)
     {

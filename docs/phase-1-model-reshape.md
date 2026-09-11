@@ -47,6 +47,17 @@ was trying and failing to guarantee. A revision log can be added later without t
 a single transaction, because no transaction will point at it. Adding it now would be
 the third thing built on a question nobody has asked.
 
+> **Revisited, 11 September 2026 -- see [Split rules are
+> versioned](split-rules-and-membership.md#split-rules-are-versioned).** The question got
+> asked: *divide this expense again by the rule it had at the time*. Stored splits cannot
+> answer it, because they are amounts and a recalculation needs the division that produced
+> them -- correct an amount and there is nothing left to re-divide by but today's rule.
+> `SplitRuleVersion` is back, and the sentence above is still right about why the first
+> attempt failed: this one does not replace the splits, it sits beside them. The splits
+> remain what each person owed; the version is what was applied. The rest of this section
+> -- one table, no TPT, no conversion between units -- is unchanged, and the version chain
+> is a second table under the same TPH hierarchy rather than a three-level one.
+
 **Currency lives in both places, and they must agree.** `Group.Currency` and
 `Transaction.Currency`, both ISO 4217, both required, defaulting to `USD` on migration.
 An expense whose currency differs from its group's is refused with `409
@@ -338,6 +349,17 @@ This is built, and the shape it took differs from the plan in one place worth re
 - The service recomputes splits **unless the request states them**. Recomputation runs
   `SplitCalculator` over the expense's category default, or an even split when it has
   none -- the same path a create takes.
+
+  > **Revisited, 11 September 2026 -- see
+  > [`docs/split-rules-and-membership.md`](split-rules-and-membership.md).** That is the
+  > contract as it stood until 47c6904, and it is no longer what the endpoint does. Silence
+  > about `/splits` now means **keep the stored shares**: a patch that states no division
+  > carries the expense's own into the save, and recomputation happens only when the edit
+  > moved something the division was worked out *from* -- the amount, the payer, the
+  > category or the group -- and the stored shares are reproducible from the expense's own
+  > rule. Reading silence as "divide it again" is what re-divided 733 expenses and moved
+  > 1,394.72 onto one member. `replace /splits null` is the operation that asks for a
+  > division outright.
 - Stated splits are used verbatim and must sum to the (possibly also patched) amount, or
   `422 SplitsDoNotSumToAmount`, which carries `amount`, `splitTotal` and `difference` so a
   dialog can name the shortfall instead of making somebody add the column up.

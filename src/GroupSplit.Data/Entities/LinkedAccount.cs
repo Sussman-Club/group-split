@@ -14,6 +14,16 @@ public class LinkedAccount : Entity
 
     public Guid BankConnectionId { get; set; }
 
+    /// <summary>
+    /// The provider's id for the account, unique within the connection and nowhere wider:
+    /// it is minted per item, so the same bank account linked twice arrives under two
+    /// different ids.
+    /// </summary>
+    /// <remarks>
+    /// Which is what makes a re-link look like a bank full of accounts nobody has seen --
+    /// see <see cref="BankConnection.AccountsRekeyed"/>, the one run that matches on what
+    /// rows look like instead.
+    /// </remarks>
     public required string ProviderAccountId { get; set; }
 
     public required string Name { get; set; }

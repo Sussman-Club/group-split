@@ -33,10 +33,12 @@ public static class DomainServiceExtensions
             services.AddScoped<IInvitationService, InvitationService>();
             services.AddScoped<IJoinLinkService, JoinLinkService>();
             services.AddScoped<ITransactionService, TransactionService>();
+            services.AddScoped<IExpenseProvenance, ExpenseProvenance>();
             services.AddSplitRuleServices();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<IMerchantService, MerchantService>();
             services.AddScoped<ISplitRuleService, SplitRuleService>();
+            services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
             services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
             services.AddBankingServices();
 

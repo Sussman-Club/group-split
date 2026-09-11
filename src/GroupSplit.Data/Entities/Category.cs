@@ -20,13 +20,20 @@ public class Category : Entity
     public required string Name { get; set; }
 
     /// <summary>
-    /// The split to pre-fill an expense in this category with, or null to divide it evenly
+    /// The rule to pre-fill an expense in this category with, or null to divide it evenly
     /// between the group's members.
     /// </summary>
     /// <remarks>
-    /// Pre-fill, not enforce: the amounts are copied onto the expense when it is written,
-    /// so "don't charge Omar for his own birthday cake" is an edit to one expense rather
-    /// than a change to how the group splits groceries forever.
+    /// The rule and not one of its versions. A category names a division the way a person
+    /// does -- "however we split rent" -- and follows it when it is edited; the expense
+    /// records which version it actually got, which is where history lives. So the two edits
+    /// are independent: re-pointing a category changes nothing about the rule, and editing
+    /// the rule changes nothing about which categories point at it.
+    /// <para>
+    /// Pre-fill, not enforce: the amounts are copied onto the expense when it is written, so
+    /// "don't charge Omar for his own birthday cake" is an edit to one expense rather than a
+    /// change to how the group splits groceries forever.
+    /// </para>
     /// </remarks>
     public virtual SplitRule? DefaultSplitRule { get; set; }
 

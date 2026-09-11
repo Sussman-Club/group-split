@@ -18,7 +18,7 @@ document at build time, so a new endpoint reaches the UI as a typed method.
 
 | | |
 |---|---|
-| API endpoints | 30, across groups, invitations, categories, split rules, transactions, users |
+| API endpoints | 32, across groups, invitations, categories, split rules, transactions, users |
 | Tests | 451 methods; ~74% line coverage on hand-written code |
 | UI | 5 pages, 11 dialogs; one command layer per aggregate behind every write |
 | Absent | bank data |
@@ -299,7 +299,9 @@ result on the transaction. What that buys:
 - **One rule, many categories.** Groceries, Utilities and Cleaning point at the same
   rule; when a roommate moves out it changes in one place.
 - **Editing a rule never rewrites history.** Existing transactions already hold their
-  splits, so the rule needs no versions.
+  splits, and -- since 11 September 2026 -- the version of the rule that produced them, so
+  editing a rule opens a new version and leaves both alone. See [Split rules are
+  versioned](split-rules-and-membership.md#split-rules-are-versioned).
 - **Imports file themselves.** A Plaid row categorised Groceries and assigned to Home
   gets Household 3-way applied automatically; the review inbox only needs a person for
   rows whose category has no default.
@@ -705,9 +707,15 @@ drift.
 
 ## Decisions to make
 
-- **Keep rule history or not?** The plan drops rule versioning because splits live on
-  the transaction. If you want "what was the Groceries rule in March", keep a lightweight
-  `SplitRuleRevision` log -- but no transaction should point at it.
+- ~~**Keep rule history or not?**~~ **Settled, 11 September 2026: keep it, and let
+  transactions point at it.** The plan dropped rule versioning because splits live on the
+  transaction, and the question that reopened it is the one the plan did not have: *divide
+  this expense again by the rule it had at the time*. Amounts cannot answer that -- correct
+  one and there is nothing left to re-divide by but today's rule. So `SplitRuleVersion` is a
+  chain per rule and `Transaction.SplitRuleVersionId` points into it, which is the half of
+  the old design that was right. The half that was wrong -- versions standing *instead* of
+  stored splits, over a three-level TPT hierarchy -- stays gone. See [Split rules are
+  versioned](split-rules-and-membership.md#split-rules-are-versioned).
 - **One currency per group, or per transaction?** Per transaction is what Plaid gives
   you; per group is what balances need. Proposal: both, with conversion out of scope and
   a group refusing an expense in another currency until it is in scope.

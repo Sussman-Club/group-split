@@ -45,7 +45,10 @@ public static class Extensions
             builder.Services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
 
             // Who a group may divide an expense between, which the splitter asks: its
-            // members, and the people it has invited and is still waiting on.
+            // members, and the people it has invited and is still waiting on -- and, behind
+            // it, how a rule changes when one of them leaves, which is by opening a new
+            // version rather than editing the one it is on.
+            builder.Services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
             builder.Services.AddScoped<IGroupParticipants, GroupParticipants>();
 
             builder.AddSeeder<CategorySeeder>();

@@ -7,24 +7,24 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 /// In proportion to whole shares.
 /// </summary>
 public class SharesSplitRuleHandler
-    : WeightedSplitRuleHandler<SharesSplitRule>, ISplitRuleFactory<SharesSplitRuleDto>
+    : WeightedSplitRuleHandler<SharesSplitRuleVersion>, ISplitRuleFactory<SharesSplitRuleDto>
 {
     protected override IReadOnlyList<SplitWeight> WeightsFor(
-        SharesSplitRule rule, IReadOnlyCollection<Guid> members) => StoredWeights(rule);
+        SharesSplitRuleVersion ruleVersion, IReadOnlyCollection<Guid> members) => StoredWeights(ruleVersion);
 
-    public override SplitRuleDto ToDto(SharesSplitRule rule) =>
+    public override SplitRuleDto ToDto(SharesSplitRuleVersion ruleVersion) =>
         new SharesSplitRuleDto
         {
-            Shares = rule.Participants.ToDictionary(
+            Shares = ruleVersion.Participants.ToDictionary(
                 participant => participant.UserId, participant => participant.Weight)
         };
 
-    public SplitRule FromDto(string name, SharesSplitRuleDto definition) =>
-        Naming(new SharesSplitRule { Name = name }, definition.Shares);
+    public SplitRuleVersion FromDto(SharesSplitRuleDto definition) =>
+        Naming(new SharesSplitRuleVersion(), definition.Shares);
 
-    public override string? Invalid(SharesSplitRule rule) =>
-        base.Invalid(rule)
-        ?? (rule.Participants.Count == 0 ? "A shares rule must name somebody." : null)
-        ?? (rule.Participants.Any(participant => participant.Weight < 0) ? "A share cannot be negative." : null)
-        ?? (rule.Participants.All(participant => participant.Weight == 0) ? "Somebody must hold a share." : null);
+    public override string? Invalid(SharesSplitRuleVersion ruleVersion) =>
+        base.Invalid(ruleVersion)
+        ?? (ruleVersion.Participants.Count == 0 ? "A shares rule must name somebody." : null)
+        ?? (ruleVersion.Participants.Any(participant => participant.Weight < 0) ? "A share cannot be negative." : null)
+        ?? (ruleVersion.Participants.All(participant => participant.Weight == 0) ? "Somebody must hold a share." : null);
 }

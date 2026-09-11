@@ -157,7 +157,8 @@
         var parameters = new DialogParameters<EditRuleDialog>
         {
             { x => x.GroupId, GroupId },
-            { x => x.OriginalModel, original }
+            { x => x.OriginalModel, original },
+            { x => x.SplitRuleId, category.DefaultSplitRuleId }
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
