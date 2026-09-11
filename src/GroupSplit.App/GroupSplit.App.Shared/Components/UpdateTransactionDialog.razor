@@ -191,7 +191,10 @@
                         </DivisionSource>
                     }
 
-                    @if (_correcting && _source is { } source)
+                    @* ShowSource again, not just the flag: the panel is opened from a strip
+                       that goes away when the expense is being moved to another group, and
+                       without this it would outlive the strip that opened it. *@
+                    @if (ShowSource && _correcting && _source is { } source)
                     {
                         <div class="gs-card gs-card-pad" style="padding: 16px">
                             <MudStack Spacing="3">
@@ -508,6 +511,11 @@
         // name the old group's members and the endpoint drops them. The toggle returns to
         // "Automatically" because there is nothing left to show on the other side of it.
         _redivide = false;
+
+        // And what produced the old shares stops being a question about this expense: the
+        // save rewrites it, so the panel that corrects it is closed rather than left open
+        // over a rule belonging to a group this is leaving.
+        _correcting = false;
 
         if (_members.All(user => user.Id != _model.PaidByUserId) && Login.User is { } me)
             _model.PaidByUserId = me.Id;
