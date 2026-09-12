@@ -43,11 +43,6 @@ public sealed record ReceiptResponse(
 /// Which purchase this line's money is part of, or null while nobody has said. Each distinct
 /// expense across the lines is one part of the bill.
 /// </param>
-/// <param name="Split">
-/// How this line divides between the people in its part. <see cref="ReceiptItemSplit.Claimed"/>
-/// reads <paramref name="Claims"/>; <see cref="ReceiptItemSplit.Evenly"/> names nobody and
-/// leaves it empty.
-/// </param>
 public sealed record ReceiptItemResponse(
     Guid Id,
     string Name,
@@ -56,7 +51,6 @@ public sealed record ReceiptItemResponse(
     decimal TotalPrice,
     bool IsTaxable,
     Guid? ExpenseId,
-    ReceiptItemSplit Split,
     IReadOnlyList<ReceiptClaimResponse> Claims);
 
 /// <summary>

@@ -619,11 +619,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // counted, and 0.250 kg is an ordinary line on a bill.
             entity.Property(item => item.Quantity).IsRequired().HasPrecision(18, 3);
 
-            // Stored as the number, like every other enum here. A line's division is read
-            // on every division of the bill and never searched on, so it needs no index.
-            entity.Property(item => item.Division).IsRequired();
-
             entity.Property(item => item.IsTaxable).IsRequired().HasDefaultValue(true);
+
+            // Where the line sits on the paper. Never searched on and always read as part of
+            // the whole bill, so it needs no index of its own -- the lines come back with
+            // their receipt and are ordered in memory.
+            entity.Property(item => item.Position).IsRequired();
 
             // Which purchase this line's money is part of. Set-null rather than cascade:
             // deleting an expense that was one part of a split bill must not take the lines

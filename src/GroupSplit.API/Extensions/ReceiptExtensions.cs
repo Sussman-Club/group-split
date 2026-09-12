@@ -42,7 +42,6 @@ public static class ReceiptExtensions
                     item.TotalPrice,
                     item.IsTaxable,
                     item.ExpenseId,
-                    (ReceiptItemSplit)item.Division,
                     [.. ShareOf(item)]))
                 .ToList();
 
@@ -55,8 +54,7 @@ public static class ReceiptExtensions
                 receipt.Tip,
                 receipt.Total,
                 receipt.Items.Count(item =>
-                    (expenseId is null || item.ExpenseId == expenseId)
-                    && item.Division == ReceiptItemDivision.Claimed && item.Claims.Count == 0),
+                    (expenseId is null || item.ExpenseId == expenseId) && item.Claims.Count == 0),
                 canDivide,
                 items);
         }
@@ -74,12 +72,6 @@ public static class ReceiptExtensions
     /// </remarks>
     private static IEnumerable<ReceiptClaimResponse> ShareOf(ReceiptItem item)
     {
-        // A line that divides some other way names nobody, so there is nothing to list --
-        // and listing the stale claims of a line somebody has since set to Evenly would show
-        // people a division that is no longer being applied.
-        if (item.Division != ReceiptItemDivision.Claimed)
-            return [];
-
         var totalWeight = item.Claims.Sum(claim => (long)claim.Weight);
 
         return item.Claims.Select(claim => new ReceiptClaimResponse(

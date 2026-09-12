@@ -16,15 +16,13 @@ namespace GroupSplit.Cli.Infrastructure;
 /// <item><c>Wine=18.00@&lt;id&gt;</c> -- one person had it.</item>
 /// <item><c>Wine=18.00@&lt;id&gt;,&lt;id&gt;</c> -- shared evenly between two.</item>
 /// <item><c>Wine=18.00@&lt;id&gt;*2,&lt;id&gt;</c> -- shared, one of them had twice as much.</item>
-/// <item><c>Wine=18.00@even</c> -- shared between everybody, naming nobody.</item>
 /// <item><c>Bananas=1.99/notax</c> -- the bill's tax was not charged on this line.</item>
 /// </list>
 /// <para>
-/// <c>even</c> is a word rather than an id and cannot collide with one: a guid never parses
-/// as it. It is how a line says it is the table's without naming anybody, which is what
-/// "these two are mine and the rest is shared" needs and what a list of claimants cannot
-/// express -- naming everybody says the same thing today and stops saying it the moment
-/// somebody joins. To put a line on one person, name them.
+/// Claimants are the only thing that says how a line divides. A line could once be marked as
+/// the table's without naming anybody; that is gone, because dividing something between
+/// everybody is not what an itemised bill is for -- a category that wants an even split names
+/// an even rule instead.
 /// </para>
 /// <para>
 /// <c>/notax</c> is how a warehouse bill says its groceries were exempt and its clothes were
@@ -69,12 +67,11 @@ public static class ReceiptItems
 
         var rest = value[(separator + 1)..].Trim();
         var claims = Array.Empty<ReceiptClaimInput>();
-        var split = ReceiptItemSplit.Claimed;
         var taxable = true;
 
         // Lifted out before anything else is read, and spliced rather than truncated, so it
-        // can be written on either side of the claimants -- "1.99/notax@even" and
-        // "1.99@even/notax" are the same line. Nothing else in a line contains a '/'.
+        // can be written on either side of the claimants -- "1.99/notax@<id>" and
+        // "1.99@<id>/notax" are the same line. Nothing else in a line contains a '/'.
         if (rest.IndexOf('/') is var slash and >= 0)
         {
             var after = rest[(slash + 1)..];
@@ -102,16 +99,7 @@ public static class ReceiptItems
             var who = rest[(at + 1)..].Trim();
             rest = rest[..at].Trim();
 
-            switch (who.ToLowerInvariant())
-            {
-                case "even":
-                    split = ReceiptItemSplit.Evenly;
-                    break;
-
-                default:
-                    claims = [.. Claims(option, value, who)];
-                    break;
-            }
+            claims = [.. Claims(option, value, who)];
         }
 
         var quantity = 1m;
@@ -132,7 +120,6 @@ public static class ReceiptItems
             Name = name,
             TotalPrice = totalPrice,
             Quantity = quantity,
-            Split = split,
             IsTaxable = taxable,
             // What one of them cost, which is the line divided by how many -- and the line
             // itself when that is one, which is nearly always. Rounded because it is shown
@@ -188,7 +175,7 @@ public static class ReceiptItems
     private static CliException Invalid(string option, string value, string why)
         => CliException.Input(
             $"Could not read {option} '{value}': {why}.",
-            $"Use {option} <name>=<price>[x<qty>][/notax][@<user-id>[*<weight>],...|@even], "
-            + $"e.g. {option} {Sample}, {option} Wine=18.00@even, or "
+            $"Use {option} <name>=<price>[x<qty>][/notax][@<user-id>[*<weight>],...], "
+            + $"e.g. {option} {Sample} or "
             + $"{option} Wine=18.00@3f25c1a8-1111-2222-3333-444455556666");
 }

@@ -186,8 +186,7 @@ public static class ReceiptSplitCalculator
             var part = PartOf(receipt, expenseId);
             RefuseIfAnythingIsUnclaimed(part);
 
-            return part.Any(item =>
-                item.Division != ReceiptItemDivision.Claimed || item.Claims.Count > 0);
+            return part.Any(item => item.Claims.Count > 0);
         }
         catch (UnprocessableException)
         {
@@ -243,9 +242,7 @@ public static class ReceiptSplitCalculator
     /// </remarks>
     private static void RefuseIfAnythingIsUnclaimed(IReadOnlyList<ReceiptItem> part)
     {
-        var unclaimed = part
-            .Where(item => item.Division == ReceiptItemDivision.Claimed && item.Claims.Count == 0)
-            .ToList();
+        var unclaimed = part.Where(item => item.Claims.Count == 0).ToList();
 
         // Refused rather than spread over everybody. A forgotten line and one the table
         // really did share look identical from here -- which is exactly what marking a line
@@ -294,19 +291,9 @@ public static class ReceiptSplitCalculator
 
         foreach (var item in lines)
         {
-            if (item.Division == ReceiptItemDivision.Evenly)
-            {
-                // Between everybody, naming none of them. Empty participants cannot happen --
-                // an expense always has at least its payer -- but it costs one comparison to
-                // not find out the hard way.
-                var among = participants.Count > 0 ? participants : [payerId];
-
-                foreach (var participant in among)
-                    Add(participant, item.TotalPrice / among.Count);
-
-                continue;
-            }
-
+            // Nobody had it, as far as the bill says. Skipped rather than spread, and the
+            // division as a whole is refused before it gets here -- see
+            // RefuseIfAnythingIsUnclaimed.
             if (item.Claims.Count == 0)
                 continue;
 

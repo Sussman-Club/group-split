@@ -154,27 +154,23 @@
                 {
                   "Name": "Rotisserie chicken",
                   "Price": 8.99,
-                  "Taxable": false,
-                  "Shared": true
+                  "Taxable": false
                 },
                 {
                   "Name": "Olive oil 2L",
                   "Price": 18.5,
-                  "Taxable": false,
-                  "Shared": true
+                  "Taxable": false
                 },
                 {
                   "Name": "Coffee beans 1kg",
                   "Price": 14.25,
-                  "Taxable": false,
-                  "Shared": true
+                  "Taxable": false
                 },
                 {
                   "Name": "Kitchen roll",
                   "Price": 11.8,
                   "Quantity": 12,
-                  "Taxable": false,
-                  "Shared": true
+                  "Taxable": false
                 },
                 {
                   "Name": "Fleece jacket",
@@ -247,7 +243,12 @@
                 {
                   "Name": "Tiramisu",
                   "Price": 9.0,
-                  "Shared": true
+                  "Had": {
+                      "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+                      "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+                      "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+                      "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+                  }
                 }
               ]
             }

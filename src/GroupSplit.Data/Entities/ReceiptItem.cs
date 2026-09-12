@@ -135,21 +135,19 @@ public class ReceiptItem : Entity
     public bool IsTaxable { get; set; } = true;
 
     /// <summary>
-    /// How this line is divided between the people in its part. Claimed by default, which is
-    /// the one that needs <see cref="Claims"/> to say anything.
+    /// Who had it, and in what proportion.
     /// </summary>
     /// <remarks>
-    /// Defaulted to <see cref="ReceiptItemDivision.Claimed"/> so that the safe behaviour is
-    /// the one you get by saying nothing: a line nobody has claimed stops its part being
-    /// divided rather than quietly landing on everybody.
+    /// The only thing that says how a line divides, and deliberately the only thing. A line
+    /// carried a marker for "the table's, rather than anybody's" for a while; it is gone,
+    /// because dividing something between everybody is not what an itemised bill is for. An
+    /// itemised division says everybody owes what they had -- a category that wants an even
+    /// split has an even rule to name, and naming both was two ways to say one thing with a
+    /// silent disagreement between them.
+    /// <para>
+    /// Empty means nobody has claimed the line yet: an ordinary state while a bill is being
+    /// worked through, and a refusal once it comes to dividing its part.
+    /// </para>
     /// </remarks>
-    public ReceiptItemDivision Division { get; set; } = ReceiptItemDivision.Claimed;
-
-    /// <summary>
-    /// Who had it, and in what proportion. Read only when <see cref="Division"/> is
-    /// <see cref="ReceiptItemDivision.Claimed"/>; empty then means nobody has claimed the
-    /// line yet, which is an ordinary state while a bill is being worked through and a
-    /// refusal once it comes to dividing its part.
-    /// </summary>
     public virtual ICollection<ReceiptItemClaim> Claims { get; } = [];
 }

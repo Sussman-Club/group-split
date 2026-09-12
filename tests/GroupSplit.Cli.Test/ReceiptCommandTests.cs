@@ -84,8 +84,8 @@ public sealed class ReceiptCommandTests : IDisposable
     /// refusal that says so.
     /// </remarks>
     [Theory]
-    [InlineData("Bread=4.00/notax@even")]
-    [InlineData("Bread=4.00@even/notax")]
+    [InlineData("Bread=4.00/notax@11111111-0000-4000-8000-000000000001")]
+    [InlineData("Bread=4.00@11111111-0000-4000-8000-000000000001/notax")]
     public async Task The_tax_flag_can_be_written_either_side_of_the_claimants(string line)
     {
         _api.Returns($"/api/inbox/{RowId}/receipt", Bill());
@@ -100,8 +100,11 @@ public sealed class ReceiptCommandTests : IDisposable
         var first = Sent().GetProperty("items")[0];
 
         Assert.False(first.GetProperty("isTaxable").GetBoolean());
-        Assert.Equal("Evenly", first.GetProperty("split").GetString());
         Assert.Equal(4.00m, first.GetProperty("totalPrice").GetDecimal());
+
+        // The claimant survived the splice, which is the half of this that could break:
+        // lifting the flag out must not take the name with it.
+        Assert.Equal(Lines[0], first.GetProperty("claims")[0].GetProperty("userId").GetGuid());
     }
 
     /// <summary>A flag nobody defined is a typo, and is refused before anything is sent.</summary>

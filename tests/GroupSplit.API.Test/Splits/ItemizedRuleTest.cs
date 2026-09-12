@@ -696,7 +696,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 {
                     Name = "Everything",
                     TotalPrice = 100.00m,
-                    Split = ReceiptItemSplit.Evenly
+                    Claims = [new ReceiptClaimInput { UserId = Self }]
                 }
             ]
         }, Ct);
