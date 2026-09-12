@@ -29,7 +29,11 @@
     well not be there.
 *@
 
-<MudDialog>
+@* gs-sheet is what makes this the full screen on a phone, with the actions held
+   at the bottom. It rides the dialog rather than every DialogOptions that opens
+   one, which is both fewer places to forget and the right owner: how this looks
+   on a small screen is the dialog's business, not its caller's. *@
+<MudDialog Class="gs-sheet">
     <TitleContent>
         <div class="gs-dialog-head">
             <div style="min-width: 0">

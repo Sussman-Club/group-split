@@ -30,7 +30,11 @@
     rule has moved on since.
 *@
 
-<MudDialog>
+@* gs-sheet is what makes this the full screen on a phone, with the actions held
+   at the bottom. It rides the dialog rather than every DialogOptions that opens
+   one, which is both fewer places to forget and the right owner: how this looks
+   on a small screen is the dialog's business, not its caller's. *@
+<MudDialog Class="gs-sheet">
     <TitleContent>
         <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
     </TitleContent>
