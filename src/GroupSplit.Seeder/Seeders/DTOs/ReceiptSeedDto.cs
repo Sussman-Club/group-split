@@ -1,17 +1,23 @@
 namespace GroupSplit.Seeder.Seeders.DTOs;
 
 /// <summary>
-/// An itemised bill on a seeded expense, for the categories that divide by one.
+/// An itemised bill, either on a seeded expense or on a seeded bank row waiting in the inbox.
 /// </summary>
 /// <remarks>
+/// The same shape in both places, because it is the same piece of paper. On an expense it is
+/// what the categories that divide by one read; on a bank row it is a charge that has not
+/// been filed yet, and whose lines somebody is about to sort into one purchase or several.
+/// <para>
 /// The subtotal and the total are not here: they are the lines added up and then the extras
 /// added on, and a seed file that stated them could disagree with its own arithmetic --
 /// which the division refuses, so the seeder would fail rather than produce the wrong
 /// answer. Deriving them keeps the file saying one thing.
+/// </para>
 /// <para>
-/// The expense's own <see cref="TransactionSeedDto.Amount"/> does still have to equal that
-/// total, because a bill has to be the expense's own money. That one is checked rather than
-/// derived, since the amount is what every other seeded expense already states.
+/// What the file does have to get right is the money the bill is a bill for: the expense's
+/// own <see cref="TransactionSeedDto.Amount"/>, or the bank row's
+/// <see cref="BankTransactionSeedDto.Amount"/>. Those are checked rather than derived, since
+/// the amount is what every other seeded expense and every other seeded row already states.
 /// </para>
 /// </remarks>
 public class ReceiptSeedDto
@@ -32,6 +38,19 @@ public class ReceiptItemSeedDto
     public required decimal Price { get; init; }
 
     public decimal Quantity { get; init; } = 1;
+
+    /// <summary>
+    /// Whether the tax on the bill was charged on this line. True unless the file says
+    /// otherwise, which is what a restaurant bill wants and what every seeded dinner relies
+    /// on.
+    /// </summary>
+    /// <remarks>
+    /// False is for the warehouse receipt, where the groceries are exempt and the clothes
+    /// are not. It is the difference between apportioning the tax over the lines that were
+    /// actually charged it and spreading it over everything -- which would tax the bananas
+    /// and let the jacket off.
+    /// </remarks>
+    public bool Taxable { get; init; } = true;
 
     /// <summary>
     /// Who had it, and with what weight -- one apiece for a line shared between them, two

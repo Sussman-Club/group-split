@@ -84,4 +84,21 @@ public class BankTransactionSeedDto
     public string? City { get; init; }
 
     public bool Pending { get; init; }
+
+    /// <summary>
+    /// The itemised bill behind this charge, for the rows a demo is meant to file by hand.
+    /// Null for the ordinary row, which is every charge nobody kept the paper for.
+    /// </summary>
+    /// <remarks>
+    /// This is the state the feature exists for, and the only one a seeder can reach: the
+    /// card is charged at the shop, the row lands in the inbox, and the lines are there
+    /// before any expense is. Filing the row whole hands the bill to the expense, so a
+    /// category with an itemised rule divides by it on the spot; splitting the row instead
+    /// gives each group of lines an expense of its own.
+    /// <para>
+    /// Its derived total has to equal <see cref="Amount"/>, and the seeder refuses the row
+    /// rather than seed a bill that is not this charge.
+    /// </para>
+    /// </remarks>
+    public ReceiptSeedDto? Receipt { get; init; }
 }

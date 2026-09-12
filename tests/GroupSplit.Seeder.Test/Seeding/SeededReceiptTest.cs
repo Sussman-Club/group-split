@@ -10,11 +10,16 @@ namespace GroupSplit.Seeder.Test.Seeding;
 /// <remarks>
 /// An itemised rule is the first kind whose division depends on something other than the
 /// rule, so it is the first that a seed file can get wrong in a way nothing catches until
-/// the run. Two ways, both of which stop the seeder dead rather than producing a wrong
+/// the run. Several ways, all of which stop the seeder dead rather than producing a wrong
 /// balance -- which is the right behaviour and a miserable thing to debug from a container
 /// log at the end of a database reset.
 /// <para>
-/// So they are checked here, against the real files, where the failure names the expense.
+/// So they are checked here, against the real files, where the failure names the bill.
+/// </para>
+/// <para>
+/// Both files that can carry one are checked together: a bill typed onto an expense and a
+/// bill typed against a bank row are the same piece of paper, and what makes either of them
+/// undividable is the same thing.
 /// </para>
 /// </remarks>
 public class SeededReceiptTest
@@ -30,29 +35,51 @@ public class SeededReceiptTest
         return Path.Combine(root, "src", "GroupSplit.Seeder", "SeedData");
     }
 
-    private static List<TransactionSeedDto> Transactions() =>
-        JsonSerializer.Deserialize<List<TransactionSeedDto>>(
-            File.ReadAllText(Path.Combine(SeedData(), "transactions.json")), Options)!;
+    private static List<T> Read<T>(string file) =>
+        JsonSerializer.Deserialize<List<T>>(
+            File.ReadAllText(Path.Combine(SeedData(), file)), Options)!;
 
-    private static List<CategorySeedDto> Categories() =>
-        JsonSerializer.Deserialize<List<CategorySeedDto>>(
-            File.ReadAllText(Path.Combine(SeedData(), "categories.json")), Options)!;
+    private static List<TransactionSeedDto> Transactions() =>
+        Read<TransactionSeedDto>("transactions.json");
+
+    private static List<CategorySeedDto> Categories() => Read<CategorySeedDto>("categories.json");
 
     /// <summary>
-    /// A bill has to be the expense's own money, and the division refuses it otherwise --
-    /// naming both figures, after the seeder has already written everything before it.
+    /// Every seeded bill, wherever it is written, with the money it is a bill for.
     /// </summary>
-    [Fact]
-    public void Every_seeded_bill_comes_to_its_expense_amount()
+    /// <param name="Where">
+    /// What to say when one of these fails, which is the only reason the sequence carries a
+    /// string at all: a figure that does not add up is useless without the line of the file
+    /// to go and look at.
+    /// </param>
+    private static IEnumerable<(string Where, decimal Charge, ReceiptSeedDto Bill)> Bills()
     {
         foreach (var expense in Transactions().Where(tx => tx.Receipt is not null))
+            yield return ($"expense '{expense.Name}' ({expense.Id})", expense.Amount, expense.Receipt!);
+
+        var rows = Read<BankConnectionSeedDto>("bank-connections.json")
+            .SelectMany(connection => connection.Accounts)
+            .SelectMany(account => account.Transactions)
+            .Where(row => row.Receipt is not null);
+
+        foreach (var row in rows)
+            yield return ($"bank row '{row.Description}' ({row.Id})", row.Amount, row.Receipt!);
+    }
+
+    /// <summary>
+    /// A bill has to be the money it is a bill for, and both dividing an expense and
+    /// splitting a charge refuse it otherwise -- naming both figures, after the seeder has
+    /// already written everything before it.
+    /// </summary>
+    [Fact]
+    public void Every_seeded_bill_comes_to_the_charge_it_is_a_bill_for()
+    {
+        foreach (var (where, charge, bill) in Bills())
         {
-            var bill = expense.Receipt!;
             var total = bill.Items.Sum(line => line.Price) + bill.Tax + bill.Tip;
 
-            Assert.True(total == expense.Amount,
-                $"Seeded expense '{expense.Name}' ({expense.Id}) has a bill coming to {total}, "
-                + $"but the expense is {expense.Amount}.");
+            Assert.True(total == charge,
+                $"Seeded {where} has a bill coming to {total}, but the charge is {charge}.");
         }
     }
 
@@ -87,13 +114,13 @@ public class SeededReceiptTest
     [Fact]
     public void Every_line_of_every_seeded_bill_is_accounted_for()
     {
-        foreach (var expense in Transactions().Where(tx => tx.Receipt is not null))
+        foreach (var (where, _, bill) in Bills())
         {
-            foreach (var line in expense.Receipt!.Items)
+            foreach (var line in bill.Items)
             {
                 Assert.True(line.Shared || line.Had.Count > 0,
-                    $"'{line.Name}' on seeded expense '{expense.Name}' ({expense.Id}) "
-                    + "names nobody and is not marked Shared, so the bill cannot be divided.");
+                    $"'{line.Name}' on seeded {where} names nobody and is not marked Shared, "
+                    + "so the bill cannot be divided.");
             }
         }
     }
@@ -105,14 +132,36 @@ public class SeededReceiptTest
     [Fact]
     public void No_seeded_line_is_both_shared_and_claimed()
     {
-        foreach (var expense in Transactions().Where(tx => tx.Receipt is not null))
+        foreach (var (where, _, bill) in Bills())
         {
-            foreach (var line in expense.Receipt!.Items.Where(line => line.Shared))
+            foreach (var line in bill.Items.Where(line => line.Shared))
             {
                 Assert.True(line.Had.Count == 0,
-                    $"'{line.Name}' on seeded expense '{expense.Name}' ({expense.Id}) is "
-                    + "marked Shared and also names people; the names would be ignored.");
+                    $"'{line.Name}' on seeded {where} is marked Shared and also names people; "
+                    + "the names would be ignored.");
             }
+        }
+    }
+
+    /// <summary>
+    /// A bill that charges tax marks something taxable.
+    /// </summary>
+    /// <remarks>
+    /// Checked here precisely because nothing else would say anything. Tax is weighed across
+    /// the taxable lines, and <c>ReceiptSplitCalculator</c> falls back to weighing it across
+    /// every line when none is taxable -- which keeps a real bill dividing rather than
+    /// refusing on a transcription error, and quietly does the one thing <c>Taxable</c> was
+    /// added to prevent. A seed file that hit that fallback would divide, balance, and be
+    /// wrong, with the demo showing tax on the exempt groceries.
+    /// </remarks>
+    [Fact]
+    public void No_seeded_bill_charges_tax_with_nothing_taxable_on_it()
+    {
+        foreach (var (where, _, bill) in Bills().Where(entry => entry.Bill.Tax != 0))
+        {
+            Assert.True(bill.Items.Any(line => line.Taxable),
+                $"Seeded {where} charges {bill.Tax} of tax and marks every line exempt, so the "
+                + "tax would fall back onto every line, exempt ones included.");
         }
     }
 }

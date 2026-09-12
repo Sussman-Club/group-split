@@ -24,6 +24,10 @@
          extension the test app rejects the CI report option with MTP exit code 5.
          Version tracks the MTP that xunit.v3 brings in. -->
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
+    <!-- A provider, only so the change tracker works: the seeder tests add entities and
+         read back what was added, and DbContext.Set<T>() refuses without one. Nothing
+         here saves. Matches the provider and version GroupSplit.API.Test uses. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="xunit.v3" Version="4.0.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
