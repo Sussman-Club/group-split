@@ -57,9 +57,6 @@ internal static class SeededBill
                     ? line.Price
                     : decimal.Round(line.Price / line.Quantity, 2),
                 IsTaxable = line.Taxable,
-                Division = line.Shared
-                    ? ReceiptItemDivision.Evenly
-                    : ReceiptItemDivision.Claimed,
                 ExpenseId = expenseId
             };
 

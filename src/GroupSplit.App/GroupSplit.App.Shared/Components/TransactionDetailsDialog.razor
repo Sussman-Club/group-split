@@ -311,19 +311,15 @@
             : null;
 
     /// <summary>
-    /// How one line divides, in a caption under its name.
+    /// Who had one line, in a caption under its name.
     /// </summary>
     /// <remarks>
-    /// "Shared" and "not claimed yet" both have an empty claim list and mean opposite things:
-    /// one is a line the table agreed on, the other is the reason the bill cannot be divided.
-    /// Reading them the same way would make the unclaimed warning above look like a bug.
+    /// An empty claim list has one meaning now: nobody has said. It is the reason the bill
+    /// cannot be divided, which is why it is spelt out rather than left blank -- the tag
+    /// above counts these, and a caption that said nothing would make that count look wrong.
     /// </remarks>
-    private string Divided(ReceiptItemResponse item) => item.Split switch
-    {
-        ReceiptItemSplit.Evenly => "shared by everyone",
-        _ when item.Claims.Count == 0 => "not claimed yet",
-        _ => Who(item)
-    };
+    private string Divided(ReceiptItemResponse item) =>
+        item.Claims.Count == 0 ? "not claimed yet" : Who(item);
 
     /// <summary>
     /// Who had one line, by name.

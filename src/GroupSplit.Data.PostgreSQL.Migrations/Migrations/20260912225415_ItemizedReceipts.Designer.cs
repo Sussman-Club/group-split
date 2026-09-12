@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    [Migration("20260912224355_ItemizedReceipts")]
+    [Migration("20260912225415_ItemizedReceipts")]
     partial class ItemizedReceipts
     {
         /// <inheritdoc />
@@ -547,9 +547,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<int>("Division")
-                        .HasColumnType("integer");
 
                     b.Property<Guid?>("ExpenseId")
                         .HasColumnType("uuid");

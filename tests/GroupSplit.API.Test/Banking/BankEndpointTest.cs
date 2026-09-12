@@ -1228,8 +1228,7 @@ public class BankEndpointTest : IAsyncLifetime
             {
                 Name = name,
                 NormalizedName = name.ToLowerInvariant(),
-                TotalPrice = price,
-                Division = ReceiptItemDivision.Evenly
+                TotalPrice = price
             });
         }
 

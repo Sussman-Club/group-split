@@ -545,9 +545,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Division")
-                        .HasColumnType("integer");
-
                     b.Property<Guid?>("ExpenseId")
                         .HasColumnType("uuid");
 

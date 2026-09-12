@@ -5406,7 +5406,7 @@
     "Amount": 88.0,
     "DateTime": "2026-07-25T21:00:00Z",
     "Name": "Birthday dinner",
-    "Description": "Two things were somebody's; the rest was the table's",
+    "Description": "Two mains claimed; the shared plates named everybody",
     "Receipt": {
       "Tax": 0.0,
       "Tip": 8.0,
@@ -5428,12 +5428,22 @@
         {
           "Name": "Bread and olives",
           "Price": 12.0,
-          "Shared": true
+          "Had": {
+              "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+              "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+              "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+              "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
         },
         {
           "Name": "Paella for two",
           "Price": 28.0,
-          "Shared": true
+          "Had": {
+              "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+              "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+              "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+              "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
         }
       ]
     }

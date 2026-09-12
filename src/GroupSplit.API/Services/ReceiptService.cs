@@ -332,19 +332,13 @@ public class ReceiptService(
 
         RefuseStrangeClaims(request.Claims, await ParticipantsFor(expense, ct), item.Name);
 
-        item.Division = (ReceiptItemDivision)request.Split;
-
+        // Replaced rather than added to, so un-claiming is the same call as claiming and a
+        // client never has to work out which of the two it is making.
         dbContext.RemoveRange(item.Claims);
         item.Claims.Clear();
 
-        // Only a claimed line keeps claims. A line that is the table's names nobody, so
-        // anything sent alongside it would be stored and never read -- a division sitting in
-        // the table that nothing applies.
-        if (item.Division == ReceiptItemDivision.Claimed)
-        {
-            foreach (var claim in request.Claims)
-                Attach(item, claim);
-        }
+        foreach (var claim in request.Claims)
+            Attach(item, claim);
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -607,21 +601,11 @@ public class ReceiptService(
             item.UnitPrice = line.UnitPrice;
             item.Quantity = line.Quantity;
             item.IsTaxable = line.IsTaxable;
-            item.Division = (ReceiptItemDivision)line.Split;
 
             // Which purchase the line is part of. Stated by the caller only when the whole
             // bill is one expense's; a bill typed against a bank row leaves it open until
             // somebody splits the charge.
             item.ExpenseId = expenseId;
-
-            // A line that no longer divides by its claims should not keep them: they would
-            // be invisible in the response and come back the moment somebody set it to
-            // Claimed again, which is a division nobody asked for reappearing on its own.
-            if (item.Division != ReceiptItemDivision.Claimed && item.Claims.Count > 0)
-            {
-                dbContext.RemoveRange(item.Claims);
-                item.Claims.Clear();
-            }
 
             // Claims are only replaced when the request says something about them, so a
             // client re-sending a bill to fix a price does not silently un-claim every line.

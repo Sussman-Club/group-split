@@ -99,50 +99,16 @@ public record ReceiptItemInput
     public bool IsTaxable { get; init; } = true;
 
     /// <summary>
-    /// How this line divides. Defaults to <see cref="ReceiptItemSplit.Claimed"/>, which is
-    /// what <see cref="Claims"/> is for.
+    /// Who had it, or empty to leave the line unclaimed for now.
     /// </summary>
     /// <remarks>
-    /// The default is the cautious one on purpose: a line that says nothing about how it
-    /// divides, and names nobody, stops the bill being divided rather than quietly landing on
-    /// everybody.
+    /// The only thing that says how a line divides. Unclaimed lines are perfectly ordinary
+    /// while a bill is being worked through, and are refused when it comes to dividing it --
+    /// there is no longer a way for a line to say it divides some other way, because an
+    /// itemised division is "everybody owes what they had" and a bill that wants an even
+    /// split wants a different rule.
     /// </remarks>
-    [EnumDataType(typeof(ReceiptItemSplit), ErrorMessage = "That is not a way a line can divide.")]
-    public ReceiptItemSplit Split { get; init; } = ReceiptItemSplit.Claimed;
-
-    /// <summary>
-    /// Who had it, or empty to leave the line unclaimed for now. Unclaimed lines are
-    /// perfectly ordinary while a bill is being worked through, and are refused when it comes
-    /// to dividing it -- unless the line says it divides some other way, which is what
-    /// <see cref="Split"/> is for.
-    /// </summary>
     public IReadOnlyList<ReceiptClaimInput> Claims { get; init; } = [];
-}
-
-/// <summary>
-/// How one line of a bill is divided, on the wire.
-/// </summary>
-/// <remarks>
-/// Named apart from the entity's <c>ReceiptItemDivision</c> rather than shared with it, the
-/// way <see cref="InboxStatus"/> is named apart from the row's own status: the DTOs and the
-/// entities are separate assemblies on purpose, and the API has both namespaces in scope at
-/// once.
-/// </remarks>
-[JsonConverter(typeof(JsonStringEnumConverter<ReceiptItemSplit>))]
-public enum ReceiptItemSplit
-{
-    /// <summary>
-    /// Between whoever claimed it, in proportion to their weights. The default, and the only
-    /// one that needs <see cref="ReceiptItemInput.Claims"/> to say anything.
-    /// </summary>
-    Claimed = 0,
-
-    /// <summary>
-    /// Evenly between everybody, naming none of them. How "these two are mine and the rest is
-    /// shared" is said, and the one division that cannot be written as a list of claimants --
-    /// naming everybody means something different the moment somebody joins or leaves.
-    /// </summary>
-    Evenly = 1
 }
 
 /// <summary>One person's part of one line.</summary>
@@ -171,12 +137,7 @@ public record ReceiptClaimInput
 public record SetReceiptItemClaimsRequest
 {
     /// <summary>
-    /// How the line divides from now on. <see cref="ReceiptItemSplit.Claimed"/> reads
-    /// <see cref="Claims"/>; <see cref="ReceiptItemSplit.Evenly"/> names nobody and ignores
-    /// it.
+    /// Who had the line from now on, replacing whoever was on it. Empty un-claims it.
     /// </summary>
-    [EnumDataType(typeof(ReceiptItemSplit), ErrorMessage = "That is not a way a line can divide.")]
-    public ReceiptItemSplit Split { get; init; } = ReceiptItemSplit.Claimed;
-
     public IReadOnlyList<ReceiptClaimInput> Claims { get; init; } = [];
 }

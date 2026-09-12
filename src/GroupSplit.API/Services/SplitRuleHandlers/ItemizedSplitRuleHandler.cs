@@ -28,9 +28,8 @@ public class ItemizedSplitRuleHandler
     /// What the bill says each person owed.
     /// </summary>
     /// <remarks>
-    /// <paramref name="members"/> is read for one thing only: the lines divided
-    /// <see cref="ReceiptItemDivision.Evenly"/>, which name nobody and so have to be told who
-    /// everybody is. It is deliberately <em>not</em> used to filter claims, which is where
+    /// <paramref name="members"/> is read for one thing only: settling who the leftover cent
+    /// of an apportioning goes to. It is deliberately <em>not</em> used to filter claims, which is where
     /// this parts company with every proportional rule. Those drop anybody who has left the
     /// group and redistribute their weight, because a rule names people in advance and the
     /// group moves on without them. A bill names who <em>ate</em>, and there is no honest way

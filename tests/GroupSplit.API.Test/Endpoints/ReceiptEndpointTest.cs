@@ -69,48 +69,17 @@ public class ReceiptEndpointTest : IAsyncLifetime
     }
 
     /// <summary>
-    /// A line's division is an enum on the wire, and one outside its range must not reach the
-    /// service: the cast there is unchecked, an unknown division reads as neither claimed nor
-    /// shared, and the line's money leaves the weights while staying in the total -- so it is
-    /// redistributed across everybody else with nothing reporting it.
+    /// A line names who had it and nothing else, so a bill whose lines name nobody is stored
+    /// and refuses to divide.
     /// </summary>
-    [Theory]
-    [InlineData(7)]
-    [InlineData(-1)]
-    public async Task A_line_dividing_in_a_way_that_does_not_exist_is_refused(int split)
-    {
-        var expense = await AGroupExpense();
-
-        var response = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new
-        {
-            subtotal = 30m,
-            total = 30m,
-            items = new[] { new { name = "Everything", totalPrice = 30m, split } }
-        }, Json, Ct);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
+    /// <remarks>
+    /// The three tests this replaces were about a line saying it divided some other way --
+    /// an enum on the wire, its out-of-range values, and its names. There is no other way
+    /// now: an itemised division is "everybody owes what they had", and a bill that wants an
+    /// even split wants a category with an even rule.
+    /// </remarks>
     [Fact]
-    public async Task A_line_dividing_by_a_name_that_does_not_exist_is_refused()
-    {
-        var expense = await AGroupExpense();
-
-        var response = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new
-        {
-            subtotal = 30m,
-            total = 30m,
-            items = new[] { new { name = "Everything", totalPrice = 30m, split = "Sideways" } }
-        }, Json, Ct);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    /// <summary>
-    /// The division names, which is what the wire now speaks.
-    /// </summary>
-    [Fact]
-    public async Task A_bill_whose_lines_are_the_tables_is_stored_and_can_be_divided()
+    public async Task A_bill_nobody_has_claimed_is_stored_and_refuses_to_divide()
     {
         var expense = await AGroupExpense();
 
@@ -118,19 +87,19 @@ public class ReceiptEndpointTest : IAsyncLifetime
         {
             subtotal = 30m,
             total = 30m,
-            items = new[] { new { name = "Everything", totalPrice = 30m, split = "Evenly" } }
+            items = new[] { new { name = "Everything", totalPrice = 30m } }
         }, Json, Ct);
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
 
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
 
-        Assert.Equal(0, body.GetProperty("unclaimedItemCount").GetInt32());
-        Assert.True(body.GetProperty("canDivide").GetBoolean());
+        Assert.Equal(1, body.GetProperty("unclaimedItemCount").GetInt32());
+        Assert.False(body.GetProperty("canDivide").GetBoolean());
 
         var divided = await Client.PostAsync($"/transactions/{expense}/receipt/divide", null, Ct);
 
-        Assert.Equal(HttpStatusCode.OK, divided.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, divided.StatusCode);
     }
 
     /// <summary>

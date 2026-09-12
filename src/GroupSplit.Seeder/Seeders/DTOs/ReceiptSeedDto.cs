@@ -61,11 +61,4 @@ public class ReceiptItemSeedDto
     /// seed files say "who, how much" in one shape throughout.
     /// </remarks>
     public Dictionary<Guid, int> Had { get; init; } = [];
-
-    /// <summary>
-    /// True for a line that was the table's rather than anybody's in particular, which is
-    /// how a seeded bill says "these two were mine and the rest was shared" without naming
-    /// four people on every other line.
-    /// </summary>
-    public bool Shared { get; init; }
 }

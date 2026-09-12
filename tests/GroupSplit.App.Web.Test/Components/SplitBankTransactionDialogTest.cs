@@ -283,10 +283,8 @@ public class SplitBankTransactionDialogTest : ComponentTest
     private static ReceiptResponse Bill => new(
         Guid.NewGuid(), null, RowId, 100m, 0m, 0m, 100m, 0, false,
         [
-            new ReceiptItemResponse(Groceries, "GROCERIES", 60m, 1, 60m, true, null,
-                ReceiptItemSplit.Evenly, []),
-            new ReceiptItemResponse(Jacket, "JACKET", 40m, 1, 40m, true, null,
-                ReceiptItemSplit.Evenly, [])
+            new ReceiptItemResponse(Groceries, "GROCERIES", 60m, 1, 60m, true, null, []),
+            new ReceiptItemResponse(Jacket, "JACKET", 40m, 1, 40m, true, null, [])
         ]);
 
     private static BankTransactionResponse Row() =>

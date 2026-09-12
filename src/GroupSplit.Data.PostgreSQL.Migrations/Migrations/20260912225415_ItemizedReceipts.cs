@@ -50,8 +50,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     UnitPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     Quantity = table.Column<decimal>(type: "numeric(18,3)", precision: 18, scale: 3, nullable: false),
                     TotalPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    IsTaxable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    Division = table.Column<int>(type: "integer", nullable: false)
+                    IsTaxable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {

@@ -130,10 +130,7 @@ public class BankConnectionSeederTest
         Tax = 19.55m,
         Items =
         [
-            new ReceiptItemSeedDto
-            {
-                Name = "Rotisserie chicken", Price = 53.54m, Taxable = false, Shared = true
-            },
+            new ReceiptItemSeedDto { Name = "Rotisserie chicken", Price = 53.54m, Taxable = false },
             new ReceiptItemSeedDto
             {
                 Name = "Fleece jacket", Price = 34.99m,

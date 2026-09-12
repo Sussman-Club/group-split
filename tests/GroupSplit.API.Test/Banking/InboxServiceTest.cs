@@ -439,7 +439,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                     new ReceiptItemInput
                     {
                         Name = "GROCERIES", TotalPrice = 60m, IsTaxable = false,
-                        Split = ReceiptItemSplit.Evenly
+                        Claims = [new ReceiptClaimInput { UserId = Self }]
                     },
                     new ReceiptItemInput
                     {
@@ -547,7 +547,14 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 [
                     new ReceiptItemInput
                     {
-                        Name = "GROCERIES", TotalPrice = 60m, Split = ReceiptItemSplit.Evenly
+                        // The flat's, so both of them are on it -- which is how an itemised
+                        // bill says "shared" now that a line has nothing else to say it with.
+                        Name = "GROCERIES", TotalPrice = 60m,
+                        Claims =
+                        [
+                            new ReceiptClaimInput { UserId = Self },
+                            new ReceiptClaimInput { UserId = other.Id }
+                        ]
                     },
                     new ReceiptItemInput
                     {
@@ -728,7 +735,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                         Id = line.Id,
                         Name = line.Name,
                         TotalPrice = line.TotalPrice,
-                        Split = ReceiptItemSplit.Evenly
+                        Claims = [new ReceiptClaimInput { UserId = Self }]
                     };
                 })
             ]
@@ -837,7 +844,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                     new ReceiptItemInput
                     {
                         Name = "GROCERIES", TotalPrice = 60m, IsTaxable = false,
-                        Split = ReceiptItemSplit.Evenly
+                        Claims = [new ReceiptClaimInput { UserId = Self }]
                     },
                     new ReceiptItemInput
                     {

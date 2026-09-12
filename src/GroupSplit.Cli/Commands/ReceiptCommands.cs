@@ -86,8 +86,9 @@ public static class ReceiptCommands
     {
         var items = new Option<string[]>("--item")
         {
-            Description = "A line on the bill, as <name>=<price>[x<qty>][@<user-id>[*<weight>],...], "
-                          + "repeatable. Claimants are optional here and can be set later with "
+            Description = "A line on the bill, as <name>=<price>[x<qty>][/notax][@<user-id>[*<weight>],...], "
+                          + "repeatable. /notax says the bill's tax was not charged on it. "
+                          + "Claimants are optional here and can be set later with "
                           + "`groupsplit receipts claim`.",
             AllowMultipleArgumentsPerToken = false
         };
@@ -107,19 +108,12 @@ public static class ReceiptCommands
                           + "equal the expense's amount."
         };
 
-        var restEven = new Option<bool>("--rest-even")
-        {
-            Description = "Every line you did not say who had is shared evenly instead of "
-                          + "being left unclaimed. The shape of most bills: a couple of "
-                          + "things were somebody's, and the rest was the table's."
-        };
-
         var bankRow = BankRow();
 
         var command = new Command("set",
             "Transcribe a bill, replacing whatever was there. Does not divide anything.")
         {
-            TransactionId, items, subtotal, tax, tip, total, restEven, bankRow
+            TransactionId, items, subtotal, tax, tip, total, bankRow
         };
 
         command.SetHandler(async (context, ct) =>
@@ -135,21 +129,6 @@ public static class ReceiptCommands
             }
 
             var lines = ReceiptItems.Parse("--item", given);
-
-            // Applied after parsing rather than inside it, because it is a statement about
-            // the bill and not about any one line: what it means is "the ones I did not
-            // mention". A line that already says how it divides -- claimed, or @even, or
-            // @payer -- is left exactly as typed.
-            if (parse.GetValue(restEven))
-            {
-                lines =
-                [
-                    .. lines.Select(line =>
-                        line is { Split: ReceiptItemSplit.Claimed, Claims.Count: 0 }
-                            ? line with { Split = ReceiptItemSplit.Evenly }
-                            : line)
-                ];
-            }
 
             // Both default rather than being required, because on an ordinary bill they are
             // the lines added up and then the tax and tip added on -- and making somebody
@@ -197,16 +176,9 @@ public static class ReceiptCommands
             AllowMultipleArgumentsPerToken = true
         };
 
-        var even = new Option<bool>("--even")
+        var command = new Command("claim", "Say who had one line of the bill.")
         {
-            Description = "Share this line evenly between everybody, naming nobody. "
-                          + "To put it on one person, name them with --user instead."
-        };
-
-        var command = new Command("claim",
-            "Say how one line divides: who had it, or evenly between everybody.")
-        {
-            TransactionId, itemId, users, even
+            TransactionId, itemId, users
         };
 
         command.SetHandler(async (context, ct) =>
@@ -214,24 +186,9 @@ public static class ReceiptCommands
             var parse = context.ParseResult;
             var named = parse.GetValue(users) ?? [];
 
-            // Refused rather than resolved by precedence, the way the rule flags are: a
-            // caller passing two of these has one of them in mind, and picking for them
-            // would store the other.
-            if (named.Length > 0 && parse.GetValue(even))
-            {
-                throw CliException.Input(
-                    "--user and --even describe different divisions.",
-                    "Pass one or the other: --user to name who had it, --even to make it "
-                    + "the table's.");
-            }
-
-            var split = parse.GetValue(even)
-                ? ReceiptItemSplit.Evenly
-                : ReceiptItemSplit.Claimed;
-
             // Through the item parser, so one line's claimants read exactly as they do
             // inside --item and a weight means the same thing in both places.
-            var claims = split == ReceiptItemSplit.Claimed
+            var claims = named.Length > 0
                 ? ReceiptItems.Parse("--user", [$"line={0m}@{string.Join(',', named)}"]).Single().Claims
                 : [];
 
@@ -239,7 +196,7 @@ public static class ReceiptCommands
                 .SetReceiptItemClaimsAsync(
                     parse.GetValue(TransactionId),
                     parse.GetValue(itemId),
-                    new SetReceiptItemClaimsRequest { Split = split, Claims = claims },
+                    new SetReceiptItemClaimsRequest { Claims = claims },
                     ct);
 
             context.Output.Write(receipt, Render);
@@ -415,7 +372,9 @@ public static class ReceiptCommands
             // The invariant, said once where it can be checked: the parts are cut from the
             // charge, so this is arithmetic the caller can follow rather than trust.
             new Markup($"\n[grey]Tax and tip are apportioned between the parts in proportion "
-                       + $"to the lines each holds. They come to {split.Parts.Sum(part => part.Amount)}.[/]\n"));
+                       + $"to the lines each holds. The parts come to "
+                       + $"{split.Parts.Sum(part => part.Amount)}, against a charge of "
+                       + $"{split.Charge}.[/]\n"));
     }
 
     private static Command Delete()
@@ -493,22 +452,19 @@ public static class ReceiptCommands
     }
 
     /// <summary>
-    /// How one line divides, in the width of a table cell.
+    /// Who had one line, in the width of a table cell.
     /// </summary>
     /// <remarks>
-    /// The three kinds have to be told apart here or <c>--rest-even</c> is invisible: a line
-    /// shared between everybody and a line nobody has claimed both have an empty claim list,
-    /// and only one of them is stopping the bill being divided.
+    /// An empty list is called out rather than left blank, because it is the one state that
+    /// stops the bill being divided -- and a blank cell in a column of names reads as a
+    /// rendering gap rather than as an answer.
     /// </remarks>
-    private static string Divided(ReceiptItemResponse item) => item.Split switch
-    {
-        ReceiptItemSplit.Evenly => "[green]everybody, evenly[/]",
-        _ when item.Claims.Count == 0 => "[yellow]nobody[/]",
-        _ => Markup.Escape(string.Join(", ", item.Claims.Select(claim =>
+    private static string Divided(ReceiptItemResponse item) => item.Claims.Count == 0
+        ? "[yellow]nobody[/]"
+        : Markup.Escape(string.Join(", ", item.Claims.Select(claim =>
             claim.Weight == 1
                 ? $"{claim.UserId} ({claim.Share})"
-                : $"{claim.UserId}*{claim.Weight} ({claim.Share})")))
-    };
+                : $"{claim.UserId}*{claim.Weight} ({claim.Share})")));
 
     private static IRenderable Render(ReceiptResponse receipt)
     {

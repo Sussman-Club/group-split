@@ -108,37 +108,24 @@ public class SeededReceiptTest
     }
 
     /// <summary>
-    /// Every line either names somebody or says it was the table's. A line that does neither
-    /// is the one thing that stops a bill being divided at all.
+    /// Every line of a bill that is going to be divided by names somebody.
     /// </summary>
+    /// <remarks>
+    /// Claims are the only thing that says how a line divides, so a line naming nobody cannot
+    /// be divided -- which the API refuses by name. Only the expenses' bills are checked: a
+    /// bill on an unfiled bank row is there to be split into parts, and a part whose category
+    /// divides evenly never reads the lines at all.
+    /// </remarks>
     [Fact]
-    public void Every_line_of_every_seeded_bill_is_accounted_for()
+    public void Every_line_of_every_seeded_expenses_bill_names_somebody()
     {
-        foreach (var (where, _, bill) in Bills())
+        foreach (var expense in Transactions().Where(tx => tx.Receipt is not null))
         {
-            foreach (var line in bill.Items)
+            foreach (var line in expense.Receipt!.Items)
             {
-                Assert.True(line.Shared || line.Had.Count > 0,
-                    $"'{line.Name}' on seeded {where} names nobody and is not marked Shared, "
-                    + "so the bill cannot be divided.");
-            }
-        }
-    }
-
-    /// <summary>
-    /// A line cannot be both the table's and somebody's: Shared names nobody by design, and
-    /// the claims beside it would be stored and never read.
-    /// </summary>
-    [Fact]
-    public void No_seeded_line_is_both_shared_and_claimed()
-    {
-        foreach (var (where, _, bill) in Bills())
-        {
-            foreach (var line in bill.Items.Where(line => line.Shared))
-            {
-                Assert.True(line.Had.Count == 0,
-                    $"'{line.Name}' on seeded {where} is marked Shared and also names people; "
-                    + "the names would be ignored.");
+                Assert.True(line.Had.Count > 0,
+                    $"'{line.Name}' on seeded expense '{expense.Name}' ({expense.Id}) names "
+                    + "nobody, so the bill cannot be divided.");
             }
         }
     }

@@ -159,8 +159,8 @@ exactly as they are.
 | Command | |
 | --- | --- |
 | `receipts show <transaction-id>` | The bill, its lines with their ids, who has claimed each, and whether it can be divided yet. `--bank-row` reads the id as an imported row's. |
-| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--rest-even` makes every unclaimed line the table's. `--subtotal` and `--total` default to the lines added up and the extras added on. `--bank-row` as above. |
-| `receipts claim <transaction-id> <item-id>` | Say how one line divides. `--user` repeatable names who had it; `--even` makes it the table's; neither un-claims it. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. `--bank-row` as above. |
+| `receipts claim <transaction-id> <item-id>` | Say who had one line. `--user` repeatable; naming nobody un-claims it. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
 | `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
@@ -176,22 +176,21 @@ groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
   --item "Beers=9.00x3@<omar>*2,<ana>"
 ```
 
-`@<ana>,<omar>` is a line shared evenly; `@<omar>*2,<ana>` is one where Omar had twice as
-much. A line with no `@` belongs to nobody yet, which is fine until you divide.
+`@<ana>,<omar>` is a line the two of them shared evenly; `@<omar>*2,<ana>` is one where Omar
+had twice as much. A line with no `@` belongs to nobody yet, which is fine until you divide.
 
-**`@even` is the important one.** It says the line was the table's without naming anybody --
-which naming everybody does not, because that says the same thing today and a different thing
-the moment somebody joins or leaves. It is also how you avoid typing four ids on the six
-lines of a bill where only the steak and the oysters were somebody's:
+**Claims are the only thing that says how a line divides.** A plate the table shared names
+everybody who had it:
 
 ```bash
-groupsplit receipts set 7c1e... --tip 8.00 --rest-even \
+groupsplit receipts set 7c1e... --tip 8.00 \
   --item "Ribeye=26.00@<ana>" --item "Oysters=14.00@<carl>" \
-  --item "Bread=12.00" --item "Paella=28.00"
+  --item "Bread=12.00@<ana>,<carl>,<omar>" --item "Paella=28.00@<ana>,<carl>,<omar>"
 ```
 
-`--rest-even` marks every line you did not claim. A line that already says how it divides is
-left as typed.
+A line could once be marked as the table's without naming anybody; that is gone. An itemised
+division says everybody owes what they had -- a bill you want divided evenly wants a category
+with an even rule instead, not an itemised one.
 
 `/notax` says the bill's tax was not charged on that line -- a warehouse receipt where the
 groceries are exempt and the clothes are not. Lines are taxable unless they say otherwise, so
@@ -206,7 +205,7 @@ What it refuses, before dividing rather than after:
 
 | Code | |
 | --- | --- |
-| `RECEIPT_ITEMS_UNCLAIMED` | A line belongs to nobody and is not marked `@even`. Carries `unclaimedItemNames`. Refused rather than spread over everybody: a forgotten line and one the table really did share look identical from here -- which is exactly what `@even` exists to tell apart. |
+| `RECEIPT_ITEMS_UNCLAIMED` | A line belongs to nobody. Carries `unclaimedItemNames`. Refused rather than spread over everybody: charging five people for one person's steak is the kind of wrong nobody checks for afterwards. |
 | `RECEIPT_DOES_NOT_ADD_UP` | The lines do not come to the subtotal, the parts do not come to the total, or the total is not the expense's amount. Carries the figures it compared. |
 | `RECEIPT_NOT_FOUND` | No bill on that expense -- or, when dividing, the expense is filed under an itemised rule and nobody has attached one. |
 
@@ -224,6 +223,9 @@ groupsplit receipts split <bank-row-id> \
   --part "Groceries=1-4@<group-id>/<category-id>" \
   --part "Clothes=5,6"
 ```
+
+Lines only need claims when the part's category divides *by the bill*; a part going to a
+category that divides evenly never reads them.
 
 A part is `<name>=<lines>[@<group-id>[/<category-id>]]`. `<lines>` is line numbers, ranges of
 them, or line ids -- the numbers are the first column of `receipts show`. The category nests

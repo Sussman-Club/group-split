@@ -739,29 +739,30 @@ needs: the groceries are exempt and the clothes are not, and weighing the tax ov
 would tax the bananas and let the jacket off. It is a flag rather than a rate because a flag
 is what the paper gives you -- one tax total at the bottom and a letter beside the lines it
 was charged on. Lines are taxable unless they say otherwise, so a restaurant bill never
-mentions it. Either side of the `@` reads the same: `Bread=4.00/notax@even` and
-`Bread=4.00@even/notax` are one line.
+mentions it. Either side of the `@` reads the same: `Bread=4.00/notax@<ana>` and
+`Bread=4.00@<ana>/notax` are one line.
 
-`@even` is the other thing a line can say: **the table's, rather than anybody's in
-particular.** That is not the same as naming everybody, which says the same thing today and a
-different thing the moment somebody joins or leaves -- and on the usual bill, where two
-things were somebody's and the rest was shared, it saves typing four ids on every other line.
-`--rest-even` says it for every line you did not claim:
+**Claimants are the only thing that says how a line divides.** A plate the table shared names
+everybody who had it:
 
 ```bash
-groupsplit receipts set 7c1e... --tip 8.00 --rest-even \
+groupsplit receipts set 7c1e... --tip 8.00 \
   --item "Ribeye=26.00@<ana>" \
   --item "Oysters=14.00@<carl>" \
-  --item "Bread and olives=12.00" \
-  --item "Paella=28.00"
+  --item "Bread and olives=12.00@<ana>,<carl>,<omar>" \
+  --item "Paella=28.00@<ana>,<carl>,<omar>"
 ```
 
-A line with no `@` and no `--rest-even` belongs to nobody yet, which is the ordinary state of
-a bill somebody is still working through:
+A line could once be marked as the table's without naming anybody. That is gone: an itemised
+division says *everybody owes what they had*, and a bill you want divided evenly wants a
+category with an even rule, not an itemised one.
+
+A line with no `@` belongs to nobody yet, which is the ordinary state of a bill somebody is
+still working through:
 
 ```bash
 groupsplit receipts claim 7c1e... <line-id> --user 3f25c1a8-...-444455556666
-groupsplit receipts claim 7c1e... <line-id> --even
+groupsplit receipts claim 7c1e... <line-id>                 # naming nobody un-claims it
 ```
 
 `receipts show` lists the lines with their ids, who has claimed each, and what each
@@ -793,12 +794,10 @@ after:
   total (`RECEIPT_DOES_NOT_ADD_UP`)
 - a total that is not the expense's amount (the same code -- the bill has to be the expense's
   own money)
-- any line nobody has claimed and that is not marked `@even` (`RECEIPT_ITEMS_UNCLAIMED`,
-  carrying the names)
+- any line nobody has claimed (`RECEIPT_ITEMS_UNCLAIMED`, carrying the names)
 
-The last one is refused rather than spread over everybody on purpose. A line somebody forgot
-to claim and a line the table really did share look identical from here, and quietly charging
-five people for one person's steak is the kind of wrong nobody checks for afterwards.
+The last one is refused rather than spread over everybody on purpose: quietly charging five
+people for one person's steak is the kind of wrong nobody checks for afterwards.
 
 ### Itemising before the charge is filed
 
@@ -835,8 +834,8 @@ Type the bill against the row, then say which lines are which:
 
 ```bash
 groupsplit receipts set <bank-row-id> --bank-row --tax 19.55 \
-  --item "Rotisserie chicken=8.99/notax@even" \
-  --item "Olive oil=18.50/notax@even" \
+  --item "Rotisserie chicken=8.99/notax" \
+  --item "Olive oil=18.50/notax" \
   --item "Fleece jacket=34.99@<you>" \
   --item "Running shoes=49.99@<you>"
 
@@ -846,6 +845,10 @@ groupsplit receipts split <bank-row-id> \
   --part "Groceries=1-2@<group-id>/<category-id>" \
   --part "Clothes=3,4"
 ```
+
+The grocery lines name nobody, and that is fine here: the Groceries category divides evenly,
+so nothing reads the lines. Claims only matter for a part whose category divides *by the
+bill*.
 
 A part reads `<name>=<lines>[@<group-id>[/<category-id>]]`. `<lines>` is line numbers, ranges
 of them, or line ids -- the numbers are the first column of `receipts show`, and ranges exist
