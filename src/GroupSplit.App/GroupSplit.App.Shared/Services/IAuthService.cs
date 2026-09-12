@@ -6,7 +6,8 @@ namespace GroupSplit.App.Shared.Services;
 public interface IAuthService
 {
     /// <param name="returnUrl">Local path to land on afterwards.</param>
-    Task Login(string? returnUrl = null, CancellationToken ct = default);
+    /// <param name="remember">Whether the session should survive the browser closing.</param>
+    Task Login(string? returnUrl = null, bool remember = false, CancellationToken ct = default);
 
     Task Logout(CancellationToken ct = default);
 }

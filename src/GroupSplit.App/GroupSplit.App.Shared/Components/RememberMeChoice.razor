@@ -1,0 +1,35 @@
+@*
+    "Keep me signed in", and the period it promises, in one place.
+
+    Every screen that starts a sign-in shows this -- the hand-off at /login and the
+    two invite landings -- because an option that appears on one route into the app
+    and not the others is a worse promise than no option at all.
+
+    The number here is copy. What actually ends the session is
+    RememberedSessionLifetime on the server, and the two have to say the same thing.
+*@
+
+<div style="width: 100%; text-align: start">
+    <MudCheckBox T="bool"
+                 Value="Value"
+                 ValueChanged="ValueChanged"
+                 Color="Color.Primary"
+                 Dense="true"
+                 Disabled="Disabled"
+                 Label="Keep me signed in" />
+    <p class="gs-muted" style="margin: 0 0 0 32px; font-size: .75rem">
+        Stays signed in on this browser for @Days days. Uncheck to sign out automatically when you close the browser.
+    </p>
+</div>
+
+@code {
+    /// <summary>Kept in step with <c>AuthenticationExtensions.RememberedSessionLifetime</c>.</summary>
+    public const int Days = 30;
+
+    [Parameter] public bool Value { get; set; }
+
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+
+    /// <summary>Set once the hand-off is under way, so the answer cannot change after it was sent.</summary>
+    [Parameter] public bool Disabled { get; set; }
+}

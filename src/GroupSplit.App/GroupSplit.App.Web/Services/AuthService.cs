@@ -5,9 +5,9 @@ namespace GroupSplit.App.Web.Services;
 
 public class AuthService(NavigationManager nav) : IAuthService
 {
-    public Task Login(string? returnUrl, CancellationToken ct)
+    public Task Login(string? returnUrl, bool remember, CancellationToken ct)
     {
-        nav.NavigateTo(AuthRoutes.Login(returnUrl), forceLoad: true);
+        nav.NavigateTo(AuthRoutes.Login(returnUrl, remember), forceLoad: true);
         return Task.CompletedTask;
     }
 

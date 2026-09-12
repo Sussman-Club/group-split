@@ -6,6 +6,12 @@
     Credentials are never collected here. Keycloak owns the forms, which is what
     keeps SSO, MFA, password policy and brute-force protection working; this
     component only explains where the user is going and gets them there.
+
+    The one thing it does collect is "Keep me signed in", and that is why the
+    hand-off waits for a click rather than redirecting by itself: Keycloak has a
+    checkbox of its own but keeps the answer, so an app federated to it cannot
+    find out which was chosen, and the answer has to be given on this side of the
+    redirect or not at all.
 *@
 
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
@@ -34,15 +40,15 @@
                 </div>
             }
 
-            @* Always rendered: the automatic redirect needs interactivity, and this
-               is also the way back if the user returns via the browser's history. *@
+            <RememberMeChoice @bind-Value="_remember" Disabled="_redirecting" />
+
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
                        FullWidth
                        Size="Size.Large"
                        Class="gs-btn-pill"
                        EndIcon="@Icons.Material.Rounded.ArrowForward"
-                       Disabled="_redirecting && Error is null"
+                       Disabled="_redirecting"
                        OnClick="GoAsync">
                 @ActionLabel
             </MudButton>
@@ -63,6 +69,7 @@
     [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
 
     private bool _redirecting;
+    private bool _remember;
     private string? Error { get; set; }
 
     protected override void OnInitialized()
@@ -70,27 +77,18 @@
         Error = ReadQueryValue("error");
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private async Task GoAsync()
     {
-        // Only hand off automatically once, and never on top of an error --
-        // bouncing straight back to the identity provider would hide why the
-        // previous attempt failed and can loop.
-        if (!firstRender || _redirecting || Error is not null)
+        // The hand-off is a full page load that does not come back, so a second click
+        // before the browser has left would start a second one.
+        if (_redirecting)
         {
             return;
         }
 
         _redirecting = true;
-        StateHasChanged();
 
-        await GoAsync();
-    }
-
-    private async Task GoAsync()
-    {
-        var returnUrl = ReadQueryValue("returnUrl");
-
-        await AuthService.Login(returnUrl);
+        await AuthService.Login(ReadQueryValue("returnUrl"), _remember);
     }
 
     private string? ReadQueryValue(string key)
