@@ -775,7 +775,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Record")
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
             .ClickAsync(new MouseEventArgs());
 
         _commands.Verify(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
@@ -862,7 +862,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Record")
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
             .ClickAsync(new MouseEventArgs());
 
         // Asked about the amounts themselves, and asked not to divide them again -- which is
@@ -933,7 +933,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(version));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Record")
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
             .ClickAsync(new MouseEventArgs());
 
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
