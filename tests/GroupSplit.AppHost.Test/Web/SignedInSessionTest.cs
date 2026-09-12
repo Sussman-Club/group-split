@@ -38,6 +38,36 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         TimeSpan.FromSeconds(KeycloakAdmin.AccessTokenLifespanSeconds + 15);
 
     /// <summary>
+    /// The reported bug, from the browser's side: ticking "Keep me signed in" changed
+    /// nothing, because the ticket cookie was never marked to persist and the browser threw
+    /// it away when it closed, whatever had been ticked. Playwright reports a cookie with no
+    /// expiry -- one that dies with the browser -- as -1.
+    /// </summary>
+    [Fact(Timeout = 240_000)]
+    public async Task Being_kept_signed_in_writes_a_cookie_the_browser_keeps()
+    {
+        await SignInAsync(remember: true);
+
+        var ticket = await TicketCookieAsync();
+
+        Assert.True(
+            ticket.Expires > 0,
+            "the ticket cookie has no expiry, so the browser drops it on close");
+    }
+
+    /// <summary>
+    /// The other half of the promise, and the easier one to break while fixing the first:
+    /// unticked, the session still has to end with the browser.
+    /// </summary>
+    [Fact(Timeout = 240_000)]
+    public async Task Without_the_tick_the_cookie_still_dies_with_the_browser()
+    {
+        await SignInAsync();
+
+        Assert.Equal(-1, (await TicketCookieAsync()).Expires);
+    }
+
+    /// <summary>
     /// The whole authenticated path in one assertion. A sign-in that stored no tokens, a
     /// store the API client cannot read, or a token the API rejects all land here as the
     /// page never reaching its own empty state.
@@ -180,18 +210,28 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     private string Url(string path) =>
         new Uri(_appHost.Application.GetEndpoint("web"), path).AbsoluteUri;
 
+    /// <summary>The app's own ticket cookie, which is what being signed in amounts to.</summary>
+    private async Task<BrowserContextCookiesResult> TicketCookieAsync() =>
+        Assert.Single(await Context.CookiesAsync(), cookie => cookie.Name == "GroupSplit.Auth");
+
     /// <summary>
     /// Signs in as an account made for this test, through Keycloak's own form, and waits
     /// until the page it was sent back to has rendered.
     /// </summary>
-    private async Task SignInAsync()
+    /// <param name="remember">
+    /// What the checkbox on the app's sign-in page sets. Passed on the query string rather
+    /// than ticked, because what these tests are for is the cookie that comes back -- the
+    /// checkbox reaching this parameter is covered by <c>AuthHandoffTest</c>.
+    /// </param>
+    private async Task SignInAsync(bool remember = false)
     {
         var email = await _appHost.Keycloak.CreateAccountAsync(TestContext.Current.CancellationToken);
 
         // Straight at the challenge rather than through the app's own sign-in page, which
-        // only navigates here anyway.
+        // has nothing to add here beyond the parameter above.
         await Page.GotoAsync(
-            Url("auth/login?returnUrl=/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+            Url($"auth/login?returnUrl=/groups{(remember ? "&remember=true" : string.Empty)}"),
+            new PageGotoOptions { Timeout = OperationTimeoutMs });
 
         await Page.FillAsync("#username", email, new PageFillOptions { Timeout = OperationTimeoutMs });
         await Page.FillAsync(
