@@ -2260,10 +2260,15 @@ html:not([data-gs-ready]) .gs-group-card {
     category, the payer, the date and the merchant are chips carrying the answers they
     already have. It replaces eight fields of equal weight spread over two steps.
 */
+/* Wraps, at every width. The chips were narrowed -- the caret off each one, tighter
+   padding, a smaller gap -- so that five of them usually sit on one line in the dialog,
+   which is what stops the row looking ragged. Usually, not always: a long name is a long
+   name, and the second row is the right answer to it. Holding one line by scrolling
+   sideways would have put a decision out of sight to keep a silhouette. */
 .gs-chip-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
 }
 
 /*
@@ -2279,7 +2284,7 @@ html:not([data-gs-ready]) .gs-group-card {
     align-items: center;
     gap: 6px;
     height: 36px;
-    padding: 0 12px;
+    padding: 0 10px;
     border-radius: var(--gs-radius-pill);
     background: var(--gs-surface-2);
     border: 1px solid var(--gs-line-strong);
@@ -4025,6 +4030,70 @@ html:not([data-gs-ready]) .gs-group-card {
 
     .gs-card-pad {
         padding: 14px;
+    }
+
+    /*
+        The expense dialogs, as a sheet.
+
+        On a phone they were a card floating in the middle of the screen with the save
+        button under four people's shares, so recording an expense ended in a scroll to
+        find the only thing you came to press. A sheet instead: the whole screen, the
+        fields scrolling, and the actions held at the bottom where a thumb already is.
+    */
+    /* Out-specifies MudBlazor's own `.mud-dialog-container > .mud-dialog`, which insets
+       a dialog by 32px a side whatever the screen -- on a phone that is a card with a
+       hairline of page showing around it rather than a sheet. */
+    .mud-dialog-container > .mud-dialog.gs-sheet {
+        max-width: 100%;
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        margin: 0;
+        /* !important to match the one on .mud-dialog above, which is how this file
+           already had to talk to MudBlazor's own radius. A sheet that covers the screen
+           and keeps 24px corners shows four little wedges of backdrop. */
+        border-radius: 0 !important;
+        border: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .gs-sheet .mud-dialog-content {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Held at the bottom, and the primary takes the width that is left: the thing
+       somebody means to press is the biggest thing on the row, and Cancel is a place a
+       thumb reaches by accident. */
+    .gs-sheet .mud-dialog-actions {
+        position: sticky;
+        bottom: 0;
+        gap: 10px;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        background: var(--gs-surface);
+        border-top: 1px solid var(--gs-line);
+    }
+
+    .gs-sheet .mud-dialog-actions .mud-button-root {
+        height: 48px;
+        flex: 0 0 auto;
+    }
+
+    .gs-sheet .mud-dialog-actions .mud-button-root:not(:only-child):last-child {
+        flex: 1 1 auto;
+    }
+
+    /* Forty is the touch floor, and a row of chips is the one control here that is all
+       target and no label. */
+    .gs-expense-chip {
+        height: 40px;
+        padding: 0 13px;
+    }
+
+    .gs-chip-row {
+        gap: 7px;
     }
 
     /* Hover-revealed actions never reveal on a touch screen, so they are always on --

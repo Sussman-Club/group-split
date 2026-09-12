@@ -12,7 +12,11 @@
     have to do the bookkeeping.
 *@
 
-<MudDialog>
+@* gs-sheet: the full screen on a phone, with the actions held at the bottom. Every
+   dialog that records money wears it -- filing a row and settling up end in the
+   same press as adding an expense, and a save button below a scroll is the same
+   nuisance whichever dialog it is in. *@
+<MudDialog Class="gs-sheet">
     <TitleContent>
         <MudText Typo="Typo.h5">Settle with @Person.UserName</MudText>
     </TitleContent>
