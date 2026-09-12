@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 using GroupSplit.Data;
+using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders;
 using GroupSplit.Seeder.Seeders.DTOs;
@@ -90,6 +92,92 @@ public class TransactionSeederTest
         Assert.Contains(dto.Id.ToString(), refusal.Message);
     }
 
+    /// <summary>
+    /// A seeded bill is saved, not just divided by.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Expense.Bill"/> is not a mapped navigation -- it is how the splitter is
+    /// handed the whole receipt -- so a bill attached while mapping divides the expense and
+    /// then vanishes unless the seeder adds it. Nothing about the demo looks wrong when that
+    /// happens: the balances are itemised and correct, and every bill behind them is missing,
+    /// which is only visible as an expense whose bill section never appears.
+    /// </remarks>
+    [Fact]
+    public void A_seeded_bill_is_saved_beside_its_expense()
+    {
+        var db = Context();
+        var expense = new Expense
+        {
+            Id = Guid.NewGuid(),
+            Amount = 40m,
+            Currency = Currencies.Default,
+            Name = "Dinner",
+            DateTime = Now,
+            Bill = SeededBill()
+        };
+
+        Added(db, expense);
+
+        var bill = Assert.Single(db.ChangeTracker.Entries<Receipt>().Select(entry => entry.Entity));
+
+        Assert.Equal(40m, bill.Total);
+        Assert.All(bill.Items, line => Assert.Equal(expense.Id, line.ExpenseId));
+    }
+
+    /// <summary>An expense with no bill -- which is nearly all of them -- adds none.</summary>
+    [Fact]
+    public void An_expense_with_no_bill_adds_none()
+    {
+        var db = Context();
+
+        Added(db, new Expense
+        {
+            Id = Guid.NewGuid(),
+            Amount = 14.02m,
+            Currency = Currencies.Default,
+            Name = "Coffee",
+            DateTime = Now
+        });
+
+        Assert.Empty(db.ChangeTracker.Entries<Receipt>());
+        Assert.Single(db.ChangeTracker.Entries<Expense>());
+    }
+
+    private static Receipt SeededBill()
+    {
+        var receipt = new Receipt { Subtotal = 40m, Total = 40m };
+
+        receipt.Items.Add(new ReceiptItem
+        {
+            Name = "Bistecca", NormalizedName = "bistecca", TotalPrice = 40m
+        });
+
+        return receipt;
+    }
+
+    /// <summary>
+    /// A context nothing ever saves: what is under test is what the seeder adds, so these
+    /// read the change tracker. The bill's own lines carry the expense's id, which is what
+    /// ties them together once it is saved for real.
+    /// </summary>
+    private static AppDbContext Context() =>
+        new(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
+    private static void Added(AppDbContext db, Expense expense)
+    {
+        foreach (var line in expense.Bill?.Items ?? [])
+            line.ExpenseId = expense.Id;
+
+        new Probe(db, new FixedClock(Now), new FakeSource([]))
+            .Add(expense, new TransactionSeedDto
+            {
+                Id = expense.Id, PayerId = Guid.NewGuid(), Amount = expense.Amount,
+                Name = expense.Name, DateTime = Now
+            });
+    }
+
     private static DateTimeOffset When(TransactionSeedDto dto) =>
         new Probe(new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().Options),
             new FixedClock(Now),
@@ -104,6 +192,9 @@ public class TransactionSeederTest
         : TransactionSeeder(db, NullLogger<TransactionSeeder>.Instance, null!, clock, source)
     {
         public DateTimeOffset On(TransactionSeedDto dto) => When(dto);
+
+        public void Add(Expense expense, TransactionSeedDto dto) =>
+            AddEntityAsync(expense, dto).GetAwaiter().GetResult();
     }
 
     /// <summary>A clock that does not move, so a relative date is a fixed expectation.</summary>

@@ -109,6 +109,60 @@ public class BankConnectionSeeder(
     }
 
     /// <summary>
+    /// Adds the connection and, alongside it, the bills for the rows that have one.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in <c>MapAsync</c>, and that is the whole reason this override
+    /// exists: a mapped connection that turns out to be seeded already is dropped without
+    /// ever being added, so a bill added while mapping would be a bill added on every run.
+    /// <para>
+    /// A receipt is not reachable through the connection's own graph -- a bank row does not
+    /// navigate to its bill, on purpose, since the row is a fact from the bank and the bill
+    /// is something a person typed. So it is added on its own with the row's id on it.
+    /// </para>
+    /// </remarks>
+    protected override Task AddEntityAsync(
+        BankConnection entity, BankConnectionSeedDto dto, CancellationToken ct = default)
+    {
+        var bills = dto.Accounts
+            .SelectMany(account => account.Transactions)
+            .Where(row => row.Receipt is not null)
+            .Select(row => Bill(row));
+
+        DbContext.Set<Receipt>().AddRange(bills);
+
+        return base.AddEntityAsync(entity, dto, ct);
+    }
+
+    /// <summary>
+    /// The bill on a seeded row, checked against the charge it claims to be.
+    /// </summary>
+    /// <remarks>
+    /// Thrown rather than logged, because there is nothing useful to seed in its place. A
+    /// bill whose lines do not come to the charge cannot be filed and cannot be split --
+    /// both refuse it by name -- so a demo that carried on would leave a row that looks
+    /// ready and fails the moment anybody touches it, which is worse than a seed run that
+    /// stops and says which row it was.
+    /// </remarks>
+    private static Receipt Bill(BankTransactionSeedDto row)
+    {
+        // Null-forgiving: the caller filtered on it, and a nullable parameter here would only
+        // move the same fact somewhere it reads as an open question.
+        var receipt = SeededBill.From(row.Receipt!, expenseId: null);
+
+        if (receipt.Total != row.Amount)
+        {
+            throw new InvalidOperationException(
+                $"Seeded bank row {row.Id} ({row.Description}) is {row.Amount:0.00}, but its " +
+                $"bill comes to {receipt.Total:0.00}.");
+        }
+
+        receipt.BankTransactionId = row.Id;
+
+        return receipt;
+    }
+
+    /// <summary>
     /// The seeded shop this row names, or null for one <c>merchants.json</c> does not list.
     /// Looked up and never created: <see cref="MerchantSeeder"/> owns that table, because
     /// this seeder and the expenses' one run at the same time and both point at it.

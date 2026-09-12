@@ -135,6 +135,122 @@
             "ProviderCategoryDetailed": "MEDICAL_PHARMACIES_AND_SUPPLEMENTS",
             "PaymentChannel": "in store",
             "City": "Lisbon"
+          },
+          {
+            "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F642",
+            "DaysAgo": 2,
+            "AuthorizedDaysAgo": 4,
+            "Amount": 158.07,
+            "Description": "COSTCO WHOLESALE 718",
+            "MerchantName": "Costco",
+            "ProviderCategory": "GENERAL_MERCHANDISE",
+            "ProviderCategoryDetailed": "GENERAL_MERCHANDISE_SUPERSTORES",
+            "PaymentChannel": "in store",
+            "City": "Lisbon",
+            "Receipt": {
+              "Tax": 19.55,
+              "Tip": 0.0,
+              "Items": [
+                {
+                  "Name": "Rotisserie chicken",
+                  "Price": 8.99,
+                  "Taxable": false,
+                  "Shared": true
+                },
+                {
+                  "Name": "Olive oil 2L",
+                  "Price": 18.5,
+                  "Taxable": false,
+                  "Shared": true
+                },
+                {
+                  "Name": "Coffee beans 1kg",
+                  "Price": 14.25,
+                  "Taxable": false,
+                  "Shared": true
+                },
+                {
+                  "Name": "Kitchen roll",
+                  "Price": 11.8,
+                  "Quantity": 12,
+                  "Taxable": false,
+                  "Shared": true
+                },
+                {
+                  "Name": "Fleece jacket",
+                  "Price": 34.99,
+                  "Had": {
+                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+                  }
+                },
+                {
+                  "Name": "Running shoes",
+                  "Price": 49.99,
+                  "Had": {
+                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F643",
+            "DaysAgo": 4,
+            "AuthorizedDaysAgo": 5,
+            "Amount": 126.5,
+            "Description": "TRATTORIA DA ENZO",
+            "MerchantName": "Trattoria da Enzo",
+            "ProviderCategory": "FOOD_AND_DRINK",
+            "ProviderCategoryDetailed": "FOOD_AND_DRINK_RESTAURANT",
+            "PaymentChannel": "in store",
+            "City": "Lisbon",
+            "Receipt": {
+              "Tax": 0.0,
+              "Tip": 12.0,
+              "Items": [
+                {
+                  "Name": "Bistecca",
+                  "Price": 28.0,
+                  "Had": {
+                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+                  }
+                },
+                {
+                  "Name": "Vongole",
+                  "Price": 19.5,
+                  "Had": {
+                    "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+                  }
+                },
+                {
+                  "Name": "Gnocchi",
+                  "Price": 15.0,
+                  "Had": {
+                    "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+                  }
+                },
+                {
+                  "Name": "Polpo",
+                  "Price": 21.0,
+                  "Had": {
+                    "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+                  }
+                },
+                {
+                  "Name": "Bottle of white",
+                  "Price": 22.0,
+                  "Had": {
+                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+                    "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+                  }
+                },
+                {
+                  "Name": "Tiramisu",
+                  "Price": 9.0,
+                  "Shared": true
+                }
+              ]
+            }
           }
         ]
       }

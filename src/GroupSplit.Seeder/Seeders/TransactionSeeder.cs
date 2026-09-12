@@ -78,7 +78,7 @@ public class TransactionSeeder(
         // one the navigation does not already carry. Attached here, a seeded expense divides
         // by its own bill on the first pass with nothing written yet.
         if (dto.Receipt is { } bill)
-            expense.Bill = Bill(bill, expense);
+            expense.Bill = SeededBill.From(bill, expense.Id);
 
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.
@@ -88,54 +88,28 @@ public class TransactionSeeder(
     }
 
     /// <summary>
-    /// The seeded bill, with its figures worked out from its lines.
+    /// Adds the expense and, for the ones that have a bill, the bill.
     /// </summary>
     /// <remarks>
-    /// The subtotal is the lines added up and the total is that plus the extras, so the seed
-    /// file cannot state a receipt that disagrees with itself. What it can still state is one
-    /// that disagrees with the <em>expense</em>, and that is left to fail: the division
-    /// refuses a bill whose total is not the expense's amount, by name and with both figures,
-    /// which is a better thing for a seed run to say than a balance nobody checked.
+    /// The bill needs adding by hand because <see cref="Expense.Bill"/> is not a mapped
+    /// navigation -- it is how the splitter is handed the whole receipt, and a saved expense
+    /// reaches its lines through <see cref="Expense.ReceiptItems"/> instead. So a receipt
+    /// attached while mapping divides the expense and is then dropped on the floor, which is
+    /// the quietest possible failure: the balances are right, every itemised expense in the
+    /// demo has no bill behind it, and the app's own bill section never appears.
+    /// <para>
+    /// Here rather than in <c>MapAsync</c> for the same reason the bank rows' bills are: an
+    /// expense already seeded is mapped and then dropped without being added, and a receipt
+    /// added while mapping would be a receipt added on every run.
+    /// </para>
     /// </remarks>
-    private static Receipt Bill(ReceiptSeedDto dto, Expense expense)
+    protected override Task AddEntityAsync(
+        Expense entity, TransactionSeedDto dto, CancellationToken ct = default)
     {
-        var subtotal = dto.Items.Sum(line => line.Price);
+        if (entity.Bill is { } bill)
+            DbContext.Set<Receipt>().Add(bill);
 
-        var receipt = new Receipt
-        {
-            Subtotal = subtotal,
-            Tax = dto.Tax,
-            Tip = dto.Tip,
-            Total = subtotal + dto.Tax + dto.Tip
-        };
-
-        foreach (var line in dto.Items)
-        {
-            var item = new ReceiptItem
-            {
-                Name = line.Name,
-                NormalizedName = line.Name.Trim().ToLowerInvariant(),
-                TotalPrice = line.Price,
-                Quantity = line.Quantity,
-                UnitPrice = line.Quantity == 0
-                    ? line.Price
-                    : decimal.Round(line.Price / line.Quantity, 2),
-                Division = line.Shared
-                    ? ReceiptItemDivision.Evenly
-                    : ReceiptItemDivision.Claimed
-            };
-
-            // A seeded bill is one purchase, so every line is the expense's. A charge that
-            // is two purchases is split from the inbox, which demo data has no way to reach.
-            item.ExpenseId = expense.Id;
-
-            foreach (var (userId, weight) in line.Had)
-                item.Claims.Add(new ReceiptItemClaim { UserId = userId, Weight = weight });
-
-            receipt.Items.Add(item);
-        }
-
-        return receipt;
+        return base.AddEntityAsync(entity, dto, ct);
     }
 
     /// <summary>
