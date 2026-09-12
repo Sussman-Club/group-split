@@ -10,6 +10,12 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The realm the app has to agree with about how long a remembered session lasts.
+         Copied in rather than read out of the checkout so the assertion runs the same
+         way from a test binary as it does from here. See RememberMeTest. -->
+    <Content Include="..\..\src\GroupSplit.AppHost\Assets\keycloak\realms.json"
+             Link="Authentication\realms.json"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
