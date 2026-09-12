@@ -2,6 +2,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,21 @@ public interface IExpenseSplitter
     /// says when that is null.
     /// </summary>
     Task WriteSplitsAsync(Expense expense, IReadOnlyList<SplitInput>? given, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether this expense would be divided by the bill attached to it.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the version the expense would actually be divided by -- the one it was
+    /// written under when that still belongs to its category's rule, and otherwise the
+    /// rule's current one. That distinction is the whole reason this lives here rather than
+    /// being worked out by the caller: a rule edited from even to itemised leaves an older
+    /// expense still pointing at the even version, so "the rule is itemised now" and "this
+    /// expense divides by its bill" are different questions with different answers, and
+    /// answering the first while acting on the second stores an even split and reports an
+    /// itemised one.
+    /// </remarks>
+    Task<bool> DividesByItsBill(Expense expense, CancellationToken ct = default);
 
     /// <summary>
     /// Whether the shares the expense holds are the ones its own rule produces -- that is,
@@ -66,7 +82,7 @@ public class ExpenseSplitter(
     {
         ArgumentNullException.ThrowIfNull(expense);
 
-        var payerId = expense.User?.Id ?? expense.UserId;
+        var payerId = expense.Payer;
 
         // A personal expense has nobody to divide with, so there is nothing a stated
         // division could say that is not either "all of it, to me" -- which is what it gets
@@ -104,11 +120,11 @@ public class ExpenseSplitter(
                 expense.SplitRuleVersionId = null;
             }
 
-            Replace(expense, stated);
+            Replace(expense, stated, members);
             return;
         }
 
-        Replace(expense, await DividedByRule(expense, payerId, members, ct));
+        Replace(expense, await DividedByRule(expense, payerId, members, ct), members);
     }
 
     /// <summary>
@@ -131,9 +147,11 @@ public class ExpenseSplitter(
 
         var rule = version.SplitRule;
 
+        await LoadBillIfItDividesByOne(expense, version, ct);
+
         try
         {
-            return splitRules.Divide(version, expense.Amount, payerId, members);
+            return splitRules.Divide(version, expense, members);
         }
         // Narrowed away from ArgumentNullException, which derives from this and means
         // something else entirely: SplitCalculator.Divide opens by refusing a null weight
@@ -193,9 +211,12 @@ public class ExpenseSplitter(
         if (expense.Splits.Count == 0)
             return false;
 
-        var payerId = expense.User?.Id ?? expense.UserId;
+        var payerId = expense.Payer;
         var members = await MembersOf(expense, ct);
         var version = await HeldVersion(expense, ct);
+
+        if (version is not null)
+            await LoadBillIfItDividesByOne(expense, version, ct);
 
         IReadOnlyList<SplitAmount> wouldBe;
 
@@ -206,18 +227,81 @@ public class ExpenseSplitter(
             // not one a person typed, and it has to follow the amount the same way.
             wouldBe = version is null
                 ? SplitCalculator.DivideEvenly(expense.Amount, payerId, members)
-                : splitRules.Divide(version, expense.Amount, payerId, members);
+                : splitRules.Divide(version, expense, members);
         }
+        // A version that cannot divide right now explains nothing, so the shares are the
+        // expense's own as far as this is concerned. Refusing here would turn "which of the
+        // two is it" into an error on a path that only wanted to know whether to leave the
+        // shares alone.
         catch (ArgumentException)
         {
-            // A version that can no longer divide between anybody explains nothing, so the
-            // shares are the expense's own as far as this is concerned. Refusing here would
-            // turn "which of the two is it" into an error on a path that only wanted to
-            // know whether to leave the shares alone.
+            // A weighted rule left naming nobody: everybody it named has gone.
+            return false;
+        }
+        catch (UnprocessableException)
+        {
+            // An itemised rule with no bill to read, one whose lines are not all claimed yet,
+            // or one whose total no longer matches the expense. All are ordinary states of an
+            // expense somebody is still working on, and this is asked on the way into *every*
+            // edit -- so letting one escape would make renaming a half-finished dinner fail
+            // with a complaint about its receipt.
+            return false;
+        }
+        catch (ValidationException)
+        {
+            // The same thing said with a different status. A bill carrying a claim with no
+            // share in it is refused as a 400, because that code answers 400 everywhere else
+            // -- and the reclassification quietly took it out of the arm above, since these
+            // are siblings rather than one deriving from the other. Renaming such an expense
+            // started failing with RECEIPT_INVALID.
             return false;
         }
 
         return IsWhatItAlreadyHolds(expense, wouldBe);
+    }
+
+    /// <summary>
+    /// Puts the expense's bill on it, for a version that divides by one.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the callers, for the reason <see cref="HeldVersion"/> re-reads a
+    /// version it was handed: a handler is given whatever the caller loaded, and there are
+    /// several callers. An itemised division reads <see cref="Expense.Receipt"/>, so an
+    /// expense that reached this without one -- which is every expense TransactionService
+    /// loads, since nothing else needs it -- would divide as though it had no bill and be
+    /// refused for not having one.
+    /// <para>
+    /// Only for the kind that needs it. Loading a receipt and its lines and their claims on
+    /// every division would be three joins bought for the rules that never look at them.
+    /// </para>
+    /// <para>
+    /// By id rather than through the navigation, and skipped when the navigation is already
+    /// filled: a caller that did include the bill has the tracked instance, and re-reading
+    /// would not improve on it.
+    /// </para>
+    /// </remarks>
+    private async Task LoadBillIfItDividesByOne(
+        Expense expense, SplitRuleVersion version, CancellationToken ct)
+    {
+        if (version is not ItemizedSplitRuleVersion || expense.Bill is not null)
+            return;
+
+        // The whole bill, found by the lines that name this expense -- not just those lines.
+        // How much of the tax and the tip is this part's depends on what the other parts of
+        // the same charge hold, so a receipt loaded with half its items would divide a
+        // warehouse run as though the jacket had never been on it.
+        expense.Bill = await dbContext.Set<Receipt>()
+            .Include(receipt => receipt.Items)
+            .ThenInclude(item => item.Claims)
+            .FirstOrDefaultAsync(
+                receipt => receipt.Items.Any(item => item.ExpenseId == expense.Id), ct);
+    }
+
+    public async Task<bool> DividesByItsBill(Expense expense, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(expense);
+
+        return await VersionFor(expense, ct) is ItemizedSplitRuleVersion;
     }
 
     /// <summary>The version the expense was written under, loaded if it is not already.</summary>
@@ -245,6 +329,55 @@ public class ExpenseSplitter(
         // 500 on an edit rather than a false.
         return stated.All(share => expense.Splits.Any(stored =>
             stored.UserId == share.UserId && stored.Amount == share.Amount));
+    }
+
+    /// <summary>
+    /// The two things that must be true of any division before it is stored, whoever worked
+    /// it out: it sums to the expense's amount, and every share belongs to somebody the
+    /// expense can be divided between.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in <see cref="AsStated"/>, which is where both used to live, and the
+    /// move is the point. <see cref="AsStated"/> runs on one path -- amounts a caller sent --
+    /// so a handler that divided by something other than the expense's amount, or that named
+    /// somebody who is no longer a participant, reached the table unchecked. Every kind that
+    /// came before happened not to: they divide <c>transaction.Amount</c> by construction and
+    /// <c>WeightedSplitRuleHandler.Among</c> drops departed members. An itemised rule divides
+    /// its <em>receipt's</em> total and names whoever ate, so it is the first that can do
+    /// both, and the next kind should not have to remember either.
+    /// <para>
+    /// A defect rather than a refusal when it is a rule's doing: the caller of a create or an
+    /// edit did nothing wrong, and there is no field for them to correct. The stated path
+    /// still refuses first, in <see cref="AsStated"/>, with the figures and the shortfall a
+    /// dialog needs -- so this is reached by a person only when a rule produced the division,
+    /// and then what it reports is which rule.
+    /// </para>
+    /// </remarks>
+    private static void RefuseIfItIsNotAStorableDivision(
+        Expense expense, IReadOnlyList<SplitAmount> splits, IReadOnlyCollection<Guid> members)
+    {
+        var total = splits.Sum(split => split.Amount);
+
+        if (total != expense.Amount)
+            throw new UnprocessableException(ErrorCodes.SplitsDoNotSumToAmount,
+                    $"The shares add up to {total}, but the expense is {expense.Amount}.")
+                .WithExtension("amount", expense.Amount)
+                .WithExtension("splitTotal", total)
+                .WithExtension("difference", expense.Amount - total);
+
+        var strangers = splits
+            .Where(split => !members.Contains(split.UserId))
+            .Select(split => split.UserId)
+            .ToList();
+
+        if (strangers.Count > 0)
+            throw new ConflictException(ErrorCodes.SplitUserNotInGroup,
+                    "The division gives a share to somebody who is neither a member of the " +
+                    "group nor invited to it.")
+                // Named, because on this path nobody typed them: they are on the expense's
+                // bill or in its rule, and which person it is is the whole of what a caller
+                // needs to go and fix.
+                .WithExtension("userIds", strangers);
     }
 
     /// <summary>
@@ -299,7 +432,7 @@ public class ExpenseSplitter(
         var groupId = expense.Group?.Id ?? expense.GroupId;
 
         if (groupId is null)
-            return [expense.User?.Id ?? expense.UserId];
+            return [expense.Payer];
 
         return await participants.IdsOf(groupId.Value, ct);
     }
@@ -377,8 +510,11 @@ public class ExpenseSplitter(
     /// one to INSERT. On a create the expense is still detached and the cascade from Add
     /// does the right thing on its own.
     /// </remarks>
-    private void Replace(Expense expense, IReadOnlyList<SplitAmount> splits)
+    private void Replace(
+        Expense expense, IReadOnlyList<SplitAmount> splits, IReadOnlyCollection<Guid> members)
     {
+        RefuseIfItIsNotAStorableDivision(expense, splits, members);
+
         var expenseIsTracked = dbContext.Entry(expense).State is not EntityState.Detached;
 
         // Materialised first: marking a child deleted makes EF take it out of this very

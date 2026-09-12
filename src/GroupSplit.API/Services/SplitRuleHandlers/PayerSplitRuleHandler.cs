@@ -1,4 +1,5 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 
 namespace GroupSplit.API.Services.SplitRuleHandlers;
@@ -14,8 +15,8 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 public class PayerSplitRuleHandler : ISplitRuleHandler<PayerSplitRuleVersion>, ISplitRuleFactory<PayerSplitRuleDto>
 {
     public IReadOnlyList<SplitAmount> Divide(
-        PayerSplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members) =>
-        [new SplitAmount(payerId, amount)];
+        PayerSplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members) =>
+        [new SplitAmount(transaction.Payer, transaction.Amount)];
 
     public string? Invalid(PayerSplitRuleVersion ruleVersion) => null;
 

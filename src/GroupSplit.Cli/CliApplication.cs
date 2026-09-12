@@ -27,6 +27,7 @@ public static class CliApplication
         root.Subcommands.Add(SettleCommands.Build());
         root.Subcommands.Add(CategoryCommands.Build());
         root.Subcommands.Add(MerchantCommands.Build());
+        root.Subcommands.Add(ReceiptCommands.Build());
         root.Subcommands.Add(SplitRuleCommands.Build());
         root.Subcommands.Add(InvitationCommands.Build());
         root.Subcommands.Add(BankCommands.Build());

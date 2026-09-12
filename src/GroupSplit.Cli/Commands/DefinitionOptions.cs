@@ -5,7 +5,7 @@ using GroupSplit.Shared;
 namespace GroupSplit.Cli.Commands;
 
 /// <summary>
-/// The four ways a split rule can divide, as command-line flags.
+/// The ways a split rule can divide, as command-line flags.
 /// </summary>
 /// <remarks>
 /// On the wire the division is one polymorphic object told apart by <c>$type</c>, which a
@@ -48,6 +48,14 @@ public sealed class DefinitionOptions
         AllowMultipleArgumentsPerToken = true
     };
 
+    private readonly Option<bool> _itemized = new("--itemized")
+    {
+        Description = "Divide by the receipt on the expense: everybody owes what they "
+                      + "claimed, plus their share of the tax and the tip. Names nobody -- "
+                      + "who owes what is on each expense's own bill. See "
+                      + "`groupsplit receipts`."
+    };
+
     public void AddTo(Command command)
     {
         command.Options.Add(_even);
@@ -55,6 +63,7 @@ public sealed class DefinitionOptions
         command.Options.Add(_payer);
         command.Options.Add(_percent);
         command.Options.Add(_shares);
+        command.Options.Add(_itemized);
     }
 
     /// <summary>
@@ -73,12 +82,13 @@ public sealed class DefinitionOptions
         if (parse.GetValue(_payer)) chosen.Add("--payer");
         if (parse.GetResult(_percent) is not null) chosen.Add("--percent");
         if (parse.GetResult(_shares) is not null) chosen.Add("--shares");
+        if (parse.GetValue(_itemized)) chosen.Add("--itemized");
 
         if (chosen.Count > 1)
         {
             throw CliException.Input(
                 $"{string.Join(" and ", chosen)} describe different divisions.",
-                "Pass exactly one of --even, --payer, --percent or --shares.");
+                "Pass exactly one of --even, --payer, --percent, --shares or --itemized.");
         }
 
         if (chosen.Count == 0)
@@ -94,6 +104,7 @@ public sealed class DefinitionOptions
             {
                 Percentages = Pairs.Decimals("--percent", parse.GetValue(_percent) ?? [])
             },
+            "--itemized" => new ItemizedSplitRuleDto(),
             _ => new SharesSplitRuleDto
             {
                 Shares = Pairs.Ints("--shares", parse.GetValue(_shares) ?? [])
@@ -110,6 +121,7 @@ public static class Definitions
         EvenSplitRuleDto { Among.Count: 0 } => "evenly, between the whole group",
         EvenSplitRuleDto even => $"evenly, between {even.Among.Count} named members",
         PayerSplitRuleDto => "not shared: whoever paid owes all of it",
+        ItemizedSplitRuleDto => "by the bill: what each person claimed, plus their share of tax and tip",
         PercentSplitRuleDto => "by percentage",
         SharesSplitRuleDto => "by whole shares",
         _ => definition.GetType().Name

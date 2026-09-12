@@ -210,7 +210,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 14.02,
     "DateTime": "2025-03-06T12:00:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000002-0000-4000-8000-000000000002",
@@ -401,7 +401,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 14.35,
     "DateTime": "2025-04-02T14:05:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000028-0000-4000-8000-000000000028",
@@ -684,7 +684,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 10.97,
     "DateTime": "2025-05-06T16:20:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000055-0000-4000-8000-000000000055",
@@ -813,7 +813,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 11.27,
     "DateTime": "2025-05-18T15:30:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E000003D-0000-4000-8000-00000000003D",
@@ -2302,7 +2302,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 17.41,
     "DateTime": "2025-11-01T13:05:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000113-0000-4000-8000-000000000113",
@@ -2497,7 +2497,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 15.6,
     "DateTime": "2025-12-02T18:05:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000128-0000-4000-8000-000000000128",
@@ -2749,7 +2749,7 @@
     "CategoryId": "CA7E000B-0000-4000-8000-00000000000B",
     "Amount": 28.04,
     "DateTime": "2026-01-03T12:30:00Z",
-    "Name": "Après-ski"
+    "Name": "Apr\u00e8s-ski"
   },
   {
     "Id": "E000014A-0000-4000-8000-00000000014A",
@@ -2781,7 +2781,7 @@
     "CategoryId": "CA7E000B-0000-4000-8000-00000000000B",
     "Amount": 71.86,
     "DateTime": "2026-01-06T19:15:00Z",
-    "Name": "Après-ski"
+    "Name": "Apr\u00e8s-ski"
   },
   {
     "Id": "E0000142-0000-4000-8000-000000000142",
@@ -2870,7 +2870,7 @@
     "CategoryId": "CA7E000B-0000-4000-8000-00000000000B",
     "Amount": 82.51,
     "DateTime": "2026-01-14T21:15:00Z",
-    "Name": "Après-ski"
+    "Name": "Apr\u00e8s-ski"
   },
   {
     "Id": "E0000162-0000-4000-8000-000000000162",
@@ -3040,7 +3040,7 @@
     "CategoryId": "CA7E000B-0000-4000-8000-00000000000B",
     "Amount": 83.82,
     "DateTime": "2026-02-01T20:20:00Z",
-    "Name": "Après-ski"
+    "Name": "Apr\u00e8s-ski"
   },
   {
     "Id": "E000017D-0000-4000-8000-00000000017D",
@@ -3147,7 +3147,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 16.19,
     "DateTime": "2026-02-09T18:45:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000166-0000-4000-8000-000000000166",
@@ -3502,7 +3502,7 @@
     "CategoryId": "CA7E000B-0000-4000-8000-00000000000B",
     "Amount": 76.21,
     "DateTime": "2026-03-16T16:00:00Z",
-    "Name": "Après-ski"
+    "Name": "Apr\u00e8s-ski"
   },
   {
     "Id": "E0000189-0000-4000-8000-000000000189",
@@ -3747,7 +3747,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 18.1,
     "DateTime": "2026-04-18T09:05:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E00001C6-0000-4000-8000-0000000001C6",
@@ -4445,7 +4445,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 16.05,
     "DateTime": "2026-06-26T15:30:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000215-0000-4000-8000-000000000215",
@@ -5049,7 +5049,7 @@
     "CategoryId": "CA7E0014-0000-4000-8000-000000000014",
     "Amount": 13.06,
     "DateTime": "2026-09-02T10:30:00Z",
-    "Name": "Café Delta"
+    "Name": "Caf\u00e9 Delta"
   },
   {
     "Id": "E0000273-0000-4000-8000-000000000273",
@@ -5244,7 +5244,7 @@
     "Id": "D0000001-0000-4000-8000-000000000001",
     "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
-    "Amount": 40.00,
+    "Amount": 40.0,
     "DaysAgo": 9,
     "Name": "Dinner",
     "Description": "Typed at the table so nobody forgot it",
@@ -5264,7 +5264,7 @@
     "Id": "D0000003-0000-4000-8000-000000000003",
     "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
-    "Amount": 5.20,
+    "Amount": 5.2,
     "DaysAgo": 2,
     "Name": "Flat white",
     "Merchant": "Blue Bottle Coffee"
@@ -5273,7 +5273,7 @@
     "Id": "D0000004-0000-4000-8000-000000000004",
     "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
     "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
-    "Amount": 27.80,
+    "Amount": 27.8,
     "DaysAgo": 6,
     "Name": "Month of bus fares",
     "Description": "Nothing to do with the taxi it will be offered against"
@@ -5285,5 +5285,157 @@
     "DaysAgo": 3,
     "Name": "Painkillers",
     "Merchant": "Pharmacy 88"
+  },
+  {
+    "Id": "1EE70001-0000-4000-8000-000000000001",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "CA7E0090-0000-4000-8000-000000000090",
+    "Amount": 96.4,
+    "DateTime": "2026-03-14T21:15:00Z",
+    "Name": "Dinner at Trattoria",
+    "Description": "Itemised: everybody owes what they had, plus their share of tax and tip",
+    "Receipt": {
+      "Tax": 7.4,
+      "Tip": 12.0,
+      "Items": [
+        {
+          "Name": "Bistecca",
+          "Price": 28.0,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Risotto",
+          "Price": 16.5,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Carbonara",
+          "Price": 14.5,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Bottle of red",
+          "Price": 18.0,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "Id": "1EE70002-0000-4000-8000-000000000002",
+    "PayerId": "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52",
+    "CategoryId": "CA7E0090-0000-4000-8000-000000000090",
+    "Amount": 51.0,
+    "DateTime": "2026-05-02T20:40:00Z",
+    "Name": "Tapas night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 6.0,
+      "Items": [
+        {
+          "Name": "Tapas for the table",
+          "Price": 30.0,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Vermouth",
+          "Price": 15.0,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 2,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "Id": "1EE70003-0000-4000-8000-000000000003",
+    "PayerId": "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C",
+    "CategoryId": "CA7E0091-0000-4000-8000-000000000091",
+    "Amount": 74.0,
+    "DateTime": "2026-06-18T22:05:00Z",
+    "Name": "Last night of the trip",
+    "Receipt": {
+      "Tax": 4.0,
+      "Tip": 10.0,
+      "Items": [
+        {
+          "Name": "Paella to share",
+          "Price": 40.0,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Sangria",
+          "Price": 12.0,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Dessert",
+          "Price": 8.0,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "Id": "1EE70004-0000-4000-8000-000000000004",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0090-0000-4000-8000-000000000090",
+    "Amount": 88.0,
+    "DateTime": "2026-07-25T21:00:00Z",
+    "Name": "Birthday dinner",
+    "Description": "Two things were somebody's; the rest was the table's",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 8.0,
+      "Items": [
+        {
+          "Name": "Ribeye",
+          "Price": 26.0,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Oysters",
+          "Price": 14.0,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Bread and olives",
+          "Price": 12.0,
+          "Shared": true
+        },
+        {
+          "Name": "Paella for two",
+          "Price": 28.0,
+          "Shared": true
+        }
+      ]
+    }
   }
 ]

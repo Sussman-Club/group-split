@@ -36,5 +36,6 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
         {
             entity.Property(row => row.RawJson).HasColumnType("jsonb");
         });
+
     }
 }

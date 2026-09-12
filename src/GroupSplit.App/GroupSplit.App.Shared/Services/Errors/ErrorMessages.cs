@@ -43,6 +43,20 @@ public static class ErrorMessages
         [ErrorCodes.MerchantNotFound] = "That merchant no longer exists.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
 
+        // A bill is the exception rather than the rule, so this reads as a statement about
+        // the expense rather than as something having gone missing.
+        [ErrorCodes.ReceiptNotFound] = "That expense has no itemised bill on it.",
+        [ErrorCodes.ReceiptItemNotFound] = "That line is no longer on the bill.",
+        [ErrorCodes.ReceiptInvalid] = "That bill could not be read. Check the lines and who is on them.",
+        [ErrorCodes.SplitPartsInvalid] = "Every line of the bill has to be in exactly one part.",
+        [ErrorCodes.ReceiptDoesNotAddUp] = "The bill does not add up to what was paid.",
+        [ErrorCodes.ReceiptTooLargeToDivide] = "This bill is too large to divide by its items.",
+
+        // The one refusal somebody can act on directly, so it says what to do rather than
+        // what went wrong.
+        [ErrorCodes.ReceiptItemsUnclaimed] = "Some lines on the bill are not claimed yet. "
+                                             + "Say who had them before dividing it.",
+
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
         [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
         [ErrorCodes.GroupJoinLinkNotFound] = "That join link is not one of ours. Check you copied the whole of it.",

@@ -490,6 +490,36 @@ public sealed class BankSyncService(
             }
         }
 
+        // The bill moves with the row, for the same reason the expense does: the posted row
+        // is the same money, and OwnedBankRow cannot see a superseded one. Left behind, a
+        // receipt typed at the table became unreachable from either row -- 404 from the one
+        // it points at, absent from the one anybody would file -- while still holding the
+        // unique index that would stop a replacement being typed.
+        //
+        // Only when the posted row has none of its own, which it cannot have unless somebody
+        // typed one against it directly; two bills and one link is the same collision the
+        // filed-expense branch above declines to resolve, and for the same reason.
+        var strandedBill = await dbContext.Set<Receipt>()
+            .FirstOrDefaultAsync(receipt => receipt.BankTransactionId == pending.Id, ct);
+
+        // Not onto a filed row, either: File and Link both refuse one, so the bill would be
+        // visible in the inbox forever and attachable to nothing. Its own row going superseded
+        // is the better place for it to end up -- the cascade takes it when the row is
+        // eventually removed.
+        //
+        // Asked of the status the posted row *ends* on rather than of postedCarriesItsOwn,
+        // which was read before Stronger() raised it: a pending filed row superseded by a new
+        // one makes the posted row filed here, and reading the earlier value would have moved
+        // the bill onto it after all.
+        if (strandedBill is not null &&
+            posted.Status is not BankTransactionStatus.Filed &&
+            !await dbContext.Set<Receipt>()
+                .AnyAsync(receipt => receipt.BankTransactionId == posted.Id, ct))
+        {
+            strandedBill.BankTransaction = posted;
+            strandedBill.BankTransactionId = posted.Id;
+        }
+
         pending.Status = BankTransactionStatus.Superseded;
     }
 

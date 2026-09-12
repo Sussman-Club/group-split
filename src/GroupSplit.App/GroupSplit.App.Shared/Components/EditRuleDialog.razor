@@ -111,6 +111,7 @@
         EvenSplitRuleDto { Among.Count: 0 } => "Evenly, between the whole group",
         EvenSplitRuleDto even => $"Evenly, between {even.Among.Count}",
         PayerSplitRuleDto => "All on whoever paid",
+        ItemizedSplitRuleDto => "By the bill on each expense",
         _ => "A split"
     };
 

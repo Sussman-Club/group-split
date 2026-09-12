@@ -35,7 +35,24 @@
             <MudSelectItem T="RuleType?" Value="RuleType.Shares">
                 Shares split
             </MudSelectItem>
+
+            <MudSelectItem T="RuleType?" Value="RuleType.Itemized">
+                By the bill (itemised)
+            </MudSelectItem>
         </MudSelect>
+
+        @* Itemised names nobody, so the member rows below have nothing to show for it. A
+           line saying where the division actually comes from is worth more than an empty
+           table: without it the form reads as though something failed to load. *@
+        @if (_ruleType == RuleType.Itemized)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">
+                Each expense is divided by the receipt attached to it -- everybody owes what
+                they claimed, plus their share of the tax and the tip. Add the bill to an
+                expense with <code>groupsplit receipts</code>. An expense filed here with no
+                bill on it cannot be divided.
+            </MudAlert>
+        }
 
         <MudSelect T="Guid?"
                    Label="Apply settings from another rule"
@@ -171,6 +188,7 @@
             PercentSplitRuleDto => RuleType.Percent,
             SharesSplitRuleDto => RuleType.Shares,
             PayerSplitRuleDto => RuleType.Personal,
+            ItemizedSplitRuleDto => RuleType.Itemized,
             _ => _ruleType
         };
 
@@ -225,6 +243,11 @@
         Model.Version = _ruleType switch
         {
             RuleType.Personal => new PayerSplitRuleDto(),
+
+            // Carries nothing, like the payer rule: what each person owes is on the
+            // expense's own bill, so there is nothing here to carry over from whatever
+            // division was selected before.
+            RuleType.Itemized => new ItemizedSplitRuleDto(),
 
             RuleType.Percent when Model.Version is SharesSplitRuleDto shares => new PercentSplitRuleDto
             {
