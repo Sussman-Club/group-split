@@ -3829,3 +3829,314 @@ html:not([data-gs-ready]) .gs-group-card {
     padding-top: 4px;
     border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
+
+
+/* ------------------------------------------------- splitting one charge -- */
+
+/*
+    Sorting the lines of a bill into the purchases they belong to.
+
+    Two panes and one question between them: which of these lines are the same purchase.
+    The bill is set in tabular figures because it is a till slip and the column of prices is
+    read down; the parts beside it are cards, because each one is about to be an expense.
+
+    Colour is the only thing tying a line to its part, so the part tones are the load-bearing
+    decoration here rather than ornament -- four of them, which is also why a split is capped
+    at four parts. Past that nobody can tell the chips apart, and a charge that is really five
+    purchases is two trips to this screen.
+*/
+
+:root {
+    --gs-part-a: var(--gs-teal);
+    --gs-part-a-soft: var(--gs-teal-soft);
+    --gs-part-b: var(--gs-clay);
+    --gs-part-b-soft: var(--gs-clay-soft);
+    --gs-part-c: #5c6f9c;
+    --gs-part-c-soft: rgb(92 111 156 / 12%);
+    --gs-part-d: #8a5a77;
+    --gs-part-d-soft: rgb(138 90 119 / 12%);
+    --gs-part-none: var(--gs-muted);
+    --gs-part-none-soft: color-mix(in srgb, var(--gs-muted) 10%, transparent);
+}
+
+:root[data-theme="dark"] {
+    --gs-part-c: #8fa2cd;
+    --gs-part-c-soft: rgb(143 162 205 / 16%);
+    --gs-part-d: #c08fb0;
+    --gs-part-d-soft: rgb(192 143 176 / 16%);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --gs-part-c: #8fa2cd;
+        --gs-part-c-soft: rgb(143 162 205 / 16%);
+        --gs-part-d: #c08fb0;
+        --gs-part-d-soft: rgb(192 143 176 / 16%);
+    }
+}
+
+.gs-split-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .gs-split-panes {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+}
+
+.gs-pane-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 30px;
+    margin-bottom: 8px;
+}
+
+/* ---- the bill ---- */
+
+.gs-bill {
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+    overflow: hidden;
+}
+
+/* Suppresses the text selection a drag would otherwise make of the whole list. */
+.gs-bill.is-brushing {
+    user-select: none;
+    cursor: crosshair;
+}
+
+.gs-bill-line {
+    display: grid;
+    grid-template-columns: 16px 104px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--gs-line);
+    background: none;
+    color: var(--gs-ink);
+    font: inherit;
+    font-size: .8125rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gs-bill-line:last-child {
+    border-bottom: 0;
+}
+
+.gs-bill-line:hover {
+    background: var(--gs-surface-3);
+}
+
+.gs-bill-line.is-picked {
+    background: var(--gs-teal-soft);
+    box-shadow: inset 3px 0 0 var(--gs-teal);
+}
+
+.gs-bill-line .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-bill-line .amt {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.gs-bill-tick {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--gs-line-strong);
+    border-radius: 4px;
+    background: var(--gs-surface);
+}
+
+.gs-bill-line.is-picked .gs-bill-tick {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal);
+}
+
+/* A line's part, and the only thing on the row that says which one it is. */
+.gs-part-chip {
+    padding: 2px 6px;
+    border: 1px solid var(--tone, var(--gs-part-none));
+    border-radius: var(--gs-radius-pill);
+    background: var(--tone-soft, var(--gs-part-none-soft));
+    color: var(--tone, var(--gs-part-none));
+    font-size: .6875rem;
+    font-weight: 600;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-part-chip.is-none {
+    border-style: dashed;
+}
+
+.gs-bill-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--gs-surface-3);
+    border-top: 1px solid var(--gs-line);
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- what is picked, and where it can go ---- */
+
+.gs-pick-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 7px 10px;
+    border: 1px solid var(--gs-teal);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-teal-soft);
+}
+
+.gs-pick-bar .count {
+    margin-right: 4px;
+    color: var(--gs-teal-deep);
+    font-size: .8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="dark"] .gs-pick-bar .count {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-pick-bar .count {
+        color: var(--gs-teal-bright);
+    }
+}
+
+/* The one control that is a verb on this screen: send what is picked to a part. */
+.gs-send {
+    padding: 3px 10px;
+    border: 1px solid var(--tone, var(--gs-part-none));
+    border-radius: var(--gs-radius-pill);
+    background: var(--tone-soft, var(--gs-part-none-soft));
+    color: var(--tone, var(--gs-part-none));
+    font: inherit;
+    font-size: .8125rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.gs-send:hover {
+    background: var(--tone, var(--gs-part-none));
+    color: var(--gs-on-accent);
+}
+
+.gs-send.is-none {
+    border-style: dashed;
+}
+
+/* ---- the parts ---- */
+
+.gs-parts {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gs-part {
+    padding: 12px 14px;
+    border: 1px solid var(--gs-line);
+    border-left: 3px solid var(--tone, var(--gs-part-none));
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+}
+
+.gs-part-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.gs-part-sum {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-part-ledger {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--gs-line);
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--gs-muted);
+}
+
+.gs-part-ledger > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.gs-part-ledger > div + div {
+    margin-top: 2px;
+}
+
+/* ---- the invariant, said once, at the bottom ---- */
+
+.gs-split-tally {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+    width: 100%;
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-split-tally .k {
+    color: var(--gs-muted);
+}
+
+.gs-split-tally .v {
+    font-weight: 600;
+}
+
+.gs-split-verdict {
+    font-weight: 600;
+}
+
+.gs-split-verdict.is-ok {
+    color: var(--gs-teal-deep);
+}
+
+:root[data-theme="dark"] .gs-split-verdict.is-ok {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-split-verdict.is-ok {
+        color: var(--gs-teal-bright);
+    }
+}
+
+.gs-split-verdict.is-short {
+    color: var(--gs-danger);
+}

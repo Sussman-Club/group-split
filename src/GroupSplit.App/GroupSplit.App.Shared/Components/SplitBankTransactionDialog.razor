@@ -1,0 +1,742 @@
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsClient GroupsClient
+@inject ICategoriesClient CategoriesClient
+@inject IReceiptCommands Receipts
+@inject IBankCommands Bank
+@inject ApiErrorPresenter Errors
+
+@*
+    One charge that is really several purchases, sorted out before it is filed.
+
+    The warehouse run: the flat's groceries and a jacket that is nobody's business but yours,
+    on one card charge. Filing it whole puts the clothes in the group's ledger and files them
+    under Groceries; this says which lines are which, and each part becomes its own expense
+    with its own group and category.
+
+    Two panes and one question between them -- which of these lines are the same purchase --
+    and one invariant said once, at the bottom: the parts have to come to what the card was
+    charged. That is not a warning, it is the thing being built, so it is on screen the whole
+    time rather than raised at the end.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_bill is null)
+        {
+            <div class="gs-loading">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Small" />
+            </div>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                @* What the bank sent, in the summary card the file dialog uses for the same
+                   job. None of it is a field: it is the money being divided up. *@
+                <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                    <div class="gs-inline" style="justify-content: space-between">
+                        <div>
+                            <div class="gs-eyebrow">@Row.Title</div>
+                            <div class="gs-muted" style="font-size: .8125rem">@Where</div>
+                        </div>
+                        <Money Value="@Row.Amount" Currency="@Row.Currency" Class="gs-money" />
+                    </div>
+                </div>
+
+                @* The reason to stop, carried above the work rather than raised at the end.
+                   Splitting creates several expenses at once, so filing over a payment
+                   already recorded is several wrong balances instead of one -- and the API
+                   refuses it unless somebody says outright that they meant to. *@
+                @if (Row.PossibleDuplicates.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        <div class="gs-stack" style="gap: 6px">
+                            <span>
+                                @(Row.PossibleDuplicates.Count == 1
+                                    ? "You may already have recorded this payment:"
+                                    : "You may already have recorded this payment. It looks like:")
+                                @string.Join(", ", Row.PossibleDuplicates.Select(match => match.Name)).
+                            </span>
+                            <MudCheckBox T="bool" @bind-Value="_fileAnyway" Dense="true" Color="Color.Warning">
+                                Split it anyway — this is different money
+                            </MudCheckBox>
+                        </div>
+                    </MudAlert>
+                }
+
+                <div class="gs-split-panes">
+                    <section>
+                        <div class="gs-pane-head">
+                            <span class="gs-eyebrow">The bill · @_bill.Items.Count lines</span>
+                            @if (_picked.Count == 0)
+                            {
+                                <span class="gs-muted" style="font-size: .75rem">
+                                    drag to pick · shift-click for a run
+                                </span>
+                            }
+                        </div>
+
+                        @* Only while something is picked. A bar of buttons that is empty most
+                           of the time teaches people to look past it. *@
+                        @if (_picked.Count > 0)
+                        {
+                            <div class="gs-pick-bar">
+                                <span class="count">
+                                    @_picked.Count @(_picked.Count == 1 ? "line" : "lines") ·
+                                    <Money Value="@PickedTotal" Currency="@Row.Currency" />
+                                </span>
+                                <span class="gs-muted" style="font-size: .75rem">send to</span>
+
+                                @foreach (var part in _parts)
+                                {
+                                    <button type="button" class="gs-send" style="@Tone(part)"
+                                            @onclick="@(() => Send(part.Key))">@Named(part)</button>
+                                }
+
+                                <button type="button" class="gs-send is-none"
+                                        @onclick="@(() => Send(null))">No part</button>
+
+                                <span style="flex: 1 1 auto"></span>
+
+                                <MudButton Variant="Variant.Text" Size="Size.Small"
+                                           OnClick="ClearPicked">Clear</MudButton>
+                            </div>
+                        }
+
+                        @* The list is a till slip: prices read down a column, so the figures
+                           are tabular and the names are allowed to run out of room. *@
+                        <div class="gs-bill @(_brushing ? "is-brushing" : "")"
+                             @onpointerup="EndBrush" @onpointerleave="EndBrush">
+                            @foreach (var line in _bill.Items)
+                            {
+                                var id = line.Id;
+                                var part = PartOf(id);
+
+                                <button type="button"
+                                        class="gs-bill-line @(_picked.Contains(id) ? "is-picked" : "")"
+                                        aria-pressed="@(_picked.Contains(id) ? "true" : "false")"
+                                        aria-label="@Spoken(line, part)"
+                                        @key="id"
+                                        @onpointerdown="@(args => StartBrush(args, id))"
+                                        @onpointerenter="@(() => Brush(id))"
+                                        @onclick="@(args => KeyboardToggle(args, id))">
+                                    <span class="gs-bill-tick" aria-hidden="true"></span>
+                                    <span class="gs-part-chip @(part is null ? "is-none" : "")"
+                                          style="@Tone(part)">@(part is null ? "no part" : Named(part))</span>
+                                    <span class="name">@line.Name</span>
+                                    <span class="amt">
+                                        <Money Value="@line.TotalPrice" Currency="@Row.Currency" />
+                                    </span>
+                                </button>
+                            }
+                        </div>
+
+                        <div class="gs-bill-foot">
+                            <span class="gs-muted">Items</span>
+                            <span><Money Value="@_bill.Subtotal" Currency="@Row.Currency" /></span>
+                        </div>
+                        @if (_bill.Tax != 0)
+                        {
+                            <div class="gs-bill-foot">
+                                <span class="gs-muted">Tax</span>
+                                <span><Money Value="@_bill.Tax" Currency="@Row.Currency" /></span>
+                            </div>
+                        }
+                        @if (_bill.Tip != 0)
+                        {
+                            <div class="gs-bill-foot">
+                                <span class="gs-muted">Tip</span>
+                                <span><Money Value="@_bill.Tip" Currency="@Row.Currency" /></span>
+                            </div>
+                        }
+                    </section>
+
+                    <section>
+                        <div class="gs-pane-head">
+                            <span class="gs-eyebrow">Parts · each becomes an expense</span>
+                            <MudButton Variant="Variant.Text" Size="Size.Small"
+                                       Disabled="@(_parts.Count >= MaxParts)"
+                                       OnClick="AddPart">Add part</MudButton>
+                        </div>
+
+                        <div class="gs-parts">
+                            @foreach (var part in _parts)
+                            {
+                                var held = Held(part.Key);
+
+                                <div class="gs-part" style="@Tone(part)" @key="part.Key">
+                                    <div class="gs-part-top">
+                                        <MudTextField @bind-Value="part.Name"
+                                                      Variant="Variant.Text"
+                                                      Margin="Margin.Dense"
+                                                      Immediate="true"
+                                                      Placeholder="Name this part"
+                                                      aria-label="Name of this part" />
+                                        <span class="gs-part-sum">
+                                            <Money Value="@AmountOf(part)" Currency="@Row.Currency" />
+                                        </span>
+                                        @* Only when there is somewhere for its lines to land:
+                                           removing the last part would leave the whole bill
+                                           with nowhere to be. *@
+                                        @if (_parts.Count > 1)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Rounded.Close"
+                                                           Size="Size.Small"
+                                                           Title="@Dropping(part, held.Count)"
+                                                           aria-label="@Dropping(part, held.Count)"
+                                                           OnClick="@(() => RemovePart(part))" />
+                                        }
+                                    </div>
+
+                                    <div class="gs-field-pair">
+                                        <MudSelect T="Guid?" Label="Goes to" Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   Value="@part.GroupId"
+                                                   ValueChanged="@(async (Guid? id) => await OnGroupChangedAsync(part, id))"
+                                                   Clearable="false" Placeholder="">
+                                            @* Null is not "nothing chosen" here, it is an
+                                               answer: the part that is yours alone. *@
+                                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">Just me (personal)</MudSelectItem>
+                                            @foreach (var group in _groups)
+                                            {
+                                                <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+
+                                        <MudSelect T="Guid?" Label="Category" Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   @bind-Value="part.CategoryId"
+                                                   Disabled="@(part.Categories.Count == 0)"
+                                                   Clearable="true" Placeholder="">
+                                            @foreach (var category in part.Categories)
+                                            {
+                                                <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">@category.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </div>
+
+                                    @if (held.Count == 0)
+                                    {
+                                        <div class="gs-muted" style="font-size: .8125rem; margin-top: 8px">
+                                            Nothing in here yet. Pick some lines and send them over.
+                                        </div>
+                                    }
+
+                                    <div class="gs-part-ledger">
+                                        <div>
+                                            <span>@held.Count @(held.Count == 1 ? "item" : "items")</span>
+                                            <span><Money Value="@held.Sum(line => line.TotalPrice)" Currency="@Row.Currency" /></span>
+                                        </div>
+                                        @if (_bill.Tax != 0 || _bill.Tip != 0)
+                                        {
+                                            <div>
+                                                <span>its share of @Extras</span>
+                                                <span>
+                                                    <Money Value="@(AmountOf(part) - held.Sum(line => line.TotalPrice))"
+                                                           Currency="@Row.Currency" />
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @* What is not in a part yet, said where the parts are rather than on
+                           the bill: it is the parts that are short. *@
+                        @if (Unplaced.Count > 0)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                                <strong><Money Value="@UnplacedTotal" Currency="@Row.Currency" /> isn't in a part yet.</strong>
+                                Pick @(Unplaced.Count == 1 ? "that line" : $"those {Unplaced.Count} lines")
+                                and send @(Unplaced.Count == 1 ? "it" : "them") somewhere.
+                                You can file once every line has a part.
+                            </MudAlert>
+                        }
+                    </section>
+                </div>
+            </MudStack>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        @if (_bill is not null)
+        {
+            <div class="gs-split-tally">
+                <span><span class="k">Parts come to</span> <span class="v"><Money Value="@PlacedTotal" Currency="@Row.Currency" /></span></span>
+                <span><span class="k">Card was charged</span> <span class="v"><Money Value="@Row.Amount" Currency="@Row.Currency" /></span></span>
+                @* The invariant only, not whether filing is allowed. A bill that adds up
+                   still says so while somebody is confirming it is not a duplicate. *@
+                <span class="gs-split-verdict @(Unplaced.Count == 0 ? "is-ok" : "is-short")">
+                    @if (Unplaced.Count == 0)
+                    {
+                        @:Adds up
+                    }
+                    else
+                    {
+                        <Money Value="@UnplacedTotal" Currency="@Row.Currency" />
+                        @: still to place
+                    }
+                </span>
+
+                <span style="flex: 1 1 auto"></span>
+
+                <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                           Disabled="@(!Ready || _filing)" OnClick="SubmitAsync">
+                    @FileLabel
+                </MudButton>
+            </div>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>
+    /// How many parts a charge can be split into.
+    /// </summary>
+    /// <remarks>
+    /// Bounded by what a person can tell apart, not by anything the API minds. A line's part
+    /// is shown as one coloured chip and nothing else, and past four tones nobody can read
+    /// the column. A charge that really is five purchases is two trips through here.
+    /// </remarks>
+    private const int MaxParts = 4;
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
+
+    /// <summary>One proposed purchase: what it is called, where it goes, and what it holds.</summary>
+    /// <remarks>
+    /// A class rather than a record because the name and the selections are bound to fields
+    /// on screen. The key is the app's own, not the API's -- a part has no identity until it
+    /// is filed, and the lines have to point at something in the meantime.
+    /// </remarks>
+    private sealed class Part
+    {
+        public Guid Key { get; } = Guid.NewGuid();
+
+        public string Name { get; set; } = string.Empty;
+
+        public Guid? GroupId { get; set; }
+
+        public Guid? CategoryId { get; set; }
+
+        public IReadOnlyList<CategoryResponse> Categories { get; set; } = [];
+    }
+
+    private ReceiptResponse? _bill;
+    private IReadOnlyList<GroupResponse> _groups = [];
+
+    private readonly List<Part> _parts = [];
+
+    /// <summary>Which part each line is in. A line missing from here is in none.</summary>
+    private readonly Dictionary<Guid, Guid> _placement = [];
+
+    private readonly HashSet<Guid> _picked = [];
+
+    /// <summary>What each part comes to, from the API, so no figure here is one it would not store.</summary>
+    private IReadOnlyList<decimal> _amounts = [];
+
+    /// <summary>
+    /// The line a run is measured from: the last one touched deliberately, so shift-clicking
+    /// picks everything between.
+    /// </summary>
+    private Guid? _anchor;
+
+    private bool _brushing;
+
+    /// <summary>
+    /// Whether the drag under way is picking or unpicking. Decided by the line it started on,
+    /// so dragging back over a run clears it instead of re-picking what is already picked.
+    /// </summary>
+    private bool _brushTo = true;
+
+    private bool _filing;
+
+    /// <summary>
+    /// Whether the person said to go ahead over a payment that may already be recorded.
+    /// False until they tick it, and there is nothing to tick unless the row carries a
+    /// suggestion.
+    /// </summary>
+    private bool _fileAnyway;
+
+    private string Where
+    {
+        get
+        {
+            var parts = new[] { Row.AccountName, Row.SpentOn.ToShortDateString(), Row.Context }
+                .Where(part => !string.IsNullOrWhiteSpace(part));
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    /// <summary>What the bill charges on top of its lines, named for the part ledgers.</summary>
+    private string Extras => (_bill?.Tax ?? 0) != 0 && (_bill?.Tip ?? 0) != 0
+        ? "tax and tip"
+        : (_bill?.Tax ?? 0) != 0
+            ? "tax"
+            : "tip";
+
+    private IReadOnlyList<ReceiptItemResponse> Lines => _bill?.Items ?? [];
+
+    private List<ReceiptItemResponse> Unplaced =>
+        [.. Lines.Where(line => !_placement.ContainsKey(line.Id))];
+
+    private decimal UnplacedTotal => Row.Amount - PlacedTotal;
+
+    private decimal PlacedTotal => _amounts.Sum();
+
+    private decimal PickedTotal => Lines.Where(line => _picked.Contains(line.Id)).Sum(line => line.TotalPrice);
+
+    /// <summary>
+    /// Ready when every line has a part and at least two parts hold something.
+    /// </summary>
+    /// <remarks>
+    /// The second half is the API's rule shown rather than discovered: splitting into one is
+    /// an ordinary filing, which the other dialog does. An empty part is not an error either
+    /// -- somebody added it and has not filled it yet -- it simply does not count towards the
+    /// two.
+    /// </remarks>
+    private bool Ready => _bill is not null && Unplaced.Count == 0 && Filled >= 2 && NotADuplicate;
+
+    /// <summary>
+    /// Nothing suggests this is money already recorded, or the person has said it is not.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than left to the API's refusal because of what a split costs to undo:
+    /// one wrong filing is one expense to delete, and one wrong split is several, in
+    /// different groups, each having moved somebody's balance.
+    /// </remarks>
+    private bool NotADuplicate => Row.PossibleDuplicates.Count == 0 || _fileAnyway;
+
+    private int Filled => _parts.Count(part => _placement.ContainsValue(part.Key));
+
+    private string FileLabel => Unplaced.Count > 0
+        ? $"{Unplaced.Count} {(Unplaced.Count == 1 ? "line needs" : "lines need")} a part"
+        : Filled < 2
+            ? "Send lines to two parts"
+            : !NotADuplicate
+                ? "Confirm this is not a duplicate"
+                : $"File as {Filled} expenses";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var loaded = await Errors.TryAsync(async () =>
+        {
+            _groups = [.. await GroupsClient.GetGroupsAsync()];
+        }, "Could not load your groups.");
+
+        _bill = await Receipts.ForBankRowAsync(Row.Id);
+
+        if (!loaded || _bill is null)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        // Two to begin with, because the screen exists for a charge that is two purchases and
+        // opening on one empty box would make the first move "add a part" rather than "pick
+        // the groceries". Lines start in neither, so nothing is claimed on the person's
+        // behalf.
+        AddPart();
+        AddPart();
+
+        await RefreshAsync();
+    }
+
+    // ---- picking -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Starts a drag, or extends a run when shift is held.
+    /// </summary>
+    /// <remarks>
+    /// Mouse only. On a touchscreen a drag down a list is how the list is scrolled, and
+    /// taking that gesture would trade one people already have for one they would have to be
+    /// told about -- so a tap toggles a line and the send buttons do the rest.
+    /// </remarks>
+    private void StartBrush(PointerEventArgs args, Guid id)
+    {
+        if (args.PointerType != "mouse")
+        {
+            Toggle(id);
+            return;
+        }
+
+        if (args.ShiftKey)
+        {
+            RunTo(id);
+            _anchor = id;
+            return;
+        }
+
+        _brushing = true;
+        _brushTo = !_picked.Contains(id);
+        Set(id, _brushTo);
+        _anchor = id;
+    }
+
+    private void Brush(Guid id)
+    {
+        if (_brushing)
+            Set(id, _brushTo);
+    }
+
+    private void EndBrush() => _brushing = false;
+
+    /// <summary>
+    /// The keyboard's way in. A click raised by Enter or Space carries no coordinates, which
+    /// is what tells it apart from the mouse -- whose picking the pointer handlers have
+    /// already done by the time this runs.
+    /// </summary>
+    private void KeyboardToggle(MouseEventArgs args, Guid id)
+    {
+        if (args.Detail == 0)
+        {
+            Toggle(id);
+            _anchor = id;
+        }
+    }
+
+    private void Toggle(Guid id) => Set(id, !_picked.Contains(id));
+
+    private void Set(Guid id, bool picked)
+    {
+        if (picked)
+            _picked.Add(id);
+        else
+            _picked.Remove(id);
+    }
+
+    private void RunTo(Guid id)
+    {
+        if (_anchor is not { } anchor)
+        {
+            Set(id, true);
+            return;
+        }
+
+        var from = Lines.ToList().FindIndex(line => line.Id == anchor);
+        var to = Lines.ToList().FindIndex(line => line.Id == id);
+
+        if (from < 0 || to < 0)
+            return;
+
+        foreach (var line in Lines.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1))
+            Set(line.Id, true);
+    }
+
+    private void ClearPicked()
+    {
+        _picked.Clear();
+        _anchor = null;
+    }
+
+    // ---- moving lines ------------------------------------------------------------------
+
+    /// <summary>
+    /// Sends everything picked to one part, or back to none. In one go, so the arithmetic
+    /// settles once rather than once per line.
+    /// </summary>
+    private async Task Send(Guid? partKey)
+    {
+        if (_picked.Count == 0)
+            return;
+
+        foreach (var id in _picked)
+        {
+            if (partKey is { } key)
+                _placement[id] = key;
+            else
+                _placement.Remove(id);
+        }
+
+        ClearPicked();
+
+        await RefreshAsync();
+    }
+
+    // ---- parts -------------------------------------------------------------------------
+
+    private void AddPart()
+    {
+        if (_parts.Count >= MaxParts)
+            return;
+
+        _parts.Add(new Part());
+    }
+
+    /// <summary>
+    /// Where a removed part's lines go, said on the button before it is pressed rather than
+    /// discovered after.
+    /// </summary>
+    /// <remarks>
+    /// One part left to take them is unambiguous, so they go there. Two or more is a choice
+    /// nobody made, so they come back to no part and the bill says so -- which is visible and
+    /// undoable, unlike guessing.
+    /// </remarks>
+    private string Dropping(Part part, int held)
+    {
+        var name = Named(part);
+
+        if (held == 0)
+            return $"Remove {name}";
+
+        var others = _parts.Where(other => other.Key != part.Key).ToList();
+        var what = held == 1 ? "its line goes" : $"its {held} lines go";
+
+        return others.Count == 1
+            ? $"Remove {name} — {what} to {Named(others[0])}"
+            : $"Remove {name} — {what} back to no part";
+    }
+
+    private async Task RemovePart(Part part)
+    {
+        if (_parts.Count <= 1)
+            return;
+
+        _parts.Remove(part);
+
+        var landing = _parts.Count == 1 ? _parts[0].Key : (Guid?)null;
+
+        foreach (var id in _placement.Where(entry => entry.Value == part.Key).Select(entry => entry.Key).ToList())
+        {
+            if (landing is { } key)
+                _placement[id] = key;
+            else
+                _placement.Remove(id);
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task OnGroupChangedAsync(Part part, Guid? groupId)
+    {
+        part.GroupId = groupId;
+        part.CategoryId = null;
+        part.Categories = [];
+
+        if (groupId is not { } id)
+            return;
+
+        await Errors.TryAsync(async () =>
+        {
+            part.Categories = [.. await CategoriesClient.GetCategoriesAsync(id)];
+        }, "Could not load the group's categories.");
+
+        StateHasChanged();
+    }
+
+    // ---- what the parts come to --------------------------------------------------------
+
+    /// <summary>
+    /// Asks the API what the parts come to, rather than working it out here.
+    /// </summary>
+    /// <remarks>
+    /// The apportioning is the one piece of arithmetic that must not drift: tax weighed over
+    /// the lines it was charged on, tip over all of them, every cut truncated to the cent
+    /// with the leftover to one holder. A second copy in the client would be a second thing
+    /// to keep right, and the figures on screen are what filing will store.
+    /// </remarks>
+    private async Task RefreshAsync()
+    {
+        var placed = _parts
+            .Select(part => new SplitChargePreviewPartInput { ItemIds = Held(part.Key).Select(line => line.Id).ToList() })
+            .ToList();
+
+        var preview = await Bank.PreviewSplitAsync(Row.Id, new SplitChargePreviewRequest { Parts = placed });
+
+        // Kept rather than blanked when the preview fails. The placement on screen is still
+        // what the person put there, and figures that flicker to nothing on a dropped request
+        // read as the split having gone wrong.
+        if (preview is not null)
+            _amounts = preview.Amounts;
+
+        StateHasChanged();
+    }
+
+    private List<ReceiptItemResponse> Held(Guid partKey) =>
+        [.. Lines.Where(line => _placement.TryGetValue(line.Id, out var key) && key == partKey)];
+
+    private decimal AmountOf(Part part)
+    {
+        var index = _parts.IndexOf(part);
+
+        return index >= 0 && index < _amounts.Count ? _amounts[index] : 0m;
+    }
+
+    private Part? PartOf(Guid lineId) =>
+        _placement.TryGetValue(lineId, out var key)
+            ? _parts.FirstOrDefault(part => part.Key == key)
+            : null;
+
+    /// <summary>What to call a part that has not been named: its position, which is what its colour says too.</summary>
+    private string Named(Part part) =>
+        string.IsNullOrWhiteSpace(part.Name) ? $"Part {_parts.IndexOf(part) + 1}" : part.Name;
+
+    /// <summary>
+    /// A part's tone, as the two custom properties every coloured thing on this screen reads.
+    /// Set on the element rather than through a class per position, so a part keeps its
+    /// colour by where it sits and nothing has to be renumbered when one is removed.
+    /// </summary>
+    private string Tone(Part? part)
+    {
+        var index = part is null ? -1 : _parts.IndexOf(part);
+
+        if (index < 0)
+            return "--tone: var(--gs-part-none); --tone-soft: var(--gs-part-none-soft)";
+
+        var letter = "abcd"[index % MaxParts];
+
+        return $"--tone: var(--gs-part-{letter}); --tone-soft: var(--gs-part-{letter}-soft)";
+    }
+
+    private string Spoken(ReceiptItemResponse line, Part? part) =>
+        $"{line.Name}, {line.TotalPrice:0.00}, in {(part is null ? "no part" : Named(part))}. Select to move.";
+
+    // ---- filing ------------------------------------------------------------------------
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (!Ready || _filing)
+            return;
+
+        _filing = true;
+
+        var request = new SplitBankTransactionRequest
+        {
+            // Only the parts holding something. An empty one is somebody's unfinished
+            // thought, and sending it would be asking the API to create an expense for
+            // nothing -- which it refuses, naming a part the person can see is empty.
+            Parts =
+            [
+                .. _parts.Where(part => Held(part.Key).Count > 0).Select(part => new BankTransactionPartInput
+                {
+                    GroupId = part.GroupId,
+                    CategoryId = part.CategoryId,
+                    Name = string.IsNullOrWhiteSpace(part.Name) ? null : part.Name,
+                    ItemIds = Held(part.Key).Select(line => line.Id).ToList()
+                })
+            ],
+            // The person's own answer, never a default. The suggestion was on screen the
+            // whole time; ticking it is them saying they really did pay twice.
+            FileAnyway = _fileAnyway
+        };
+
+        var split = await Bank.SplitAsync(Row.Id, request);
+
+        _filing = false;
+
+        if (split is not null)
+            MudDialog.Close(DialogResult.Ok(split));
+    }
+}

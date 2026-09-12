@@ -5,11 +5,17 @@ namespace GroupSplit.App.Shared.Services.Commands;
 /// <inheritdoc cref="IReceiptCommands"/>
 public sealed class ReceiptCommands(IReceiptsClient receipts) : IReceiptCommands
 {
-    public async Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default)
+    public Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default) =>
+        Read(() => receipts.GetReceiptAsync(transactionId, ct));
+
+    public Task<ReceiptResponse?> ForBankRowAsync(Guid rowId, CancellationToken ct = default) =>
+        Read(() => receipts.GetBankRowReceiptAsync(rowId, ct));
+
+    private static async Task<ReceiptResponse?> Read(Func<Task<ReceiptResponse>> read)
     {
         try
         {
-            return await receipts.GetReceiptAsync(transactionId, ct);
+            return await read();
         }
         catch (OperationCanceledException)
         {

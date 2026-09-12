@@ -516,6 +516,142 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private Guid Self => GetService<ICurrentUser>().User.Id;
 
     /// <summary>A bill typed against an imported row, before anybody files it.</summary>
+    // ---- What a split would come to, before it is one --------------------------------
+    //
+    // The screen that sorts a bill into purchases has to say what each part is worth as it is
+    // built -- that figure is the reason to move a line from one part to another. It asks
+    // rather than works it out, so there is one copy of the apportioning rather than two.
+
+    /// <summary>
+    /// A preview prices the parts by the lines they hold, using the same apportioning that
+    /// filing would.
+    /// </summary>
+    [Fact]
+    public async Task A_preview_prices_each_part_by_the_lines_it_holds()
+    {
+        var row = await Row(amount: 100m);
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+        var jacket = bill.Items.First(item => item.Name == "JACKET");
+
+        var preview = await Inbox.PreviewSplit(row.Id, new SplitChargePreviewRequest
+        {
+            Parts =
+            [
+                new SplitChargePreviewPartInput { ItemIds = [groceries.Id] },
+                new SplitChargePreviewPartInput { ItemIds = [jacket.Id] }
+            ]
+        }, Ct);
+
+        Assert.Equal([60m, 40m], preview.Amounts);
+        Assert.Equal(100m, preview.Charge);
+        Assert.Equal(0m, preview.Unplaced);
+    }
+
+    /// <summary>
+    /// A half-placed bill is priced for what it holds, and says what is still loose.
+    /// </summary>
+    /// <remarks>
+    /// The ordinary state of a screen somebody is working in, and the one thing a preview
+    /// must not do is refuse it: the figures would go blank exactly while they are being
+    /// used. What is unplaced is the difference between the parts and the charge, which is
+    /// the number the screen leads with.
+    /// </remarks>
+    [Fact]
+    public async Task A_preview_of_a_half_placed_bill_says_what_is_still_loose()
+    {
+        var row = await Row(amount: 100m);
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+
+        var preview = await Inbox.PreviewSplit(row.Id, new SplitChargePreviewRequest
+        {
+            Parts =
+            [
+                new SplitChargePreviewPartInput { ItemIds = [groceries.Id] },
+                new SplitChargePreviewPartInput()
+            ]
+        }, Ct);
+
+        Assert.Equal([60m, 0m], preview.Amounts);
+        Assert.Equal(40m, preview.Unplaced);
+    }
+
+    /// <summary>
+    /// Tax follows the lines it was charged on here too, which is the whole reason the
+    /// figures are asked for rather than added up in the client.
+    /// </summary>
+    [Fact]
+    public async Task A_preview_weighs_tax_over_the_lines_it_was_charged_on()
+    {
+        var row = await Row(amount: 104m);
+
+        var bill = await GetService<IReceiptService>().SaveForBankRow(row.Id,
+            new SaveReceiptRequest
+            {
+                Subtotal = 100m,
+                Tax = 4m,
+                Total = 104m,
+                Items =
+                [
+                    new ReceiptItemInput
+                    {
+                        Name = "GROCERIES", TotalPrice = 60m, IsTaxable = false,
+                        Split = ReceiptItemSplit.Evenly
+                    },
+                    new ReceiptItemInput
+                    {
+                        Name = "JACKET", TotalPrice = 40m,
+                        Claims = [new ReceiptClaimInput { UserId = Self }]
+                    }
+                ]
+            }, Ct);
+
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+        var jacket = bill.Items.First(item => item.Name == "JACKET");
+
+        var preview = await Inbox.PreviewSplit(row.Id, new SplitChargePreviewRequest
+        {
+            Parts =
+            [
+                new SplitChargePreviewPartInput { ItemIds = [groceries.Id] },
+                new SplitChargePreviewPartInput { ItemIds = [jacket.Id] }
+            ]
+        }, Ct);
+
+        // All 4.00 of it is the jacket's: the groceries were exempt.
+        Assert.Equal([60m, 44m], preview.Amounts);
+        Assert.Equal(0m, preview.Unplaced);
+    }
+
+    /// <summary>
+    /// A line that is not this bill's is priced without rather than refused.
+    /// </summary>
+    /// <remarks>
+    /// There is no field to fix it in: this prices a screen mid-edit, against a bill that
+    /// could have changed under somebody in another tab. Dropping the stranger keeps the
+    /// figures live and lets the split itself -- which does refuse it, by name -- be the
+    /// place that says so.
+    /// </remarks>
+    [Fact]
+    public async Task A_preview_ignores_a_line_that_is_not_on_this_bill()
+    {
+        var row = await Row(amount: 100m);
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+
+        var preview = await Inbox.PreviewSplit(row.Id, new SplitChargePreviewRequest
+        {
+            Parts = [new SplitChargePreviewPartInput { ItemIds = [groceries.Id, Guid.NewGuid()] }]
+        }, Ct);
+
+        Assert.Equal(60m, Assert.Single(preview.Amounts));
+        Assert.Equal(40m, preview.Unplaced);
+    }
+
     private Task<Receipt> BillOn(Guid rowId, params (string Name, decimal Price, Guid Had)[] lines) =>
         GetService<IReceiptService>().SaveForBankRow(rowId, new SaveReceiptRequest
         {

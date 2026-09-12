@@ -134,7 +134,7 @@ public sealed record BankTransactionResponse(
     /// rather than the first of its parts: a caller following this to "the" expense would
     /// land on one part of a purchase and be told it was the whole thing.
     /// </remarks>
-    public Guid? TransactionId => TransactionIds.Count == 1 ? TransactionIds[0] : null;
+    public Guid? TransactionId => TransactionIds is { Count: 1 } one ? one[0] : null;
 
     /// <summary>What to lead the row with: who was paid, falling back to the bank's line.</summary>
     public string Title => string.IsNullOrWhiteSpace(MerchantName) ? Description : MerchantName;
