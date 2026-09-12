@@ -2188,6 +2188,116 @@ html:not([data-gs-ready]) .gs-group-card {
     color: var(--gs-muted);
 }
 
+/* ----------------------------------------------- the expense dialogs ---- */
+
+/*
+    A field is free text you type; a chip is something you pick. The expense dialogs are
+    built on that line: the amount, the name and the note are fields, and the group, the
+    category, the payer, the date and the merchant are chips carrying the answers they
+    already have. It replaces eight fields of equal weight spread over two steps.
+*/
+.gs-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.gs-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line-strong);
+    color: var(--gs-ink);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background var(--gs-fast) var(--gs-ease),
+        border-color var(--gs-fast) var(--gs-ease);
+}
+
+.gs-chip:hover {
+    background: var(--gs-surface-3);
+}
+
+.gs-chip:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+/* Open, so the picker below it is visibly this chip's and not the row's. */
+.gs-chip.is-open {
+    background: var(--gs-teal-soft);
+    border-color: var(--gs-teal);
+    color: var(--gs-teal-deep);
+}
+
+/* Nothing in it yet: it says what it would be rather than what it is. */
+.gs-chip.is-empty {
+    border-style: dashed;
+    color: var(--gs-muted);
+    font-weight: 600;
+}
+
+.gs-chip .k {
+    color: var(--gs-muted);
+    font-weight: 600;
+}
+
+.gs-chip .mud-icon-root {
+    width: 15px;
+    height: 15px;
+    opacity: 0.55;
+}
+
+.gs-chip.is-open .mud-icon-root {
+    opacity: 1;
+}
+
+/*
+    Where a chip opens to. Under the row rather than over it: the control is the same
+    select or picker it has always been, shown in place, so the only new thing about
+    choosing is where it appears.
+*/
+.gs-picker {
+    padding: 14px;
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+}
+
+/* One size up from the rest of the form, which is enough to say it is the point. */
+.gs-amount .mud-input-root {
+    font-family: var(--gs-font-display);
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.gs-amount .mud-input-adornment-start {
+    font-family: var(--gs-font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--gs-muted);
+}
+
+:root[data-theme="dark"] .gs-chip.is-open {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-chip.is-open {
+        color: var(--gs-teal-bright);
+    }
+}
+
 /* ------------------------------------------------------------- notices ---- */
 
 /*
