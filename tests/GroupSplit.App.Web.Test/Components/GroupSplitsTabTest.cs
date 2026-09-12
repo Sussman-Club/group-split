@@ -229,7 +229,7 @@ public class GroupSplitsTabTest : ComponentTest
 
         Assert.All(
             tab.FindAll("button").Where(button =>
-                button.GetAttribute("aria-label")?.StartsWith("Delete ", StringComparison.Ordinal) == true),
+                button.GetAttribute("aria-label")?.StartsWith("Delete the ", StringComparison.Ordinal) == true),
             button => Assert.True(button.HasAttribute("disabled")));
     }
 
@@ -357,13 +357,13 @@ public class GroupSplitsTabTest : ComponentTest
         // Not awaited yet: the click runs until the dialog closes, so awaiting here would
         // wait on a dialog nothing has answered.
         var editing = tab.FindAll("button")
-            .First(button => button.GetAttribute("aria-label") == "Edit Household 3-way")
+            .First(button => button.GetAttribute("aria-label") == "Edit the Household 3-way rule")
             .ClickAsync(new MouseEventArgs());
 
         var warning = provider.FindAll(".gs-notice.is-warn")
             .Single(notice => notice.QuerySelector("strong") is not null);
 
-        Assert.Equal("Groceries and Utilities all divide by this rule",
+        Assert.Equal("Groceries and Utilities both divide by this rule",
             warning.QuerySelector("strong")!.TextContent.Trim());
 
         // It is said while there is still a way out, which is the only time saying it helps.
@@ -405,7 +405,7 @@ public class GroupSplitsTabTest : ComponentTest
         var (tab, provider) = await RenderWithDialogsAsync();
 
         var editing = tab.FindAll("button")
-            .First(button => button.GetAttribute("aria-label") == "Edit Whoever paid")
+            .First(button => button.GetAttribute("aria-label") == "Edit the Whoever paid rule")
             .ClickAsync(new MouseEventArgs());
 
         // The kind it already is, selected -- not an empty box the person has to guess at.
@@ -480,8 +480,14 @@ public class GroupSplitsTabTest : ComponentTest
             button => button.GetAttribute("aria-label") == "Restore Dining out");
     }
 
-    private static IElement Delete(IRenderedComponent<GroupSplitsTab> tab, string what) =>
-        tab.FindAll("button").First(button => button.GetAttribute("aria-label") == $"Delete {what}");
+    /// <summary>
+    /// The delete button on a rule. Named "the X rule" rather than "X", because a category
+    /// and the rule it divides by usually carry the same name and these sat a row apart
+    /// announcing the same thing.
+    /// </summary>
+    private static IElement Delete(IRenderedComponent<GroupSplitsTab> tab, string rule) =>
+        tab.FindAll("button").First(button =>
+            button.GetAttribute("aria-label") == $"Delete the {rule} rule");
 
     private static IElement Edit(IRenderedComponent<GroupSplitsTab> tab, string category) =>
         tab.FindAll("button").First(button =>
