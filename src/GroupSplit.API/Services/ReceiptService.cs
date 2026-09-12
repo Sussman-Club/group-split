@@ -544,6 +544,7 @@ public class ReceiptService(
                     ReceiptId = receipt.Id,
                     ExpenseId = expenseId,
                     Name = line.Name.Trim(),
+                    NormalizedName = Folded(line.Name),
                     TotalPrice = line.TotalPrice
                 };
 
@@ -559,6 +560,7 @@ public class ReceiptService(
             else
             {
                 item.Name = line.Name.Trim();
+                item.NormalizedName = Folded(line.Name);
                 item.TotalPrice = line.TotalPrice;
             }
 
@@ -595,6 +597,12 @@ public class ReceiptService(
 
         ReceiptSplitCalculator.RefuseIfFiguresDisagree(receipt);
     }
+
+    /// <summary>
+    /// A line's name folded for matching, so two of the same thing are recognisable as such.
+    /// The same folding the merchant resolver uses.
+    /// </summary>
+    private static string Folded(string name) => name.Trim().ToLowerInvariant();
 
     private void Attach(ReceiptItem item, ReceiptClaimInput claim)
     {

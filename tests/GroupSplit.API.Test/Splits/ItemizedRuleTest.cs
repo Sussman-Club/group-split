@@ -81,7 +81,11 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         {
             var item = new ReceiptItem
             {
-                ReceiptId = receipt.Id, ExpenseId = expenseId, Name = name, TotalPrice = price
+                ReceiptId = receipt.Id,
+                ExpenseId = expenseId,
+                Name = name,
+                NormalizedName = name.ToLowerInvariant(),
+                TotalPrice = price
             };
 
             foreach (var userId in had)

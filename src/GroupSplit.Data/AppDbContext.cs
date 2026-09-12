@@ -606,6 +606,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<ReceiptItem>(entity =>
         {
             entity.Property(item => item.Name).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.NormalizedName).HasMaxLength(128).IsRequired();
+
+            // What a reader groups two of the same thing by, and the access path a later
+            // "you have bought this before" would want. Not unique: two lines sharing a
+            // folded name on one bill is the point of having it.
+            entity.HasIndex(item => item.NormalizedName);
             entity.Property(item => item.UnitPrice).IsRequired().HasPrecision(18, 2);
             entity.Property(item => item.TotalPrice).IsRequired().HasPrecision(18, 2);
 

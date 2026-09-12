@@ -43,7 +43,10 @@ public class ReceiptSplitCalculatorTest
         {
             var item = new ReceiptItem
             {
-                Name = $"Line {price}", TotalPrice = price, ExpenseId = Part
+                Name = $"Line {price}",
+                NormalizedName = $"line {price}",
+                TotalPrice = price,
+                ExpenseId = Part
             };
 
             foreach (var (user, weight) in had)

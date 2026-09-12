@@ -114,6 +114,7 @@ public class TransactionSeeder(
             var item = new ReceiptItem
             {
                 Name = line.Name,
+                NormalizedName = line.Name.Trim().ToLowerInvariant(),
                 TotalPrice = line.Price,
                 Quantity = line.Quantity,
                 UnitPrice = line.Quantity == 0
