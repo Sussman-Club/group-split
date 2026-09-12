@@ -145,26 +145,4 @@ public sealed class TransactionCommands(
             // that edit read it from the listings.
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not record what divided the expense.");
-
-    public async Task<ReattachSummaryResponse?> ReattachAsync(Guid groupId, bool dryRun,
-        CancellationToken ct = default)
-    {
-        ReattachSummaryResponse? summary = null;
-
-        var done = await errors.TryAsync(async () =>
-        {
-            summary = await transactions.ReattachTransactionsAsync(
-                new ReattachTransactionsRequest { GroupId = groupId, DryRun = dryRun }, ct);
-
-            if (dryRun) return;
-
-            snackbar.Add(
-                $"{summary.Changed} {(summary.Changed == 1 ? "expense" : "expenses")} re-pointed. No amount moved.",
-                Severity.Success);
-
-            await changes.NotifyTransactionsChangedAsync();
-        }, dryRun ? "Could not work out what would change." : "Could not re-point the expenses.");
-
-        return done ? summary : null;
-    }
 }

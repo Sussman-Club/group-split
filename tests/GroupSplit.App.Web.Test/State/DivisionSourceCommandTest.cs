@@ -9,22 +9,20 @@ using MudBlazor;
 namespace GroupSplit.App.Web.Test.State;
 
 /// <summary>
-/// The two writes that say where an expense's shares came from, and where a group's expenses
-/// should point.
+/// The write that says where an expense's shares came from.
 /// </summary>
 /// <remarks>
-/// Neither moves a penny, and that is exactly why what they say matters: the figures on
-/// screen are identical afterwards, so a bare "updated" would read as a button that did
-/// nothing. Both sentences carry it.
+/// It moves no penny, and that is exactly why what it says matters: the figures on screen
+/// are identical afterwards, so a bare "updated" would read as a button that did nothing.
+/// Both sentences carry it.
 /// <para>
-/// They are also the two endpoints the CLI has driven since rules were versioned and no
-/// client could reach -- so the app could record the wrong provenance and never correct it.
-/// See <c>docs/cli.md</c> under "Saying what divided it" and "Re-pointing a back catalogue".
+/// It is the endpoint the CLI has driven since rules were versioned and no client could
+/// reach -- so the app could record the wrong provenance and never correct it. See
+/// <c>docs/cli.md</c> under "Saying what divided it".
 /// </para>
 /// </remarks>
 public class DivisionSourceCommandTest
 {
-    private static readonly Guid Flat = Guid.NewGuid();
     private static readonly Guid Expense = Guid.NewGuid();
     private static readonly Guid Version = Guid.NewGuid();
 
@@ -119,87 +117,6 @@ public class DivisionSourceCommandTest
 
         Assert.Equal("Mercadona's shares are recorded as its own. No amount moved.", message);
     }
-
-    // ---- Re-pointing a back catalogue --------------------------------------------------------
-
-    /// <summary>
-    /// A dry run saves nothing, so it says nothing and tells nobody.
-    /// </summary>
-    /// <remarks>
-    /// It is the whole safety of the operation: somebody reads what would move before any of
-    /// it does. A success message over a run that wrote nothing would be a lie about the
-    /// most consequential button in the group.
-    /// </remarks>
-    [Fact]
-    public async Task A_dry_run_is_silent_and_announces_nothing()
-    {
-        _transactions
-            .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ASummary(dryRun: true, changed: 812));
-
-        var summary = await _commands.ReattachAsync(Flat, dryRun: true);
-
-        Assert.Equal(812, summary?.Changed);
-
-        _transactions.Verify(client => client.ReattachTransactionsAsync(
-            It.Is<ReattachTransactionsRequest>(request => request.GroupId == Flat && request.DryRun),
-            It.IsAny<CancellationToken>()), Times.Once);
-
-        Assert.Empty(_said);
-        Assert.Equal(0, _announced);
-    }
-
-    [Fact]
-    public async Task Applying_it_counts_what_moved_and_says_no_amount_did()
-    {
-        _transactions
-            .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ASummary(dryRun: false, changed: 812));
-
-        await _commands.ReattachAsync(Flat, dryRun: false);
-
-        _transactions.Verify(client => client.ReattachTransactionsAsync(
-            It.Is<ReattachTransactionsRequest>(request => request.GroupId == Flat && !request.DryRun),
-            It.IsAny<CancellationToken>()), Times.Once);
-
-        var (message, severity) = Assert.Single(_said);
-
-        Assert.Equal(Severity.Success, severity);
-        Assert.Equal("812 expenses re-pointed. No amount moved.", message);
-        Assert.Equal(1, _announced);
-    }
-
-    /// <summary>One is an expense, not "1 expenses".</summary>
-    [Fact]
-    public async Task One_expense_is_counted_in_the_singular()
-    {
-        _transactions
-            .Setup(client => client.ReattachTransactionsAsync(It.IsAny<ReattachTransactionsRequest>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ASummary(dryRun: false, changed: 1));
-
-        await _commands.ReattachAsync(Flat, dryRun: false);
-
-        var (message, _) = Assert.Single(_said);
-
-        Assert.Equal("1 expense re-pointed. No amount moved.", message);
-    }
-
-    /// <summary>
-    /// A summary whose figures can co-occur.
-    /// </summary>
-    /// <remarks>
-    /// An empty <c>ByRule</c> means no expense is filed under a category naming a rule, in
-    /// which case every one of the 1,411 is left without a version -- not 63. The command
-    /// reads only <c>Changed</c>, so an impossible shape here masks nothing today; it is
-    /// written straight because the identical shape one file away is what let a dialog
-    /// misread the same field for a whole review round.
-    /// </remarks>
-    private static ReattachSummaryResponse ASummary(bool dryRun, int changed) =>
-        new(Flat, dryRun, Examined: 1411, Changed: changed, LeftWithoutAVersion: 285,
-            ByRule: [new ReattachedRuleSummary(Guid.NewGuid(), "Household 3-way", 1189, changed, 63)]);
 
     private sealed class TestNavigationManager : NavigationManager
     {
