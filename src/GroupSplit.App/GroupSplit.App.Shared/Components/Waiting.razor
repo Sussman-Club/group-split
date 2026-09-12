@@ -13,12 +13,18 @@
     already the right size when it arrives.
 *@
 
-<div class="gs-list gs-waiting" aria-busy="true" aria-live="polite">
+@* gs-placeholder, not gs-waiting: the home page's "Waiting on you" card had that class
+   first, and a second meaning for it landed later in the stylesheet at the same
+   specificity, so the skeleton's padding won and stripped that card to its border --
+   heading against one edge, count against the other. Two unrelated senses of "waiting",
+   one class name. *@
+
+<div class="gs-list gs-placeholder" aria-busy="true" aria-live="polite">
     <span class="gs-sr-only">Loading</span>
 
     @for (var row = 0; row < Rows; row++)
     {
-        <div class="gs-waiting-row" @key="row" aria-hidden="true"></div>
+        <div class="gs-placeholder-row" @key="row" aria-hidden="true"></div>
     }
 </div>
 
