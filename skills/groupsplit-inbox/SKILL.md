@@ -72,6 +72,37 @@ For each row, in order:
 Do not pick for them. The three are not interchangeable and the wrong one is not obviously
 wrong afterwards.
 
+## When one charge is several purchases
+
+A warehouse run is the flat's groceries **and** a jacket that is nobody's business but the
+payer's: one card charge, two purchases. Filing it whole puts the clothes in the group's
+ledger and files them under Groceries, and neither is visible as wrong afterwards -- the
+balance moves and the by-category totals are quietly off.
+
+`inbox list` marks the rows this can apply to: `billLineCount` is how many lines the bill
+behind that charge has, and `canSplit` says it is worth offering. Both are zero and false for
+nearly every row, because a bill is something a person typed rather than something the bank
+sent.
+
+When `canSplit` is true, **ask before filing whole.** The user knows whether the charge was
+one purchase; you do not, and the bill's line names are usually enough for them to say.
+
+```bash
+groupsplit receipts show <row-id> --bank-row --json    # the lines, numbered
+groupsplit receipts split <row-id> \
+  --part "Groceries=1-4@<group-id>/<category-id>" \
+  --part "Clothes=5,6"
+```
+
+Every line has to land in exactly one part, and no `@` keeps that part on the payer's own
+ledger. The amounts are never given -- each part is cut from the charge in proportion to the
+lines it holds. See the `groupsplit` skill's `receipts` reference for the grammar and the
+refusals.
+
+A charge with no bill cannot be split. Typing one up is `receipts set --bank-row`, and that
+is a fair thing to offer when somebody says a charge was two purchases -- but it is their
+receipt to transcribe, so ask for the lines rather than inventing them.
+
 ## How sure a suggestion is
 
 Every candidate carries a `confidence`, and it changes how you should put it -- not whether

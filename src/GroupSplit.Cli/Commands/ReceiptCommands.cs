@@ -50,6 +50,7 @@ public static class ReceiptCommands
         receipts.Subcommands.Add(Claim());
         receipts.Subcommands.Add(Preview());
         receipts.Subcommands.Add(Divide());
+        receipts.Subcommands.Add(Split());
         receipts.Subcommands.Add(Delete());
 
         return receipts;
@@ -306,6 +307,117 @@ public static class ReceiptCommands
         return command;
     }
 
+    /// <summary>
+    /// Files one imported charge as several expenses, by saying which lines are which.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the feature, at the other scale. <c>divide</c> splits one expense
+    /// between the people who had each line; this splits one charge between the purchases it
+    /// turns out to be -- the flat's groceries and a jacket that is nobody's business but
+    /// yours, on one warehouse receipt.
+    /// <para>
+    /// Everything at once. Every line has to land in exactly one part, so there is no
+    /// half-split row to come back to and nothing to reconcile: either every part exists or
+    /// the charge is still waiting.
+    /// </para>
+    /// <para>
+    /// The amounts are not given and cannot be. Each part is cut from the charge in
+    /// proportion to the lines it holds, with the tax and the tip apportioned over them, so
+    /// the parts sum to what the card was charged by construction rather than by the caller
+    /// getting the arithmetic right.
+    /// </para>
+    /// </remarks>
+    private static Command Split()
+    {
+        var rowId = new Argument<Guid>("bank-transaction-id")
+        {
+            Description = "The imported row's id, as shown by `groupsplit inbox list`."
+        };
+
+        var parts = new Option<string[]>("--part")
+        {
+            Description = "One purchase, as <name>=<lines>[@<group-id>[/<category-id>]], "
+                          + "repeatable and needed at least twice. <lines> is line numbers, "
+                          + "ranges or ids from `groupsplit receipts show --bank-row`; no "
+                          + "@group keeps that part on your own ledger.",
+            AllowMultipleArgumentsPerToken = false
+        };
+
+        var fileAnyway = new Option<bool>("--file-anyway")
+        {
+            Description = "Go ahead even though this charge looks like an expense already "
+                          + "recorded."
+        };
+
+        var command = new Command("split",
+            "File one imported charge as several expenses, by its bill.")
+        {
+            rowId, parts, fileAnyway
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var id = parse.GetValue(rowId);
+
+            if (parse.GetValue(parts) is not { Length: > 1 } given)
+            {
+                throw CliException.Input(
+                    "Splitting a charge needs at least two --part.",
+                    "One part is an ordinary filing -- use `groupsplit inbox file`. Try "
+                    + "--part \"Groceries=1-4@<group-id>\" --part \"Clothes=5,6\".");
+            }
+
+            // Read first, because a part names lines by where they are on the paper and only
+            // the bill knows what is there. It also means a position that is not on the bill
+            // is refused before anything is created, naming the number the caller typed
+            // rather than an id they never saw.
+            var bill = await new Api.ReceiptsClient(context.ApiHttpClient)
+                .GetBankRowReceiptAsync(id, ct);
+
+            var request = new SplitBankTransactionRequest
+            {
+                Parts = ReceiptParts.Parse("--part", given, bill.Items),
+                // Never defaulted true for convenience. A split files several expenses at
+                // once, so going ahead over a payment already recorded is several wrong
+                // balances rather than one, and this flag is the person saying they were
+                // told.
+                FileAnyway = parse.GetValue(fileAnyway)
+            };
+
+            var split = await new Api.InboxClient(context.ApiHttpClient)
+                .SplitBankTransactionAsync(id, request, ct);
+
+            context.Output.Write(split, RenderSplit);
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static IRenderable RenderSplit(SplitBankTransactionResponse split)
+    {
+        var table = Tables.Grid("Expense", "Name", "Lines", "Amount");
+
+        foreach (var part in split.Parts)
+        {
+            table.AddRow(
+                part.TransactionId.ToString(),
+                Markup.Escape(part.Name),
+                part.ItemCount.ToString(),
+                part.Amount.ToString());
+        }
+
+        return new Rows(
+            new Markup($"[green]Split[/] {split.Charge} into {split.Parts.Count} expenses.\n\n"),
+            table,
+            // The invariant, said once where it can be checked: the parts are cut from the
+            // charge, so this is arithmetic the caller can follow rather than trust.
+            new Markup($"\n[grey]Tax and tip are apportioned between the parts in proportion "
+                       + $"to the lines each holds. They come to {split.Parts.Sum(part => part.Amount)}.[/]\n"));
+    }
+
     private static Command Delete()
     {
         var bankRow = BankRow();
@@ -419,15 +531,24 @@ public static class ReceiptCommands
                 ? "no -- not filed as an expense yet"
                 : "no -- see Unclaimed, or the figures do not add up");
 
-        var items = Tables.Grid("Line", "Name", "Qty", "Price", "Had by");
+        // The position first, because that is what `receipts split --part` refers to: a
+        // warehouse bill is twenty lines and nobody is pasting twenty guids. The id stays
+        // beside it for anything that wants to be unambiguous.
+        var items = Tables.Grid("#", "Line", "Name", "Qty", "Price", "Tax", "Had by");
+
+        var position = 1;
 
         foreach (var item in receipt.Items)
         {
             items.AddRow(
+                position++.ToString(),
                 item.Id.ToString(),
                 Markup.Escape(item.Name),
                 item.Quantity.ToString(),
                 item.TotalPrice.ToString(),
+                // Only worth marking where it is not the ordinary answer. A column of
+                // "taxed" down every restaurant bill says nothing.
+                item.IsTaxable ? string.Empty : "[grey]exempt[/]",
                 Divided(item));
         }
 

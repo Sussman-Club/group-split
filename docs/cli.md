@@ -37,7 +37,7 @@ has to reach for `curl` and a bearer token to do.
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `reattach`, `delete` |
 | `categories` | `list`, `create`, `update`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
-| `receipts` | `show`, `set`, `claim`, `preview`, `divide`, `delete` |
+| `receipts` | `show`, `set`, `claim`, `preview`, `divide`, `split`, `delete` |
 | `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
 | `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
@@ -730,9 +730,17 @@ bottom:
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00   --item "Steak=22.00@3f25c1a8-...-444455556666"   --item "Risotto=16.50@9ab77d10-...-111122223333"   --item "Wine=18.00@3f25c1a8-...-444455556666,9ab77d10-...-111122223333"
 ```
 
-A line reads `<name>=<price>[x<qty>][@<who>]`. After the `@` come user ids, comma-separated,
-each optionally `*<weight>` -- so `@alice,bob` is a bottle shared evenly and `@alice*2,bob`
-is one where Alice had twice as much.
+A line reads `<name>=<price>[x<qty>][/notax][@<who>]`. After the `@` come user ids,
+comma-separated, each optionally `*<weight>` -- so `@alice,bob` is a bottle shared evenly and
+`@alice*2,bob` is one where Alice had twice as much.
+
+`/notax` says the bill's tax was not charged on that line, which is what a warehouse receipt
+needs: the groceries are exempt and the clothes are not, and weighing the tax over every line
+would tax the bananas and let the jacket off. It is a flag rather than a rate because a flag
+is what the paper gives you -- one tax total at the bottom and a letter beside the lines it
+was charged on. Lines are taxable unless they say otherwise, so a restaurant bill never
+mentions it. Either side of the `@` reads the same: `Bread=4.00/notax@even` and
+`Bread=4.00@even/notax` are one line.
 
 `@even` is the other thing a line can say: **the table's, rather than anybody's in
 particular.** That is not the same as naming everybody, which says the same thing today and a
@@ -814,6 +822,54 @@ name a rule that divides by the bill.
 A claim naming somebody who turns out not to be in the destination group is dropped rather
 than refusing the filing, and its line goes back to unclaimed -- which `divide` then refuses
 until somebody says who had it.
+
+### One charge, several purchases
+
+The other half of the feature, at the other scale. `divide` splits one expense between the
+people who had each line; `split` splits one **charge** between the purchases it turns out to
+be -- the flat's groceries and a jacket that is nobody's business but yours, on one warehouse
+receipt. Filing that whole would put your clothes in the group's ledger and file them under
+Groceries.
+
+Type the bill against the row, then say which lines are which:
+
+```bash
+groupsplit receipts set <bank-row-id> --bank-row --tax 19.55 \
+  --item "Rotisserie chicken=8.99/notax@even" \
+  --item "Olive oil=18.50/notax@even" \
+  --item "Fleece jacket=34.99@<you>" \
+  --item "Running shoes=49.99@<you>"
+
+groupsplit receipts show <bank-row-id> --bank-row
+
+groupsplit receipts split <bank-row-id> \
+  --part "Groceries=1-2@<group-id>/<category-id>" \
+  --part "Clothes=3,4"
+```
+
+A part reads `<name>=<lines>[@<group-id>[/<category-id>]]`. `<lines>` is line numbers, ranges
+of them, or line ids -- the numbers are the first column of `receipts show`, and ranges exist
+because a warehouse bill is twenty lines and nobody is pasting twenty guids. The category
+nests inside the group because that is where it lives: a category belongs to one group.
+
+**No `@` at all is the personal part** -- kept on your own ledger, owed to nobody. That is the
+jacket, and it is the whole reason a charge gets split.
+
+The amounts are not given and cannot be. Each part is cut from the charge in proportion to
+the lines it holds, with the tax and the tip apportioned over them, so the parts sum to what
+the card was charged by construction rather than by you getting the arithmetic right.
+
+It is all or nothing. Every line has to land in exactly one part:
+
+- a line in no part is money no part accounts for, so the parts would stop summing to the
+  charge (`SPLIT_PARTS_INVALID`, carrying the lines)
+- a line in two parts is money counted twice (the same code)
+- one part is an ordinary filing, so use `inbox file`
+
+Nothing is half-filed: either every part exists or the charge is still waiting. And like
+`inbox file`, going ahead over a payment that may already be recorded takes `--file-anyway` --
+more so here, because a split files several expenses at once, so a duplicate is several wrong
+balances rather than one.
 
 ### Making it a group's default
 
