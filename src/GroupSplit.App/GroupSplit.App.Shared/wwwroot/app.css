@@ -1644,6 +1644,43 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 /* Empty state. */
+/* Announced, not drawn. The placeholder rows below are aria-hidden, so without this a
+   screen reader is told the region is busy and never told what about. */
+.gs-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/*
+    A row that has not arrived. Sized to .gs-row's own height so the list does not resize
+    underneath the person when the real ones replace it, and swept rather than pulsed --
+    a sweep reads as progress, a pulse reads as something wrong. The global
+    prefers-reduced-motion rule stops it for anybody who has asked.
+*/
+.gs-waiting-row {
+    height: 44px;
+    border-radius: var(--gs-radius);
+    background: linear-gradient(
+        90deg,
+        var(--gs-surface-2) 0%,
+        var(--gs-surface-3) 50%,
+        var(--gs-surface-2) 100%);
+    background-size: 200% 100%;
+    animation: gs-sweep 1.4s var(--gs-ease) infinite;
+}
+
+@keyframes gs-sweep {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+
 .gs-empty {
     display: flex;
     flex-direction: column;

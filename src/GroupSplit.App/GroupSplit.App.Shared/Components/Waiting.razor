@@ -1,0 +1,32 @@
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    Rows that are not there yet.
+
+    A list has three states and only two of them were ever drawn: full, and empty. "Not
+    asked yet" looked exactly like "there is nothing here", so a screen whose read takes a
+    moment announced an emptiness it had not established, then contradicted itself -- and
+    the card grew as the real rows arrived under a heading that had already settled.
+
+    Rows rather than a spinner because that is what is coming. A spinner says something is
+    happening; these say what will be there and roughly how much of it, so the layout is
+    already the right size when it arrives.
+*@
+
+<div class="gs-list" aria-busy="true" aria-live="polite">
+    <span class="gs-sr-only">Loading</span>
+
+    @for (var row = 0; row < Rows; row++)
+    {
+        <div class="gs-waiting-row" @key="row" aria-hidden="true"></div>
+    }
+</div>
+
+@code {
+    /// <summary>How many rows to stand in for.</summary>
+    /// <remarks>
+    /// Guessed, and deliberately on the low side: a placeholder taller than what replaces
+    /// it makes the page settle upwards, which reads as content being taken away.
+    /// </remarks>
+    [Parameter] public int Rows { get; set; } = 3;
+}

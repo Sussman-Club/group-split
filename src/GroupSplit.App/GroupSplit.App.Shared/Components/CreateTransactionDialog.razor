@@ -234,6 +234,16 @@
     /// <summary>The group to open on, or null for a personal expense.</summary>
     [Parameter] public Guid? SelectedGroupId { get; set; }
 
+    /// <summary>
+    /// What that group is called, when the caller already knows.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and worth having: a screen that opens this from inside a group is showing
+    /// the group's name at the top of the page, so making the dialog re-derive it from a
+    /// list it has to fetch is the app asking the API for something it is already holding.
+    /// </remarks>
+    [Parameter] public string? SelectedGroupName { get; set; }
+
     /// <summary>Which chip's picker is showing. One at a time; the row stays a row.</summary>
     private enum Picker { None, Group, Category, Payer, When, Where }
 
@@ -321,15 +331,36 @@
     /// </summary>
     private bool GroupFixed => SelectedGroupId is not null;
 
+
+
     private bool IsShared => _groupId is not null;
 
     /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
     private static string Divides(CategoryResponse category) =>
         category.DefaultSplitRuleName is { Length: > 0 } rule ? rule : "even split";
 
-    private string Where => _groupId is null
-        ? "Personal"
-        : _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
+    /// <summary>
+    /// The group this is being recorded in, said the way the person would say it.
+    /// </summary>
+    /// <remarks>
+    /// The name the caller handed over comes first. Looking it up in the groups list meant
+    /// the heading of a dialog opened from inside a group depended on a read of every other
+    /// group the person belongs to -- so a slow one left it blank and a failed one left it
+    /// blank for good, on the one fact the screen was certain of before it opened.
+    /// </remarks>
+    private string Where
+    {
+        get
+        {
+            if (_groupId is null)
+                return "Personal";
+
+            if (GroupFixed && SelectedGroupName is { Length: > 0 } named)
+                return named;
+
+            return _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
+        }
+    }
 
     private string CategoryName =>
         _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name ?? "category";
@@ -375,11 +406,18 @@
         _selectedDate = now.Date;
         _selectedTime = now.TimeOfDay;
 
+        // Opened from inside a group that named itself, the list of every other group is
+        // only what the group picker offers -- and the picker is not shown, because the
+        // group is settled. It was fetched anyway, so an expense could not be recorded in
+        // the group somebody was standing in because a read about other groups had failed.
+        // A caller that does not pass the name still needs the list to find it.
         var loaded = await Errors.TryAsync(async () =>
         {
-            _groups = [.. await GroupsClient.GetGroupsAsync()];
+            if (!GroupFixed || string.IsNullOrWhiteSpace(SelectedGroupName))
+                _groups = [.. await GroupsClient.GetGroupsAsync()];
+
             await LoadGroupDetailsAsync();
-        }, "Could not load your groups.");
+        }, GroupFixed ? "Could not load the group." : "Could not load your groups.");
 
         if (!loaded)
         {

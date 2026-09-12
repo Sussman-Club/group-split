@@ -355,7 +355,8 @@ else if (NotFound)
 
         var parameters = new DialogParameters<CreateTransactionDialog>
         {
-            { x => x.SelectedGroupId, GroupId }
+            { x => x.SelectedGroupId, GroupId },
+            { x => x.SelectedGroupName, Group?.Name }
         };
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
