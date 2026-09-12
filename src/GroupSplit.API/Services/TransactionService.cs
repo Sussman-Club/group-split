@@ -54,12 +54,17 @@ public interface ITransactionService
     /// divides by the bill has to read it on the very first division -- which happens inside
     /// this call, before any caller could attach it afterwards.
     /// </param>
+    /// <param name="billItemIds">
+    /// Which of the bill's lines are this expense's, or null for all of them. Named when one
+    /// charge is being filed as several purchases, where each expense takes its own part of
+    /// the paper and the rest belongs to its siblings.
+    /// </param>
     /// <remarks>
     /// An overload rather than an optional parameter on the one above, so that the dozens of
     /// existing <c>Create(request, ct)</c> calls keep meaning what they meant.
     /// </remarks>
     ValueTask<Expense> Create(CreateTransactionRequest request, Receipt? bill,
-        CancellationToken ct = default);
+        IReadOnlyList<Guid>? billItemIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// What <paramref name="request"/> would be divided into if it were saved, without
@@ -231,10 +236,10 @@ public class TransactionService(
     /// record against, which is what four of the error codes this replaces were for.
     /// </remarks>
     public ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default) =>
-        Create(request, bill: null, ct);
+        Create(request, bill: null, billItemIds: null, ct);
 
     public async ValueTask<Expense> Create(CreateTransactionRequest request, Receipt? bill,
-        CancellationToken ct = default)
+        IReadOnlyList<Guid>? billItemIds = null, CancellationToken ct = default)
     {
         var currentUser = userContext.User;
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
@@ -274,11 +279,14 @@ public class TransactionService(
         // until this method builds it.
         if (bill is not null)
         {
-            // Every line becomes this expense's. Filing a row on its own is the one-part
-            // case: the whole charge is one purchase, so the whole paper is one expense's.
-            // Splitting a charge into several is the inbox's own operation, which assigns
-            // the lines itself.
-            foreach (var item in bill.Items)
+            // All of the paper when nothing narrower was named -- filing a charge on its own
+            // is the one-part case, where the whole bill is one purchase. A split names its
+            // own lines and leaves the rest to its siblings.
+            var mine = billItemIds is null
+                ? bill.Items
+                : bill.Items.Where(item => billItemIds.Contains(item.Id));
+
+            foreach (var item in mine)
                 item.ExpenseId = expense.Id;
 
             // The row keeps its bill. There is no hand-over to make any more -- a receipt

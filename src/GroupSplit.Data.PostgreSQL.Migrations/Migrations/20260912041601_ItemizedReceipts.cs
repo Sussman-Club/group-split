@@ -11,12 +11,15 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropIndex(
+                name: "IX_Transaction_BankTransactionId",
+                table: "Transaction");
+
             migrationBuilder.CreateTable(
                 name: "Receipt",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ExpenseId = table.Column<Guid>(type: "uuid", nullable: true),
                     BankTransactionId = table.Column<Guid>(type: "uuid", nullable: true),
                     Subtotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     Tax = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
@@ -26,17 +29,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Receipt", x => x.Id);
-                    table.CheckConstraint("CK_Receipt_BelongsToExactlyOne", "num_nonnulls(\"ExpenseId\", \"BankTransactionId\") = 1");
                     table.ForeignKey(
                         name: "FK_Receipt_BankTransaction_BankTransactionId",
                         column: x => x.BankTransactionId,
                         principalTable: "BankTransaction",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Receipt_Transaction_ExpenseId",
-                        column: x => x.ExpenseId,
-                        principalTable: "Transaction",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -47,10 +43,13 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ReceiptId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ExpenseId = table.Column<Guid>(type: "uuid", nullable: true),
                     Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    NormalizedName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     UnitPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     Quantity = table.Column<decimal>(type: "numeric(18,3)", precision: 18, scale: 3, nullable: false),
                     TotalPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    IsTaxable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     Division = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
@@ -62,6 +61,12 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         principalTable: "Receipt",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_ReceiptItem_Transaction_ExpenseId",
+                        column: x => x.ExpenseId,
+                        principalTable: "Transaction",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -91,16 +96,25 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Transaction_BankTransactionId",
+                table: "Transaction",
+                column: "BankTransactionId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Receipt_BankTransactionId",
                 table: "Receipt",
                 column: "BankTransactionId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Receipt_ExpenseId",
-                table: "Receipt",
-                column: "ExpenseId",
-                unique: true);
+                name: "IX_ReceiptItem_ExpenseId",
+                table: "ReceiptItem",
+                column: "ExpenseId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ReceiptItem_NormalizedName",
+                table: "ReceiptItem",
+                column: "NormalizedName");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ReceiptItem_ReceiptId",
@@ -130,6 +144,16 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "Receipt");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Transaction_BankTransactionId",
+                table: "Transaction");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Transaction_BankTransactionId",
+                table: "Transaction",
+                column: "BankTransactionId",
+                unique: true);
         }
     }
 }

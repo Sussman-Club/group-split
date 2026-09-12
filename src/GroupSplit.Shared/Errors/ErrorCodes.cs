@@ -129,6 +129,15 @@ public static class ErrorCodes
     public const string SplitsInvalid = "SPLITS_INVALID";
 
     /// <summary>
+    /// The parts a charge was to be split into do not account for its bill: a line named
+    /// twice, a line named that is not on it, or a line left out. Every line has to land in
+    /// exactly one part, because a part's amount is cut from the charge in proportion to the
+    /// lines it holds -- so a line belonging to nobody is money the parts would not sum to.
+    /// Carries the lines at fault.
+    /// </summary>
+    public const string SplitPartsInvalid = "SPLIT_PARTS_INVALID";
+
+    /// <summary>
     /// A receipt was sent that could not describe a bill at all -- no items, a line with no
     /// name or a negative price, or a claim with no share in it. Distinct from
     /// <see cref="ReceiptDoesNotAddUp"/>, which is a well-formed bill whose figures disagree.

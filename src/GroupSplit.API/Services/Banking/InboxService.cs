@@ -52,6 +52,23 @@ public interface IInboxService
         IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
 
     /// <summary>
+    /// Files one charge as several expenses, by saying which lines of its bill belong to
+    /// which purchase.
+    /// </summary>
+    /// <remarks>
+    /// For the charge that is two purchases -- the flat's groceries and a jacket of your own
+    /// on one warehouse receipt. Filing it whole would put your clothes in the group's ledger
+    /// and file them under Groceries; this gives each part its own expense, its own group and
+    /// its own category, while the money stays one charge.
+    /// <para>
+    /// Everything at once. Every line lands in a part, so there is no half-split state to
+    /// leave a row in and nothing to reconcile afterwards.
+    /// </para>
+    /// </remarks>
+    Task<SplitBankTransactionResponse> Split(Guid id, SplitBankTransactionRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Attaches the row to an expense that is already there, instead of making a second one.
     /// </summary>
     Task<Expense> Link(Guid id, LinkBankTransactionRequest request, CancellationToken ct = default);
@@ -193,7 +210,7 @@ public sealed class InboxService(
             // A statement has a date and not an instant. Midnight UTC keeps it the day the
             // bank said, whichever zone it is later read in.
             DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
-        }, bill, ct);
+        }, bill, ct: ct);
 
         expense.BankTransaction = row;
         expense.BankTransactionId = row.Id;
@@ -399,6 +416,156 @@ public sealed class InboxService(
                 $"This is in {row.Currency} and the group keeps its balances in {currency}.")
             .WithExtension("transactionCurrency", row.Currency)
             .WithExtension("groupCurrency", currency);
+    }
+
+    public async Task<SplitBankTransactionResponse> Split(
+        Guid id, SplitBankTransactionRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var row = await Existing(id, ct);
+
+        if (row.Status == BankTransactionStatus.Filed)
+        {
+            throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled,
+                "This imported transaction has already been added as an expense.");
+        }
+
+        if (row.Amount < 0)
+        {
+            throw new UnprocessableException(ErrorCodes.BankTransactionIsCredit,
+                    "This is money coming in, so it cannot be added as an expense.")
+                .WithExtension("amount", row.Amount);
+        }
+
+        // Once per destination: a split can land its parts in different groups, and each of
+        // them keeps its balances in its own currency.
+        foreach (var groupId in request.Parts.Select(part => part.GroupId).Distinct())
+            await RefuseCurrencyMismatch(row, groupId, ct);
+
+        // Before any of it exists, exactly as an ordinary filing does -- a duplicate found
+        // afterwards is several wrong balances rather than one.
+        if (!request.FileAnyway)
+        {
+            var matches = await matcher.ExpensesLike(row, ct);
+
+            if (matches.Count > 0)
+            {
+                throw new ConflictException(ErrorCodes.PossibleDuplicateExpense, Refusal(matches))
+                    .WithExtension(ProblemDetails.MatchesExtension, matches.ToResponses());
+            }
+        }
+
+        // There is nothing to split without one. A charge with no bill is filed whole, which
+        // is what File is for.
+        var bill = await receipts.ForBankRow(row.Id, ct);
+
+        var parts = PartsOf(bill, request);
+
+        // What each part comes to, worked out before any expense exists -- an expense cannot
+        // be created without its amount, and the amount depends on which lines it holds.
+        // Cut from the charge rather than added up towards it, so the parts sum to it.
+        var amounts = ReceiptSplitCalculator.AmountsFor(bill, parts);
+
+        var filed = new List<SplitPartResponse>();
+
+        for (var i = 0; i < request.Parts.Count; i++)
+        {
+            var part = request.Parts[i];
+
+            var expense = await transactions.Create(new CreateTransactionRequest
+            {
+                GroupId = part.GroupId,
+                CategoryId = part.CategoryId,
+                PaidByUserId = part.PaidByUserId,
+                Splits = part.Splits,
+                Name = Named(part.Name, row),
+                Description = part.Description,
+                Amount = amounts[i],
+                DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+            }, bill, part.ItemIds, ct);
+
+            // Every part came from this charge, and each says so. The link is many-to-one now
+            // for exactly this reason.
+            expense.BankTransaction = row;
+            expense.BankTransactionId = row.Id;
+            expense.MerchantId = row.MerchantId;
+
+            filed.Add(new SplitPartResponse(
+                expense.Id, expense.Name, expense.GroupId, expense.Amount, part.ItemIds.Count));
+        }
+
+        row.Status = BankTransactionStatus.Filed;
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return new SplitBankTransactionResponse(row.Id, row.Amount, filed);
+    }
+
+    /// <summary>
+    /// The bill's lines, grouped as the request asks -- and refused unless every line lands
+    /// in exactly one part.
+    /// </summary>
+    /// <remarks>
+    /// Not a tidiness check. A part's amount is cut from the charge in proportion to the
+    /// lines it holds, so a line left out is money no part accounts for and the parts stop
+    /// summing to what the card was charged; a line named twice is money counted twice. Both
+    /// are refused here, by name, rather than surfacing later as a total nobody can explain.
+    /// </remarks>
+    private static List<IReadOnlyList<ReceiptItem>> PartsOf(
+        Receipt bill, SplitBankTransactionRequest request)
+    {
+        var byId = bill.Items.ToDictionary(item => item.Id);
+        var seen = new HashSet<Guid>();
+        var twice = new List<Guid>();
+        var strangers = new List<Guid>();
+        var parts = new List<IReadOnlyList<ReceiptItem>>();
+
+        foreach (var part in request.Parts)
+        {
+            var lines = new List<ReceiptItem>();
+
+            foreach (var itemId in part.ItemIds)
+            {
+                if (!byId.TryGetValue(itemId, out var item))
+                {
+                    strangers.Add(itemId);
+                    continue;
+                }
+
+                if (!seen.Add(itemId))
+                {
+                    twice.Add(itemId);
+                    continue;
+                }
+
+                lines.Add(item);
+            }
+
+            parts.Add(lines);
+        }
+
+        if (strangers.Count > 0)
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    "A part names a line that is not on this bill.")
+                .WithExtension("unknownItemIds", strangers);
+
+        if (twice.Count > 0)
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    "A line of the bill is in more than one part. Each line belongs to one " +
+                    "purchase.")
+                .WithExtension("duplicatedItemIds", twice);
+
+        var missed = bill.Items.Where(item => !seen.Contains(item.Id)).ToList();
+
+        if (missed.Count > 0)
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    $"{missed.Count} line(s) of the bill are in no part. Every line has to " +
+                    "belong to one before the charge can be filed.")
+                .WithExtension("unplacedItemIds", missed.ConvertAll(item => item.Id))
+                .WithExtension("unplacedItemNames", missed.ConvertAll(item => item.Name));
+
+        return parts;
     }
 
     private static string Named(string? requested, BankTransaction row) =>
