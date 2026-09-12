@@ -163,10 +163,11 @@ exactly as they are.
 | `receipts claim <transaction-id> <item-id>` | Say how one line divides. `--user` repeatable names who had it; `--even` makes it the table's; neither un-claims it. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
+| `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
 | `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. `--bank-row` removes one from an imported row instead. |
 
-A line is `<name>=<price>[x<qty>][@<who>]`, and `<who>` is comma-separated user ids each
-optionally `*<weight>`:
+A line is `<name>=<price>[x<qty>][/notax][@<who>]`, and `<who>` is comma-separated user ids
+each optionally `*<weight>`:
 
 ```bash
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
@@ -192,6 +193,10 @@ groupsplit receipts set 7c1e... --tip 8.00 --rest-even \
 `--rest-even` marks every line you did not claim. A line that already says how it divides is
 left as typed.
 
+`/notax` says the bill's tax was not charged on that line -- a warehouse receipt where the
+groceries are exempt and the clothes are not. Lines are taxable unless they say otherwise, so
+a restaurant bill never mentions it. It reads the same on either side of the `@`.
+
 **Tax and tip are apportioned in proportion to what each person claimed**, not per head --
 somebody holding a quarter of the food owes a quarter of both. It is one calculation, so
 there is a single rounding and the remainder goes to whoever paid, as in every other
@@ -204,6 +209,38 @@ What it refuses, before dividing rather than after:
 | `RECEIPT_ITEMS_UNCLAIMED` | A line belongs to nobody and is not marked `@even`. Carries `unclaimedItemNames`. Refused rather than spread over everybody: a forgotten line and one the table really did share look identical from here -- which is exactly what `@even` exists to tell apart. |
 | `RECEIPT_DOES_NOT_ADD_UP` | The lines do not come to the subtotal, the parts do not come to the total, or the total is not the expense's amount. Carries the figures it compared. |
 | `RECEIPT_NOT_FOUND` | No bill on that expense -- or, when dividing, the expense is filed under an itemised rule and nobody has attached one. |
+
+#### One charge, several purchases
+
+`divide` splits one expense between the people who had each line. `receipts split` splits one
+**charge** between the purchases it turns out to be -- the flat's groceries and a jacket of
+your own, on one warehouse receipt. Filing that whole would put the clothes in the group's
+ledger and file them under Groceries.
+
+```bash
+groupsplit receipts show <bank-row-id> --bank-row
+
+groupsplit receipts split <bank-row-id> \
+  --part "Groceries=1-4@<group-id>/<category-id>" \
+  --part "Clothes=5,6"
+```
+
+A part is `<name>=<lines>[@<group-id>[/<category-id>]]`. `<lines>` is line numbers, ranges of
+them, or line ids -- the numbers are the first column of `receipts show`. The category nests
+inside the group because a category belongs to one group. **No `@` keeps that part on your own
+ledger**, which is the jacket and the reason to split at all.
+
+Amounts are never given: each part is cut from the charge in proportion to the lines it holds,
+with the tax and the tip apportioned over them, so the parts sum to the charge by
+construction.
+
+| Code | |
+| --- | --- |
+| `SPLIT_PARTS_INVALID` | A line is in no part, in two parts, or is not on this bill. Carries the offending lines. Every line has to land in exactly one part -- a line left out is money no part accounts for, and one named twice is money counted twice. |
+| `POSSIBLE_DUPLICATE_EXPENSE` | The charge looks like an expense already recorded. `--file-anyway` goes ahead. Worth more care here than on an ordinary filing: a split files several expenses at once, so a duplicate is several wrong balances. |
+
+All or nothing -- either every part exists or the charge is still waiting. Two parts minimum;
+one part is an ordinary `inbox file`.
 
 A bill can be typed against an imported bank row before anybody files it, with `--bank-row`,
 so a dinner can be divided at the table. Filing carries it onto the expense but does **not**
