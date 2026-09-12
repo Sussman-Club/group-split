@@ -85,13 +85,26 @@ public class UpdateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
-    /// Through step one to the split step, which is where Save lives. The dialog is two
-    /// steps now, matching the create dialog: everything that makes the expense, then how
-    /// it divides.
+    /// Nothing, now that there is nowhere to go.
     /// </summary>
-    private static async Task ToSplitStepAsync(IRenderedComponent<MudDialogProvider> provider) =>
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Next")
-            .ClickAsync(new MouseEventArgs());
+    /// <remarks>
+    /// The dialog was two steps and this pressed Next to reach the division. It is one
+    /// screen: the division is under the amount that decides it. The call survives as a
+    /// no-op so that each test still says where in the flow it is standing, and so that the
+    /// diff that collapsed the steps did not also rewrite twelve unrelated tests.
+    /// </remarks>
+    private static Task ToSplitStepAsync(IRenderedComponent<MudDialogProvider> provider) =>
+        Task.CompletedTask;
+
+    /// <summary>Opens one chip's picker, which is where its control now lives.</summary>
+    private static async Task OpenChipAsync(IRenderedComponent<MudDialogProvider> provider, string label)
+    {
+        var chip = provider.FindAll("button.gs-chip")
+            .First(candidate => candidate.GetAttribute("aria-label")!
+                .Contains(label, StringComparison.Ordinal));
+
+        await chip.ClickAsync(new MouseEventArgs());
+    }
 
     private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference DialogRef)> OpenAsync(
         TransactionResponse original)
@@ -200,6 +213,9 @@ public class UpdateTransactionDialogTest : ComponentTest
         // listing row the edit was opened from does not.
         provider.WaitForAssertion(() =>
             Assert.Contains("Lidl", provider.Markup, StringComparison.Ordinal));
+
+        // The merchant search lives behind its chip, like every other thing you pick.
+        await OpenChipAsync(provider, "where");
 
         var picker = provider.FindComponent<MerchantPicker>();
         await provider.InvokeAsync(() => picker.Instance.ValueChanged.InvokeAsync(corner));
@@ -388,6 +404,8 @@ public class UpdateTransactionDialogTest : ComponentTest
         var popovers = Render<MudPopoverProvider>();
 
         var (provider, _) = await OpenAsync(Row(transactionId));
+
+        await OpenChipAsync(provider, "category");
 
         var select = provider.FindComponents<MudSelect<Guid?>>()
             .Single(component => component.Instance.Label == "Category");
@@ -621,6 +639,10 @@ public class UpdateTransactionDialogTest : ComponentTest
     private static async Task PickCategoryAsync(
         IRenderedComponent<MudDialogProvider> provider, Guid categoryId)
     {
+        // The category is a chip, and its select is rendered only while that chip is open.
+        if (!provider.FindComponents<MudSelect<Guid?>>().Any(c => c.Instance.Label == "Category"))
+            await OpenChipAsync(provider, "category");
+
         var select = provider.FindComponents<MudSelect<Guid?>>()
             .Single(component => component.Instance.Label == "Category");
 

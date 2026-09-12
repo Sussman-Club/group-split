@@ -166,6 +166,15 @@
                                 }
                             </div>
                         </div>
+                        @* What it was, where an edit has moved it. The consequence of
+                           changing an amount belongs beside the new figure and before the
+                           save, not in the ledger afterwards. Only where it actually moved:
+                           a struck-through copy of an unchanged number is noise. *@
+                        @if (Was(share.UserId) is { } was && was != share.Amount)
+                        {
+                            <span class="gs-was gs-num">@was.ToMoney()</span>
+                        }
+
                         <Money Value="share.Amount"/>
                     </div>
                 }
@@ -210,6 +219,21 @@
     /// even starting point below is used instead.
     /// </summary>
     [Parameter] public IReadOnlyList<SplitInput>? Stored { get; set; }
+
+    /// <summary>
+    /// What each person holds today, so the preview can show what an edit moves.
+    /// </summary>
+    /// <remarks>
+    /// The same list as <see cref="Stored"/> in practice, and a separate parameter because
+    /// the two are asked for different reasons: that one is where a hand-split starts from,
+    /// this one is what the new figures are being compared against. A create passes neither
+    /// -- there is nothing an expense that does not exist yet used to be.
+    /// </remarks>
+    [Parameter] public IReadOnlyList<SplitInput>? Before { get; set; }
+
+    /// <summary>What one person's share was before this edit, when it is known.</summary>
+    private decimal? Was(Guid userId) =>
+        Before?.FirstOrDefault(split => split.UserId == userId)?.Amount;
 
     /// <summary>
     /// What the API says this comes to, which is what the automatic division is shown as.

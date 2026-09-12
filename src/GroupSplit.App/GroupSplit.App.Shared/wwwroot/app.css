@@ -2272,6 +2272,13 @@ html:not([data-gs-ready]) .gs-group-card {
     border: 1px solid var(--gs-line);
 }
 
+/* What a share was, beside what an edit is about to make it. */
+.gs-was {
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+    text-decoration: line-through;
+}
+
 /* One size up from the rest of the form, which is enough to say it is the point. */
 .gs-amount .mud-input-root {
     font-family: var(--gs-font-display);
