@@ -101,7 +101,7 @@
                                  Open="@(_open == Picker.When)"
                                  OnClick="@(() => Toggle(Picker.When))"/>
 
-                    <ExpenseChip Label="where" Value="@MerchantName"
+                    <ExpenseChip Label="where" Lead="at" Value="@MerchantName"
                                  Set="@(_model.MerchantId is not null)"
                                  Open="@(_open == Picker.Where)"
                                  OnClick="@(() => Toggle(Picker.Where))">
@@ -217,7 +217,8 @@
                        now a client could create it wrongly and never put it right. *@
                     @if (ShowSource)
                     {
-                        <DivisionSource Info="@_source" On="@Original.DateTime" Splits="@_recordedSplits">
+                        <DivisionSource Info="@_source" On="@Original.DateTime" Splits="@_recordedSplits"
+                                        Quiet="true">
                             <Action>
                                 @if (Correctable)
                                 {
