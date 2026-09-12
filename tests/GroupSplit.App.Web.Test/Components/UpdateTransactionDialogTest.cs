@@ -55,11 +55,11 @@ public class UpdateTransactionDialogTest : ComponentTest
             }.ToAsyncEnumerable());
 
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null)]);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => new[] { new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null) }.ToAsyncEnumerable());
 
         _merchants
@@ -606,11 +606,11 @@ public class UpdateTransactionDialogTest : ComponentTest
     private void WithCategories(params CategoryResponse[] categories)
     {
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(categories);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => categories.ToAsyncEnumerable());
     }
 
@@ -805,11 +805,11 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         // CategoriesClient returns empty (category deleted from group)
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => AsyncEnumerable.Empty<CategoryResponse>());
 
         _transactions

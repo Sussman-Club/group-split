@@ -120,10 +120,12 @@ Expense categories and their default split rules.
 
 | Command | |
 | --- | --- |
-| `categories list` | List categories. |
+| `categories list` | List categories. `--archived` includes the ones the group has retired. |
 | `categories create <name>` | Create a category. |
 | `categories update <category-id>` | Change a category's name or its default rule. `--no-rule` clears the rule, which `--rule` cannot: a flag with no value cannot say the difference between "leave it" and "clear it". |
-| `categories delete <category-id>` | Delete a category. |
+| `categories archive <category-id>` | Stop offering a category. It leaves every listing; the expenses filed under it keep it. What people mean by deleting one they have used. |
+| `categories unarchive <category-id>` | Offer a retired category again. |
+| `categories delete <category-id>` | Delete a category. Refused once anything is filed under it (`CATEGORY_IN_USE`) -- archive it instead. |
 
 ### merchants
 

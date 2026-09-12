@@ -40,7 +40,7 @@ public class GroupSplitsTabTest : ComponentTest
     public GroupSplitsTabTest()
     {
         Categories
-            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             [
                 new CategoryResponse(Groceries, Flat, "Groceries", Household, "Household 3-way"),
@@ -216,7 +216,7 @@ public class GroupSplitsTabTest : ComponentTest
     public async Task A_failed_read_says_so_and_stops_the_screen_asserting_anything()
     {
         Categories
-            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("the network went away"));
 
         var tab = await RenderTabAsync();
@@ -248,7 +248,7 @@ public class GroupSplitsTabTest : ComponentTest
     public async Task A_category_is_captioned_from_the_rule_it_points_at()
     {
         Categories
-            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new CategoryResponse(DiningOut, Flat, "Dining out", WhoeverPaid, "What it used to be called")]);
 
         var tab = await RenderTabAsync();
@@ -376,6 +376,65 @@ public class GroupSplitsTabTest : ComponentTest
             WhoeverPaid,
             It.Is<UpdateSplitRuleRequest>(request => request.Definition is EvenSplitRuleDto),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Retiring a category, which is what people mean by deleting one they have been using.
+    /// </summary>
+    /// <remarks>
+    /// The API refuses to delete a category with anything filed under it, so for any
+    /// category older than a week this is the only door that opens -- and the screen has to
+    /// show the retired ones or there would be no way back through it.
+    /// </remarks>
+    [Fact]
+    public async Task A_category_can_be_retired_without_touching_what_is_filed_under_it()
+    {
+        Categories
+            .Setup(client => client.ArchiveCategoryAsync(DiningOut, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CategoryResponse(DiningOut, Flat, "Dining out", null, null, IsArchive: true));
+
+        var tab = await RenderTabAsync();
+
+        await tab.FindAll("button")
+            .First(button => button.GetAttribute("aria-label") == "Archive Dining out")
+            .ClickAsync(new MouseEventArgs());
+
+        Categories.Verify(client => client.ArchiveCategoryAsync(DiningOut, It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        // Nothing is deleted on the way past: the expenses filed under it are the reason
+        // this exists at all.
+        Categories.Verify(client => client.DeleteCategoryAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// This screen asks for the retired ones; every picker asks for what the group uses.
+    /// </summary>
+    [Fact]
+    public async Task The_tab_asks_for_archived_categories_and_marks_them()
+    {
+        Categories
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new CategoryResponse(Groceries, Flat, "Groceries", Household, "Household 3-way"),
+                new CategoryResponse(DiningOut, Flat, "Dining out", null, null, IsArchive: true)
+            ]);
+
+        var tab = await RenderTabAsync();
+
+        Categories.Verify(client => client.GetCategoriesAsync(Flat, true, It.IsAny<CancellationToken>()),
+            Times.AtLeastOnce);
+
+        var retired = tab.FindAll(".gs-row .title")
+            .Single(row => row.TextContent.Contains("Dining out", StringComparison.Ordinal));
+
+        Assert.Equal("Archived", retired.QuerySelector(".gs-tag")!.TextContent.Trim());
+
+        // And it offers the way back rather than the way in.
+        Assert.Contains(tab.FindAll("button"),
+            button => button.GetAttribute("aria-label") == "Restore Dining out");
     }
 
     private static IElement Delete(IRenderedComponent<GroupSplitsTab> tab, string what) =>

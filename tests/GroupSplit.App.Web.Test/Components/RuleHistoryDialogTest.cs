@@ -62,7 +62,7 @@ public class RuleHistoryDialogTest : ComponentTest
                 });
 
         Categories
-            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(
             [
                 new CategoryResponse(Guid.NewGuid(), Flat, "Groceries", Household, "Household 3-way"),
@@ -303,7 +303,7 @@ public class RuleHistoryDialogTest : ComponentTest
     public async Task A_failed_count_of_the_categories_is_said_rather_than_left_blank()
     {
         Categories
-            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("the network went away"));
 
         var dialog = await OpenAsync();

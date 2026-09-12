@@ -103,7 +103,11 @@ public sealed class DivisionSourceReader(
         {
             var read = await errors.CaptureAsync(async () =>
             {
-                var forGroup = await categories.GetCategoriesAsync(groupId, ct);
+                // Archived ones included. An expense filed under a category the group has
+                // since retired still has to say what divided it, and the rule is reached
+                // through that category -- so leaving it out would turn every expense in a
+                // retired category into "divided by a rule nothing here can name".
+                var forGroup = await categories.GetCategoriesAsync(groupId, true, ct);
                 ruleId = forGroup?.FirstOrDefault(category => category.Id == filed)?.DefaultSplitRuleId;
             });
 

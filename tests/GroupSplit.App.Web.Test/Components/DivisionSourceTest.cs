@@ -57,7 +57,7 @@ public class DivisionSourceTest : ComponentTest
             .Returns(new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"));
 
         Categories
-            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new CategoryResponse(Groceries, Flat, "Groceries", Household, "Household 3-way")]);
 
         SplitRules
@@ -243,7 +243,7 @@ public class DivisionSourceTest : ComponentTest
         Assert.Empty(dialog.FindAll(".gs-provenance"));
 
         Categories.Verify(
-            client => client.GetCategoriesAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
+            client => client.GetCategoriesAsync(It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
