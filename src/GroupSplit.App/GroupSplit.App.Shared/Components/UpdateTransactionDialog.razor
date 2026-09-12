@@ -12,6 +12,7 @@
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
 @inject DivisionSourceReader Source
+@inject IMerchantCommands Merchants
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 
 @*
@@ -34,133 +35,145 @@
     </TitleContent>
 
     <DialogContent>
-        <div class="gs-steps" role="list" aria-label="Steps">
-            <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
-                <span class="dot">1</span> What
-            </span>
-            <span class="gs-step-line"></span>
-            <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
-                <span class="dot">2</span> Split
-            </span>
-        </div>
+        <MudForm @ref="_form" Model="@_model">
+            <div class="gs-stack" style="gap: 16px">
 
-        @if (Step == 1)
-        {
-            <MudForm @ref="_form" Model="@_model">
-                <MudStack Spacing="3">
-                    <MudTextField @bind-Value="_model.Name"
-                                  For="@(() => _model.Name)"
-                                  Label="Name"
-                                  Variant="Variant.Outlined"
-                                  Immediate="true"/>
+                @* First, and a size up: what an edit is usually about is this figure, and
+                   what it does to everybody's share is directly underneath. *@
+                <MudNumericField @bind-Value="_model.Amount"
+                                 @bind-Value:after="OnMoneyChangedAsync"
+                                 For="@(() => _model.Amount)"
+                                 Label="How much?"
+                                 Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start"
+                                 AdornmentText="$"
+                                 HideSpinButtons="true"
+                                 Format="N2"
+                                 Class="gs-amount"/>
 
-                    <MudTextField @bind-Value="_model.Description"
-                                  For="@(() => _model.Description)"
-                                  Label="Description"
-                                  Variant="Variant.Outlined"
-                                  Lines="2"
-                                  Immediate="true"/>
+                <MudTextField @bind-Value="_model.Name"
+                              For="@(() => _model.Name)"
+                              Label="What was it?"
+                              Variant="Variant.Outlined"
+                              Immediate="true"/>
 
-                    <MudNumericField @bind-Value="_model.Amount"
-                                     For="@(() => _model.Amount)"
-                                     Label="Amount"
-                                     Variant="Variant.Outlined"
-                                     Adornment="Adornment.Start"
-                                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                     AdornmentColor="Color.Primary"
-                                     HideSpinButtons="true"
-                                     Immediate="true"
-                                     Format="N2"/>
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Note"
+                              Placeholder="Anything worth remembering about it"
+                              HelperText="Optional"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              Immediate="true"/>
 
-                    @* Stacked below 600px, for the reason the create dialog's pair gives:
-                       two pickers sharing a phone-width dialog clip both their values. *@
-                    <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                        <MudDatePicker @bind-Date="_selectedDate"
-                                       Label="Date"
-                                       Variant="Variant.Outlined"/>
-
-                        <MudTimePicker @bind-Time="_selectedTime"
-                                       Label="Time"
-                                       Variant="Variant.Outlined"
-                                       AmPm="true"/>
-                    </MudStack>
-
-                    @* Where it belongs. Changing this is how an expense moves: a personal
-                       one is shared by giving it a group, a shared one taken back by
-                       choosing Personal. The category, the payer and the shares all belong
-                       to whichever group this says, so they are reloaded -- and any stated
-                       shares dropped -- when it changes. *@
-                    <MudSelect T="Guid?" Label="Group"
-                               Variant="Variant.Outlined"
-                               @bind-Value="_model.GroupId"
-                               @bind-Value:after="OnGroupChangedAsync"
-                               Clearable="false">
-                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
-                        @foreach (var group in _groups)
-                        {
-                            <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-
-                    @if (_model.GroupId != Original.GroupId)
-                    {
-                        <MudAlert Severity="Severity.Info" Dense="true">
-                            @(_model.GroupId is null
-                                ? "This will become your own expense: no category, nothing owed by anybody."
-                                : "This will be divided among the members of the group you picked.")
-                        </MudAlert>
-                    }
-
-                    @* Categories and payers belong to a group. A personal expense has none,
-                       so the fields that would be about one are absent rather than present
-                       and empty. The place is not: you can spend at Lidl on your own. *@
-                    @if (IsShared)
-                    {
-                        @* The rule beside the name, because "Groceries" says nothing about
-                           how Groceries is divided and the person picking is choosing both. *@
-                        <MudSelect T="Guid?" Label="Category"
-                                   Variant="Variant.Outlined"
-                                   @bind-Value="_model.CategoryId"
-                                   @bind-Value:after="OnCategoryChanged"
-                                   Clearable="true">
-                            @foreach (var category in _categories)
-                            {
-                                <MudSelectItem T="Guid?" Value="@category.CategoryId">
-                                    @category.Name <span class="gs-muted">· @category.Splits</span>
-                                </MudSelectItem>
-                            }
-                        </MudSelect>
-                    }
-
-                    <MerchantPicker @bind-Value="_model.MerchantId"/>
+                @* The group is a chip here and not the heading, unlike the create dialog:
+                   this is the one screen where it can genuinely move. A personal expense is
+                   shared by giving it a group, a shared one taken back by choosing Personal,
+                   and the category, payer and shares all belong to whichever it says. *@
+                <div class="gs-chip-row">
+                    <ExpenseChip Label="group" Lead="in" Value="@Where" Set="true"
+                                 Open="@(_open == Picker.Group)"
+                                 OnClick="@(() => Toggle(Picker.Group))"/>
 
                     @if (IsShared)
                     {
-                        <MudSelect T="Guid" Label="Paid by"
-                                   Variant="Variant.Outlined"
-                                   Disabled="@(!_members.Any())"
-                                   @bind-Value="_model.PaidByUserId">
-                            @foreach (var member in _members)
-                            {
-                                <MudSelectItem T="Guid" Value="@member.Id">@member.Label()</MudSelectItem>
-                            }
-                        </MudSelect>
+                        <ExpenseChip Label="category" Lead="for" Value="@CategoryName"
+                                     Set="@(_model.CategoryId is not null)"
+                                     Open="@(_open == Picker.Category)"
+                                     OnClick="@(() => Toggle(Picker.Category))"/>
+
+                        <ExpenseChip Label="payer" Lead="paid by" Value="@PayerName" Set="true"
+                                     Open="@(_open == Picker.Payer)"
+                                     OnClick="@(() => Toggle(Picker.Payer))"/>
                     }
-                </MudStack>
-            </MudForm>
-        }
-        else
-        {
-            <MudStack Spacing="3">
-                <div class="gs-card gs-card-pad" style="padding: 14px 16px">
-                    <div class="gs-inline" style="justify-content: space-between">
-                        <div>
-                            <div class="gs-eyebrow">@_model.Name</div>
-                            <div class="gs-muted" style="font-size: .8125rem">@Where</div>
-                        </div>
-                        <Money Value="_model.Amount" Class="gs-money"/>
-                    </div>
+
+                    <ExpenseChip Label="when" Value="@WhenSpent" Set="true"
+                                 Open="@(_open == Picker.When)"
+                                 OnClick="@(() => Toggle(Picker.When))"/>
+
+                    <ExpenseChip Label="where" Value="@MerchantName"
+                                 Set="@(_model.MerchantId is not null)"
+                                 Open="@(_open == Picker.Where)"
+                                 OnClick="@(() => Toggle(Picker.Where))"/>
                 </div>
+
+                @if (_open is not Picker.None)
+                {
+                    <div class="gs-picker">
+                        @switch (_open)
+                        {
+                            case Picker.Group:
+                                <MudSelect T="Guid?" Label="Group"
+                                           Variant="Variant.Outlined"
+                                           @bind-Value="_model.GroupId"
+                                           @bind-Value:after="OnGroupChangedAsync"
+                                           Clearable="false">
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
+                                    @foreach (var group in _groups)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+
+                            case Picker.Category:
+                                @* The rule beside the name, because "Groceries" says nothing
+                                   about how Groceries is divided and the person picking is
+                                   choosing both. *@
+                                <MudSelect T="Guid?" Label="Category"
+                                           Variant="Variant.Outlined"
+                                           @bind-Value="_model.CategoryId"
+                                           @bind-Value:after="OnCategoryChanged"
+                                           Clearable="true">
+                                    @foreach (var category in _categories)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="@category.CategoryId">
+                                            @category.Name <span class="gs-muted">· @category.Splits</span>
+                                        </MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+
+                            case Picker.Payer:
+                                <MudSelect T="Guid" Label="Paid by"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(!_members.Any())"
+                                           @bind-Value="_model.PaidByUserId"
+                                           @bind-Value:after="OnMoneyChangedAsync">
+                                    @foreach (var member in _members)
+                                    {
+                                        <MudSelectItem T="Guid" Value="@member.Id">@member.Label()</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+
+                            case Picker.When:
+                                @* Stacked below 600px: two pickers sharing a phone-width
+                                   dialog clip both their values. *@
+                                <MudStack Row="true" Spacing="4" Class="gs-field-pair">
+                                    <MudDatePicker @bind-Date="_selectedDate" Label="Date"
+                                                   Variant="Variant.Outlined"/>
+                                    <MudTimePicker @bind-Time="_selectedTime" Label="Time"
+                                                   Variant="Variant.Outlined" AmPm="true"/>
+                                </MudStack>
+                                break;
+
+                            case Picker.Where:
+                                <MerchantPicker Value="@_model.MerchantId"
+                                                ValueChanged="@OnMerchantChangedAsync"/>
+                                break;
+                        }
+                    </div>
+                }
+
+                @if (_model.GroupId != Original.GroupId)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        @(_model.GroupId is null
+                            ? "This will become your own expense: no category, nothing owed by anybody."
+                            : "This will be divided among the members of the group you picked.")
+                    </MudAlert>
+                }
 
                 @if (!IsShared)
                 {
@@ -260,33 +273,29 @@
                         </div>
                     }
 
-                    <SplitEditor Members="@_members"
-                                 Amount="@_model.Amount"
-                                 PayerId="@_model.PaidByUserId"
-                                 Stored="@_storedSplits"
-                                 Value="@_model.Splits"
-                                 ValueChanged="@OnSplitsChangedAsync"
-                                 Preview="@_preview"
-                                 PreviewError="@_previewError"/>
+                    <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                        <SplitEditor Members="@_members"
+                                     Amount="@_model.Amount"
+                                     PayerId="@_model.PaidByUserId"
+                                     Stored="@_storedSplits"
+                                     Before="@_storedSplits"
+                                     Value="@_model.Splits"
+                                     ValueChanged="@OnSplitsChangedAsync"
+                                     Preview="@_preview"
+                                     PreviewError="@_previewError"/>
+                    </div>
                 }
-            </MudStack>
-        }
+            </div>
+        </MudForm>
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
 
-        @if (Step == 2)
-        {
-            <MudButton Variant="Variant.Text" OnClick="@Back">Back</MudButton>
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                       OnClick="Submit">Save</MudButton>
-        }
-        else
-        {
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                       OnClick="@NextAsync">Next</MudButton>
-        }
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   OnClick="Submit">
+            Save
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -298,7 +307,10 @@
 
     private MudForm _form = null!;
 
-    private int Step { get; set; } = 1;
+    /// <summary>Which chip's picker is showing. One at a time; the row stays a row.</summary>
+    private enum Picker { None, Group, Category, Payer, When, Where }
+
+    private Picker _open = Picker.None;
 
     /// <summary>Whether the expense will belong to a group after this edit.</summary>
     private bool IsShared => _model.GroupId is not null;
@@ -384,6 +396,68 @@
         ? "Personal"
         : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
 
+    private string CategoryName =>
+        _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "category";
+
+    private string PayerName =>
+        _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
+
+    /// <summary>
+    /// What the merchant chip shows.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than derived, because an id is all the picker answers with and a chip
+    /// has to say a name. It is read off the expense on the way in and resolved again after
+    /// a pick -- the same round trip the picker itself makes, which is why it is cheap.
+    /// </remarks>
+    private string? _merchantName;
+
+    private string MerchantName => _merchantName ?? "where";
+
+    /// <summary>
+    /// Records the pick and resolves the name the chip will show.
+    /// </summary>
+    /// <remarks>
+    /// No preview: a merchant is where the money went, not who owes it. The picker closes
+    /// on a choice because its control is a search, and a list of nothing left open under
+    /// the row reads as an unfinished gesture.
+    /// </remarks>
+    private async Task OnMerchantChangedAsync(Guid? merchantId)
+    {
+        _model.MerchantId = merchantId;
+
+        if (merchantId is null)
+        {
+            _merchantName = null;
+            return;
+        }
+
+        _merchantName = (await Merchants.GetAsync(merchantId.Value))?.Name;
+        _open = Picker.None;
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The day, as a person would say it. Today and yesterday by name, because a date is a
+    /// worse way of saying either.
+    /// </summary>
+    private string WhenSpent
+    {
+        get
+        {
+            var day = _selectedDate ?? Clock.Today;
+
+            return (Clock.Today - day.Date).Days switch
+            {
+                0 => "today",
+                1 => "yesterday",
+                _ when day.Year == Clock.Today.Year => day.ToString("d MMM"),
+                _ => day.ToString("d MMM yyyy")
+            };
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _model = new UpdateTransactionRequest
@@ -431,6 +505,15 @@
                 _model.MerchantId = details.MerchantId;
             }
 
+            // The name for the chip, from whichever read has it. Neither always does -- a
+            // row opened from some listings carries the id alone -- and a chip that showed
+            // an id would be useless, so the last resort is to go and ask. Only then: this
+            // is one round trip to put one word on one chip.
+            _merchantName = details.MerchantName ?? Original.MerchantName;
+
+            if (_merchantName is null && _model.MerchantId is { } merchantId)
+                _merchantName = (await Merchants.GetAsync(merchantId))?.Name;
+
             // A category that has since been deleted still names what this expense was
             // filed under, so it stays in the list rather than silently reading as none.
             if (_model.CategoryId is { } filed && _categories.All(row => row.CategoryId != filed))
@@ -474,6 +557,10 @@
         }
 
         StateHasChanged();
+
+        // The division is on this screen, so it is asked for on the way in rather than on
+        // the way into a second step that no longer exists.
+        await RefreshPreviewAsync();
     }
 
     /// <summary>The categories and members of one group, or none for personal.</summary>
@@ -578,25 +665,20 @@
     }
 
     /// <summary>
-    /// Step one is the whole of what makes an expense; step two only decides how it is
-    /// carried. So the form is validated here, on the way through, rather than at the Save
-    /// button two screens later.
+    /// Anything that changes what the division comes to: the amount, the payer.
     /// </summary>
-    private async Task NextAsync()
+    /// <remarks>
+    /// The amount is bound on change rather than on every keystroke, which is what makes
+    /// this affordable now that the division is on the same screen: a preview is a round
+    /// trip, and one per digit would be several racing each other.
+    /// </remarks>
+    private Task OnMoneyChangedAsync() => RefreshPreviewAsync();
+
+    private Task Toggle(Picker picker)
     {
-        await _form.ValidateAsync();
-
-        if (!_form.IsValid)
-            return;
-
-        ApplyDate();
-
-        Step = 2;
-
-        await RefreshPreviewAsync();
+        _open = _open == picker ? Picker.None : picker;
+        return Task.CompletedTask;
     }
-
-    private void Back() => Step = 1;
 
     /// <summary>
     /// The editor's answer, which arrives only when somebody has acted on it: amounts they
