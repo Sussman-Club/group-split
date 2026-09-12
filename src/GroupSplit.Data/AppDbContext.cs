@@ -323,14 +323,17 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(transaction => transaction.GroupId);
 
             // Filing copies, then links. Unlinking a bank deletes its rows, and the
-            // expenses they became lose the link and nothing else -- they are history,
-            // not an import.
-            // One to one: a bank row files into at most one expense, and an expense came
-            // from at most one row. The unique index EF builds for it lets the nulls
-            // through, which is every typed transaction.
+            // expenses they became lose the link and nothing else -- they are history, not
+            // an import.
+            //
+            // Many to one now, not one to one. A charge whose bill covers two purchases
+            // files as two expenses, and both point back at the row it came from; the
+            // ordinary charge still becomes exactly one. What that gives up is the unique
+            // index that used to stop a second expense claiming a row by mistake -- the
+            // inbox's own already-filed guard is what holds that now.
             entity.HasOne(transaction => transaction.BankTransaction)
-                .WithOne(row => row.FiledAs)
-                .HasForeignKey<Transaction>(transaction => transaction.BankTransactionId)
+                .WithMany(row => row.FiledAs)
+                .HasForeignKey(transaction => transaction.BankTransactionId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             // Restrict, not cascade: a merchant row is shared by every expense filed
@@ -579,41 +582,25 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(receipt => receipt.Tip).IsRequired().HasPrecision(18, 2);
             entity.Property(receipt => receipt.Total).IsRequired().HasPrecision(18, 2);
 
-            // Both cascade, and that is only coherent because a receipt has exactly one
-            // owner at a time: it belongs to the bank row it was typed against until filing
-            // hands it to the expense, which clears the other link. TransactionService.Create
-            // and InboxService.Link are where the hand-over happens.
+            // The bank row is the receipt's only owner the database knows about, and it
+            // cascades: a row that is removed takes its bill with it. A receipt with no row
+            // is owned by the expenses its lines name -- a rule spanning two tables, which no
+            // check constraint could carry, so ReceiptService removes such a receipt when the
+            // last expense holding its lines goes.
             //
-            // Set-null was the mistake it replaces. Deleting an expense nulled the link, and
-            // a bill somebody typed onto a typed expense then had nothing left to belong to
-            // -- so the check constraint refused the delete and the expense could never be
-            // removed at all. Unlinking a bank did the same to an unfiled bill, taking the
-            // whole sync save down with it.
-            //
-            // Nothing is lost by cascading. Where the bill came from is recorded on the
-            // ledger, in Transaction.BankTransactionId, which is where that fact has always
-            // lived; and a bill is one expense's, so an expense that is gone takes it.
-            entity.HasOne(receipt => receipt.Expense)
-                .WithOne(expense => expense.Receipt)
-                .HasForeignKey<Receipt>(receipt => receipt.ExpenseId)
-                .OnDelete(DeleteBehavior.Cascade);
-
+            // There is no longer a link to an expense here at all, and that is what dissolved
+            // the ownership problem rather than managing it: a bill is not an expense, it is
+            // a piece of paper whose lines may be two purchases. The check constraint that
+            // used to hold "exactly one owner" went with it.
             entity.HasOne(receipt => receipt.BankTransaction)
                 .WithOne()
                 .HasForeignKey<Receipt>(receipt => receipt.BankTransactionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // One bill per expense and one per bank row. The nulls are the ordinary case on
-            // each -- an unfiled receipt has no expense, a typed one has no bank row -- and
-            // a unique index lets them through, exactly as the one behind
-            // Transaction.BankTransactionId does.
-            entity.HasIndex(receipt => receipt.ExpenseId).IsUnique();
+            // One bill per bank row. The nulls are ordinary -- a bill typed straight onto an
+            // expense has no row -- and a unique index lets them through, exactly as the one
+            // behind Transaction.BankTransactionId does.
             entity.HasIndex(receipt => receipt.BankTransactionId).IsUnique();
-
-            // A receipt belongs to exactly one thing -- an expense, or the bank row it was
-            // typed against. That invariant is stated to the database rather than here, in
-            // PostgreSqlAppDbContext, because a check constraint is the only thing that can
-            // hold it and it needs the provider's SQL to say so.
         });
 
         modelBuilder.Entity<ReceiptItem>(entity =>
@@ -629,6 +616,21 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // Stored as the number, like every other enum here. A line's division is read
             // on every division of the bill and never searched on, so it needs no index.
             entity.Property(item => item.Division).IsRequired();
+
+            entity.Property(item => item.IsTaxable).IsRequired().HasDefaultValue(true);
+
+            // Which purchase this line's money is part of. Set-null rather than cascade:
+            // deleting an expense that was one part of a split bill must not take the lines
+            // with it -- they go back to belonging to no purchase, which is exactly what they
+            // were before somebody split the charge, and the bill goes on saying what was
+            // bought.
+            entity.HasOne(item => item.Expense)
+                .WithMany(expense => expense.ReceiptItems)
+                .HasForeignKey(item => item.ExpenseId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Every line of one expense, which is how a division finds its part of the bill.
+            entity.HasIndex(item => item.ExpenseId);
 
             entity.HasOne(item => item.Receipt)
                 .WithMany(receipt => receipt.Items)

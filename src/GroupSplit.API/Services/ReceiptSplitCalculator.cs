@@ -5,179 +5,155 @@ using GroupSplit.Shared.Errors;
 namespace GroupSplit.API.Services;
 
 /// <summary>
-/// Turns a bill into what each person owed: their items, plus their share of the tax and the
-/// tip.
+/// Turns a bill into money owed, at two scales: how much of the charge each purchase on it
+/// came to, and then what each person owes within one of those purchases.
 /// </summary>
 /// <remarks>
-/// The tax and the tip are apportioned in proportion to what each person claimed, which is
-/// the only division of them that does not depend on who happened to order the expensive
-/// thing. Somebody holding a quarter of the food owes a quarter of both.
+/// One warehouse charge can be the flat's groceries and a jacket of your own -- two
+/// purchases, two expenses, one piece of paper. So the tax and the tip are apportioned
+/// twice: between the parts in proportion to the lines each holds, and then inside a part
+/// between the people who claimed those lines. A restaurant bill is the same arithmetic
+/// with one part, which is why nothing about dividing a dinner changed when this arrived.
 /// <para>
-/// That falls out of the arithmetic rather than being done in a second pass. Each person's
-/// claimed subtotal becomes their weight, and the weights divide the <em>total</em> -- so a
-/// weight of a quarter draws a quarter of the food, a quarter of the tax and a quarter of the
-/// tip in one step. Doing it in two, by splitting the subtotal and then splitting the extras,
-/// rounds twice and leaves two remainders to place instead of one.
+/// Tax and tip are weighed differently, and that is not a detail. Tax is charged on goods,
+/// and plenty of bills exempt some of them -- weighing it across every line taxes the
+/// bananas and lets the jacket off. A tip is a fact about the bill rather than about the
+/// goods, so it spreads over everything. Hence two weightings, each apportioned exactly, and
+/// a total that is still exact because a sum of exact parts is exact.
 /// </para>
 /// <para>
-/// Which is also why this does not do its own division: it works out weights and hands them
-/// to <see cref="SplitCalculator"/>, the one place the split arithmetic is written. The
-/// truncation, the remainder going to the payer, and the guarantee that the parts sum to the
-/// whole are all inherited rather than restated, so a receipt's shares round exactly the way
-/// a rule's do.
+/// Every division here ends in <see cref="Spread"/>, which is the one place a whole is cut
+/// into parts: truncate to the cent, hand the leftover to one named holder. Nothing in this
+/// file rounds on its own, which is what keeps the parts summing to the charge and the
+/// shares summing to their part.
 /// </para>
 /// </remarks>
 public static class ReceiptSplitCalculator
 {
     /// <summary>
-    /// Weights are held as whole numbers, so a claimed subtotal has to be scaled to one.
-    /// Hundredths of a cent, which is finer than any bill and keeps a line shared three ways
-    /// from drifting -- see <see cref="ScaleFor"/> for the bills too large to afford it.
+    /// What each purchase on the bill came to: its own lines, plus its share of the tax and
+    /// the tip. Keyed by the expense its lines name.
     /// </summary>
-    private const int PreferredScale = 10_000;
+    /// <remarks>
+    /// The figure that becomes each part's <see cref="Transaction.Amount"/>, and the reason
+    /// splitting a charge does not have to be reconciled afterwards: the parts are cut from
+    /// the total rather than added up towards it, so they sum to it by construction.
+    /// </remarks>
+    public static IReadOnlyDictionary<Guid, decimal> PartAmounts(Receipt receipt)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+
+        var placed = receipt.Items.Where(item => item.ExpenseId is not null).ToList();
+
+        var lines = Sum(placed, item => item.ExpenseId!.Value, item => item.TotalPrice);
+        var taxable = Sum(placed.Where(item => item.IsTaxable), item => item.ExpenseId!.Value,
+            item => item.TotalPrice);
+
+        // Tax over the lines it was charged on; the tip over all of them. Where nothing on
+        // the bill is taxable the tax cannot have come from the goods, so it spreads like the
+        // tip rather than vanishing.
+        var biggest = Largest(lines);
+        var tax = Spread(Cents(receipt.Tax), taxable.Values.Sum() > 0 ? taxable : lines, biggest);
+        var tip = Spread(Cents(receipt.Tip), lines, biggest);
+
+        var amounts = new Dictionary<Guid, decimal>();
+
+        foreach (var (expenseId, subtotal) in lines)
+            amounts[expenseId] = subtotal + (tax.GetValueOrDefault(expenseId)
+                                             + tip.GetValueOrDefault(expenseId)) / 100m;
+
+        return amounts;
+    }
 
     /// <summary>
-    /// What each person owes on <paramref name="receipt"/>, summing to its total exactly.
+    /// What each person owes on one part of the bill, summing to that part's amount exactly.
     /// </summary>
+    /// <param name="expenseId">Which purchase on the bill to divide.</param>
     /// <param name="payerId">
     /// Who paid. They carry the remainder, the same as in any other division.
     /// </param>
     /// <param name="participants">
-    /// Everybody the expense may be divided between, for the lines that name nobody. A line
-    /// divided <see cref="ReceiptItemDivision.Evenly"/> is shared between these, so the bill
-    /// keeps saying "the rest is shared" when somebody joins instead of freezing today's
-    /// membership into claims.
+    /// Everybody the expense may be divided between, for the lines that name nobody.
     /// </param>
     /// <exception cref="UnprocessableException">
-    /// The bill does not add up, or a line belongs to nobody -- neither of which describes a
-    /// division that could be stored.
+    /// The bill does not add up, or a line in this part belongs to nobody -- neither of which
+    /// describes a division that could be stored.
     /// </exception>
     public static IReadOnlyList<SplitAmount> Divide(
-        Receipt receipt, Guid payerId, IReadOnlyCollection<Guid> participants)
+        Receipt receipt, Guid expenseId, Guid payerId, IReadOnlyCollection<Guid> participants)
     {
         ArgumentNullException.ThrowIfNull(receipt);
         ArgumentNullException.ThrowIfNull(participants);
 
         RefuseIfFiguresDisagree(receipt);
-        RefuseIfAnythingIsUnclaimed(receipt);
 
-        var claimed = ClaimedSubtotals(receipt, payerId, participants);
+        var part = PartOf(receipt, expenseId);
 
-        if (claimed.Count == 0)
+        RefuseIfAnythingIsUnclaimed(part);
+
+        var amount = PartAmounts(receipt).GetValueOrDefault(expenseId);
+
+        // The part's three components, each spread by the weighting that belongs to it. Doing
+        // it in one pass over a single weighting would be simpler and would charge somebody
+        // who only had exempt groceries for a share of the tax on everybody else's.
+        var lineTotal = part.Sum(item => item.TotalPrice);
+        var taxTotal = Cents(amount) - Cents(lineTotal) - TipShareOf(receipt, expenseId);
+
+        var claimedAll = Claimed(part, payerId, participants);
+        var claimedTaxable = Claimed(part.Where(item => item.IsTaxable), payerId, participants);
+
+        if (claimedAll.Count == 0)
             throw new UnprocessableException(ErrorCodes.ReceiptItemsUnclaimed,
-                "Nobody has claimed anything on this receipt, so there is nothing to divide.");
+                "Nobody has claimed anything in this part of the bill, so there is nothing to divide.");
 
-        var scale = ScaleFor(receipt.Subtotal);
+        var favour = claimedAll.ContainsKey(payerId) ? payerId : Largest(claimedAll);
 
-        var weights = claimed
-            .Select(entry => new SplitWeight(entry.Key, (int)decimal.Round(entry.Value * scale)))
-            .ToList();
+        var byLines = Spread(Cents(lineTotal), claimedAll, favour);
+        var byTax = Spread(taxTotal, claimedTaxable.Values.Sum() > 0 ? claimedTaxable : claimedAll, favour);
+        var byTip = Spread(TipShareOf(receipt, expenseId), claimedAll, favour);
 
-        // A bill whose lines are all free -- comped food with a tip left on it, which does
-        // happen -- gives every claimant a weight of zero, and proportions of nothing are
-        // not a division SplitCalculator can carry out. Evenly between whoever was there is
-        // what "in proportion to what you had" degenerates to when nobody had anything
-        // priced, and it is the only answer that does not invent an order.
-        if (weights.TrueForAll(weight => weight.Weight == 0))
-            weights = [.. weights.Select(weight => weight with { Weight = 1 })];
-
-        return SplitCalculator.Divide(receipt.Total, payerId, weights);
+        return
+        [
+            .. claimedAll.Keys.Select(userId => new SplitAmount(userId,
+                (byLines.GetValueOrDefault(userId)
+                 + byTax.GetValueOrDefault(userId)
+                 + byTip.GetValueOrDefault(userId)) / 100m))
+        ];
     }
 
-    /// <summary>
-    /// What each person claimed, in money, before tax and tip. A line shared between people
-    /// is divided between them by their weights on it.
-    /// </summary>
-    /// <remarks>
-    /// Unrounded on purpose. These are weights and not amounts -- nobody is charged what this
-    /// returns -- so carrying the full precision of a third of a bottle costs nothing and
-    /// keeps three equal claims equal, which rounding each to the cent here would not.
-    /// <para>
-    /// Public because a preview shows it beside what each person owes: the difference between
-    /// the two is their share of the tax and the tip, and seeing both is how somebody checks
-    /// that the apportioning did what they expected.
-    /// </para>
-    /// </remarks>
-    public static Dictionary<Guid, decimal> ClaimedSubtotals(
-        Receipt receipt, Guid payerId, IReadOnlyCollection<Guid> participants)
+    /// <summary>The lines of one purchase on the bill.</summary>
+    public static IReadOnlyList<ReceiptItem> PartOf(Receipt receipt, Guid expenseId)
     {
         ArgumentNullException.ThrowIfNull(receipt);
-        ArgumentNullException.ThrowIfNull(participants);
 
-        var claimed = new Dictionary<Guid, decimal>();
-
-        void Add(Guid userId, decimal share) =>
-            claimed[userId] = claimed.GetValueOrDefault(userId) + share;
-
-        foreach (var item in receipt.Items)
-        {
-            switch (item.Division)
-            {
-                // Between everybody, naming none of them. Empty participants would be a
-                // division by zero; it cannot happen -- an expense always has at least its
-                // payer -- but it costs one comparison to not find out the hard way.
-                case ReceiptItemDivision.Evenly when participants.Count > 0:
-                    foreach (var participant in participants)
-                        Add(participant, item.TotalPrice / participants.Count);
-
-                    break;
-
-                case ReceiptItemDivision.Evenly:
-                    Add(payerId, item.TotalPrice);
-                    break;
-
-                default:
-                    // Unclaimed is not an error here: RefuseIfAnythingIsUnclaimed has the
-                    // say, and CanDivide asks it separately.
-                    if (item.Claims.Count == 0)
-                        continue;
-
-                    // A validation refusal and not an unprocessable one, so that
-                    // RECEIPT_INVALID means 400 wherever it appears. The wire already refuses
-                    // this with [Range]; what reaches here is a row written past the API, and
-                    // a code that answered 400 from one door and 422 from another would be a
-                    // code a client cannot branch on.
-                    if (item.Claims.Any(claim => claim.Weight <= 0))
-                        throw new ValidationException(ErrorCodes.ReceiptInvalid,
-                                $"\"{item.Name}\" has a claim with no share in it. A claim is " +
-                                "somebody who had some of the line, so its weight has to be " +
-                                "at least one.")
-                            .WithExtension("receiptItemId", item.Id);
-
-                    var totalWeight = item.Claims.Sum(claim => (long)claim.Weight);
-
-                    foreach (var claim in item.Claims)
-                        Add(claim.UserId, item.TotalPrice * claim.Weight / totalWeight);
-
-                    break;
-            }
-        }
-
-        return claimed;
+        return [.. receipt.Items.Where(item => item.ExpenseId == expenseId)];
     }
 
     /// <summary>
-    /// Whether dividing this bill would succeed -- it adds up, and every line is claimed.
+    /// Whether dividing this part would succeed -- the bill adds up, and every line in the
+    /// part is spoken for.
     /// </summary>
     /// <remarks>
-    /// Asked by the response so a client can light the button without having to know the
-    /// rules, and answered by running the same refusals rather than by restating them. A
-    /// second copy of "what makes a bill dividable" is a second copy to drift.
+    /// Answered by running the same refusals rather than by restating them. A second copy of
+    /// "what makes a part dividable" is a second copy to drift.
     /// </remarks>
-    public static bool CanDivide(Receipt receipt)
+    public static bool CanDivide(Receipt receipt, Guid expenseId)
     {
         try
         {
             RefuseIfFiguresDisagree(receipt);
-            RefuseIfAnythingIsUnclaimed(receipt);
 
-            // A bill of nothing but unclaimed lines has already been refused above, so what
-            // is left to check is that *something* divides it: at least one line that names
-            // somebody, or one that is the table's.
-            return receipt.Items.Any(item =>
+            var part = PartOf(receipt, expenseId);
+            RefuseIfAnythingIsUnclaimed(part);
+
+            return part.Any(item =>
                 item.Division != ReceiptItemDivision.Claimed || item.Claims.Count > 0);
         }
         catch (UnprocessableException)
+        {
+            return false;
+        }
+        catch (ValidationException)
         {
             return false;
         }
@@ -187,15 +163,10 @@ public static class ReceiptSplitCalculator
     /// Refuses a bill whose own figures contradict each other.
     /// </summary>
     /// <remarks>
-    /// Checked when the bill is stored as well as when it is divided, because a receipt that
-    /// does not describe the money it claims to is wrong the moment it is written down --
-    /// waiting until somebody divides it means the person who mistyped it is not the person
-    /// who has to work out what happened.
-    /// <para>
-    /// Separate from <see cref="RefuseIfAnythingIsUnclaimed"/> for exactly that reason: these
-    /// figures must hold from the start, whereas a line nobody has claimed yet is the
-    /// ordinary state of a bill somebody is still working through.
-    /// </para>
+    /// Checked when the bill is stored as well as when a part of it is divided, because a
+    /// receipt that does not describe the money it claims to is wrong the moment it is
+    /// written down -- waiting means the person who mistyped it is not the person who has to
+    /// work out what happened.
     /// </remarks>
     public static void RefuseIfFiguresDisagree(Receipt receipt)
     {
@@ -222,62 +193,188 @@ public static class ReceiptSplitCalculator
     }
 
     /// <summary>
-    /// Refuses a bill with a line belonging to nobody.
+    /// Refuses a part with a line belonging to nobody.
     /// </summary>
     /// <remarks>
-    /// Only when it comes to dividing. Storing a bill with unclaimed lines is the whole
-    /// point of storing one before it is divided -- somebody scans the paper, and then five
-    /// people tap what they had.
+    /// Only when it comes to dividing, and only over the lines of the part being divided.
+    /// Storing a bill with unclaimed lines is the point of storing one before it is divided,
+    /// and a line sitting in somebody else's half of the charge is none of this part's
+    /// business.
     /// </remarks>
-    private static void RefuseIfAnythingIsUnclaimed(Receipt receipt)
+    private static void RefuseIfAnythingIsUnclaimed(IReadOnlyList<ReceiptItem> part)
     {
-        // Only the lines that are divided *by* their claims. A line set to Evenly names
-        // nobody by design, and is exactly how "the rest is shared" is said -- reading those
-        // as unclaimed would refuse the bill the feature exists to allow.
-        var unclaimed = receipt.Items
+        var unclaimed = part
             .Where(item => item.Division == ReceiptItemDivision.Claimed && item.Claims.Count == 0)
             .ToList();
 
-        // Refused rather than spread over everybody. Which of the two a person meant is not
-        // knowable from here -- a forgotten line and a line genuinely shared by the table
-        // look identical -- and quietly charging five people for a steak one of them ordered
-        // is the kind of wrong nobody checks for afterwards. Claiming it explicitly takes one
-        // tap.
+        // Refused rather than spread over everybody. A forgotten line and one the table
+        // really did share look identical from here -- which is exactly what marking a line
+        // as everybody's exists to tell apart -- and quietly charging five people for one
+        // person's steak is the kind of wrong nobody checks for afterwards.
         if (unclaimed.Count > 0)
             throw new UnprocessableException(ErrorCodes.ReceiptItemsUnclaimed,
-                    $"{unclaimed.Count} item(s) on this receipt belong to nobody, so the bill " +
+                    $"{unclaimed.Count} item(s) in this part of the bill belong to nobody, so it " +
                     "cannot be divided yet.")
-                // By name as well as by id, so a client can say which without holding the
-                // whole receipt, and a person reading the raw problem can see the answer.
                 .WithExtension("unclaimedItemIds", unclaimed.ConvertAll(item => item.Id))
                 .WithExtension("unclaimedItemNames", unclaimed.ConvertAll(item => item.Name));
     }
 
     /// <summary>
-    /// The largest scale that keeps every weight inside an <see cref="int"/>.
+    /// What each person claimed of these lines, in money, before tax and tip.
     /// </summary>
     /// <remarks>
-    /// A weight is an int, so a claimed subtotal of 214,748.36 is as far as hundredths of a
-    /// cent reach. Stepping down to cents, and then to whole units, buys two more orders of
-    /// magnitude each -- which is past any bill this will ever meet, but the arithmetic
-    /// should degrade rather than fail.
+    /// Unrounded on purpose. These are weights and not amounts -- nobody is charged what this
+    /// returns -- so carrying the full precision of a third of a bottle costs nothing and
+    /// keeps three equal claims equal, which rounding each to the cent here would not.
+    /// </remarks>
+    /// <summary>
+    /// What each person claimed of these lines, before tax and tip.
+    /// </summary>
+    /// <remarks>
+    /// Public because a preview shows it beside what each person owes: the difference between
+    /// the two is their share of the tax and the tip, and seeing both is how somebody checks
+    /// that the apportioning did what they expected.
+    /// </remarks>
+    public static IReadOnlyDictionary<Guid, decimal> ClaimedSubtotals(
+        IReadOnlyList<ReceiptItem> lines, Guid payerId, IReadOnlyCollection<Guid> participants)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(participants);
+
+        return Claimed(lines, payerId, participants);
+    }
+
+    private static Dictionary<Guid, decimal> Claimed(
+        IEnumerable<ReceiptItem> lines, Guid payerId, IReadOnlyCollection<Guid> participants)
+    {
+        var claimed = new Dictionary<Guid, decimal>();
+
+        void Add(Guid userId, decimal share) =>
+            claimed[userId] = claimed.GetValueOrDefault(userId) + share;
+
+        foreach (var item in lines)
+        {
+            if (item.Division == ReceiptItemDivision.Evenly)
+            {
+                // Between everybody, naming none of them. Empty participants cannot happen --
+                // an expense always has at least its payer -- but it costs one comparison to
+                // not find out the hard way.
+                var among = participants.Count > 0 ? participants : [payerId];
+
+                foreach (var participant in among)
+                    Add(participant, item.TotalPrice / among.Count);
+
+                continue;
+            }
+
+            if (item.Claims.Count == 0)
+                continue;
+
+            if (item.Claims.Any(claim => claim.Weight <= 0))
+                throw new ValidationException(ErrorCodes.ReceiptInvalid,
+                        $"\"{item.Name}\" has a claim with no share in it. A claim is somebody " +
+                        "who had some of the line, so its weight has to be at least one.")
+                    .WithExtension("receiptItemId", item.Id);
+
+            var totalWeight = item.Claims.Sum(claim => (long)claim.Weight);
+
+            foreach (var claim in item.Claims)
+                Add(claim.UserId, item.TotalPrice * claim.Weight / totalWeight);
+        }
+
+        return claimed;
+    }
+
+    /// <summary>What of the bill's tip belongs to one part, in cents.</summary>
+    private static long TipShareOf(Receipt receipt, Guid expenseId)
+    {
+        var lines = Sum(receipt.Items.Where(item => item.ExpenseId is not null),
+            item => item.ExpenseId!.Value, item => item.TotalPrice);
+
+        return Spread(Cents(receipt.Tip), lines, Largest(lines)).GetValueOrDefault(expenseId);
+    }
+
+    /// <summary>
+    /// Cuts <paramref name="amount"/> into parts in proportion to <paramref name="weights"/>:
+    /// truncated to the cent, with the leftover handed to <paramref name="favour"/>, so the
+    /// parts sum to the amount exactly.
+    /// </summary>
+    /// <remarks>
+    /// The one place anything here is rounded, which is what lets every caller above claim
+    /// its own result is exact. Truncation rather than rounding, so no holder is ever given
+    /// more than their proportion and the leftover is always somebody named rather than
+    /// whoever a dictionary happened to enumerate last.
     /// <para>
-    /// Nobody's claimed subtotal can exceed the subtotal itself, since a line's price is
-    /// refused if negative and is shared out in full, so bounding on the subtotal bounds
-    /// every weight.
+    /// Weights of zero throughout -- a comped bill, a part of nothing but free items -- means
+    /// there is no proportion to divide by, and evenly between whoever is there is what
+    /// "in proportion to what you had" degenerates to. It is the only answer that does not
+    /// invent an order.
     /// </para>
     /// </remarks>
-    private static int ScaleFor(decimal subtotal)
+    private static Dictionary<Guid, long> Spread(
+        long amount, Dictionary<Guid, decimal> weights, Guid favour)
     {
-        foreach (var scale in (ReadOnlySpan<int>)[PreferredScale, 100, 1])
-            if (subtotal * scale < int.MaxValue)
-                return scale;
+        var result = new Dictionary<Guid, long>();
 
-        // Its own code, not RECEIPT_DOES_NOT_ADD_UP: the figures on this bill agree with each
-        // other perfectly and the client would tell somebody their bill does not add up,
-        // which is both wrong and unactionable. Nothing is wrong with it except its size.
-        throw new UnprocessableException(ErrorCodes.ReceiptTooLargeToDivide,
-                "This receipt is too large to divide by its items.")
-            .WithExtension("subtotal", subtotal);
+        if (weights.Count == 0 || amount == 0)
+        {
+            foreach (var key in weights.Keys) result[key] = 0;
+            return result;
+        }
+
+        var total = weights.Values.Sum();
+        var even = total <= 0;
+        var placed = 0L;
+
+        foreach (var (key, weight) in weights)
+        {
+            // Multiplied before divided, and that grouping is the whole of it: dividing
+            // first turns a two-to-one share of 30.00 into 0.666... and truncates the
+            // product to 19.99, so the remainder lands on somebody as a stray cent and a
+            // clean 20/10 reads 20.01/9.99. Kept in decimal throughout for the same reason.
+            var share = even
+                ? amount / weights.Count
+                : (long)(amount * weight / total);
+
+            result[key] = share;
+            placed += share;
+        }
+
+        if (!result.ContainsKey(favour))
+            favour = result.Keys.First();
+
+        result[favour] += amount - placed;
+
+        return result;
     }
+
+    private static Dictionary<Guid, decimal> Sum<T>(
+        IEnumerable<T> source, Func<T, Guid> key, Func<T, decimal> value)
+    {
+        var totals = new Dictionary<Guid, decimal>();
+
+        foreach (var item in source)
+            totals[key(item)] = totals.GetValueOrDefault(key(item)) + value(item);
+
+        return totals;
+    }
+
+    private static Guid Largest(Dictionary<Guid, decimal> weights)
+    {
+        var best = Guid.Empty;
+        decimal seen = -1;
+
+        // Ties broken by the smaller id, so the same bill divides the same way on every
+        // machine and in every enumeration order.
+        foreach (var (key, weight) in weights)
+            if (weight > seen || (weight == seen && key.CompareTo(best) < 0))
+            {
+                best = key;
+                seen = weight;
+            }
+
+        return best;
+    }
+
+    private static long Cents(decimal amount) => (long)decimal.Round(amount * 100);
 }

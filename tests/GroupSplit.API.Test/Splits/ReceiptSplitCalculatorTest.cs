@@ -20,6 +20,13 @@ public class ReceiptSplitCalculatorTest
     private static readonly Guid Bob = new("22222222-2222-2222-2222-222222222222");
     private static readonly Guid Carol = new("33333333-3333-3333-3333-333333333333");
 
+    /// <summary>
+    /// The expense every line here belongs to. A restaurant bill is one purchase, so it is
+    /// one part -- which is the shape this whole file is about, and the reason splitting a
+    /// warehouse charge into two changed none of it.
+    /// </summary>
+    private static readonly Guid Part = new("44444444-4444-4444-4444-444444444444");
+
     /// <param name="lines">
     /// Each line as its price and who had it, with a weight apiece. The subtotal and the
     /// total are worked out from the lines and the extras rather than passed, because a
@@ -34,7 +41,10 @@ public class ReceiptSplitCalculatorTest
 
         foreach (var (price, had) in lines)
         {
-            var item = new ReceiptItem { Name = $"Line {price}", TotalPrice = price };
+            var item = new ReceiptItem
+            {
+                Name = $"Line {price}", TotalPrice = price, ExpenseId = Part
+            };
 
             foreach (var (user, weight) in had)
                 item.Claims.Add(new ReceiptItemClaim { UserId = user, Weight = weight });
@@ -70,7 +80,7 @@ public class ReceiptSplitCalculatorTest
             (30.00m, Had(Alice)),
             (20.00m, Had(Bob)));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(30.00m, AmountFor(splits, Alice));
         Assert.Equal(20.00m, AmountFor(splits, Bob));
@@ -90,7 +100,7 @@ public class ReceiptSplitCalculatorTest
             (75.00m, Had(Alice)),
             (25.00m, Had(Bob)));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(90.00m, AmountFor(splits, Alice));
         Assert.Equal(30.00m, AmountFor(splits, Bob));
@@ -104,7 +114,7 @@ public class ReceiptSplitCalculatorTest
             (10.00m, Had(Alice)),
             (18.00m, Had(Alice, Bob)));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(19.00m, AmountFor(splits, Alice));
         Assert.Equal(9.00m, AmountFor(splits, Bob));
@@ -115,7 +125,7 @@ public class ReceiptSplitCalculatorTest
     {
         var receipt = Bill(tax: 0m, tip: 0m, (30.00m, [(Alice, 2), (Bob, 1)]));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(20.00m, AmountFor(splits, Alice));
         Assert.Equal(10.00m, AmountFor(splits, Bob));
@@ -130,7 +140,7 @@ public class ReceiptSplitCalculatorTest
     {
         var receipt = Bill(tax: 0m, tip: 0m, (10.00m, Had(Alice, Bob, Carol)));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(10.00m, splits.Sum(split => split.Amount));
         Assert.Equal(3.34m, AmountFor(splits, Alice));
@@ -154,7 +164,7 @@ public class ReceiptSplitCalculatorTest
             (7.77m, Had(Bob)),
             (0.03m, [(Alice, 2), (Carol, 1)]));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Bob, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Bob, Everyone);
 
         Assert.Equal(receipt.Total, splits.Sum(split => split.Amount));
     }
@@ -171,10 +181,10 @@ public class ReceiptSplitCalculatorTest
             (22.00m, []));
 
         var thrown = Assert.Throws<UnprocessableException>(
-            () => ReceiptSplitCalculator.Divide(receipt, Alice, Everyone));
+            () => ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone));
 
         Assert.Equal(ErrorCodes.ReceiptItemsUnclaimed, thrown.Code);
-        Assert.False(ReceiptSplitCalculator.CanDivide(receipt));
+        Assert.False(ReceiptSplitCalculator.CanDivide(receipt, Part));
     }
 
     [Fact]
@@ -186,7 +196,7 @@ public class ReceiptSplitCalculatorTest
         receipt.Total = 12.00m;
 
         var thrown = Assert.Throws<UnprocessableException>(
-            () => ReceiptSplitCalculator.Divide(receipt, Alice, Everyone));
+            () => ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone));
 
         Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, thrown.Code);
     }
@@ -200,7 +210,7 @@ public class ReceiptSplitCalculatorTest
         receipt.Total = 9.00m;
 
         var thrown = Assert.Throws<UnprocessableException>(
-            () => ReceiptSplitCalculator.Divide(receipt, Alice, Everyone));
+            () => ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone));
 
         Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, thrown.Code);
     }
@@ -218,7 +228,7 @@ public class ReceiptSplitCalculatorTest
             (0.00m, Had(Bob)),
             (0.00m, Had(Carol)));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(3.00m, AmountFor(splits, Alice));
         Assert.Equal(3.00m, AmountFor(splits, Bob));
@@ -232,7 +242,7 @@ public class ReceiptSplitCalculatorTest
             (40.00m, Had(Alice)),
             (10.00m, Had(Bob)));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         // Not a zero row: a bill names who ate, and Carol was not there. The distinction
         // matters because a zero split would put her in the group's balances for this
@@ -252,7 +262,7 @@ public class ReceiptSplitCalculatorTest
         var receipt = Bill(tax: 0m, tip: 0m, (10.00m, [(Alice, 0)]));
 
         var thrown = Assert.Throws<ValidationException>(
-            () => ReceiptSplitCalculator.Divide(receipt, Alice, Everyone));
+            () => ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone));
 
         Assert.Equal(ErrorCodes.ReceiptInvalid, thrown.Code);
     }
@@ -268,7 +278,7 @@ public class ReceiptSplitCalculatorTest
             (30.00m, Had(Alice)),
             (30.00m, [])), 1);
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         // 30.00 of her own, plus a third of the shared 30.00.
         Assert.Equal(40.00m, AmountFor(splits, Alice));
@@ -288,9 +298,9 @@ public class ReceiptSplitCalculatorTest
             (20.00m, []),
             (10.00m, [])), 0), 1);
 
-        Assert.True(ReceiptSplitCalculator.CanDivide(receipt));
+        Assert.True(ReceiptSplitCalculator.CanDivide(receipt, Part));
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
 
         Assert.Equal(35.00m, splits.Sum(split => split.Amount));
     }
@@ -304,8 +314,8 @@ public class ReceiptSplitCalculatorTest
     {
         var receipt = Shared(Bill(tax: 0m, tip: 0m, (30.00m, [])), 0);
 
-        var betweenThree = ReceiptSplitCalculator.Divide(receipt, Alice, Everyone);
-        var betweenTwo = ReceiptSplitCalculator.Divide(receipt, Alice, [Alice, Bob]);
+        var betweenThree = ReceiptSplitCalculator.Divide(receipt, Part, Alice, Everyone);
+        var betweenTwo = ReceiptSplitCalculator.Divide(receipt, Part, Alice, [Alice, Bob]);
 
         Assert.Equal(10.00m, AmountFor(betweenThree, Bob));
         Assert.Equal(15.00m, AmountFor(betweenTwo, Bob));
@@ -326,7 +336,7 @@ public class ReceiptSplitCalculatorTest
             (7.77m, []),
             (0.03m, [])), 1), 2);
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Bob, Everyone);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Bob, Everyone);
 
         Assert.Equal(receipt.Total, splits.Sum(split => split.Amount));
     }
@@ -344,7 +354,7 @@ public class ReceiptSplitCalculatorTest
             (60.00m, Had(Alice)),
             (40.00m, [])), 1);
 
-        var splits = ReceiptSplitCalculator.Divide(receipt, Alice, [Bob, Carol]);
+        var splits = ReceiptSplitCalculator.Divide(receipt, Part, Alice, [Bob, Carol]);
 
         Assert.Equal(72.00m, AmountFor(splits, Alice));
         Assert.Equal(24.00m, AmountFor(splits, Bob));
@@ -357,6 +367,6 @@ public class ReceiptSplitCalculatorTest
     {
         var receipt = Bill(tax: 1.00m, tip: 2.00m, (10.00m, Had(Alice, Bob)));
 
-        Assert.True(ReceiptSplitCalculator.CanDivide(receipt));
+        Assert.True(ReceiptSplitCalculator.CanDivide(receipt, Part));
     }
 }

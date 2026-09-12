@@ -270,7 +270,9 @@ public static class InboxApi
                     : row.Status == BankTransactionStatus.Ignored
                         ? InboxStatus.Ignored
                         : InboxStatus.New,
-                row.FiledAs == null ? null : row.FiledAs.Id,
+                row.FiledAs.Select(filed => filed.Id).FirstOrDefault() == Guid.Empty
+                    ? (Guid?)null
+                    : row.FiledAs.Select(filed => filed.Id).First(),
                 row.RemovedAt,
                 row.Account.Name,
                 row.Account.Connection.InstitutionName));

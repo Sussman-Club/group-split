@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
@@ -31,19 +33,39 @@ public class Expense : Transaction
     public Guid? CategoryId { get; set; }
 
     /// <summary>
-    /// The itemised bill behind this, when there is one. Null for the ordinary expense
-    /// nobody photographed.
+    /// The lines of a bill that are this expense's money. Empty for the ordinary expense
+    /// nobody itemised.
     /// </summary>
     /// <remarks>
-    /// Here so that a division can reach it. An <see cref="ItemizedSplitRuleVersion"/> is
-    /// answered from the receipt's claims rather than from anything on the version, so the
-    /// handler needs the expense to have it loaded -- which is why
-    /// <c>ExpenseSplitter</c> includes it on every read that might divide.
+    /// The inverse of <see cref="ReceiptItem.Expense"/>, and the way round it is because one
+    /// bill can be more than one expense: a warehouse charge covering the flat's groceries
+    /// and a jacket of your own is one receipt whose lines name two expenses. An expense
+    /// therefore holds lines rather than a receipt -- and reaches the bill, when it needs the
+    /// tax and the tip, through any one of them.
     /// <para>
-    /// Nullable, and it stays nullable for an expense filed under an itemised rule: an
-    /// expense with no bill is not a broken row, it is one nobody has itemised yet, and the
-    /// division says so rather than the model forbidding it.
+    /// Empty is not a broken row. An expense filed under an itemised rule with no lines is
+    /// one nobody has itemised yet, and the division says so by name rather than the model
+    /// forbidding it.
     /// </para>
     /// </remarks>
-    public virtual Receipt? Receipt { get; set; }
+    public virtual ICollection<ReceiptItem> ReceiptItems { get; } = [];
+
+    /// <summary>
+    /// The whole bill this expense is one part of, put here by whoever is about to divide it.
+    /// Never stored.
+    /// </summary>
+    /// <remarks>
+    /// A division by items needs more of the paper than the expense's own lines: the tax and
+    /// the tip are stated once for the whole bill, and how much of them is this part's
+    /// depends on what the other parts hold. <see cref="ReceiptItems"/> cannot answer that,
+    /// so the splitter loads the receipt and hands it over here.
+    /// <para>
+    /// Set explicitly rather than left to EF's navigation fixup, which would fill
+    /// <see cref="ReceiptItems"/> for a tracked expense and not for a detached one -- and the
+    /// update preview divides a detached draft. A division that worked on the save and failed
+    /// on the preview of the same edit is the bug this avoids.
+    /// </para>
+    /// </remarks>
+    [NotMapped]
+    public Receipt? Bill { get; set; }
 }

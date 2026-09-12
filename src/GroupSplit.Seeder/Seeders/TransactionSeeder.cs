@@ -78,7 +78,7 @@ public class TransactionSeeder(
         // one the navigation does not already carry. Attached here, a seeded expense divides
         // by its own bill on the first pass with nothing written yet.
         if (dto.Receipt is { } bill)
-            expense.Receipt = Bill(bill, expense);
+            expense.Bill = Bill(bill, expense);
 
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.
@@ -103,7 +103,6 @@ public class TransactionSeeder(
 
         var receipt = new Receipt
         {
-            ExpenseId = expense.Id,
             Subtotal = subtotal,
             Tax = dto.Tax,
             Tip = dto.Tip,
@@ -124,6 +123,10 @@ public class TransactionSeeder(
                     ? ReceiptItemDivision.Evenly
                     : ReceiptItemDivision.Claimed
             };
+
+            // A seeded bill is one purchase, so every line is the expense's. A charge that
+            // is two purchases is split from the inbox, which demo data has no way to reach.
+            item.ExpenseId = expense.Id;
 
             foreach (var (userId, weight) in line.Had)
                 item.Claims.Add(new ReceiptItemClaim { UserId = userId, Weight = weight });

@@ -17,20 +17,15 @@ public static class ReceiptExtensions
 {
     extension(Receipt receipt)
     {
-        /// <param name="participants">
-        /// Everybody the expense may be divided between, or empty when there is no expense to
-        /// divide. What <c>CanDivide</c> checks the claims against: a bill claimed by somebody
-        /// who has since left the group is refused by the splitter, and saying yes here is the
-        /// last of the four ways this answer used to light up a button that then refused.
+        /// <param name="canDivide">
+        /// Whether asking to divide this part would actually succeed. Decided by the service
+        /// rather than here, because it turns on facts a receipt does not carry -- whether
+        /// the expense is shared with anybody, whether its amount is still this part of the
+        /// bill, whether every claimant is still a participant, and whether the person
+        /// reading may write to it at all. Each of those was once a yes on this flag and a
+        /// refusal one call later, on a button this answer had lit up.
         /// </param>
-        /// <param name="readerMayDivide">
-        /// Whether the person reading may write to this expense at all. Separate from every
-        /// other check here, all of which are about the bill: reading reaches further than
-        /// writing, so the departed payer of a group expense still sees a bill they cannot
-        /// divide.
-        /// </param>
-        public ReceiptResponse ToResponse(
-            IReadOnlyCollection<Guid> participants, bool readerMayDivide)
+        public ReceiptResponse ToResponse(Guid? expenseId, bool canDivide)
         {
             var items = receipt.Items
                 .Select(item => new ReceiptItemResponse(
@@ -39,49 +34,27 @@ public static class ReceiptExtensions
                     item.UnitPrice,
                     item.Quantity,
                     item.TotalPrice,
+                    item.IsTaxable,
+                    item.ExpenseId,
                     (ReceiptItemSplit)item.Division,
                     [.. ShareOf(item)]))
                 .ToList();
 
             return new ReceiptResponse(
                 receipt.Id,
-                receipt.ExpenseId,
+                expenseId,
                 receipt.BankTransactionId,
                 receipt.Subtotal,
                 receipt.Tax,
                 receipt.Tip,
                 receipt.Total,
                 receipt.Items.Count(item =>
-                    item.Division == ReceiptItemDivision.Claimed && item.Claims.Count == 0),
-                // Three things have to hold, and none of them is about the lines. There has
-                // to be an expense to write the shares to; the bill has to still be that
-                // expense's money, which a later edit to the amount or a link to a row of a
-                // different figure can undo; and the expense has to be shared with somebody,
-                // since a bill on a personal one divides between nobody.
-                //
-                // Said here so a client does not have to know these separately from the rules
-                // about the figures -- and said at all because each of them was once a yes
-                // here and a refusal one call later, on a button this answer had lit up.
-                readerMayDivide
-                && receipt.Expense is { } expense
-                && expense.GroupId is not null
-                && receipt.Total == expense.Amount
-                && Claims(receipt).All(participants.Contains)
-                && ReceiptSplitCalculator.CanDivide(receipt),
+                    (expenseId is null || item.ExpenseId == expenseId)
+                    && item.Division == ReceiptItemDivision.Claimed && item.Claims.Count == 0),
+                canDivide,
                 items);
         }
     }
-
-    /// <summary>
-    /// Everybody named anywhere on the bill.
-    /// </summary>
-    /// <remarks>
-    /// Read off the lines rather than off the stored splits, because the two answer different
-    /// questions: the splits are who owed something last time it was divided, and this is who
-    /// would be given a share if it were divided now.
-    /// </remarks>
-    private static IEnumerable<Guid> Claims(Receipt receipt) =>
-        receipt.Items.SelectMany(item => item.Claims).Select(claim => claim.UserId).Distinct();
 
     /// <summary>
     /// What each claimant's part of one line comes to, before tax and tip: the line's price

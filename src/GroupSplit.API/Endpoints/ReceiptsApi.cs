@@ -64,7 +64,7 @@ public static class ReceiptsApi
                 {
                     var receipt = await receipts.ForExpense(id, ct);
 
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct));
+                    return Results.Ok(await receipts.ResponseFor(receipt, id, ct));
                 })
                 .WithName("GetReceipt")
                 .Produces<ReceiptResponse>()
@@ -90,7 +90,7 @@ public static class ReceiptsApi
                 {
                     var receipt = await receipts.SaveForExpense(id, request, ct);
 
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct));
+                    return Results.Ok(await receipts.ResponseFor(receipt, id, ct));
                 })
                 .WithName("SaveReceipt")
                 .Produces<ReceiptResponse>()
@@ -133,7 +133,7 @@ public static class ReceiptsApi
                 {
                     var receipt = await receipts.SetClaims(id, itemId, request, ct);
 
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct));
+                    return Results.Ok(await receipts.ResponseFor(receipt, id, ct));
                 })
                 .WithName("SetReceiptItemClaims")
                 .Produces<ReceiptResponse>()
@@ -213,7 +213,9 @@ public static class ReceiptsApi
                 {
                     var receipt = await receipts.ForBankRow(id, ct);
 
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct));
+                    // No part named: an unfiled row is the whole piece of paper, and none of
+                    // its lines belongs to a purchase yet.
+                    return Results.Ok(await receipts.ResponseFor(receipt, ct: ct));
                 })
                 .WithName("GetBankRowReceipt")
                 .Produces<ReceiptResponse>()
@@ -234,7 +236,7 @@ public static class ReceiptsApi
                 {
                     var receipt = await receipts.SaveForBankRow(id, request, ct);
 
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct));
+                    return Results.Ok(await receipts.ResponseFor(receipt, ct: ct));
                 })
                 .WithName("SaveBankRowReceipt")
                 .Produces<ReceiptResponse>()

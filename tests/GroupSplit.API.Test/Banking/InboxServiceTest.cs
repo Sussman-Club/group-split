@@ -249,12 +249,13 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             CategoryId = category
         }, Ct);
 
+        // The bill stays on the row it was typed against; which purchases it became is on
+        // its lines.
         var bill = await DbContext.Set<Receipt>().AsNoTracking()
-            .FirstAsync(receipt => receipt.ExpenseId == expense.Id, Ct);
+            .Include(receipt => receipt.Items)
+            .FirstAsync(receipt => receipt.BankTransactionId == row.Id, Ct);
 
-        Assert.Null(bill.BankTransactionId);
-        Assert.Empty(await DbContext.Set<Receipt>().AsNoTracking()
-            .Where(receipt => receipt.BankTransactionId == row.Id).ToListAsync(Ct));
+        Assert.All(bill.Items, item => Assert.Equal(expense.Id, item.ExpenseId));
     }
 
     /// <summary>
@@ -332,7 +333,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .FirstAsync(receipt => receipt.BankTransactionId == row.Id, Ct);
 
         Assert.Single(bill.Items.Single().Claims);
-        Assert.Null(bill.ExpenseId);
+        Assert.Null(bill.Items.Single().ExpenseId);
     }
 
     /// <summary>

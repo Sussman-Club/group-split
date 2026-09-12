@@ -71,7 +71,6 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var receipt = new Receipt
         {
-            ExpenseId = expenseId,
             Subtotal = lines.Sum(line => line.Price),
             Tax = tax,
             Tip = tip,
@@ -80,7 +79,10 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         foreach (var (name, price, had) in lines)
         {
-            var item = new ReceiptItem { ReceiptId = receipt.Id, Name = name, TotalPrice = price };
+            var item = new ReceiptItem
+            {
+                ReceiptId = receipt.Id, ExpenseId = expenseId, Name = name, TotalPrice = price
+            };
 
             foreach (var userId in had)
                 item.Claims.Add(new ReceiptItemClaim { UserId = userId, Weight = 1 });
@@ -607,12 +609,12 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var receipts = GetService<IReceiptService>();
 
         // Every figure still agrees; what changed is who may be given a share.
-        Assert.True((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), Ct))
+        Assert.True((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), expense.Id, Ct))
             .CanDivide);
 
         await Departs(groupId, other);
 
-        Assert.False((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), Ct))
+        Assert.False((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), expense.Id, Ct))
             .CanDivide);
     }
 
@@ -646,12 +648,12 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var receipts = GetService<IReceiptService>();
 
-        Assert.True((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), Ct))
+        Assert.True((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), expense.Id, Ct))
             .CanDivide);
 
         await Departs(groupId, Self);
 
-        Assert.False((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), Ct))
+        Assert.False((await receipts.ResponseFor(await receipts.ForExpense(expense.Id, Ct), expense.Id, Ct))
             .CanDivide);
     }
 
@@ -709,7 +711,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Through the service, which is what the endpoint does: the answer depends on who may
         // be given a share, and only the service can ask.
-        Assert.False((await receipts.ResponseFor(bill, Ct)).CanDivide);
+        Assert.False((await receipts.ResponseFor(bill, expense.Id, Ct)).CanDivide);
 
         var thrown = await Assert.ThrowsAsync<UnprocessableException>(
             () => receipts.Divide(expense.Id, Ct));
