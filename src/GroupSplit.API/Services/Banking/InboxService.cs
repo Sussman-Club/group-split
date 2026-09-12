@@ -471,6 +471,21 @@ public sealed class InboxService(
         // is what File is for.
         var bill = await receipts.ForBankRow(row.Id, ct);
 
+        // Checked again here, not only when the bill was typed. A pending row's amount is the
+        // bank's to change before it posts, so a bill typed at the table against 100.00 can
+        // be facing a 105.00 charge by the time anybody splits it -- and the parts are cut
+        // from the bill, so they would sum to the old figure while the response and the
+        // ledger said the new one.
+        if (bill.Total != row.Amount)
+        {
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    $"This bill comes to {bill.Total} and the charge is {row.Amount}, so its " +
+                    "parts cannot add up to what was paid. Update the bill to match the " +
+                    "charge before splitting it.")
+                .WithExtension("receiptTotal", bill.Total)
+                .WithExtension("amount", row.Amount);
+        }
+
         var parts = PartsOf(bill, request);
 
         // What each part comes to, worked out before any expense exists -- an expense cannot
@@ -478,36 +493,76 @@ public sealed class InboxService(
         // Cut from the charge rather than added up towards it, so the parts sum to it.
         var amounts = ReceiptSplitCalculator.AmountsFor(bill, parts);
 
+        // Every line told which purchase it is before any part is divided, rather than a part
+        // at a time. A rule that divides by the bill re-derives its part from the receipt, and
+        // a receipt half placed is a bill with half its lines: the tax gets apportioned over
+        // the lines placed so far, and the first part of a taxed charge is handed a figure
+        // that disagrees with the amount it was cut for. Which needs the ids up front, and
+        // this is why they are made here.
+        var ids = request.Parts.Select(_ => Guid.NewGuid()).ToList();
+
+        // What the lines said before, so a failure can put them back. The expenses are only
+        // tracked until the save below, but the lines are rows that already exist: left
+        // pointing at expenses that were never created, they would be flushed by the next
+        // thing to save in this scope. Nothing does today, and a bill quietly claiming to be
+        // several purchases that do not exist is not worth resting on that.
+        var wasPlaced = bill.Items.ToDictionary(line => line.Id, line => line.ExpenseId);
+
         var filed = new List<SplitPartResponse>();
 
-        for (var i = 0; i < request.Parts.Count; i++)
+        try
         {
-            var part = request.Parts[i];
-
-            var expense = await transactions.Create(new CreateTransactionRequest
+            for (var i = 0; i < parts.Count; i++)
             {
-                GroupId = part.GroupId,
-                CategoryId = part.CategoryId,
-                PaidByUserId = part.PaidByUserId,
-                Splits = part.Splits,
-                Name = Named(part.Name, row),
-                Description = part.Description,
-                Amount = amounts[i],
-                DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
-            }, bill, part.ItemIds, ct);
+                foreach (var line in parts[i])
+                    line.ExpenseId = ids[i];
+            }
 
-            // Every part came from this charge, and each says so. The link is many-to-one now
-            // for exactly this reason.
-            expense.BankTransaction = row;
-            expense.BankTransactionId = row.Id;
-            expense.MerchantId = row.MerchantId;
+            for (var i = 0; i < request.Parts.Count; i++)
+            {
+                var part = request.Parts[i];
 
-            filed.Add(new SplitPartResponse(
-                expense.Id, expense.Name, expense.GroupId, expense.Amount, part.ItemIds.Count));
+                // Built and not saved. The whole split commits once, below, so a part that
+                // cannot be built takes the parts before it with it -- rather than leaving
+                // them in the ledger against a row that still reads as waiting, where the
+                // obvious next move is to fix the bad part and split again, filing the good
+                // ones a second time.
+                var expense = await transactions.Build(new CreateTransactionRequest
+                {
+                    GroupId = part.GroupId,
+                    CategoryId = part.CategoryId,
+                    PaidByUserId = part.PaidByUserId,
+                    Splits = part.Splits,
+                    Name = Named(part.Name, row),
+                    Description = part.Description,
+                    Amount = amounts[i],
+                    DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+                }, bill, part.ItemIds, ids[i], ct);
+
+                dbContext.Add(expense);
+
+                // Every part came from this charge, and each says so. The link is many-to-one
+                // now for exactly this reason.
+                expense.BankTransaction = row;
+                expense.BankTransactionId = row.Id;
+                expense.MerchantId = row.MerchantId;
+
+                filed.Add(new SplitPartResponse(
+                    expense.Id, expense.Name, expense.GroupId, expense.Amount, part.ItemIds.Count));
+            }
+        }
+        catch
+        {
+            foreach (var line in bill.Items)
+                line.ExpenseId = wasPlaced[line.Id];
+
+            throw;
         }
 
         row.Status = BankTransactionStatus.Filed;
 
+        // Once, for the lot. EF wraps a single SaveChanges in one database transaction, which
+        // is what makes this all-or-nothing rather than a run of separate filings.
         await dbContext.SaveChangesAsync(ct);
 
         return new SplitBankTransactionResponse(row.Id, row.Amount, filed);
@@ -534,7 +589,11 @@ public sealed class InboxService(
 
         var amounts = ReceiptSplitCalculator.AmountsFor(bill, parts);
 
-        return new SplitChargePreviewResponse(amounts, bill.Total, amounts.Sum());
+        // The row's amount rather than the bill's, so what is "still to place" is measured
+        // against the money being divided. They are the same figure for a bill that can be
+        // split at all; where they differ the screen says so by never reaching zero, which is
+        // the honest thing for it to say -- Split refuses that bill by name.
+        return new SplitChargePreviewResponse(amounts, row.Amount, amounts.Sum());
     }
 
     /// <summary>

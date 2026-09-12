@@ -516,6 +516,134 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private Guid Self => GetService<ICurrentUser>().User.Id;
 
     /// <summary>A bill typed against an imported row, before anybody files it.</summary>
+    /// <summary>
+    /// A part filed under a rule that divides by the bill gets the amount the split cut for
+    /// it, not one worked out from half a bill.
+    /// </summary>
+    /// <remarks>
+    /// The two arithmetics have to agree, and they only do if the whole bill is placed before
+    /// any of it is divided. Placing one part at a time made the handler apportion the tax
+    /// over the lines placed so far -- so the first part of a taxed bill was told its part
+    /// came to more than the expense it was being created for, and the split failed naming
+    /// two figures nobody typed.
+    /// <para>
+    /// The one-part case never showed it: with every line in the only part there is no
+    /// subset to be wrong about.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_part_that_divides_by_the_bill_agrees_with_what_the_split_cut_for_it()
+    {
+        var (group, category, other) = await GroupWithItemizedCategory();
+        var row = await Row(amount: 110m);
+
+        var bill = await GetService<IReceiptService>().SaveForBankRow(row.Id,
+            new SaveReceiptRequest
+            {
+                Subtotal = 100m,
+                Tax = 10m,
+                Total = 110m,
+                Items =
+                [
+                    new ReceiptItemInput
+                    {
+                        Name = "GROCERIES", TotalPrice = 60m, Split = ReceiptItemSplit.Evenly
+                    },
+                    new ReceiptItemInput
+                    {
+                        Name = "JACKET", TotalPrice = 40m,
+                        Claims = [new ReceiptClaimInput { UserId = Self }]
+                    }
+                ]
+            }, Ct);
+
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+        var jacket = bill.Items.First(item => item.Name == "JACKET");
+
+        var split = await Inbox.Split(row.Id, new SplitBankTransactionRequest
+        {
+            Parts =
+            [
+                new BankTransactionPartInput
+                {
+                    Name = "Groceries", GroupId = group.Id, CategoryId = category,
+                    ItemIds = [groceries.Id]
+                },
+                new BankTransactionPartInput { Name = "Jacket", ItemIds = [jacket.Id] }
+            ]
+        }, Ct);
+
+        // Six tenths of the goods carry six tenths of the tax.
+        var shared = split.Parts.Single(part => part.GroupId == group.Id);
+
+        Assert.Equal(66m, shared.Amount);
+        Assert.Equal(44m, split.Parts.Single(part => part.GroupId is null).Amount);
+        Assert.Equal(110m, split.Parts.Sum(part => part.Amount));
+
+        // And the shares it was divided into are that same figure, between the two of them.
+        var shares = await DbContext.Set<TransactionSplit>()
+            .Where(entry => entry.TransactionId == shared.TransactionId).ToListAsync(Ct);
+
+        Assert.Equal(2, shares.Count);
+        Assert.Contains(shares, entry => entry.UserId == other.Id);
+        Assert.Equal(66m, shares.Sum(entry => entry.Amount));
+    }
+
+    /// <summary>
+    /// A split that cannot be finished leaves nothing behind.
+    /// </summary>
+    /// <remarks>
+    /// The whole reason it is all-or-nothing. A part that fails halfway used to leave the
+    /// parts before it in the ledger with the row still reading as waiting -- so the obvious
+    /// thing to do next, fixing the bad part and splitting again, filed the good ones a
+    /// second time and doubled what the group owed.
+    /// </remarks>
+    [Fact]
+    public async Task A_split_that_fails_partway_leaves_no_expenses_behind()
+    {
+        var (group, category, _) = await GroupWithEvenCategory();
+        var row = await Row(amount: 100m);
+
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+        var jacket = bill.Items.First(item => item.Name == "JACKET");
+
+        // The second part names a payer who is in no group at all, which Create refuses --
+        // after the first part has already been built.
+        var stranger = await CreateNewUser();
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => Inbox.Split(row.Id, new SplitBankTransactionRequest
+            {
+                Parts =
+                [
+                    new BankTransactionPartInput
+                    {
+                        Name = "Groceries", GroupId = group.Id, CategoryId = category,
+                        ItemIds = [groceries.Id]
+                    },
+                    new BankTransactionPartInput
+                    {
+                        Name = "Jacket", GroupId = group.Id, PaidByUserId = stranger.Id,
+                        ItemIds = [jacket.Id]
+                    }
+                ]
+            }, Ct));
+
+        // By name, not by the row: the link is set after the expense is built, so a part left
+        // behind by a failure halfway carries no bank row at all -- which is exactly what
+        // makes it invisible to anybody looking for what this charge became.
+        Assert.Empty(await DbContext.Set<Expense>()
+            .Where(expense => expense.Name == "Groceries").ToListAsync(Ct));
+
+        Assert.Equal(BankTransactionStatus.New, (await Reload(row)).Status);
+
+        // And the lines are still nobody's, so the row can simply be split again.
+        Assert.All(
+            await DbContext.Set<ReceiptItem>().Where(item => item.ReceiptId == bill.Id).ToListAsync(Ct),
+            line => Assert.Null(line.ExpenseId));
+    }
+
     // ---- What a split would come to, before it is one --------------------------------
     //
     // The screen that sorts a bill into purchases has to say what each part is worth as it is

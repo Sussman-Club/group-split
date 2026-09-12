@@ -67,6 +67,13 @@ public interface ITransactionService
         IReadOnlyList<Guid>? billItemIds = null, CancellationToken ct = default);
 
     /// <summary>
+    /// The expense, divided and tracked, but not saved -- for the caller creating several at
+    /// once out of one charge, which commits them together.
+    /// </summary>
+    ValueTask<Expense> Build(CreateTransactionRequest request, Receipt? bill,
+        IReadOnlyList<Guid>? billItemIds = null, Guid? id = null, CancellationToken ct = default);
+
+    /// <summary>
     /// What <paramref name="request"/> would be divided into if it were saved, without
     /// saving it.
     /// </summary>
@@ -241,6 +248,34 @@ public class TransactionService(
     public async ValueTask<Expense> Create(CreateTransactionRequest request, Receipt? bill,
         IReadOnlyList<Guid>? billItemIds = null, CancellationToken ct = default)
     {
+        var expense = await Build(request, bill, billItemIds, ct: ct);
+
+        dbContext.Add(expense);
+        await dbContext.SaveChangesAsync(ct);
+
+        return expense;
+    }
+
+    /// <summary>
+    /// The expense, divided and tracked, but not saved.
+    /// </summary>
+    /// <remarks>
+    /// For the caller creating several at once out of one charge. Every check and the whole
+    /// division happen here; what is left to the caller is when to commit, and doing that once
+    /// for the lot is what makes a split all-or-nothing -- EF wraps a single
+    /// <c>SaveChanges</c> in one database transaction, so a part that cannot be built takes
+    /// the parts before it with it instead of leaving them in the ledger against a row that
+    /// still reads as waiting.
+    /// </remarks>
+    /// <param name="id">
+    /// The id to give it, for a caller that has to know it before this runs. A split has to:
+    /// every line of the bill must name its purchase before any part is divided, or an
+    /// itemised rule apportions the tax over the lines placed so far and refuses the part it
+    /// was given.
+    /// </param>
+    public async ValueTask<Expense> Build(CreateTransactionRequest request, Receipt? bill,
+        IReadOnlyList<Guid>? billItemIds = null, Guid? id = null, CancellationToken ct = default)
+    {
         var currentUser = userContext.User;
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
@@ -256,6 +291,7 @@ public class TransactionService(
 
         var expense = new Expense
         {
+            Id = id ?? Guid.NewGuid(),
             Amount = request.Amount,
             Currency = group?.Currency ?? Currencies.Default,
             // Stored as UTC, whatever offset the client wrote it with. The column has no
@@ -296,9 +332,6 @@ public class TransactionService(
         }
 
         await splitter.WriteSplitsAsync(expense, request.Splits, ct);
-
-        dbContext.Add(expense);
-        await dbContext.SaveChangesAsync(ct);
 
         return expense;
     }
