@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    [Migration("20260911200158_ItemizedReceipts")]
+    [Migration("20260912041601_ItemizedReceipts")]
     partial class ItemizedReceipts
     {
         /// <inheritdoc />
@@ -518,9 +518,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("BankTransactionId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ExpenseId")
-                        .HasColumnType("uuid");
-
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -542,13 +539,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("BankTransactionId")
                         .IsUnique();
 
-                    b.HasIndex("ExpenseId")
-                        .IsUnique();
-
-                    b.ToTable("Receipt", t =>
-                        {
-                            t.HasCheckConstraint("CK_Receipt_BelongsToExactlyOne", "num_nonnulls(\"ExpenseId\", \"BankTransactionId\") = 1");
-                        });
+                    b.ToTable("Receipt");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptItem", b =>
@@ -560,7 +551,20 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<int>("Division")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ExpenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsTaxable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("NormalizedName")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -581,6 +585,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("numeric(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExpenseId");
+
+                    b.HasIndex("NormalizedName");
 
                     b.HasIndex("ReceiptId");
 
@@ -749,8 +757,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BankTransactionId")
-                        .IsUnique();
+                    b.HasIndex("BankTransactionId");
 
                     b.HasIndex("DateTime");
 
@@ -1106,23 +1113,23 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("GroupSplit.Data.Entities.Receipt", "BankTransactionId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
-                        .WithOne("Receipt")
-                        .HasForeignKey("GroupSplit.Data.Entities.Receipt", "ExpenseId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.Navigation("BankTransaction");
-
-                    b.Navigation("Expense");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptItem", b =>
                 {
+                    b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
+                        .WithMany("ReceiptItems")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GroupSplit.Data.Entities.Receipt", "Receipt")
                         .WithMany("Items")
                         .HasForeignKey("ReceiptId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Expense");
 
                     b.Navigation("Receipt");
                 });
@@ -1190,8 +1197,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.Transaction", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
-                        .WithOne("FiledAs")
-                        .HasForeignKey("GroupSplit.Data.Entities.Transaction", "BankTransactionId")
+                        .WithMany("FiledAs")
+                        .HasForeignKey("BankTransactionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
@@ -1336,7 +1343,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Expense", b =>
                 {
-                    b.Navigation("Receipt");
+                    b.Navigation("ReceiptItems");
                 });
 #pragma warning restore 612, 618
         }

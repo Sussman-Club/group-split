@@ -52,6 +52,7 @@ public static class InboxApi
             group.MapSummary();
             group.MapMatches();
             group.MapFile();
+            group.MapSplit();
             group.MapLink();
             group.MapDismissMatch();
             group.MapIgnore();
@@ -137,6 +138,32 @@ public static class InboxApi
         /// now carrying the bank's row -- the same link filing would have made for a new
         /// one, and no change to anything else about it.
         /// </remarks>
+        /// <summary>
+        /// Files one charge as several expenses, by saying which lines of its bill are which.
+        /// </summary>
+        /// <remarks>
+        /// Beside filing rather than a mode of it, because what it takes is different in
+        /// kind: filing needs one destination, and this needs a destination per part and an
+        /// account of every line on the paper. A charge with no bill cannot be split at all,
+        /// which is the other reason it is its own route -- there is nothing to divide up.
+        /// </remarks>
+        private RouteHandlerBuilder MapSplit()
+        {
+            return group.MapPost("{id:guid}/split", async (
+                    Guid id,
+                    SplitBankTransactionRequest request,
+                    IInboxService inbox,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await inbox.Split(id, request, ct));
+                })
+                .WithName("SplitBankTransaction")
+                .Produces<SplitBankTransactionResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
         private RouteHandlerBuilder MapLink()
         {
             return group.MapPost("{id:guid}/link", async (

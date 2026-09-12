@@ -43,24 +43,64 @@ public static class ReceiptSplitCalculator
     {
         ArgumentNullException.ThrowIfNull(receipt);
 
-        var placed = receipt.Items.Where(item => item.ExpenseId is not null).ToList();
+        return Priced(receipt, receipt.Items
+            .Where(item => item.ExpenseId is not null)
+            .Select(item => (Key: item.ExpenseId!.Value, Item: item)));
+    }
 
-        var lines = Sum(placed, item => item.ExpenseId!.Value, item => item.TotalPrice);
-        var taxable = Sum(placed.Where(item => item.IsTaxable), item => item.ExpenseId!.Value,
-            item => item.TotalPrice);
+    /// <summary>
+    /// What each purchase would come to, for a bill somebody is proposing to split -- before
+    /// any of the expenses exist. Answered by position, in the order the parts were given.
+    /// </summary>
+    /// <remarks>
+    /// The same arithmetic as <see cref="PartAmounts"/>, asked the only way it can be asked
+    /// before there is anything to key on. Splitting a charge has to know what each part
+    /// comes to in order to create an expense for it, and an expense cannot be created
+    /// without its amount -- so the two are worked out here first and the lines are pointed
+    /// at the expenses afterwards.
+    /// </remarks>
+    public static IReadOnlyList<decimal> AmountsFor(
+        Receipt receipt, IReadOnlyList<IReadOnlyList<ReceiptItem>> parts)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        ArgumentNullException.ThrowIfNull(parts);
 
-        // Tax over the lines it was charged on; the tip over all of them. Where nothing on
-        // the bill is taxable the tax cannot have come from the goods, so it spreads like the
-        // tip rather than vanishing.
+        var priced = Priced(receipt, parts.SelectMany(
+            (part, index) => part.Select(item => (Key: index, Item: item))));
+
+        return [.. Enumerable.Range(0, parts.Count).Select(i => priced.GetValueOrDefault(i))];
+    }
+
+    /// <summary>
+    /// Each group of lines, plus its share of the bill's tax and tip.
+    /// </summary>
+    /// <remarks>
+    /// Tax over the lines it was charged on; the tip over all of them. Where nothing on the
+    /// bill is taxable the tax cannot have come from the goods, so it spreads like the tip
+    /// rather than vanishing.
+    /// <para>
+    /// Cut from the total rather than added up towards it, which is why the parts of a split
+    /// charge sum to what the card was charged without anything having to reconcile them.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<TKey, decimal> Priced<TKey>(
+        Receipt receipt, IEnumerable<(TKey Key, ReceiptItem Item)> placed)
+        where TKey : notnull
+    {
+        var held = placed.ToList();
+
+        var lines = Sum(held, pair => pair.Key, pair => pair.Item.TotalPrice);
+        var taxable = Sum(held.Where(pair => pair.Item.IsTaxable),
+            pair => pair.Key, pair => pair.Item.TotalPrice);
+
         var biggest = Largest(lines);
         var tax = Spread(Cents(receipt.Tax), taxable.Values.Sum() > 0 ? taxable : lines, biggest);
         var tip = Spread(Cents(receipt.Tip), lines, biggest);
 
-        var amounts = new Dictionary<Guid, decimal>();
+        var amounts = new Dictionary<TKey, decimal>();
 
-        foreach (var (expenseId, subtotal) in lines)
-            amounts[expenseId] = subtotal + (tax.GetValueOrDefault(expenseId)
-                                             + tip.GetValueOrDefault(expenseId)) / 100m;
+        foreach (var (key, subtotal) in lines)
+            amounts[key] = subtotal + (tax.GetValueOrDefault(key) + tip.GetValueOrDefault(key)) / 100m;
 
         return amounts;
     }
@@ -311,10 +351,11 @@ public static class ReceiptSplitCalculator
     /// invent an order.
     /// </para>
     /// </remarks>
-    private static Dictionary<Guid, long> Spread(
-        long amount, Dictionary<Guid, decimal> weights, Guid favour)
+    private static Dictionary<TKey, long> Spread<TKey>(
+        long amount, Dictionary<TKey, decimal> weights, TKey favour)
+        where TKey : notnull
     {
-        var result = new Dictionary<Guid, long>();
+        var result = new Dictionary<TKey, long>();
 
         if (weights.Count == 0 || amount == 0)
         {
@@ -348,10 +389,11 @@ public static class ReceiptSplitCalculator
         return result;
     }
 
-    private static Dictionary<Guid, decimal> Sum<T>(
-        IEnumerable<T> source, Func<T, Guid> key, Func<T, decimal> value)
+    private static Dictionary<TKey, decimal> Sum<T, TKey>(
+        IEnumerable<T> source, Func<T, TKey> key, Func<T, decimal> value)
+        where TKey : notnull
     {
-        var totals = new Dictionary<Guid, decimal>();
+        var totals = new Dictionary<TKey, decimal>();
 
         foreach (var item in source)
             totals[key(item)] = totals.GetValueOrDefault(key(item)) + value(item);
@@ -359,15 +401,17 @@ public static class ReceiptSplitCalculator
         return totals;
     }
 
-    private static Guid Largest(Dictionary<Guid, decimal> weights)
+    private static TKey Largest<TKey>(Dictionary<TKey, decimal> weights)
+        where TKey : notnull
     {
-        var best = Guid.Empty;
+        var best = default(TKey)!;
         decimal seen = -1;
 
-        // Ties broken by the smaller id, so the same bill divides the same way on every
+        // Ties broken by the lower key, so the same bill divides the same way on every
         // machine and in every enumeration order.
         foreach (var (key, weight) in weights)
-            if (weight > seen || (weight == seen && key.CompareTo(best) < 0))
+            if (weight > seen ||
+                (weight == seen && Comparer<TKey>.Default.Compare(key, best) < 0))
             {
                 best = key;
                 seen = weight;

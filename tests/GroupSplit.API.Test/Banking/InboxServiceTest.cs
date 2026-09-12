@@ -358,6 +358,161 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .Where(receipt => receipt.BankTransactionId == row.Id).ToListAsync(Ct));
     }
 
+    // ---- One charge, two purchases --------------------------------------------------
+    //
+    // The warehouse run: the flat's groceries and a jacket that is nobody's business but
+    // yours, on one card charge. Filing it whole would put the clothes in the group's ledger
+    // and file them under Groceries; splitting gives each part its own expense.
+
+    /// <summary>
+    /// The parts are cut from the charge, each with its own group, and they sum to what the
+    /// card was charged.
+    /// </summary>
+    [Fact]
+    public async Task Splitting_a_charge_files_it_as_several_expenses_that_sum_to_it()
+    {
+        var (group, category, other) = await GroupWithEvenCategory();
+        var row = await Row(amount: 100m);
+
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+        var jacket = bill.Items.First(item => item.Name == "JACKET");
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+
+        var split = await Inbox.Split(row.Id, new SplitBankTransactionRequest
+        {
+            Parts =
+            [
+                new BankTransactionPartInput
+                {
+                    Name = "Groceries", GroupId = group.Id, CategoryId = category,
+                    ItemIds = [groceries.Id]
+                },
+                new BankTransactionPartInput { Name = "Jacket", ItemIds = [jacket.Id] }
+            ]
+        }, Ct);
+
+        Assert.Equal(2, split.Parts.Count);
+        Assert.Equal(100m, split.Parts.Sum(part => part.Amount));
+
+        var shared = split.Parts.Single(part => part.GroupId == group.Id);
+        var mine = split.Parts.Single(part => part.GroupId is null);
+
+        Assert.Equal(60m, shared.Amount);
+        Assert.Equal(40m, mine.Amount);
+
+        // The groceries are the flat's and divide between them; the jacket is the payer's
+        // alone, on their own ledger.
+        var sharedSplits = await DbContext.Set<TransactionSplit>()
+            .Where(entry => entry.TransactionId == shared.TransactionId).ToListAsync(Ct);
+
+        Assert.Equal(2, sharedSplits.Count);
+        Assert.Contains(sharedSplits, entry => entry.UserId == other.Id);
+
+        var mineSplits = await DbContext.Set<TransactionSplit>()
+            .Where(entry => entry.TransactionId == mine.TransactionId).ToListAsync(Ct);
+
+        Assert.Equal(Self, Assert.Single(mineSplits).UserId);
+        Assert.Equal(BankTransactionStatus.Filed, (await Reload(row)).Status);
+    }
+
+    /// <summary>
+    /// Tax follows the lines it was charged on, and the parts still sum to the charge.
+    /// </summary>
+    /// <remarks>
+    /// The bill that makes splitting worth doing: groceries exempt, general goods not.
+    /// Weighing the tax across every line would tax the bananas and let the jacket off.
+    /// </remarks>
+    [Fact]
+    public async Task Tax_lands_on_the_part_whose_lines_were_charged_it()
+    {
+        var (group, category, _) = await GroupWithEvenCategory();
+        var row = await Row(amount: 104m);
+
+        var bill = await GetService<IReceiptService>().SaveForBankRow(row.Id,
+            new SaveReceiptRequest
+            {
+                Subtotal = 100m,
+                Tax = 4m,
+                Total = 104m,
+                Items =
+                [
+                    new ReceiptItemInput
+                    {
+                        Name = "GROCERIES", TotalPrice = 60m, IsTaxable = false,
+                        Split = ReceiptItemSplit.Evenly
+                    },
+                    new ReceiptItemInput
+                    {
+                        Name = "JACKET", TotalPrice = 40m,
+                        Claims = [new ReceiptClaimInput { UserId = Self }]
+                    }
+                ]
+            }, Ct);
+
+        var jacket = bill.Items.First(item => item.Name == "JACKET");
+        var groceries = bill.Items.First(item => item.Name == "GROCERIES");
+
+        var split = await Inbox.Split(row.Id, new SplitBankTransactionRequest
+        {
+            Parts =
+            [
+                new BankTransactionPartInput
+                {
+                    Name = "Groceries", GroupId = group.Id, CategoryId = category,
+                    ItemIds = [groceries.Id]
+                },
+                new BankTransactionPartInput { Name = "Jacket", ItemIds = [jacket.Id] }
+            ]
+        }, Ct);
+
+        // All 4.00 of the tax is the jacket's: the groceries were exempt.
+        Assert.Equal(60m, split.Parts.Single(part => part.GroupId == group.Id).Amount);
+        Assert.Equal(44m, split.Parts.Single(part => part.GroupId is null).Amount);
+        Assert.Equal(104m, split.Parts.Sum(part => part.Amount));
+    }
+
+    /// <summary>
+    /// A line in no part is money no part accounts for, so the parts would stop summing to
+    /// the charge. Refused by name, and nothing is filed.
+    /// </summary>
+    [Fact]
+    public async Task A_split_that_does_not_account_for_every_line_is_refused()
+    {
+        var row = await Row(amount: 100m);
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+        var one = bill.Items.First();
+
+        var thrown = await Assert.ThrowsAsync<ValidationException>(
+            () => Inbox.Split(row.Id, new SplitBankTransactionRequest
+            {
+                Parts =
+                [
+                    new BankTransactionPartInput { Name = "One", ItemIds = [one.Id] },
+                    new BankTransactionPartInput { Name = "Two", ItemIds = [one.Id] }
+                ]
+            }, Ct));
+
+        Assert.Equal(ErrorCodes.SplitPartsInvalid, thrown.Code);
+        Assert.Equal(BankTransactionStatus.New, (await Reload(row)).Status);
+    }
+
+    /// <summary>A charge with no bill has nothing to divide up.</summary>
+    [Fact]
+    public async Task A_charge_with_no_bill_cannot_be_split()
+    {
+        var row = await Row(amount: 100m);
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => Inbox.Split(row.Id, new SplitBankTransactionRequest
+            {
+                Parts =
+                [
+                    new BankTransactionPartInput { Name = "One", ItemIds = [Guid.NewGuid()] },
+                    new BankTransactionPartInput { Name = "Two", ItemIds = [Guid.NewGuid()] }
+                ]
+            }, Ct));
+    }
+
     private Guid Self => GetService<ICurrentUser>().User.Id;
 
     /// <summary>A bill typed against an imported row, before anybody files it.</summary>
