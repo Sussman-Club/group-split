@@ -155,33 +155,56 @@
     }
 
     /// <summary>
-    /// Who carries the odd cent, when there is one.
+    /// Who carries the remainder, when the division did not go in exactly.
     /// </summary>
     /// <remarks>
-    /// A division that will not go exactly into the amount leaves a penny somewhere, the app
-    /// decides where deliberately, and until now every screen stayed silent about it -- so
-    /// the one figure in the list that differs from its neighbours had no explanation. Only
-    /// for a division that is otherwise equal: where the shares genuinely differ, the odd
-    /// cent is not what anybody is asking about.
+    /// A division that will not go exactly into the amount leaves something over, the app
+    /// decides where it lands deliberately, and until now every screen stayed silent about
+    /// it -- so the one figure in the list that differs from its neighbours had no
+    /// explanation.
+    /// <para>
+    /// A remainder is not always one cent. The splitter settles the whole of it on one
+    /// person rather than handing out a cent each, so 48.50 four ways is 12.12, 12.12,
+    /// 12.12, 12.14 -- and this went looking for a one-cent gap, found two, and said
+    /// nothing at all about the only figure on the screen anybody was going to ask about.
+    /// It reads whatever the gap is now and names it.
+    /// </para>
+    /// <para>
+    /// Still only for a division that is otherwise equal, in the sense that earns the
+    /// sentence: everybody on one share except the people carrying the remainder, and what
+    /// they carry between them small enough to be one -- under a cent a head. Shares that
+    /// genuinely differ are not what this line is for, and calling the largest of them the
+    /// odd cent would be a different false statement in the same place.
+    /// </para>
     /// </remarks>
     private string Remainder()
     {
         if (Splits is not { Count: > 1 } splits) return "";
 
-        var amounts = splits.Select(split => split.Amount).ToArray();
+        var least = splits.Min(split => split.Amount);
 
-        var most = amounts.Max();
-        var least = amounts.Min();
+        var carrying = splits.Where(split => split.Amount != least).ToArray();
 
-        if (most - least != 0.01m) return "";
+        // It went in exactly. There is nothing to account for.
+        if (carrying.Length == 0) return "";
 
-        var carrying = splits.Where(split => split.Amount == most).Select(split => split.UserName).ToArray();
+        // More than two shares in play is a division that differs, not one that rounded.
+        if (carrying.Any(split => split.Amount != carrying[0].Amount)) return "";
 
-        return carrying.Length switch
+        var over = carrying[0].Amount - least;
+
+        if (over * carrying.Length > 0.01m * (splits.Count - 1)) return "";
+
+        var cents = (int)decimal.Round(over / 0.01m);
+
+        var names = carrying.Select(split => split.UserName).ToList();
+
+        return (cents, names.Count) switch
         {
-            0 => "",
-            1 => $" · the odd cent goes to {carrying[0]}",
-            _ => $" · the odd cents go to {carrying.ToList().Listed()}"
+            (1, 1) => $" · the odd cent goes to {names[0]}",
+            (1, _) => $" · the odd cents go to {names.Listed()}",
+            (_, 1) => $" · the odd {cents} cents go to {names[0]}",
+            _ => $" · the odd {cents} cents go to {names.Listed()} each"
         };
     }
 
