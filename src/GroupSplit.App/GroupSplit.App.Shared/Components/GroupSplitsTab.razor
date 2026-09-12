@@ -187,10 +187,14 @@
 
                                 <span class="gs-inline" style="gap: 2px">
                                     <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small"
-                                                   aria-label="@($"History of {rule.Name}")"
+                                                   aria-label="@($"History of the {rule.Name} rule")"
                                                    OnClick="@(() => ShowHistoryAsync(rule.Id))"/>
+                                    @* "the X rule", because a category and the rule it
+                                       divides by usually share a name, and two buttons a
+                                       row apart both announcing "Edit Household" is two
+                                       different actions under one spoken label. *@
                                     <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
-                                                   aria-label="@($"Edit {rule.Name}")"
+                                                   aria-label="@($"Edit the {rule.Name} rule")"
                                                    OnClick="@(() => EditRuleAsync(rule, used))"/>
                                     @* Not offered while a category still points at it: the
                                        API refuses to delete a rule in use, and an action
@@ -204,7 +208,7 @@
                                         <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                        Color="Color.Error"
                                                        Disabled="@(_stale || used.Count > 0)"
-                                                       aria-label="@($"Delete {rule.Name}")"
+                                                       aria-label="@($"Delete the {rule.Name} rule")"
                                                        OnClick="@(() => DeleteRuleAsync(rule))"/>
                                     </MudTooltip>
                                 </span>
@@ -459,6 +463,14 @@
         var dialog = await DialogService.ShowAsync<CategoryDialog>(
             category is null ? "New category" : "Edit category", parameters, options);
 
+        // Read again on the way out. The tab reloads on the change notification these
+        // commands raise, which is enough when it arrives -- and it does not always: a
+        // category saved onto a rule left the list and the "used by" tags reading the way
+        // they had before, under a snackbar saying it was done, until something unrelated
+        // reloaded the tab. One read per dialog somebody actually opened is a cheap
+        // guarantee, and the notification stays for every other screen watching.
+        await dialog.Result;
+        await LoadAsync();
     }
 
     private async Task DeleteCategoryAsync(CategoryResponse category)
@@ -491,6 +503,14 @@
 
         var dialog = await DialogService.ShowAsync<CreateRuleDialog>("New split rule", parameters, options);
 
+        // Read again on the way out. The tab reloads on the change notification these
+        // commands raise, which is enough when it arrives -- and it does not always: a
+        // category saved onto a rule left the list and the "used by" tags reading the way
+        // they had before, under a snackbar saying it was done, until something unrelated
+        // reloaded the tab. One read per dialog somebody actually opened is a cheap
+        // guarantee, and the notification stays for every other screen watching.
+        await dialog.Result;
+        await LoadAsync();
     }
 
     private async Task EditRuleAsync(SplitRuleResponse rule, IReadOnlyList<string> usedBy)
@@ -510,6 +530,14 @@
 
         var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
 
+        // Read again on the way out. The tab reloads on the change notification these
+        // commands raise, which is enough when it arrives -- and it does not always: a
+        // category saved onto a rule left the list and the "used by" tags reading the way
+        // they had before, under a snackbar saying it was done, until something unrelated
+        // reloaded the tab. One read per dialog somebody actually opened is a cheap
+        // guarantee, and the notification stays for every other screen watching.
+        await dialog.Result;
+        await LoadAsync();
     }
 
     /// <summary>

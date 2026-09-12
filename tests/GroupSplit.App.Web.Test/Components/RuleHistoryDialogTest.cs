@@ -189,7 +189,7 @@ public class RuleHistoryDialogTest : ComponentTest
 
         var notice = dialog.Find(".gs-notice.is-warn");
 
-        Assert.Equal("Groceries and Utilities all divide by this rule",
+        Assert.Equal("Groceries and Utilities both divide by this rule",
             notice.QuerySelector("strong")!.TextContent.Trim());
     }
 

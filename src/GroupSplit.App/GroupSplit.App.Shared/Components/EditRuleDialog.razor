@@ -52,7 +52,7 @@
                 <div class="gs-notice is-warn mt-3" role="alert">
                     <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                     <div class="gs-notice-body">
-                        <strong>@UsedBy.Listed() all divide by this rule</strong>
+                        <strong>@UsedBy.Listed() @((UsedBy.Count == 2) ? "both" : "all") divide by this rule</strong>
                         <span>Editing it changes what every one of them pre-fills, from now on.</span>
                     </div>
                 </div>
