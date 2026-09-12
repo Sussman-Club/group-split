@@ -91,6 +91,28 @@ public sealed class TransactionCommands(
             await changes.NotifyTransactionsChangedAsync();
         }, $"Could not delete the {noun}.");
 
+    /// <summary>
+    /// Says out loud anything the dialog cannot say for itself.
+    /// </summary>
+    /// <remarks>
+    /// A preview that comes back null used to read as one thing in both dialogs -- that the
+    /// shares did not add up -- when it also covered a dropped connection, a payer who has
+    /// since left the group, and a category somebody else deleted. Being told your numbers
+    /// are wrong while they visibly sum correctly is worse than being told nothing. The
+    /// arithmetic case is the validation one, and the space where the preview would have
+    /// been already explains it; the rest have nowhere else to be said.
+    /// </remarks>
+    private async Task SayWhyAsync(Exception exception)
+    {
+        if (ApiErrors.IsCancellation(exception))
+            return;
+
+        var error = ApiErrors.Read(exception);
+
+        if (error.Kind is not ApiErrorKind.Validation)
+            await errors.ShowAsync(error, "Could not work out how this divides.");
+    }
+
     public async Task<SplitPreviewResponse?> PreviewAsync(CreateTransactionRequest request,
         CancellationToken ct = default)
     {
@@ -102,6 +124,7 @@ public sealed class TransactionCommands(
         {
             // Null means "no preview to show", and the dialog says so in the space the
             // preview would have taken. A bug still throws: the error boundary is for those.
+            await SayWhyAsync(exception);
             return null;
         }
     }
@@ -121,7 +144,29 @@ public sealed class TransactionCommands(
         }
         catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
         {
+            await SayWhyAsync(exception);
             return null;
         }
     }
+
+    public Task<bool> DivisionSourceAsync(Guid transactionId, Guid? splitRuleVersionId, string name,
+        CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await transactions.SetTransactionDivisionSourceAsync(
+                transactionId, new SetDivisionSourceRequest(splitRuleVersionId), ct);
+
+            // Says the part somebody would otherwise have to test to find out. The figures
+            // on screen do not move, so a bare "updated" would read as nothing happening.
+            snackbar.Add(
+                splitRuleVersionId is null
+                    ? $"{name}'s shares are recorded as its own. No amount moved."
+                    : $"Recorded what divided {name}. No amount moved.",
+                Severity.Success);
+
+            // Nothing a listing prints has changed, and it is told anyway: an expense's
+            // division source decides what its next edit does, and the dialogs that make
+            // that edit read it from the listings.
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not record what divided the expense.");
 }

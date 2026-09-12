@@ -3,29 +3,37 @@
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Services
-@using GroupSplit.App.Shared.Services.Commands
-@inject ISplitRuleCommands Rules
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject IRemainderPolicy Remainder
 
 <MudForm @ref="_form" Model="@Model">
     <MudStack Spacing="3">
-        <MudTextField @bind-Value="Model.Category"
-                      For="@(() => Model.Category)"
-                      Label="Category"
+        <MudTextField @bind-Value="Model.Name"
+                      For="@(() => Model.Name)"
+                      Label="@NameLabel"
+                      HelperText="@NameHelp"
                       Variant="Variant.Outlined"
                       Immediate="true"/>
 
+        @* Required, so an unanswered one is said out loud. The form validated clean
+           without it while IsValid refused on the same field, which made Create a button
+           that did nothing and explained nothing. *@
         <MudSelect
             T="RuleType?"
-            Label="Rule Type"
+            Label="How does it divide?"
             @bind-Value="_ruleType"
             @bind-Value:after="@OnRuleTypeChanged"
             Variant="Variant.Outlined"
+            Required="true"
+            RequiredError="Choose how this divides."
         >
             <MudSelectItem T="RuleType?" Value="RuleType.Personal">
                 Personal (payer owes full amount)
+            </MudSelectItem>
+
+            <MudSelectItem T="RuleType?" Value="RuleType.Even">
+                Evenly, between everyone in the group
             </MudSelectItem>
 
             <MudSelectItem T="RuleType?" Value="RuleType.Percent">
@@ -35,22 +43,6 @@
             <MudSelectItem T="RuleType?" Value="RuleType.Shares">
                 Shares split
             </MudSelectItem>
-        </MudSelect>
-
-        <MudSelect T="Guid?"
-                   Label="Apply settings from another rule"
-                   Variant="Variant.Outlined"
-                   @bind-Value="_copySourceRuleId"
-                   @bind-Value:after="@OnCopySourceSelected"
-                   Clearable="true"
-                   Immediate="true">
-            @if (_groupRules.Any())
-            {
-                @foreach (var r in _groupRules)
-                {
-                    <MudSelectItem T="Guid?" Value="@((Guid?)r.Id)">@r.Name</MudSelectItem>
-                }
-            }
         </MudSelect>
 
         @if (Model.Version is PercentSplitRuleDto percent)
@@ -125,16 +117,22 @@
     [Parameter] public Guid GroupId { get; set; }
     [Parameter] public RuleEditorModel Model { get; set; } = null!;
 
+    /// <summary>
+    /// What the name field is called. A rule has a name of its own now -- it is not the
+    /// category's, because several categories may divide by one rule and renaming one of
+    /// them must not rename the division behind the others.
+    /// </summary>
+    [Parameter] public string NameLabel { get; set; } = "Rule name";
+
+    [Parameter] public string? NameHelp { get; set; } = "What the group calls this division, e.g. \"Household 3-way\".";
+
     private MudForm _form;
 
     private RuleType? _ruleType;
     private ICollection<UserInfo> _members = [];
-    private IReadOnlyList<SplitRuleResponse> _groupRules = [];
-    private Guid? _copySourceRuleId;
 
     // The form is meaningless without the members to split between, so a failed load
-    // closes the dialog it sits in once the presenter has said why. Two reads and two
-    // failures, because they fail for different reasons and each says which it was.
+    // closes the dialog it sits in once the presenter has said why.
     protected override async Task OnInitializedAsync()
     {
         var members = await Errors.TryAsync(
@@ -147,18 +145,8 @@
             return;
         }
 
-        var rules = await Rules.ForGroupAsync(GroupId);
-
-        if (rules is null)
-        {
-            MudDialog.Cancel();
-            return;
-        }
-
-        _groupRules = rules;
-
-        // Both halves are in hand now -- the rule and who is actually in the group -- and
-        // one is edited against the other from here on.
+        // Who is actually in the group is in hand now, and the division is edited against
+        // it from here on.
         ScopeToMembers();
 
         OnModelVersionChange();
@@ -171,6 +159,7 @@
             PercentSplitRuleDto => RuleType.Percent,
             SharesSplitRuleDto => RuleType.Shares,
             PayerSplitRuleDto => RuleType.Personal,
+            EvenSplitRuleDto => RuleType.Even,
             _ => _ruleType
         };
 
@@ -202,29 +191,16 @@
         await _form.ValidateAsync();
     }
 
-    private async Task OnCopySourceSelected()
-    {
-        if (_copySourceRuleId is not { } sourceRuleId)
-            return;
-
-        var details = await Rules.GetAsync(sourceRuleId);
-
-        if (details is null) return;
-
-        Model.Version = details.Definition;
-
-        // A copied division arrives from the server whole, naming whoever that rule names,
-        // which need not be this membership either.
-        ScopeToMembers();
-
-        OnModelVersionChange();
-    }
-
     private void OnRuleTypeChanged()
     {
         Model.Version = _ruleType switch
         {
             RuleType.Personal => new PayerSplitRuleDto(),
+
+            // Naming nobody, which is what makes it keep dividing evenly when somebody
+            // joins. Listing today's members instead would freeze them in, and that is the
+            // shares rule one row down.
+            RuleType.Even => new EvenSplitRuleDto(),
 
             RuleType.Percent when Model.Version is SharesSplitRuleDto shares => new PercentSplitRuleDto
             {
@@ -396,18 +372,21 @@
     }
 
     /// <summary>
-    /// A category and the division it defaults to, edited together.
+    /// A split rule: a name the group gives a division, and the division itself.
     /// </summary>
     /// <remarks>
-    /// They are two rows now -- a category pointing at a split rule -- but a group still
-    /// thinks of them as one thing ("Groceries is split four ways"), so the form still asks
-    /// for one thing. The dialog around it does the two writes.
+    /// It used to be a category and the division behind it, edited together and written
+    /// twice, because a group says "Groceries is split four ways" and thinks of them as one
+    /// thing. They are not one thing: a rule can stand behind several categories, and
+    /// editing the division under Groceries then changed how Utilities divided too -- while
+    /// renaming Groceries renamed the rule out from under it. Categories are pointed at
+    /// rules on the group's Splits tab now, and this form edits only the rule.
     /// </remarks>
     public record RuleEditorModel
     {
-        [Required(ErrorMessage = "Category is required")]
-        [StringLength(64, ErrorMessage = "Category must be less than 64 characters.")]
-        public string Category { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+        public string Name { get; set; } = string.Empty;
 
         [Required] public SplitRuleDto Version { get; set; } = null!;
     }

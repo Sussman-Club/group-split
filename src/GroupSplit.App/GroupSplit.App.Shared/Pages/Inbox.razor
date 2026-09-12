@@ -608,7 +608,10 @@
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
-        var reference = await DialogService.ShowAsync<FileBankTransactionDialog>("Add to a group", parameters, options);
+        // Not "Add to a group" any more: a group is one of the answers and Personal is the
+        // other, and a title that names one of them is a title that is wrong half the time.
+        var reference = await DialogService.ShowAsync<FileBankTransactionDialog>(
+            "Record this payment", parameters, options);
         var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
 
         if (answer is null)

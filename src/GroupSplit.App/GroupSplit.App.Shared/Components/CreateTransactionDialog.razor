@@ -6,178 +6,128 @@
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
 @inject ITransactionCommands Transactions
+@inject IMerchantCommands Merchants
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@implements IDisposable
 
 @*
-    Recording an expense, in two steps.
+    Recording an expense, on one screen.
 
-    It was one long form, and the split sat at the bottom of it as a switch nobody reached
-    with the amount still unfilled above. Splitting is the decision the app exists for, so
-    it gets a step of its own -- and the step opens on what the division is actually going
-    to be, asked of the API rather than worked out here, because a preview that disagrees
-    with the save by a cent is worse than no preview.
+    It was two steps over eight fields of equal weight, with the amount third -- under a
+    description almost nobody fills -- and the split behind a Next. Three of those fields are
+    things somebody types and the rest are things they pick, and the picked ones already have
+    an answer before anybody arrives: the group they are standing in, the category they used
+    last, themselves, today. So the typed ones are fields and the picked ones are chips
+    carrying their defaults, and the division is on the same screen as the amount that
+    decides it. The common expense is two numbers and a button.
+
+    The one field kept in full that was not before is the note. It is optional and it is
+    always on screen: it is what somebody reaches for when an expense needs explaining -- a
+    birthday cake inside the weekly shop -- and a field you have to go looking for may as
+    well not be there.
 *@
 
-<MudDialog>
+@* gs-sheet is what makes this the full screen on a phone, with the actions held
+   at the bottom. It rides the dialog rather than every DialogOptions that opens
+   one, which is both fewer places to forget and the right owner: how this looks
+   on a small screen is the dialog's business, not its caller's. *@
+<MudDialog Class="gs-sheet">
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">
-            @MudDialog.Title
-        </MudText>
+        <div class="gs-dialog-head">
+            <div style="min-width: 0">
+                @* The group says itself once. Opened from inside one it is a fact and lives
+                   here; opened from the expenses page it is a decision and is the first
+                   chip instead. *@
+                @if (GroupFixed)
+                {
+                    <div class="gs-eyebrow">@Where</div>
+                }
+
+                <h2 class="gs-dialog-title">@MudDialog.Title</h2>
+            </div>
+        </div>
     </TitleContent>
 
     <DialogContent>
-        <div class="gs-steps" role="list" aria-label="Steps">
-            <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
-                <span class="dot">1</span> What
-            </span>
-            <span class="gs-step-line"></span>
-            <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
-                <span class="dot">2</span> Split
-            </span>
-        </div>
+        <MudForm @ref="_form" Model="_model">
+            <div class="gs-stack" style="gap: 16px">
 
-        @if (Step == 1)
-        {
-            <MudForm @ref="_form" Model="_model">
-                <MudStack Spacing="3">
-                    <MudTextField
-                        @bind-Value="_model.Name"
-                        For="@(() => _model.Name)"
-                        Label="Name"
-                        Variant="Variant.Outlined"
-                        Immediate="true"/>
+                @* First, and a size up from everything else. It is why the dialog is open. *@
+                <MudNumericField @bind-Value="_model.Amount"
+                                 @bind-Value:after="OnMoneyChangedAsync"
+                                 For="@(() => _model.Amount)"
+                                 Label="How much?"
+                                 Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start"
+                                 AdornmentText="$"
+                                 HideSpinButtons="true"
+                                 Format="N2"
+                                 Class="gs-amount"/>
 
-                    <MudTextField
-                        @bind-Value="_model.Description"
-                        For="@(() => _model.Description)"
-                        Label="Description"
-                        Variant="Variant.Outlined"
-                        Immediate="true"
-                        Lines="2"/>
+                <MudTextField @bind-Value="_model.Name"
+                              @bind-Value:after="OnNameChangedAsync"
+                              For="@(() => _model.Name)"
+                              Label="What was it?"
+                              Variant="Variant.Outlined"
+                              Immediate="true"/>
 
-                    <MudNumericField
-                        @bind-Value="_model.Amount"
-                        For="@(() => _model.Amount)"
-                        Label="Amount"
-                        Variant="Variant.Outlined"
-                        Adornment="Adornment.Start"
-                        AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                        AdornmentColor="Color.Primary"
-                        HideSpinButtons="true"
-                        Format="N2"/>
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Note"
+                              Placeholder="Anything worth remembering about it"
+                              HelperText="Optional"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              Immediate="true"/>
 
-                    @* Side by side while there is room for two, stacked below 600px. On a
-                       phone the pair got about 140px each inside the dialog, part of which
-                       a picker spends on its own calendar or clock button, so both values
-                       were cut off mid-string. *@
-                    <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                        <MudDatePicker
-                            @bind-Date="_selectedDate"
-                            Label="Date"
-                            Variant="Variant.Outlined"/>
+                <ExpenseDecisions ShowGroup="@(!GroupFixed)"
+                                  Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+                                  GroupId="@_groupId"
+                                  GroupIdChanged="@OnGroupPickedAsync"
+                                  GroupName="@Where"
+                                  ShowCategory="@IsShared"
+                                  Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, Divides(c))).ToList())"
+                                  CategoryId="@_model.CategoryId"
+                                  CategoryIdChanged="@OnCategoryPickedAsync"
+                                  ShowPayer="@(IsShared && !DisablePayingUserSelection)"
+                                  Members="@_members"
+                                  PayerId="@_model.PaidByUserId"
+                                  PayerIdChanged="@OnPayerPickedAsync"
+                                  Date="@_selectedDate"
+                                  DateChanged="@OnDatePickedAsync"
+                                  Time="@_selectedTime"
+                                  TimeChanged="@OnTimePickedAsync"
+                                  WhenSpent="@WhenSpent"
+                                  MerchantId="@_model.MerchantId"
+                                  MerchantIdChanged="@OnMerchantChangedAsync"
+                                  MerchantName="@_merchantName"
+                                  MerchantLogoUrl="@_merchantLogo"/>
 
-                        <MudTimePicker
-                            @bind-Time="_selectedTime"
-                            Label="Time"
-                            Variant="Variant.Outlined"
-                            AmPm="true"/>
-                    </MudStack>
-
-                    @* Personal is the absence of a group, so it is an option in this select
-                       rather than a group in the list. It used to be a real group, hidden
-                       everywhere it would have been embarrassing. *@
-                    <MudSelect T="Guid?"
-                               Label="Group"
-                               Variant="Variant.Outlined"
-                               @bind-Value="_groupId"
-                               @bind-Value:after="OnGroupChangedAsync"
-                               Clearable="false"
-                               Placeholder="">
-                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
-                        @foreach (var group in _groups)
-                        {
-                            <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-
-                    @* The rule beside the name, because "Groceries" says nothing about how
-                       Groceries is divided and the person picking is choosing both. The
-                       split step then shows what it came to, to the cent. *@
-                    <MudSelect T="Guid?"
-                               Label="Category"
-                               Variant="Variant.Outlined"
-                               @bind-Value="_model.CategoryId"
-                               Disabled="@(_categories.Count == 0)"
-                               Clearable="true"
-                               Placeholder="">
-                        @foreach (var category in _categories)
-                        {
-                            <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">
-                                @category.Name <span class="gs-muted">· @Divides(category)</span>
-                            </MudSelectItem>
-                        }
-                    </MudSelect>
-
-                    @* Where, not how it divides -- which is the category above. It buys
-                       the place's mark on the row and makes the shop searchable, and the
-                       CLI has been able to set it since merchants existed while this
-                       dialog could not. *@
-                    <MerchantPicker @bind-Value="_model.MerchantId"/>
-
-                    @if (!DisablePayingUserSelection && _groupId is not null)
-                    {
-                        <MudSelect T="Guid?"
-                                   Label="Paid by"
-                                   Variant="Variant.Outlined"
-                                   @bind-Value="_model.PaidByUserId"
-                                   Disabled="@(_members.Count == 0)"
-                                   Clearable="false"
-                                   Placeholder="">
-                            @foreach (var member in _members)
-                            {
-                                <MudSelectItem T="Guid?" Value="@member.Id">@member.Label()</MudSelectItem>
-                            }
-                        </MudSelect>
-                    }
-                </MudStack>
-            </MudForm>
-        }
-        else
-        {
-            <MudStack Spacing="3">
-                <div class="gs-card gs-card-pad" style="padding: 14px 16px">
-                    <div class="gs-inline" style="justify-content: space-between">
-                        <div>
-                            <div class="gs-eyebrow">@_model.Name</div>
-                            <div class="gs-muted" style="font-size: .8125rem">@Where</div>
-                        </div>
-                        <Money Value="_model.Amount" Class="gs-money" />
+                @if (IsShared)
+                {
+                    <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                        @* One component and one list of people: editable when the person is
+                           stating the division, read-only when the API worked it out. *@
+                        <SplitEditor Members="@_members"
+                                     Amount="@_model.Amount"
+                                     PayerId="@_model.PaidByUserId"
+                                     Value="@_model.Splits"
+                                     ValueChanged="@OnSplitsChangedAsync"
+                                     Preview="@_preview"
+                                     PreviewError="@_previewError"
+                                     Awaiting="@_awaiting"/>
                     </div>
-                </div>
-
-                @if (_groupId is null)
+                }
+                else
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         A personal expense is not shared with anybody, so there is nothing to divide.
                     </MudAlert>
                 }
-                else
-                {
-                    @* One component and one list of people: editable when the person is
-                       stating the division, read-only when the API worked it out. It used
-                       to be two -- fields here and an "Everyone's share" echo underneath --
-                       so splitting by hand showed every member twice. *@
-                    <SplitEditor Members="@_members"
-                                 Amount="@_model.Amount"
-                                 PayerId="@_model.PaidByUserId"
-                                 Value="@_model.Splits"
-                                 ValueChanged="@OnSplitsChangedAsync"
-                                 Preview="@_preview"
-                                 PreviewError="@_previewError"/>
-                }
-            </MudStack>
-        }
+            </div>
+        </MudForm>
     </DialogContent>
 
     <DialogActions>
@@ -185,17 +135,10 @@
            dialog must not depend on anything inside it being in a good state. *@
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
 
-        @if (Step == 2)
-        {
-            <MudButton Variant="Variant.Text" OnClick="@Back">Back</MudButton>
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                       OnClick="@Submit">Save</MudButton>
-        }
-        else
-        {
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                       OnClick="@NextAsync">Next</MudButton>
-        }
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   OnClick="@Submit">
+            Add expense
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -209,6 +152,16 @@
     [Parameter] public Guid? SelectedGroupId { get; set; }
 
     /// <summary>
+    /// What that group is called, when the caller already knows.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and worth having: a screen that opens this from inside a group is showing
+    /// the group's name at the top of the page, so making the dialog re-derive it from a
+    /// list it has to fetch is the app asking the API for something it is already holding.
+    /// </remarks>
+    [Parameter] public string? SelectedGroupName { get; set; }
+
+    /// <summary>
     /// The group actually chosen, which starts as <see cref="SelectedGroupId"/> and then
     /// belongs to the dialog.
     /// </summary>
@@ -220,8 +173,6 @@
     private Guid? _groupId;
 
     private MudForm _form = null!;
-
-    private int Step { get; set; } = 1;
 
     private readonly CreateTransactionRequest _model = new()
     {
@@ -241,16 +192,164 @@
     private SplitPreviewResponse? _preview;
     private string? _previewError;
 
+    /// <summary>
+    /// What the expense still lacks before there is anything to divide, or null once it
+    /// can be asked about.
+    /// </summary>
+    private string? _awaiting;
+
+
+    /// <summary>
+    /// The ask in flight, so a late answer cannot paint over a newer one.
+    /// </summary>
+    /// <remarks>
+    /// Every one of these is a round trip and several can be in the air at once -- the
+    /// per-member share fields are immediate, so typing "45.50" asks five times. They were
+    /// painted in the order they came back rather than the order they were asked, so an
+    /// early answer landing late redrew the division for a payer or an amount that had
+    /// already been changed, and Save then wrote something the screen had stopped showing.
+    /// Cancelled on the way out too: the continuation of a dropped dialog has nothing left
+    /// to render into.
+    /// </remarks>
+    private CancellationTokenSource? _previewing;
+
+    public void Dispose() => _previewing?.Cancel();
+
+
+    /// <summary>
+    /// Whether the expense is described well enough for the API to answer at all.
+    /// </summary>
+    /// <remarks>
+    /// The preview is the same request the save makes, so it is validated the same way: a
+    /// blank name or a zero amount comes back a 400. Asked on a form nobody has touched
+    /// yet, that reached the person as a warning that their shares did not add up.
+    /// </remarks>
+    private string? Missing()
+    {
+        // Zero, not "not positive": a negative amount is a refund, and it divides.
+        if (_model.Amount == 0m)
+            return "Enter an amount to see how it divides.";
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+            return "Name it to see how it divides.";
+
+        return null;
+    }
+
+    /// <summary>
+    /// What each pick costs, which is the dialog's business and not the chip row's.
+    /// </summary>
+    /// <remarks>
+    /// The row reports a choice and nothing else. Every one of these but the merchant ends
+    /// in a re-preview, because the division is a function of the group, the category, the
+    /// payer and the day -- and a merchant is where the money went, not who owes it.
+    /// </remarks>
+    private async Task OnGroupPickedAsync(Guid? id)
+    {
+        _groupId = id;
+
+        await OnGroupChangedAsync();
+    }
+
+    private async Task OnCategoryPickedAsync(Guid? id)
+    {
+        _model.CategoryId = id;
+
+        await OnMoneyChangedAsync();
+    }
+
+    private async Task OnPayerPickedAsync(Guid? id)
+    {
+        _model.PaidByUserId = id;
+
+        await OnMoneyChangedAsync();
+    }
+
+    private async Task OnDatePickedAsync(DateTime? date)
+    {
+        _selectedDate = date;
+
+        await OnMoneyChangedAsync();
+    }
+
+    private async Task OnTimePickedAsync(TimeSpan? time)
+    {
+        _selectedTime = time;
+
+        await OnMoneyChangedAsync();
+    }
+
+    /// <summary>What the merchant chip shows, once one has been picked.</summary>
+    private string? _merchantName;
+
+    /// <summary>The mark for that merchant, when it has one. Null renders initials-free.</summary>
+    private string? _merchantLogo;
+
+    /// <summary>
+    /// Whether the group was settled by where this was opened from, in which case it is
+    /// stated in the heading and not offered as a choice.
+    /// </summary>
+    private bool GroupFixed => SelectedGroupId is not null;
+
+
+
+    private bool IsShared => _groupId is not null;
+
     /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
     private static string Divides(CategoryResponse category) =>
         category.DefaultSplitRuleName is { Length: > 0 } rule ? rule : "even split";
 
-    private string Where => _groupId is null
-        ? "Personal"
-        : _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
+    /// <summary>
+    /// The group this is being recorded in, said the way the person would say it.
+    /// </summary>
+    /// <remarks>
+    /// The name the caller handed over comes first. Looking it up in the groups list meant
+    /// the heading of a dialog opened from inside a group depended on a read of every other
+    /// group the person belongs to -- so a slow one left it blank and a failed one left it
+    /// blank for good, on the one fact the screen was certain of before it opened.
+    /// </remarks>
+    private string Where
+    {
+        get
+        {
+            if (_groupId is null)
+                return "Personal";
 
-    // A dialog that cannot load what it offers has nothing to offer, so it closes; the
-    // presenter has already said why.
+            if (GroupFixed && SelectedGroupName is { Length: > 0 } named)
+                return named;
+
+            return _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
+        }
+    }
+
+    private string CategoryName =>
+        _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name ?? "category";
+
+    private string PayerName =>
+        _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
+
+    /// <summary>
+    /// The day, as a person would say it. Today and yesterday by name, because that is what
+    /// almost every expense is and a date is a worse way of saying it.
+    /// </summary>
+    private string WhenSpent
+    {
+        get
+        {
+            var day = _selectedDate ?? Clock.Today;
+
+            var since = (Clock.Today - day.Date).Days;
+
+            return since switch
+            {
+                0 => "today",
+                1 => "yesterday",
+                _ when day.Year == Clock.Today.Year => day.ToString("d MMM"),
+                _ => day.ToString("d MMM yyyy")
+            };
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _groupId = SelectedGroupId;
@@ -259,25 +358,49 @@
         _selectedDate = now.Date;
         _selectedTime = now.TimeOfDay;
 
-        var loaded = await Errors.TryAsync(async () =>
-        {
-            _groups = [.. await GroupsClient.GetGroupsAsync()];
-            await LoadGroupDetailsAsync();
-        }, "Could not load your groups.");
+        await OpenAsync();
+    }
 
-        if (!loaded)
-        {
-            MudDialog.Cancel();
-            return;
-        }
+    /// <summary>
+    /// Loads what the dialog offers to choose from, one read at a time.
+    /// </summary>
+    /// <remarks>
+    /// None of them is allowed to take the dialog down with it, which is the whole point of
+    /// asking separately. An expense needs a group, an amount and a name; the categories are
+    /// a label somebody may not want and the members are a convenience, since the division
+    /// is worked out by the API and not from this list. One read failing used to end all of
+    /// it -- first by closing the dialog onto nothing, then by replacing it with an apology
+    /// -- when what was actually still possible was recording the expense.
+    /// <para>
+    /// The group survives either way. It is the one fact the dialog was given rather than
+    /// fetched, and nothing that comes back from the API can unseat it.
+    /// </para>
+    /// </remarks>
+    private async Task OpenAsync()
+    {
+        // Only where something offers a choice: opened from inside a group that named
+        // itself, the list of every other group is what the group picker shows, and the
+        // picker is not shown at all.
+        if (!GroupFixed || string.IsNullOrWhiteSpace(SelectedGroupName))
+            await Errors.TryAsync(
+                async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
+                "Could not load your groups.");
+
+        await LoadGroupDetailsAsync();
 
         StateHasChanged();
+
+        // The division is on this screen now, so it is asked for as soon as there is a
+        // group to divide between rather than on the way into a second step.
+        await RefreshPreviewAsync();
     }
 
     private async Task OnGroupChangedAsync()
     {
         await Errors.TryAsync(LoadGroupDetailsAsync, "Could not load the group.");
         StateHasChanged();
+
+        await RefreshPreviewAsync();
     }
 
     private async Task LoadGroupDetailsAsync()
@@ -296,30 +419,78 @@
             return;
         }
 
-        _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
-        _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
+        // Separately, and neither fatal. A category is a label somebody may not want, and
+        // the members here only fill the payer picker -- the division itself is worked out
+        // by the API. Asked together, one of them failing took the group with it and there
+        // was no way to record the expense at all.
+        await Errors.TryAsync(
+            async () => _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
+            "Could not load this group's categories.");
+
+        await Errors.TryAsync(
+            async () => _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
+            "Could not load who is in this group.");
+
+        // Whoever is recording it paid for it, until they say otherwise. The API already
+        // assumed as much for an absent payer, so this was only ever missing from the
+        // screen -- where the chip stated it as "paid by somebody" and styled it as a
+        // settled choice, which is the app admitting to a gap it does not have.
+        if (_members.All(member => member.Id != _model.PaidByUserId) && Login.User is { } me)
+            _model.PaidByUserId = _members.Any(member => member.Id == me.Id) ? me.Id : null;
     }
 
     /// <summary>
-    /// Step one is the whole of what makes an expense; step two only decides how it is
-    /// carried. So the form is validated here, on the way through, rather than at the Save
-    /// button two screens later.
+    /// Anything that changes what the division comes to: the amount, the category, the
+    /// payer.
     /// </summary>
-    private async Task NextAsync()
+    /// <remarks>
+    /// The amount is bound on change rather than on every keystroke, which is what makes
+    /// this affordable: a preview is a round trip, and one per digit of "104.09" would be
+    /// six of them racing each other.
+    /// </remarks>
+    private Task OnMoneyChangedAsync() => RefreshPreviewAsync();
+
+    /// <summary>
+    /// Asks again only when naming it changed whether it can be asked about at all.
+    /// </summary>
+    /// <remarks>
+    /// The field is immediate, so this runs on every keystroke; a preview per letter of
+    /// "Dinner" is six round trips for an answer the name has no part in. What the name
+    /// decides is whether the API will answer at all, and that flips once.
+    /// </remarks>
+    private async Task OnNameChangedAsync()
     {
-        await _form.ValidateAsync();
-
-        if (!_form.IsValid)
-            return;
-
-        ApplyDate();
-
-        Step = 2;
-
-        await RefreshPreviewAsync();
+        if (Missing() != _awaiting)
+            await RefreshPreviewAsync();
     }
 
-    private void Back() => Step = 1;
+    /// <summary>
+    /// Records the pick and resolves the name the chip will show.
+    /// </summary>
+    /// <remarks>
+    /// The name is looked up rather than assumed: without it the chip counted as set --
+    /// no plus, no label -- and drew an empty value, so picking a shop replaced the
+    /// invitation with a blank pill. No preview follows; a merchant is where the money
+    /// went, not who owes it.
+    /// </remarks>
+    private async Task OnMerchantChangedAsync(Guid? merchantId)
+    {
+        _model.MerchantId = merchantId;
+
+        if (merchantId is null)
+        {
+            _merchantName = null;
+            _merchantLogo = null;
+            return;
+        }
+
+        var merchant = await Merchants.GetAsync(merchantId.Value);
+
+        _merchantName = merchant?.Name;
+        _merchantLogo = merchant?.LogoUrl;
+
+        StateHasChanged();
+    }
 
     private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
     {
@@ -334,22 +505,39 @@
     /// </summary>
     private async Task RefreshPreviewAsync()
     {
-        if (_groupId is null)
+        _awaiting = Missing();
+
+        if (_groupId is null || _awaiting is not null)
         {
             _preview = null;
             _previewError = null;
+            StateHasChanged();
             return;
         }
 
-        _preview = null;
-        _previewError = null;
-        StateHasChanged();
+        // What is on screen stays there while the new answer is out. It was blanked first
+        // and rendered, which took the share list away by its own height and put it back a
+        // few tens of milliseconds later -- a flinch on every pick, worst on the chips,
+        // whose picker closes in the same frame, so the dialog jumped twice for one choice.
+        // The figures standing are this same expense with one field moved: a better
+        // stand-in for the next figures than a gap is, and they are replaced, not trusted.
+        _previewing?.Cancel();
+        _previewing = new CancellationTokenSource();
+        var asked = _previewing.Token;
 
-        var preview = await Transactions.PreviewAsync(Request());
+        var preview = await Transactions.PreviewAsync(Request(), asked);
+
+        // A newer ask started while this one was out, or the dialog has gone.
+        if (asked.IsCancellationRequested)
+            return;
 
         _preview = preview;
+        // Deliberately not a diagnosis. Null is also a refused payer or a dropped
+        // connection, and those now say so themselves in a snackbar; asserting arithmetic
+        // over the top of them told people their numbers were wrong while the numbers on
+        // screen visibly summed correctly.
         _previewError = preview is null
-            ? "These shares do not add up yet, so there is nothing to show."
+            ? "No division to show yet."
             : null;
 
         StateHasChanged();
@@ -363,18 +551,34 @@
         _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
 
     /// <summary>
-    /// The request as it stands. <c>GroupId</c> is set from the select rather than inferred
+    /// The request as it stands. <c>GroupId</c> is set from the chip rather than inferred
     /// from the category: null is a personal expense now, and it is the answer for a group
     /// with no categories too, so the two have to be told apart here.
     /// </summary>
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;
+
+        // The date is applied here rather than on the way out, because which version of a
+        // rule divides an expense depends on when it was spent: a preview built from an
+        // unapplied date is a division of a different day, and the save would then differ
+        // from what the screen showed.
+        ApplyDate();
+
         return _model;
     }
 
-    private void Submit()
+    /// <summary>
+    /// Validated here rather than on the way into a second step, because there is no second
+    /// step: this is the only place between typing and saving.
+    /// </summary>
+    private async Task Submit()
     {
+        await _form.ValidateAsync();
+
+        if (!_form.IsValid)
+            return;
+
         ApplyDate();
         MudDialog.Close(DialogResult.Ok(Request()));
     }

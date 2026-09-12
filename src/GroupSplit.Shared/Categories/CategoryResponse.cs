@@ -11,12 +11,19 @@ namespace GroupSplit.Shared;
 /// the difference from the rule it replaces, where a category with no rule could record
 /// nothing at all.
 /// </param>
+/// <param name="IsArchive">
+/// True once the group has retired this category. It is left out of the listing unless it is
+/// asked for, so a client holding one of these is either showing what a group files under
+/// today or was explicitly asked for the whole set -- and every expense already filed under
+/// an archived category still names it.
+/// </param>
 public record CategoryResponse(
     Guid Id,
     Guid GroupId,
     string Name,
     Guid? DefaultSplitRuleId,
-    string? DefaultSplitRuleName);
+    string? DefaultSplitRuleName,
+    bool IsArchive = false);
 
 public record CreateCategoryRequest
 {

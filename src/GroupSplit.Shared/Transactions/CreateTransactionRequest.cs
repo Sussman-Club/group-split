@@ -54,7 +54,18 @@ public record CreateTransactionRequest
     [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]
     public string? Description { get; set; }
 
+    /// <summary>
+    /// What was spent, or what came back: negative records a refund, which the splitter
+    /// divides the same way in the other direction.
+    /// </summary>
+    /// <remarks>
+    /// Not positive-only, deliberately. <c>[Required]</c> is satisfied by any decimal
+    /// though, zero included, so it said nothing here on its own: the dialog opens on
+    /// 0.00 and an expense saved straight out of it landed in a shared ledger as a row
+    /// that moved nobody's balance and that nobody could account for.
+    /// </remarks>
     [Required(ErrorMessage = "Amount is required.")]
+    [NotZero(ErrorMessage = "Amount cannot be zero.")]
     [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
     public decimal Amount { get; set; }
 

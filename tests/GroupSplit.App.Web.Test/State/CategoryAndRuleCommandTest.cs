@@ -21,9 +21,13 @@ namespace GroupSplit.App.Web.Test.State;
 /// Groceries until it was reloaded.
 /// <para>
 /// So each of these asks two things of a write: that it announced, which is what makes the
-/// pages catch up, and what it put in front of the person. The category speaks and the rule
-/// beside it stays quiet, because a person editing "how Groceries is split" pressed one
-/// button and changed one thing as far as they are concerned.
+/// pages catch up, and what it put in front of the person.
+/// </para>
+/// <para>
+/// A rule used to stay quiet here, because it was only ever written as the division behind a
+/// category and the category's own message covered both. The group's Splits tab edits them
+/// apart -- one rule may stand behind several categories -- so a rule now speaks for itself,
+/// and both of its messages say the same second thing: that nothing already recorded moved.
 /// </para>
 /// </remarks>
 public class CategoryAndRuleCommandTest
@@ -63,7 +67,7 @@ public class CategoryAndRuleCommandTest
             Mock.Of<IAuthService>(), new TestNavigationManager(), _snackbar.Object);
 
         _categoryCommands = new CategoryCommands(_categories.Object, errors, _snackbar.Object, _changes);
-        _ruleCommands = new SplitRuleCommands(_rules.Object, errors, _changes);
+        _ruleCommands = new SplitRuleCommands(_rules.Object, errors, _snackbar.Object, _changes);
     }
 
     private static CategoryResponse ACategory(string name, Guid? ruleId = null, string? ruleName = null) =>
@@ -193,7 +197,7 @@ public class CategoryAndRuleCommandTest
     public async Task The_categories_of_a_group_are_read_through_the_command_too()
     {
         _categories
-            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([ACategory("Groceries", FourWays, "Groceries")]);
 
         var loaded = await _categoryCommands.ForGroupAsync(Trip);
@@ -211,7 +215,7 @@ public class CategoryAndRuleCommandTest
     public async Task A_failed_read_says_why_and_answers_null()
     {
         _categories
-            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(Refusals.Of(404, ErrorCodes.GroupNotFound));
 
         Assert.Null(await _categoryCommands.ForGroupAsync(Trip));
@@ -224,8 +228,18 @@ public class CategoryAndRuleCommandTest
 
     // ---- Split rules ------------------------------------------------------------------------
 
+    /// <summary>
+    /// A rule speaks for itself now.
+    /// </summary>
+    /// <remarks>
+    /// It used to stay silent, because a rule was only ever written as the division behind a
+    /// category and the category's own message said what had happened. They are edited apart
+    /// on the group's Splits tab -- one rule may stand behind several categories -- so there
+    /// is no category left to speak for it, and a save that said nothing read as one that
+    /// did nothing.
+    /// </remarks>
     [Fact]
-    public async Task Saving_a_new_split_announces_and_leaves_the_talking_to_the_category()
+    public async Task Saving_a_new_split_says_so_and_says_what_is_left_to_do()
     {
         _rules
             .Setup(c => c.CreateSplitRuleAsync(It.IsAny<CreateSplitRuleRequest>(), It.IsAny<CancellationToken>()))
@@ -241,13 +255,20 @@ public class CategoryAndRuleCommandTest
         Assert.Equal(FourWays, created?.Id);
         Assert.Equal(1, _announced);
 
-        // One gesture, one message -- and the message is the category's. Two would be the
-        // same news twice.
-        Assert.Empty(_said);
+        var (message, severity) = Assert.Single(_said);
+
+        Assert.Equal(Severity.Success, severity);
+
+        // A rule nothing points at divides nothing. That is the next thing to do rather than
+        // a fault, so the sentence carries it.
+        Assert.Equal("Groceries created. Point a category at it to use it.", message);
     }
 
+    /// <summary>
+    /// And an edit says the part somebody would otherwise have to go and check.
+    /// </summary>
     [Fact]
-    public async Task Editing_a_split_announces_and_stays_quiet_as_well()
+    public async Task Editing_a_split_says_that_what_is_recorded_is_untouched()
     {
         _rules
             .Setup(c => c.UpdateSplitRuleAsync(FourWays, It.IsAny<UpdateSplitRuleRequest>(),
@@ -262,7 +283,14 @@ public class CategoryAndRuleCommandTest
 
         Assert.Equal(FourWays, updated?.Id);
         Assert.Equal(1, _announced);
-        Assert.Empty(_said);
+
+        var (message, severity) = Assert.Single(_said);
+
+        Assert.Equal(Severity.Success, severity);
+
+        // The fear a person has when they change how something divides, answered in the
+        // sentence rather than left to be tested by opening an expense from last March.
+        Assert.Equal("Groceries updated. Expenses already recorded keep their split.", message);
     }
 
     /// <summary>

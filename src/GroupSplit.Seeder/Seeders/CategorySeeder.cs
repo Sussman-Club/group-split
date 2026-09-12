@@ -24,6 +24,12 @@ public class CategorySeeder(
     ISeedDataSource<CategorySeedDto> source)
     : AppDbContextSeeder<Category, CategorySeedDto>(db, source, logger)
 {
+    /// <summary>
+    /// When every seeded rule is taken to have started: before the oldest seeded expense,
+    /// which reaches back to early 2023.
+    /// </summary>
+    private static readonly DateTimeOffset Inception = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     protected override async Task<Category?> MapAsync(CategorySeedDto dto, CancellationToken ct = default)
     {
         var group = await DbContext.Set<Group>().FindAsync([dto.GroupId], ct);
@@ -31,12 +37,22 @@ public class CategorySeeder(
         if (group is null)
             return null;
 
+        var first = splitRules.FromDto(dto.SplitRule);
+
+        // A version dates itself to the moment it is made, which for a seeded one is the
+        // moment the seeder ran -- after every expense it is supposed to have divided. The
+        // app reads that comparison and says so: the strip over the shares called every
+        // seeded expense in the demo data a record that "looks wrong", because on the dates
+        // stored it was. Backdated to before the oldest seeded expense, which is what a rule
+        // the group has always had would look like.
+        first.StartedAt = Inception;
+
         // A rule and its first version, which is what a rule that has never been edited is.
         var rule = new SplitRule
         {
             Group = group,
             Name = dto.Category,
-            Versions = { splitRules.FromDto(dto.SplitRule) }
+            Versions = { first }
         };
 
         return new Category

@@ -8,14 +8,18 @@ namespace GroupSplit.App.Shared.Services.Commands;
 /// </summary>
 /// <remarks>
 /// A rule is the division a group keeps -- four ways, or by shares, or all on whoever paid
-/// -- and a <see cref="ICategoryCommands">category</see> points at one. The two are written
-/// together, so these say nothing to the person: the category names what changed, and a
-/// second message about the rule behind it would be the same news twice.
+/// -- and a <see cref="ICategoryCommands">category</see> points at one.
 /// <para>
-/// They still announce, like every other write. What a rule change moves is the next
-/// expense's pre-fill and nothing already recorded: an expense holds both the amounts it
-/// was divided into and the version of the rule that divided them, and editing a rule opens
-/// a new version rather than touching either.
+/// These used to say nothing to the person, because the two were written together in one
+/// dialog and the category named what changed. They are edited apart now, on the group's
+/// Splits tab: a rule can stand behind several categories, so there is no single category
+/// to speak for one, and a save that said nothing would read as a save that did nothing.
+/// </para>
+/// <para>
+/// They announce to the pages as well, like every other write. What a rule change moves is
+/// the next expense's pre-fill and nothing already recorded: an expense holds both the
+/// amounts it was divided into and the version of the rule that divided them, and editing a
+/// rule opens a new version rather than touching either.
 /// </para>
 /// </remarks>
 public interface ISplitRuleCommands
@@ -47,4 +51,14 @@ public interface ISplitRuleCommands
     /// </remarks>
     Task<SplitRuleDetailsResponse?> UpdateAsync(Guid ruleId, UpdateSplitRuleRequest request,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes a rule nothing is using.
+    /// </summary>
+    /// <remarks>
+    /// The API refuses one a category still points at, and one anything has ever been
+    /// divided by, rather than leaving an expense with amounts and no account of what
+    /// produced them -- so this is a refusal the person may well see.
+    /// </remarks>
+    Task<bool> DeleteAsync(Guid ruleId, string name, CancellationToken ct = default);
 }

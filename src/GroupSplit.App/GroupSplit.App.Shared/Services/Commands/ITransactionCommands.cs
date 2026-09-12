@@ -56,4 +56,19 @@ public interface ITransactionCommands
     /// </param>
     Task<SplitPreviewResponse?> PreviewUpdateAsync(Guid transactionId, UpdateTransactionRequest request,
         bool redivide = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records what produced an expense's shares: a version of a split rule, or nobody --
+    /// the amounts are the expense's own.
+    /// </summary>
+    /// <remarks>
+    /// Provenance and nothing else; not one share moves. What it changes is what a later
+    /// edit does, so it announces like any other write -- an expense recorded as a rule's
+    /// follows that rule when its amount or payer changes, and one whose shares are its own
+    /// has no rule to be re-billed under.
+    /// </remarks>
+    /// <param name="splitRuleVersionId">The version that divided it, or null for by hand.</param>
+    /// <param name="name">The expense, so the sentence names what was recorded.</param>
+    Task<bool> DivisionSourceAsync(Guid transactionId, Guid? splitRuleVersionId, string name,
+        CancellationToken ct = default);
 }

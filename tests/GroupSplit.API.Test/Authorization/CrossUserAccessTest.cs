@@ -118,7 +118,10 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var (categoryId, _, _, _) = await SomeoneElsesGroup();
 
-        var list = await GetService<ICategoryService>().List(null, TestContext.Current.CancellationToken);
+        // Archived ones included, so that the boundary being tested is the one about whose
+        // group it is, and not the one about whether anybody has retired it.
+        var list = await GetService<ICategoryService>()
+            .List(null, includeArchived: true, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(list, category => category.Id == categoryId);
     }

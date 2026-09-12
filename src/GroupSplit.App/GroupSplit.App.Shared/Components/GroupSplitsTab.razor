@@ -1,0 +1,593 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@namespace GroupSplit.App.Shared.Components
+@inject ICategoryCommands Categories
+@inject ISplitRuleCommands Rules
+@inject ISplitRulesClient RulesClient
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject IDialogService DialogService
+@inject LocalClock Clock
+@inject DataChangeNotifier Changes
+@implements IDisposable
+
+@*
+    How a group divides what it spends: the labels, and the divisions they point at.
+
+    Two lists, because they are two things. This replaces a dialog called "Manage Rules"
+    that managed categories -- one row per category, with the division behind it edited in
+    the same form and written under the category's own name. A rule never appeared, so the
+    thing the model is built for could not be asked for: Groceries and Utilities dividing by
+    one "Household 3-way", changed in one place. Worse, renaming a category renamed the rule
+    behind it, which in a group where two categories shared one would have renamed the
+    division under both.
+*@
+
+<div class="gs-stack" style="gap: 24px">
+
+    <div class="gs-page-head" style="margin-bottom: 0">
+        <div>
+            <div class="gs-eyebrow">Splits</div>
+            <p style="margin-top: 4px">
+                The divisions this group keeps, and the labels that point at them.
+            </p>
+        </div>
+    </div>
+
+    @if (_stale)
+    {
+        <div class="gs-notice is-warn" role="alert">
+            <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
+            <div class="gs-notice-body">
+                <strong>This did not all load</strong>
+                <span>What is below may be out of date, and deleting a rule is held back
+                    until it can be checked against the categories again.</span>
+            </div>
+            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                       OnClick="@LoadAsync">
+                Try again
+            </MudButton>
+        </div>
+    }
+
+    <div class="gs-splits-grid">
+
+        <div class="gs-card gs-card-pad">
+            <div class="gs-card-title">
+                <h3>Categories</h3>
+                <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.Add"
+                           OnClick="@(() => EditCategoryAsync(null))">
+                    New category
+                </MudButton>
+            </div>
+
+            @* Only where the emptiness was read rather than assumed: "none" is a claim, and
+               neither a failed read nor a read still in flight is entitled to make it. *@
+            @if (!_loaded)
+            {
+                <Waiting Rows="3"/>
+            }
+            else if (_categories.Count == 0 && !_stale)
+            {
+                @* The way out is in here, not only in the card's title. An empty state is
+                   where the eye lands, and this one used to describe the emptiness and then
+                   explain that nothing was needed -- leaving no reason to press the quiet
+                   button above it. *@
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Outlined.Sell"/>
+                    <h3>Nothing to file expenses under yet</h3>
+                    <span>
+                        Categories are labels &mdash; Groceries, Rent, Nights out &mdash; and each
+                        one remembers how it divides. Until there is one, every expense divides
+                        evenly.
+                    </span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                               OnClick="@(() => EditCategoryAsync(null))">
+                        Add your first category
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var category in _categories)
+                    {
+                        <div class="gs-row gs-row-has-actions" @key="category.Id">
+                            <span class="gs-avatar sm tile ink">@Initials(category.Name)</span>
+
+                            <span style="min-width: 0">
+                                <span class="title">
+                                    <span>@category.Name</span>
+                                    @if (category.IsArchive)
+                                    {
+                                        <span class="gs-tag neutral">Archived</span>
+                                    }
+                                </span>
+                                @* From the id, not the name beside it. Both are nullable on
+                                   the wire, and reading the caption off one while the
+                                   used-by tags and the delete gate read the other let the
+                                   same screen say "no rule" on a category and "Used by
+                                   Groceries" on the rule it points at. *@
+                                <span class="meta">@DividesBy(category)</span>
+                            </span>
+
+                            <span class="gs-row-actions gs-inline" style="gap: 2px">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                               aria-label="@($"Edit {category.Name}")"
+                                               OnClick="@(() => EditCategoryAsync(category))"/>
+
+                                @* Archiving before deleting, and in that order, because it
+                                   is what people mean by deleting a category they have been
+                                   using: the API refuses to delete one with anything filed
+                                   under it, so for most categories older than a week this
+                                   is the only door that opens. *@
+                                <MudTooltip Text="@(category.IsArchive
+                                                      ? "Offer this category again"
+                                                      : "Stop offering this category")">
+                                    <MudIconButton Size="Size.Small"
+                                                   Icon="@(category.IsArchive
+                                                             ? Icons.Material.Outlined.Unarchive
+                                                             : Icons.Material.Outlined.Archive)"
+                                                   aria-label="@($"{(category.IsArchive ? "Restore" : "Archive")} {category.Name}")"
+                                                   OnClick="@(() => SetArchivedAsync(category))"/>
+                                </MudTooltip>
+
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                               Color="Color.Error"
+                                               aria-label="@($"Delete {category.Name}")"
+                                               OnClick="@(() => DeleteCategoryAsync(category))"/>
+                            </span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="gs-card gs-card-pad">
+            <div class="gs-card-title">
+                <h3>Split rules</h3>
+                <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.Add"
+                           OnClick="@CreateRuleAsync">
+                    New rule
+                </MudButton>
+            </div>
+
+            @if (!_loaded)
+            {
+                <Waiting Rows="2"/>
+            }
+            else if (_rules.Count == 0 && !_stale)
+            {
+                <div class="gs-empty">
+                    <MudIcon Icon="@Icons.Material.Outlined.AccountTree"/>
+                    <h3>No saved divisions yet</h3>
+                    <span>
+                        Everything divides evenly for now. Save a division &mdash; 60/40, or all
+                        on whoever paid &mdash; and any category can use it.
+                    </span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                               OnClick="@CreateRuleAsync">
+                        Save a division
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var rule in _rules)
+                    {
+                        var used = UsedBy(rule.Id);
+
+                        <div class="gs-rule" @key="rule.Id">
+                            <div class="gs-rule-head">
+                                <span class="title"><span>@rule.Name</span></span>
+
+                                <span class="gs-inline" style="gap: 2px">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small"
+                                                   aria-label="@($"History of the {rule.Name} rule")"
+                                                   OnClick="@(() => ShowHistoryAsync(rule.Id))"/>
+                                    @* "the X rule", because a category and the rule it
+                                       divides by usually share a name, and two buttons a
+                                       row apart both announcing "Edit Household" is two
+                                       different actions under one spoken label. *@
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                                   aria-label="@($"Edit the {rule.Name} rule")"
+                                                   OnClick="@(() => EditRuleAsync(rule, used))"/>
+                                    @* Not offered while a category still points at it: the
+                                       API refuses to delete a rule in use, and an action
+                                       that can only fail is worse than none. Re-point the
+                                       categories and it comes back. *@
+                                    <MudTooltip Text="@(_stale
+                                                          ? "Held back until the categories can be read again"
+                                                          : used.Count > 0
+                                                              ? "In use by a category"
+                                                              : "Delete this rule")">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       Disabled="@(_stale || used.Count > 0)"
+                                                       aria-label="@($"Delete the {rule.Name} rule")"
+                                                       OnClick="@(() => DeleteRuleAsync(rule))"/>
+                                    </MudTooltip>
+                                </span>
+                            </div>
+
+                            <span class="meta">
+                                @Describe(rule.Id)
+                            </span>
+
+                            @* Three states, not two. "Used by" with nothing after it is what
+                               the two-state version drew whenever the categories had not
+                               loaded -- a label introducing an empty list. *@
+                            <div class="gs-inline" style="gap: 6px">
+                                @if (_stale)
+                                {
+                                    <span class="gs-tag neutral">Not checked</span>
+                                }
+                                else if (used.Count == 0)
+                                {
+                                    <span class="gs-tag neutral">No category uses it</span>
+                                }
+                                else
+                                {
+                                    <span class="gs-provenance-when">Used by</span>
+                                    @foreach (var name in used)
+                                    {
+                                        <span class="gs-tag" @key="name">@name</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid GroupId { get; set; }
+
+    [Parameter] public string GroupName { get; set; } = "";
+
+    private IReadOnlyList<CategoryResponse> _categories = [];
+    private IReadOnlyList<SplitRuleResponse> _rules = [];
+
+    /// <summary>
+    /// Whether what is on screen is what the server last said.
+    /// </summary>
+    /// <remarks>
+    /// One flag doing three jobs, all of them the same job really: an unread list must not
+    /// be allowed to speak. It suppresses both empty states, because "none" is a claim a
+    /// failed read cannot make; it disables deleting a rule, because the join that decides
+    /// whether one is in use is the very thing that did not load; and it puts a line on the
+    /// screen with a way to try again, because the snackbar has scrolled away by the time
+    /// somebody reaches the second column.
+    /// </remarks>
+    private bool _stale;
+
+    /// <summary>
+    /// What each rule currently divides by, for the line under its name. Read one call per
+    /// rule -- the listing carries only names -- and missing for any that failed, which
+    /// costs the line and not the row.
+    /// </summary>
+    private Dictionary<Guid, SplitRuleDetailsResponse> _definitions = [];
+
+    /// <summary>
+    /// Who the group's people are, so a rule's line names them rather than printing ids.
+    /// </summary>
+    /// <remarks>
+    /// Null until the read succeeds, and null if it fails -- never an empty dictionary. The
+    /// phrases degrade to a count on null; handed an empty one they take the named branch
+    /// and every weighted rule reads "By shares — someone not in the group 3, someone not in
+    /// the group 1", which is a read failure dressed up as a fact about the group.
+    /// </remarks>
+    private Dictionary<Guid, string>? _names;
+
+    /// <summary>
+    /// Loads, and then keeps up by listening rather than by asking after each dialog.
+    /// </summary>
+    /// <remarks>
+    /// Every write here goes through a command, and every command announces -- so the screen
+    /// re-reads when something changed, wherever the change was made. Re-reading after each
+    /// dialog instead meant reading the dialog's answer, and a dialog closed with the corner
+    /// button or Escape carries no answer at all: the reload was skipped after an edit that
+    /// had already been saved, and asking for the answer as a <c>bool</c> unboxed a null and
+    /// threw. <see cref="DialogExtensions.ConfirmedAsync"/> documents that trap; this avoids
+    /// needing to read a result in the first place.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+    {
+        Changes.TransactionsChanged += OnDataChangedAsync;
+
+        await LoadAsync();
+    }
+
+    private Task OnDataChangedAsync() => InvokeAsync(LoadAsync);
+
+    public void Dispose() => Changes.TransactionsChanged -= OnDataChangedAsync;
+
+    /// <summary>
+    /// The load in flight, so an older one cannot finish last and win.
+    /// </summary>
+    /// <remarks>
+    /// Three things start one -- opening the tab, the Try again button, and every category
+    /// or rule command, each of which announces itself through the notifier. Archiving two
+    /// categories in quick succession ran two, and the first to return was not necessarily
+    /// the first asked: the earlier answer overwrote the later one and the Archived tag came
+    /// off a category that was archived, until something unrelated reloaded the tab.
+    /// </remarks>
+    private int _loads;
+
+    /// <summary>
+    /// Whether the first read has answered, either way.
+    /// </summary>
+    /// <remarks>
+    /// An empty list means two things until this is true: the group files nothing under
+    /// anything, or nobody has asked yet. They were drawn the same, so opening the tab
+    /// flashed "Nothing to file expenses under yet" at a group with a dozen categories --
+    /// and the card jumped as the real list replaced it.
+    /// </remarks>
+    private bool _loaded;
+
+    private async Task LoadAsync()
+    {
+        var load = ++_loads;
+
+        // Retired ones included: this is the screen that manages categories, and a category
+        // the group has stopped using has to be visible here or there is no way to bring it
+        // back. Every other caller asks for what the group files under today.
+        var categories = await Categories.ForGroupAsync(GroupId, includeArchived: true);
+        var rules = await Rules.ForGroupAsync(GroupId);
+
+        // Null is a failure the presenter has shown. Keep whatever is on screen rather than
+        // emptying the lists, which would read as a group that has no categories -- but
+        // remember that it was kept, because an empty list that is merely unread must not go
+        // on to assert anything. On a first load "whatever is on screen" is nothing at all,
+        // which is how a failed read came to print "No categories yet", claim that no
+        // category used any rule, and enable Delete on rules a category still points at.
+        if (load != _loads)
+            return;
+
+        _stale = categories is null || rules is null;
+
+        if (categories is not null) _categories = [.. categories.OrderBy(row => row.Name)];
+        if (rules is not null) _rules = [.. rules.OrderBy(row => row.Name)];
+
+        await Errors.CaptureAsync(async () =>
+        {
+            var members = await GroupsClient.GetGroupMembersAsync(GroupId);
+
+            // Label, not FullName: a rule may name somebody invited who has not joined, and
+            // a screen that forgets the mark offers them as a member. DistinctBy so a
+            // duplicate id cannot throw ArgumentException out of a quiet block and take the
+            // group page down with it.
+            _names = members
+                .DistinctBy(member => member.Id)
+                .ToDictionary(member => member.Id, member => member.Label());
+        });
+
+        if (load != _loads)
+            return;
+
+        await LoadDefinitionsAsync();
+
+        if (load != _loads)
+            return;
+
+        // Either way: a failed read has its own message, and leaving this false would sit
+        // on placeholder rows that are never replaced.
+        _loaded = true;
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The division behind each rule, all at once.
+    /// </summary>
+    /// <remarks>
+    /// One read per rule, because the listing endpoint returns names and ids only. They go
+    /// together rather than in sequence, and a failure is read and not shown: this fills in
+    /// a line of description under a row that is perfectly usable without it, and one
+    /// snackbar per rule would be the loudest possible way to say so.
+    /// </remarks>
+    private async Task LoadDefinitionsAsync()
+    {
+        var read = await Task.WhenAll(_rules.Select(async rule =>
+        {
+            SplitRuleDetailsResponse? details = null;
+
+            await Errors.CaptureAsync(async () => details = await RulesClient.GetSplitRuleAsync(rule.Id));
+
+            return details;
+        }));
+
+        // Merged rather than replaced, for the reason the lists are kept above: a refresh
+        // whose reads failed would otherwise blank the description under every rule that had
+        // one a second ago, with nothing on screen to say why.
+        foreach (var details in read.OfType<SplitRuleDetailsResponse>())
+            _definitions[details.Id] = details;
+    }
+
+    private string Describe(Guid ruleId)
+    {
+        if (!_definitions.TryGetValue(ruleId, out var details))
+            return "";
+
+        return $"{details.Definition.Summary(_names)} · since {Clock.Local(details.ChangedAt):d MMM yyyy}";
+    }
+
+    /// <summary>
+    /// Which categories divide by a rule. The join is here rather than on the API because
+    /// both halves are already on this screen, and it is the fact that makes editing a rule
+    /// something to think about.
+    /// </summary>
+    private IReadOnlyList<string> UsedBy(Guid ruleId) =>
+        [.. _categories.Where(category => category.DefaultSplitRuleId == ruleId).Select(category => category.Name)];
+
+    /// <summary>
+    /// What a category divides by, named from the rule it points at rather than from the
+    /// name the listing carried alongside the id.
+    /// </summary>
+    private string DividesBy(CategoryResponse category)
+    {
+        if (category.DefaultSplitRuleId is not { } ruleId)
+            return "no rule · evenly between whoever is in the group";
+
+        var named = _rules.FirstOrDefault(rule => rule.Id == ruleId)?.Name
+                    ?? category.DefaultSplitRuleName;
+
+        // Pointed at a rule this screen could not name -- the rules list failed, or it was
+        // deleted between the two reads. Saying so beats printing "no rule", which is a
+        // different state with a different division behind it.
+        return named is { Length: > 0 }
+            ? $"divides by {named}"
+            : "divides by a rule that is not in this list";
+    }
+
+    private static string Initials(string name) => name.Initials();
+
+    private async Task EditCategoryAsync(CategoryResponse? category)
+    {
+        var parameters = new DialogParameters<CategoryDialog>
+        {
+            { dialog => dialog.GroupId, GroupId },
+            { dialog => dialog.Category, category },
+            { dialog => dialog.Rules, _rules }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<CategoryDialog>(
+            category is null ? "New category" : "Edit category", parameters, options);
+
+        // Read again on the way out. The tab reloads on the change notification these
+        // commands raise, which is enough when it arrives -- and it does not always: a
+        // category saved onto a rule left the list and the "used by" tags reading the way
+        // they had before, under a snackbar saying it was done, until something unrelated
+        // reloaded the tab. One read per dialog somebody actually opened is a cheap
+        // guarantee, and the notification stays for every other screen watching.
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task DeleteCategoryAsync(CategoryResponse category)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            @* The API refuses a category that still has expenses filed under it rather than
+               taking a group's spending history with it, so what this can promise is only
+               what it leaves alone. *@
+            { dialog => dialog.ContentText,
+                $"Delete the category '{category.Name}'? One with expenses filed under it "
+                + "cannot be deleted. The rule it divides by is left alone either way." },
+            { dialog => dialog.ButtonText, "Delete" },
+            { dialog => dialog.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete category", parameters);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        await Categories.DeleteAsync(category.Id, category.Name);
+    }
+
+    private async Task CreateRuleAsync()
+    {
+        var parameters = new DialogParameters<CreateRuleDialog> { { dialog => dialog.GroupId, GroupId } };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("New split rule", parameters, options);
+
+        // Read again on the way out. The tab reloads on the change notification these
+        // commands raise, which is enough when it arrives -- and it does not always: a
+        // category saved onto a rule left the list and the "used by" tags reading the way
+        // they had before, under a snackbar saying it was done, until something unrelated
+        // reloaded the tab. One read per dialog somebody actually opened is a cheap
+        // guarantee, and the notification stays for every other screen watching.
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task EditRuleAsync(SplitRuleResponse rule, IReadOnlyList<string> usedBy)
+    {
+        var parameters = new DialogParameters<EditRuleDialog>
+        {
+            { dialog => dialog.GroupId, GroupId },
+            { dialog => dialog.SplitRuleId, rule.Id },
+
+            // Null while the categories are unread, because the empty list here means the
+            // same thing the screen behind refuses to let it mean: deleting is held back for
+            // exactly this reason, and editing is the more consequential of the two.
+            { dialog => dialog.UsedBy, _stale ? null : usedBy }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
+
+        // Read again on the way out. The tab reloads on the change notification these
+        // commands raise, which is enough when it arrives -- and it does not always: a
+        // category saved onto a rule left the list and the "used by" tags reading the way
+        // they had before, under a snackbar saying it was done, until something unrelated
+        // reloaded the tab. One read per dialog somebody actually opened is a cheap
+        // guarantee, and the notification stays for every other screen watching.
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Retires a category, or brings it back. No confirmation either way: nothing is lost,
+    /// and the same button undoes it.
+    /// </summary>
+    private Task SetArchivedAsync(CategoryResponse category) =>
+        Categories.SetArchivedAsync(category.Id, !category.IsArchive);
+
+    /// <summary>
+    /// Removes a rule nothing points at.
+    /// </summary>
+    /// <remarks>
+    /// The API refuses one that anything has been divided by, as well as one a category
+    /// still names, so that an expense is never left holding amounts with no account of
+    /// where they came from. The categories are checked here, which is why the button is not
+    /// offered while any of them point at it; the expenses are not, so the refusal is one
+    /// somebody may still meet, and the message names the reason.
+    /// </remarks>
+    private async Task DeleteRuleAsync(SplitRuleResponse rule)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { dialog => dialog.ContentText,
+                $"Delete the split rule '{rule.Name}'? If anything was ever divided by it, "
+                + "this is refused rather than leaving those expenses without an account of "
+                + "what produced their shares." },
+            { dialog => dialog.ButtonText, "Delete" },
+            { dialog => dialog.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete split rule", parameters);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        await Rules.DeleteAsync(rule.Id, rule.Name);
+    }
+
+    private async Task ShowHistoryAsync(Guid ruleId)
+    {
+        var parameters = new DialogParameters<RuleHistoryDialog> { { dialog => dialog.SplitRuleId, ruleId } };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        // Nothing to read on the way out. It can edit the rule or send a past division back
+        // into service, and both of those announce, which is what brings this screen up to
+        // date -- including when the dialog is dismissed with the corner button, which
+        // carries no answer to read.
+        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+    }
+
+}
