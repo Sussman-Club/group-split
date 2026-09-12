@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    [Migration("20260912041601_ItemizedReceipts")]
+    [Migration("20260912224355_ItemizedReceipts")]
     partial class ItemizedReceipts
     {
         /// <inheritdoc />
@@ -569,6 +569,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
@@ -1109,7 +1112,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
-                        .WithOne()
+                        .WithOne("Receipt")
                         .HasForeignKey("GroupSplit.Data.Entities.Receipt", "BankTransactionId")
                         .OnDelete(DeleteBehavior.Cascade);
 
@@ -1280,6 +1283,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.BankTransaction", b =>
                 {
                     b.Navigation("FiledAs");
+
+                    b.Navigation("Receipt");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>

@@ -48,6 +48,24 @@ public class ReceiptItem : Entity
 
     public Guid? ExpenseId { get; set; }
 
+    /// <summary>
+    /// Where this line sits on the paper, from zero. What makes "line 4" mean anything.
+    /// </summary>
+    /// <remarks>
+    /// A bill is a piece of paper and its order is part of what it says -- the groceries are
+    /// the first fourteen lines and the clothes are the last two, which is why a split can be
+    /// written as a range at all. Without a column for it the order is whatever the database
+    /// hands back, and on Postgres that changes the moment a row is updated: somebody could
+    /// read the numbers off one listing, claim a line, and put the wrong lines in the wrong
+    /// part with nothing refusing it.
+    /// <para>
+    /// Stored rather than derived from insertion order, because there is nothing to derive it
+    /// from: the ids are client-generated and random, so they sort into no order the paper
+    /// has.
+    /// </para>
+    /// </remarks>
+    public int Position { get; set; }
+
     public required string Name { get; set; }
 
     /// <summary>

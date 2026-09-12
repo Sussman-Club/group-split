@@ -644,6 +644,116 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             line => Assert.Null(line.ExpenseId));
     }
 
+    /// <summary>
+    /// Once a charge has been split, its bill cannot be rewritten through the row.
+    /// </summary>
+    /// <remarks>
+    /// A bill stays on its bank row after filing -- that is what lets one charge be several
+    /// expenses -- which left the row's own routes reaching a receipt those expenses are now
+    /// divided by. Rewriting one replaces every line, so the parts lose the lines that are
+    /// their money and report no bill at all. Nothing about it looks wrong afterwards: the
+    /// balances do not move, they simply stop being explicable.
+    /// </remarks>
+    [Fact]
+    public async Task The_bill_of_a_split_charge_cannot_be_rewritten_through_the_row()
+    {
+        var row = await Row(amount: 100m);
+        var bill = await BillOn(row.Id, ("GROCERIES", 60m, Self), ("JACKET", 40m, Self));
+
+        await Inbox.Split(row.Id, new SplitBankTransactionRequest
+        {
+            Parts =
+            [
+                new BankTransactionPartInput { Name = "Groceries", ItemIds = [bill.Items.First().Id] },
+                new BankTransactionPartInput { Name = "Jacket", ItemIds = [bill.Items.Last().Id] }
+            ]
+        }, Ct);
+
+        var receipts = GetService<IReceiptService>();
+
+        await Assert.ThrowsAsync<ConflictException>(() => receipts.SaveForBankRow(row.Id,
+            new SaveReceiptRequest
+            {
+                Subtotal = 100m,
+                Total = 100m,
+                Items = [new ReceiptItemInput { Name = "SOMETHING ELSE", TotalPrice = 100m }]
+            }, Ct));
+
+        await Assert.ThrowsAsync<ConflictException>(() => receipts.DeleteForBankRow(row.Id, Ct));
+
+        // And the bill is exactly as it was, still naming the two purchases.
+        var after = await receipts.ForBankRow(row.Id, Ct);
+
+        Assert.Equal(2, after.Items.Count);
+        Assert.All(after.Items, line => Assert.NotNull(line.ExpenseId));
+    }
+
+    /// <summary>
+    /// A bill reads back in the order it was typed, whatever the database did with the rows.
+    /// </summary>
+    /// <remarks>
+    /// What makes "line 4" mean anything. The CLI numbers the lines and a split names them by
+    /// position, so an order the database chose would let somebody read the numbers off one
+    /// listing, edit a line, and put the wrong lines in the wrong part -- with every id valid
+    /// and nothing to refuse.
+    /// </remarks>
+    [Fact]
+    public async Task A_bill_reads_back_in_the_order_it_was_typed()
+    {
+        var row = await Row(amount: 100m);
+        var receipts = GetService<IReceiptService>();
+
+        await BillOn(row.Id,
+            ("FIRST", 10m, Self), ("SECOND", 20m, Self),
+            ("THIRD", 30m, Self), ("FOURTH", 40m, Self));
+
+        Assert.Equal(["FIRST", "SECOND", "THIRD", "FOURTH"], await OnThePaper(row.Id));
+
+        // Typed again in a different order, keeping the ids -- which is what a client that
+        // moves a line does. The stored order has to follow the paper, not the rows.
+        var typed = (await receipts.ForBankRow(row.Id, Ct)).Items.ToList();
+
+        await receipts.SaveForBankRow(row.Id, new SaveReceiptRequest
+        {
+            Subtotal = 100m,
+            Total = 100m,
+            Items =
+            [
+                .. new[] { "FOURTH", "FIRST", "THIRD", "SECOND" }.Select(name =>
+                {
+                    var line = typed.Single(stored => stored.Name == name);
+
+                    return new ReceiptItemInput
+                    {
+                        Id = line.Id,
+                        Name = line.Name,
+                        TotalPrice = line.TotalPrice,
+                        Split = ReceiptItemSplit.Evenly
+                    };
+                })
+            ]
+        }, Ct);
+
+        Assert.Equal(["FOURTH", "FIRST", "THIRD", "SECOND"], await OnThePaper(row.Id));
+    }
+
+    /// <summary>
+    /// The bill's lines in the order they are stored as being on the paper.
+    /// </summary>
+    /// <remarks>
+    /// Read untracked and ordered explicitly, which is what every client gets: the response
+    /// projection orders by this column. Reading the tracked graph instead would prove
+    /// nothing -- an ordered Include does not re-sort a collection whose entities are already
+    /// tracked, so it would hand back whatever order the first load happened to use.
+    /// </remarks>
+    private async Task<List<string>> OnThePaper(Guid rowId) =>
+        await DbContext.Set<ReceiptItem>()
+            .AsNoTracking()
+            .Where(item => item.Receipt.BankTransactionId == rowId)
+            .OrderBy(item => item.Position)
+            .Select(item => item.Name)
+            .ToListAsync(Ct);
+
     // ---- What a split would come to, before it is one --------------------------------
     //
     // The screen that sorts a bill into purchases has to say what each part is worth as it is

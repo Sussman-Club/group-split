@@ -27,7 +27,13 @@ public static class ReceiptExtensions
         /// </param>
         public ReceiptResponse ToResponse(Guid? expenseId, bool canDivide)
         {
+            // In the order they are on the paper. Every caller that numbers the lines -- the
+            // CLI's `receipts show`, and the split screen's shift-click run -- is reading
+            // this order, and a listing that reordered itself between two reads would put
+            // somebody's lines in the wrong part without refusing anything.
             var items = receipt.Items
+                .OrderBy(item => item.Position)
+                .ThenBy(item => item.Id)
                 .Select(item => new ReceiptItemResponse(
                     item.Id,
                     item.Name,

@@ -40,10 +40,15 @@ internal static class SeededBill
             Total = subtotal + dto.Tax + dto.Tip
         };
 
+        var position = 0;
+
         foreach (var line in dto.Items)
         {
             var item = new ReceiptItem
             {
+                // The order the seed file lists them in, which is the order they are on the
+                // paper -- and what makes a demo bill's line numbers mean anything.
+                Position = position++,
                 Name = line.Name,
                 NormalizedName = line.Name.Trim().ToLowerInvariant(),
                 TotalPrice = line.Price,
