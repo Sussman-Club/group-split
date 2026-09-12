@@ -2881,6 +2881,26 @@ html:not([data-gs-ready]) .gs-group-card {
     margin: 2px 6px;
 }
 
+/*
+    One scrollbar in a dropdown, not two.
+
+    MudBlazor caps the popover at 300px and lets it scroll, and caps the list inside it at
+    300px and lets that scroll too. A list a little too tall for the box -- which the 2px
+    margins above make of six short rows -- then has a scrollbar inside a scrollbar, and a
+    wheel over it moves whichever one the pointer happens to be on.
+
+    The box keeps the cap, since it is the thing with the border and the corners; the list
+    inside it grows and lets the box do the scrolling.
+
+    Through .mud-paper, which the popover also carries, because MudBlazor's own rule is
+    `.mud-popover .mud-list { max-height: inherit }` -- the same specificity as the obvious
+    way of writing this, and later in the cascade, so the obvious way lost silently.
+*/
+.mud-popover.mud-paper > .mud-list {
+    max-height: none;
+    overflow-y: visible;
+}
+
 /* ------------------------------------------------------------- tooltips ---- */
 
 .mud-tooltip {

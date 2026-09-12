@@ -83,10 +83,11 @@
                            Variant="Variant.Outlined"
                            Clearable="false"
                            Value="@GroupValue"
-                           ValueChanged="@OnGroupPickedAsync">
+                           ValueChanged="@OnGroupPickedAsync"
+                           ToStringFunc="@GroupText">
                     @if (AllowPersonal)
                     {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)Personal)">Personal (just you)</MudSelectItem>
                     }
 
                     @foreach (var group in Groups)
@@ -105,7 +106,8 @@
                            Disabled="@(Categories.Count == 0)"
                            HelperText="@CategoryHint"
                            Value="@CategoryId"
-                           ValueChanged="@OnCategoryPickedAsync">
+                           ValueChanged="@OnCategoryPickedAsync"
+                           ToStringFunc="@CategoryText">
                     @foreach (var category in Categories)
                     {
                         <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">
@@ -125,7 +127,8 @@
                            Variant="Variant.Outlined"
                            Disabled="@(Members.Count == 0)"
                            Value="@PayerId"
-                           ValueChanged="@OnPayerPickedAsync">
+                           ValueChanged="@OnPayerPickedAsync"
+                           ToStringFunc="@PayerText">
                     @foreach (var member in Members)
                     {
                         <MudSelectItem T="Guid?" Value="@((Guid?)member.Id)">@member.Label()</MudSelectItem>
@@ -201,25 +204,33 @@
     /// Whether <see cref="GroupId"/> is an answer rather than a starting point.
     /// </summary>
     /// <remarks>
-    /// Null is Personal. On a screen that opens with nothing said -- filing a bank row --
-    /// null is also "nothing said", so the control already held Personal's own value and
-    /// choosing Personal changed nothing: the select raised no event, the chip went on
-    /// reading "Pick a group", and the save stayed disabled with no way to enable it.
-    /// <para>
-    /// Where this is false the control holds a value that is none of the answers, so every
-    /// answer is a change. The two dialogs that open on a real group leave it true and
-    /// nothing about them moves.
-    /// </para>
+    /// A caller that opens on nothing -- filing a bank row, which could go to a group or
+    /// stay the payer's own -- sets this false until somebody says. It only decides what
+    /// the control shows while nothing has been said; the two dialogs that open on a real
+    /// expense leave it true and nothing about them moves.
     /// </remarks>
     [Parameter] public bool GroupChosen { get; set; } = true;
 
     /// <summary>
-    /// A value outside the list, for a control that must not start equal to one of its own
-    /// options. Never leaves this component and never reaches a caller.
+    /// What Personal is worth inside the select.
     /// </summary>
-    private static readonly Guid Unanswered = new("ffffffff-ffff-ffff-ffff-ffffffffffff");
+    /// <remarks>
+    /// Outside it, Personal is a null group -- that is what the API means by it and what
+    /// every caller passes. Inside a select it cannot be, because "no group" and "nothing
+    /// chosen yet" would then be the same value: the control opened already equal to
+    /// Personal, so choosing Personal raised no change, and on the inbox dialog the chip
+    /// went on reading "Pick a group" with the save disabled and no way to enable it.
+    /// <para>
+    /// So the item carries a value of its own and null is left to mean the empty state,
+    /// which is what a select with no matching item draws -- nothing. It never leaves this
+    /// component: it goes out as null in <see cref="OnGroupPickedAsync"/>. A sentinel that
+    /// reaches the control's display instead of its value shows up as a raw guid on screen,
+    /// which is the first way round this went.
+    /// </para>
+    /// </remarks>
+    private static readonly Guid Personal = new("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
-    private Guid? GroupValue => GroupChosen ? GroupId : Unanswered;
+    private Guid? GroupValue => GroupChosen ? GroupId ?? Personal : null;
 
     /// <summary>What the group chip says, which is not always a group: "Personal".</summary>
     [Parameter] public string GroupName { get; set; } = "";
@@ -252,6 +263,30 @@
     [Parameter] public string? MerchantName { get; set; }
     [Parameter] public string? MerchantLogoUrl { get; set; }
 
+    /// <summary>
+    /// What each select shows for the value it holds.
+    /// </summary>
+    /// <remarks>
+    /// Without these it shows the value itself. A MudSelectItem written as content rather
+    /// than as a Text carries no display string, so the control falls back to its
+    /// converter -- and for an id that is the id: picking Home put
+    /// "12345678-9abc-def0-1234-56789abcdef0" in the box. It has been that way in these
+    /// dialogs since they were written, and is only ever on screen while a picker is open,
+    /// which is exactly when somebody is reading it.
+    /// </remarks>
+    private string GroupText(Guid? id) => id switch
+    {
+        null => "",
+        { } value when value == Personal => "Personal (just you)",
+        _ => Groups.FirstOrDefault(group => group.Id == id)?.Name ?? ""
+    };
+
+    private string CategoryText(Guid? id) =>
+        Categories.FirstOrDefault(category => category.Id == id)?.Name ?? "";
+
+    private string PayerText(Guid? id) =>
+        id is null ? "" : Members.FirstOrDefault(member => member.Id == id).Label();
+
     private string CategoryName =>
         Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? "category";
 
@@ -260,8 +295,19 @@
 
     private void Toggle(Picker which) => _open = _open == which ? Picker.None : which;
 
-    private Task OnGroupPickedAsync(Guid? id) =>
-        id == Unanswered ? Task.CompletedTask : GroupIdChanged.InvokeAsync(id);
+    /// <summary>
+    /// Reports the pick, with Personal turned back into the absent group it stands for.
+    /// </summary>
+    /// <remarks>
+    /// A null arriving here is not a choice: no item carries one. It is the control saying
+    /// it has nothing selected, which is the state the caller put it in.
+    /// </remarks>
+    private Task OnGroupPickedAsync(Guid? id) => id switch
+    {
+        null => Task.CompletedTask,
+        { } picked when picked == Personal => GroupIdChanged.InvokeAsync(null),
+        _ => GroupIdChanged.InvokeAsync(id)
+    };
 
     private Task OnCategoryPickedAsync(Guid? id) => CategoryIdChanged.InvokeAsync(id);
 
