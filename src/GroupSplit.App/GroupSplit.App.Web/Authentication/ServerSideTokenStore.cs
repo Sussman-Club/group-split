@@ -23,8 +23,17 @@ internal sealed class ServerSideTokenStore(
     IDistributedCache cache,
     ILogger<ServerSideTokenStore> logger) : IUserTokenStore
 {
-    /// <summary>Longer than the cookie's own idle timeout, so tokens never end a session.</summary>
-    private static readonly TimeSpan Lifetime = TimeSpan.FromHours(12);
+    /// <summary>
+    /// As long as the longest session a cookie can name, so tokens never end one.
+    /// </summary>
+    /// <remarks>
+    /// Sliding, and taken from the remembered lifetime rather than the ordinary one: a
+    /// remembered session is thirty days and its ticket is not stored here. Set shorter,
+    /// the failure is worse than being signed out -- the cookie and the ticket are both
+    /// still good, so the app believes the person is signed in while every call it makes
+    /// on their behalf has no token to make it with.
+    /// </remarks>
+    private static readonly TimeSpan Lifetime = AuthenticationExtensions.RememberedSessionLifetime;
 
     public async Task<TokenResult<TokenForParameters>> GetTokenAsync(
         ClaimsPrincipal user,
