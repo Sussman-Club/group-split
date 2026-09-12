@@ -9,10 +9,20 @@
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@implements IDisposable
 
 @*
-    Turning one imported row into a group expense, in the same two steps recording one
-    takes: what it is, then how it is divided.
+    Turning one imported row into an expense, on the one screen recording any other expense
+    takes.
+
+    Into a group or into the person's own, which the request has always allowed and this
+    screen did not: it offered groups only, so a card payment that was nobody's business but
+    the payer's could be ignored or filed as somebody's share, and nothing else.
+
+    It was two steps -- what it is, then how it is divided -- which is the shape the create
+    dialog itself was rescued from: the division was the thing people wanted to see while
+    choosing a category, and it sat behind a Next. Filing a row has less to decide than
+    recording one from scratch, not more, so there was never enough here to fill two screens.
 
     What the bank said is shown and not asked for. The amount, the date and the currency are
     facts, not fields -- correcting the bank is editing the expense afterwards, and the row
@@ -25,24 +35,18 @@
    nuisance whichever dialog it is in. *@
 <MudDialog Class="gs-sheet">
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
+        <div class="gs-dialog-head">
+            <div style="min-width: 0">
+                <h2 class="gs-dialog-title">@MudDialog.Title</h2>
+            </div>
+        </div>
     </TitleContent>
 
     <DialogContent>
-        <div class="gs-steps" role="list" aria-label="Steps">
-            <span class="gs-step @(Step == 1 ? "is-current" : "is-done")" role="listitem">
-                <span class="dot">1</span> What
-            </span>
-            <span class="gs-step-line"></span>
-            <span class="gs-step @(Step == 2 ? "is-current" : "")" role="listitem">
-                <span class="dot">2</span> Split
-            </span>
-        </div>
-
-        <MudStack Spacing="3">
+        <div class="gs-stack" style="gap: 16px">
             @* What the bank sent, in the same summary card the expense dialog uses for its
-               own figures. Shown on both steps because none of it is a field: it is the
-               thing being filed, and it does not change. *@
+               own figures. It stands where the amount field stands there, because it is
+               that -- the amount -- and the only difference is that nobody may type it. *@
             <div class="gs-card gs-card-pad" style="padding: 14px 16px">
                 <div class="gs-inline" style="justify-content: space-between">
                     <div>
@@ -53,10 +57,9 @@
                 </div>
             </div>
 
-            @* Carried on both steps, because it is the reason to stop, and stopping is
-               still an option on the second one. Nothing is decided by showing it: the
-               person either goes on, and files a second expense on purpose, or attaches the
-               row to the one that is already there. *@
+            @* Near the top, because it is the reason to stop. Nothing is decided by showing
+               it: the person either goes on, and files a second expense on purpose, or
+               attaches the row to the one that is already there. *@
             @if (Match is { } match)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true">
@@ -77,73 +80,72 @@
                 </MudAlert>
             }
 
-            @if (Step == 1)
+            @* Worded as the create dialog words them. They were "Name" and "Description",
+               which is what the fields are called in the request rather than what they are
+               asking for, and the same two boxes on the other screen ask better. *@
+            <MudTextField @bind-Value="_name"
+                          Label="What was it?"
+                          Variant="Variant.Outlined"
+                          Immediate="true"/>
+
+            <MudTextField @bind-Value="_description"
+                          Label="Note"
+                          Placeholder="Anything worth remembering about it"
+                          HelperText="Optional"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Immediate="true"/>
+
+            @* The same row the create and edit dialogs use. Only two of the five chips: the
+               amount, the day and the shop are the bank's account of what happened and not
+               open to an opinion here. *@
+            <ExpenseDecisions Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+                              GroupId="@_groupId"
+                              GroupChosen="@_chosen"
+                              GroupIdChanged="@OnGroupPickedAsync"
+                              GroupName="@GroupName"
+                              ShowCategory="@IsShared"
+                              Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, c.DefaultSplitRuleName)).ToList())"
+                              CategoryId="@_categoryId"
+                              CategoryIdChanged="@OnCategoryPickedAsync"
+                              CategoryHint="@CategoryHint"
+                              ShowPayer="false"
+                              ShowWhen="false"
+                              ShowWhere="false"/>
+
+            @if (IsShared || !_chosen)
             {
-                @* The same row the create and edit dialogs use. This screen used to ask
-                   for the same two facts through full-width selects stacked down the page,
-                   so filing a bank row looked like a different product from recording an
-                   expense by hand -- which is the one thing it is.
-
-                   Only two of the five chips: the amount, the day and the shop are the
-                   bank's account of what happened and not open to an opinion here. *@
-                <ExpenseDecisions AllowPersonal="false"
-                                  Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
-                                  GroupId="@_groupId"
-                                  GroupIdChanged="@OnGroupPickedAsync"
-                                  GroupName="@GroupName"
-                                  ShowCategory="true"
-                                  Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, c.DefaultSplitRuleName)).ToList())"
-                                  CategoryId="@_categoryId"
-                                  CategoryIdChanged="@OnCategoryPickedAsync"
-                                  CategoryHint="@CategoryHint"
-                                  ShowPayer="false"
-                                  ShowWhen="false"
-                                  ShowWhere="false"/>
-
-                <MudTextField
-                    @bind-Value="_name"
-                    Label="Name"
-                    Variant="Variant.Outlined"
-                    Immediate="true"/>
-
-                <MudTextField
-                    @bind-Value="_description"
-                    Label="Description"
-                    Variant="Variant.Outlined"
-                    Immediate="true"
-                    Lines="2"/>
+                <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                    @* One component and one list of people, as the create and edit dialogs
+                       have: editable when the division is being stated, read-only when the
+                       API worked it out. There used to be an "Everyone's share" block under
+                       this one, so stating a division drew every member twice. *@
+                    <SplitEditor Members="@_members"
+                                 Amount="@Row.Amount"
+                                 PayerId="@null"
+                                 Value="@_splits"
+                                 ValueChanged="@OnSplitsChangedAsync"
+                                 Preview="@_preview"
+                                 PreviewError="@_previewError"
+                                 Awaiting="@_awaiting"/>
+                </div>
             }
             else
             {
-                @* One component and one list of people, as the create and edit dialogs
-                   have: editable when the division is being stated, read-only when the API
-                   worked it out. There used to be an "Everyone's share" block under this
-                   one, so stating a division drew every member twice. *@
-                <SplitEditor Members="@_members"
-                             Amount="@Row.Amount"
-                             PayerId="@null"
-                             Value="@_splits"
-                             ValueChanged="@OnSplitsChangedAsync"
-                             Preview="@_preview"
-                             PreviewError="@_previewError"/>
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    A personal expense is not shared with anybody, so there is nothing to divide.
+                </MudAlert>
             }
-        </MudStack>
+        </div>
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
 
-        @if (Step == 2)
-        {
-            <MudButton Variant="Variant.Text" OnClick="Back">Back</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       OnClick="Submit">Add expense</MudButton>
-        }
-        else
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(_groupId is null)" OnClick="NextAsync">Next</MudButton>
-        }
+        @* Gated on having answered, not on the answer: null is "Personal", which is a
+           destination like any other, so it cannot also stand for "not yet said". *@
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                   Disabled="@(!_chosen)" OnClick="Submit">Add expense</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -165,13 +167,23 @@
 
     [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
 
-    private int Step { get; set; } = 1;
-
     private IReadOnlyList<GroupResponse> _groups = [];
     private IReadOnlyList<CategoryResponse> _categories = [];
     private IReadOnlyList<UserInfo> _members = [];
 
     private Guid? _groupId;
+
+    /// <summary>
+    /// Whether the person has said where this goes.
+    /// </summary>
+    /// <remarks>
+    /// Held apart from <see cref="_groupId"/> because null is an answer here -- Personal --
+    /// and not the absence of one. The dialog opens on neither: a row the bank imported
+    /// belongs wherever the person says, and guessing "Personal" would file somebody's
+    /// share of the rent as their own money on a mis-tap.
+    /// </remarks>
+    private bool _chosen;
+
     private Guid? _categoryId;
     private string _name = string.Empty;
     private string? _description;
@@ -179,6 +191,29 @@
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
+
+    /// <summary>
+    /// What the division is waiting on, where it is waiting on the person rather than the
+    /// API. Nothing can be divided until there is a group to divide it among.
+    /// </summary>
+    private string? _awaiting = "Pick a group to see how it divides.";
+
+    /// <summary>Where the snackbar says it went.</summary>
+    private string Destination =>
+        _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "your personal expenses";
+
+    /// <summary>
+    /// The ask in flight, so a later one wins.
+    /// </summary>
+    /// <remarks>
+    /// It did not need this while the preview was fetched once, on the way to a second
+    /// step. On one screen the group and the category are both live, and picking them in
+    /// quick succession asks twice -- answered in the order the server gets round to them,
+    /// which is not necessarily the order they were asked.
+    /// </remarks>
+    private CancellationTokenSource? _previewing;
+
+    public void Dispose() => _previewing?.Cancel();
 
     /// <summary>
     /// The row's own provenance, under its title in the summary card: which account, when
@@ -195,20 +230,32 @@
         }
     }
 
-    /// <summary>What the group chip says before a group has been picked.</summary>
+    /// <summary>Whether it is going somewhere with other people in it.</summary>
+    private bool IsShared => _groupId is not null;
+
+    /// <summary>What the group chip says, including before anything has been said.</summary>
     private string GroupName =>
-        _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "Pick a group";
+        _groups.FirstOrDefault(group => group.Id == _groupId)?.Name
+        ?? (_chosen ? "Personal" : "Pick a group");
 
     private async Task OnGroupPickedAsync(Guid? id)
     {
         _groupId = id;
+        _chosen = true;
 
         await OnGroupChangedAsync();
     }
 
-    private void OnCategoryPickedAsync(Guid? id) => _categoryId = id;
+    private async Task OnCategoryPickedAsync(Guid? id)
+    {
+        _categoryId = id;
 
-    private string CategoryHint => _groupId is null
+        // Which is the whole reason this is on one screen: the category is how it divides,
+        // and the shares are right there to say so.
+        await RefreshPreviewAsync();
+    }
+
+    private string CategoryHint => !IsShared
         ? "Pick a group first."
         : Row.CategoryLabel is { Length: > 0 } label
             ? $"Your bank called this \"{label}\"."
@@ -229,16 +276,19 @@
 
     private async Task OnGroupChangedAsync()
     {
-
         // A stated division names people, and the people just changed.
         _splits = null;
         _categoryId = null;
         _categories = [];
         _members = [];
-        _preview = null;
 
         if (_groupId is not { } groupId)
+        {
+            _preview = null;
+
+            await RefreshPreviewAsync();
             return;
+        }
 
         await Errors.TryAsync(async () =>
         {
@@ -251,20 +301,8 @@
         // the button is pressed is what gets sent.
         _categoryId = Suggested()?.Id;
 
-        StateHasChanged();
-    }
-
-    private async Task NextAsync()
-    {
-        if (_groupId is null)
-            return;
-
-        Step = 2;
-
         await RefreshPreviewAsync();
     }
-
-    private void Back() => Step = 1;
 
     private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
     {
@@ -280,9 +318,24 @@
     /// </summary>
     private async Task RefreshPreviewAsync()
     {
-        _preview = null;
-        _previewError = null;
-        StateHasChanged();
+        // Only while nothing has been said. Personal has an answer -- there is nobody to
+        // divide it among -- and the panel says so in its own words instead.
+        _awaiting = _chosen ? null : "Pick a group to see how it divides.";
+
+        if (!_chosen || !IsShared)
+        {
+            _preview = null;
+            _previewError = null;
+            StateHasChanged();
+            return;
+        }
+
+        // What is on screen stays there while the new answer is out, as in the other two
+        // dialogs: blanking it first took the share list away by its own height and put it
+        // back a few tens of milliseconds later, which on a chip is a flinch per pick.
+        _previewing?.Cancel();
+        _previewing = new CancellationTokenSource();
+        var asked = _previewing.Token;
 
         var preview = await Transactions.PreviewAsync(new CreateTransactionRequest
         {
@@ -293,7 +346,11 @@
             Description = _description,
             Amount = Row.Amount,
             DateTime = Row.SpentOn.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
-        });
+        }, asked);
+
+        // A newer ask started while this one was out, or the dialog has gone.
+        if (asked.IsCancellationRequested)
+            return;
 
         _preview = preview;
         _previewError = preview is null
@@ -337,12 +394,12 @@
 
     private void Submit()
     {
-        if (_groupId is not { } groupId)
+        if (!_chosen)
             return;
 
         var request = new FileBankTransactionRequest
         {
-            GroupId = groupId,
+            GroupId = _groupId,
             CategoryId = _categoryId,
             Splits = _splits,
             Name = string.IsNullOrWhiteSpace(_name) ? null : _name,
@@ -353,8 +410,6 @@
             FileAnyway = Match is not null
         };
 
-        var destination = _groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? "the group";
-
-        MudDialog.Close(DialogResult.Ok(new Answer(request, destination)));
+        MudDialog.Close(DialogResult.Ok(new Answer(request, Destination)));
     }
 }

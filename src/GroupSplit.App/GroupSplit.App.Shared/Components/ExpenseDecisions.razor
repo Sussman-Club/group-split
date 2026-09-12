@@ -82,7 +82,7 @@
                 <MudSelect T="Guid?" Label="Group"
                            Variant="Variant.Outlined"
                            Clearable="false"
-                           Value="@GroupId"
+                           Value="@GroupValue"
                            ValueChanged="@OnGroupPickedAsync">
                     @if (AllowPersonal)
                     {
@@ -197,6 +197,30 @@
     [Parameter] public Guid? GroupId { get; set; }
     [Parameter] public EventCallback<Guid?> GroupIdChanged { get; set; }
 
+    /// <summary>
+    /// Whether <see cref="GroupId"/> is an answer rather than a starting point.
+    /// </summary>
+    /// <remarks>
+    /// Null is Personal. On a screen that opens with nothing said -- filing a bank row --
+    /// null is also "nothing said", so the control already held Personal's own value and
+    /// choosing Personal changed nothing: the select raised no event, the chip went on
+    /// reading "Pick a group", and the save stayed disabled with no way to enable it.
+    /// <para>
+    /// Where this is false the control holds a value that is none of the answers, so every
+    /// answer is a change. The two dialogs that open on a real group leave it true and
+    /// nothing about them moves.
+    /// </para>
+    /// </remarks>
+    [Parameter] public bool GroupChosen { get; set; } = true;
+
+    /// <summary>
+    /// A value outside the list, for a control that must not start equal to one of its own
+    /// options. Never leaves this component and never reaches a caller.
+    /// </summary>
+    private static readonly Guid Unanswered = new("ffffffff-ffff-ffff-ffff-ffffffffffff");
+
+    private Guid? GroupValue => GroupChosen ? GroupId : Unanswered;
+
     /// <summary>What the group chip says, which is not always a group: "Personal".</summary>
     [Parameter] public string GroupName { get; set; } = "";
 
@@ -236,7 +260,8 @@
 
     private void Toggle(Picker which) => _open = _open == which ? Picker.None : which;
 
-    private Task OnGroupPickedAsync(Guid? id) => GroupIdChanged.InvokeAsync(id);
+    private Task OnGroupPickedAsync(Guid? id) =>
+        id == Unanswered ? Task.CompletedTask : GroupIdChanged.InvokeAsync(id);
 
     private Task OnCategoryPickedAsync(Guid? id) => CategoryIdChanged.InvokeAsync(id);
 
