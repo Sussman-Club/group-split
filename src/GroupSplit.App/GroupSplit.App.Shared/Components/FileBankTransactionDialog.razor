@@ -79,32 +79,26 @@
 
             @if (Step == 1)
             {
-                <MudSelect T="Guid?"
-                           Label="Group"
-                           Variant="Variant.Outlined"
-                           @bind-Value="_groupId"
-                           @bind-Value:after="OnGroupChangedAsync"
-                           Clearable="false"
-                           Placeholder="">
-                    @foreach (var group in _groups)
-                    {
-                        <MudSelectItem T="Guid?" Value="@group.Id">@group.Name</MudSelectItem>
-                    }
-                </MudSelect>
+                @* The same row the create and edit dialogs use. This screen used to ask
+                   for the same two facts through full-width selects stacked down the page,
+                   so filing a bank row looked like a different product from recording an
+                   expense by hand -- which is the one thing it is.
 
-                <MudSelect T="Guid?"
-                           Label="Category"
-                           Variant="Variant.Outlined"
-                           @bind-Value="_categoryId"
-                           Disabled="@(_categories.Count == 0)"
-                           Clearable="true"
-                           Placeholder=""
-                           HelperText="@CategoryHint">
-                    @foreach (var category in _categories)
-                    {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">@category.Name</MudSelectItem>
-                    }
-                </MudSelect>
+                   Only two of the five chips: the amount, the day and the shop are the
+                   bank's account of what happened and not open to an opinion here. *@
+                <ExpenseDecisions AllowPersonal="false"
+                                  Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+                                  GroupId="@_groupId"
+                                  GroupIdChanged="@OnGroupPickedAsync"
+                                  GroupName="@GroupName"
+                                  ShowCategory="true"
+                                  Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, c.DefaultSplitRuleName)).ToList())"
+                                  CategoryId="@_categoryId"
+                                  CategoryIdChanged="@OnCategoryPickedAsync"
+                                  CategoryHint="@CategoryHint"
+                                  ShowPayer="false"
+                                  ShowWhen="false"
+                                  ShowWhere="false"/>
 
                 <MudTextField
                     @bind-Value="_name"
@@ -200,6 +194,19 @@
             return string.Join(" · ", parts);
         }
     }
+
+    /// <summary>What the group chip says before a group has been picked.</summary>
+    private string GroupName =>
+        _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "Pick a group";
+
+    private async Task OnGroupPickedAsync(Guid? id)
+    {
+        _groupId = id;
+
+        await OnGroupChangedAsync();
+    }
+
+    private void OnCategoryPickedAsync(Guid? id) => _categoryId = id;
 
     private string CategoryHint => _groupId is null
         ? "Pick a group first."

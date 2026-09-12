@@ -82,127 +82,28 @@
                               Lines="2"
                               Immediate="true"/>
 
-                <div class="gs-chip-row">
-                    @if (!GroupFixed)
-                    {
-                        <ExpenseChip Label="group" Lead="in" Value="@Where" Set="true"
-                                     Open="@(_open == Picker.Group)"
-                                     OnClick="@(() => Toggle(Picker.Group))"/>
-                    }
-
-                    @if (IsShared)
-                    {
-                        <ExpenseChip Label="category" Lead="for" Value="@CategoryName"
-                                     Set="@(_model.CategoryId is not null)"
-                                     Open="@(_open == Picker.Category)"
-                                     OnClick="@(() => Toggle(Picker.Category))"/>
-
-                        @if (!DisablePayingUserSelection)
-                        {
-                            <ExpenseChip Label="payer" Lead="paid by" Value="@PayerName"
-                                         Set="@(_model.PaidByUserId is not null)"
-                                         Open="@(_open == Picker.Payer)"
-                                         OnClick="@(() => Toggle(Picker.Payer))"/>
-                        }
-                    }
-
-                    <ExpenseChip Label="when" Value="@WhenSpent" Set="true"
-                                 Open="@(_open == Picker.When)"
-                                 OnClick="@(() => Toggle(Picker.When))"/>
-
-                    <ExpenseChip Label="where" Lead="at" Value="@_merchantName"
-                                 Set="@(_model.MerchantId is not null)"
-                                 Open="@(_open == Picker.Where)"
-                                 OnClick="@(() => Toggle(Picker.Where))">
-                        @* The same mark the picker offered it under, and the same one the
-                           row will carry once this is saved. A chip that named Lidl in
-                           words while the list above it showed the logo made the person
-                           check they had picked the place they thought they had. *@
-                        <Mark>
-                            @if (!string.IsNullOrWhiteSpace(_merchantLogo))
-                            {
-                                <img class="gs-mark-inline" src="@_merchantLogo" alt=""
-                                     width="20" height="20" loading="lazy"/>
-                            }
-                        </Mark>
-                    </ExpenseChip>
-                </div>
-
-                @* The picker opens under the row rather than over it. A chip is a summary
-                   and its control is the same control it always was -- a select, a date
-                   picker, the merchant search -- shown in place, so nothing about choosing
-                   is new except where it appears. *@
-                @if (_open is not Picker.None)
-                {
-                    <div class="gs-picker">
-                        @switch (_open)
-                        {
-                            case Picker.Group:
-                                <MudSelect T="Guid?" Label="Group"
-                                           Variant="Variant.Outlined"
-                                           @bind-Value="_groupId"
-                                           @bind-Value:after="OnGroupChangedAsync">
-                                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
-                                    @foreach (var group in _groups)
-                                    {
-                                        <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
-                                    }
-                                </MudSelect>
-                                break;
-
-                            case Picker.Category:
-                                <MudSelect T="Guid?" Label="Category"
-                                           Variant="Variant.Outlined"
-                                           Clearable="true"
-                                           @bind-Value="_model.CategoryId"
-                                           @bind-Value:after="OnMoneyChangedAsync">
-                                    @foreach (var category in _categories)
-                                    {
-                                        <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">
-                                            @category.Name <span class="gs-muted">· @Divides(category)</span>
-                                        </MudSelectItem>
-                                    }
-                                </MudSelect>
-                                break;
-
-                            case Picker.Payer:
-                                <MudSelect T="Guid?" Label="Paid by"
-                                           Variant="Variant.Outlined"
-                                           Disabled="@(!_members.Any())"
-                                           @bind-Value="_model.PaidByUserId"
-                                           @bind-Value:after="OnMoneyChangedAsync">
-                                    @foreach (var member in _members)
-                                    {
-                                        <MudSelectItem T="Guid?" Value="@member.Id">@member.Label()</MudSelectItem>
-                                    }
-                                </MudSelect>
-                                break;
-
-                            case Picker.When:
-                                @* Stacked below 600px: two pickers sharing a phone-width
-                                   dialog clip both their values. *@
-                                <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                                    @* Both re-preview: the rule version that divides an
-                                       expense is the one that stood on the day it was
-                                       spent, so the day is part of the division. *@
-                                    <MudDatePicker @bind-Date="_selectedDate"
-                                                   @bind-Date:after="OnMoneyChangedAsync" Label="Date"
-                                                   Variant="Variant.Outlined"/>
-                                    <MudTimePicker @bind-Time="_selectedTime"
-                                                   @bind-Time:after="OnMoneyChangedAsync" Label="Time"
-                                                   Variant="Variant.Outlined" AmPm="true"/>
-                                </MudStack>
-                                break;
-
-                            case Picker.Where:
-                                @* No preview after this one: a merchant is where the money
-                                   went, not who owes it. *@
-                                <MerchantPicker Value="@_model.MerchantId"
-                                                ValueChanged="@OnMerchantChangedAsync"/>
-                                break;
-                        }
-                    </div>
-                }
+                <ExpenseDecisions ShowGroup="@(!GroupFixed)"
+                                  Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+                                  GroupId="@_groupId"
+                                  GroupIdChanged="@OnGroupPickedAsync"
+                                  GroupName="@Where"
+                                  ShowCategory="@IsShared"
+                                  Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, Divides(c))).ToList())"
+                                  CategoryId="@_model.CategoryId"
+                                  CategoryIdChanged="@OnCategoryPickedAsync"
+                                  ShowPayer="@(IsShared && !DisablePayingUserSelection)"
+                                  Members="@_members"
+                                  PayerId="@_model.PaidByUserId"
+                                  PayerIdChanged="@OnPayerPickedAsync"
+                                  Date="@_selectedDate"
+                                  DateChanged="@OnDatePickedAsync"
+                                  Time="@_selectedTime"
+                                  TimeChanged="@OnTimePickedAsync"
+                                  WhenSpent="@WhenSpent"
+                                  MerchantId="@_model.MerchantId"
+                                  MerchantIdChanged="@OnMerchantChangedAsync"
+                                  MerchantName="@_merchantName"
+                                  MerchantLogoUrl="@_merchantLogo"/>
 
                 @if (IsShared)
                 {
@@ -259,11 +160,6 @@
     /// list it has to fetch is the app asking the API for something it is already holding.
     /// </remarks>
     [Parameter] public string? SelectedGroupName { get; set; }
-
-    /// <summary>Which chip's picker is showing. One at a time; the row stays a row.</summary>
-    private enum Picker { None, Group, Category, Payer, When, Where }
-
-    private Picker _open = Picker.None;
 
     /// <summary>
     /// The group actually chosen, which starts as <see cref="SelectedGroupId"/> and then
@@ -340,6 +236,49 @@
         return null;
     }
 
+    /// <summary>
+    /// What each pick costs, which is the dialog's business and not the chip row's.
+    /// </summary>
+    /// <remarks>
+    /// The row reports a choice and nothing else. Every one of these but the merchant ends
+    /// in a re-preview, because the division is a function of the group, the category, the
+    /// payer and the day -- and a merchant is where the money went, not who owes it.
+    /// </remarks>
+    private async Task OnGroupPickedAsync(Guid? id)
+    {
+        _groupId = id;
+
+        await OnGroupChangedAsync();
+    }
+
+    private async Task OnCategoryPickedAsync(Guid? id)
+    {
+        _model.CategoryId = id;
+
+        await OnMoneyChangedAsync();
+    }
+
+    private async Task OnPayerPickedAsync(Guid? id)
+    {
+        _model.PaidByUserId = id;
+
+        await OnMoneyChangedAsync();
+    }
+
+    private async Task OnDatePickedAsync(DateTime? date)
+    {
+        _selectedDate = date;
+
+        await OnMoneyChangedAsync();
+    }
+
+    private async Task OnTimePickedAsync(TimeSpan? time)
+    {
+        _selectedTime = time;
+
+        await OnMoneyChangedAsync();
+    }
+
     /// <summary>What the merchant chip shows, once one has been picked.</summary>
     private string? _merchantName;
 
@@ -409,12 +348,6 @@
                 _ => day.ToString("d MMM yyyy")
             };
         }
-    }
-
-    private Task Toggle(Picker picker)
-    {
-        _open = _open == picker ? Picker.None : picker;
-        return Task.CompletedTask;
     }
 
     protected override async Task OnInitializedAsync()
@@ -555,10 +488,6 @@
 
         _merchantName = merchant?.Name;
         _merchantLogo = merchant?.LogoUrl;
-
-        // Closes on the way out: the merchant is the one chip whose picker is a search, so
-        // leaving it open after a choice keeps a list of nothing on screen.
-        _open = Picker.None;
 
         StateHasChanged();
     }

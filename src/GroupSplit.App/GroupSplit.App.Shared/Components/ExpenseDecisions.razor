@@ -1,0 +1,262 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    Everything about an expense that is picked rather than typed, as one row of chips with
+    the chosen control opening beneath it.
+
+    The row is half of what an expense dialog is; the other half is the fields -- amount,
+    name, note -- and the line between them is what you do with each. This half was written
+    twice, once in the create dialog and once in the edit dialog, and then a third screen
+    that records an expense -- filing a bank row from the inbox -- never got it at all and
+    was still asking for the same two facts through full-width selects stacked down the
+    page. Three dialogs recording the same thing looked like three products.
+
+    It owns only which picker is open. Every value belongs to the caller, and every change
+    goes straight back out: what a pick costs -- a re-preview, a re-divide, a category
+    whose rule changes the shares -- is the dialog's business and differs in each of them.
+*@
+
+<div class="gs-chip-row">
+    @if (ShowGroup)
+    {
+        <ExpenseChip Label="group" Lead="in" Value="@GroupName" Set="true"
+                     Open="@(_open == Picker.Group)"
+                     OnClick="@(() => Toggle(Picker.Group))"/>
+    }
+
+    @if (ShowCategory)
+    {
+        <ExpenseChip Label="category" Lead="for" Value="@CategoryName"
+                     Set="@(CategoryId is not null)"
+                     Open="@(_open == Picker.Category)"
+                     OnClick="@(() => Toggle(Picker.Category))"/>
+    }
+
+    @if (ShowPayer)
+    {
+        <ExpenseChip Label="payer" Lead="paid by" Value="@PayerName"
+                     Set="@(PayerId is not null)"
+                     Open="@(_open == Picker.Payer)"
+                     OnClick="@(() => Toggle(Picker.Payer))"/>
+    }
+
+    @if (ShowWhen)
+    {
+        <ExpenseChip Label="when" Value="@WhenSpent" Set="true"
+                     Open="@(_open == Picker.When)"
+                     OnClick="@(() => Toggle(Picker.When))"/>
+    }
+
+    @if (ShowWhere)
+    {
+        <ExpenseChip Label="where" Lead="at" Value="@MerchantName"
+                     Set="@(MerchantId is not null)"
+                     Open="@(_open == Picker.Where)"
+                     OnClick="@(() => Toggle(Picker.Where))">
+            @* The same mark the picker offered it under, and the same one the row will
+               carry once this is saved. A chip that named Lidl in words while the list
+               above it showed the logo made the person check they had picked the place
+               they thought they had. *@
+            <Mark>
+                @if (!string.IsNullOrWhiteSpace(MerchantLogoUrl))
+                {
+                    <img class="gs-mark-inline" src="@MerchantLogoUrl" alt=""
+                         width="20" height="20" loading="lazy"/>
+                }
+            </Mark>
+        </ExpenseChip>
+    }
+</div>
+
+@* The picker opens under the row rather than over it. A chip is a summary and its control
+   is the same control it always was -- a select, a date picker, the merchant search --
+   shown in place, so nothing about choosing is new except where it appears. *@
+@if (_open is not Picker.None)
+{
+    <div class="gs-picker">
+        @switch (_open)
+        {
+            case Picker.Group:
+                <MudSelect T="Guid?" Label="Group"
+                           Variant="Variant.Outlined"
+                           Clearable="false"
+                           Value="@GroupId"
+                           ValueChanged="@OnGroupPickedAsync">
+                    @if (AllowPersonal)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Personal (just you)</MudSelectItem>
+                    }
+
+                    @foreach (var group in Groups)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                break;
+
+            case Picker.Category:
+                @* The rule beside the name, because "Groceries" says nothing about how
+                   Groceries is divided and the person picking is choosing both. *@
+                <MudSelect T="Guid?" Label="Category"
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           Disabled="@(Categories.Count == 0)"
+                           HelperText="@CategoryHint"
+                           Value="@CategoryId"
+                           ValueChanged="@OnCategoryPickedAsync">
+                    @foreach (var category in Categories)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">
+                            @category.Name
+
+                            @if (category.Divides is { Length: > 0 } divides)
+                            {
+                                <span class="gs-muted">· @divides</span>
+                            }
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                break;
+
+            case Picker.Payer:
+                <MudSelect T="Guid?" Label="Paid by"
+                           Variant="Variant.Outlined"
+                           Disabled="@(Members.Count == 0)"
+                           Value="@PayerId"
+                           ValueChanged="@OnPayerPickedAsync">
+                    @foreach (var member in Members)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)member.Id)">@member.Label()</MudSelectItem>
+                    }
+                </MudSelect>
+                break;
+
+            case Picker.When:
+                @* Stacked below 600px: two pickers sharing a phone-width dialog clip both
+                   their values. *@
+                <MudStack Row="true" Spacing="4" Class="gs-field-pair">
+                    @* Both report: the version of a rule that divides an expense is the one
+                       that stood on the day it was spent, so the day is part of the
+                       division. *@
+                    <MudDatePicker Date="@Date" DateChanged="@OnDatePickedAsync" Label="Date"
+                                   Variant="Variant.Outlined"/>
+                    <MudTimePicker Time="@Time" TimeChanged="@OnTimePickedAsync" Label="Time"
+                                   Variant="Variant.Outlined" AmPm="true"/>
+                </MudStack>
+                break;
+
+            case Picker.Where:
+                <MerchantPicker Value="@MerchantId" ValueChanged="@OnMerchantPickedAsync"/>
+                break;
+        }
+    </div>
+}
+
+@code {
+    /// <summary>A group this expense could be recorded in.</summary>
+    public sealed record GroupChoice(Guid Id, string Name);
+
+    /// <summary>
+    /// A category, and how filing an expense under it divides one.
+    /// </summary>
+    /// <param name="Divides">
+    /// The rule's name, or empty where it names none. Shown beside the category because the
+    /// person picking one is choosing both and the name alone says nothing about the second.
+    /// </param>
+    public sealed record CategoryChoice(Guid Id, string Name, string? Divides);
+
+    /// <summary>Which chip's picker is showing. One at a time; the row stays a row.</summary>
+    private enum Picker { None, Group, Category, Payer, When, Where }
+
+    private Picker _open = Picker.None;
+
+    /// <summary>Closes whatever is open, for a caller whose own state moved underneath.</summary>
+    /// <remarks>
+    /// The edit dialog is the caller with a reason: moving an expense to another group
+    /// retires the category and payer it was showing, and a picker left open over the old
+    /// group's members offers a choice that no longer exists.
+    /// </remarks>
+    public void Close()
+    {
+        _open = Picker.None;
+        StateHasChanged();
+    }
+
+    [Parameter] public bool ShowGroup { get; set; } = true;
+
+    /// <summary>Whether "Personal (just you)" is one of the answers.</summary>
+    /// <remarks>
+    /// It is on the edit dialog, where a shared expense can be taken back, and not where
+    /// the expense is on its way into a group by definition -- filing a bank row.
+    /// </remarks>
+    [Parameter] public bool AllowPersonal { get; set; } = true;
+
+    [Parameter] public IReadOnlyList<GroupChoice> Groups { get; set; } = [];
+    [Parameter] public Guid? GroupId { get; set; }
+    [Parameter] public EventCallback<Guid?> GroupIdChanged { get; set; }
+
+    /// <summary>What the group chip says, which is not always a group: "Personal".</summary>
+    [Parameter] public string GroupName { get; set; } = "";
+
+    [Parameter] public bool ShowCategory { get; set; }
+    [Parameter] public IReadOnlyList<CategoryChoice> Categories { get; set; } = [];
+    [Parameter] public Guid? CategoryId { get; set; }
+    [Parameter] public EventCallback<Guid?> CategoryIdChanged { get; set; }
+
+    /// <summary>A word under the category picker, where a caller has one to add.</summary>
+    [Parameter] public string? CategoryHint { get; set; }
+
+    [Parameter] public bool ShowPayer { get; set; }
+    [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
+    [Parameter] public Guid? PayerId { get; set; }
+    [Parameter] public EventCallback<Guid?> PayerIdChanged { get; set; }
+
+    [Parameter] public bool ShowWhen { get; set; } = true;
+    [Parameter] public DateTime? Date { get; set; }
+    [Parameter] public EventCallback<DateTime?> DateChanged { get; set; }
+    [Parameter] public TimeSpan? Time { get; set; }
+    [Parameter] public EventCallback<TimeSpan?> TimeChanged { get; set; }
+
+    /// <summary>The day, as the chip says it. The caller words it; only it knows "today".</summary>
+    [Parameter] public string WhenSpent { get; set; } = "";
+
+    [Parameter] public bool ShowWhere { get; set; } = true;
+    [Parameter] public Guid? MerchantId { get; set; }
+    [Parameter] public EventCallback<Guid?> MerchantIdChanged { get; set; }
+    [Parameter] public string? MerchantName { get; set; }
+    [Parameter] public string? MerchantLogoUrl { get; set; }
+
+    private string CategoryName =>
+        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? "category";
+
+    private string PayerName =>
+        Members.FirstOrDefault(member => member.Id == PayerId).Label();
+
+    private void Toggle(Picker which) => _open = _open == which ? Picker.None : which;
+
+    private Task OnGroupPickedAsync(Guid? id) => GroupIdChanged.InvokeAsync(id);
+
+    private Task OnCategoryPickedAsync(Guid? id) => CategoryIdChanged.InvokeAsync(id);
+
+    private Task OnPayerPickedAsync(Guid? id) => PayerIdChanged.InvokeAsync(id);
+
+    private Task OnDatePickedAsync(DateTime? date) => DateChanged.InvokeAsync(date);
+
+    private Task OnTimePickedAsync(TimeSpan? time) => TimeChanged.InvokeAsync(time);
+
+    /// <summary>
+    /// Records the merchant, and closes on the way out.
+    /// </summary>
+    /// <remarks>
+    /// The one picker that is a search rather than a list: leaving it open after a choice
+    /// keeps a list of nothing on screen under the row.
+    /// </remarks>
+    private async Task OnMerchantPickedAsync(Guid? id)
+    {
+        _open = Picker.None;
+
+        await MerchantIdChanged.InvokeAsync(id);
+    }
+}
