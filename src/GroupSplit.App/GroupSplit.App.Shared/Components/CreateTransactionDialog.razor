@@ -47,7 +47,27 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="_form" Model="_model">
+        @* Before the form, and instead of it. A dialog whose opening reads failed has
+           nothing to record an expense with, and saying so is the whole of what it can
+           usefully do. *@
+        @if (_failed)
+        {
+            <div class="gs-empty" style="padding: 24px">
+                <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
+                <h3>Could not open this</h3>
+                <span>
+                    @(GroupFixed
+                        ? "The group's categories and members did not load, so there is nothing to divide this between yet."
+                        : "Your groups did not load, so there is nowhere to record this yet.")
+                </span>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                           OnClick="@RetryAsync">
+                    Try again
+                </MudButton>
+            </div>
+        }
+
+        <MudForm @ref="_form" Model="_model" Class="@(_failed ? "d-none" : "")">
             <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
@@ -218,7 +238,10 @@
            dialog must not depend on anything inside it being in a good state. *@
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
 
+        @* Nothing to add while the dialog is standing on its own failure: there are no
+           members to divide it between and no category to file it under. *@
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@_failed"
                    OnClick="@Submit">
             Add expense
         </MudButton>
@@ -285,6 +308,17 @@
     /// can be asked about.
     /// </summary>
     private string? _awaiting;
+
+    /// <summary>
+    /// Whether the dialog could not load what it offers to choose from.
+    /// </summary>
+    /// <remarks>
+    /// It used to cancel itself here, which read as the dialog having opened onto nothing:
+    /// MudBlazor had already drawn the title and the buttons, the content between them
+    /// never arrived, and the snackbar carrying the reason was gone by the time anybody
+    /// looked. A box that will not say why is worse than the failure it is hiding.
+    /// </remarks>
+    private bool _failed;
     /// <summary>
     /// The ask in flight, so a late answer cannot paint over a newer one.
     /// </summary>
@@ -396,8 +430,6 @@
         return Task.CompletedTask;
     }
 
-    // A dialog that cannot load what it offers has nothing to offer, so it closes; the
-    // presenter has already said why.
     protected override async Task OnInitializedAsync()
     {
         _groupId = SelectedGroupId;
@@ -405,6 +437,16 @@
         var now = Clock.Now;
         _selectedDate = now.Date;
         _selectedTime = now.TimeOfDay;
+
+        await OpenAsync();
+    }
+
+    /// <summary>
+    /// Loads what the dialog offers to choose from, and says so when it cannot.
+    /// </summary>
+    private async Task OpenAsync()
+    {
+        _failed = false;
 
         // Opened from inside a group that named itself, the list of every other group is
         // only what the group picker offers -- and the picker is not shown, because the
@@ -421,7 +463,12 @@
 
         if (!loaded)
         {
-            MudDialog.Cancel();
+            // Said here rather than closed. Cancelling left whatever MudBlazor had already
+            // drawn of the dialog on screen -- a title, two buttons and nothing between
+            // them -- with the reason in a snackbar that had already gone. An empty box
+            // that will not say why is the worst thing this screen can do.
+            _failed = true;
+            StateHasChanged();
             return;
         }
 
@@ -581,6 +628,11 @@
     /// from the category: null is a personal expense now, and it is the answer for a group
     /// with no categories too, so the two have to be told apart here.
     /// </summary>
+    /// <summary>
+    /// Asks again, for somebody looking at the reason it could not open.
+    /// </summary>
+    private Task RetryAsync() => OpenAsync();
+
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;
