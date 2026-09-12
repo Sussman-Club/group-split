@@ -297,12 +297,19 @@ public static class InboxApi
                     : row.Status == BankTransactionStatus.Ignored
                         ? InboxStatus.Ignored
                         : InboxStatus.New,
-                row.FiledAs.Select(filed => filed.Id).FirstOrDefault() == Guid.Empty
-                    ? (Guid?)null
-                    : row.FiledAs.Select(filed => filed.Id).First(),
+                // All of them, not the first. A charge whose bill covers two purchases is
+                // filed as two expenses, and a row that reported one of them would send
+                // anybody following it to a part of a purchase labelled as the whole.
+                row.FiledAs.Select(filed => filed.Id).ToList(),
                 row.RemovedAt,
                 row.Account.Name,
-                row.Account.Connection.InstitutionName));
+                row.Account.Connection.InstitutionName)
+            {
+                // Zero for the ordinary row, which is every charge nobody typed a bill for.
+                // Counted here rather than fetched, because the list only has to say the
+                // charge can be broken up; the screen that breaks it up asks for the lines.
+                BillLineCount = row.Receipt == null ? 0 : row.Receipt.Items.Count
+            });
     }
 
     extension(PagedResponse<BankTransactionResponse> page)
