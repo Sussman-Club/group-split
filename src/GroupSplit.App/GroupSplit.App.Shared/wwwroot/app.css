@@ -2181,10 +2181,23 @@ html:not([data-gs-ready]) .gs-group-card {
     between 4 people", so it finishes that sentence rather than opening a new box.
 */
 .gs-provenance-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin: 0 0 10px;
     font-size: 0.8125rem;
     color: var(--gs-muted);
     text-wrap: pretty;
+}
+
+/* The sentence yields; a control beside it does not. */
+.gs-provenance-line > span {
+    min-width: 0;
+}
+
+.gs-provenance-line .mud-button-root {
+    flex: 0 0 auto;
 }
 
 .gs-provenance {
@@ -2332,6 +2345,19 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 /* What a share was, beside what an edit is about to make it. */
+/* What a share was and what it becomes, side by side in the one cell the amount has.
+   Baselines rather than centres, so the two figures sit on the same line the way a
+   correction is written; the old one is smaller and struck, so the order reads without
+   an arrow between them. */
+.gs-change {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
 .gs-was {
     font-size: 0.75rem;
     color: var(--gs-muted);

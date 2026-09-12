@@ -23,7 +23,13 @@
 {
     @if (Plain(source))
     {
-        <p class="gs-provenance-line">@Phrase(source)@Remainder()</p>
+        @if (!Quiet)
+        {
+            <p class="gs-provenance-line">
+                <span>@Phrase(source)@Remainder()</span>
+                @Action
+            </p>
+        }
     }
     else
     {
@@ -32,7 +38,11 @@
 
             <div class="gs-provenance-body">
                 <span class="gs-provenance-what">@Phrase(source)</span>
-                <span class="gs-provenance-when">@When(source)</span>
+
+                @if (When(source) is { Length: > 0 } when)
+                {
+                    <span class="gs-provenance-when">@when</span>
+                }
             </div>
 
             @if (Tag(source) is { Length: > 0 } tag)
@@ -68,17 +78,35 @@
     [Parameter] public RenderFragment? Action { get; set; }
 
     /// <summary>
+    /// Whether to say nothing at all where there is nothing to report.
+    /// </summary>
+    /// <remarks>
+    /// For a screen that already states the ordinary case in its own words. The edit
+    /// dialog's split control prints <c>Divided by the "Household" rule.</c> under its
+    /// Automatically toggle, and this printed <c>Divided evenly by Household</c> six lines
+    /// above it -- the same sentence twice, the upper one in a bordered card with an icon,
+    /// over the least surprising fact in the app.
+    /// <para>
+    /// It changes nothing about the states worth interrupting over: a version that began
+    /// after the money was spent, a rule edited since, a version the category no longer
+    /// reaches, shares that are somebody's own. Those say what no toggle can, and they say
+    /// it here whether this is set or not. Quiet suppresses the agreement, not the news.
+    /// </para>
+    /// </remarks>
+    [Parameter] public bool Quiet { get; set; }
+
+    /// <summary>
     /// Whether this is the ordinary case: a rule divided it, the rule still says the same
     /// thing, and the version was in force at the time. One line, no chrome.
     /// </summary>
     /// <remarks>
-    /// An <see cref="Action"/> keeps the full strip whatever the state. The caller that
-    /// passes one is offering to change what this says, and a control has to be somewhere a
-    /// person can find it.
+    /// An <see cref="Action"/> used to force the full strip whatever the state, so that a
+    /// control offering to correct this had somewhere findable to sit. It bought weight and
+    /// nothing else: a button sits on one line perfectly well, and where the caller is
+    /// <see cref="Quiet"/> there is no line to sit on and nothing to correct.
     /// </remarks>
     private bool Plain(DivisionSourceInfo source) =>
-        Action is null
-        && source is { Superseded: false, RuleUnknown: false }
+        source is { Superseded: false, RuleUnknown: false }
         && (!source.ByHand || Undecidable(source))
         && !Predates(source);
 
@@ -238,8 +266,13 @@
         if (Predates(source) && On is { } spent)
             return $"but that division only began {Day(from)}, after this was spent on {Day(Clock.Local(spent))}";
 
+        // Nothing. "Unchanged since 4 Aug 2026" is the day somebody wrote the rule, put in
+        // the grammar of a change -- the non-information this method's summary warns
+        // against, and the only sentence a rule nobody has edited can produce. It is
+        // unreachable now that the ordinary case never draws the full strip, and it returns
+        // nothing rather than a line if anything reaches it again.
         if (version.SupersededAt is not { } until)
-            return $"unchanged since {Day(from)}";
+            return "";
 
         var to = Clock.Local(until);
 

@@ -106,7 +106,7 @@
                                  Open="@(_open == Picker.When)"
                                  OnClick="@(() => Toggle(Picker.When))"/>
 
-                    <ExpenseChip Label="where" Value="@_merchantName"
+                    <ExpenseChip Label="where" Lead="at" Value="@_merchantName"
                                  Set="@(_model.MerchantId is not null)"
                                  Open="@(_open == Picker.Where)"
                                  OnClick="@(() => Toggle(Picker.Where))">

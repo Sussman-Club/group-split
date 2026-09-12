@@ -756,8 +756,17 @@ public class UpdateTransactionDialogTest : ComponentTest
         SplitRules
             .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
-                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
-                    new EvenSplitRuleDto())]));
+                [
+                    // Superseded, which is what puts the strip on screen at all. Correcting
+                    // is offered where there is something to correct; over an expense whose
+                    // recorded version is simply the current one, the dialog says nothing
+                    // and the split control below speaks for it.
+                    new SplitRuleVersionResponse(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-7),
+                        null, new EvenSplitRuleDto()),
+
+                    new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2),
+                        DateTimeOffset.UtcNow.AddDays(-7), new EvenSplitRuleDto())
+                ]));
 
         _commands
             .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
@@ -827,8 +836,17 @@ public class UpdateTransactionDialogTest : ComponentTest
         SplitRules
             .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
-                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
-                    new EvenSplitRuleDto())]));
+                [
+                    // Superseded, which is what puts the strip on screen at all. Correcting
+                    // is offered where there is something to correct; over an expense whose
+                    // recorded version is simply the current one, the dialog says nothing
+                    // and the split control below speaks for it.
+                    new SplitRuleVersionResponse(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-7),
+                        null, new EvenSplitRuleDto()),
+
+                    new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2),
+                        DateTimeOffset.UtcNow.AddDays(-7), new EvenSplitRuleDto())
+                ]));
 
         _commands
             .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
@@ -951,16 +969,18 @@ public class UpdateTransactionDialogTest : ComponentTest
     private static readonly Guid Household = Guid.NewGuid();
 
     /// <summary>
-    /// The strip in the edit dialog reads the recorded shares, so an even division under no
-    /// rule is not announced as somebody's own handiwork.
+    /// The edit dialog says nothing at all about where an ordinary division came from.
     /// </summary>
     /// <remarks>
-    /// The details dialog passed its shares to the strip and this one did not, so the same
-    /// expense was described two ways in the same app -- and the way this one chose was the
-    /// wrong one, sitting directly above a split control still set to "Automatically".
+    /// This is the create dialog's own default: no category, no rule, an even split. The
+    /// strip called it "Amounts set by hand" under a BY HAND tag, in a bordered card,
+    /// directly above a control still set to Automatically -- and once that was corrected
+    /// to a true sentence it was merely a redundant one, because the split control prints
+    /// how it divides in its own words a few lines below. So the whole strip goes, and what
+    /// is left of it is reserved for the four states no toggle can report.
     /// </remarks>
     [Fact]
-    public async Task The_strip_does_not_call_an_even_division_under_no_rule_hand_set()
+    public async Task The_strip_says_nothing_over_an_ordinary_division()
     {
         var transactionId = Guid.NewGuid();
 
@@ -986,8 +1006,12 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await ToSplitStepAsync(provider);
 
-        Assert.Contains("No rule divided this one", provider.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("gs-provenance", provider.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Amounts set by hand", provider.Markup, StringComparison.Ordinal);
+
+        // And with it the button, which had nothing to offer: the expense records no
+        // version, and there is no rule behind it to point one at.
+        Assert.DoesNotContain(">Correct<", provider.Markup, StringComparison.Ordinal);
     }
 
     private static TransactionDetailsResponse Details(

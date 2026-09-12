@@ -173,13 +173,20 @@
                         @* What it was, where an edit has moved it. The consequence of
                            changing an amount belongs beside the new figure and before the
                            save, not in the ledger afterwards. Only where it actually moved:
-                           a struck-through copy of an unchanged number is noise. *@
-                        @if (Was(share.UserId) is { } was && was != share.Amount)
-                        {
-                            <span class="gs-was gs-num">@was.ToMoney()</span>
-                        }
+                           a struck-through copy of an unchanged number is noise.
 
-                        <Money Value="share.Amount"/>
+                           Both figures in one cell. The row is a three-column grid and this
+                           put four children in it, so on every row an edit touched the new
+                           amount -- the one the whole panel is about -- wrapped to a line of
+                           its own under the name, while the old one kept the column. *@
+                        <span class="gs-change">
+                            @if (Was(share.UserId) is { } was && was != share.Amount)
+                            {
+                                <span class="gs-was gs-num">@was.ToMoney()</span>
+                            }
+
+                            <Money Value="share.Amount"/>
+                        </span>
                     </div>
                 }
             </div>
