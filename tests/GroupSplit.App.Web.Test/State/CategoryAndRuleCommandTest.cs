@@ -197,7 +197,7 @@ public class CategoryAndRuleCommandTest
     public async Task The_categories_of_a_group_are_read_through_the_command_too()
     {
         _categories
-            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([ACategory("Groceries", FourWays, "Groceries")]);
 
         var loaded = await _categoryCommands.ForGroupAsync(Trip);
@@ -215,7 +215,7 @@ public class CategoryAndRuleCommandTest
     public async Task A_failed_read_says_why_and_answers_null()
     {
         _categories
-            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(Refusals.Of(404, ErrorCodes.GroupNotFound));
 
         Assert.Null(await _categoryCommands.ForGroupAsync(Trip));

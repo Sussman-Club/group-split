@@ -70,11 +70,11 @@ public class CreateTransactionDialogTest : ComponentTest
         };
 
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(categories);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => categories.ToAsyncEnumerable());
 
         // The options live in a popover, which needs its host rendered: without one the

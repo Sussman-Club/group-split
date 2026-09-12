@@ -69,7 +69,11 @@ public static class ErrorMessages
             "Their balance stands until they accept.",
         [ErrorCodes.SettlementNothingToSettle] = "You are already square with everybody in this group.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
-        [ErrorCodes.CategoryInUse] = "This category still has expenses filed under it. Move them first.",
+        // Points at the thing they almost certainly meant. Moving a year of expenses out of
+        // a category so that it can be deleted is nobody's actual goal; not being offered it
+        // any more is, and archiving does that without touching what is filed under it.
+        [ErrorCodes.CategoryInUse] =
+            "This category still has expenses filed under it. Archive it instead to stop being offered it.",
         [ErrorCodes.SplitRuleNameTaken] = "This group already has a rule with that name.",
         [ErrorCodes.SplitRuleInUse] = "This split is in use. A category still points at it, or an expense was divided by it.",
         // The first two reach a person only through the CLI: writing a rule's past wholesale

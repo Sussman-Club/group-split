@@ -66,7 +66,7 @@ public abstract class ComponentTest : BunitContext
         // services to render a dialog. A test that cares registers its own clients after
         // this constructor has run, and the later registration is the one resolved.
         Categories
-            .Setup(client => client.GetCategoriesAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         // A rule that has stood for one division since it was made, which is the smallest

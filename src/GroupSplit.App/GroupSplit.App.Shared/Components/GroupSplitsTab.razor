@@ -82,7 +82,13 @@
                             <span class="gs-avatar sm tile ink">@Initials(category.Name)</span>
 
                             <span style="min-width: 0">
-                                <span class="title"><span>@category.Name</span></span>
+                                <span class="title">
+                                    <span>@category.Name</span>
+                                    @if (category.IsArchive)
+                                    {
+                                        <span class="gs-tag neutral">Archived</span>
+                                    }
+                                </span>
                                 @* From the id, not the name beside it. Both are nullable on
                                    the wire, and reading the caption off one while the
                                    used-by tags and the delete gate read the other let the
@@ -95,6 +101,23 @@
                                 <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
                                                aria-label="@($"Edit {category.Name}")"
                                                OnClick="@(() => EditCategoryAsync(category))"/>
+
+                                @* Archiving before deleting, and in that order, because it
+                                   is what people mean by deleting a category they have been
+                                   using: the API refuses to delete one with anything filed
+                                   under it, so for most categories older than a week this
+                                   is the only door that opens. *@
+                                <MudTooltip Text="@(category.IsArchive
+                                                      ? "Offer this category again"
+                                                      : "Stop offering this category")">
+                                    <MudIconButton Size="Size.Small"
+                                                   Icon="@(category.IsArchive
+                                                             ? Icons.Material.Outlined.Unarchive
+                                                             : Icons.Material.Outlined.Archive)"
+                                                   aria-label="@($"{(category.IsArchive ? "Restore" : "Archive")} {category.Name}")"
+                                                   OnClick="@(() => SetArchivedAsync(category))"/>
+                                </MudTooltip>
+
                                 <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                Color="Color.Error"
                                                aria-label="@($"Delete {category.Name}")"
@@ -257,7 +280,10 @@
 
     private async Task LoadAsync()
     {
-        var categories = await Categories.ForGroupAsync(GroupId);
+        // Retired ones included: this is the screen that manages categories, and a category
+        // the group has stopped using has to be visible here or there is no way to bring it
+        // back. Every other caller asks for what the group files under today.
+        var categories = await Categories.ForGroupAsync(GroupId, includeArchived: true);
         var rules = await Rules.ForGroupAsync(GroupId);
 
         // Null is a failure the presenter has shown. Keep whatever is on screen rather than
@@ -420,6 +446,13 @@
         var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
 
     }
+
+    /// <summary>
+    /// Retires a category, or brings it back. No confirmation either way: nothing is lost,
+    /// and the same button undoes it.
+    /// </summary>
+    private Task SetArchivedAsync(CategoryResponse category) =>
+        Categories.SetArchivedAsync(category.Id, !category.IsArchive);
 
     /// <summary>
     /// Removes a rule nothing points at.

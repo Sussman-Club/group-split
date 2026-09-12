@@ -28,7 +28,13 @@ public interface ICategoryCommands
     /// stated reason is worse than one that says why.
     /// </remarks>
     /// <returns>Null when the read failed, which the caller can take as "do not open".</returns>
-    Task<IReadOnlyList<CategoryResponse>?> ForGroupAsync(Guid groupId, CancellationToken ct = default);
+    /// <param name="includeArchived">
+    /// True for the screen that manages categories, which has to show what the group retired
+    /// in order to offer bringing it back. False -- the default -- is what every picker
+    /// wants: the labels the group files under today.
+    /// </param>
+    Task<IReadOnlyList<CategoryResponse>?> ForGroupAsync(Guid groupId, bool includeArchived = false,
+        CancellationToken ct = default);
 
     Task<CategoryResponse?> CreateAsync(CreateCategoryRequest request, CancellationToken ct = default);
 
@@ -45,4 +51,16 @@ public interface ICategoryCommands
     /// person may well see.
     /// </summary>
     Task<bool> DeleteAsync(Guid categoryId, string name, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retires a category, or brings it back.
+    /// </summary>
+    /// <remarks>
+    /// The answer to what people mean by deleting one they have been using: it leaves the
+    /// pickers and the lists, and every expense filed under it goes on naming it. Deleting
+    /// is refused outright once anything is filed under it, so for most categories older
+    /// than a week this is the only way to stop being offered them.
+    /// </remarks>
+    Task<CategoryResponse?> SetArchivedAsync(Guid categoryId, bool archived,
+        CancellationToken ct = default);
 }
