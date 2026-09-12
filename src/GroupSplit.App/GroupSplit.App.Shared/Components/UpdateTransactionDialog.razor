@@ -205,7 +205,7 @@
                        now a client could create it wrongly and never put it right. *@
                     @if (ShowSource)
                     {
-                        <DivisionSource Info="@_source" On="@Original.DateTime">
+                        <DivisionSource Info="@_source" On="@Original.DateTime" Splits="@_recordedSplits">
                             <Action>
                                 @if (Correctable)
                                 {
@@ -424,6 +424,18 @@
     /// <summary>What divided the expense as it stands, resolved to a rule and a window.</summary>
     private DivisionSourceInfo? _source;
 
+    /// <summary>
+    /// The shares as the expense records them, for the strip above the split control.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>_storedSplits</c>, which is the same figures shaped for sending back, and not
+    /// the live model, which is whatever is being typed right now: the strip describes what
+    /// was recorded, so it reads the recorded shares. Without them it could not tell an even
+    /// division under no rule from shares somebody set, and said the second about both --
+    /// here, over a split control the person had just left on "Automatically".
+    /// </remarks>
+    private IReadOnlyList<TransactionSplitResponse> _recordedSplits = [];
+
     private bool _correcting;
     private bool _recording;
 
@@ -581,6 +593,8 @@
             // filed under, so it stays in the list rather than silently reading as none.
             if (_model.CategoryId is { } filed && _categories.All(row => row.CategoryId != filed))
                 _categories.Add(new CategoryInfo(filed, Original.Category ?? details.Category ?? "(removed)", null));
+
+            _recordedSplits = details.Splits;
 
             _storedSplits = [.. details.Splits.Select(split =>
                 new SplitInput { UserId = split.UserId, Amount = split.Amount })];

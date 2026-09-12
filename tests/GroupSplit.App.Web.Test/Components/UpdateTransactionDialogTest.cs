@@ -950,6 +950,46 @@ public class UpdateTransactionDialogTest : ComponentTest
 
     private static readonly Guid Household = Guid.NewGuid();
 
+    /// <summary>
+    /// The strip in the edit dialog reads the recorded shares, so an even division under no
+    /// rule is not announced as somebody's own handiwork.
+    /// </summary>
+    /// <remarks>
+    /// The details dialog passed its shares to the strip and this one did not, so the same
+    /// expense was described two ways in the same app -- and the way this one chose was the
+    /// wrong one, sitting directly above a split control still set to "Automatically".
+    /// </remarks>
+    [Fact]
+    public async Task The_strip_does_not_call_an_even_division_under_no_rule_hand_set()
+    {
+        var transactionId = Guid.NewGuid();
+
+        var details = Details(transactionId) with
+        {
+            CategoryId = null,
+            Category = null,
+            Amount = 48.50m,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 12.14m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Lu Ferrer", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Dani Rivero", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Omar Rivero", 12.12m)
+            ]
+        };
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(details);
+
+        var (provider, _) = await OpenAsync(Row(transactionId) with { CategoryId = null, Category = null });
+
+        await ToSplitStepAsync(provider);
+
+        Assert.Contains("No rule divided this one", provider.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Amounts set by hand", provider.Markup, StringComparison.Ordinal);
+    }
+
     private static TransactionDetailsResponse Details(
         Guid id, Guid? merchantId = null, Guid? splitRuleVersionId = null) => new()
     {

@@ -92,10 +92,10 @@ public sealed class DivisionSourceReader(
     public async Task<DivisionSourceInfo?> ReadAsync(Guid groupId, Guid? categoryId, Guid? versionId,
         bool withHistory = false, CancellationToken ct = default)
     {
-        // Nothing divided it and nobody is offering to change that: the answer needs no
-        // server at all.
-        if (versionId is null && !withHistory)
-            return new DivisionSourceInfo(null, categoryId, null, null, null, []);
+        // Nothing divided it, it is filed under nothing, and nobody is offering to change
+        // that: there is no category to ask about, so the answer needs no server at all.
+        if (versionId is null && categoryId is null && !withHistory)
+            return new DivisionSourceInfo(null, null, null, null, null, []);
 
         Guid? ruleId = null;
 
@@ -119,6 +119,16 @@ public sealed class DivisionSourceReader(
         // belongs to a rule that cannot be reached from here, which is its own answer.
         if (ruleId is not { } rule)
             return new DivisionSourceInfo(versionId, categoryId, null, null, null, []);
+
+        // A rule was reachable and the expense records no version of it, so it departed from
+        // one deliberately. That is the whole of the answer -- there is no version to place
+        // in the rule's history -- and the read that would place it is skipped.
+        //
+        // Which rule it was is what separates shares somebody typed over a rule from shares
+        // an expense under no rule simply has; the caller says one and not the other, and
+        // before this it was told neither and said the first about both.
+        if (versionId is null && !withHistory)
+            return new DivisionSourceInfo(null, categoryId, rule, null, null, []);
 
         SplitRuleHistoryResponse? history = null;
 
