@@ -36,7 +36,16 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="_form" Model="@_model">
+        @if (_failed)
+        {
+            <div class="gs-empty" style="padding: 24px">
+                <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
+                <h3>Could not open this</h3>
+                <span>This expense and its group did not load, so there is nothing here to edit yet.</span>
+            </div>
+        }
+
+        <MudForm @ref="_form" Model="@_model" Class="@(_failed ? "d-none" : "")">
             <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up: what an edit is usually about is this figure, and
@@ -305,6 +314,7 @@
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@_failed"
                    OnClick="Submit">
             Save
         </MudButton>
@@ -344,6 +354,9 @@
     /// be asked about. See the create dialog's field of the same name.
     /// </summary>
     private string? _awaiting;
+
+    /// <summary>Whether the read this dialog opens on failed. See the create dialog's.</summary>
+    private bool _failed;
     /// <summary>
     /// The ask in flight, so a late answer cannot paint over a newer one.
     /// </summary>
@@ -602,7 +615,11 @@
 
         if (!loaded)
         {
-            MudDialog.Cancel();
+            // Said here rather than closed, for the reason the create dialog gives: a
+            // cancel left MudBlazor's title and buttons on screen with nothing between
+            // them, and the snackbar carrying the reason had already gone.
+            _failed = true;
+            StateHasChanged();
             return;
         }
 

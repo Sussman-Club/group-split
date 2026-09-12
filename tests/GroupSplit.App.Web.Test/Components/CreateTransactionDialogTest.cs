@@ -264,6 +264,37 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// A dialog that could not load what it offers says so, in the space the form would
+    /// have taken.
+    /// </summary>
+    /// <remarks>
+    /// It used to cancel itself. MudBlazor had already drawn the title and the buttons, the
+    /// content between them never arrived, and the snackbar carrying the reason was gone by
+    /// the time anybody looked -- so a failed read presented as an empty box with an Add
+    /// expense button in it. That is the worst thing this screen can do: it neither works
+    /// nor admits that it does not.
+    /// </remarks>
+    [Fact]
+    public async Task A_dialog_that_could_not_open_says_so_rather_than_showing_nothing()
+    {
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("no connection"));
+
+        var provider = await OpenAsync(GroupId);
+
+        Assert.Contains("Could not open this", provider.Markup, StringComparison.Ordinal);
+
+        // Still there to be read, and refusing to pretend it can record anything.
+        Assert.NotEmpty(provider.FindComponents<CreateTransactionDialog>());
+
+        var add = provider.FindComponents<MudButton>()
+            .Single(button => button.Markup.Contains("Add expense", StringComparison.Ordinal));
+
+        Assert.True(add.Instance.Disabled);
+    }
+
+    /// <summary>
     /// Opened from inside a group that named itself, the heading says which group without
     /// reading the list of every group the person belongs to.
     /// </summary>
