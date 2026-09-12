@@ -2125,6 +2125,17 @@ html:not([data-gs-ready]) .gs-group-card {
     edits it, and it is the same strip in each -- which is why it is a component and these
     are classes rather than a paragraph written twice.
 */
+/*
+    The ordinary case: one line, no chrome. It is under a heading that already says "Split
+    between 4 people", so it finishes that sentence rather than opening a new box.
+*/
+.gs-provenance-line {
+    margin: 0 0 10px;
+    font-size: 0.8125rem;
+    color: var(--gs-muted);
+    text-wrap: pretty;
+}
+
 .gs-provenance {
     display: flex;
     align-items: flex-start;
@@ -2133,6 +2144,17 @@ html:not([data-gs-ready]) .gs-group-card {
     border-radius: var(--gs-radius);
     background: var(--gs-surface-2);
     border: 1px solid var(--gs-line);
+}
+
+/* A version that began after the money was spent. The record is wrong, and the one state
+   here that is worth the colour of a problem rather than the colour of a remark. */
+.gs-provenance.is-wrong {
+    background: var(--gs-clay-soft);
+    border-color: var(--gs-clay-glow);
+}
+
+.gs-provenance.is-wrong .mud-icon-root {
+    color: var(--gs-clay-deep);
 }
 
 .gs-provenance .mud-icon-root {

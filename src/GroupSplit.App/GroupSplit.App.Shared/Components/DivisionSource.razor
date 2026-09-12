@@ -1,3 +1,4 @@
+@using GroupSplit.Shared
 @using GroupSplit.App.Shared.Services.Transactions
 @namespace GroupSplit.App.Shared.Components
 @inject LocalClock Clock
@@ -5,30 +6,43 @@
 @*
     Where an expense's shares came from, stated rather than guessed at.
 
-    The dialog that shows an expense used to work this out from the amounts: three equal
-    figures got the word "evenly", and anything else got nothing at all. That reading is
-    wrong in both directions -- a two-to-one rule on an amount that happens to divide
-    equally reads as even, and shares somebody typed by hand to be equal read as a rule's --
-    and it is exactly the guess the version id on the response exists to end.
+    Quiet by default, loud when something is off. The first version of this drew a bordered
+    card with an icon, two lines and a CURRENT badge over every expense in the app -- the
+    same visual weight as the split list underneath it -- to report the ordinary case. A
+    badge on the normal state teaches people to ignore badges, and "the version in force
+    since 11 Sep 2026" is administrative register for what is usually "this is how the group
+    splits the bills". The INVITED tag two rows below it is the model: it marks the one row
+    that is not ordinary.
 
-    Pure presentation: DivisionSourceReader does the joining, because the dialog that
-    corrects this needs the same answer and neither should ask twice.
+    So the common case is one line, and the border, the icon and the tag are kept for the
+    three states worth interrupting somebody over -- a rule that has changed since, shares
+    that are the expense's own, and a version that did not exist when the money was spent.
 *@
 
 @if (Info is { } source)
 {
-    <div class="gs-provenance @(source.ByHand ? "is-own" : "")">
-        <MudIcon Icon="@(source.ByHand ? Icons.Material.Outlined.DriveFileRenameOutline : Icons.Material.Outlined.AccountTree)" />
+    @if (Plain(source))
+    {
+        <p class="gs-provenance-line">@Phrase(source)@Remainder()</p>
+    }
+    else
+    {
+        <div class="gs-provenance @Tone(source)">
+            <MudIcon Icon="@Mark(source)"/>
 
-        <div class="gs-provenance-body">
-            <span class="gs-provenance-what">@What(source)</span>
-            <span class="gs-provenance-when">@When(source)</span>
+            <div class="gs-provenance-body">
+                <span class="gs-provenance-what">@Phrase(source)</span>
+                <span class="gs-provenance-when">@When(source)</span>
+            </div>
+
+            @if (Tag(source) is { Length: > 0 } tag)
+            {
+                <span class="gs-tag @TagTone(source)">@tag</span>
+            }
+
+            @Action
         </div>
-
-        <span class="gs-tag @TagClass(source)">@TagText(source)</span>
-
-        @Action
-    </div>
+    }
 }
 
 @code {
@@ -38,29 +52,102 @@
     /// </summary>
     [Parameter] public DivisionSourceInfo? Info { get; set; }
 
+    /// <summary>
+    /// When the money was spent, so a version that started afterwards can be called what it
+    /// is. Without it that check is simply not made.
+    /// </summary>
+    [Parameter] public DateTimeOffset? On { get; set; }
+
+    /// <summary>
+    /// The shares, for the one question this screen is asked more than any other: why one
+    /// person is a penny up on everybody else.
+    /// </summary>
+    [Parameter] public IReadOnlyList<TransactionSplitResponse>? Splits { get; set; }
+
     /// <summary>The right-hand slot, for a caller offering to correct what this says.</summary>
     [Parameter] public RenderFragment? Action { get; set; }
 
+    /// <summary>
+    /// Whether this is the ordinary case: a rule divided it, the rule still says the same
+    /// thing, and the version was in force at the time. One line, no chrome.
+    /// </summary>
     /// <remarks>
-    /// The unreachable case is tested before the name, and the order is the whole of it: the
-    /// rule whose name is in hand is the one the category points at <em>now</em>, and when
-    /// the recorded version is not one of its own, that name belongs to a different division
-    /// from the one that produced these figures. Naming it would be a more confident lie
-    /// than the guess this line replaced.
+    /// An <see cref="Action"/> keeps the full strip whatever the state. The caller that
+    /// passes one is offering to change what this says, and a control has to be somewhere a
+    /// person can find it.
     /// </remarks>
-    private string What(DivisionSourceInfo source) => source switch
-    {
-        { ByHand: true } => "Amounts set by hand",
-        { RuleUnknown: true } => "Divided by a split rule",
-        { RuleName: { Length: > 0 } rule } => $"Divided by {rule}",
-        _ => "Divided by a split rule"
-    };
+    private bool Plain(DivisionSourceInfo source) =>
+        Action is null && source is { ByHand: false, Superseded: false, RuleUnknown: false } && !Predates(source);
 
     /// <summary>
-    /// The window the version stood for. It is the whole point of the line: an expense
-    /// divided by what the rule said in March is not divided by what it says now, and the
-    /// dates are how somebody sees that without opening the rule.
+    /// Whether the version that supposedly divided this began after the money was spent.
     /// </summary>
+    /// <remarks>
+    /// It cannot have, so the record is wrong -- usually a back catalogue pointed at whatever
+    /// its rule said on the day of the import. This is the one fact on the screen that says
+    /// so, and it is a comparison of two dates the response already carries.
+    /// </remarks>
+    private bool Predates(DivisionSourceInfo source) =>
+        On is { } spent && source.Version is { } version && version.StartedAt > spent;
+
+    /// <summary>What divided it, in the words somebody would use about their own money.</summary>
+    private static string Phrase(DivisionSourceInfo source)
+    {
+        if (source.ByHand) return "Amounts set by hand";
+
+        if (source.Version is not { } version)
+            return "Divided by a split rule";
+
+        var named = source.RuleName is { Length: > 0 } name ? name : "a split rule";
+
+        return version.Definition switch
+        {
+            PayerSplitRuleDto => $"All on whoever paid, by {named}",
+            EvenSplitRuleDto { Among.Count: 0 } => $"Divided evenly by {named}",
+            EvenSplitRuleDto => $"Divided evenly by {named}",
+            _ => $"Divided by {named} — {version.Definition.Ratio()}"
+        };
+    }
+
+    /// <summary>
+    /// Who carries the odd cent, when there is one.
+    /// </summary>
+    /// <remarks>
+    /// A division that will not go exactly into the amount leaves a penny somewhere, the app
+    /// decides where deliberately, and until now every screen stayed silent about it -- so
+    /// the one figure in the list that differs from its neighbours had no explanation. Only
+    /// for a division that is otherwise equal: where the shares genuinely differ, the odd
+    /// cent is not what anybody is asking about.
+    /// </remarks>
+    private string Remainder()
+    {
+        if (Splits is not { Count: > 1 } splits) return "";
+
+        var amounts = splits.Select(split => split.Amount).ToArray();
+
+        var most = amounts.Max();
+        var least = amounts.Min();
+
+        if (most - least != 0.01m) return "";
+
+        var carrying = splits.Where(split => split.Amount == most).Select(split => split.UserName).ToArray();
+
+        return carrying.Length switch
+        {
+            0 => "",
+            1 => $" · the odd cent goes to {carrying[0]}",
+            _ => $" · the odd cents go to {carrying.ToList().Listed()}"
+        };
+    }
+
+    /// <summary>
+    /// The window the version stood for, said only where it carries information.
+    /// </summary>
+    /// <remarks>
+    /// "In force since today" is not information -- it is the day the rule was made, read as
+    /// though something had changed. The dates matter when the rule has moved on since, or
+    /// when they are the proof that the record is wrong.
+    /// </remarks>
     private string When(DivisionSourceInfo source)
     {
         if (source.ByHand)
@@ -68,9 +155,6 @@
 
         if (source.Version is not { } version)
         {
-            // Three situations reach here and no two of them are the same sentence. Only the
-            // last is a category pointing elsewhere; saying so about the other two asserts a
-            // category that does not exist, or a rule the category never named.
             return source switch
             {
                 { Filed: false } => "it is filed under no category, so the rule cannot be named from here",
@@ -81,31 +165,44 @@
 
         var from = Clock.Local(version.StartedAt);
 
+        if (Predates(source) && On is { } spent)
+            return $"but that division only began {Day(from)}, after this was spent on {Day(Clock.Local(spent))}";
+
         if (version.SupersededAt is not { } until)
-            return $"the version in force since {Day(from)}";
+            return $"unchanged since {Day(from)}";
 
         var to = Clock.Local(until);
 
-        // "1 Mar – 12 Aug 2026" rather than the year twice. Two years stay two years.
         return from.Year == to.Year
-            ? $"the version in force {from.ToString("d MMM")} – {Day(to)}"
-            : $"the version in force {Day(from)} – {Day(to)}";
+            ? $"as it stood {from.ToString("d MMM")} – {Day(to)}"
+            : $"as it stood {Day(from)} – {Day(to)}";
     }
 
     private static string Day(DateTimeOffset when) => when.ToString("d MMM yyyy");
 
-    private static string TagText(DivisionSourceInfo source) => source switch
+    private string Tag(DivisionSourceInfo source) => source switch
     {
+        _ when Predates(source) => "Looks wrong",
         { ByHand: true } => "By hand",
         { RuleUnknown: true } => "Another rule",
         { Superseded: true } => "Edited since",
-        _ => "Current"
+
+        // No "Current". Almost every rule has never been edited, so almost every expense
+        // would carry it -- a badge on the ordinary state, which is how a badge stops being
+        // read at all.
+        _ => ""
     };
 
-    private static string TagClass(DivisionSourceInfo source) => source switch
+    private string TagTone(DivisionSourceInfo source) =>
+        Predates(source) || source.Superseded ? "clay" : "neutral";
+
+    private string Tone(DivisionSourceInfo source) =>
+        Predates(source) ? "is-wrong" : source.ByHand ? "is-own" : "";
+
+    private string Mark(DivisionSourceInfo source) => source switch
     {
-        { ByHand: true } or { RuleUnknown: true } => "neutral",
-        { Superseded: true } => "clay",
-        _ => ""
+        _ when Predates(source) => Icons.Material.Outlined.Warning,
+        { ByHand: true } => Icons.Material.Outlined.DriveFileRenameOutline,
+        _ => Icons.Material.Outlined.AccountTree
     };
 }

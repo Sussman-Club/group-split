@@ -42,6 +42,9 @@ public class DivisionSourceTest : ComponentTest
 
     private static readonly DateTimeOffset Closed = new(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
 
+    /// <summary>A date safely inside the current version's window.</summary>
+    private static readonly DateTimeOffset Spent = new(2026, 8, 20, 19, 42, 0, TimeSpan.Zero);
+
     private static readonly Guid MeId = Guid.NewGuid();
     private static readonly Guid LuId = Guid.NewGuid();
 
@@ -82,7 +85,8 @@ public class DivisionSourceTest : ComponentTest
 
         var strip = dialog.Find(".gs-provenance");
 
-        Assert.Equal("Divided by Household 3-way", strip.QuerySelector(".gs-provenance-what")!.TextContent.Trim());
+        Assert.Contains("Household 3-way", strip.QuerySelector(".gs-provenance-what")!.TextContent,
+            StringComparison.Ordinal);
 
         // Read through the same clock the dialog renders with. These are instants, and the
         // clock shows them in the reader's zone -- so a UTC midnight is the previous day
@@ -100,15 +104,92 @@ public class DivisionSourceTest : ComponentTest
         Assert.Equal("Edited since", strip.QuerySelector(".gs-tag")!.TextContent.Trim());
     }
 
+    /// <summary>
+    /// The ordinary case is one line: no box, no icon, no badge.
+    /// </summary>
+    /// <remarks>
+    /// It used to draw the full strip with a CURRENT tag over every expense in the app.
+    /// Almost no rule is ever edited, so almost every expense carried it -- a badge on the
+    /// normal state, which is how a badge stops being read at all, and which left the one
+    /// tag that means something ("edited since") competing with it. The line also says what
+    /// the rule *does*, because that is what makes the figures underneath make sense; naming
+    /// the rule alone never did.
+    /// </remarks>
     [Fact]
-    public async Task An_expense_the_rule_still_divides_that_way_is_marked_current()
+    public async Task The_ordinary_case_is_one_line_and_says_how_the_rule_divides()
     {
+        var dialog = await OpenAsync(Details(CurrentVersion, Spent));
+
+        var line = dialog.Find(".gs-provenance-line").TextContent;
+
+        Assert.Contains("Divided evenly by Household 3-way", line, StringComparison.Ordinal);
+
+        Assert.Empty(dialog.FindAll(".gs-provenance"));
+        Assert.DoesNotContain("Current", dialog.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A version that began after the money was spent cannot have divided it, and the screen
+    /// says so.
+    /// </summary>
+    /// <remarks>
+    /// This is the shape a back catalogue arrives in: an import points every expense at
+    /// whatever its rule said on the day of the import, so expenses from years earlier claim
+    /// a division agreed last week. Both dates are already on screen's data, and until now
+    /// nothing compared them -- the strip reported the window as though it were ordinary.
+    /// </remarks>
+    [Fact]
+    public async Task A_version_that_began_after_the_money_was_spent_is_called_wrong()
+    {
+        // The current version opened on 12 August; this was spent on 4 August.
         var dialog = await OpenAsync(Details(CurrentVersion));
 
-        var strip = dialog.Find(".gs-provenance");
+        var strip = dialog.Find(".gs-provenance.is-wrong");
 
-        Assert.Equal("Divided by Household 3-way", strip.QuerySelector(".gs-provenance-what")!.TextContent.Trim());
-        Assert.Equal("Current", strip.QuerySelector(".gs-tag")!.TextContent.Trim());
+        Assert.Equal("Looks wrong", strip.QuerySelector(".gs-tag")!.TextContent.Trim());
+
+        Assert.Contains("only began", strip.QuerySelector(".gs-provenance-when")!.TextContent,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Who carries the odd cent, which is the question this screen is asked most.
+    /// </summary>
+    [Fact]
+    public async Task The_odd_cent_is_accounted_for()
+    {
+        var expense = Details(CurrentVersion, Spent) with
+        {
+            Amount = 27.87m,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 13.93m),
+                new TransactionSplitResponse(LuId, "Lu Ferrer", 13.94m)
+            ]
+        };
+
+        var dialog = await OpenAsync(expense);
+
+        Assert.Contains("the odd cent goes to Lu Ferrer", dialog.Find(".gs-provenance-line").TextContent,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>And nothing is said where the shares were never meant to match.</summary>
+    [Fact]
+    public async Task A_division_that_is_not_almost_equal_says_nothing_about_cents()
+    {
+        var expense = Details(CurrentVersion, Spent) with
+        {
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 40m),
+                new TransactionSplitResponse(LuId, "Lu Ferrer", 20m)
+            ]
+        };
+
+        var dialog = await OpenAsync(expense);
+
+        Assert.DoesNotContain("odd cent", dialog.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -193,12 +274,18 @@ public class DivisionSourceTest : ComponentTest
             button => button.TextContent.Contains("See how Household 3-way has changed", StringComparison.Ordinal));
     }
 
-    private static TransactionDetailsResponse Details(Guid? versionId) => new()
+    /// <param name="when">
+    /// When it was spent. It defaults inside the superseded version's window, because that
+    /// is the interesting case; a test about the current version has to move it after that
+    /// version began, or the expense is claiming a division that did not exist yet -- which
+    /// is a different thing the screen now says out loud.
+    /// </param>
+    private static TransactionDetailsResponse Details(Guid? versionId, DateTimeOffset? when = null) => new()
     {
         Id = Expense,
         Name = "Mercadona",
         Amount = 60m,
-        DateTime = new DateTimeOffset(2026, 8, 4, 19, 42, 0, TimeSpan.Zero),
+        DateTime = when ?? new DateTimeOffset(2026, 8, 4, 19, 42, 0, TimeSpan.Zero),
         GroupId = Flat,
         GroupName = "The flat",
         CategoryId = Groceries,

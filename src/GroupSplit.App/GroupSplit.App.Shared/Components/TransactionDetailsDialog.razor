@@ -157,9 +157,9 @@
                            not say. This used to be an "evenly" tag worked out by comparing
                            the amounts to each other; see DivisionSource for why that reading
                            was wrong in both directions. *@
-                        <div style="margin-bottom: 10px">
-                            <DivisionSource Info="@_source" />
-                        </div>
+                        <DivisionSource Info="@_source"
+                                        On="@details.DateTime"
+                                        Splits="@details.Splits"/>
 
                         @* A row per person and nothing else. There was a bar under each one
                            drawing the share as a proportion, and it earned nothing: an
@@ -263,17 +263,25 @@
             return;
         }
 
+        // Paint the expense now, before going after what divided it.
+        //
+        // Three reads stood between opening this dialog and seeing anything in it -- the
+        // expense, then the group's categories, then the rule's history -- and every one of
+        // them had to answer before the spinner gave way. Two of the three fill in a single
+        // line of description. So the body goes up as soon as its own read lands, the line
+        // arrives when it arrives, and the dialog stops looking like it is loading twice.
+        //
+        // The title has to be told separately, and this is not belt and braces: TitleContent
+        // is hoisted into the dialog provider's own tree, so it does not re-render when this
+        // component's state changes. Without it the dialog stays headed "Expense" over a
+        // body full of the thing it is refusing to name. Both go together here so the
+        // heading and the figures under it appear in the same frame.
+        StateHasChanged();
+        MudDialog.StateHasChanged();
+
         await ReadSourceAsync();
 
-        // The title has to be told separately, and this is not belt and braces.
-        //
-        // TitleContent is hoisted out of this component and rendered in the dialog
-        // provider's own tree, so it does not re-render when this component's state
-        // changes -- it keeps whatever it drew the first time. The heading is the expense's
-        // name now rather than a fixed "Transaction Details", so the first draw is the
-        // placeholder and without this the dialog stays headed "Expense" over a body full
-        // of the thing it is refusing to name.
-        MudDialog.StateHasChanged();
+        StateHasChanged();
     }
 
     /// <summary>
