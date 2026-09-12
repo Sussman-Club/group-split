@@ -20,6 +20,8 @@ public static class CategoryCommands
         categories.Subcommands.Add(List());
         categories.Subcommands.Add(Create());
         categories.Subcommands.Add(Update());
+        categories.Subcommands.Add(Archive(archiving: true));
+        categories.Subcommands.Add(Archive(archiving: false));
         categories.Subcommands.Add(Delete());
 
         return categories;
@@ -28,12 +30,20 @@ public static class CategoryCommands
     private static Command List()
     {
         var group = new Option<Guid?>("--group") { Description = "Only categories in this group." };
-        var list = new Command("list", "List categories.") { group };
+
+        var archived = new Option<bool>("--archived")
+        {
+            Description = "Include categories the group has retired."
+        };
+
+        var list = new Command("list", "List categories.") { group, archived };
 
         list.SetHandler(async (context, ct) =>
         {
+            var showArchived = context.ParseResult.GetValue(archived);
+
             var result = await new Api.CategoriesClient(context.ApiHttpClient)
-                .GetCategoriesAsync(context.ParseResult.GetValue(group), ct);
+                .GetCategoriesAsync(context.ParseResult.GetValue(group), showArchived, ct);
 
             context.Output.Write(result, value =>
             {
@@ -42,14 +52,25 @@ public static class CategoryCommands
                     return new Markup(Tables.Empty("categories") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Name", "Default rule");
+                // The column only when it can say something. Without --archived every row
+                // would read "no", which is a column of one answer.
+                var table = showArchived
+                    ? Tables.Grid("Id", "Name", "Default rule", "Archived")
+                    : Tables.Grid("Id", "Name", "Default rule");
 
                 foreach (var category in value)
                 {
-                    table.AddRow(
+                    var cells = new List<string>
+                    {
                         category.Id.ToString(),
                         Markup.Escape(category.Name),
-                        Markup.Escape(category.DefaultSplitRuleName ?? "-"));
+                        Markup.Escape(category.DefaultSplitRuleName ?? "-")
+                    };
+
+                    if (showArchived)
+                        cells.Add(category.IsArchive ? "yes" : "-");
+
+                    table.AddRow([.. cells]);
                 }
 
                 return table;
@@ -59,6 +80,50 @@ public static class CategoryCommands
         });
 
         return list;
+    }
+
+    /// <summary>
+    /// Retiring a category, and bringing one back.
+    /// </summary>
+    /// <remarks>
+    /// What a group means by "delete this" once a year of spending is filed under it.
+    /// Deleting is refused there -- <c>CATEGORY_IN_USE</c> -- because a category is how
+    /// spending is read back, and taking one away would take the reading with it. This takes
+    /// it out of the listings and leaves every expense still naming it.
+    /// <para>
+    /// Not destructive, so no confirmation: it is reversible with one command, and nothing
+    /// it touches is money.
+    /// </para>
+    /// </remarks>
+    private static Command Archive(bool archiving)
+    {
+        var command = new Command(
+            archiving ? "archive" : "unarchive",
+            archiving
+                ? "Stop offering a category, keeping the expenses filed under it."
+                : "Offer a retired category again.")
+        {
+            CategoryId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var client = new Api.CategoriesClient(context.ApiHttpClient);
+            var categoryId = context.ParseResult.GetValue(CategoryId);
+
+            var category = archiving
+                ? await client.ArchiveCategoryAsync(categoryId, ct)
+                : await client.UnarchiveCategoryAsync(categoryId, ct);
+
+            context.Output.Write(category, value => new Markup(
+                archiving
+                    ? $"[green]{Markup.Escape(value.Name)} archived.[/] Expenses filed under it keep it.\n"
+                    : $"[green]{Markup.Escape(value.Name)} is back.[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
     }
 
     private static Command Create()
@@ -137,7 +202,7 @@ public static class CategoryCommands
 
             // Read across the listing, since a category has no route of its own. A guid
             // that is not there fails here rather than as a PUT of a half-built request.
-            var categories = await client.GetCategoriesAsync(null, ct);
+            var categories = await client.GetCategoriesAsync(null, true, ct);
             var current = categories.FirstOrDefault(candidate => candidate.Id == id);
 
             if (current is null)
@@ -179,7 +244,7 @@ public static class CategoryCommands
             var id = context.ParseResult.GetValue(CategoryId);
             var client = new Api.CategoriesClient(context.ApiHttpClient);
 
-            var categories = await client.GetCategoriesAsync(null, ct);
+            var categories = await client.GetCategoriesAsync(null, true, ct);
             var name = categories.FirstOrDefault(candidate => candidate.Id == id)?.Name ?? id.ToString();
 
             Confirmation.Require(

@@ -1,0 +1,143 @@
+@using System.ComponentModel.DataAnnotations
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@namespace GroupSplit.App.Shared.Components
+@inject ICategoryCommands Categories
+
+@*
+    A category: the label a group files spending under, and which division it pre-fills.
+
+    Two fields, and the second one is a pointer rather than a copy. Picking a rule here is
+    what lets Groceries and Utilities divide by one "Household 3-way" -- the shape the model
+    has had since categories stopped being rules, and which no screen could reach, because
+    the dialog this replaces wrote a fresh rule named after every category it created.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@(Category is null ? "New category" : "Edit category")</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="@_model">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_model.Name"
+                              For="@(() => _model.Name)"
+                              Label="Category"
+                              Variant="Variant.Outlined"
+                              Immediate="true"/>
+
+                @* ToStringFunc, or the box shows the id. A MudSelectItem written as
+                   content carries no display string, so the control falls back to its
+                   converter -- and picking "Household" put a raw guid in a field whose
+                   whole job is to say which division this files under. *@
+                <MudSelect T="Guid?"
+                           Label="Divides by"
+                           Variant="Variant.Outlined"
+                           @bind-Value="_model.SplitRuleId"
+                           Clearable="true"
+                           ToStringFunc="@RuleName">
+                    @foreach (var rule in Rules)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)rule.Id)">@rule.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @* Not an error state. A category with no rule is ordinary -- it is the
+                   difference from the model this replaced, where a category without one
+                   could record nothing at all. *@
+                <MudText Typo="Typo.caption" Class="gs-muted">
+                    @(_model.SplitRuleId is null
+                        ? "With no rule, an expense here is divided evenly between whoever is in the group."
+                        : "Expenses filed here are pre-filled with this division. Ones already recorded keep theirs.")
+                </MudText>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@_saving" OnClick="@Submit">
+            @(Category is null ? "Create" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>What the rule select shows for the id it holds.</summary>
+    private string RuleName(Guid? id) =>
+        Rules.FirstOrDefault(rule => rule.Id == id)?.Name ?? "";
+
+
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid GroupId { get; set; }
+
+    /// <summary>The category being edited, or null to create one.</summary>
+    [Parameter] public CategoryResponse? Category { get; set; }
+
+    /// <summary>The group's rules, to point this category at one of them.</summary>
+    [Parameter] public IReadOnlyList<SplitRuleResponse> Rules { get; set; } = [];
+
+    private readonly CategoryModel _model = new();
+    private MudForm _form = null!;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Category is not { } editing) return;
+
+        _model.Name = editing.Name;
+        _model.SplitRuleId = editing.DefaultSplitRuleId;
+    }
+
+    private async Task Submit()
+    {
+        if (_saving) return;
+
+        await _form.ValidateAsync();
+
+        if (!_form.IsValid)
+            return;
+
+        _saving = true;
+
+        CategoryResponse? saved;
+
+        try
+        {
+            saved = Category is { } editing
+                ? await Categories.UpdateAsync(editing.Id, new UpdateCategoryRequest
+                {
+                    Name = _model.Name,
+                    DefaultSplitRuleId = _model.SplitRuleId
+                })
+                : await Categories.CreateAsync(new CreateCategoryRequest
+                {
+                    GroupId = GroupId,
+                    Name = _model.Name,
+                    DefaultSplitRuleId = _model.SplitRuleId
+                });
+        }
+        finally
+        {
+            _saving = false;
+        }
+
+        if (saved is not null)
+            MudDialog.Close(DialogResult.Ok(saved));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    public sealed record CategoryModel
+    {
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>Which rule it divides by, or null to divide evenly.</summary>
+        public Guid? SplitRuleId { get; set; }
+    }
+}

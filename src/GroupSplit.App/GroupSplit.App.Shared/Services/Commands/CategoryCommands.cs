@@ -23,13 +23,14 @@ public sealed class CategoryCommands(
     ISnackbar snackbar,
     DataChangeNotifier changes) : ICategoryCommands
 {
-    public async Task<IReadOnlyList<CategoryResponse>?> ForGroupAsync(Guid groupId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<CategoryResponse>?> ForGroupAsync(Guid groupId,
+        bool includeArchived = false, CancellationToken ct = default)
     {
         IReadOnlyList<CategoryResponse> loaded = [];
 
         var done = await errors.TryAsync(async () =>
         {
-            loaded = [.. await categories.GetCategoriesAsync(groupId, ct)];
+            loaded = [.. await categories.GetCategoriesAsync(groupId, includeArchived, ct)];
         }, "Could not load the categories.");
 
         return done ? loaded : null;
@@ -67,6 +68,32 @@ public sealed class CategoryCommands(
         }, "Could not update the category.");
 
         return done ? updated : null;
+    }
+
+    public async Task<CategoryResponse?> SetArchivedAsync(Guid categoryId, bool archived,
+        CancellationToken ct = default)
+    {
+        CategoryResponse? saved = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            saved = archived
+                ? await categories.ArchiveCategoryAsync(categoryId, ct)
+                : await categories.UnarchiveCategoryAsync(categoryId, ct);
+
+            // Says the half that is not obvious. "Groceries archived" on its own reads like
+            // a year of shopping went with it, which is the fear that makes people not press
+            // the button -- and then keep a category they have stopped using for ever.
+            snackbar.Add(
+                archived
+                    ? $"{saved.Name} archived. Expenses filed under it keep it."
+                    : $"{saved.Name} is back.",
+                Severity.Success);
+
+            await changes.NotifyTransactionsChangedAsync();
+        }, archived ? "Could not archive the category." : "Could not bring the category back.");
+
+        return done ? saved : null;
     }
 
     public Task<bool> DeleteAsync(Guid categoryId, string name, CancellationToken ct = default) =>

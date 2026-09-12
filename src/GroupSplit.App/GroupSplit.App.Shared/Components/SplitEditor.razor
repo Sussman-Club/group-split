@@ -142,7 +142,11 @@
             </MudAlert>
         }
 
-        @if (PreviewError is { Length: > 0 })
+        @if (Awaiting is { Length: > 0 })
+        {
+            <MudText Typo="Typo.caption">@Awaiting</MudText>
+        }
+        else if (PreviewError is { Length: > 0 })
         {
             <MudAlert Severity="Severity.Warning" Dense="true">@PreviewError</MudAlert>
         }
@@ -166,7 +170,23 @@
                                 }
                             </div>
                         </div>
-                        <Money Value="share.Amount"/>
+                        @* What it was, where an edit has moved it. The consequence of
+                           changing an amount belongs beside the new figure and before the
+                           save, not in the ledger afterwards. Only where it actually moved:
+                           a struck-through copy of an unchanged number is noise.
+
+                           Both figures in one cell. The row is a three-column grid and this
+                           put four children in it, so on every row an edit touched the new
+                           amount -- the one the whole panel is about -- wrapped to a line of
+                           its own under the name, while the old one kept the column. *@
+                        <span class="gs-change">
+                            @if (Was(share.UserId) is { } was && was != share.Amount)
+                            {
+                                <span class="gs-was gs-num">@was.ToMoney()</span>
+                            }
+
+                            <Money Value="share.Amount"/>
+                        </span>
                     </div>
                 }
             </div>
@@ -212,6 +232,21 @@
     [Parameter] public IReadOnlyList<SplitInput>? Stored { get; set; }
 
     /// <summary>
+    /// What each person holds today, so the preview can show what an edit moves.
+    /// </summary>
+    /// <remarks>
+    /// The same list as <see cref="Stored"/> in practice, and a separate parameter because
+    /// the two are asked for different reasons: that one is where a hand-split starts from,
+    /// this one is what the new figures are being compared against. A create passes neither
+    /// -- there is nothing an expense that does not exist yet used to be.
+    /// </remarks>
+    [Parameter] public IReadOnlyList<SplitInput>? Before { get; set; }
+
+    /// <summary>What one person's share was before this edit, when it is known.</summary>
+    private decimal? Was(Guid userId) =>
+        Before?.FirstOrDefault(split => split.UserId == userId)?.Amount;
+
+    /// <summary>
     /// What the API says this comes to, which is what the automatic division is shown as.
     /// Null while the answer is still in flight.
     /// </summary>
@@ -225,9 +260,35 @@
     /// <summary>Why there is no preview, when the API refused to give one.</summary>
     [Parameter] public string? PreviewError { get; set; }
 
-    private bool Custom => Value is not null;
+    /// <summary>
+    /// What the expense is still missing before a division can be asked for at all, when
+    /// it is missing something.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="PreviewError"/>, which is a refusal of a question that was
+    /// asked. A dialog opens with no amount and no name, and asking anyway returned a
+    /// validation failure that reached the person as an amber warning about shares not
+    /// adding up -- on a form they had not touched. Nothing is wrong yet; it is just early.
+    /// </remarks>
+    [Parameter] public string? Awaiting { get; set; }
 
-    private decimal Remaining => Amount - (Value?.Sum(split => split.Amount) ?? 0m);
+    /// <summary>
+    /// The shares as this component currently holds them, seeded from the parameter and
+    /// replaced by what the person types.
+    /// </summary>
+    /// <remarks>
+    /// Held separately because a component may not write to its own parameter: both dialogs
+    /// happen to hand the same list straight back, so it worked, but any re-render of the
+    /// parent between the local write and the parent's own would have reverted whatever had
+    /// just been typed -- with the figure still on screen.
+    /// </remarks>
+    private IReadOnlyList<SplitInput>? _shares;
+
+    protected override void OnParametersSet() => _shares = Value;
+
+    private bool Custom => _shares is not null;
+
+    private decimal Remaining => Amount - (_shares?.Sum(split => split.Amount) ?? 0m);
 
     private bool Assigned => Remaining == 0m;
 
@@ -247,12 +308,12 @@
         : "Divided evenly between everyone in the group.";
 
     private decimal ShareOf(Guid userId) =>
-        Value?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
+        _shares?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
 
     private async Task OnCustomChanged(bool custom)
     {
-        Value = custom ? StartingPoint() : null;
-        await ValueChanged.InvokeAsync(Value);
+        _shares = custom ? StartingPoint() : null;
+        await ValueChanged.InvokeAsync(_shares);
     }
 
     private async Task SetShare(Guid userId, decimal share)
@@ -265,8 +326,8 @@
             })
             .ToList();
 
-        Value = shares;
-        await ValueChanged.InvokeAsync(Value);
+        _shares = shares;
+        await ValueChanged.InvokeAsync(_shares);
     }
 
     /// <summary>

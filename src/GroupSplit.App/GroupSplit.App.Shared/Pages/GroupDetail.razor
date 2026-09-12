@@ -54,9 +54,9 @@
         </div>
 
         <div class="gs-toolbar" role="toolbar" aria-label="Group actions">
-            <MudTooltip Text="Split rules">
-                <MudIconButton Icon="@Icons.Material.Rounded.Rule" OnClick="@ManageRulesAsync" aria-label="Manage rules" />
-            </MudTooltip>
+            @* The rules icon that used to be here opened a dialog called "Manage Rules"
+               which managed categories. Both are a tab now: they are two lists that point
+               at each other, which a dialog the width of a phone could not show. *@
             <MudTooltip Text="Rename group">
                 <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@RenameAsync" aria-label="Rename group" />
             </MudTooltip>
@@ -99,6 +99,10 @@
 
             case "members":
                 <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
+                break;
+
+            case "splits":
+                <GroupSplitsTab GroupId="@group.Id" GroupName="@group.Name" />
                 break;
 
             default:
@@ -144,7 +148,8 @@ else if (NotFound)
     [
         ("overview", "Overview"),
         ("ledger", "Ledger"),
-        ("members", "Members")
+        ("members", "Members"),
+        ("splits", "Splits")
     ];
 
     /// <summary>
@@ -165,6 +170,9 @@ else if (NotFound)
     {
         "ledger" or "expenses" or "activity" => "ledger",
         "members" => "members",
+        // "rules" too: what this tab holds used to be a dialog reached from an icon called
+        // Split rules, and that is still what somebody types.
+        "splits" or "rules" or "categories" => "splits",
         _ => "overview"
     };
 
@@ -276,15 +284,6 @@ else if (NotFound)
             await GroupsService.EnsureSelectedLoadedAsync();
     }
 
-    private async Task ManageRulesAsync()
-    {
-        var parameters = new DialogParameters<ManageRulesDialog> { { x => x.GroupId, GroupId } };
-
-        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
-
-        await DialogService.ShowAsync<ManageRulesDialog>("Manage Rules", parameters, options);
-    }
-
     private async Task RenameAsync()
     {
         if (Group is not { } group) return;
@@ -356,7 +355,8 @@ else if (NotFound)
 
         var parameters = new DialogParameters<CreateTransactionDialog>
         {
-            { x => x.SelectedGroupId, GroupId }
+            { x => x.SelectedGroupId, GroupId },
+            { x => x.SelectedGroupName, Group?.Name }
         };
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
