@@ -216,6 +216,90 @@ public class DivisionSourceTest : ComponentTest
     }
 
     /// <summary>
+    /// The same absent version, but with no rule anywhere behind the expense: nothing
+    /// records who arrived at the amounts, so neither answer is asserted.
+    /// </summary>
+    /// <remarks>
+    /// This is how the create dialog's own default lands. It offers "Automatically", divides
+    /// evenly because there is no category to say otherwise, and the expense comes back
+    /// carrying no version -- the same shape as shares somebody typed. Calling that "by
+    /// hand" told the person they had not taken the option they had just taken, in a pencil
+    /// and under a tag. The strip says the one thing the response supports instead, and
+    /// drops to the quiet one-line form, because nothing here is worth interrupting over.
+    /// </remarks>
+    [Fact]
+    public async Task An_expense_with_no_rule_behind_it_claims_nothing_about_who_set_the_amounts()
+    {
+        var expense = Details(null) with { CategoryId = null, Category = null };
+
+        var dialog = await OpenAsync(expense);
+
+        Assert.Equal("No rule divided this one", dialog.Find(".gs-provenance-line").TextContent.Trim());
+
+        Assert.DoesNotContain("by hand", dialog.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("evenly", dialog.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The remainder an even division leaves can be more than a cent, and that is still an
+    /// even division.
+    /// </summary>
+    /// <remarks>
+    /// 48.50 four ways is 12.12, 12.12, 12.12, 12.14: the splitter settles the remainder on
+    /// one person rather than handing out a cent each, so the ends are two cents apart. Read
+    /// with a one-cent tolerance that expense was "set by hand" -- which is how this reached
+    /// the running app after the first fix.
+    /// </remarks>
+    [Fact]
+    public async Task A_remainder_larger_than_a_cent_is_still_an_even_division()
+    {
+        var expense = Details(null) with
+        {
+            CategoryId = null,
+            Category = null,
+            Amount = 48.50m,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 12.14m),
+                new TransactionSplitResponse(LuId, "Lu Ferrer", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Dani Rivero", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Omar Rivero", 12.12m)
+            ]
+        };
+
+        var dialog = await OpenAsync(expense);
+
+        Assert.Equal("No rule divided this one", dialog.Find(".gs-provenance-line").TextContent.Trim());
+        Assert.DoesNotContain("by hand", dialog.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// And shares that are not even cannot have fallen out of an even division, so they are
+    /// still called what they are even with no rule to have departed from.
+    /// </summary>
+    [Fact]
+    public async Task Uneven_shares_under_no_rule_are_still_somebody_s_own()
+    {
+        var expense = Details(null) with
+        {
+            CategoryId = null,
+            Category = null,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 45m),
+                new TransactionSplitResponse(LuId, "Lu Ferrer", 15m)
+            ]
+        };
+
+        var dialog = await OpenAsync(expense);
+
+        var strip = dialog.Find(".gs-provenance");
+
+        Assert.Equal("Amounts set by hand", strip.QuerySelector(".gs-provenance-what")!.TextContent.Trim());
+        Assert.Equal("By hand", strip.QuerySelector(".gs-tag")!.TextContent.Trim());
+    }
+
+    /// <summary>
     /// A version whose rule is not the one the category names any more. The expense was
     /// divided by something; naming the category's current rule would name the wrong one.
     /// </summary>

@@ -77,7 +77,51 @@
     /// person can find it.
     /// </remarks>
     private bool Plain(DivisionSourceInfo source) =>
-        Action is null && source is { ByHand: false, Superseded: false, RuleUnknown: false } && !Predates(source);
+        Action is null
+        && source is { Superseded: false, RuleUnknown: false }
+        && (!source.ByHand || Undecidable(source))
+        && !Predates(source);
+
+    /// <summary>
+    /// Whether shares the expense carries as its own leave it genuinely unknown who arrived
+    /// at them -- in which case neither answer is stated.
+    /// </summary>
+    /// <remarks>
+    /// An expense records a version or it does not, and an even division under no rule
+    /// records none -- so "somebody typed these" and "nothing needed deciding" arrive here
+    /// as the same absent id. Saying "evenly" over that reads the figures and guesses at
+    /// who chose them, which is why this component stopped doing it. Saying "by hand"
+    /// guesses at the same question in the other direction, and it is the guess that is
+    /// wrong more often: an uncategorised expense is the common way to record one, the
+    /// dialog that made it offered "Automatically", and the screen then told the person
+    /// they had not taken it -- in a pencil, under a BY HAND tag.
+    /// <para>
+    /// So where nothing distinguishes the two, the strip states the one thing the response
+    /// does support: no rule divided it. The two cases that <em>are</em> knowable keep
+    /// their claim. A rule the expense could have used and did not is a departure somebody
+    /// made; and shares that are not even cannot have fallen out of an even division,
+    /// whether or not a rule was there to reach.
+    /// </para>
+    /// </remarks>
+    private bool Undecidable(DivisionSourceInfo source) => !source.Ruled && Even();
+
+    /// <summary>Whether the shares differ by no more than the remainder a division leaves.</summary>
+    /// <remarks>
+    /// The spread an even division can open up is not one cent. The splitter settles the
+    /// remainder on one person rather than spreading it a cent each, so 48.50 four ways is
+    /// 12.12, 12.12, 12.12, 12.14 -- two cents between the ends, from a division nobody
+    /// touched. One cent was the tolerance at first and it called that expense hand-set,
+    /// which is the very sentence this is here to stop. The most a remainder can come to is
+    /// a cent short of the number of people, so that is the bound.
+    /// </remarks>
+    private bool Even()
+    {
+        if (Splits is not { Count: > 0 } splits) return false;
+
+        var amounts = splits.Select(split => split.Amount).ToArray();
+
+        return amounts.Max() - amounts.Min() <= 0.01m * (splits.Count - 1);
+    }
 
     /// <summary>
     /// Whether the version that supposedly divided this began after the money was spent.
@@ -91,9 +135,10 @@
         On is { } spent && source.Version is { } version && version.StartedAt > spent;
 
     /// <summary>What divided it, in the words somebody would use about their own money.</summary>
-    private static string Phrase(DivisionSourceInfo source)
+    private string Phrase(DivisionSourceInfo source)
     {
-        if (source.ByHand) return "Amounts set by hand";
+        if (source.ByHand)
+            return Undecidable(source) ? "No rule divided this one" : "Amounts set by hand";
 
         if (source.Version is not { } version)
             return "Divided by a split rule";
@@ -151,7 +196,9 @@
     private string When(DivisionSourceInfo source)
     {
         if (source.ByHand)
-            return "no rule divided this one";
+            return Undecidable(source)
+                ? "nothing here records who arrived at the amounts"
+                : "no rule divided this one";
 
         if (source.Version is not { } version)
         {
@@ -183,7 +230,7 @@
     private string Tag(DivisionSourceInfo source) => source switch
     {
         _ when Predates(source) => "Looks wrong",
-        { ByHand: true } => "By hand",
+        { ByHand: true } when !Undecidable(source) => "By hand",
         { RuleUnknown: true } => "Another rule",
         { Superseded: true } => "Edited since",
 
@@ -197,12 +244,12 @@
         Predates(source) || source.Superseded ? "clay" : "neutral";
 
     private string Tone(DivisionSourceInfo source) =>
-        Predates(source) ? "is-wrong" : source.ByHand ? "is-own" : "";
+        Predates(source) ? "is-wrong" : source.ByHand && !Undecidable(source) ? "is-own" : "";
 
     private string Mark(DivisionSourceInfo source) => source switch
     {
         _ when Predates(source) => Icons.Material.Outlined.Warning,
-        { ByHand: true } => Icons.Material.Outlined.DriveFileRenameOutline,
+        { ByHand: true } when !Undecidable(source) => Icons.Material.Outlined.DriveFileRenameOutline,
         _ => Icons.Material.Outlined.AccountTree
     };
 }
