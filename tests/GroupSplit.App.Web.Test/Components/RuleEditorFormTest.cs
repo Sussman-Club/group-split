@@ -42,9 +42,6 @@ public class RuleEditorFormTest : ComponentTest
     /// <summary>Who the group answers with. Set before rendering to change the membership.</summary>
     private List<UserInfo> _group = [Carol, Alice, Bob];
 
-    /// <summary>Kept, so a test can say what copying from another rule reads back.</summary>
-    private readonly Mock<ISplitRulesClient> _rules = new();
-
     public RuleEditorFormTest()
     {
         var groups = new Mock<IGroupsClient>();
@@ -52,17 +49,9 @@ public class RuleEditorFormTest : ComponentTest
             .Setup(client => client.GetGroupMembersAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => _group);
 
-        _rules
-            .Setup(client => client.GetSplitRulesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
-
+        // The membership, and nothing else. The form used to read the group's other rules
+        // too, to offer copying a division out of one of them; it reads one thing now.
         Services.AddSingleton(groups.Object);
-        Services.AddSingleton(_rules.Object);
-
-        // The real command over the mocked client, rather than a mocked command: what the
-        // form reads through it is the same call it used to make itself, and the error
-        // handling around it is the command's now.
-        Services.AddSingleton<ISplitRuleCommands, SplitRuleCommands>();
     }
 
     private IRenderedComponent<RuleEditorForm> Render(SplitRuleDto version)
@@ -329,42 +318,6 @@ public class RuleEditorFormTest : ComponentTest
         Assert.Equal(1, shares[Alice.Id]);
         Assert.Equal(0, shares[Bob.Id]);
         Assert.Equal(0, shares[Carol.Id]);
-    }
-
-    /// <summary>
-    /// A division copied from another rule arrives from the server whole, naming whoever
-    /// that rule names, so it is scoped to the membership the same way the rule being
-    /// edited is.
-    /// </summary>
-    [Fact]
-    public async Task A_copied_division_is_scoped_to_the_membership_too()
-    {
-        _group = [Alice, Bob];
-
-        var source = Guid.NewGuid();
-
-        _rules
-            .Setup(client => client.GetSplitRuleAsync(source, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SplitRuleDetailsResponse
-            {
-                Id = source,
-                GroupId = GroupId,
-                Name = "Rent",
-                Definition = new SharesSplitRuleDto
-                {
-                    Shares = new Dictionary<Guid, int> { [Alice.Id] = 1, [Bob.Id] = 1, [Carol.Id] = 1 }
-                }
-            });
-
-        var form = RenderShares();
-
-        var copyFrom = form.FindComponent<MudSelect<Guid?>>();
-
-        await form.InvokeAsync(() => copyFrom.Instance.ValueChanged.InvokeAsync(source));
-
-        var shares = ((SharesSplitRuleDto)form.Instance.Model.Version).Shares;
-
-        Assert.Equal([Alice.Id, Bob.Id], shares.Keys.OrderBy(id => id));
     }
 
     /// <summary>

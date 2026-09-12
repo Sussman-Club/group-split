@@ -3,8 +3,6 @@
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Services
-@using GroupSplit.App.Shared.Services.Commands
-@inject ISplitRuleCommands Rules
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject IRemainderPolicy Remainder
@@ -40,22 +38,6 @@
             <MudSelectItem T="RuleType?" Value="RuleType.Shares">
                 Shares split
             </MudSelectItem>
-        </MudSelect>
-
-        <MudSelect T="Guid?"
-                   Label="Apply settings from another rule"
-                   Variant="Variant.Outlined"
-                   @bind-Value="_copySourceRuleId"
-                   @bind-Value:after="@OnCopySourceSelected"
-                   Clearable="true"
-                   Immediate="true">
-            @if (_groupRules.Any())
-            {
-                @foreach (var r in _groupRules)
-                {
-                    <MudSelectItem T="Guid?" Value="@((Guid?)r.Id)">@r.Name</MudSelectItem>
-                }
-            }
         </MudSelect>
 
         @if (Model.Version is PercentSplitRuleDto percent)
@@ -143,12 +125,9 @@
 
     private RuleType? _ruleType;
     private ICollection<UserInfo> _members = [];
-    private IReadOnlyList<SplitRuleResponse> _groupRules = [];
-    private Guid? _copySourceRuleId;
 
     // The form is meaningless without the members to split between, so a failed load
-    // closes the dialog it sits in once the presenter has said why. Two reads and two
-    // failures, because they fail for different reasons and each says which it was.
+    // closes the dialog it sits in once the presenter has said why.
     protected override async Task OnInitializedAsync()
     {
         var members = await Errors.TryAsync(
@@ -161,18 +140,8 @@
             return;
         }
 
-        var rules = await Rules.ForGroupAsync(GroupId);
-
-        if (rules is null)
-        {
-            MudDialog.Cancel();
-            return;
-        }
-
-        _groupRules = rules;
-
-        // Both halves are in hand now -- the rule and who is actually in the group -- and
-        // one is edited against the other from here on.
+        // Who is actually in the group is in hand now, and the division is edited against
+        // it from here on.
         ScopeToMembers();
 
         OnModelVersionChange();
@@ -215,24 +184,6 @@
     public async Task Validate()
     {
         await _form.ValidateAsync();
-    }
-
-    private async Task OnCopySourceSelected()
-    {
-        if (_copySourceRuleId is not { } sourceRuleId)
-            return;
-
-        var details = await Rules.GetAsync(sourceRuleId);
-
-        if (details is null) return;
-
-        Model.Version = details.Definition;
-
-        // A copied division arrives from the server whole, naming whoever that rule names,
-        // which need not be this membership either.
-        ScopeToMembers();
-
-        OnModelVersionChange();
     }
 
     private void OnRuleTypeChanged()
