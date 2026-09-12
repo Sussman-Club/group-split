@@ -119,6 +119,66 @@ public class ServerSideTokenStoreTest
         await store.StoreTokenAsync(withoutSessionClaim, Token("an-access-token", "a-refresh-token"));
     }
 
+    /// <summary>
+    /// The tokens are not in the ticket, so the two expire independently -- and the one
+    /// that expires first decides. Tokens going first is the worse way round: the cookie
+    /// and the ticket are both still good, so the app believes the person is signed in
+    /// while every call it makes on their behalf has nothing to make it with.
+    /// </summary>
+    [Fact]
+    public async Task Tokens_are_kept_for_as_long_as_the_longest_session_a_cookie_can_name()
+    {
+        var cache = new RecordingCache();
+
+        var store = new ServerSideTokenStore(cache, NullLogger<ServerSideTokenStore>.Instance);
+
+        await store.StoreTokenAsync(SignedIn(), Token("an-access-token", "a-refresh-token"));
+
+        var written = Assert.IsType<DistributedCacheEntryOptions>(cache.LastOptions);
+
+        Assert.True(
+            written.SlidingExpiration >= AuthenticationExtensions.RememberedSessionLifetime,
+            $"tokens are kept {written.SlidingExpiration}, less than a remembered session");
+    }
+
+    /// <summary>Remembers how the entry was written, which is what the test above is about.</summary>
+    private sealed class RecordingCache : IDistributedCache
+    {
+        private readonly MemoryDistributedCache _inner = new(
+            new OptionsWrapper<MemoryDistributedCacheOptions>(new MemoryDistributedCacheOptions()));
+
+        public DistributedCacheEntryOptions? LastOptions { get; private set; }
+
+        public byte[]? Get(string key) => _inner.Get(key);
+
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) =>
+            _inner.GetAsync(key, token);
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+        {
+            LastOptions = options;
+            _inner.Set(key, value, options);
+        }
+
+        public Task SetAsync(
+            string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+        {
+            LastOptions = options;
+
+            return _inner.SetAsync(key, value, options, token);
+        }
+
+        public void Refresh(string key) => _inner.Refresh(key);
+
+        public Task RefreshAsync(string key, CancellationToken token = default) =>
+            _inner.RefreshAsync(key, token);
+
+        public void Remove(string key) => _inner.Remove(key);
+
+        public Task RemoveAsync(string key, CancellationToken token = default) =>
+            _inner.RemoveAsync(key, token);
+    }
+
     private static ServerSideTokenStore Build() =>
         new(
             new MemoryDistributedCache(

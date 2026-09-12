@@ -21,12 +21,10 @@ public static class IdentityApi
 
     private static void MapLogin(this RouteGroupBuilder group)
     {
-        group.MapGet("/login", ([FromQuery] string? returnUrl) =>
-        {
-            var properties = new AuthenticationProperties { RedirectUri = ResolveReturnUrl(returnUrl) };
-
-            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
-        });
+        group.MapGet("/login", ([FromQuery] string? returnUrl, [FromQuery] bool? remember) =>
+            Results.Challenge(
+                ChallengeProperties(returnUrl, remember ?? false),
+                [OpenIdConnectDefaults.AuthenticationScheme]));
     }
 
     private static void MapLogout(this RouteGroupBuilder group)
@@ -62,6 +60,28 @@ public static class IdentityApi
                 : Results.Redirect($"{issuer.TrimEnd('/')}/account");
         })
         .RequireAuthorization();
+    }
+
+    /// <summary>
+    /// What the sign-in carries across to Keycloak and back: where to land afterwards, and
+    /// whether the person asked to stay signed in.
+    /// </summary>
+    /// <remarks>
+    /// The tick is only recorded here. What it comes to mean is
+    /// <see cref="AuthenticationExtensions.RememberSession"/>, on the way back in -- the
+    /// cookie being written is the far side of this round trip, and nothing in between can
+    /// be trusted to still hold the answer.
+    /// </remarks>
+    internal static AuthenticationProperties ChallengeProperties(string? returnUrl, bool remember)
+    {
+        var properties = new AuthenticationProperties { RedirectUri = ResolveReturnUrl(returnUrl) };
+
+        if (remember)
+        {
+            properties.Items[AuthenticationExtensions.RememberMeItem] = bool.TrueString;
+        }
+
+        return properties;
     }
 
     /// <summary>

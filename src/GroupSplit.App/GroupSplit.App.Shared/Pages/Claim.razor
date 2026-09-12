@@ -34,10 +34,11 @@
 {
     <LinkLanding Title="You have been invited"
                  Subtitle="Sign in, or create an account, and we will bring you straight back here.">
+        <RememberMeChoice @bind-Value="_remember" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                    FullWidth Size="Size.Large"
                    EndIcon="@Icons.Material.Rounded.ArrowForward"
-                   OnClick="@(() => AuthService.Login($"/claim/{Token}"))">Continue</MudButton>
+                   OnClick="@(() => AuthService.Login($"/claim/{Token}", _remember))">Continue</MudButton>
     </LinkLanding>
 }
 else if (_loading)
@@ -91,6 +92,12 @@ else if (_invitation is { } invitation)
     [Parameter] public string Token { get; set; } = string.Empty;
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
+
+    /// <summary>
+    /// Asked here as well as on /login: an invite link is a way into the app like any
+    /// other, and the tick has to mean the same thing whichever door somebody came in by.
+    /// </summary>
+    private bool _remember;
 
     private InvitationClaimResponse? _invitation;
     private string? _error;

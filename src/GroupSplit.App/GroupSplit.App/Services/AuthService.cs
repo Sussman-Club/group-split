@@ -4,7 +4,7 @@ namespace GroupSplit.App.Services;
 
 public class AuthService : IAuthService
 {
-    public Task Login(string? returnUrl = null, CancellationToken ct = default)
+    public Task Login(string? returnUrl = null, bool remember = false, CancellationToken ct = default)
     {
         throw new NotImplementedException();
     }
