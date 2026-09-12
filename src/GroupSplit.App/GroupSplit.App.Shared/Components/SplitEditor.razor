@@ -265,9 +265,23 @@
     /// </remarks>
     [Parameter] public string? Awaiting { get; set; }
 
-    private bool Custom => Value is not null;
+    /// <summary>
+    /// The shares as this component currently holds them, seeded from the parameter and
+    /// replaced by what the person types.
+    /// </summary>
+    /// <remarks>
+    /// Held separately because a component may not write to its own parameter: both dialogs
+    /// happen to hand the same list straight back, so it worked, but any re-render of the
+    /// parent between the local write and the parent's own would have reverted whatever had
+    /// just been typed -- with the figure still on screen.
+    /// </remarks>
+    private IReadOnlyList<SplitInput>? _shares;
 
-    private decimal Remaining => Amount - (Value?.Sum(split => split.Amount) ?? 0m);
+    protected override void OnParametersSet() => _shares = Value;
+
+    private bool Custom => _shares is not null;
+
+    private decimal Remaining => Amount - (_shares?.Sum(split => split.Amount) ?? 0m);
 
     private bool Assigned => Remaining == 0m;
 
@@ -287,12 +301,12 @@
         : "Divided evenly between everyone in the group.";
 
     private decimal ShareOf(Guid userId) =>
-        Value?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
+        _shares?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
 
     private async Task OnCustomChanged(bool custom)
     {
-        Value = custom ? StartingPoint() : null;
-        await ValueChanged.InvokeAsync(Value);
+        _shares = custom ? StartingPoint() : null;
+        await ValueChanged.InvokeAsync(_shares);
     }
 
     private async Task SetShare(Guid userId, decimal share)
@@ -305,8 +319,8 @@
             })
             .ToList();
 
-        Value = shares;
-        await ValueChanged.InvokeAsync(Value);
+        _shares = shares;
+        await ValueChanged.InvokeAsync(_shares);
     }
 
     /// <summary>

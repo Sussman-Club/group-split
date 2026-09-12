@@ -219,11 +219,12 @@
                             <MudStack Spacing="3">
                                 <div>
                                     <div style="font-weight: 700; font-size: .875rem">
-                                        What produced these amounts?
+                                        Where did these amounts come from?
                                     </div>
                                     <div class="gs-muted" style="font-size: .75rem">
-                                        Provenance only — no share moves. It decides what happens
-                                        the next time the amount or the payer changes.
+                                        Nobody&rsquo;s share changes. This only records what
+                                        produced these amounts, which decides what the next
+                                        edit does.
                                     </div>
                                 </div>
 
@@ -231,7 +232,7 @@
                                     @if (source.Versions.Count > 0)
                                     {
                                         <div style="font-weight: 700; font-size: .875rem; margin-bottom: 4px">
-                                            A version of @source.RuleName divided them
+                                            @source.RuleName, as it stood then
                                         </div>
 
                                         @foreach (var version in source.Versions)
@@ -251,18 +252,18 @@
                                     </MudRadio>
                                 </MudRadioGroup>
 
-                                @* Hedged, because both outcomes are conditional and the
-                                   unhedged versions were wrong in the commonest cases. An
-                                   amount edit is refused only where the stored shares are
-                                   not what a division would produce -- shares that happen to
-                                   equal an even split are re-divided, which is the tradeoff
-                                   ExpenseSplitter states and docs/cli.md spells out. And a
-                                   version whose division does not reproduce these amounts is
-                                   not applied either: that edit is refused for not summing. *@
+                                @* Said as what happens next, not as the condition under
+                                   which it happens. Both outcomes really are conditional --
+                                   shares that happen to equal an even split are re-divided,
+                                   and a version whose division does not reproduce these
+                                   amounts is refused for not summing -- but a sentence
+                                   hedging a future refusal, inside a panel whose whole point
+                                   is that nothing is moving, could only be read by somebody
+                                   who had already read ExpenseSplitter. *@
                                 <div class="gs-muted" style="font-size: .75rem">
                                     @(_chosen is null
-                                        ? "Shares only this expense could have arrived at are then kept, and an edit to the amount is refused rather than restating them."
-                                        : "If that version's division is what these amounts are, a later edit to the amount follows it.")
+                                        ? "Next time somebody changes the amount, the app will ask you to set the shares yourself."
+                                        : "Next time somebody changes the amount, this is divided the same way again.")
                                 </div>
 
                                 <div class="gs-inline" style="justify-content: flex-end; gap: 8px">
@@ -272,7 +273,7 @@
                                     <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
                                                Disabled="@(_recording || _chosen == source.VersionId)"
                                                OnClick="@RecordSourceAsync">
-                                        Record
+                                        Save this
                                     </MudButton>
                                 </div>
                             </MudStack>

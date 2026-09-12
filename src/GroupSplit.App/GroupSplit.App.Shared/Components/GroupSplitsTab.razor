@@ -67,10 +67,22 @@
                a failed read is not entitled to make it. *@
             @if (_categories.Count == 0 && !_stale)
             {
+                @* The way out is in here, not only in the card's title. An empty state is
+                   where the eye lands, and this one used to describe the emptiness and then
+                   explain that nothing was needed -- leaving no reason to press the quiet
+                   button above it. *@
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.Sell"/>
-                    <h3>No categories yet</h3>
-                    <span>An expense filed under none is divided evenly between the group.</span>
+                    <h3>Nothing to file expenses under yet</h3>
+                    <span>
+                        Categories are labels &mdash; Groceries, Rent, Nights out &mdash; and each
+                        one remembers how it divides. Until there is one, every expense divides
+                        evenly.
+                    </span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                               OnClick="@(() => EditCategoryAsync(null))">
+                        Add your first category
+                    </MudButton>
                 </div>
             }
             else
@@ -143,8 +155,15 @@
             {
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.AccountTree"/>
-                    <h3>No rules yet</h3>
-                    <span>Without one, every category here divides evenly.</span>
+                    <h3>No saved divisions yet</h3>
+                    <span>
+                        Everything divides evenly for now. Save a division &mdash; 60/40, or all
+                        on whoever paid &mdash; and any category can use it.
+                    </span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                               OnClick="@CreateRuleAsync">
+                        Save a division
+                    </MudButton>
                 </div>
             }
             else
@@ -278,8 +297,22 @@
 
     public void Dispose() => Changes.TransactionsChanged -= OnDataChangedAsync;
 
+    /// <summary>
+    /// The load in flight, so an older one cannot finish last and win.
+    /// </summary>
+    /// <remarks>
+    /// Three things start one -- opening the tab, the Try again button, and every category
+    /// or rule command, each of which announces itself through the notifier. Archiving two
+    /// categories in quick succession ran two, and the first to return was not necessarily
+    /// the first asked: the earlier answer overwrote the later one and the Archived tag came
+    /// off a category that was archived, until something unrelated reloaded the tab.
+    /// </remarks>
+    private int _loads;
+
     private async Task LoadAsync()
     {
+        var load = ++_loads;
+
         // Retired ones included: this is the screen that manages categories, and a category
         // the group has stopped using has to be visible here or there is no way to bring it
         // back. Every other caller asks for what the group files under today.
@@ -292,6 +325,9 @@
         // on to assert anything. On a first load "whatever is on screen" is nothing at all,
         // which is how a failed read came to print "No categories yet", claim that no
         // category used any rule, and enable Delete on rules a category still points at.
+        if (load != _loads)
+            return;
+
         _stale = categories is null || rules is null;
 
         if (categories is not null) _categories = [.. categories.OrderBy(row => row.Name)];
@@ -310,7 +346,13 @@
                 .ToDictionary(member => member.Id, member => member.Label());
         });
 
+        if (load != _loads)
+            return;
+
         await LoadDefinitionsAsync();
+
+        if (load != _loads)
+            return;
 
         StateHasChanged();
     }

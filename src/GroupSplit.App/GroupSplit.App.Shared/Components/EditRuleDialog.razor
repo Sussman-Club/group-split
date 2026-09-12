@@ -87,7 +87,7 @@
     /// nobody counted, and the reader is about to change a division that may pre-fill
     /// several categories without being told it might.
     /// </remarks>
-    [Parameter] public IReadOnlyList<string>? UsedBy { get; set; } = [];
+    [Parameter] public IReadOnlyList<string>? UsedBy { get; set; }
 
     private RuleEditorForm.RuleEditorModel? _model;
     private RuleEditorForm _form = null!;
