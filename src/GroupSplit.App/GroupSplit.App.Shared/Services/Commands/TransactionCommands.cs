@@ -91,6 +91,28 @@ public sealed class TransactionCommands(
             await changes.NotifyTransactionsChangedAsync();
         }, $"Could not delete the {noun}.");
 
+    /// <summary>
+    /// Says out loud anything the dialog cannot say for itself.
+    /// </summary>
+    /// <remarks>
+    /// A preview that comes back null used to read as one thing in both dialogs -- that the
+    /// shares did not add up -- when it also covered a dropped connection, a payer who has
+    /// since left the group, and a category somebody else deleted. Being told your numbers
+    /// are wrong while they visibly sum correctly is worse than being told nothing. The
+    /// arithmetic case is the validation one, and the space where the preview would have
+    /// been already explains it; the rest have nowhere else to be said.
+    /// </remarks>
+    private async Task SayWhyAsync(Exception exception)
+    {
+        if (ApiErrors.IsCancellation(exception))
+            return;
+
+        var error = ApiErrors.Read(exception);
+
+        if (error.Kind is not ApiErrorKind.Validation)
+            await errors.ShowAsync(error, "Could not work out how this divides.");
+    }
+
     public async Task<SplitPreviewResponse?> PreviewAsync(CreateTransactionRequest request,
         CancellationToken ct = default)
     {
@@ -102,6 +124,7 @@ public sealed class TransactionCommands(
         {
             // Null means "no preview to show", and the dialog says so in the space the
             // preview would have taken. A bug still throws: the error boundary is for those.
+            await SayWhyAsync(exception);
             return null;
         }
     }
@@ -121,6 +144,7 @@ public sealed class TransactionCommands(
         }
         catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
         {
+            await SayWhyAsync(exception);
             return null;
         }
     }

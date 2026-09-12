@@ -16,12 +16,17 @@
                       Variant="Variant.Outlined"
                       Immediate="true"/>
 
+        @* Required, so an unanswered one is said out loud. The form validated clean
+           without it while IsValid refused on the same field, which made Create a button
+           that did nothing and explained nothing. *@
         <MudSelect
             T="RuleType?"
-            Label="Rule Type"
+            Label="How does it divide?"
             @bind-Value="_ruleType"
             @bind-Value:after="@OnRuleTypeChanged"
             Variant="Variant.Outlined"
+            Required="true"
+            RequiredError="Choose how this divides."
         >
             <MudSelectItem T="RuleType?" Value="RuleType.Personal">
                 Personal (payer owes full amount)

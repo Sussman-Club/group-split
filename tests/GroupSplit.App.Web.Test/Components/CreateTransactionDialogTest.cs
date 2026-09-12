@@ -1,6 +1,8 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,11 +23,13 @@ namespace GroupSplit.App.Web.Test.Components;
 public class CreateTransactionDialogTest : ComponentTest
 {
     private static readonly Guid GroupId = Guid.NewGuid();
+    private static readonly Guid MeId = Guid.NewGuid();
 
     private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<ICategoriesClient> _categories = new();
     private readonly Mock<IMerchantsClient> _merchants = new();
     private readonly Mock<ITransactionCommands> _commands = new();
+    private readonly Mock<IUserLogin> _login = new();
 
     public CreateTransactionDialogTest()
     {
@@ -35,7 +39,12 @@ public class CreateTransactionDialogTest : ComponentTest
 
         _groups
             .Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new UserInfo(Guid.NewGuid(), "Ana", "Benitez", "ana@example.com")]);
+            .ReturnsAsync([new UserInfo(MeId, "Ana", "Benitez", "ana@example.com")]);
+
+        // Whoever is recording the expense is who the dialog says paid for it, so it needs
+        // to know who that is.
+        _login.SetupGet(login => login.User)
+            .Returns(new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"));
 
         _merchants
             .Setup(m => m.GetMerchantsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -44,6 +53,7 @@ public class CreateTransactionDialogTest : ComponentTest
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_categories.Object);
         Services.AddSingleton(_merchants.Object);
+        Services.AddSingleton(_login.Object);
         Services.AddSingleton<IMerchantCommands, MerchantCommands>();
 
         // Scoped, for the reason UpdateTransactionDialogTest gives: the real
@@ -94,7 +104,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         // The category is a chip now, and its select opens underneath when the chip is
         // pressed -- so the list under test does not exist until somebody asks for it.
-        await provider.FindAll("button.gs-chip")
+        await provider.FindAll("button.gs-expense-chip")
             .Single(chip => chip.GetAttribute("aria-label")!.Contains("category", StringComparison.Ordinal))
             .ClickAsync(new MouseEventArgs());
 
@@ -184,9 +194,136 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.False(note.Instance.Disabled);
     }
 
+    /// <summary>
+    /// The commonest thing anybody does with this app: type an amount and a name, press the
+    /// button, and get the expense the dialog was showing.
+    /// </summary>
+    /// <remarks>
+    /// Nothing pinned it. Every other test here reads what the dialog renders, and the
+    /// dialog was just rebuilt from two steps into one -- the amount moved to the top, the
+    /// group became a field of its own rather than something inferred from the category, the
+    /// validate-and-close that used to sit behind Next moved to the only button left. A
+    /// rewrite of the path between typing and saving deserves one test that walks it, or the
+    /// dialog can come apart in the way that costs the most and look perfectly correct in
+    /// every assertion above.
+    /// <para>
+    /// The date especially. It is applied on submit and nowhere else, so a Save that skipped
+    /// <c>ApplyDate</c> would file every expense at whatever instant the dialog happened to
+    /// be constructed, which is a defect nothing on screen would show.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Typing_an_amount_and_a_name_records_that_expense_in_that_group()
+    {
+        var provider = Render<MudDialogProvider>();
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { dialog => dialog.SelectedGroupId, GroupId }
+        };
+
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense", parameters));
+
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(42.50m));
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Mercadona"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await reference!.GetReturnValueAsync<CreateTransactionRequest>();
+
+        Assert.NotNull(request);
+
+        Assert.Equal(42.50m, request!.Amount);
+        Assert.Equal("Mercadona", request.Name);
+
+        // The group the dialog was opened in, which is the one thing on this screen nobody is
+        // asked about and the one the expense is meaningless without.
+        Assert.Equal(GroupId, request.GroupId);
+
+        // Today, in the reader's zone -- read off the same clock the dialog picks its default
+        // from, because that clock is not necessarily on the UTC day.
+        var clock = Services.GetRequiredService<LocalClock>();
+
+        Assert.Equal(clock.Today, clock.Local(request.DateTime).Date);
+    }
+
+    /// <summary>
+    /// The payer chip names whoever is recording the expense, not "somebody".
+    /// </summary>
+    /// <remarks>
+    /// The API has always defaulted an absent payer to the caller, so this was never wrong
+    /// in the ledger -- only on the screen, where the chip said "paid by somebody" and drew
+    /// itself as a settled choice: no plus, no dashed border, nothing suggesting it wanted
+    /// answering. The app was admitting to a gap it did not have, on the one field people
+    /// are most likely to check before pressing Add.
+    /// </remarks>
+    [Fact]
+    public async Task The_payer_is_whoever_is_recording_it()
+    {
+        var provider = await OpenAsync(GroupId);
+
+        var payer = Chips(provider)
+            .Single(chip => chip.GetAttribute("aria-label")!.Contains("payer", StringComparison.Ordinal));
+
+        Assert.Contains("Ana", payer.TextContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("somebody", payer.TextContent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Picking a place puts its name on the chip.
+    /// </summary>
+    /// <remarks>
+    /// The chip counts as filled the moment an id is set, and it draws its value rather
+    /// than its label once it is -- so without the name resolved beside the id, choosing a
+    /// shop replaced "+ where" with an empty pill and told a screen reader "where: .". The
+    /// edit dialog looked the name up from the start; this one was given the chip without
+    /// the lookup.
+    /// </remarks>
+    [Fact]
+    public async Task Picking_where_it_was_spent_says_where_that_was()
+    {
+        var lidl = Guid.NewGuid();
+
+        _merchants
+            .Setup(m => m.GetMerchantAsync(lidl, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MerchantResponse(lidl, "Lidl", null, DateTimeOffset.UtcNow, 0));
+
+        var provider = await OpenAsync(GroupId);
+
+        // The search lives in the chip's picker, which does not exist until it is opened.
+        await Chips(provider)
+            .Single(chip => chip.GetAttribute("aria-label")!.Contains("where", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+
+        var picker = provider.FindComponent<MerchantPicker>();
+
+        await provider.InvokeAsync(() => picker.Instance.ValueChanged.InvokeAsync(lidl));
+
+        var where = Chips(provider)
+            .Single(chip => chip.GetAttribute("aria-label")!.Contains("where", StringComparison.Ordinal));
+
+        Assert.Contains("Lidl", where.TextContent, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<AngleSharp.Dom.IElement> Chips(
         IRenderedComponent<MudDialogProvider> provider) =>
-        [.. provider.FindAll("button.gs-chip")];
+        [.. provider.FindAll("button.gs-expense-chip")];
 
     private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync(Guid? groupId)
     {

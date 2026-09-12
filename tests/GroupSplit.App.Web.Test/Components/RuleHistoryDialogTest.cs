@@ -1,5 +1,6 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Web;
@@ -116,6 +117,38 @@ public class RuleHistoryDialogTest : ComponentTest
 
         Assert.Equal(("Ana Benitez", "3 shares", "75%"), weights[0]);
         Assert.Equal(("Lu Ferrer", "1 share", "25%"), weights[1]);
+    }
+
+    /// <summary>
+    /// The window each version stood for: a closed one names both ends, and the open one is
+    /// dated from its start with no end invented for it.
+    /// </summary>
+    /// <remarks>
+    /// The dates are what make this a history rather than a list. Every recorded expense
+    /// names a version, and the only way anybody can tell which of these divided theirs is by
+    /// reading their own date against these windows -- so a window that printed the wrong end,
+    /// or gave the open version a closing date, would send somebody to the wrong division
+    /// with nothing on screen to contradict them.
+    /// </remarks>
+    [Fact]
+    public async Task Each_version_says_the_window_it_stood_for_and_the_open_one_has_no_end()
+    {
+        var dialog = await OpenAsync();
+
+        // Through the same clock the dialog renders with: these are instants, and west of
+        // Greenwich a UTC midnight is the previous day. See LocalClock in ComponentTest.
+        var clock = Services.GetRequiredService<LocalClock>();
+
+        var windows = dialog.FindAll(".gs-version .gs-version-when")
+            .Select(when => when.TextContent.Trim())
+            .ToArray();
+
+        Assert.Equal(
+            $"{clock.Local(Opened):d MMM} – {clock.Local(Closed):d MMM yyyy}",
+            windows.Last());
+
+        // The one in force has a start and nothing after it -- not a window closed at today.
+        Assert.Equal($"Since {clock.Local(Closed):d MMM yyyy}", windows.First());
     }
 
     /// <summary>

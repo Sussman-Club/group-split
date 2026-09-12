@@ -158,15 +158,26 @@
 
         _saving = true;
 
-        // A PUT, so the whole of what the rule is to become goes over: the API adds a
-        // version when the division actually moved and none when only the name did.
-        var saved = await Rules.UpdateAsync(SplitRuleId, new UpdateSplitRuleRequest
-        {
-            Name = _model.Name,
-            Definition = _model.Version
-        });
+        SplitRuleDetailsResponse? saved;
 
-        _saving = false;
+        // In a finally, because the presenter rethrows anything that is not an API or a
+        // transport failure: without it one unexpected exception left Save disabled for as
+        // long as the dialog stayed open, and a division somebody had just retyped could
+        // only be thrown away.
+        try
+        {
+            // A PUT, so the whole of what the rule is to become goes over: the API adds a
+            // version when the division actually moved and none when only the name did.
+            saved = await Rules.UpdateAsync(SplitRuleId, new UpdateSplitRuleRequest
+            {
+                Name = _model.Name,
+                Definition = _model.Version
+            });
+        }
+        finally
+        {
+            _saving = false;
+        }
 
         if (saved is not null)
             MudDialog.Close(DialogResult.Ok(saved));

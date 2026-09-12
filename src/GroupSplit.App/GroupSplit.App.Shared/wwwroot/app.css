@@ -2202,7 +2202,15 @@ html:not([data-gs-ready]) .gs-group-card {
     gap: 8px;
 }
 
-.gs-chip {
+/*
+    Its own class, not .gs-chip. It began as one, and since it was defined second it
+    quietly won every shared property on the group switcher, the ledger kind chips, the
+    date range chip and the views on the Transactions page -- a different height, a
+    different weight, and no hover lift -- so their resting state no longer matched
+    their selected one. A chip somebody picks a value in is not the chip that filters a
+    list, whatever they have in common.
+*/
+.gs-expense-chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -2222,41 +2230,41 @@ html:not([data-gs-ready]) .gs-group-card {
         border-color var(--gs-fast) var(--gs-ease);
 }
 
-.gs-chip:hover {
+.gs-expense-chip:hover {
     background: var(--gs-surface-3);
 }
 
-.gs-chip:focus-visible {
+.gs-expense-chip:focus-visible {
     outline: 2px solid var(--gs-teal);
     outline-offset: 2px;
 }
 
 /* Open, so the picker below it is visibly this chip's and not the row's. */
-.gs-chip.is-open {
+.gs-expense-chip.is-open {
     background: var(--gs-teal-soft);
     border-color: var(--gs-teal);
     color: var(--gs-teal-deep);
 }
 
 /* Nothing in it yet: it says what it would be rather than what it is. */
-.gs-chip.is-empty {
+.gs-expense-chip.is-empty {
     border-style: dashed;
     color: var(--gs-muted);
     font-weight: 600;
 }
 
-.gs-chip .k {
+.gs-expense-chip .k {
     color: var(--gs-muted);
     font-weight: 600;
 }
 
-.gs-chip .mud-icon-root {
+.gs-expense-chip .mud-icon-root {
     width: 15px;
     height: 15px;
     opacity: 0.55;
 }
 
-.gs-chip.is-open .mud-icon-root {
+.gs-expense-chip.is-open .mud-icon-root {
     opacity: 1;
 }
 
@@ -2295,12 +2303,12 @@ html:not([data-gs-ready]) .gs-group-card {
     color: var(--gs-muted);
 }
 
-:root[data-theme="dark"] .gs-chip.is-open {
+:root[data-theme="dark"] .gs-expense-chip.is-open {
     color: var(--gs-teal-bright);
 }
 
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .gs-chip.is-open {
+    :root:not([data-theme="light"]) .gs-expense-chip.is-open {
         color: var(--gs-teal-bright);
     }
 }
@@ -3138,8 +3146,11 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 @media (max-width: 599px) {
+    /* !important because the only consumers are MudStack Row, which emits MudBlazor's
+       .flex-row -- itself !important -- so a plain declaration here never applied and the
+       two pickers went on clipping each other at phone width. */
     .gs-field-pair {
-        flex-direction: column;
+        flex-direction: column !important;
     }
 
     .gs-field-pair > * {

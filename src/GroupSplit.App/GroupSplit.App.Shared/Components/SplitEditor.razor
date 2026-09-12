@@ -142,7 +142,11 @@
             </MudAlert>
         }
 
-        @if (PreviewError is { Length: > 0 })
+        @if (Awaiting is { Length: > 0 })
+        {
+            <MudText Typo="Typo.caption">@Awaiting</MudText>
+        }
+        else if (PreviewError is { Length: > 0 })
         {
             <MudAlert Severity="Severity.Warning" Dense="true">@PreviewError</MudAlert>
         }
@@ -248,6 +252,18 @@
 
     /// <summary>Why there is no preview, when the API refused to give one.</summary>
     [Parameter] public string? PreviewError { get; set; }
+
+    /// <summary>
+    /// What the expense is still missing before a division can be asked for at all, when
+    /// it is missing something.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="PreviewError"/>, which is a refusal of a question that was
+    /// asked. A dialog opens with no amount and no name, and asking anyway returned a
+    /// validation failure that reached the person as an amber warning about shares not
+    /// adding up -- on a form they had not touched. Nothing is wrong yet; it is just early.
+    /// </remarks>
+    [Parameter] public string? Awaiting { get; set; }
 
     private bool Custom => Value is not null;
 

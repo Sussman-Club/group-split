@@ -99,7 +99,7 @@ public class UpdateTransactionDialogTest : ComponentTest
     /// <summary>Opens one chip's picker, which is where its control now lives.</summary>
     private static async Task OpenChipAsync(IRenderedComponent<MudDialogProvider> provider, string label)
     {
-        var chip = provider.FindAll("button.gs-chip")
+        var chip = provider.FindAll("button.gs-expense-chip")
             .First(candidate => candidate.GetAttribute("aria-label")!
                 .Contains(label, StringComparison.Ordinal));
 
@@ -126,8 +126,75 @@ public class UpdateTransactionDialogTest : ComponentTest
         return (provider, dialogRef!);
     }
 
+    /// <summary>
+    /// An edit with a field the API will refuse does not close the dialog.
+    /// </summary>
+    /// <remarks>
+    /// The two-step version validated on the way into step two. Collapsing the steps onto
+    /// one screen took the check with it, and nothing put it back: clearing the name and
+    /// pressing Save closed the dialog, the patch came back a 400, and the amount and the
+    /// payer and everything else the person had just changed went with the dialog that was
+    /// already gone. The snackbar told them it failed, over a screen they could not get
+    /// back to.
+    /// </remarks>
     [Fact]
-    public async Task When_opened_with_null_category_id_it_hydrates_category_from_transaction_details()
+    public async Task An_edit_the_api_would_refuse_does_not_close_over_the_rest_of_it()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = GroupId,
+                PaidByUserId = MeId,
+                CategoryId = FoodCategoryId,
+                Category = "Food",
+                Splits =
+                [
+                    new TransactionSplitResponse(MeId, "Ana Benitez", 50m),
+                    new TransactionSplitResponse(Guid.NewGuid(), "Daniel Jones", 50m)
+                ]
+            });
+
+        var (provider, dialogRef) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId,
+            CategoryId = FoodCategoryId,
+            Category = "Food"
+        });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync(string.Empty));
+
+        await provider.FindAll("button")
+            .First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        // Still open, and still holding the edit: the dialog is the only place left where
+        // the name can be put back.
+        Assert.NotEmpty(provider.FindComponents<UpdateTransactionDialog>());
+        Assert.False(dialogRef.Result.IsCompleted);
+    }
+
+    /// <summary>
+    /// The expenses page lists rows with no category on them. Opening one for editing has
+    /// to find the category anyway, or saving any other field would file the expense under
+    /// nothing -- and it has to find it without writing on the row the page is showing.
+    /// </summary>
+    [Fact]
+    public async Task An_expense_opened_from_a_listing_that_carries_no_category_keeps_it_anyway()
     {
         var transactionId = Guid.NewGuid();
 
@@ -164,8 +231,10 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         var (provider, dialogRef) = await OpenAsync(original);
 
-        // Original.CategoryId should be hydrated from details
-        Assert.Equal(FoodCategoryId, original.CategoryId);
+        // Backfilled into the dialog and not into the row it was handed. The row belongs to
+        // the grid that is still showing it, and writing the category back onto it meant
+        // cancelling an edit left a category on a line nobody had saved.
+        Assert.Null(original.CategoryId);
 
         // Submit to verify the patch does not inadvertently wipe the category
         await ToSplitStepAsync(provider);
@@ -724,6 +793,96 @@ public class UpdateTransactionDialogTest : ComponentTest
         var operation = Assert.Single(patch!.Operations, op => Touches(op, "splits"));
 
         Assert.NotNull(operation.value);
+    }
+
+    /// <summary>
+    /// And the figures on screen after that correction are the ones the Save then sends.
+    /// </summary>
+    /// <remarks>
+    /// The test above pins that <em>something</em> about the shares reaches the patch. This
+    /// pins the harder half, which is the one somebody can be misled by: the preview sits
+    /// directly above the button, and recording "by hand" changes both what the expense's
+    /// division is taken to be and what the preview is therefore asking about. Refresh it
+    /// with the old question and the panel keeps the rule's division -- 540/360 under a rule
+    /// the expense no longer records -- while Save writes something else. Nobody reading the
+    /// screen could tell, which is exactly why it needs a test rather than an eye.
+    /// <para>
+    /// Snapshotted in the callback rather than read off the mock afterwards. The dialog hands
+    /// the same <c>UpdateTransactionRequest</c> instance to every preview, so reading it at
+    /// the end of the test would report the final state whatever the preview had been asked.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_preview_after_that_correction_is_asked_about_the_shares_that_are_saved()
+    {
+        var transactionId = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
+
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
+                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
+                    new EvenSplitRuleDto())]));
+
+        _commands
+            .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        IReadOnlyList<SplitInput>? asked = null;
+        var askedToRedivide = true;
+
+        _commands
+            .Setup(c => c.PreviewUpdateAsync(transactionId, It.IsAny<UpdateTransactionRequest>(),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback((Guid _, UpdateTransactionRequest request, bool redivide, CancellationToken _) =>
+            {
+                asked = request.Splits is null ? null : [.. request.Splits];
+                askedToRedivide = redivide;
+            })
+            .ReturnsAsync(new SplitPreviewResponse(
+                [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)], "Household"));
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
+            .ClickAsync(new MouseEventArgs());
+
+        // The option in the words the person reads before choosing it. Up to the apostrophe,
+        // which the markup carries as an entity rather than as the character.
+        Assert.Contains("These amounts are the expense", provider.Markup, StringComparison.Ordinal);
+
+        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
+
+        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Record")
+            .ClickAsync(new MouseEventArgs());
+
+        // Asked about the amounts themselves, and asked not to divide them again -- which is
+        // the whole content of "the amounts are this expense's own".
+        Assert.False(askedToRedivide);
+        Assert.NotNull(asked);
+        Assert.Equal(100m, Assert.Single(asked!, split => split.UserId == MeId).Amount);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        var saved = Assert.IsAssignableFrom<IReadOnlyList<SplitInput>>(
+            Assert.Single(patch!.Operations, op => Touches(op, "splits")).value);
+
+        // The same figures, share for share: the preview is a promise about what Save does.
+        Assert.Equal(
+            asked!.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)),
+            saved.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)));
     }
 
     /// <summary>

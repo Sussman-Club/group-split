@@ -11,8 +11,11 @@
 *@
 
 <button type="button"
-        class="gs-chip @(Set ? "" : "is-empty") @(Open ? "is-open" : "")"
-        aria-expanded="@Open"
+        class="gs-expense-chip @(Set ? "" : "is-empty") @(Open ? "is-open" : "")"
+        @* Spelled out rather than bound as a bool: Razor omits a false bool attribute
+           altogether, so a resting chip advertised no expandable state at all and a screen
+           reader announced a plain button. *@
+        aria-expanded="@(Open ? "true" : "false")"
         aria-label="@(Set ? $"{Label}: {Value}. Change it" : $"Add {Label}")"
         @onclick="OnClick">
 
