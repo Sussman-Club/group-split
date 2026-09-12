@@ -47,27 +47,7 @@
     </TitleContent>
 
     <DialogContent>
-        @* Before the form, and instead of it. A dialog whose opening reads failed has
-           nothing to record an expense with, and saying so is the whole of what it can
-           usefully do. *@
-        @if (_failed)
-        {
-            <div class="gs-empty" style="padding: 24px">
-                <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
-                <h3>Could not open this</h3>
-                <span>
-                    @(GroupFixed
-                        ? "The group's categories and members did not load, so there is nothing to divide this between yet."
-                        : "Your groups did not load, so there is nowhere to record this yet.")
-                </span>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                           OnClick="@RetryAsync">
-                    Try again
-                </MudButton>
-            </div>
-        }
-
-        <MudForm @ref="_form" Model="_model" Class="@(_failed ? "d-none" : "")">
+        <MudForm @ref="_form" Model="_model">
             <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
@@ -238,10 +218,7 @@
            dialog must not depend on anything inside it being in a good state. *@
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
 
-        @* Nothing to add while the dialog is standing on its own failure: there are no
-           members to divide it between and no category to file it under. *@
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@_failed"
                    OnClick="@Submit">
             Add expense
         </MudButton>
@@ -309,16 +286,7 @@
     /// </summary>
     private string? _awaiting;
 
-    /// <summary>
-    /// Whether the dialog could not load what it offers to choose from.
-    /// </summary>
-    /// <remarks>
-    /// It used to cancel itself here, which read as the dialog having opened onto nothing:
-    /// MudBlazor had already drawn the title and the buttons, the content between them
-    /// never arrived, and the snackbar carrying the reason was gone by the time anybody
-    /// looked. A box that will not say why is worse than the failure it is hiding.
-    /// </remarks>
-    private bool _failed;
+
     /// <summary>
     /// The ask in flight, so a late answer cannot paint over a newer one.
     /// </summary>
@@ -442,35 +410,31 @@
     }
 
     /// <summary>
-    /// Loads what the dialog offers to choose from, and says so when it cannot.
+    /// Loads what the dialog offers to choose from, one read at a time.
     /// </summary>
+    /// <remarks>
+    /// None of them is allowed to take the dialog down with it, which is the whole point of
+    /// asking separately. An expense needs a group, an amount and a name; the categories are
+    /// a label somebody may not want and the members are a convenience, since the division
+    /// is worked out by the API and not from this list. One read failing used to end all of
+    /// it -- first by closing the dialog onto nothing, then by replacing it with an apology
+    /// -- when what was actually still possible was recording the expense.
+    /// <para>
+    /// The group survives either way. It is the one fact the dialog was given rather than
+    /// fetched, and nothing that comes back from the API can unseat it.
+    /// </para>
+    /// </remarks>
     private async Task OpenAsync()
     {
-        _failed = false;
+        // Only where something offers a choice: opened from inside a group that named
+        // itself, the list of every other group is what the group picker shows, and the
+        // picker is not shown at all.
+        if (!GroupFixed || string.IsNullOrWhiteSpace(SelectedGroupName))
+            await Errors.TryAsync(
+                async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
+                "Could not load your groups.");
 
-        // Opened from inside a group that named itself, the list of every other group is
-        // only what the group picker offers -- and the picker is not shown, because the
-        // group is settled. It was fetched anyway, so an expense could not be recorded in
-        // the group somebody was standing in because a read about other groups had failed.
-        // A caller that does not pass the name still needs the list to find it.
-        var loaded = await Errors.TryAsync(async () =>
-        {
-            if (!GroupFixed || string.IsNullOrWhiteSpace(SelectedGroupName))
-                _groups = [.. await GroupsClient.GetGroupsAsync()];
-
-            await LoadGroupDetailsAsync();
-        }, GroupFixed ? "Could not load the group." : "Could not load your groups.");
-
-        if (!loaded)
-        {
-            // Said here rather than closed. Cancelling left whatever MudBlazor had already
-            // drawn of the dialog on screen -- a title, two buttons and nothing between
-            // them -- with the reason in a snackbar that had already gone. An empty box
-            // that will not say why is the worst thing this screen can do.
-            _failed = true;
-            StateHasChanged();
-            return;
-        }
+        await LoadGroupDetailsAsync();
 
         StateHasChanged();
 
@@ -503,8 +467,17 @@
             return;
         }
 
-        _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
-        _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
+        // Separately, and neither fatal. A category is a label somebody may not want, and
+        // the members here only fill the payer picker -- the division itself is worked out
+        // by the API. Asked together, one of them failing took the group with it and there
+        // was no way to record the expense at all.
+        await Errors.TryAsync(
+            async () => _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
+            "Could not load this group's categories.");
+
+        await Errors.TryAsync(
+            async () => _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
+            "Could not load who is in this group.");
 
         // Whoever is recording it paid for it, until they say otherwise. The API already
         // assumed as much for an absent payer, so this was only ever missing from the
@@ -628,11 +601,6 @@
     /// from the category: null is a personal expense now, and it is the answer for a group
     /// with no categories too, so the two have to be told apart here.
     /// </summary>
-    /// <summary>
-    /// Asks again, for somebody looking at the reason it could not open.
-    /// </summary>
-    private Task RetryAsync() => OpenAsync();
-
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;

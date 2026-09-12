@@ -264,18 +264,18 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
-    /// A dialog that could not load what it offers says so, in the space the form would
-    /// have taken.
+    /// A read that fails does not take the expense down with it.
     /// </summary>
     /// <remarks>
-    /// It used to cancel itself. MudBlazor had already drawn the title and the buttons, the
-    /// content between them never arrived, and the snackbar carrying the reason was gone by
-    /// the time anybody looked -- so a failed read presented as an empty box with an Add
-    /// expense button in it. That is the worst thing this screen can do: it neither works
-    /// nor admits that it does not.
+    /// The group, the amount and the name are what an expense needs; the categories are a
+    /// label somebody may not want and the members only fill the payer picker, since the
+    /// division is worked out by the API. All of it was asked for in one block whose
+    /// failure ended the dialog -- first by closing it onto a title and two buttons with
+    /// nothing between them, then by replacing it with an apology -- when recording the
+    /// expense was still perfectly possible.
     /// </remarks>
     [Fact]
-    public async Task A_dialog_that_could_not_open_says_so_rather_than_showing_nothing()
+    public async Task A_group_that_will_not_say_who_is_in_it_can_still_be_spent_in()
     {
         _groups
             .Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
@@ -283,15 +283,17 @@ public class CreateTransactionDialogTest : ComponentTest
 
         var provider = await OpenAsync(GroupId);
 
-        Assert.Contains("Could not open this", provider.Markup, StringComparison.Ordinal);
+        // The group is the one fact this was handed rather than fetched, and nothing that
+        // comes back from the API can unseat it.
+        Assert.Contains("Trip", provider.Markup, StringComparison.Ordinal);
 
-        // Still there to be read, and refusing to pretend it can record anything.
-        Assert.NotEmpty(provider.FindComponents<CreateTransactionDialog>());
+        Assert.Contains(provider.FindComponents<MudTextField<string>>(),
+            field => field.Instance.Label == "What was it?");
 
         var add = provider.FindComponents<MudButton>()
             .Single(button => button.Markup.Contains("Add expense", StringComparison.Ordinal));
 
-        Assert.True(add.Instance.Disabled);
+        Assert.False(add.Instance.Disabled);
     }
 
     /// <summary>
