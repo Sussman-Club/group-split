@@ -33,14 +33,6 @@
                 The divisions this group keeps, and the labels that point at them.
             </p>
         </div>
-
-        @* Provenance maintenance, and it belongs beside the rules rather than on a
-           transaction: what it corrects is which version each expense claims divided it. *@
-        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
-                   StartIcon="@Icons.Material.Outlined.Restore"
-                   OnClick="@RepointAsync">
-            Re-point past expenses
-        </MudButton>
     </div>
 
     @if (_stale)
@@ -472,16 +464,4 @@
         await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
     }
 
-    private async Task RepointAsync()
-    {
-        var parameters = new DialogParameters<ReattachDialog>
-        {
-            { dialog => dialog.GroupId, GroupId },
-            { dialog => dialog.GroupName, GroupName }
-        };
-
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
-
-        await DialogService.ShowAsync<ReattachDialog>("Re-point past expenses", parameters, options);
-    }
 }

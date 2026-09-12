@@ -2436,63 +2436,6 @@ html:not([data-gs-ready]) .gs-group-card {
     font-size: 0.8125rem;
 }
 
-/* --------------------------------------------------------- count tables ---- */
-
-/*
-    A few rows of figures with a heading over each column. Not MudTable: these are read as
-    a block and never sorted, paged or selected, and the grid keeps the numbers in one
-    column whatever the names beside them do.
-*/
-.gs-counts {
-    display: flex;
-    flex-direction: column;
-}
-
-.gs-counts-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(3, 72px);
-    gap: 10px;
-    align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--gs-line);
-}
-
-.gs-counts-row:last-child {
-    border-bottom: 0;
-}
-
-.gs-counts-row.is-head {
-    padding: 0 0 8px;
-}
-
-.gs-counts-row > span:not(:first-child) {
-    text-align: right;
-    font-size: 0.875rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.gs-counts-row.is-head > span:not(:first-child) {
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--gs-muted);
-}
-
-.gs-counts-what {
-    font-size: 0.875rem;
-    font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.gs-counts-row.is-quiet .gs-counts-what,
-.gs-counts-row.is-quiet > span {
-    font-weight: 400;
-    color: var(--gs-muted);
-}
-
 
 /* --------------------------------------------------------------- inputs ---- */
 
