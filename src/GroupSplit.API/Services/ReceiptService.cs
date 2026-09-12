@@ -46,14 +46,19 @@ public interface IReceiptService
     Task<Expense> Divide(Guid expenseId, CancellationToken ct = default);
 
     /// <summary>
-    /// One bill, shaped for the wire.
+    /// One bill, shaped for the wire, read as one purchase on it.
     /// </summary>
+    /// <param name="expenseId">
+    /// Which part of the bill is being read, or null to read the whole paper without
+    /// answering for any one purchase on it -- which is what an unfiled bank row gets.
+    /// </param>
     /// <remarks>
-    /// Here rather than on the endpoint, because the response says whether the bill could be
+    /// Here rather than on the endpoint, because the response says whether the part could be
     /// divided and that depends on who may be given a share -- which is the group's
     /// participants, and the endpoint has no way to ask.
     /// </remarks>
-    Task<ReceiptResponse> ResponseFor(Receipt receipt, CancellationToken ct = default);
+    Task<ReceiptResponse> ResponseFor(
+        Receipt receipt, Guid? expenseId = null, CancellationToken ct = default);
 
     /// <summary>
     /// Takes a bill off an imported row that nobody has filed.
@@ -116,29 +121,59 @@ public class ReceiptService(
     {
         await VisibleExpense(expenseId, ct);
 
-        return await Loaded().FirstOrDefaultAsync(receipt => receipt.ExpenseId == expenseId, ct)
+        // Through the lines rather than through the receipt, because a bill is not an
+        // expense: one warehouse charge can be two purchases, and the receipt that answers
+        // here is the whole piece of paper, of which this expense is one part.
+        return await Loaded()
+                   .FirstOrDefaultAsync(
+                       receipt => receipt.Items.Any(item => item.ExpenseId == expenseId), ct)
                ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound,
                    "This expense has no itemised bill.");
     }
 
-    public async Task<ReceiptResponse> ResponseFor(Receipt receipt, CancellationToken ct = default)
+    public async Task<ReceiptResponse> ResponseFor(
+        Receipt receipt, Guid? expenseId = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(receipt);
 
-        // An unfiled bill has nobody to divide between yet, and CanDivide already answers no
-        // for one -- so there is nothing to look up and no group to look it up in.
-        if (receipt.Expense is not { } expense)
-            return receipt.ToResponse([], readerMayDivide: false);
+        // A bill read on its own -- an unfiled row, or the whole paper rather than one part
+        // of it -- has no expense to answer for, so it reports its lines and nothing about
+        // dividing them.
+        if (expenseId is not { } id)
+            return receipt.ToResponse(null, canDivide: false);
 
-        // Whether the person reading may divide it, which is a different question from
-        // whether the bill could be divided at all -- and the last of the five ways this
-        // answer used to light up a button that then refused. Reading reaches further than
-        // writing: the payer of a group expense goes on seeing it after they leave, and
-        // MineToChange refuses them. Claiming nothing on the bill themselves, every other
-        // check here would pass.
-        var readerMayDivide = await StillInTheGroup(expense, ct);
+        var expense = await dbContext.Set<Expense>()
+            .FirstOrDefaultAsync(candidate => candidate.Id == id, ct);
 
-        return receipt.ToResponse(await ParticipantsFor(expense, ct), readerMayDivide);
+        if (expense is null)
+            return receipt.ToResponse(id, canDivide: false);
+
+        var participants = await ParticipantsFor(expense, ct);
+        var claimants = ReceiptSplitCalculator.PartOf(receipt, id)
+            .SelectMany(item => item.Claims)
+            .Select(claim => claim.UserId)
+            .Distinct();
+
+        // Everything that has to hold for a division to go through, asked in one place
+        // because every one of them was once a yes on this flag and a refusal one call
+        // later, on a button this answer had lit up:
+        var canDivide =
+            // the expense is shared with somebody -- a bill on a personal one divides
+            // between nobody;
+            expense.GroupId is not null
+            // the part is still this expense's money, which an edit to the amount or a link
+            // to a row of a different figure can undo;
+            && ReceiptSplitCalculator.PartAmounts(receipt).GetValueOrDefault(id) == expense.Amount
+            // every claimant is still somebody the group can be divided between;
+            && claimants.All(participants.Contains)
+            // the bill adds up and none of this part's lines is unspoken for;
+            && ReceiptSplitCalculator.CanDivide(receipt, id)
+            // and the person reading may write to it at all. Reading reaches further than
+            // writing: the payer goes on seeing an expense after they leave its group, and
+            // MineToChange refuses them.
+            && await StillInTheGroup(expense, ct);
+
+        return receipt.ToResponse(id, canDivide);
     }
 
     public async Task DeleteForBankRow(Guid bankTransactionId, CancellationToken ct = default)
@@ -189,16 +224,19 @@ public class ReceiptService(
                 .WithExtension("total", request.Total)
                 .WithExtension("amount", expense.Amount);
 
-        var existing = await Loaded().FirstOrDefaultAsync(row => row.ExpenseId == expenseId, ct);
+        var existing = await Loaded()
+            .FirstOrDefaultAsync(row => row.Items.Any(item => item.ExpenseId == expenseId), ct);
 
         var receipt = existing ?? new Receipt
         {
-            ExpenseId = expenseId,
             Subtotal = request.Subtotal,
             Total = request.Total
         };
 
-        Apply(receipt, request, await ParticipantsFor(expense, ct));
+        // Every line belongs to this expense, which is what "the bill for this expense"
+        // means: one purchase, one part, the whole paper. A charge that is two purchases is
+        // split from the inbox instead, where there is a row to split.
+        Apply(receipt, request, await ParticipantsFor(expense, ct), expenseId);
 
         if (existing is null)
             dbContext.Add(receipt);
@@ -235,7 +273,7 @@ public class ReceiptService(
         // has no group, so which people may appear on it is not knowable until it is filed
         // into one -- and filing re-checks, which is where a claim naming somebody who is not
         // in the destination is caught.
-        Apply(receipt, request, known: null);
+        Apply(receipt, request, known: null, expenseId: null);
 
         if (existing is null)
             dbContext.Add(receipt);
@@ -285,8 +323,9 @@ public class ReceiptService(
 
         var participants = await ParticipantsFor(expense, ct);
 
-        var shares = ReceiptSplitCalculator.Divide(receipt, expense.Payer, participants);
-        var claimed = ReceiptSplitCalculator.ClaimedSubtotals(receipt, expense.Payer, participants);
+        var shares = ReceiptSplitCalculator.Divide(receipt, expense.Id, expense.Payer, participants);
+        var claimed = ReceiptSplitCalculator.ClaimedSubtotals(
+            ReceiptSplitCalculator.PartOf(receipt, expense.Id), expense.Payer, participants);
 
         return new ReceiptDivisionResponse(
             receipt.Id,
@@ -318,7 +357,7 @@ public class ReceiptService(
             // for the division explicitly should not cost the expense its provenance, which
             // is what stating the amounts would do -- stated shares have no rule behind them
             // by definition, and clearing the version is how the splitter says so.
-            expense.Receipt = receipt;
+            expense.Bill = receipt;
 
             await splitter.WriteSplitsAsync(expense, ct);
         }
@@ -336,7 +375,7 @@ public class ReceiptService(
             // divides some other way, being divided by its bill this once. Stated amounts are
             // the honest record of that: a person decided it, and no rule will reproduce it.
             var shares = ReceiptSplitCalculator.Divide(
-                receipt, expense.Payer, await ParticipantsFor(expense, ct));
+                receipt, expense.Id, expense.Payer, await ParticipantsFor(expense, ct));
 
             await splitter.WriteSplitsAsync(
                 expense,
@@ -358,11 +397,24 @@ public class ReceiptService(
 
         var receipt = await ForExpense(expenseId, ct);
 
-        // Gone, not detached. A receipt belongs to exactly one thing, and filing moved it
-        // from the bank row to the expense -- so there is nothing left for it to fall back
-        // to. Where the bill came from is still on the ledger, in
-        // Transaction.BankTransactionId, which is where that fact always lived.
-        dbContext.Remove(receipt);
+        // This expense's lines come off the bill; the bill itself may well outlive them,
+        // because the same charge may be somebody else's groceries too. Only when nothing is
+        // left of it -- no line naming any expense, and no bank row behind it -- is there a
+        // receipt with nowhere to be, and then it goes.
+        var mine = receipt.Items.Where(item => item.ExpenseId == expenseId).ToList();
+
+        foreach (var item in mine)
+        {
+            dbContext.RemoveRange(item.Claims);
+            dbContext.Remove(item);
+            receipt.Items.Remove(item);
+        }
+
+        var orphaned = receipt.BankTransactionId is null
+                       && receipt.Items.All(item => item.ExpenseId is null);
+
+        if (orphaned)
+            dbContext.Remove(receipt);
 
         await dbContext.SaveChangesAsync(ct);
     }
@@ -425,13 +477,18 @@ public class ReceiptService(
     /// </remarks>
     private static void RefuseIfTheBillIsNotThisExpense(Receipt receipt, Expense expense)
     {
-        if (receipt.Total == expense.Amount)
+        // This expense's part of the bill, not the whole paper: a split charge is several
+        // expenses, and each one answers only for the lines that name it.
+        var part = ReceiptSplitCalculator.PartAmounts(receipt).GetValueOrDefault(expense.Id);
+
+        if (part == expense.Amount)
             return;
 
         throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
-                $"The bill comes to {receipt.Total} and the expense is {expense.Amount}. " +
-                "Update the bill to match, or remove it and divide the expense some other way.")
-            .WithExtension("receiptTotal", receipt.Total)
+                $"This expense's part of the bill comes to {part} and the expense is " +
+                $"{expense.Amount}. Update the bill to match, or take these lines off it and " +
+                "divide the expense some other way.")
+            .WithExtension("partTotal", part)
             .WithExtension("amount", expense.Amount);
     }
 
@@ -444,7 +501,8 @@ public class ReceiptService(
     /// one; a stored line the request no longer mentions is gone, and its claims go with it.
     /// </remarks>
     private void Apply(
-        Receipt receipt, SaveReceiptRequest request, IReadOnlyCollection<Guid>? known)
+        Receipt receipt, SaveReceiptRequest request, IReadOnlyCollection<Guid>? known,
+        Guid? expenseId)
     {
         receipt.Subtotal = request.Subtotal;
         receipt.Tax = request.Tax;
@@ -484,6 +542,7 @@ public class ReceiptService(
                 item = new ReceiptItem
                 {
                     ReceiptId = receipt.Id,
+                    ExpenseId = expenseId,
                     Name = line.Name.Trim(),
                     TotalPrice = line.TotalPrice
                 };
@@ -505,7 +564,13 @@ public class ReceiptService(
 
             item.UnitPrice = line.UnitPrice;
             item.Quantity = line.Quantity;
+            item.IsTaxable = line.IsTaxable;
             item.Division = (ReceiptItemDivision)line.Split;
+
+            // Which purchase the line is part of. Stated by the caller only when the whole
+            // bill is one expense's; a bill typed against a bank row leaves it open until
+            // somebody splits the charge.
+            item.ExpenseId = expenseId;
 
             // A line that no longer divides by its claims should not keep them: they would
             // be invisible in the response and come back the moment somebody set it to
@@ -596,7 +661,6 @@ public class ReceiptService(
     /// </remarks>
     private IQueryable<Receipt> Loaded() =>
         dbContext.Set<Receipt>()
-            .Include(receipt => receipt.Expense)
             .Include(receipt => receipt.Items)
             .ThenInclude(item => item.Claims);
 

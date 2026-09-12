@@ -274,9 +274,17 @@ public class TransactionService(
         // until this method builds it.
         if (bill is not null)
         {
-            bill.ExpenseId = expense.Id;
-            bill.BankTransactionId = null;
-            expense.Receipt = bill;
+            // Every line becomes this expense's. Filing a row on its own is the one-part
+            // case: the whole charge is one purchase, so the whole paper is one expense's.
+            // Splitting a charge into several is the inbox's own operation, which assigns
+            // the lines itself.
+            foreach (var item in bill.Items)
+                item.ExpenseId = expense.Id;
+
+            // The row keeps its bill. There is no hand-over to make any more -- a receipt
+            // belongs to the charge it was typed against, and which purchases it turned into
+            // is on its lines.
+            expense.Bill = bill;
         }
 
         await splitter.WriteSplitsAsync(expense, request.Splits, ct);

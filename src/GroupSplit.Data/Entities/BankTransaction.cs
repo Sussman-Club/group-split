@@ -143,11 +143,16 @@ public class BankTransaction : Entity
     /// </summary>
     /// <remarks>
     /// The inverse of <see cref="Transaction.BankTransaction"/>, and the reason the inbox
-    /// can show a filed row's expense without a second query per row. It goes null rather
-    /// than dangling if the expense is deleted, because deleting an expense is undoing the
-    /// filing, not undoing the import.
+    /// can show what a filed row became without a second query per row. A row leaves this
+    /// list rather than dangling if its expense is deleted, because deleting an expense is
+    /// undoing the filing, not undoing the import.
+    /// <para>
+    /// Several, not one, since a bill may be split: a single charge covering the flat's
+    /// groceries and a jacket of your own files as two expenses, and both point back here.
+    /// The ordinary row still becomes exactly one.
+    /// </para>
     /// </remarks>
-    public virtual Transaction? FiledAs { get; set; }
+    public virtual ICollection<Transaction> FiledAs { get; } = [];
 
     /// <summary>
     /// When the provider withdrew a row that had already been filed. The expense stays --

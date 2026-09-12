@@ -1,15 +1,16 @@
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
-/// One line on a bill: what it was, how many, and what it cost.
+/// One line on a bill: what it was, how many, what it cost, which purchase it belongs to,
+/// and who had it.
 /// </summary>
 /// <remarks>
-/// <see cref="TotalPrice"/> is stored rather than multiplied out of
-/// <see cref="UnitPrice"/> and <see cref="Quantity"/>, because the paper does not always
-/// agree with the arithmetic -- a two-for-one, a line discount, a price rounded at the till
-/// -- and the bill is the record. The division reads this one and nothing else, so a line
-/// that does not multiply out is transcribed faithfully instead of being corrected into
-/// something nobody was charged.
+/// <see cref="TotalPrice"/> is stored rather than multiplied out of <see cref="UnitPrice"/>
+/// and <see cref="Quantity"/>, because the paper does not always agree with the arithmetic
+/// -- a two-for-one, a line discount, a price rounded at the till -- and the bill is the
+/// record. The division reads this one and nothing else, so a line that does not multiply
+/// out is transcribed faithfully instead of being corrected into something nobody was
+/// charged.
 /// </remarks>
 public class ReceiptItem : Entity
 {
@@ -21,14 +22,40 @@ public class ReceiptItem : Entity
     /// </summary>
     public Guid ReceiptId { get; set; }
 
+    /// <summary>
+    /// The expense this line's money is part of, or null while nobody has said.
+    /// </summary>
+    /// <remarks>
+    /// What makes one charge able to be two purchases. A warehouse run is the flat's
+    /// groceries and a jacket that is yours alone on one piece of paper; each distinct
+    /// expense the lines name is one part of the bill, with its own group, its own category
+    /// and its own place in the ledger. A restaurant bill names one expense on every line,
+    /// which is the same shape with one part.
+    /// <para>
+    /// Null is the ordinary state of a bill somebody is still working through and a refusal
+    /// once it comes to filing: a line nobody has placed is money belonging to no purchase,
+    /// and there is no honest guess to make about which one.
+    /// </para>
+    /// <para>
+    /// Distinct from <see cref="Claims"/>, which answers a different question about the same
+    /// line. This one says <em>which purchase this is</em>; the claims say <em>who owed it</em>
+    /// within that purchase. They ran together while a bill could only be one expense, and the
+    /// jacket is what pulled them apart: claiming it for yourself divides it correctly and
+    /// still files it under Groceries in the flat's ledger.
+    /// </para>
+    /// </remarks>
+    public virtual Expense? Expense { get; set; }
+
+    public Guid? ExpenseId { get; set; }
+
     public required string Name { get; set; }
 
     /// <summary>What one of them cost.</summary>
     public decimal UnitPrice { get; set; }
 
     /// <summary>
-    /// How many. Decimal rather than an integer count, because bills are written in
-    /// kilos and litres as readily as in units.
+    /// How many. Decimal rather than an integer count, because bills are written in kilos
+    /// and litres as readily as in units.
     /// </summary>
     public decimal Quantity { get; set; } = 1;
 
@@ -39,19 +66,37 @@ public class ReceiptItem : Entity
     public required decimal TotalPrice { get; set; }
 
     /// <summary>
-    /// How this line is divided. Claimed by default, which is the one that needs
-    /// <see cref="Claims"/> to say anything.
+    /// Whether the bill's tax was charged on this line. True unless somebody says otherwise.
     /// </summary>
     /// <remarks>
-    /// What makes a line behave like a small transaction of its own: it has an amount and a
-    /// division, and the division need not be the same as the line above it. "These two are
-    /// mine and the rest is shared" is two claimed lines and the others left
-    /// <see cref="ReceiptItemDivision.Evenly"/>.
+    /// A flag and not a rate, because a flag is what the paper gives you: a receipt prints
+    /// one tax total at the bottom and a letter beside the lines it was charged on. A rate
+    /// per line would be a more general model of something no till hands over, and it would
+    /// make <see cref="Receipt.Tax"/> derived rather than transcribed.
     /// <para>
-    /// Defaulted to <see cref="ReceiptItemDivision.Claimed"/> so that the safe behaviour is
-    /// the one you get by saying nothing: a line nobody has claimed stops the bill being
-    /// divided rather than quietly landing on everybody.
+    /// It matters most on exactly the bill that made a receipt worth splitting: where
+    /// groceries are exempt and general goods are not, apportioning the tax across every
+    /// line taxes the bananas and lets the jacket off. So the tax is weighed over the lines
+    /// it was actually charged on -- and the tip, which is a fact about the bill rather than
+    /// about the goods, is weighed over all of them.
     /// </para>
+    /// <para>
+    /// Defaulted to true so that a bill nobody flags divides exactly as it did before this
+    /// existed, and so that the common case -- a restaurant, where everything is taxable --
+    /// needs no thought. Where the price already includes the tax, as it does under VAT,
+    /// <see cref="Receipt.Tax"/> is zero and this decides nothing.
+    /// </para>
+    /// </remarks>
+    public bool IsTaxable { get; set; } = true;
+
+    /// <summary>
+    /// How this line is divided between the people in its part. Claimed by default, which is
+    /// the one that needs <see cref="Claims"/> to say anything.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted to <see cref="ReceiptItemDivision.Claimed"/> so that the safe behaviour is
+    /// the one you get by saying nothing: a line nobody has claimed stops its part being
+    /// divided rather than quietly landing on everybody.
     /// </remarks>
     public ReceiptItemDivision Division { get; set; } = ReceiptItemDivision.Claimed;
 
@@ -59,7 +104,7 @@ public class ReceiptItem : Entity
     /// Who had it, and in what proportion. Read only when <see cref="Division"/> is
     /// <see cref="ReceiptItemDivision.Claimed"/>; empty then means nobody has claimed the
     /// line yet, which is an ordinary state while a bill is being worked through and a
-    /// refusal once it comes to dividing it.
+    /// refusal once it comes to dividing its part.
     /// </summary>
     public virtual ICollection<ReceiptItemClaim> Claims { get; } = [];
 }

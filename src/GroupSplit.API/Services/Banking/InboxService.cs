@@ -299,13 +299,13 @@ public sealed class InboxService(
         // unloaded navigation reads null exactly like an expense that has no bill, and taking
         // that for permission would point a second receipt at it and break the check
         // constraint.
-        var alreadyHasOne = await dbContext.Set<Receipt>()
-            .AnyAsync(candidate => candidate.ExpenseId == expense.Id, ct);
+        var alreadyHasOne = await dbContext.Set<ReceiptItem>()
+            .AnyAsync(item => item.ExpenseId == expense.Id, ct);
 
         if (!alreadyHasOne && await receipts.ForFiling(row.Id, expense.GroupId, ct) is { } bill)
         {
-            bill.ExpenseId = expense.Id;
-            bill.BankTransactionId = null;
+            foreach (var item in bill.Items)
+                item.ExpenseId = expense.Id;
         }
 
         await dbContext.SaveChangesAsync(ct);

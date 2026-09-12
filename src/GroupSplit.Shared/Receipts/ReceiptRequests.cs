@@ -86,6 +86,19 @@ public record ReceiptItemInput
     public decimal TotalPrice { get; init; }
 
     /// <summary>
+    /// Whether the bill's tax was charged on this line. True unless you say otherwise.
+    /// </summary>
+    /// <remarks>
+    /// A flag rather than a rate, because a flag is what the paper gives you: one tax total
+    /// at the bottom and a letter beside the lines it was charged on. It matters on the bill
+    /// that made splitting worth doing -- where groceries are exempt and general goods are
+    /// not, taxing every line taxes the bananas and lets the jacket off. Where the price
+    /// already includes the tax, as under VAT, the receipt's tax is zero and this decides
+    /// nothing.
+    /// </remarks>
+    public bool IsTaxable { get; init; } = true;
+
+    /// <summary>
     /// How this line divides. Defaults to <see cref="ReceiptItemSplit.Claimed"/>, which is
     /// what <see cref="Claims"/> is for.
     /// </summary>

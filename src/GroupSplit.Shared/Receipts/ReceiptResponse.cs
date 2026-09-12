@@ -4,8 +4,9 @@ namespace GroupSplit.Shared;
 /// An itemised bill as the client reads it back.
 /// </summary>
 /// <param name="ExpenseId">
-/// The expense this divides, or null for a bill photographed against a bank row that nobody
-/// has filed yet.
+/// The purchase this reading is about -- one part of the bill -- or null when the whole
+/// paper is being read rather than any one part of it, which is what an unfiled bank row
+/// gets. The lines carry their own, so a split charge can be read whole.
 /// </param>
 /// <param name="BankTransactionId">
 /// The imported row this bill is waiting on, or null once it has been filed onto an expense.
@@ -13,9 +14,9 @@ namespace GroupSplit.Shared;
 /// over. Where a filed expense came from is on the expense itself.
 /// </param>
 /// <param name="UnclaimedItemCount">
-/// How many lines still belong to nobody. The figure a client needs to say "3 items left to
-/// claim" without walking the list, and the one thing standing between a bill and being
-/// dividable.
+/// How many lines of this part still belong to nobody -- of the whole bill, when no part was
+/// asked for. The figure a client needs to say "3 items left to claim" without walking the
+/// list, and the one thing standing between a part and being dividable.
 /// </param>
 /// <param name="CanDivide">
 /// Whether asking to divide by this bill would succeed: it adds up, every line is claimed,
@@ -34,10 +35,18 @@ public sealed record ReceiptResponse(
     IReadOnlyList<ReceiptItemResponse> Items);
 
 /// <summary>One line on a bill, with how it divides and who had it.</summary>
+/// <param name="IsTaxable">
+/// Whether the bill's tax was charged on this line. The tax is weighed over the lines it was
+/// charged on; the tip, which is about the bill rather than the goods, over all of them.
+/// </param>
+/// <param name="ExpenseId">
+/// Which purchase this line's money is part of, or null while nobody has said. Each distinct
+/// expense across the lines is one part of the bill.
+/// </param>
 /// <param name="Split">
-/// How this line divides. <see cref="ReceiptItemSplit.Claimed"/> reads
-/// <paramref name="Claims"/>; <see cref="ReceiptItemSplit.Evenly"/> names nobody and leaves
-/// it empty.
+/// How this line divides between the people in its part. <see cref="ReceiptItemSplit.Claimed"/>
+/// reads <paramref name="Claims"/>; <see cref="ReceiptItemSplit.Evenly"/> names nobody and
+/// leaves it empty.
 /// </param>
 public sealed record ReceiptItemResponse(
     Guid Id,
@@ -45,6 +54,8 @@ public sealed record ReceiptItemResponse(
     decimal UnitPrice,
     decimal Quantity,
     decimal TotalPrice,
+    bool IsTaxable,
+    Guid? ExpenseId,
     ReceiptItemSplit Split,
     IReadOnlyList<ReceiptClaimResponse> Claims);
 

@@ -48,31 +48,35 @@ public class ItemizedSplitRuleHandler
         // are refused by name: falling back to an even split would hand five people an equal
         // share of a dinner that was filed under this rule precisely so that it would not be
         // divided that way, and nothing downstream would ever say so.
-        var receipt = (transaction as Expense)?.Receipt
+        var receipt = (transaction as Expense)?.Bill
                       ?? throw new UnprocessableException(ErrorCodes.ReceiptNotFound,
                               "This expense is split by its bill, and there is no bill on it yet. " +
                               "Attach the receipt and say who had what, or file it under " +
                               "something else.")
                           .WithExtension("transactionId", transaction.Id);
 
-        // The bill has to be the money this expense actually is. It stops being so the
-        // moment somebody edits the amount -- the bank settled higher, a tip was added -- and
-        // this is the only place that can say which of the two moved.
+        // What this part of the bill came to. Cut from the charge rather than added up
+        // towards it, so the parts of a split bill sum to what the card was charged.
+        var part = ReceiptSplitCalculator.PartAmounts(receipt).GetValueOrDefault(transaction.Id);
+
+        // The part has to be the money this expense actually is. It stops being so the moment
+        // somebody edits the amount -- the bank settled higher, a tip was added -- and this is
+        // the only place that can say which of the two moved.
         //
         // Caught here rather than left to ExpenseSplitter's sum check, which is right that
         // something is wrong and blames the shares: "the shares add up to 120.00, but the
         // expense is 125.00" describes amounts nobody typed, on an edit to a field that is
         // not the shares, with no hint that a receipt is involved at all.
-        if (receipt.Total != transaction.Amount)
+        if (part != transaction.Amount)
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
-                    $"This expense is split by its bill, and the bill comes to {receipt.Total} " +
-                    $"while the expense is {transaction.Amount}. Update the bill to match, or " +
-                    "remove it and divide the expense some other way.")
+                    $"This expense is split by its bill, and its part of the bill comes to " +
+                    $"{part} while the expense is {transaction.Amount}. Update the bill to " +
+                    "match, or take these lines off it and divide the expense some other way.")
                 .WithExtension("transactionId", transaction.Id)
-                .WithExtension("receiptTotal", receipt.Total)
+                .WithExtension("partTotal", part)
                 .WithExtension("amount", transaction.Amount);
 
-        return ReceiptSplitCalculator.Divide(receipt, transaction.Payer, members);
+        return ReceiptSplitCalculator.Divide(receipt, transaction.Id, transaction.Payer, members);
     }
 
     /// <summary>

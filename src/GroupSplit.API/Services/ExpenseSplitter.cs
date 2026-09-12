@@ -283,13 +283,18 @@ public class ExpenseSplitter(
     private async Task LoadBillIfItDividesByOne(
         Expense expense, SplitRuleVersion version, CancellationToken ct)
     {
-        if (version is not ItemizedSplitRuleVersion || expense.Receipt is not null)
+        if (version is not ItemizedSplitRuleVersion || expense.Bill is not null)
             return;
 
-        expense.Receipt = await dbContext.Set<Receipt>()
+        // The whole bill, found by the lines that name this expense -- not just those lines.
+        // How much of the tax and the tip is this part's depends on what the other parts of
+        // the same charge hold, so a receipt loaded with half its items would divide a
+        // warehouse run as though the jacket had never been on it.
+        expense.Bill = await dbContext.Set<Receipt>()
             .Include(receipt => receipt.Items)
             .ThenInclude(item => item.Claims)
-            .FirstOrDefaultAsync(receipt => receipt.ExpenseId == expense.Id, ct);
+            .FirstOrDefaultAsync(
+                receipt => receipt.Items.Any(item => item.ExpenseId == expense.Id), ct);
     }
 
     public async Task<bool> DividesByItsBill(Expense expense, CancellationToken ct = default)
