@@ -264,6 +264,40 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// Opened from inside a group that named itself, the heading says which group without
+    /// reading the list of every group the person belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The name used to be looked up in that list, so the one fact the dialog was certain
+    /// of before it opened depended on a read about other groups entirely: slow left the
+    /// heading blank, and failed left it blank for good, over a form whose group picker is
+    /// not even shown.
+    /// </remarks>
+    [Fact]
+    public async Task Opened_from_a_group_that_names_itself_it_asks_for_no_other_group()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { dialog => dialog.SelectedGroupId, GroupId },
+            { dialog => dialog.SelectedGroupName, "Trip" }
+        };
+
+        await provider.InvokeAsync(async () =>
+            await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense", parameters));
+
+        Assert.Contains("Trip", provider.Markup, StringComparison.Ordinal);
+
+        _groups.Verify(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
     /// The payer chip names whoever is recording the expense, not "somebody".
     /// </summary>
     /// <remarks>

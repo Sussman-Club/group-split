@@ -64,8 +64,12 @@
             </div>
 
             @* Only where the emptiness was read rather than assumed: "none" is a claim, and
-               a failed read is not entitled to make it. *@
-            @if (_categories.Count == 0 && !_stale)
+               neither a failed read nor a read still in flight is entitled to make it. *@
+            @if (!_loaded)
+            {
+                <Waiting Rows="3"/>
+            }
+            else if (_categories.Count == 0 && !_stale)
             {
                 @* The way out is in here, not only in the card's title. An empty state is
                    where the eye lands, and this one used to describe the emptiness and then
@@ -151,7 +155,11 @@
                 </MudButton>
             </div>
 
-            @if (_rules.Count == 0 && !_stale)
+            @if (!_loaded)
+            {
+                <Waiting Rows="2"/>
+            }
+            else if (_rules.Count == 0 && !_stale)
             {
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.AccountTree"/>
@@ -309,6 +317,17 @@
     /// </remarks>
     private int _loads;
 
+    /// <summary>
+    /// Whether the first read has answered, either way.
+    /// </summary>
+    /// <remarks>
+    /// An empty list means two things until this is true: the group files nothing under
+    /// anything, or nobody has asked yet. They were drawn the same, so opening the tab
+    /// flashed "Nothing to file expenses under yet" at a group with a dozen categories --
+    /// and the card jumped as the real list replaced it.
+    /// </remarks>
+    private bool _loaded;
+
     private async Task LoadAsync()
     {
         var load = ++_loads;
@@ -353,6 +372,10 @@
 
         if (load != _loads)
             return;
+
+        // Either way: a failed read has its own message, and leaving this false would sit
+        // on placeholder rows that are never replaced.
+        _loaded = true;
 
         StateHasChanged();
     }
