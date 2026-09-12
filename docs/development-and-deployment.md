@@ -337,6 +337,13 @@ The three settings move together or not at all -- `RememberedSessionLifetime` in
 `AuthenticationExtensions`, and the two realm timeouts in `realms.json`. `RememberMeTest`
 reads the realm file and fails if they disagree.
 
+A fourth follows them: `ServerSideTokenStore` holds the tokens beside the ticket rather than
+inside it, so the two expire separately and the shorter one decides. It was twelve hours,
+which was longer than the cookie when the cookie was thirty minutes. Tokens going first is
+the worse way round -- the cookie and the ticket are both still good, so the app believes
+the person is signed in while every call it makes on their behalf has nothing to make it
+with -- so the store keeps them for the remembered lifetime too.
+
 The checkbox is on the app's own hand-off page rather than Keycloak's, which is why that
 page waits for a click instead of redirecting by itself. Keycloak has a "Remember Me" of its
 own and keeps the answer: the flag is read into `UserSessionModel` and never written to a
@@ -353,7 +360,10 @@ rows in the session table for longer than they are worth.
 Realm changes reach a running Keycloak only on a fresh import. Development keeps a data
 volume and deployment keeps a database, so both skip the import once the realm exists: after
 changing `realms.json`, either drop the volume locally, or apply the same values through the
-admin console on the deployed realm.
+admin console on the deployed realm. Turning `rememberMe` off is not retroactive either:
+sessions created while it was on keep their extended lifetime until they expire
+([CVE-2025-11429](https://advisories.gitlab.com/pkg/maven/org.keycloak/keycloak-services/CVE-2025-11429/)),
+so on a realm that had it on, existing sessions have to be ended rather than waited out.
 
 ## Sessions across a deploy
 
