@@ -53,6 +53,7 @@ public static class InboxApi
             group.MapMatches();
             group.MapFile();
             group.MapSplit();
+            group.MapSplitPreview();
             group.MapLink();
             group.MapDismissMatch();
             group.MapIgnore();
@@ -162,6 +163,24 @@ public static class InboxApi
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
+        /// <summary>
+        /// What the parts of a proposed split would come to. Creates nothing.
+        /// </summary>
+        private RouteHandlerBuilder MapSplitPreview()
+        {
+            return group.MapPost("{id:guid}/split/preview", async (
+                    Guid id,
+                    SplitChargePreviewRequest request,
+                    IInboxService inbox,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await inbox.PreviewSplit(id, request, ct));
+                })
+                .WithName("PreviewBankTransactionSplit")
+                .Produces<SplitChargePreviewResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         private RouteHandlerBuilder MapLink()

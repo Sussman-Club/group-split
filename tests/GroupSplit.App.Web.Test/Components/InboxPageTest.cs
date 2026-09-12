@@ -177,7 +177,7 @@ public class InboxPageTest : ComponentTest
 
     private static BankTransactionResponse Row(string merchant, decimal amount, DateOnly date) =>
         new(Guid.NewGuid(), date, amount, "USD", merchant.ToUpperInvariant(), merchant,
-            null, null, null, null, null, null, null, false, InboxStatus.New, null, null,
+            null, null, null, null, null, null, null, false, InboxStatus.New, [], null,
             "Everyday", "Fake Bank");
 
     /// <summary>

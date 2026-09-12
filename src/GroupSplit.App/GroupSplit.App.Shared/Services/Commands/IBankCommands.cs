@@ -37,6 +37,34 @@ public interface IBankCommands
         CancellationToken ct = default);
 
     /// <summary>
+    /// Files one charge as several expenses, by saying which lines of its bill belong to
+    /// which purchase.
+    /// </summary>
+    /// <remarks>
+    /// Raises both announcements, like <see cref="FileAsync"/> and for the same reason -- a
+    /// row left the inbox and expenses appeared -- and says how many it became, since that
+    /// count is the whole answer to what just happened.
+    /// <para>
+    /// All or nothing. The API refuses a split that leaves a line in no part or names one
+    /// twice, so there is no half-filed row to come back to: either every part exists or the
+    /// charge is still waiting.
+    /// </para>
+    /// </remarks>
+    Task<SplitBankTransactionResponse?> SplitAsync(Guid rowId, SplitBankTransactionRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// What the parts of a proposed split would come to. Creates nothing.
+    /// </summary>
+    /// <remarks>
+    /// Silent, and null when there is nothing to show -- the only caller is a screen being
+    /// worked in, where the figures are supplementary to a placement the person can see. A
+    /// snackbar per line moved would be unusable.
+    /// </remarks>
+    Task<SplitChargePreviewResponse?> PreviewSplitAsync(Guid rowId, SplitChargePreviewRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Points an imported row at an expense that is already recorded, instead of filing it
     /// as a second one. One expense is left, carrying the bank's row.
     /// </summary>

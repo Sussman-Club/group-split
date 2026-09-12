@@ -69,6 +69,17 @@ public interface IInboxService
         CancellationToken ct = default);
 
     /// <summary>
+    /// What each proposed part of a charge would come to, while somebody is still deciding.
+    /// </summary>
+    /// <remarks>
+    /// The same apportioning <see cref="Split"/> uses, asked without creating anything -- so
+    /// the figures a screen shows are the ones filing would store, rather than a second copy
+    /// of the arithmetic that could drift from this one.
+    /// </remarks>
+    Task<SplitChargePreviewResponse> PreviewSplit(Guid id, SplitChargePreviewRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Attaches the row to an expense that is already there, instead of making a second one.
     /// </summary>
     Task<Expense> Link(Guid id, LinkBankTransactionRequest request, CancellationToken ct = default);
@@ -500,6 +511,30 @@ public sealed class InboxService(
         await dbContext.SaveChangesAsync(ct);
 
         return new SplitBankTransactionResponse(row.Id, row.Amount, filed);
+    }
+
+    public async Task<SplitChargePreviewResponse> PreviewSplit(
+        Guid id, SplitChargePreviewRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var row = await Existing(id, ct);
+        var bill = await receipts.ForBankRow(row.Id, ct);
+
+        var byId = bill.Items.ToDictionary(item => item.Id);
+
+        // Lines that are not this bill's are dropped rather than refused. This prices a
+        // screen mid-edit, and the one thing it must not do is go blank: a stale id from a
+        // bill that changed under somebody is worth pricing without, not worth a refusal
+        // where there is no field to fix it in.
+        var parts = request.Parts
+            .Select(IReadOnlyList<ReceiptItem> (part) =>
+                [.. part.ItemIds.Select(byId.GetValueOrDefault).OfType<ReceiptItem>()])
+            .ToList();
+
+        var amounts = ReceiptSplitCalculator.AmountsFor(bill, parts);
+
+        return new SplitChargePreviewResponse(amounts, bill.Total, amounts.Sum());
     }
 
     /// <summary>

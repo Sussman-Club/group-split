@@ -29,4 +29,16 @@ public interface IReceiptCommands
     /// </para>
     /// </remarks>
     Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The bill typed against an imported row, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// The same read as <see cref="GetAsync"/> from the other end -- a bill before it is an
+    /// expense at all. Silent for the same reason and in the same way: the screen that asks
+    /// only opens for a row the listing already said has one, so null here is a row whose
+    /// bill went away between the list and the click, and there is nothing to show either
+    /// way.
+    /// </remarks>
+    Task<ReceiptResponse?> ForBankRowAsync(Guid rowId, CancellationToken ct = default);
 }

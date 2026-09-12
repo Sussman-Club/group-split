@@ -96,6 +96,41 @@ public sealed class BankCommands(
         return done ? expense : null;
     }
 
+    public async Task<SplitBankTransactionResponse?> SplitAsync(Guid rowId,
+        SplitBankTransactionRequest request, CancellationToken ct = default)
+    {
+        SplitBankTransactionResponse? split = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            split = await inbox.SplitBankTransactionAsync(rowId, request, ct);
+
+            // The count, because that is what a person is checking: one charge is now this
+            // many expenses, each in its own place.
+            snackbar.Add($"Split into {split.Parts.Count} expenses.", Severity.Success);
+
+            await changes.NotifyBankDataChangedAsync();
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not split the charge.");
+
+        return done ? split : null;
+    }
+
+    public async Task<SplitChargePreviewResponse?> PreviewSplitAsync(Guid rowId,
+        SplitChargePreviewRequest request, CancellationToken ct = default)
+    {
+        try
+        {
+            return await inbox.PreviewBankTransactionSplitAsync(rowId, request, ct);
+        }
+        catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
+        {
+            // Null means "no figures this time", and the screen keeps the ones it had. A bug
+            // still throws: the error boundary is for those.
+            return null;
+        }
+    }
+
     public async Task<TransactionResponse?> AttachAsync(Guid rowId, Guid transactionId,
         CancellationToken ct = default)
     {

@@ -158,6 +158,14 @@
                                 {
                                     <span class="gs-tag">Withdrawn by the bank</span>
                                 }
+                                @* Somebody typed the bill behind this charge, which is the
+                                   one thing on a row that says it can be broken up. Without
+                                   it the answer would have to be offered on every row and
+                                   refused on nearly all of them. *@
+                                @if (row.BillLineCount > 0)
+                                {
+                                    <span class="gs-tag neutral">@row.BillLineCount-line bill</span>
+                                }
                             </div>
                             <div class="meta">
                                 @row.AccountName · @row.SpentOn.ToShortDateString()
@@ -216,6 +224,15 @@
                                                  TransformOrigin="Origin.TopRight"
                                                  Disabled="@(_busy == row.Id)"
                                                  aria-label="@($"Other answers for {row.Title}")">
+                                            @* First, and only where there is a bill to
+                                               divide by. The row keeps its one primary
+                                               button -- most charges are one purchase, and
+                                               a second filled button on every row is what
+                                               this menu exists to undo. *@
+                                            @if (row.CanSplit)
+                                            {
+                                                <MudMenuItem OnClick="@(() => SplitAsync(row))">Split by the bill…</MudMenuItem>
+                                            }
                                             <MudMenuItem OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudMenuItem>
                                             <MudMenuItem OnClick="@(() => IgnoreAsync(row))">Ignore</MudMenuItem>
                                         </MudMenu>
@@ -623,6 +640,29 @@
 
         if (answer.Request is { } request)
             await FileAsync(row, request, answer.Destination);
+    }
+
+    /// <summary>
+    /// Sorts one charge into the purchases it turns out to be, and files it as several
+    /// expenses.
+    /// </summary>
+    /// <remarks>
+    /// Wider than the other dialogs on purpose: it is two panes and a bill of a dozen lines,
+    /// which does not fit the column the rest of them use. The dialog does its own filing --
+    /// unlike <see cref="AddToGroupAsync"/>, whose answer is a request this page then sends
+    /// -- because a split's refusals are about the placement on screen and belong where the
+    /// placement is, not out here where there is nothing left to fix.
+    /// </remarks>
+    private async Task SplitAsync(BankTransactionResponse row)
+    {
+        var parameters = new DialogParameters<SplitBankTransactionDialog>
+        {
+            { dialog => dialog.Row, row }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
+
+        await DialogService.ShowAsync<SplitBankTransactionDialog>("Split this charge", parameters, options);
     }
 
     private async Task FileAsync(BankTransactionResponse row, FileBankTransactionRequest request, string destination)
