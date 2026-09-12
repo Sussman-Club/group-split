@@ -29,8 +29,7 @@ public static class KeycloakDevelopmentExtensions
                 .WithRealmImport("./Assets/keycloak/realms.json")
                 .WithContainerFiles("/opt/keycloak/themes/group-split", "./Assets/keycloak/themes")
                 .WithSmtp(mailpit)
-                .WithDataVolume()
-                .WithPersistentLifetime();
+                .WithDataVolume();
         }
     }
 }
