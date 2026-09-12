@@ -331,6 +331,49 @@ public class GroupSplitsTabTest : ComponentTest
         Assert.False(Delete(tab, "Whoever paid").HasAttribute("disabled"));
     }
 
+    /// <summary>
+    /// Opening a rule two categories divide by warns that it stands behind both -- before
+    /// anything is saved, and while Cancel is still the way out.
+    /// </summary>
+    /// <remarks>
+    /// The fan-out is the whole reason a rule is a thing of its own rather than a field on a
+    /// category, and it is the one consequence somebody cannot see from inside the editor:
+    /// they arrived from Groceries and the form in front of them says nothing about
+    /// Utilities. The tab holds the join already, so the warning costs a parameter -- and the
+    /// absence of one is read as "there is nothing to warn about" at exactly the moment that
+    /// matters.
+    /// <para>
+    /// Driven from the tab rather than by rendering the dialog directly, because the
+    /// parameter is the thing that can break: the tab passes null while its categories are
+    /// unread, and a wiring that passed the wrong list, or none, would leave the dialog
+    /// correct and the screen silent.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Editing_a_rule_two_categories_divide_by_names_both_before_the_save()
+    {
+        var (tab, provider) = await RenderWithDialogsAsync();
+
+        // Not awaited yet: the click runs until the dialog closes, so awaiting here would
+        // wait on a dialog nothing has answered.
+        var editing = tab.FindAll("button")
+            .First(button => button.GetAttribute("aria-label") == "Edit Household 3-way")
+            .ClickAsync(new MouseEventArgs());
+
+        var warning = provider.FindAll(".gs-notice.is-warn")
+            .Single(notice => notice.QuerySelector("strong") is not null);
+
+        Assert.Equal("Groceries and Utilities all divide by this rule",
+            warning.QuerySelector("strong")!.TextContent.Trim());
+
+        // It is said while there is still a way out, which is the only time saying it helps.
+        SplitRules.Verify(client => client.UpdateSplitRuleAsync(
+            It.IsAny<Guid>(), It.IsAny<UpdateSplitRuleRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        await Button(provider, "Cancel").ClickAsync(new MouseEventArgs());
+        await editing;
+    }
+
     private static IElement Rule(IRenderedComponent<GroupSplitsTab> tab, string name) =>
         tab.FindAll(".gs-rule").Single(rule => rule.QuerySelector(".title")!.TextContent.Trim() == name);
 

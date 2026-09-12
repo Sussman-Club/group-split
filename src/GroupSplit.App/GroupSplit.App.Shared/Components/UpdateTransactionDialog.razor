@@ -14,14 +14,15 @@
 @inject DivisionSourceReader Source
 @inject IMerchantCommands Merchants
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
+@implements IDisposable
 
 @*
-    Editing an expense, in the two steps the create dialog uses.
+    Editing an expense, on the one screen the create dialog uses.
 
-    It was one long form with the split at the bottom, which is the shape the create
-    dialog was taken apart for: the division is the decision the app exists for and it was
-    the last thing on a screen people scrolled past. The two now match field for field, so
-    somebody who has recorded an expense already knows where everything is.
+    It was one long form with the split at the bottom, which is the shape the create dialog
+    was taken apart for: the division is the decision the app exists for and it was the last
+    thing on a screen people scrolled past. The two now match field for field, so somebody
+    who has recorded an expense already knows where everything is.
 
     The one real difference is underneath. An edit is divided again by the version of the
     rule the expense was *written under*, not by whatever the rule says today -- so the
@@ -151,9 +152,14 @@
                                 @* Stacked below 600px: two pickers sharing a phone-width
                                    dialog clip both their values. *@
                                 <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                                    <MudDatePicker @bind-Date="_selectedDate" Label="Date"
+                                    @* Both re-preview: the version of a rule that divides
+                                       an expense is the one that stood on the day it was
+                                       spent, so the day is part of the division. *@
+                                    <MudDatePicker @bind-Date="_selectedDate"
+                                                   @bind-Date:after="RefreshPreviewAsync" Label="Date"
                                                    Variant="Variant.Outlined"/>
-                                    <MudTimePicker @bind-Time="_selectedTime" Label="Time"
+                                    <MudTimePicker @bind-Time="_selectedTime"
+                                                   @bind-Time:after="RefreshPreviewAsync" Label="Time"
                                                    Variant="Variant.Outlined" AmPm="true"/>
                                 </MudStack>
                                 break;
@@ -282,7 +288,8 @@
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
                                      Preview="@_preview"
-                                     PreviewError="@_previewError"/>
+                                     PreviewError="@_previewError"
+                                     Awaiting="@_awaiting"/>
                     </div>
                 }
             </div>
@@ -326,6 +333,42 @@
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
+
+    /// <summary>
+    /// What the edit still lacks before there is anything to divide, or null once it can
+    /// be asked about. See the create dialog's field of the same name.
+    /// </summary>
+    private string? _awaiting;
+    /// <summary>
+    /// The ask in flight, so a late answer cannot paint over a newer one.
+    /// </summary>
+    /// <remarks>
+    /// Every one of these is a round trip and several can be in the air at once -- the
+    /// per-member share fields are immediate, so typing "45.50" asks five times. They were
+    /// painted in the order they came back rather than the order they were asked, so an
+    /// early answer landing late redrew the division for a payer or an amount that had
+    /// already been changed, and Save then wrote something the screen had stopped showing.
+    /// Cancelled on the way out too: the continuation of a dropped dialog has nothing left
+    /// to render into.
+    /// </remarks>
+    private CancellationTokenSource? _previewing;
+
+    public void Dispose() => _previewing?.Cancel();
+
+
+    /// <summary>
+    /// What the expense was filed under and where it was spent when this opened, backfilled
+    /// from the detail read when the listing row did not carry them.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than written back onto <see cref="Original"/>, which is the caller's
+    /// own grid row: filling those in meant cancelling an edit left a category on a row in
+    /// the expenses list that nobody had saved, and the same object was then handed to the
+    /// update call as the "before" of the patch.
+    /// </remarks>
+    private Guid? _openedCategoryId;
+
+    private Guid? _openedMerchantId;
 
     /// <summary>
     /// What the expense is divided into today, which is where the editor starts from when
@@ -382,7 +425,7 @@
     private bool ShowSource =>
         IsShared
         && _model.GroupId == Original.GroupId
-        && _model.CategoryId == Original.CategoryId
+        && _model.CategoryId == _openedCategoryId
         && _source is not null;
 
     /// <summary>
@@ -460,6 +503,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _openedCategoryId = Original.CategoryId;
+        _openedMerchantId = Original.MerchantId;
+
         _model = new UpdateTransactionRequest
         {
             Name = Original.Name,
@@ -467,8 +513,8 @@
             Amount = Original.Amount,
             DateTime = Original.DateTime,
             GroupId = Original.GroupId,
-            CategoryId = Original.CategoryId,
-            MerchantId = Original.MerchantId,
+            CategoryId = _openedCategoryId,
+            MerchantId = _openedMerchantId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -492,16 +538,15 @@
             // The listing row carries no merchant id and, opened from some lists, no
             // category either. The detail read has both, and is the same read the splits
             // come from.
-            if (Original.CategoryId is null && details.CategoryId is not null)
+            if (_openedCategoryId is null && details.CategoryId is not null)
             {
-                Original.CategoryId = details.CategoryId;
-                Original.Category = details.Category;
+                _openedCategoryId = details.CategoryId;
                 _model.CategoryId = details.CategoryId;
             }
 
-            if (Original.MerchantId is null && details.MerchantId is not null)
+            if (_openedMerchantId is null && details.MerchantId is not null)
             {
-                Original.MerchantId = details.MerchantId;
+                _openedMerchantId = details.MerchantId;
                 _model.MerchantId = details.MerchantId;
             }
 
@@ -621,6 +666,11 @@
             _model.PaidByUserId = me.Id;
 
         StateHasChanged();
+
+        // The new group's members divide it now, and nothing on screen says how until this
+        // is asked again: clearing the preview above without replacing it left "Working it
+        // out..." standing for as long as the dialog was open.
+        await RefreshPreviewAsync();
     }
 
     /// <summary>
@@ -647,7 +697,7 @@
     /// </remarks>
     private async Task OnCategoryChanged()
     {
-        _redivide = _model.CategoryId != Original.CategoryId;
+        _redivide = _model.CategoryId != _openedCategoryId;
 
         // Back where it started means back to what it opened holding, so that undoing the
         // pick undoes the whole of it rather than leaving step two on "Automatically" over
@@ -703,10 +753,18 @@
     /// </summary>
     private async Task RefreshPreviewAsync()
     {
-        if (!IsShared)
+        // Before the ask, not on the way out: which version of a rule divides an expense
+        // depends on the day it was spent, so a preview built from an unapplied date
+        // answers about a different day than the one the save will store.
+        ApplyDate();
+
+        _awaiting = _model.Amount == 0m ? "Enter an amount to see how it divides." : null;
+
+        if (!IsShared || _awaiting is not null)
         {
             _preview = null;
             _previewError = null;
+            StateHasChanged();
             return;
         }
 
@@ -714,11 +772,23 @@
         _previewError = null;
         StateHasChanged();
 
-        var preview = await Transactions.PreviewUpdateAsync(Original.Id, _model, _redivide);
+        _previewing?.Cancel();
+        _previewing = new CancellationTokenSource();
+        var asked = _previewing.Token;
+
+        var preview = await Transactions.PreviewUpdateAsync(Original.Id, _model, _redivide, asked);
+
+        // A newer ask started while this one was out, or the dialog has gone.
+        if (asked.IsCancellationRequested)
+            return;
 
         _preview = preview;
+        // Deliberately not a diagnosis. Null is also a refused payer or a dropped
+        // connection, and those now say so themselves in a snackbar; asserting arithmetic
+        // over the top of them told people their numbers were wrong while the numbers on
+        // screen visibly summed correctly.
         _previewError = preview is null
-            ? "These shares do not add up yet, so there is nothing to show."
+            ? "No division to show yet."
             : null;
 
         StateHasChanged();
@@ -727,8 +797,22 @@
     private void ApplyDate() =>
         _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
 
-    private void Submit()
+    /// <summary>
+    /// Validated here, because this is the only place left between typing and saving.
+    /// </summary>
+    /// <remarks>
+    /// The two-step version validated on the way into step two, and collapsing the steps
+    /// took the check with it: clearing the name and pressing Save closed the dialog, the
+    /// API refused the patch, and every other edit in it went with the dialog that was
+    /// already gone.
+    /// </remarks>
+    private async Task Submit()
     {
+        await _form.ValidateAsync();
+
+        if (!_form.IsValid)
+            return;
+
         ApplyDate();
 
         var original = new UpdateTransactionRequest
@@ -738,8 +822,8 @@
             Amount = Original.Amount,
             DateTime = Original.DateTime,
             GroupId = Original.GroupId,
-            CategoryId = Original.CategoryId,
-            MerchantId = Original.MerchantId,
+            CategoryId = _openedCategoryId,
+            MerchantId = _openedMerchantId,
             PaidByUserId = Original.PaidByUserId
         };
 
@@ -897,7 +981,7 @@
         // a pending pick reads a different rule's history and reports the version it just
         // wrote as belonging to some other rule.
         var refreshed = await Source.ReadAsync(
-            Original.GroupId!.Value, Original.CategoryId, _chosen, withHistory: true);
+            Original.GroupId!.Value, _openedCategoryId, _chosen, withHistory: true);
 
         if (refreshed is not null)
         {

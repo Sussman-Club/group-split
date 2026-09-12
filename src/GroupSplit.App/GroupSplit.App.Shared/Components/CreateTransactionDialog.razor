@@ -6,8 +6,11 @@
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
 @inject ITransactionCommands Transactions
+@inject IMerchantCommands Merchants
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@implements IDisposable
 
 @*
     Recording an expense, on one screen.
@@ -60,6 +63,7 @@
                                  Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
+                              @bind-Value:after="OnNameChangedAsync"
                               For="@(() => _model.Name)"
                               Label="What was it?"
                               Variant="Variant.Outlined"
@@ -91,7 +95,8 @@
 
                         @if (!DisablePayingUserSelection)
                         {
-                            <ExpenseChip Label="payer" Lead="paid by" Value="@PayerName" Set="true"
+                            <ExpenseChip Label="payer" Lead="paid by" Value="@PayerName"
+                                         Set="@(_model.PaidByUserId is not null)"
                                          Open="@(_open == Picker.Payer)"
                                          OnClick="@(() => Toggle(Picker.Payer))"/>
                         }
@@ -161,9 +166,14 @@
                                 @* Stacked below 600px: two pickers sharing a phone-width
                                    dialog clip both their values. *@
                                 <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                                    <MudDatePicker @bind-Date="_selectedDate" Label="Date"
+                                    @* Both re-preview: the rule version that divides an
+                                       expense is the one that stood on the day it was
+                                       spent, so the day is part of the division. *@
+                                    <MudDatePicker @bind-Date="_selectedDate"
+                                                   @bind-Date:after="OnMoneyChangedAsync" Label="Date"
                                                    Variant="Variant.Outlined"/>
-                                    <MudTimePicker @bind-Time="_selectedTime" Label="Time"
+                                    <MudTimePicker @bind-Time="_selectedTime"
+                                                   @bind-Time:after="OnMoneyChangedAsync" Label="Time"
                                                    Variant="Variant.Outlined" AmPm="true"/>
                                 </MudStack>
                                 break;
@@ -172,7 +182,7 @@
                                 @* No preview after this one: a merchant is where the money
                                    went, not who owes it. *@
                                 <MerchantPicker Value="@_model.MerchantId"
-                                                ValueChanged="@OnMerchantChanged"/>
+                                                ValueChanged="@OnMerchantChangedAsync"/>
                                 break;
                         }
                     </div>
@@ -189,7 +199,8 @@
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
                                      Preview="@_preview"
-                                     PreviewError="@_previewError"/>
+                                     PreviewError="@_previewError"
+                                     Awaiting="@_awaiting"/>
                     </div>
                 }
                 else
@@ -258,6 +269,48 @@
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
+
+    /// <summary>
+    /// What the expense still lacks before there is anything to divide, or null once it
+    /// can be asked about.
+    /// </summary>
+    private string? _awaiting;
+    /// <summary>
+    /// The ask in flight, so a late answer cannot paint over a newer one.
+    /// </summary>
+    /// <remarks>
+    /// Every one of these is a round trip and several can be in the air at once -- the
+    /// per-member share fields are immediate, so typing "45.50" asks five times. They were
+    /// painted in the order they came back rather than the order they were asked, so an
+    /// early answer landing late redrew the division for a payer or an amount that had
+    /// already been changed, and Save then wrote something the screen had stopped showing.
+    /// Cancelled on the way out too: the continuation of a dropped dialog has nothing left
+    /// to render into.
+    /// </remarks>
+    private CancellationTokenSource? _previewing;
+
+    public void Dispose() => _previewing?.Cancel();
+
+
+    /// <summary>
+    /// Whether the expense is described well enough for the API to answer at all.
+    /// </summary>
+    /// <remarks>
+    /// The preview is the same request the save makes, so it is validated the same way: a
+    /// blank name or a zero amount comes back a 400. Asked on a form nobody has touched
+    /// yet, that reached the person as a warning that their shares did not add up.
+    /// </remarks>
+    private string? Missing()
+    {
+        // Zero, not "not positive": a negative amount is a refund, and it divides.
+        if (_model.Amount == 0m)
+            return "Enter an amount to see how it divides.";
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+            return "Name it to see how it divides.";
+
+        return null;
+    }
 
     /// <summary>What the merchant chip shows, once one has been picked.</summary>
     private string? _merchantName;
@@ -367,6 +420,13 @@
 
         _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
         _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
+
+        // Whoever is recording it paid for it, until they say otherwise. The API already
+        // assumed as much for an absent payer, so this was only ever missing from the
+        // screen -- where the chip stated it as "paid by somebody" and styled it as a
+        // settled choice, which is the app admitting to a gap it does not have.
+        if (_members.All(member => member.Id != _model.PaidByUserId) && Login.User is { } me)
+            _model.PaidByUserId = _members.Any(member => member.Id == me.Id) ? me.Id : null;
     }
 
     /// <summary>
@@ -380,13 +440,46 @@
     /// </remarks>
     private Task OnMoneyChangedAsync() => RefreshPreviewAsync();
 
-    private void OnMerchantChanged(Guid? merchantId)
+    /// <summary>
+    /// Asks again only when naming it changed whether it can be asked about at all.
+    /// </summary>
+    /// <remarks>
+    /// The field is immediate, so this runs on every keystroke; a preview per letter of
+    /// "Dinner" is six round trips for an answer the name has no part in. What the name
+    /// decides is whether the API will answer at all, and that flips once.
+    /// </remarks>
+    private async Task OnNameChangedAsync()
+    {
+        if (Missing() != _awaiting)
+            await RefreshPreviewAsync();
+    }
+
+    /// <summary>
+    /// Records the pick and resolves the name the chip will show.
+    /// </summary>
+    /// <remarks>
+    /// The name is looked up rather than assumed: without it the chip counted as set --
+    /// no plus, no label -- and drew an empty value, so picking a shop replaced the
+    /// invitation with a blank pill. No preview follows; a merchant is where the money
+    /// went, not who owes it.
+    /// </remarks>
+    private async Task OnMerchantChangedAsync(Guid? merchantId)
     {
         _model.MerchantId = merchantId;
 
+        if (merchantId is null)
+        {
+            _merchantName = null;
+            return;
+        }
+
+        _merchantName = (await Merchants.GetAsync(merchantId.Value))?.Name;
+
         // Closes on the way out: the merchant is the one chip whose picker is a search, so
         // leaving it open after a choice keeps a list of nothing on screen.
-        _open = merchantId is null ? _open : Picker.None;
+        _open = Picker.None;
+
+        StateHasChanged();
     }
 
     private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
@@ -402,10 +495,13 @@
     /// </summary>
     private async Task RefreshPreviewAsync()
     {
-        if (_groupId is null)
+        _awaiting = Missing();
+
+        if (_groupId is null || _awaiting is not null)
         {
             _preview = null;
             _previewError = null;
+            StateHasChanged();
             return;
         }
 
@@ -413,11 +509,23 @@
         _previewError = null;
         StateHasChanged();
 
-        var preview = await Transactions.PreviewAsync(Request());
+        _previewing?.Cancel();
+        _previewing = new CancellationTokenSource();
+        var asked = _previewing.Token;
+
+        var preview = await Transactions.PreviewAsync(Request(), asked);
+
+        // A newer ask started while this one was out, or the dialog has gone.
+        if (asked.IsCancellationRequested)
+            return;
 
         _preview = preview;
+        // Deliberately not a diagnosis. Null is also a refused payer or a dropped
+        // connection, and those now say so themselves in a snackbar; asserting arithmetic
+        // over the top of them told people their numbers were wrong while the numbers on
+        // screen visibly summed correctly.
         _previewError = preview is null
-            ? "These shares do not add up yet, so there is nothing to show."
+            ? "No division to show yet."
             : null;
 
         StateHasChanged();
@@ -438,6 +546,13 @@
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;
+
+        // The date is applied here rather than on the way out, because which version of a
+        // rule divides an expense depends on when it was spent: a preview built from an
+        // unapplied date is a division of a different day, and the save would then differ
+        // from what the screen showed.
+        ApplyDate();
+
         return _model;
     }
 
