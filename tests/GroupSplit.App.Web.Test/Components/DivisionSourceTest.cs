@@ -174,6 +174,75 @@ public class DivisionSourceTest : ComponentTest
             StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A remainder of more than a cent is named for what it is.
+    /// </summary>
+    /// <remarks>
+    /// The splitter settles the whole remainder on one person rather than a cent each, so
+    /// 48.50 four ways is 12.12, 12.12, 12.12, 12.14. Looking for a one-cent gap this found
+    /// two and said nothing -- silent about the single figure on the screen that anybody was
+    /// going to ask about.
+    /// </remarks>
+    [Fact]
+    public async Task A_remainder_of_more_than_a_cent_is_accounted_for()
+    {
+        var expense = Details(CurrentVersion, Spent) with
+        {
+            Amount = 48.50m,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 12.14m),
+                new TransactionSplitResponse(LuId, "Lu Ferrer", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Dani Rivero", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Omar Rivero", 12.12m)
+            ]
+        };
+
+        var dialog = await OpenAsync(expense);
+
+        Assert.Contains("the odd 2 cents go to Ana Benitez", dialog.Find(".gs-provenance-line").TextContent,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A division that went in exactly has no remainder, and nothing is said about one.
+    /// </summary>
+    [Fact]
+    public async Task A_division_that_goes_in_exactly_says_nothing_about_cents()
+    {
+        var dialog = await OpenAsync(Details(CurrentVersion, Spent));
+
+        Assert.DoesNotContain("odd", dialog.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Three shares in play is a division that differs, not one that rounded, however close
+    /// together the figures land.
+    /// </summary>
+    /// <remarks>
+    /// Guarding on the gap between the ends alone would call the largest of these the odd
+    /// cent, which is the same false statement in the same place as the one this line was
+    /// added to end.
+    /// </remarks>
+    [Fact]
+    public async Task Shares_that_all_differ_are_not_a_remainder()
+    {
+        var expense = Details(CurrentVersion, Spent) with
+        {
+            Amount = 60.03m,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 20.02m),
+                new TransactionSplitResponse(LuId, "Lu Ferrer", 20.01m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Dani Rivero", 20m)
+            ]
+        };
+
+        var dialog = await OpenAsync(expense);
+
+        Assert.DoesNotContain("odd", dialog.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>And nothing is said where the shares were never meant to match.</summary>
     [Fact]
     public async Task A_division_that_is_not_almost_equal_says_nothing_about_cents()
@@ -269,8 +338,14 @@ public class DivisionSourceTest : ComponentTest
 
         var dialog = await OpenAsync(expense);
 
-        Assert.Equal("No rule divided this one", dialog.Find(".gs-provenance-line").TextContent.Trim());
+        var line = dialog.Find(".gs-provenance-line").TextContent.Trim();
+
+        Assert.StartsWith("No rule divided this one", line, StringComparison.Ordinal);
         Assert.DoesNotContain("by hand", dialog.Markup, StringComparison.OrdinalIgnoreCase);
+
+        // And the two cents that made it look hand-set in the first place are accounted for
+        // rather than left as the one figure on the screen with no explanation.
+        Assert.Contains("the odd 2 cents go to Ana Benitez", line, StringComparison.Ordinal);
     }
 
     /// <summary>
