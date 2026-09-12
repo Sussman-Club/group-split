@@ -50,6 +50,33 @@ public class ReceiptItem : Entity
 
     public required string Name { get; set; }
 
+    /// <summary>
+    /// <see cref="Name"/> folded for matching: lower-cased and trimmed. What says two lines
+    /// are the same product.
+    /// </summary>
+    /// <remarks>
+    /// A bill prints "2 @ 59.99" for two of a thing, and that is one line -- which is fine
+    /// until the two are headed different ways. <see cref="ExpenseId"/> and
+    /// <see cref="Division"/> are facts about a line, so one line cannot be one jacket of
+    /// yours and one of Ana's, nor a pack of paper towels for the flat beside an identical
+    /// one for your office. Two lines can. Splitting the quantity is therefore how that is
+    /// said, and this is what lets the two be shown as what they are rather than as an
+    /// accidental duplicate: a reader collapses on it.
+    /// <para>
+    /// Not derived by splitting <see cref="Quantity"/> automatically, because a quantity is
+    /// not always a count. Three-quarters of a kilo of salmon is a measure and has no units
+    /// to separate; a twelve-pack does, and turning it into twelve rows nobody asked for
+    /// would be worse than the problem.
+    /// </para>
+    /// <para>
+    /// Stored rather than folded in the query, the same way <see cref="Merchant.NormalizedName"/>
+    /// is and for the same reason: an index can be on it. Which is also what would let a
+    /// later feature recognise a thing across bills -- "you bought this last month" -- without
+    /// anything here having to change.
+    /// </para>
+    /// </remarks>
+    public required string NormalizedName { get; set; }
+
     /// <summary>What one of them cost.</summary>
     public decimal UnitPrice { get; set; }
 
