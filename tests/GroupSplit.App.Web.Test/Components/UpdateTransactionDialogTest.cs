@@ -726,7 +726,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         string.Equals(operation.path, $"/{member}", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Correcting an expense to "these amounts are the expense's own" leaves the split
+    /// Correcting an expense to "somebody set them by hand" leaves the split
     /// control holding them, so the next Save states them.
     /// </summary>
     /// <remarks>
@@ -854,9 +854,9 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
             .ClickAsync(new MouseEventArgs());
 
-        // The option in the words the person reads before choosing it. Up to the apostrophe,
-        // which the markup carries as an entity rather than as the character.
-        Assert.Contains("These amounts are the expense", provider.Markup, StringComparison.Ordinal);
+        // The option in the words the person reads before choosing it, and in the same ones
+        // the strip above uses for the state they describe.
+        Assert.Contains("Somebody set them by hand", provider.Markup, StringComparison.Ordinal);
 
         var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
 
