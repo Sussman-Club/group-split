@@ -1659,13 +1659,21 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 /*
-    A row that has not arrived. Sized to .gs-row's own height so the list does not resize
-    underneath the person when the real ones replace it, and swept rather than pulsed --
-    a sweep reads as progress, a pulse reads as something wrong. The global
-    prefers-reduced-motion rule stops it for anybody who has asked.
+    Rows that have not arrived. A real .gs-row spaces itself from the next one with its own
+    12px of padding and .gs-list adds no gap of its own -- so a column of plain blocks
+    touched, and read as one grey slab rather than as rows. The gap here stands in for that
+    padding, and the bar is the height of a row's contents rather than of the whole row.
+
+    Swept rather than pulsed: a sweep reads as progress, a pulse reads as something wrong.
+    The global prefers-reduced-motion rule stops it for anybody who has asked.
 */
+.gs-waiting {
+    gap: 20px;
+    padding: 6px 0;
+}
+
 .gs-waiting-row {
-    height: 44px;
+    height: 32px;
     border-radius: var(--gs-radius);
     background: linear-gradient(
         90deg,
