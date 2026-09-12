@@ -104,7 +104,19 @@
                     <ExpenseChip Label="where" Value="@MerchantName"
                                  Set="@(_model.MerchantId is not null)"
                                  Open="@(_open == Picker.Where)"
-                                 OnClick="@(() => Toggle(Picker.Where))"/>
+                                 OnClick="@(() => Toggle(Picker.Where))">
+                        @* The same mark the picker offered it under, and the same one the
+                           row will carry once this is saved. A chip that named Lidl in
+                           words while the list above it showed the logo made the person
+                           check they had picked the place they thought they had. *@
+                        <Mark>
+                            @if (!string.IsNullOrWhiteSpace(_merchantLogo))
+                            {
+                                <img class="gs-mark-inline" src="@_merchantLogo" alt=""
+                                     width="20" height="20" loading="lazy"/>
+                            }
+                        </Mark>
+                    </ExpenseChip>
                 </div>
 
                 @if (_open is not Picker.None)
@@ -487,6 +499,9 @@
 
     private string MerchantName => _merchantName ?? "where";
 
+    /// <summary>The mark for that merchant, when it has one.</summary>
+    private string? _merchantLogo;
+
     /// <summary>
     /// Records the pick and resolves the name the chip will show.
     /// </summary>
@@ -502,10 +517,14 @@
         if (merchantId is null)
         {
             _merchantName = null;
+            _merchantLogo = null;
             return;
         }
 
-        _merchantName = (await Merchants.GetAsync(merchantId.Value))?.Name;
+        var merchant = await Merchants.GetAsync(merchantId.Value);
+
+        _merchantName = merchant?.Name;
+        _merchantLogo = merchant?.LogoUrl;
         _open = Picker.None;
 
         StateHasChanged();
@@ -585,9 +604,15 @@
             // an id would be useless, so the last resort is to go and ask. Only then: this
             // is one round trip to put one word on one chip.
             _merchantName = details.MerchantName ?? Original.MerchantName;
+            _merchantLogo = details.MerchantLogoUrl ?? Original.MerchantLogoUrl;
 
             if (_merchantName is null && _model.MerchantId is { } merchantId)
-                _merchantName = (await Merchants.GetAsync(merchantId))?.Name;
+            {
+                var merchant = await Merchants.GetAsync(merchantId);
+
+                _merchantName = merchant?.Name;
+                _merchantLogo ??= merchant?.LogoUrl;
+            }
 
             // A category that has since been deleted still names what this expense was
             // filed under, so it stays in the list rather than silently reading as none.
@@ -804,10 +829,12 @@
             return;
         }
 
-        _preview = null;
-        _previewError = null;
-        StateHasChanged();
-
+        // What is on screen stays there while the new answer is out. It was blanked first
+        // and rendered, which took the share list away by its own height and put it back a
+        // few tens of milliseconds later -- a flinch on every pick, worst on the chips,
+        // whose picker closes in the same frame, so the dialog jumped twice for one choice.
+        // The figures standing are this same expense with one field moved: a better
+        // stand-in for the next figures than a gap is, and they are replaced, not trusted.
         _previewing?.Cancel();
         _previewing = new CancellationTokenSource();
         var asked = _previewing.Token;

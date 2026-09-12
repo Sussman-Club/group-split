@@ -1667,13 +1667,19 @@ html:not([data-gs-ready]) .gs-group-card {
     Swept rather than pulsed: a sweep reads as progress, a pulse reads as something wrong.
     The global prefers-reduced-motion rule stops it for anybody who has asked.
 */
-.gs-waiting {
+/* The rows a list stands in for while it is being read. Named for what it is rather
+   than for the wait: "gs-waiting" is the home page's card of things waiting on you, and
+   sharing the name cost that card its padding. */
+.gs-placeholder {
     gap: 20px;
     padding: 6px 0;
 }
 
-.gs-waiting-row {
-    height: 32px;
+/* 48 and a 20px gap is a 68px pitch, against the 69px of the rows that replace these.
+   It was 32, which stood 52px per row in for 69 and let the card grow by a third of its
+   height the moment the real ones landed -- the settling this component exists to stop. */
+.gs-placeholder-row {
+    height: 48px;
     border-radius: var(--gs-radius);
     background: linear-gradient(
         90deg,
