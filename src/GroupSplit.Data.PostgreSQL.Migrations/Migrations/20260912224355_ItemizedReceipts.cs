@@ -44,6 +44,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ReceiptId = table.Column<Guid>(type: "uuid", nullable: false),
                     ExpenseId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Position = table.Column<int>(type: "integer", nullable: false),
                     Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     NormalizedName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     UnitPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),

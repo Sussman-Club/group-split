@@ -182,9 +182,39 @@ public class ReceiptService(
 
         var receipt = await ForBankRow(bankTransactionId, ct);
 
+        RefuseIfItsLinesAreSomebodysPurchase(receipt,
+            "This charge has already been added as an expense, and removing its bill would "
+            + "take away what those expenses were divided by. Delete the expense instead.");
+
         dbContext.Remove(receipt);
 
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Refuses to rewrite or remove a bill whose lines are already somebody's purchases.
+    /// </summary>
+    /// <remarks>
+    /// A bill stays on its bank row after the charge is filed, which is what lets one charge
+    /// be several expenses -- and it means the row's own routes go on reaching a receipt that
+    /// expenses are now divided by. Rewriting one replaces every line, so the expenses lose
+    /// the lines that are their money and report no bill at all; removing one takes the lines
+    /// and the claims with it, and an itemised rule then refuses to divide anything.
+    /// <para>
+    /// Neither is visible as a mistake afterwards: the balances do not move, they simply stop
+    /// being explicable. So the row's routes are for a bill nobody has filed from, and a bill
+    /// that has been filed from is changed through the expense that holds its lines.
+    /// </para>
+    /// </remarks>
+    private static void RefuseIfItsLinesAreSomebodysPurchase(Receipt? receipt, string why)
+    {
+        if (receipt is null || !receipt.Items.Any(line => line.ExpenseId is not null))
+            return;
+
+        throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled, why)
+            .WithExtension("transactionIds",
+                receipt.Items.Where(line => line.ExpenseId is not null)
+                    .Select(line => line.ExpenseId!.Value).Distinct().ToList());
     }
 
     public async Task<Receipt> ForBankRow(Guid bankTransactionId, CancellationToken ct = default)
@@ -261,6 +291,11 @@ public class ReceiptService(
 
         var existing = await Loaded()
             .FirstOrDefaultAsync(receipt => receipt.BankTransactionId == bankTransactionId, ct);
+
+        RefuseIfItsLinesAreSomebodysPurchase(existing,
+            "This charge has already been added as an expense, so its bill is what those "
+            + "expenses were divided by. Change the bill through the expense, or delete the "
+            + "expense first.");
 
         var receipt = existing ?? new Receipt
         {
@@ -533,6 +568,8 @@ public class ReceiptService(
             receipt.Items.Remove(item);
         }
 
+        var position = 0;
+
         foreach (var line in request.Items)
         {
             var item = receipt.Items.FirstOrDefault(stored => stored.Id == line.Id);
@@ -563,6 +600,9 @@ public class ReceiptService(
                 item.NormalizedName = Folded(line.Name);
                 item.TotalPrice = line.TotalPrice;
             }
+
+            // The order the bill was sent in, which is the order it was read off the paper.
+            item.Position = position++;
 
             item.UnitPrice = line.UnitPrice;
             item.Quantity = line.Quantity;
@@ -667,9 +707,18 @@ public class ReceiptService(
     /// the navigation anyway. Stated so that a future caller which has not does not silently
     /// get a false answer.
     /// </remarks>
+    /// <summary>
+    /// A receipt with its lines in the order they are on the paper, and their claims.
+    /// </summary>
+    /// <remarks>
+    /// Ordered here as well as in the projection, because the loaded graph is what the
+    /// division reads: the leftover cent of an apportioning goes to one named holder, and
+    /// which one is settled by a scan over these. An order the database chose would have made
+    /// that cent move between two people for no reason anybody could see.
+    /// </remarks>
     private IQueryable<Receipt> Loaded() =>
         dbContext.Set<Receipt>()
-            .Include(receipt => receipt.Items)
+            .Include(receipt => receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id))
             .ThenInclude(item => item.Claims);
 
     /// <summary>
