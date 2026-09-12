@@ -1122,6 +1122,142 @@ public class BankEndpointTest : IAsyncLifetime
     private static List<string?> Ids(IEnumerable<JsonElement> rows) =>
         rows.Select(row => row.GetProperty("id").GetString()).ToList();
 
+    /// <summary>
+    /// A charge with a bill says so, and says the list can offer to break it up.
+    /// </summary>
+    /// <remarks>
+    /// The count is what makes the feature reachable at all. Without it the inbox cannot
+    /// tell a charge that is two purchases from one that is not, so the way in would have to
+    /// be offered on every row and refused on nearly all of them.
+    /// </remarks>
+    [Fact]
+    public async Task A_row_with_a_bill_says_how_many_lines_it_has()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        await BillAsync(row, ("GROCERIES", 6m), ("JACKET", 4m));
+
+        var listed = Assert.Single(await ItemsAsync("/inbox"));
+
+        Assert.Equal(2, listed.GetProperty("billLineCount").GetInt32());
+        Assert.True(listed.GetProperty("canSplit").GetBoolean());
+    }
+
+    /// <summary>
+    /// A row nobody typed a bill for -- which is nearly every row -- says nothing about one,
+    /// and cannot be split.
+    /// </summary>
+    [Fact]
+    public async Task A_row_with_no_bill_reports_none_and_cannot_be_split()
+    {
+        var connection = await LinkAsync();
+
+        await RowAsync(connection);
+
+        var listed = Assert.Single(await ItemsAsync("/inbox"));
+
+        Assert.Equal(0, listed.GetProperty("billLineCount").GetInt32());
+        Assert.False(listed.GetProperty("canSplit").GetBoolean());
+    }
+
+    /// <summary>
+    /// A charge filed as several expenses reports all of them, and reports no single one.
+    /// </summary>
+    /// <remarks>
+    /// The listing used to take the first of the collection, which is right for the ordinary
+    /// row and wrong the moment a bill covers two purchases: following it landed on one part
+    /// of the charge presented as the whole of it. Null is the honest answer for a split row
+    /// -- there is no "the" expense -- and the ids are there for a caller that wants them.
+    /// </remarks>
+    [Fact]
+    public async Task A_charge_filed_as_several_expenses_reports_all_of_them()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        var groceries = await ExpenseAsync("Groceries", 6m);
+        var jacket = await ExpenseAsync("Jacket", 4m);
+
+        await FiledAsync(row, groceries.Id, jacket.Id);
+
+        var listed = Assert.Single(await ItemsAsync("/inbox?Status=Filed"));
+
+        var ids = listed.GetProperty("transactionIds").EnumerateArray()
+            .Select(id => id.GetGuid()).ToList();
+
+        Assert.Equal(new[] { groceries.Id, jacket.Id }.Order(), ids.Order());
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("transactionId").ValueKind);
+        Assert.False(listed.GetProperty("canSplit").GetBoolean());
+    }
+
+    /// <summary>The ordinary filing still reports its one expense.</summary>
+    [Fact]
+    public async Task A_charge_filed_as_one_expense_still_reports_it()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        var expense = await ExpenseAsync("Shopping", 10m);
+
+        await FiledAsync(row, expense.Id);
+
+        var listed = Assert.Single(await ItemsAsync("/inbox?Status=Filed"));
+
+        Assert.Equal(expense.Id, listed.GetProperty("transactionId").GetGuid());
+        Assert.Equal(expense.Id, Assert.Single(
+            listed.GetProperty("transactionIds").EnumerateArray()).GetGuid());
+    }
+
+    /// <summary>A bill on an imported row, with its figures worked out from its lines.</summary>
+    private async Task BillAsync(BankTransaction row, params (string Name, decimal Price)[] lines)
+    {
+        using var scope = _host.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var receipt = new Receipt
+        {
+            BankTransactionId = row.Id,
+            Subtotal = lines.Sum(line => line.Price),
+            Total = lines.Sum(line => line.Price)
+        };
+
+        foreach (var (name, price) in lines)
+        {
+            receipt.Items.Add(new ReceiptItem
+            {
+                Name = name,
+                NormalizedName = name.ToLowerInvariant(),
+                TotalPrice = price,
+                Division = ReceiptItemDivision.Evenly
+            });
+        }
+
+        dbContext.Add(receipt);
+        await dbContext.SaveChangesAsync(Ct);
+    }
+
+    /// <summary>
+    /// Links expenses to the row as a filing does, without going through the filing itself:
+    /// what is under test here is what the listing reports, not how the rows got that way.
+    /// </summary>
+    private async Task FiledAsync(BankTransaction row, params Guid[] expenseIds)
+    {
+        using var scope = _host.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        foreach (var id in expenseIds)
+        {
+            var expense = await dbContext.Set<Expense>().FirstAsync(tx => tx.Id == id, Ct);
+            expense.BankTransactionId = row.Id;
+        }
+
+        var stored = await dbContext.Set<BankTransaction>().FirstAsync(one => one.Id == row.Id, Ct);
+        stored.Status = BankTransactionStatus.Filed;
+
+        await dbContext.SaveChangesAsync(Ct);
+    }
+
     private async Task<List<JsonElement>> ItemsAsync(string route)
     {
         var response = await _host.Client.GetAsync(route, Ct);

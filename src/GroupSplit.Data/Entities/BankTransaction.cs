@@ -155,6 +155,18 @@ public class BankTransaction : Entity
     public virtual ICollection<Transaction> FiledAs { get; } = [];
 
     /// <summary>
+    /// The itemised bill somebody typed against this charge, when there is one.
+    /// </summary>
+    /// <remarks>
+    /// The inverse of <see cref="Data.Entities.Receipt.BankTransaction"/>, and what lets the
+    /// inbox say a row has a bill without a query per row. A bill is not a fact from the
+    /// bank -- the row arrives with a total and a merchant, and somebody types the lines --
+    /// so this is empty for nearly every row, and the few that have one are the ones a
+    /// charge covering two purchases can be split by.
+    /// </remarks>
+    public virtual Receipt? Receipt { get; set; }
+
+    /// <summary>
     /// When the provider withdrew a row that had already been filed. The expense stays --
     /// it is somebody's history -- and the inbox can say what happened. A row nobody had
     /// acted on is simply deleted instead, so this is set on filed rows only.

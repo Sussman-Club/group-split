@@ -68,7 +68,9 @@ public sealed record InboxSummaryResponse(int NewCount, int? PossibleDuplicates 
 /// The provider's own category in the provider's vocabulary, for the client to match
 /// against a group's categories once a group is chosen.
 /// </param>
-/// <param name="TransactionId">The expense this became, once it has been filed.</param>
+/// <param name="TransactionIds">
+/// The expenses this became, once it has been filed. Empty until then.
+/// </param>
 /// <param name="RemovedAt">
 /// Set when the bank withdrew a row that had already been filed. The expense stays; this is
 /// how the inbox can say what happened.
@@ -89,7 +91,7 @@ public sealed record BankTransactionResponse(
     string? CategoryIconUrl,
     bool Pending,
     InboxStatus Status,
-    Guid? TransactionId,
+    IReadOnlyList<Guid> TransactionIds,
     DateTimeOffset? RemovedAt,
     string AccountName,
     string InstitutionName)
@@ -103,6 +105,36 @@ public sealed record BankTransactionResponse(
     /// there is the other. A pair somebody has said no to is not offered again.
     /// </remarks>
     public IReadOnlyList<ExpenseMatchResponse> PossibleDuplicates { get; init; } = [];
+
+    /// <summary>
+    /// How many lines the bill behind this charge has. Zero for the ordinary row, which is
+    /// every charge nobody typed a bill for.
+    /// </summary>
+    /// <remarks>
+    /// A count rather than the lines themselves, because the inbox is a list: it needs to
+    /// say a charge can be broken up and offer the way in, and the screen that does the
+    /// breaking up asks for the bill when it opens.
+    /// <para>
+    /// Not nullable, though "no bill" and "a bill with no lines" are different things. The
+    /// second cannot happen -- a bill is saved with its lines and refused without them --
+    /// and a nullable count would have meant relying on how a provider flattens a missing
+    /// row, which the two the app runs on do not agree about.
+    /// </para>
+    /// </remarks>
+    public int BillLineCount { get; init; }
+
+    /// <summary>Whether this charge can be split: it has a bill, and the bill has lines.</summary>
+    public bool CanSplit => BillLineCount > 1 && Status == InboxStatus.New && !IsCredit;
+
+    /// <summary>
+    /// The one expense this row became, or null when it became none -- or several.
+    /// </summary>
+    /// <remarks>
+    /// For the ordinary filing, which is a row and an expense. Null for a split charge
+    /// rather than the first of its parts: a caller following this to "the" expense would
+    /// land on one part of a purchase and be told it was the whole thing.
+    /// </remarks>
+    public Guid? TransactionId => TransactionIds.Count == 1 ? TransactionIds[0] : null;
 
     /// <summary>What to lead the row with: who was paid, falling back to the bank's line.</summary>
     public string Title => string.IsNullOrWhiteSpace(MerchantName) ? Description : MerchantName;

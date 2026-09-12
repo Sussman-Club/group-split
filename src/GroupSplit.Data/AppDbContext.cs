@@ -593,7 +593,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // a piece of paper whose lines may be two purchases. The check constraint that
             // used to hold "exactly one owner" went with it.
             entity.HasOne(receipt => receipt.BankTransaction)
-                .WithOne()
+                .WithOne(row => row.Receipt)
                 .HasForeignKey<Receipt>(receipt => receipt.BankTransactionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
