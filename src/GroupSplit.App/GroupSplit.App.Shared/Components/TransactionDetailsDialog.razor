@@ -60,10 +60,53 @@
     </TitleContent>
 
     <DialogContent>
+        @*
+            The shape of what is coming, not a spinner in an empty box.
+
+            A centred spinner made the dialog as tall as a spinner, so it opened small and
+            then jumped to the size of an expense while the open transition was still
+            playing -- which is what the flash was. This stands in the same room: two
+            figures, four facts, a few rows of division. The dialog opens at about the
+            height it will keep, and the content swaps in place.
+        *@
         @if (details is null)
         {
-            <div class="gs-empty" style="padding: 32px">
-                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            <div class="gs-stack" style="gap: 20px" aria-busy="true" aria-label="Loading the expense">
+                <div class="gs-figures">
+                    <div class="gs-figure">
+                        <MudSkeleton Width="48px" Height="12px" />
+                        <MudSkeleton Width="120px" Height="34px" />
+                    </div>
+                    <div class="gs-figure">
+                        <MudSkeleton Width="64px" Height="12px" />
+                        <MudSkeleton Width="96px" Height="34px" />
+                    </div>
+                </div>
+
+                <dl class="gs-kv">
+                    @for (var row = 0; row < 4; row++)
+                    {
+                        <div class="gs-kv-row">
+                            <dt><MudSkeleton Width="72px" Height="14px" /></dt>
+                            <dd><MudSkeleton Width="140px" Height="14px" /></dd>
+                        </div>
+                    }
+                </dl>
+
+                <div>
+                    <MudSkeleton Width="180px" Height="18px" Class="mb-3" />
+
+                    <div class="gs-splits">
+                        @for (var row = 0; row < 3; row++)
+                        {
+                            <div class="gs-split">
+                                <MudSkeleton SkeletonType="SkeletonType.Circle" Width="32px" Height="32px" />
+                                <span class="gs-split-who"><MudSkeleton Width="120px" Height="14px" /></span>
+                                <span class="gs-split-amount"><MudSkeleton Width="64px" Height="14px" /></span>
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
         }
         else
@@ -217,27 +260,33 @@
                 *@
                 @if (receipt is { Items.Count: > 0 } bill)
                 {
-                    <div>
-                        <div class="gs-card-title" style="margin-bottom: 10px">
-                            <h3 style="margin: 0; font-size: 1rem">On the bill</h3>
-                        </div>
+                    @* A line, not the document.
 
-                        @* One component with the inbox's, because it is the same piece of
-                           paper. They were drawn twice, and said different things about the
-                           same line. *@
-                        <BillSheet Receipt="@bill" Me="@Me"
-                                   Title="@(details.MerchantName ?? details.Name)"
-                                   Where="@Clock.Local(details.DateTime).ToString(" d MMM yyyy")" />
+                       The slip was printed here in full, which made one dialog carry two
+                       things: the division somebody opened it for, and then a receipt --
+                       forty lines of it on a warehouse run -- between them and the Close
+                       button. It also arrived last, after two other reads, so the dialog
+                       grew twice under the reader's hand while they were trying to read it.
 
-                        @if (bill.Tax != 0 || bill.Tip != 0)
-                        {
-                            @* Said once, here, because it is the part people expect to be
-                               wrong: the extras follow what each person had rather than
-                               being divided by the number of people at the table. *@
-                            <p class="gs-muted" style="margin: 8px 0 0; font-size: .75rem">
-                                Tax and tip are shared out in proportion to what each person had.
-                            </p>
-                        }
+                       So this says what there is and opens it. Same shape as the inbox's
+                       way into a bill, because it is the same piece of paper. *@
+                    <div class="gs-bill-strip">
+                        <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
+
+                        <span>
+                            @* What is on the paper, and -- when the charge was split -- how
+                               much of it is this expense, which is the question a bill
+                               totalling more than the expense immediately raises. *@
+                            <strong>@bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items")</strong>
+                            · @bill.Total.ToMoney()@(Partly(bill) is { Length: > 0 } part ? $" · {part}" : "")
+                        </span>
+
+                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                   Class="gs-btn-quiet ms-auto"
+                                   EndIcon="@Icons.Material.Rounded.ArrowForward"
+                                   OnClick="@(() => ShowBillAsync(bill))">
+                            See the bill
+                        </MudButton>
                     </div>
                 }
             </div>
@@ -294,6 +343,13 @@
     // that cannot load its subject has nothing to show, so it closes.
     protected override async Task OnInitializedAsync()
     {
+        // Both at once, because both only ever needed the id this dialog was opened with.
+        // The bill used to be read last, after the expense and after the rule, and each
+        // answer grew the dialog under the reader's hand: it opened at the size of a
+        // spinner, jumped to the size of an expense, then twice more. That succession
+        // during the open transition is what read as a flash.
+        var bill = Receipts.GetAsync(TransactionId);
+
         var loaded = await Errors.TryAsync(
             async () => details = await TransactionsClient.GetTransactionAsync(TransactionId),
             "Could not load the expense.");
@@ -304,31 +360,23 @@
             return;
         }
 
-        // Paint the expense now, before going after what divided it.
-        //
-        // Three reads stood between opening this dialog and seeing anything in it -- the
-        // expense, then the group's categories, then the rule's history -- and every one of
-        // them had to answer before the spinner gave way. Two of the three fill in a single
-        // line of description. So the body goes up as soon as its own read lands, the line
-        // arrives when it arrives, and the dialog stops looking like it is loading twice.
-        //
+        // And what divided it, before anything is painted. It is one read, it lands in the
+        // same breath as the other two, and the line it fills sits above the figures -- so
+        // arriving late moved everything under it. An expense on screen that reflows while
+        // somebody is reading it is worse than a spinner for one more moment.
+        await ReadSourceAsync();
+
+        // Null for most expenses, which have no bill, and null for a failure just the same:
+        // there is nothing to report either way and the strip simply does not appear.
+        receipt = await bill;
+
         // The title has to be told separately, and this is not belt and braces: TitleContent
         // is hoisted into the dialog provider's own tree, so it does not re-render when this
         // component's state changes. Without it the dialog stays headed "Expense" over a
         // body full of the thing it is refusing to name. Both go together here so the
-        // heading and the figures under it appear in the same frame.
+        // heading and everything under it appear in one frame.
         StateHasChanged();
         MudDialog.StateHasChanged();
-
-        await ReadSourceAsync();
-
-        // Last, and after the paint, for the same reason as the line above it: most expenses
-        // have no bill, and this returns null for that as readily as for a failure -- so
-        // there is nothing to report and nothing worth holding the dialog for. A section that
-        // simply will not appear is not worth a spinner over an expense already on screen.
-        receipt = await Receipts.GetAsync(TransactionId);
-
-        StateHasChanged();
     }
 
     /// <summary>
@@ -377,6 +425,41 @@
         // version that stopped being current while the person was looking at the proof.
         await ReadSourceAsync();
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// How much of the paper this expense is, for a charge that was split into parts.
+    /// </summary>
+    /// <remarks>
+    /// Empty for the ordinary bill, which is the whole of one purchase: "6 of 6 items" is
+    /// furniture. Counted off the lines rather than asked for, since the reading already
+    /// carries which part each line belongs to.
+    /// </remarks>
+    private static string Partly(ReceiptResponse bill)
+    {
+        var mine = bill.Items.Count(line => line.ExpenseId == bill.ExpenseId);
+
+        return mine == bill.Items.Count ? string.Empty : $"{mine} on this expense";
+    }
+
+    /// <summary>
+    /// The bill, on its own, handed over rather than read again.
+    /// </summary>
+    private async Task ShowBillAsync(ReceiptResponse bill)
+    {
+        var parameters = new DialogParameters<ExpenseBillDialog>
+        {
+            { dialog => dialog.Receipt, bill },
+            { dialog => dialog.Title, details!.MerchantName ?? details.Name },
+            { dialog => dialog.Where, Clock.Local(details.DateTime).ToString("d MMM yyyy") },
+            { dialog => dialog.Mark, details.MerchantLogoUrl },
+            { dialog => dialog.Me, Me },
+            { dialog => dialog.PartAmount, details.Amount }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        await DialogService.ShowAsync<ExpenseBillDialog>("Bill", parameters, options);
     }
 
     private void Close() => MudDialog.Close();

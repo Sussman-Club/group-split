@@ -45,6 +45,19 @@
                 @Wanting with nobody
             </MudButton>
         }
+
+        @* Offered, not imposed. The paper is the paper, and a reader checking a charge
+           against a bill wants the lines that were on it -- but a reader who has just asked
+           what their own expense was wants the four lines out of forty that are theirs. *@
+        @if (Shared)
+        {
+            <MudButton Variant="@(_onlyMine ? Variant.Filled : Variant.Text)"
+                       Color="@(_onlyMine ? Color.Primary : Color.Default)"
+                       Size="Size.Small" Class="gs-btn-pill"
+                       OnClick="@(() => _onlyMine = !_onlyMine)">
+                Only this expense
+            </MudButton>
+        }
     </div>
 }
 
@@ -66,7 +79,13 @@
 
                 @* What a till prints at the bottom, moved to the top because on screen it is
                    the thing that says how much paper there is before you start scrolling. *@
-                <span class="gs-slip-where">@Receipt.Items.Count @(Receipt.Items.Count == 1 ? "item" : "items")</span>
+                @* And, where the paper covers more than one purchase, how much of it is
+                   this one. Said at the top because it changes how everything below is
+                   read: a bill totalling 158.07 over an expense of 53.54 is not a bill
+                   that disagrees with the charge, it is four lines somebody else's. *@
+                <span class="gs-slip-where">
+                    @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "item" : "items")@(Shared ? $" · {Mine} on this expense" : "")
+                </span>
             </div>
 
             @* Under the head and nowhere else. Without one there is nothing above it to
@@ -82,7 +101,7 @@
         <ul class="gs-slip-lines">
             @foreach (var row in Showing)
             {
-                <li class="gs-slip-line @(row.Unclaimed && DividesByClaims ? "is-unclaimed" : "")" @key="row.Key">
+                <li class="gs-slip-line @(row.Unclaimed && DividesByClaims && !row.Elsewhere ? "is-unclaimed" : "") @(row.Elsewhere ? "is-elsewhere" : "")" @key="row.Key">
                     <span class="gs-slip-item">
                         <span class="gs-slip-name">@row.Name</span>
                     </span>
@@ -147,6 +166,23 @@
                 <dt>Total</dt>
                 <dd>@Receipt.Total.ToMoney()</dd>
             </div>
+
+            @* The one figure that ties the paper to the expense it was opened from, and the
+               only place the two can be seen together. Without it a shared bill reads as a
+               receipt that does not match the charge -- which is what it looks like, and is
+               the thing somebody would otherwise go and check.
+
+               Given by the caller rather than added up here. What a part comes to is the
+               charge cut between the parts, tax and tip and the rounding included, and that
+               arithmetic is the API's; a client that re-did it would eventually disagree
+               with the ledger by a cent and be believed. *@
+            @if (Shared && PartAmount is { } part)
+            {
+                <div class="is-part">
+                    <dt>This expense</dt>
+                    <dd>@part.ToMoney()</dd>
+                </div>
+            }
         </dl>
 
         @if (Filtered)
@@ -161,14 +197,26 @@
             <p class="gs-slip-foot">N — no tax charged on this line</p>
         }
 
+        @* Said once, at the foot, where a receipt puts its small print. The greying is the
+           mark; this is what the mark means. *@
+        @if (Shared)
+        {
+            <p class="gs-slip-foot">
+                Faded lines are the rest of this charge, filed as @(Parts - 1 == 1 ? "another expense" : "other expenses").
+            </p>
+        }
+
         @* Only where the answer is wanted. Claims are read by one thing -- the rule that
            divides an expense by its bill -- and on every other bill they are stored and never
            looked at, so counting the lines that have none is nagging about something nothing
            will read. *@
         @if (Wanting > 0)
         {
+            @* Out of this expense's lines, not the paper's: on a split charge the others are
+               another expense's to answer for, and the division only ever looks at this
+               part. *@
             <p class="gs-slip-foot is-unclaimed">
-                @Wanting of @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "line" : "lines") @(Wanting == 1 ? "has" : "have") nobody on @(Wanting == 1 ? "it" : "them").
+                @Wanting of @Ours @(Ours == 1 ? "line" : "lines") @(Wanting == 1 ? "has" : "have") nobody on @(Wanting == 1 ? "it" : "them").
                 This expense cannot be divided by its bill until somebody says who had them.
             </p>
         }
@@ -198,10 +246,51 @@
     /// <summary>The reader, so their own claims read as "You" rather than as their name.</summary>
     [Parameter] public Guid? Me { get; set; }
 
+    /// <summary>
+    /// What this expense's part of the bill came to, where the caller knows it.
+    /// </summary>
+    /// <remarks>
+    /// Only ever shown on a bill covering more than one purchase, which is the only case
+    /// where the paper's total is not the money the reader arrived with.
+    /// </remarks>
+    [Parameter] public decimal? PartAmount { get; set; }
+
     private string? _filter;
     private bool _onlyUnclaimed;
+    private bool _onlyMine;
 
-    private bool Searchable => Receipt.Items.Count >= Long || Wanting > 0;
+    private bool Searchable => Receipt.Items.Count >= Long || Wanting > 0 || Shared;
+
+    /// <summary>
+    /// Which purchase is being read -- one part of the paper, or none of them.
+    /// </summary>
+    /// <remarks>
+    /// Null on an imported charge nobody has filed. There every line is unassigned and the
+    /// whole paper is the subject, so there is no "the rest of it" to fade.
+    /// </remarks>
+    private Guid? ThisPart => Receipt.ExpenseId;
+
+    /// <summary>How many distinct purchases the lines of this bill were filed as.</summary>
+    private int Parts => Receipt.Items.Select(line => line.ExpenseId).Distinct().Count();
+
+    /// <summary>
+    /// Whether the paper covers more than the purchase being read.
+    /// </summary>
+    /// <remarks>
+    /// One charge split into parts leaves several expenses sharing one receipt, and each of
+    /// them was drawing the whole thing: a 53.54 expense under a 158.07 bill, with no way to
+    /// tell which four of the six lines were the ones it was made of.
+    /// </remarks>
+    private bool Shared => ThisPart is { } part && Receipt.Items.Any(line => line.ExpenseId != part);
+
+    /// <summary>How many lines are this expense's.</summary>
+    private int Mine => Receipt.Items.Count(line => line.ExpenseId == ThisPart);
+
+    /// <summary>
+    /// The lines the reader is answerable for: this expense's where the bill has parts, and
+    /// the whole paper where it does not.
+    /// </summary>
+    private int Ours => Shared ? Mine : Receipt.Items.Count;
 
     /// <summary>
     /// Whether anything reads the claims on this bill.
@@ -218,14 +307,25 @@
     /// <summary>How many lines still need an answer -- none, where none is wanted.</summary>
     private int Wanting => DividesByClaims ? Unclaimed : 0;
 
-    private bool Filtered => !string.IsNullOrWhiteSpace(_filter) || _onlyUnclaimed;
+    private bool Filtered => !string.IsNullOrWhiteSpace(_filter) || _onlyUnclaimed || _onlyMine;
 
-    private int Unclaimed => Receipt.Items.Count(line => line.Claims.Count == 0);
+    /// <summary>
+    /// Lines with nobody on them -- of this expense's part, where the bill has parts.
+    /// </summary>
+    /// <remarks>
+    /// A line in somebody else's half of a split charge is none of this expense's business,
+    /// which is the rule the division itself follows: it refuses a part with an unclaimed
+    /// line and never looks at the others. Counted over the whole paper, this told a reader
+    /// their expense could not be divided because of four lines they had no say over.
+    /// </remarks>
+    private int Unclaimed =>
+        Receipt.Items.Count(line =>
+            line.Claims.Count == 0 && (!Shared || line.ExpenseId == ThisPart));
 
     /// <summary>One printed row: a line, or the identical lines it stands for.</summary>
     private sealed record Row(
         string Key, string Name, decimal Count, decimal Each, decimal Total,
-        bool Exempt, bool Unclaimed, string Who);
+        bool Exempt, bool Unclaimed, bool Elsewhere, string Who);
 
     /// <summary>
     /// What to print: the bill, narrowed to what is being looked for, with identical lines
@@ -246,6 +346,7 @@
 
             var lines = Receipt.Items
                 .Where(line => !_onlyUnclaimed || line.Claims.Count == 0)
+                .Where(line => !_onlyMine || line.ExpenseId == ThisPart)
                 .Where(line => string.IsNullOrEmpty(wanted)
                                || line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
 
@@ -256,6 +357,11 @@
                         Name: line.Name.Trim().ToLowerInvariant(),
                         line.UnitPrice,
                         line.IsTaxable,
+                        // Which purchase the line is part of, so two identical items bought
+                        // on one card and filed as two expenses stay two rows. Folding them
+                        // would print one row that is half this expense's and half not, and
+                        // no marking could then be true of it.
+                        line.ExpenseId,
                         Who: Who(line)))
                     .Select(same => new Row(
                         same.First().Id.ToString(),
@@ -265,6 +371,7 @@
                         same.Sum(line => line.TotalPrice),
                         !same.First().IsTaxable,
                         same.First().Claims.Count == 0,
+                        Shared && same.Key.ExpenseId != ThisPart,
                         same.Key.Who))
             ];
         }
@@ -283,8 +390,11 @@
         if (line.Claims.Count == 0)
         {
             // Said only where somebody will be asked to answer it. On a bill nothing divides
-            // by, a line naming nobody is not an omission -- it is what a receipt looks like.
-            return DividesByClaims ? "nobody yet" : string.Empty;
+            // by, a line naming nobody is not an omission -- it is what a receipt looks like;
+            // and on another part of a split charge it is somebody else's to answer.
+            var asked = DividesByClaims && (!Shared || line.ExpenseId == ThisPart);
+
+            return asked ? "nobody yet" : string.Empty;
         }
 
         return string.Join(", ", line.Claims.Select(claim =>

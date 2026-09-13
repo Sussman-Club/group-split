@@ -5054,11 +5054,36 @@ html:not([data-gs-ready]) .gs-group-card {
     font-variant-numeric: tabular-nums;
 }
 
+/*
+    One charge filed as several expenses leaves them sharing one piece of paper, and each of
+    them was drawing all of it. Faded rather than hidden: the lines really were on the bill,
+    and a reader checking a receipt against a charge needs to see the ones that account for
+    the difference -- they are just not what this expense is made of.
+
+    Opacity and not a colour, so it fades the price, the leader and the margin letter with
+    the name and needs no second rule per element.
+*/
+.gs-slip-line.is-elsewhere {
+    opacity: .42;
+}
+
 /* Double-ruled, which is how a slip says "this is the figure that was charged". */
 .gs-slip-totals > div.is-total {
     margin-top: 6px;
     padding-top: 6px;
     border-top: 3px double var(--gs-paper-rule);
+    font-weight: 700;
+}
+
+/*
+    Under the charged total and set apart from it, because it is not a figure the till
+    printed -- it is this expense's share of one that was. A single rule rather than the
+    total's double one, which stays the mark of "what the card paid".
+*/
+.gs-slip-totals > div.is-part {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--gs-paper-rule);
     font-weight: 700;
 }
 
