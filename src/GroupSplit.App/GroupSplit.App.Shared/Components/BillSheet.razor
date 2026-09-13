@@ -41,6 +41,7 @@
             <MudButton Variant="@(_onlyUnclaimed ? Variant.Filled : Variant.Text)"
                        Color="@(_onlyUnclaimed ? Color.Primary : Color.Default)"
                        Size="Size.Small" Class="gs-btn-pill"
+                       aria-pressed="@_onlyUnclaimed"
                        OnClick="@(() => _onlyUnclaimed = !_onlyUnclaimed)">
                 @Wanting with nobody
             </MudButton>
@@ -54,6 +55,7 @@
             <MudButton Variant="@(_onlyMine ? Variant.Filled : Variant.Text)"
                        Color="@(_onlyMine ? Color.Primary : Color.Default)"
                        Size="Size.Small" Class="gs-btn-pill"
+                       aria-pressed="@_onlyMine"
                        OnClick="@(() => _onlyMine = !_onlyMine)">
                 Only this expense
             </MudButton>
@@ -185,21 +187,27 @@
             }
         </dl>
 
+        @* Lines against lines. It counted a sum of the folded rows' quantities against a
+           count of the bill's lines, so a warehouse bill with a line of twelve read
+           "Showing 15 of 6" the moment anybody typed in the box. *@
         @if (Filtered)
         {
             <p class="gs-slip-foot">
-                Showing @Trimmed(Showing.Sum(row => row.Count)) of @Receipt.Items.Count. The totals are the whole bill.
+                Showing @Narrowed().Count() of @Receipt.Items.Count. The totals are the whole bill.
             </p>
         }
 
-        @if (Receipt.Tax != 0 && Receipt.Items.Any(line => !line.IsTaxable))
+        @* Both legends describe marks, so both are gated on a mark being on screen rather
+           than on one being somewhere on the paper: after a filter that leaves neither,
+           they explain nothing. *@
+        @if (Receipt.Tax != 0 && Narrowed().Any(line => !line.IsTaxable))
         {
             <p class="gs-slip-foot">N — no tax charged on this line</p>
         }
 
         @* Said once, at the foot, where a receipt puts its small print. The greying is the
            mark; this is what the mark means. *@
-        @if (Shared)
+        @if (Shared && Narrowed().Any(line => line.ExpenseId != ThisPart))
         {
             <p class="gs-slip-foot">
                 Faded lines are the rest of this charge, filed as @(Parts - 1 == 1 ? "another expense" : "other expenses").
@@ -217,7 +225,7 @@
                part. *@
             <p class="gs-slip-foot is-unclaimed">
                 @Wanting of @Ours @(Ours == 1 ? "line" : "lines") @(Wanting == 1 ? "has" : "have") nobody on @(Wanting == 1 ? "it" : "them").
-                This expense cannot be divided by its bill until somebody says who had them.
+                This expense cannot be divided by its bill until somebody says who had @(Wanting == 1 ? "it" : "them").
             </p>
         }
     </div>
@@ -318,9 +326,43 @@
     /// line and never looks at the others. Counted over the whole paper, this told a reader
     /// their expense could not be divided because of four lines they had no say over.
     /// </remarks>
-    private int Unclaimed =>
-        Receipt.Items.Count(line =>
-            line.Claims.Count == 0 && (!Shared || line.ExpenseId == ThisPart));
+    private int Unclaimed => Receipt.Items.Count(Wants);
+
+    /// <summary>
+    /// Whether this line is one somebody will be asked to answer for: it names nobody, and
+    /// it is this expense's.
+    /// </summary>
+    /// <remarks>
+    /// The one test, used by the count, the filter and the row's own marking, so the three
+    /// cannot drift apart -- which they had: the button counted the part and the filter it
+    /// drove showed the whole paper.
+    /// </remarks>
+    private bool Wants(ReceiptItemResponse line) =>
+        line.Claims.Count == 0 && (!Shared || line.ExpenseId == ThisPart);
+
+    /// <summary>
+    /// The lines being looked at: the paper, narrowed by whatever the tools are set to.
+    /// </summary>
+    /// <remarks>
+    /// Before folding, and that is the point of it being its own thing. The footnote counts
+    /// what is showing against what is on the bill, and both halves have to be counts of
+    /// the same kind: it read a sum of <em>quantities</em> off the folded rows against a
+    /// count of <em>lines</em>, so the shipped warehouse bill with a line of twelve says
+    /// "Showing 15 of 6" as soon as anybody types in the box.
+    /// </remarks>
+    private IEnumerable<ReceiptItemResponse> Narrowed()
+    {
+        var wanted = _filter?.Trim();
+
+        return Receipt.Items
+            // Part-scoped, because the count on the button is: the toggle said "1 with
+            // nobody" and then showed two rows, the second being another expense's line
+            // that this expense is not answerable for.
+            .Where(line => !_onlyUnclaimed || Wants(line))
+            .Where(line => !_onlyMine || line.ExpenseId == ThisPart)
+            .Where(line => string.IsNullOrEmpty(wanted)
+                           || line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>One printed row: a line, or the identical lines it stands for.</summary>
     private sealed record Row(
@@ -342,17 +384,9 @@
     {
         get
         {
-            var wanted = _filter?.Trim();
-
-            var lines = Receipt.Items
-                .Where(line => !_onlyUnclaimed || line.Claims.Count == 0)
-                .Where(line => !_onlyMine || line.ExpenseId == ThisPart)
-                .Where(line => string.IsNullOrEmpty(wanted)
-                               || line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
-
             return
             [
-                .. lines
+                .. Narrowed()
                     .GroupBy(line => (
                         Name: line.Name.Trim().ToLowerInvariant(),
                         line.UnitPrice,

@@ -110,6 +110,58 @@ public class BillSheetTest : ComponentTest
     }
 
     /// <summary>
+    /// The "with nobody" toggle shows exactly what its own label counted.
+    /// </summary>
+    /// <remarks>
+    /// The count was the part's and the filter behind it was the whole paper's, so the
+    /// button read "1 with nobody" and then showed two rows -- the second being a line this
+    /// expense is not answerable for and cannot do anything about.
+    /// </remarks>
+    [Fact]
+    public void The_filter_for_lines_wanting_somebody_shows_what_its_label_counted()
+    {
+        var page = Render<BillSheet>(parameters => parameters
+            .Add(sheet => sheet.Receipt, Bill(shared: true, unclaimedElsewhere: true))
+            .Add(sheet => sheet.Title, "Trattoria da Enzo"));
+
+        var toggle = page.FindAll("button").Single(button => button.TextContent.Contains("with nobody"));
+
+        Assert.Contains("1 with nobody", toggle.TextContent);
+
+        toggle.Click();
+
+        Assert.Equal(1, page.FindAll(".gs-slip-line").Count);
+    }
+
+    /// <summary>
+    /// "Showing 2 of 6" counts lines on both sides of the "of".
+    /// </summary>
+    /// <remarks>
+    /// It summed the folded rows' QUANTITIES against a count of the bill's LINES, so the
+    /// warehouse bill this app ships -- which has a line of twelve kitchen rolls -- read
+    /// "Showing 15 of 6" as soon as anybody typed in the search box.
+    /// </remarks>
+    [Fact]
+    public void What_is_showing_is_counted_in_lines_and_not_in_quantities()
+    {
+        // The shipped warehouse charge: kitchen roll by the dozen on the flat's half, the
+        // clothes on somebody's own.
+        var receipt = Receipt(
+            Line("Kitchen roll", 11.80m, Mine, quantity: 12),
+            Line("Rotisserie chicken", 8.99m, Mine),
+            Line("Fleece jacket", 34.99m, Theirs));
+
+        var page = Render<BillSheet>(parameters => parameters
+            .Add(sheet => sheet.Receipt, receipt)
+            .Add(sheet => sheet.Title, "Costco"));
+
+        page.FindAll("button").Single(button => button.TextContent.Contains("Only this expense")).Click();
+
+        // Two of the bill's three lines, not the thirteen items they came to.
+        Assert.Contains("Showing 2 of 3", page.Markup);
+    }
+
+    /// <summary>
     /// One bill: two lines this expense's, one the other part's -- optionally with a line
     /// somewhere on it that nobody has claimed.
     /// </summary>
@@ -139,12 +191,12 @@ public class BillSheetTest : ComponentTest
             Items: items);
 
     private static ReceiptItemResponse Line(
-        string name, decimal price, Guid expense, bool claimed = true) =>
+        string name, decimal price, Guid expense, bool claimed = true, decimal quantity = 1) =>
         new(
             Guid.NewGuid(),
             name,
-            UnitPrice: price,
-            Quantity: 1,
+            UnitPrice: decimal.Round(price / quantity, 2),
+            Quantity: quantity,
             TotalPrice: price,
             IsTaxable: true,
             ExpenseId: expense,
