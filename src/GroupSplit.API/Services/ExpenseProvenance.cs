@@ -84,6 +84,13 @@ public sealed class ExpenseProvenance(ICurrentUser userContext, AppDbContext dbC
             .GroupBy(window => window.SplitRuleId)
             .ToDictionary(rule => rule.Key, rule => rule.ToList());
 
+        // The versions that put the whole amount on one person, which no reattach moves.
+        var named = (await dbContext.Set<SoleSplitRuleVersion>()
+                .Where(version => version.SplitRule.Group.Id == groupId)
+                .Select(version => version.Id)
+                .ToListAsync(ct))
+            .ToHashSet();
+
         var tallies = new Dictionary<Guid, Tally>();
         var changed = 0;
         var uncovered = 0;
@@ -94,9 +101,16 @@ public sealed class ExpenseProvenance(ICurrentUser userContext, AppDbContext dbC
                 ? ruleOfCategory.GetValueOrDefault(categoryId)
                 : null as Guid?;
 
-            var version = ruleId is { } rule
-                ? Covering(windows.GetValueOrDefault(rule), expense.DateTime)
-                : null;
+            // An expense recorded as being all one member's keeps the version it holds. This
+            // pass reads dates and categories, and neither says anything about who the money
+            // was for -- so re-pointing one at its category's rule would write down a
+            // division it never had. It is examined and left alone, which is what "changed
+            // nothing" looks like from here.
+            var version = named.Contains(expense.SplitRuleVersionId ?? Guid.Empty)
+                ? expense.SplitRuleVersionId
+                : ruleId is { } rule
+                    ? Covering(windows.GetValueOrDefault(rule), expense.DateTime)
+                    : null;
 
             if (version is null)
                 uncovered++;

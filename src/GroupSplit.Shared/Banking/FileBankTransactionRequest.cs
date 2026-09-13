@@ -25,6 +25,17 @@ public record FileBankTransactionRequest
     public Guid? PaidByUserId { get; set; }
 
     /// <summary>
+    /// A rule to divide by, whatever the category says, or null to let the category decide.
+    /// See <see cref="CreateTransactionRequest.SplitRuleId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Which is the whole of why filing offers it: a card statement is where "that one was
+    /// not ours, it was Ana's" is said most often, and it is said about a row whose category
+    /// divides between everybody.
+    /// </remarks>
+    public Guid? SplitRuleId { get; set; }
+
+    /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
     /// </summary>
     public IReadOnlyList<SplitInput>? Splits { get; set; }

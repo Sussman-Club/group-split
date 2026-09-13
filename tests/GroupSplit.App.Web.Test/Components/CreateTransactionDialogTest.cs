@@ -27,6 +27,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
     private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<ICategoriesClient> _categories = new();
+    private readonly Mock<ISplitRuleCommands> _splitRules = new();
     private readonly Mock<IMerchantsClient> _merchants = new();
     private readonly Mock<ITransactionCommands> _commands = new();
     private readonly Mock<IUserLogin> _login = new();
@@ -52,6 +53,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_categories.Object);
+        Services.AddSingleton(_splitRules.Object);
         Services.AddSingleton(_merchants.Object);
         Services.AddSingleton(_login.Object);
         Services.AddSingleton<IMerchantCommands, MerchantCommands>();
@@ -212,6 +214,115 @@ public class CreateTransactionDialogTest : ComponentTest
     /// be constructed, which is a defect nothing on screen would show.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// "All for one" names a rule, and the rule's id is the whole of what the expense
+    /// carries: the division is the API's to work out, so a dialog that sent amounts
+    /// instead would be doing the arithmetic twice and would cost the expense its ability
+    /// to be divided again when the amount is corrected.
+    /// </summary>
+    [Fact]
+    public async Task Marking_an_expense_as_one_members_own_sends_that_members_rule()
+    {
+        var ruleId = Guid.NewGuid();
+
+        _splitRules
+            .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new SplitRuleResponse(ruleId, GroupId, "All for Ana", BuiltIn: true, AllForUserId: MeId)]);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { dialog => dialog.SelectedGroupId, GroupId }
+        };
+
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense", parameters));
+
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(42.50m));
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("The gym"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "All for one")
+            .ClickAsync(new MouseEventArgs());
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await reference!.GetReturnValueAsync<CreateTransactionRequest>();
+
+        Assert.NotNull(request);
+        Assert.Equal(ruleId, request!.SplitRuleId);
+
+        // And nothing stated alongside it. The API refuses both, because they are two
+        // answers to one question.
+        Assert.Null(request.Splits);
+    }
+
+    /// <summary>
+    /// The dialog opens with the same three answers it will still have once everything it
+    /// asked for has arrived.
+    /// </summary>
+    /// <remarks>
+    /// The control is drawn from a count -- the thumb is positioned as a fraction of
+    /// --gs-seg-n -- so an option appearing later does not slide in beside the others: it
+    /// resizes all of them, under the pointer, a fraction of a second after the dialog
+    /// opened. The group's rules are a round trip, and the dialog is on screen while it is
+    /// out, so "draw it when they arrive" is "change shape while somebody is reading it".
+    /// <para>
+    /// Here the rules never arrive at all, which is the strongest version of the same
+    /// question: the option is drawn and disabled, because a button that would send an id
+    /// the dialog does not have is worse than a button that says not yet.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_three_ways_to_divide_are_there_before_the_rules_are()
+    {
+        _splitRules
+            .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<SplitRuleResponse>?)null);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+
+        var parameters = new DialogParameters<CreateTransactionDialog>
+        {
+            { dialog => dialog.SelectedGroupId, GroupId }
+        };
+
+        await provider.InvokeAsync(async () =>
+            await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense", parameters));
+
+        var segments = provider.FindAll(".gs-seg-btn");
+
+        Assert.Equal(3, segments.Count);
+
+        // And the control is told to lay out three, which is what actually decides the
+        // widths: a count that moved would move every option with it.
+        Assert.Contains("--gs-seg-n: 3", provider.Find(".gs-seg").GetAttribute("style"));
+
+        // The middle one says not yet rather than offering a rule it cannot name.
+        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "All for one")
+            .HasAttribute("disabled"));
+    }
+
     [Fact]
     public async Task Typing_an_amount_and_a_name_records_that_expense_in_that_group()
     {

@@ -736,7 +736,9 @@ So a command that names nothing is refused (exit code 3) rather than sent as an 
 which the server would accept as a successful no-op.
 
 `--group` and `--personal` contradict each other, as do `--category-id` and `--no-category`
-and `--merchant-id` and `--no-merchant`; any such pair is refused before anything is sent.
+and `--merchant-id` and `--no-merchant`; any such pair is refused before anything is sent. So
+is `--split-rule` alongside either `--split` or `--redivide`, which are three answers to one
+question -- see [an expense that is one person's](#an-expense-that-is-one-persons).
 
 The patch carries what actually **moved**, not every flag you passed: the command reads the
 expense first and sends the difference. Setting a field to the value it already holds is a
@@ -817,6 +819,68 @@ divided it. If the second one fails the error says so -- "the edit was saved, bu
 what divided it was not" -- and re-running the same command is the fix. It is safe: the
 command reads the expense first and sends only what still differs, so the half that landed
 produces no operation the second time.
+
+## An expense that is one person's
+
+Every group holds one rule per member that puts the whole amount on them, provisioned rather
+than written -- `split-rules list` shows which member each one is for, and that column is
+empty for the rules the group wrote itself:
+
+```bash
+groupsplit split-rules list --group <group-id>
+```
+
+```
+ Id                                    Name              All for                               Built in
+ 6f1e...                               All for Anabel    0d1ac8ae-709c-4c4c-8f0f-0c7e951b3a52  yes
+ 9a20...                               Household 3-way   -                                     -
+```
+
+**All for** is the member a rule puts the whole amount on, read off the division it stands
+for; **built in** is whether the group was given the rule rather than writing it.
+
+Naming one on an expense divides the whole of it that way, whatever the category says:
+
+```bash
+groupsplit tx create "The gym" 60 --group <group-id> --split-rule <rule-id>
+groupsplit tx update <id> --split-rule <rule-id>      # this one was not ours, it was Ana's
+groupsplit tx update <id> --redivide                  # back to what its category says
+groupsplit inbox file <row-id> --group <group-id> --split-rule <rule-id>
+```
+
+`--split-rule` is an instruction, not a field: the expense stores the division it was written
+under, and there is no rule id on it to read back or clear. Saying nothing leaves it dividing
+the way it divides -- through a rename, a correction to the amount, even a move to another
+category -- and `--redivide` is the way back to what its category says.
+
+Why name a rule rather than type the amount against one person with `--split`: a rule keeps
+the expense divisible. Correcting the amount afterwards divides it again by the same rule,
+where hand-typed shares are refused because they no longer sum to the new total. The two are
+two answers to one question and passing both is refused before anything is sent.
+
+A group that wants a division of its own in the same shape writes one, and that one is
+editable like any other rule:
+
+```bash
+groupsplit split-rules create "Ana's gym" --group <group-id> --sole <user-id>
+groupsplit split-rules create "Mine" --group <group-id> --payer
+```
+
+`--payer` is `--sole` with your own id, which the CLI looks up so you do not have to. What
+reaches the API is the same thing either way: a rule naming a member. There is no kind that
+means "whoever paid" -- a rule that named nobody was the one division that changed meaning
+when the payer was corrected.
+
+The provisioned ones are not. `split-rules update` and `split-rules delete` on one are
+refused before anything is sent (`SPLIT_RULE_NOT_EDITABLE` from the API, which says the same
+thing): they exist for every member without anybody creating them, and an expense may name
+one the same way, so what one says is fixed.
+
+No rule changes **kind**, provisioned or not: `split-rules update --percent` on a rule that
+divides by shares is refused with `SPLIT_RULE_KIND_FIXED`. A rule is a named division, and the
+shape of that division is part of what the rule is -- every category pointing at it was
+pointed at a rule that divided that way. Writing a history is the exception, because it
+records a past that really did change shape.
 
 ## Rewriting what a rule used to say
 

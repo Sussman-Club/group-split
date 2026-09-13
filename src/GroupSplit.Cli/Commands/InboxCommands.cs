@@ -328,6 +328,14 @@ public static class InboxCommands
             Description = "Member who paid, when it was not you. Only meaningful in a group."
         };
 
+        var splitRule = new Option<Guid?>("--split-rule")
+        {
+            Description = "Divide it by this rule whatever the category says, from "
+                          + "`groupsplit split-rules list --group <group-id>`. A group holds one per "
+                          + "member that puts the whole amount on them -- which is what a card row "
+                          + "that was one person's needs."
+        };
+
         var splits = new Option<string[]>("--split")
         {
             Description = "Exact shares as <user-id>=<amount>, repeatable. "
@@ -350,7 +358,7 @@ public static class InboxCommands
 
         var command = new Command("file", "File an imported row as an expense.")
         {
-            RowId, group, category, paidBy, splits, name, description, fileAnyway
+            RowId, group, category, paidBy, splitRule, splits, name, description, fileAnyway
         };
 
         command.SetHandler(async (context, ct) =>
@@ -358,11 +366,20 @@ public static class InboxCommands
             var parse = context.ParseResult;
             var given = parse.GetValue(splits) ?? [];
 
+            if (parse.GetResult(splitRule) is not null && given.Length > 0)
+            {
+                throw CliException.Input(
+                    "--split-rule and --split contradict each other.",
+                    "--split-rule has the server divide it; --split states the shares yourself. "
+                    + "The API refuses both in one request.");
+            }
+
             var request = new FileBankTransactionRequest
             {
                 GroupId = parse.GetValue(group),
                 CategoryId = parse.GetValue(category),
                 PaidByUserId = parse.GetValue(paidBy),
+                SplitRuleId = parse.GetValue(splitRule),
                 // Null, not empty: an empty list is "divide it between nobody", which the
                 // API refuses, while null is "divide it the way the category says".
                 Splits = given.Length == 0 ? null : Pairs.Splits("--split", given),

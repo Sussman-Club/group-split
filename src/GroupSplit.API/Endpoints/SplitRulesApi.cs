@@ -164,6 +164,17 @@ public static class SplitRulesApi
         internal IQueryable<SplitRuleResponse> SelectDto() =>
             from rule in rules
             orderby rule.Name
-            select new SplitRuleResponse(rule.Id, rule.Group.Id, rule.Name);
+            select new SplitRuleResponse(
+                rule.Id,
+                rule.Group.Id,
+                rule.Name,
+                rule.BuiltIn,
+                // The person a rule puts the whole amount on, read off the division it
+                // stands for now. The listing carries no definition, and a client offering
+                // "all for Ana" has to find Ana's rule without reading every one of them.
+                rule.Versions
+                    .Where(version => version.SupersededAt == null)
+                    .Select(version => (version as SoleSplitRuleVersion)!.UserId)
+                    .FirstOrDefault());
     }
 }

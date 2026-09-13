@@ -3,7 +3,19 @@ using System.ComponentModel.DataAnnotations;
 namespace GroupSplit.Shared;
 
 /// <summary>A split rule as it appears in a list: enough to pick one by.</summary>
-public record SplitRuleResponse(Guid Id, Guid GroupId, string Name);
+/// <param name="BuiltIn">
+/// Whether the group was given this rule rather than writing it -- the one it holds per
+/// member, putting the whole amount on them. Those are not renamed, restated or deleted, so
+/// a client showing an Edit button beside one is offering something the API refuses.
+/// </param>
+/// <param name="AllForUserId">
+/// The member this rule currently puts the whole amount on, or null when it divides between
+/// people instead. Read off the division the rule stands for now, which is where a rule says
+/// who it is for; the listing carries it because it carries no definition, and a client
+/// offering "all for Ana" would otherwise have to read every rule to find Ana's.
+/// </param>
+public record SplitRuleResponse(
+    Guid Id, Guid GroupId, string Name, bool BuiltIn = false, Guid? AllForUserId = null);
 
 /// <summary>A split rule with the division it stands for now.</summary>
 /// <param name="VersionId">
@@ -25,6 +37,13 @@ public record SplitRuleDetailsResponse
     public DateTimeOffset ChangedAt { get; init; }
 
     public SplitRuleDto Definition { get; init; } = null!;
+
+    /// <inheritdoc cref="SplitRuleResponse.BuiltIn"/>
+    /// <remarks>
+    /// No <c>AllForUserId</c> beside it, unlike the listing: the definition below already
+    /// says who a rule is for, when it is for one person.
+    /// </remarks>
+    public bool BuiltIn { get; init; }
 }
 
 /// <summary>

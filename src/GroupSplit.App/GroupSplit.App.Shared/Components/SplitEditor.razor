@@ -5,9 +5,9 @@
 @*
     How one expense is divided, for the two dialogs that write one.
 
-    Two ways to answer, and one list of people either way. That second part is the whole
-    shape of this component and it was not always true: the editable fields lived here and
-    a read-only "Everyone's share" list lived in the dialog underneath, so the moment
+    Three ways to answer, and one list of people whichever it is. That second part is the
+    whole shape of this component and it was not always true: the editable fields lived here
+    and a read-only "Everyone's share" list lived in the dialog underneath, so the moment
     somebody split by hand every member appeared twice -- once as a field they were typing
     in and once as a row echoing what they had just typed, four rows of chrome for two
     people. Now the list *is* the answer: editable when the person is stating it,
@@ -15,20 +15,28 @@
 
     The choice used to be a switch whose label changed with its state, which is the one
     control nobody can read -- "Split it myself" beside a toggle tells you neither what is
-    true now nor what clicking will do. Two named options, one of them lit, says both.
+    true now nor what clicking will do. Named options, one of them lit, says both.
 
-    On, it sends the amounts shown, and they have to add up: the API refuses a set that
+    All for one is the middle answer and belongs with the automatic one rather than with
+    the hand-typed one, whatever it looks like: it names a rule -- the one every group holds
+    per member -- and the API divides by it. That is the difference from typing the whole
+    amount against one person, and it is the difference that matters afterwards. Correcting
+    the amount on an expense that named a rule divides it again by the same rule; correcting
+    the amount on hand-typed shares is refused, because shares that summed to the old total
+    do not sum to the new one.
+
+    By hand sends the amounts shown, and they have to add up: the API refuses a set that
     does not, because nothing else re-derives the division and a set that does not sum
     makes every balance in the group wrong. The remaining line is what stands between
     somebody typing three numbers and meeting that refusal at the Save button.
 
-    Off, this states nothing and the dialog decides what that means -- which differs
+    The other two state no amounts, and the dialog decides what that means -- which differs
     between the two of them, and is why the answer travels as null rather than as a
-    division. Creating, there is nothing to keep and the API divides by the category's
-    rule. Editing, the shares the expense already has are kept unless somebody actually
-    chose Off, which the edit dialog sends as an ask to divide it again; silence on an edit
-    has meant "keep them" since a bulk pass that read it the other way re-divided 733
-    expenses.
+    division. Creating, there is nothing to keep and the API divides by the category's rule,
+    or by the rule the middle option names. Editing, the shares the expense already has are
+    kept unless somebody actually moved off By hand, which the edit dialog sends as an ask to
+    divide it again; silence on an edit has meant "keep them" since a bulk pass that read it
+    the other way re-divided 733 expenses.
 *@
 
 <MudStack Spacing="2">
@@ -42,24 +50,39 @@
         <div class="gs-seg gs-seg-labels"
              role="radiogroup"
              aria-label="How to divide it"
-             style="--gs-seg-n: 2; --gs-seg-i: @(Custom ? 1 : 0)">
+             style="--gs-seg-n: @Options; --gs-seg-i: @Position">
             <span class="gs-seg-thumb" aria-hidden="true"></span>
 
             <button type="button"
-                    class="gs-seg-btn @(Custom ? "" : "active")"
+                    class="gs-seg-btn @(Chosen is Mode.Automatic ? "active" : "")"
                     role="radio"
-                    aria-checked="@(Custom ? "false" : "true")"
+                    aria-checked="@(Chosen is Mode.Automatic ? "true" : "false")"
                     disabled="@(!Members.Any())"
-                    @onclick="@(() => OnCustomChanged(false))">
+                    @onclick="@(() => OnModeChanged(Mode.Automatic))">
                 Automatically
             </button>
 
+            @* Always drawn, and disabled until the group's rules are in hand -- which is a
+               round trip, and one the dialog makes while this is already on screen. Drawn
+               only once they arrived, the control went from two options to three as they
+               landed and resized itself under the pointer: the thumb is positioned from
+               --gs-seg-n, so an option appearing moves every option. A disabled button that
+               becomes enabled moves nothing. *@
             <button type="button"
-                    class="gs-seg-btn @(Custom ? "active" : "")"
+                    class="gs-seg-btn @(Chosen is Mode.AllForOne ? "active" : "")"
                     role="radio"
-                    aria-checked="@(Custom ? "true" : "false")"
+                    aria-checked="@(Chosen is Mode.AllForOne ? "true" : "false")"
+                    disabled="@(!Members.Any() || MemberRules.Count == 0)"
+                    @onclick="@(() => OnModeChanged(Mode.AllForOne))">
+                All for one
+            </button>
+
+            <button type="button"
+                    class="gs-seg-btn @(Chosen is Mode.ByHand ? "active" : "")"
+                    role="radio"
+                    aria-checked="@(Chosen is Mode.ByHand ? "true" : "false")"
                     disabled="@(!Members.Any())"
-                    @onclick="@(() => OnCustomChanged(true))">
+                    @onclick="@(() => OnModeChanged(Mode.ByHand))">
                 By hand
             </button>
         </div>
@@ -71,7 +94,28 @@
             Pick a group first, and its members can be given a share.
         </MudAlert>
     }
-    else if (Custom)
+    else if (Chosen is Mode.AllForOne)
+    {
+        @* One control, and then the same read-only list every automatic division shows:
+           what this chooses is a rule, so the API divides by it and answers with the
+           figures, exactly as it does for the category's own rule. *@
+        <MudSelect T="Guid?"
+                   Label="Who owes it?"
+                   Value="@AllFor"
+                   ValueChanged="@OnAllForChanged"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense">
+            @foreach (var rule in MemberRules)
+            {
+                <MudSelectItem T="Guid?" Value="@rule.Id" @key="rule.Id">
+                    @NameOf(rule)
+                </MudSelectItem>
+            }
+        </MudSelect>
+
+        @Divided
+    }
+    else if (Chosen is Mode.ByHand)
     {
         @* One field per person, and nothing repeating them below: what is typed here is
            what will be stored, so there is nothing for a second list to add. *@
@@ -119,6 +163,18 @@
     }
     else
     {
+        @Divided
+    }
+</MudStack>
+
+@code {
+    /// <summary>
+    /// The division as the API worked it out, which is what both automatic answers
+    /// show: the category's rule, and the rule the expense names for itself. One
+    /// fragment rather than two copies, because the only difference between those two
+    /// is which rule the dialog asked about.
+    /// </summary>
+    private RenderFragment Divided => @<text>
         @* Worked out by the API, which is the same code the save runs -- so this is what
            will be stored and not a second copy of the arithmetic that has to agree with
            it. Said out loud, because "as the category says" is exactly the case where
@@ -191,10 +247,8 @@
                 }
             </div>
         }
-    }
-</MudStack>
+    </text>;
 
-@code {
     /// <summary>
     /// Everyone who may be given a share: the group's members, and the people it has
     /// invited and is waiting on -- who are marked as such on their field, since a share
@@ -210,6 +264,24 @@
     /// which is the same person the API's own division would give it to.
     /// </summary>
     [Parameter] public Guid? PayerId { get; set; }
+
+    /// <summary>
+    /// The rules this group holds one of per member -- all of it is for them -- which are
+    /// what the middle option picks between. Empty turns the option off.
+    /// </summary>
+    /// <remarks>
+    /// Rules and not people, because what the expense ends up carrying is a rule's id: the
+    /// division is the API's to work out, and an expense that named a person instead would
+    /// be the app deciding what "all for Ana" divides into.
+    /// </remarks>
+    [Parameter] public IReadOnlyList<SplitRuleResponse> MemberRules { get; set; } = [];
+
+    /// <summary>
+    /// The rule the expense names for itself, or null to divide the way its category does.
+    /// </summary>
+    [Parameter] public Guid? SplitRuleId { get; set; }
+
+    [Parameter] public EventCallback<Guid?> SplitRuleIdChanged { get; set; }
 
     /// <summary>
     /// The stated division, or null to leave it to the dialog. Null is not "no shares"; it
@@ -286,7 +358,41 @@
 
     protected override void OnParametersSet() => _shares = Value;
 
-    private bool Custom => _shares is not null;
+    /// <summary>
+    /// The three answers to "how is this divided", in the order the control draws them.
+    /// </summary>
+    /// <remarks>
+    /// The numbers are the thumb's position, so the order here is the order on screen.
+    /// </remarks>
+    private enum Mode
+    {
+        Automatic,
+        AllForOne,
+        ByHand
+    }
+
+    /// <summary>
+    /// Which of the three is true now, read off the values rather than remembered.
+    /// </summary>
+    /// <remarks>
+    /// Stated shares first: an expense may have been recorded under a rule and then split by
+    /// hand, and the hand-typed amounts are what it holds. The API says the same thing in
+    /// the other direction -- stating shares clears the rule the expense named -- so the two
+    /// cannot both be true for long, and the one that is true of the figures on screen wins.
+    /// </remarks>
+    private Mode Chosen =>
+        _shares is not null ? Mode.ByHand
+        : SplitRuleId is not null ? Mode.AllForOne
+        : Mode.Automatic;
+
+    /// <summary>
+    /// Three, always. What the control is made of cannot depend on a read that is still in
+    /// flight, or it changes shape while somebody is looking at it.
+    /// </summary>
+    private const int Options = 3;
+
+    /// <summary>Which slot the lit one is in.</summary>
+    private int Position => (int)Chosen;
 
     private decimal Remaining => Amount - (_shares?.Sum(split => split.Amount) ?? 0m);
 
@@ -310,11 +416,60 @@
     private decimal ShareOf(Guid userId) =>
         _shares?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;
 
-    private async Task OnCustomChanged(bool custom)
+    /// <summary>
+    /// Moves to one of the three, sending only what actually changed.
+    /// </summary>
+    /// <remarks>
+    /// Both answers can move at once -- going from a hand-split to a named rule clears the
+    /// shares and sets an id -- and each of them costs the dialog a round trip, so a pick
+    /// that left one of them where it was must not announce it anyway.
+    /// </remarks>
+    private async Task OnModeChanged(Mode mode)
     {
-        _shares = custom ? StartingPoint() : null;
-        await ValueChanged.InvokeAsync(_shares);
+        if (mode == Chosen)
+            return;
+
+        var shares = mode is Mode.ByHand ? StartingPoint() : null;
+        var rule = mode is Mode.AllForOne ? Suggested() : null;
+
+        _shares = shares;
+
+        if (rule != SplitRuleId)
+            await SplitRuleIdChanged.InvokeAsync(rule);
+
+        await ValueChanged.InvokeAsync(shares);
     }
+
+    /// <summary>
+    /// Which member's rule the middle option opens on: whoever paid, when they have one.
+    /// </summary>
+    /// <remarks>
+    /// A person has to be chosen for the option to mean anything, and opening on nobody
+    /// would show a preview of the category's division under a control claiming otherwise.
+    /// The payer is the one answer that is always right about itself -- "this one was for
+    /// me" is the commonest thing it says -- and it is one click from any of the others.
+    /// </remarks>
+    private Guid? Suggested() =>
+        MemberRules.FirstOrDefault(rule => rule.AllForUserId == PayerId)?.Id
+        ?? MemberRules.FirstOrDefault()?.Id;
+
+    /// <summary>The rule picked in the middle option, as the select reads it.</summary>
+    private Guid? AllFor =>
+        MemberRules.Any(rule => rule.Id == SplitRuleId) ? SplitRuleId : null;
+
+    private Task OnAllForChanged(Guid? ruleId) => SplitRuleIdChanged.InvokeAsync(ruleId);
+
+    /// <summary>
+    /// What to call one of those rules: the member it is for, and not the name the rule was
+    /// provisioned under.
+    /// </summary>
+    /// <remarks>
+    /// The name is written once, when somebody joins, out of whatever profile they had
+    /// then -- so a member who filled theirs in afterwards is still "All for ana@..." in the
+    /// listing. The member is on the row as an id, and the people are already here.
+    /// </remarks>
+    private string NameOf(SplitRuleResponse rule) =>
+        Members.FirstOrDefault(member => member.Id == rule.AllForUserId)?.Label() ?? rule.Name;
 
     private async Task SetShare(Guid userId, decimal share)
     {

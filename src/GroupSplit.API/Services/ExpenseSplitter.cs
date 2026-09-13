@@ -305,9 +305,10 @@ public class ExpenseSplitter(
     }
 
     /// <summary>
-    /// The version to divide by: the one this expense was already written under when that
-    /// is still a version of the rule its category names, and otherwise whatever that rule
-    /// says now. Null when there is no category or it names no rule.
+    /// The version to divide by: the one that names a person outright, or the one this
+    /// expense was already written under when that is still a version of the rule its
+    /// category names, and otherwise whatever that rule says now. Null when there is no
+    /// category or it names no rule.
     /// </summary>
     /// <remarks>
     /// The whole of "divide it again by the rule it had at the time". An expense whose
@@ -324,33 +325,44 @@ public class ExpenseSplitter(
     /// </remarks>
     private async Task<SplitRuleVersion?> VersionFor(Expense expense, CancellationToken ct)
     {
-        var categoryId = expense.Category?.Id ?? expense.CategoryId;
+        var held = await HeldVersion(expense, ct);
 
-        if (categoryId is null)
-            return null;
+        // A division that names a person outright is not something a category can restate.
+        // "All of it is for Ana" is said about this expense -- by whoever recorded it, or by
+        // the rule the group keeps for Ana -- and filing it under Groceries says what the
+        // money was for, not who it was for. So it is kept whatever the category names,
+        // which is the whole of how an expense stays one member's across an edit to its
+        // amount. Asking outright to divide it again is what gives it up, and that arrives
+        // here as an expense holding no version at all.
+        if (held is SoleSplitRuleVersion)
+            return held;
 
-        var ruleId = await dbContext.Set<Category>()
-            .Where(category => category.Id == categoryId)
-            .Select(category => category.DefaultSplitRuleId)
-            .FirstOrDefaultAsync(ct);
+        var ruleId = await CategoryRule(expense, ct);
 
         if (ruleId is null)
             return null;
 
         // The one it already holds, when that is still a version of this category's rule.
-        if (expense.SplitRuleVersionId is { } writtenUnder)
-        {
-            var kept = await Versions()
-                .FirstOrDefaultAsync(version =>
-                    version.Id == writtenUnder && version.SplitRuleId == ruleId, ct);
-
-            if (kept is not null)
-                return kept;
-        }
+        if (held is not null && held.SplitRuleId == ruleId)
+            return held;
 
         return await Versions()
             .FirstOrDefaultAsync(version =>
                 version.SplitRuleId == ruleId && version.SupersededAt == null, ct);
+    }
+
+    /// <summary>The rule the expense's category defaults to, when it has either.</summary>
+    private async Task<Guid?> CategoryRule(Expense expense, CancellationToken ct)
+    {
+        var categoryId = expense.Category?.Id ?? expense.CategoryId;
+
+        if (categoryId is null)
+            return null;
+
+        return await dbContext.Set<Category>()
+            .Where(category => category.Id == categoryId)
+            .Select(category => category.DefaultSplitRuleId)
+            .FirstOrDefaultAsync(ct);
     }
 
     /// <summary>

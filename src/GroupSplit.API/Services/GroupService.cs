@@ -181,7 +181,8 @@ public class GroupService(
     ICurrentUser userContext,
     AppDbContext context,
     IGroupParticipants participants,
-    ISplitRuleRevisions revisions) : IGroupService
+    ISplitRuleRevisions revisions,
+    IMemberSplitRules memberRules) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -209,6 +210,10 @@ public class GroupService(
             membership.JoinedAt = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync(cancellationToken);
         }
+
+        // The first member's own rule: all of it is for them. Everybody who joins later
+        // gets theirs from IGroupJoiner, which is the only other way into a group.
+        await memberRules.EnsureFor(group, user, cancellationToken);
 
         return group;
     }
@@ -346,7 +351,8 @@ public class GroupService(
 
         group.Users.Remove(user);
 
-        await revisions.WithoutParticipant(group.Id, user.Id, toUserId: null, cancellationToken);
+        await revisions.WithoutParticipant(
+            group.Id, user.Id, toUserId: null, RuleHandling.Prune, cancellationToken);
     }
 
     public async Task<IQueryable<Transaction>> GetGroupActivity(Guid groupId,

@@ -36,5 +36,22 @@ public static class SplitRuleExtensions
         /// </remarks>
         public SplitRuleVersion? Current =>
             rule.Versions.FirstOrDefault(version => version.SupersededAt is null);
+
+        /// <summary>
+        /// The member this rule currently puts the whole amount on, or null when it divides
+        /// between people instead.
+        /// </summary>
+        /// <remarks>
+        /// Read off the division rather than held beside it. Every group has one of these
+        /// per member and the app offers them by person, so "which rule is Ana's" is a
+        /// question something has to answer -- and the version already answers it, in the
+        /// one place the rule ever says who it is for.
+        /// <para>
+        /// It is also what makes a rule uneditable: there is nothing to restate in "all of
+        /// it is for Ana", and an expense may name one without anybody having created it.
+        /// <c>SplitRuleService</c> refuses the edit; this is the question it asks.
+        /// </para>
+        /// </remarks>
+        public Guid? AllFor => (rule.Current as SoleSplitRuleVersion)?.UserId;
     }
 }

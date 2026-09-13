@@ -160,7 +160,9 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             GetService<ISplitRuleService>().Update(splitRuleId, new UpdateSplitRuleRequest
             {
                 Name = "Hijacked",
-                Definition = new PayerSplitRuleDto()
+                // The caller, who is not in that group at all -- which is the point: the
+                // refusal has to come from the rule not being theirs, not from the person.
+                Definition = new SoleSplitRuleDto(GetService<ICurrentUser>().User.Id)
             }, TestContext.Current.CancellationToken));
     }
 
@@ -216,7 +218,7 @@ public class CrossUserAccessTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (_, _, _, groupId) = await SomeoneElsesGroup();
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            CreateCategory(groupId, "Injected", new PayerSplitRuleDto()));
+            CreateCategory(groupId, "Injected", new SoleSplitRuleDto(GetService<ICurrentUser>().User.Id)));
     }
 
     [Fact]

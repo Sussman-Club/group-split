@@ -166,6 +166,18 @@ Reusable rules describing how an expense is divided.
 | `split-rules versions set <rule-id> --file <history.json>` | Write the divisions a rule stood for *before* it was recorded here. `--dry-run` prints the chain and sends nothing; the real run is exit-4 gated. |
 | `split-rules delete <rule-id>` | Delete a split rule. Refused once an expense has been divided by it. |
 
+Every group also holds one rule per member that puts the whole amount on them, provisioned
+rather than written. `split-rules list` has a column each for the member a rule is **all
+for** and whether it is **built in**. Nothing renames, restates or deletes a built-in one --
+`update` and `delete` refuse before sending -- because an expense may name one without
+anybody having created it, so what it says has to stay fixed. A group that wants a division
+of its own in that shape creates one with `--sole <user-id>`, and that one is editable like
+any other.
+
+No rule changes **kind**: `update` with a different shape is refused
+(`SPLIT_RULE_KIND_FIXED`). Change the numbers, or create a rule for the new shape. Writing a
+history is exempt, since it records a past that really did change shape.
+
 A rule is a name with a history behind it. Editing how it divides starts a new version and
 closes the one before it; renaming it starts none. Every expense records the version that
 divided it, so editing a rule changes what the *next* expense is pre-filled with and nothing
@@ -265,9 +277,15 @@ than resolved by precedence, because a caller who passed both had one of them in
 | --- | --- |
 | `--even` | Equally. With no `--among`, between whoever is in the group at the time. |
 | `--even --among <user-id> <user-id>` | Equally, but only between the members named. Repeatable. |
-| `--payer` | Not at all: whoever paid owes all of it. |
+| `--sole <user-id>` | Not at all: all of it is for that member, whoever paid. |
+| `--payer` | The same, naming **you**: the CLI reads your own id so you do not have to pass it. |
 | `--percent <user-id>=<percent>` | By percentage. Repeatable, decimals allowed: `--percent 8f0c...=33.33`. |
 | `--shares <user-id>=<shares>` | By whole shares. Repeatable: `--shares 8f0c...=2`. |
+
+`--payer` used to mean something else: "whoever paid owes all of it", a rule that named
+nobody and let each expense supply the person. That was the one division that changed meaning
+when the payer was corrected, and it is gone -- the flag now names you, which is what a person
+at a terminal nearly always meant by it. Every rule of this kind names a member.
 
 A category carries a rule, and the rule is what divides an expense filed under it. So the
 usual shape is: create the rule, create the category pointing at it, then file expenses under
@@ -311,6 +329,29 @@ Either one alongside an ordinary edit is two requests -- the edit, then the reco
 divided it -- so a failure says which half landed ("the edit was saved, but recording what
 divided it was not"). Run the same command again: it reads the expense first and sends only
 what still differs, so nothing is applied twice.
+
+### One expense that is one person's: `--split-rule`
+
+The expense that divides unlike its neighbours names the rule it divides by, whatever its
+category says. The ids come from `split-rules list --group <group-id>` -- the **all for**
+column is the member each rule puts the whole amount on:
+
+```bash
+groupsplit tx create "The gym" 60 --group $G --split-rule $RULE --json
+groupsplit tx update <id> --split-rule $RULE      # this one was not ours, it was Ana's
+groupsplit tx update <id> --redivide              # back to what its category says
+groupsplit inbox file <row-id> --group $G --split-rule $RULE
+```
+
+Prefer this to typing the whole amount against one person with `--split`: a named rule keeps
+the expense divisible, so correcting the amount afterwards divides it again, where hand-typed
+shares are refused because they no longer sum to the new total. The two are two answers to one
+question and passing both is refused before anything is sent.
+
+It is an instruction rather than a field -- an expense stores the division it was written
+under, not the rule somebody picked to get it -- so saying nothing leaves it dividing the way
+it divides, and `--redivide` is the way back to its category. Stating shares gives it up too,
+which is what stating shares has always done to the version behind an expense.
 
 ### Setting exact shares: `--split`
 

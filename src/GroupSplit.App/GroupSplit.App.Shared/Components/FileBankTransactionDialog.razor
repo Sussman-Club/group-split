@@ -6,6 +6,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
+@inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
@@ -125,6 +126,9 @@
                                  PayerId="@null"
                                  Value="@_splits"
                                  ValueChanged="@OnSplitsChangedAsync"
+                                 MemberRules="@_memberRules"
+                                 SplitRuleId="@_splitRuleId"
+                                 SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                  Preview="@_preview"
                                  PreviewError="@_previewError"
                                  Awaiting="@_awaiting"/>
@@ -188,6 +192,12 @@
     private string _name = string.Empty;
     private string? _description;
     private IReadOnlyList<SplitInput>? _splits;
+
+    /// <summary>The rule this row is to be divided by, when the person named one.</summary>
+    private Guid? _splitRuleId;
+
+    /// <inheritdoc cref="CreateTransactionDialog.MemberRulesOf"/>
+    private IReadOnlyList<SplitRuleResponse> _memberRules = [];
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
@@ -276,11 +286,14 @@
 
     private async Task OnGroupChangedAsync()
     {
-        // A stated division names people, and the people just changed.
+        // A stated division names people, and the people just changed. So does a rule,
+        // which belongs to the group it came from.
         _splits = null;
+        _splitRuleId = null;
         _categoryId = null;
         _categories = [];
         _members = [];
+        _memberRules = [];
 
         if (_groupId is not { } groupId)
         {
@@ -290,11 +303,22 @@
             return;
         }
 
+        // At once: the dialog is on screen while these are out, and in sequence each answer
+        // lands as its own re-render.
+        var rules = SplitRules.ForGroupAsync(groupId);
+
         await Errors.TryAsync(async () =>
         {
-            _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)];
-            _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
+            var categories = CategoriesClient.GetCategoriesAsync(groupId);
+            var members = GroupsClient.GetGroupMembersAsync(groupId);
+
+            await Task.WhenAll(categories, members);
+
+            _categories = [.. await categories];
+            _members = [.. await members];
         }, "Could not load the group.");
+
+        _memberRules = CreateTransactionDialog.MemberRulesOf(await rules);
 
         // The bank's own category, matched against what this group already uses. Only a
         // suggestion, and only when a name happens to line up: whatever is selected when
@@ -307,6 +331,13 @@
     private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
     {
         _splits = splits;
+
+        await RefreshPreviewAsync();
+    }
+
+    private async Task OnSplitRuleChangedAsync(Guid? splitRuleId)
+    {
+        _splitRuleId = splitRuleId;
 
         await RefreshPreviewAsync();
     }
@@ -341,6 +372,7 @@
         {
             GroupId = _groupId,
             CategoryId = _categoryId,
+            SplitRuleId = _splitRuleId,
             Splits = _splits,
             Name = string.IsNullOrWhiteSpace(_name) ? Row.Title : _name,
             Description = _description,
@@ -401,6 +433,7 @@
         {
             GroupId = _groupId,
             CategoryId = _categoryId,
+            SplitRuleId = _splitRuleId,
             Splits = _splits,
             Name = string.IsNullOrWhiteSpace(_name) ? null : _name,
             Description = string.IsNullOrWhiteSpace(_description) ? null : _description,

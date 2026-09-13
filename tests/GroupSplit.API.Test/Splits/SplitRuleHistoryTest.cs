@@ -179,7 +179,7 @@ public class SplitRuleHistoryTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var history = await Rules.SetHistory(rule.Id,
         [
-            new SplitRuleVersionInput(On(2023, 3), new PayerSplitRuleDto()),
+            new SplitRuleVersionInput(On(2023, 3), new SoleSplitRuleDto(self)),
             new SplitRuleVersionInput(On(2024, 1), new EvenSplitRuleDto()),
             new SplitRuleVersionInput(On(2025, 6), Shares(self, 2, other, 1))
         ], Ct);
@@ -188,7 +188,7 @@ public class SplitRuleHistoryTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(3, history.Versions.Count);
         Assert.IsType<SharesSplitRuleDto>(history.Versions[0].Definition);
         Assert.IsType<EvenSplitRuleDto>(history.Versions[1].Definition);
-        Assert.IsType<PayerSplitRuleDto>(history.Versions[2].Definition);
+        Assert.IsType<SoleSplitRuleDto>(history.Versions[2].Definition);
     }
 
     // ---- What it refuses ------------------------------------------------------------------
@@ -439,7 +439,7 @@ public class SplitRuleHistoryEndpointTest : IAsyncLifetime
         var written = await Client.PutAsJsonAsync($"/split-rules/{rule.Id}/versions",
             new SplitRuleVersionInput[]
             {
-                new(new DateTimeOffset(2023, 3, 1, 0, 0, 0, TimeSpan.Zero), new PayerSplitRuleDto()),
+                new(new DateTimeOffset(2023, 3, 1, 0, 0, 0, TimeSpan.Zero), new SoleSplitRuleDto(me)),
                 new(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
                     new SharesSplitRuleDto { Shares = new Dictionary<Guid, int> { [me] = 1 } })
             }, Json, Ct);
@@ -451,7 +451,7 @@ public class SplitRuleHistoryEndpointTest : IAsyncLifetime
         Assert.Equal(2, history.Versions.Count);
         Assert.Equal(rule.VersionId, history.Versions[0].Id);
         Assert.Null(history.Versions[0].SupersededAt);
-        Assert.IsType<PayerSplitRuleDto>(history.Versions[1].Definition);
+        Assert.IsType<SoleSplitRuleDto>(history.Versions[1].Definition);
     }
 
     [Fact]
@@ -472,7 +472,7 @@ public class SplitRuleHistoryEndpointTest : IAsyncLifetime
         var response = await Client.PutAsJsonAsync($"/split-rules/{rule.Id}/versions",
             new SplitRuleVersionInput[]
             {
-                new(new DateTimeOffset(2023, 3, 1, 0, 0, 0, TimeSpan.Zero), new PayerSplitRuleDto())
+                new(new DateTimeOffset(2023, 3, 1, 0, 0, 0, TimeSpan.Zero), new SoleSplitRuleDto(me))
             }, Json, Ct);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);

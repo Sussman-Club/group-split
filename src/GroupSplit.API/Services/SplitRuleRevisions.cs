@@ -27,11 +27,21 @@ public interface ISplitRuleRevisions
 {
     /// <summary>
     /// Takes <paramref name="fromUserId"/> out of every rule in the group that currently
-    /// names them -- giving their weight to <paramref name="toUserId"/> when one is named,
-    /// and to nobody otherwise.
+    /// names them.
     /// </summary>
+    /// <param name="toUserId">
+    /// Who takes over their position in the group, or null when nobody does -- which is a
+    /// member leaving, where what was theirs is divided among the rest.
+    /// </param>
+    /// <param name="rules">
+    /// What that means for a weight: follow the person, or be dropped. It says nothing about
+    /// a rule that puts the whole amount on one person, which has no weight to move and
+    /// nothing to be divided among -- one of those follows <paramref name="toUserId"/>
+    /// whenever there is one, and is left saying what it says when there is not.
+    /// </param>
     Task<RuleRewrite> WithoutParticipant(
-        Guid groupId, Guid fromUserId, Guid? toUserId, CancellationToken ct = default);
+        Guid groupId, Guid fromUserId, Guid? toUserId, RuleHandling rules,
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -60,23 +70,25 @@ public sealed class SplitRuleRevisions(
     ISplitRuleFactory factory) : ISplitRuleRevisions
 {
     public async Task<RuleRewrite> WithoutParticipant(
-        Guid groupId, Guid fromUserId, Guid? toUserId, CancellationToken ct = default)
+        Guid groupId, Guid fromUserId, Guid? toUserId, RuleHandling rules,
+        CancellationToken ct = default)
     {
         if (fromUserId == toUserId)
             return RuleRewrite.Nothing;
 
-        // Only the versions that are current. The superseded ones named this person too,
-        // and that is exactly what they are for.
-        var affected = await context.Set<SplitRuleVersion>()
-            .Include(version => (version as WeightedSplitRuleVersion)!.Participants)
+        // Only the versions that are current, and only the ones whose weights name this
+        // person. The superseded ones named them too, and that is exactly what they are for.
+        //
+        // Never the rules the group was given rather than wrote: those stand for one
+        // division for as long as they exist, and the member they name is an account, which
+        // is anonymised rather than deleted. Nothing in a departure can strand one.
+        var affected = await context.Set<WeightedSplitRuleVersion>()
+            .Include(version => version.Participants)
             .Where(version => version.SupersededAt == null &&
                               version.SplitRule.Group.Id == groupId &&
-                              (version as WeightedSplitRuleVersion)!.Participants
-                              .Any(participant => participant.UserId == fromUserId))
+                              !version.SplitRule.BuiltIn &&
+                              version.Participants.Any(participant => participant.UserId == fromUserId))
             .ToListAsync(ct);
-
-        if (affected.Count == 0)
-            return RuleRewrite.Nothing;
 
         var now = DateTimeOffset.UtcNow;
         var emptied = 0;
@@ -85,7 +97,7 @@ public sealed class SplitRuleRevisions(
         {
             var replacement = (WeightedSplitRuleVersion)factory.FromDto(handlers.ToDto(version));
 
-            if (Rewrite(replacement, fromUserId, toUserId) == 0)
+            if (Rewrite(replacement, fromUserId, rules is RuleHandling.Transfer ? toUserId : null) == 0)
                 emptied++;
 
             replacement.SplitRuleId = version.SplitRuleId;
@@ -96,7 +108,54 @@ public sealed class SplitRuleRevisions(
             context.Add(replacement);
         }
 
-        return new RuleRewrite(affected.Count, emptied);
+        return new RuleRewrite(
+            affected.Count + await MoveSoleVersions(groupId, fromUserId, toUserId, ct),
+            emptied);
+    }
+
+    /// <summary>
+    /// Points every version that puts the whole amount on the person leaving at whoever
+    /// takes their place -- open and closed alike -- and answers with how many rules that
+    /// was.
+    /// </summary>
+    /// <remarks>
+    /// The one shape that is rewritten rather than superseded, and the one place a closed
+    /// version is ever written. Both follow from what it says: there is no weight to prune
+    /// and nobody to prune it among, so a rule of this kind either names the receiver or
+    /// names a row that is about to stop existing.
+    /// <para>
+    /// That row really does stop existing. A stand-in for somebody invited is deleted the
+    /// moment the invitation is claimed, declined or withdrawn -- that is what a stand-in is
+    /// -- and everything it was holding becomes the receiver's in the same hand-over, share
+    /// by share and expense by expense, including on expenses years old. A version left
+    /// naming it is a foreign key the delete cannot get past; a version pointed at nobody
+    /// would be worse, because the rule's history would stop saying who the money had been
+    /// for.
+    /// </para>
+    /// <para>
+    /// So nothing here happens when nobody is named, which is a member leaving. Their
+    /// account is anonymised rather than erased, the version goes on naming a row that is
+    /// still there, and what the rule said in March is still what it said. What it stops
+    /// doing is dividing -- a division only pays people who are still participants, and
+    /// <c>ExpenseSplitter</c> says so by name on the next expense filed under it.
+    /// </para>
+    /// </remarks>
+    private async Task<int> MoveSoleVersions(
+        Guid groupId, Guid fromUserId, Guid? toUserId, CancellationToken ct)
+    {
+        if (toUserId is not { } receiverId)
+            return 0;
+
+        var naming = await context.Set<SoleSplitRuleVersion>()
+            .Where(version => version.SplitRule.Group.Id == groupId &&
+                              !version.SplitRule.BuiltIn &&
+                              version.UserId == fromUserId)
+            .ToListAsync(ct);
+
+        foreach (var version in naming)
+            version.UserId = receiverId;
+
+        return naming.Select(version => version.SplitRuleId).Distinct().Count();
     }
 
     /// <summary>

@@ -168,12 +168,58 @@ public class SplitRuleVersionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// A rule changing kind used to mean deleting a row and creating another, because a row
-    /// cannot change type -- which took the old division with it. A new version is a new row
-    /// whatever kind it is.
+    /// A rule keeps the shape it was written with.
+    /// </summary>
+    /// <remarks>
+    /// The model can hold the change -- a version is a new row whatever kind it is, which is
+    /// what replaced deleting the rule and making another -- and the service refuses it
+    /// anyway, because a rule is a named division a group refers to and the shape of that
+    /// division is part of what the rule is. Every category pointing at "Rent" and every
+    /// expense divided by it was pointed at a rule that divided in proportion; the next
+    /// expense under any of them would suddenly not be.
+    /// <para>
+    /// Percentages and shares included, near as they are: the numbers a member reads off the
+    /// rule mean different things, and one of the two is refused for not totalling 100 where
+    /// the other is perfectly good. Choosing between them belongs to writing a rule, which is
+    /// where the editor offers the conversion.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_rule_cannot_change_kind()
+    {
+        var (groupId, self, other) = await GroupOfTwo();
+
+        var rule = await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = groupId,
+            Name = "Rent",
+            Definition = Shares(self, 2, other, 1)
+        }, Ct);
+
+        var refusal = await Assert.ThrowsAsync<ConflictException>(() => Rules.Update(
+            rule.Id,
+            new UpdateSplitRuleRequest
+            {
+                Name = "Rent",
+                Definition = new PercentSplitRuleDto
+                {
+                    Percentages = new Dictionary<Guid, decimal> { [self] = 60m, [other] = 40m }
+                }
+            },
+            Ct));
+
+        Assert.Equal(ErrorCodes.SplitRuleKindFixed, refusal.Code);
+
+        // And nothing moved: the rule stands for what it stood for, on the one version it
+        // has ever had.
+        Assert.IsType<SharesSplitRuleVersion>(Assert.Single(await VersionsOf(rule.Id)));
+    }
+
+    /// <summary>
+    /// What a rule of one kind may still be restated as: the same shape, different numbers.
     /// </summary>
     [Fact]
-    public async Task A_rule_can_change_kind_without_losing_what_it_used_to_say()
+    public async Task A_rule_can_still_be_restated_within_its_kind()
     {
         var (groupId, self, other) = await GroupOfTwo();
 
@@ -187,17 +233,13 @@ public class SplitRuleVersionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Rules.Update(rule.Id, new UpdateSplitRuleRequest
         {
             Name = "Rent",
-            Definition = new PercentSplitRuleDto
-            {
-                Percentages = new Dictionary<Guid, decimal> { [self] = 60m, [other] = 40m }
-            }
+            Definition = Shares(self, 3, other, 1)
         }, Ct);
 
         var versions = await VersionsOf(rule.Id);
 
         Assert.Equal(2, versions.Count);
-        Assert.IsType<SharesSplitRuleVersion>(versions[0]);
-        Assert.IsType<PercentSplitRuleVersion>(versions[1]);
+        Assert.All(versions, version => Assert.IsType<SharesSplitRuleVersion>(version));
     }
 
     [Fact]
@@ -775,26 +817,25 @@ public class SplitRuleVersionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// Correcting who paid on an expense under a payer rule moves the whole share onto the
-    /// person who actually paid.
+    /// A rule that puts the whole amount on one member says who, so correcting who paid
+    /// moves no share: the money is still theirs, and what changed is who put it down.
     /// </summary>
     /// <remarks>
-    /// The case that showed the old reading of silence was not merely cautious but wrong.
-    /// "Whoever paid owes all of it" is a rule whose answer is a function of the payer, so
-    /// an expense recorded against the wrong person kept a share saying the wrong person
-    /// owed it -- a debt between two people, standing in the group's balances, that the very
-    /// edit meant to correct it left untouched.
+    /// The opposite of what the kind this replaced did. "Whoever paid owes all of it" was a
+    /// division that was a function of the payer, so an expense recorded against the wrong
+    /// person left a debt standing between two people until the payer was corrected. Naming
+    /// the person is what makes that impossible to get wrong: the rule does not ask who paid.
     /// </remarks>
     [Fact]
-    public async Task Correcting_who_paid_moves_the_whole_share_under_a_payer_rule()
+    public async Task Correcting_who_paid_leaves_a_named_members_share_where_it_is()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var categoryId = await CreateCategory(groupId, "Their own", new PayerSplitRuleDto());
+        var categoryId = await CreateCategory(groupId, "Their own", new SoleSplitRuleDto(other));
 
         var expense = await AnExpense(groupId, categoryId, 40.00m);
 
-        var mine = Assert.Single(await SplitsOf(expense.Id));
-        Assert.Equal(self, mine.UserId);
+        var theirs = Assert.Single(await SplitsOf(expense.Id));
+        Assert.Equal(other, theirs.UserId);
 
         var model = await Transactions.GetUpdateModel(expense.Id, Ct);
         Assert.NotNull(model);
@@ -803,10 +844,10 @@ public class SplitRuleVersionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Transactions.Update(expense.Id, model, Ct);
 
-        var theirs = Assert.Single(await SplitsOf(expense.Id));
+        var afterwards = Assert.Single(await SplitsOf(expense.Id));
 
-        Assert.Equal(other, theirs.UserId);
-        Assert.Equal(40.00m, theirs.Amount);
+        Assert.Equal(other, afterwards.UserId);
+        Assert.Equal(40.00m, afterwards.Amount);
     }
 
     /// <summary>
@@ -817,7 +858,7 @@ public class SplitRuleVersionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Previewing_a_corrected_payer_agrees_with_the_save()
     {
         var (groupId, self, other) = await GroupOfTwo();
-        var categoryId = await CreateCategory(groupId, "Their own", new PayerSplitRuleDto());
+        var categoryId = await CreateCategory(groupId, "Their own", new SoleSplitRuleDto(other));
 
         var expense = await AnExpense(groupId, categoryId, 40.00m);
 

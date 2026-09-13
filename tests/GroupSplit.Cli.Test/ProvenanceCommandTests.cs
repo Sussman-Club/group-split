@@ -50,7 +50,7 @@ public sealed class ProvenanceCommandTests : IDisposable
 
     private static string TwoEntries(Guid member) => $$"""
         [
-          { "from": "2023-03-01", "definition": { "$type": "payer" } },
+          { "from": "2023-03-01", "definition": { "$type": "sole" } },
           {
             "from": "2024-01-01",
             "definition": { "$type": "shares", "shares": { "{{member}}": 2 } }
@@ -70,7 +70,7 @@ public sealed class ProvenanceCommandTests : IDisposable
                 id = Guid.NewGuid(),
                 startedAt = DateTimeOffset.UtcNow,
                 supersededAt = (DateTimeOffset?)null,
-                definition = new Dictionary<string, object> { ["$type"] = "payer" }
+                definition = new Dictionary<string, object> { ["$type"] = "sole" }
             }
         }
     };
@@ -111,7 +111,7 @@ public sealed class ProvenanceCommandTests : IDisposable
         var body = sent.Json;
 
         Assert.Equal(2, body.GetArrayLength());
-        Assert.Equal("payer", body[0].GetProperty("definition").GetProperty("$type").GetString());
+        Assert.Equal("sole", body[0].GetProperty("definition").GetProperty("$type").GetString());
         Assert.Equal("shares", body[1].GetProperty("definition").GetProperty("$type").GetString());
     }
 

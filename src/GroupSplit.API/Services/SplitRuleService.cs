@@ -90,7 +90,8 @@ public class SplitRuleService(
             Name = rule.Name,
             VersionId = current.Id,
             ChangedAt = current.StartedAt,
-            Definition = handlers.ToDto(current)
+            Definition = handlers.ToDto(current),
+            BuiltIn = rule.BuiltIn
         };
     }
 
@@ -157,15 +158,19 @@ public class SplitRuleService(
 
         var rule = await Existing(id, ct);
 
+        RefuseIfProvisioned(rule, "restated or renamed");
+
         await RefuseDuplicateName(rule.Group.Id, request.Name, id, ct);
 
         var proposed = factory.FromDto(request.Definition);
 
         await Validate(proposed, rule.Group, ct);
 
-        rule.Name = request.Name;
-
         var current = CurrentOf(rule);
+
+        RefuseADifferentKind(rule, current, proposed);
+
+        rule.Name = request.Name;
 
         if (!handlers.SameAs(current, proposed))
         {
@@ -230,6 +235,8 @@ public class SplitRuleService(
                 .WithExtension("from", versions[^1].From);
 
         var rule = await Existing(id, ct);
+
+        RefuseIfProvisioned(rule, "given a history");
 
         // One version is the state a freshly created rule is in, and the state the migration
         // left every rule in. A rule that has changed since has windows of its own and
@@ -304,6 +311,8 @@ public class SplitRuleService(
     {
         var rule = await Existing(id, ct);
 
+        RefuseIfProvisioned(rule, "deleted");
+
         var stillDefault = await dbContext.Set<Category>()
             .AnyAsync(category => category.DefaultSplitRuleId == id, ct);
 
@@ -340,6 +349,70 @@ public class SplitRuleService(
         rule.Current ?? throw new InvalidOperationException(
             $"Split rule {rule.Id} has no current version.");
 
+    /// <summary>
+    /// Refuses anything that would change a rule the group was given rather than wrote.
+    /// </summary>
+    /// <remarks>
+    /// One sentence, three callers, and the same answer to all of them: these say one thing
+    /// and go on saying it. That is not tidiness -- an expense can name one of these without
+    /// anybody having created it, so what they mean has to be fixed, or a restatement would
+    /// move money on expenses recorded under a division somebody never chose. A group that
+    /// wants "all of it is for Ana, until we say otherwise" creates a rule of its own, and
+    /// that one is editable like any other.
+    /// </remarks>
+    /// <summary>
+    /// Refuses a division of a different shape from the one the rule stands for.
+    /// </summary>
+    /// <remarks>
+    /// A rule is a named division a group refers to, and the shape of that division is part
+    /// of what the rule is -- not a field on it. "Household 3-way" turning into "all on
+    /// whoever paid" is not an edit anybody makes on purpose: every category pointing at it
+    /// and every expense divided by it was pointed at a rule that divided in proportion, and
+    /// the next expense under any of them would suddenly not be. Changing the numbers is an
+    /// edit; changing the shape is a different rule wearing the name, and making one is a
+    /// line of the same API.
+    /// <para>
+    /// Percentages and shares are two shapes, not one, for the same reason: the numbers a
+    /// member reads off the rule mean different things, and a percentage rule that no longer
+    /// totals 100 is refused where the same weights as shares are perfectly good. The editor
+    /// converts between them while a rule is being <em>written</em>, which is where choosing
+    /// the shape belongs.
+    /// </para>
+    /// <para>
+    /// Asked of an edit only, and not of a written history. An edit is a decision somebody is
+    /// making now, and this is what they are told they cannot decide; a history is an account
+    /// of a past that already happened somewhere else, and a flat that really did divide its
+    /// rent evenly until it started keeping shares has to be able to say so. What guards that
+    /// path is the entry it ends on: the last one has to be the division the rule stands for
+    /// now, kind included.
+    /// </para>
+    /// </remarks>
+    private static void RefuseADifferentKind(
+        SplitRule rule, SplitRuleVersion current, SplitRuleVersion proposed)
+    {
+        if (current.GetType() == proposed.GetType())
+            return;
+
+        throw new ConflictException(ErrorCodes.SplitRuleKindFixed,
+                $"\"{rule.Name}\" divides one way and this would make it divide another. A "
+                + "rule keeps the shape it was written with; create a rule for the new one.")
+            .WithExtension("splitRuleId", rule.Id);
+    }
+
+    private static void RefuseIfProvisioned(SplitRule rule, string what)
+    {
+        if (!rule.BuiltIn)
+            return;
+
+        throw new ConflictException(ErrorCodes.SplitRuleNotEditable,
+                $"\"{rule.Name}\" is the rule this group holds for one of its members, so it "
+                + $"cannot be {what}. Create a rule of your own to divide differently.")
+            .WithExtension("splitRuleId", rule.Id)
+            // Read off the division rather than off the rule, because that is where it is
+            // said. A caller that wants to name the person in a message has it already.
+            .WithExtension("allForUserId", rule.AllFor);
+    }
+
     private async Task<Group> GroupOfCaller(Guid groupId, CancellationToken ct) =>
         await dbContext.Entry(userContext.User).Collection(u => u.Groups).Query()
             .FirstOrDefaultAsync(@group => @group.Id == groupId, ct)
@@ -361,10 +434,20 @@ public class SplitRuleService(
         if (handlers.Invalid(ruleVersion) is { } complaint)
             throw new ValidationException(ErrorCodes.SplitRuleInvalid, complaint);
 
-        if (ruleVersion is not WeightedSplitRuleVersion weighted || weighted.Participants.Count == 0)
-            return;
+        // Who a rule names is asked of the rule's shape rather than of one interface, because
+        // the shapes are the point: a proportional rule names a list, and the one that puts
+        // the whole amount on somebody names exactly one person -- who has to be in the group
+        // for the same reason and with the same words.
+        List<Guid> named = ruleVersion switch
+        {
+            WeightedSplitRuleVersion weighted =>
+                weighted.Participants.Select(participant => participant.UserId).ToList(),
+            SoleSplitRuleVersion sole => [sole.UserId],
+            _ => []
+        };
 
-        var named = weighted.Participants.Select(participant => participant.UserId).ToList();
+        if (named.Count == 0)
+            return;
 
         var known = await participants.Of(group.Id)
             .Where(user => named.Contains(user.Id))

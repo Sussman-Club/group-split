@@ -5,7 +5,8 @@ using GroupSplit.Shared;
 namespace GroupSplit.Cli.Commands;
 
 /// <summary>
-/// The four ways a split rule can divide, as command-line flags.
+/// The four ways a split rule can divide, as command-line flags -- five flags, because the
+/// one that names a person offers to look your own id up.
 /// </summary>
 /// <remarks>
 /// On the wire the division is one polymorphic object told apart by <c>$type</c>, which a
@@ -31,9 +32,15 @@ public sealed class DefinitionOptions
         AllowMultipleArgumentsPerToken = true
     };
 
+    private readonly Option<Guid?> _sole = new("--sole")
+    {
+        Description = "Do not share it: all of it is for this member, whoever paid."
+    };
+
     private readonly Option<bool> _payer = new("--payer")
     {
-        Description = "Do not share it: whoever paid owes all of it."
+        Description = "Do not share it: all of it is for you. The same as --sole with your own "
+                      + "id, which this looks up so you do not have to."
     };
 
     private readonly Option<string[]> _percent = new("--percent")
@@ -52,6 +59,7 @@ public sealed class DefinitionOptions
     {
         command.Options.Add(_even);
         command.Options.Add(_among);
+        command.Options.Add(_sole);
         command.Options.Add(_payer);
         command.Options.Add(_percent);
         command.Options.Add(_shares);
@@ -64,12 +72,22 @@ public sealed class DefinitionOptions
     /// Two given is refused rather than resolved by precedence: a caller passing both
     /// <c>--even</c> and <c>--shares</c> has one of the two in mind, and picking for them
     /// would write the other.
+    /// <para>
+    /// <c>--payer</c> is the one flag that cannot be read from the command line alone: the
+    /// rule it describes names a person, and the person is whoever is signed in, so it takes
+    /// a round trip to find out. That is the whole of the difference -- what reaches the API
+    /// is a rule naming a member, the same as <c>--sole</c> would have written.
+    /// </para>
     /// </remarks>
-    public SplitRuleDto? Read(ParseResult parse, SplitRuleDto? current)
+    public async Task<SplitRuleDto?> Read(
+        CliContext context, ParseResult parse, SplitRuleDto? current, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         var chosen = new List<string>();
 
         if (parse.GetValue(_even) || parse.GetResult(_among) is not null) chosen.Add("--even");
+        if (parse.GetResult(_sole) is not null) chosen.Add("--sole");
         if (parse.GetValue(_payer)) chosen.Add("--payer");
         if (parse.GetResult(_percent) is not null) chosen.Add("--percent");
         if (parse.GetResult(_shares) is not null) chosen.Add("--shares");
@@ -78,7 +96,7 @@ public sealed class DefinitionOptions
         {
             throw CliException.Input(
                 $"{string.Join(" and ", chosen)} describe different divisions.",
-                "Pass exactly one of --even, --payer, --percent or --shares.");
+                "Pass exactly one of --even, --sole, --payer, --percent or --shares.");
         }
 
         if (chosen.Count == 0)
@@ -89,7 +107,8 @@ public sealed class DefinitionOptions
         return chosen[0] switch
         {
             "--even" => new EvenSplitRuleDto(parse.GetValue(_among) ?? []),
-            "--payer" => new PayerSplitRuleDto(),
+            "--sole" => new SoleSplitRuleDto(parse.GetValue(_sole) ?? Guid.Empty),
+            "--payer" => new SoleSplitRuleDto((await context.Users.GetCurrentUserAsync(ct)).Id),
             "--percent" => new PercentSplitRuleDto
             {
                 Percentages = Pairs.Decimals("--percent", parse.GetValue(_percent) ?? [])
@@ -109,7 +128,7 @@ public static class Definitions
     {
         EvenSplitRuleDto { Among.Count: 0 } => "evenly, between the whole group",
         EvenSplitRuleDto even => $"evenly, between {even.Among.Count} named members",
-        PayerSplitRuleDto => "not shared: whoever paid owes all of it",
+        SoleSplitRuleDto => "not shared: all of it is for one member",
         PercentSplitRuleDto => "by percentage",
         SharesSplitRuleDto => "by whole shares",
         _ => definition.GetType().Name
@@ -128,6 +147,7 @@ public static class Definitions
                 [.. percent.Percentages.Select(pair => (pair.Key, $"{pair.Value:0.##}%"))],
             SharesSplitRuleDto shares =>
                 [.. shares.Shares.Select(pair => (pair.Key, pair.Value == 1 ? "1 share" : $"{pair.Value} shares"))],
+            SoleSplitRuleDto sole => [(sole.UserId, "all of it")],
             _ => []
         };
 }

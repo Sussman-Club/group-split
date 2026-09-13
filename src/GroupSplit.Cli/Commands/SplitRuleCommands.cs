@@ -46,11 +46,20 @@ public static class SplitRuleCommands
                     return new Markup(Tables.Empty("split rules") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Name");
+                var table = Tables.Grid("Id", "Name", "All for", "Built in");
 
                 foreach (var rule in value)
                 {
-                    table.AddRow(rule.Id.ToString(), Markup.Escape(rule.Name));
+                    table.AddRow(
+                        rule.Id.ToString(),
+                        Markup.Escape(rule.Name),
+                        // The member a rule puts the whole amount on, read off the division
+                        // it stands for now. It is how a script finds the rule to pass to
+                        // `transactions create --split-rule` without matching on a name.
+                        rule.AllForUserId?.ToString() ?? "-",
+                        // And whether the group was given it, which is what tells the rules
+                        // it can edit from the ones it cannot.
+                        rule.BuiltIn ? "yes" : "-");
                 }
 
                 return table;
@@ -245,7 +254,7 @@ public static class SplitRuleCommands
             throw CliException.Input(
                 $"{file.Name} is not a history this can read: {exception.Message}",
                 "Each entry is {\"from\": \"2023-03-01\", \"definition\": {\"$type\": \"even\"}}. "
-                + "The kinds are even, payer, percent and shares.");
+                + "The kinds are even, sole, percent and shares.");
         }
 
         if (entries is not { Count: > 0 })
@@ -301,6 +310,30 @@ public static class SplitRuleCommands
         return table;
     }
 
+    /// <summary>
+    /// Stops short of the API on a rule the group was given rather than wrote.
+    /// </summary>
+    /// <remarks>
+    /// The API refuses these itself, in words, so this only decides where the refusal
+    /// happens. Here is the better place for the delete: the confirmation protocol would
+    /// otherwise print a summary of a change, take a <c>--yes</c>, and then meet the refusal
+    /// -- which reads as the CLI having agreed to something it could not do.
+    /// </remarks>
+    private static void RefuseIfProvisioned(SplitRuleDetailsResponse rule, string what)
+    {
+        if (!rule.BuiltIn)
+        {
+            return;
+        }
+
+        throw CliException.Input(
+            $"'{rule.Name}' is the rule this group holds for one of its members, "
+            + $"so it cannot be {what}.",
+            "It says one thing -- all of it is for that member -- and goes on saying it, "
+            + "which is what lets an expense name it. To divide differently, create a rule: "
+            + "groupsplit split-rules create <name> --group <group-id> --sole <user-id>");
+    }
+
     private static IRenderable Render(SplitRuleDetailsResponse rule)
     {
         var table = Tables.KeyValue();
@@ -308,6 +341,12 @@ public static class SplitRuleCommands
         table.AddRow("Name", Markup.Escape(rule.Name));
         table.AddRow("Group", rule.GroupId.ToString());
         table.AddRow("Kind", Definitions.Describe(rule.Definition));
+
+        if (rule.BuiltIn)
+        {
+            table.AddRow("Built in", "yes, one of this group's per-member rules");
+        }
+
         table.AddRow("Version", rule.VersionId.ToString());
         table.AddRow("Changed", rule.ChangedAt.ToString("u"));
 
@@ -353,10 +392,10 @@ public static class SplitRuleCommands
                     Name = parse.GetValue(name)!,
                     // Required here, unlike on update: there is nothing to read a division
                     // back off, and a rule that divides nothing is not a rule.
-                    Definition = kind.Read(parse, current: null)
+                    Definition = await kind.Read(context, parse, current: null, ct)
                               ?? throw CliException.Input(
                                   "A rule needs a division.",
-                                  "Pass one of --even, --payer, --percent or --shares.")
+                                  "Pass one of --even, --sole, --payer, --percent or --shares.")
                 },
                 ct);
 
@@ -392,12 +431,14 @@ public static class SplitRuleCommands
 
             var current = await client.GetSplitRuleAsync(id, ct);
 
+            RefuseIfProvisioned(current, "renamed or restated");
+
             var updated = await client.UpdateSplitRuleAsync(
                 id,
                 new UpdateSplitRuleRequest
                 {
                     Name = parse.GetValue(name) ?? current.Name,
-                    Definition = kind.Read(parse, current.Definition)!
+                    Definition = (await kind.Read(context, parse, current.Definition, ct))!
                 },
                 ct);
 
@@ -419,6 +460,8 @@ public static class SplitRuleCommands
             var client = new Api.SplitRulesClient(context.ApiHttpClient);
 
             var rule = await client.GetSplitRuleAsync(id, ct);
+
+            RefuseIfProvisioned(rule, "deleted");
 
             Confirmation.Require(
                 context,

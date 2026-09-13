@@ -8,9 +8,9 @@ namespace GroupSplit.Shared;
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(EvenSplitRuleDto), typeDiscriminator: "even")]
-[JsonDerivedType(typeof(PayerSplitRuleDto), typeDiscriminator: "payer")]
 [JsonDerivedType(typeof(PercentSplitRuleDto), typeDiscriminator: "percent")]
 [JsonDerivedType(typeof(SharesSplitRuleDto), typeDiscriminator: "shares")]
+[JsonDerivedType(typeof(SoleSplitRuleDto), typeDiscriminator: "sole")]
 public abstract record SplitRuleDto;
 
 /// <summary>
@@ -48,7 +48,15 @@ public record SharesSplitRuleDto : SplitRuleDto
 }
 
 /// <summary>
-/// Not shared: whoever paid owes all of it. Carries nothing, because who owes depends on
-/// who paid and that is not known until the expense is written.
+/// Not shared: the whole amount is one person's.
 /// </summary>
-public record PayerSplitRuleDto : SplitRuleDto;
+/// <param name="UserId">
+/// Who owes it: a member, or somebody the group has invited and is waiting on -- the same
+/// set any other rule may name.
+/// </param>
+public record SoleSplitRuleDto(Guid UserId) : SplitRuleDto
+{
+    public SoleSplitRuleDto() : this(Guid.Empty)
+    {
+    }
+}

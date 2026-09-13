@@ -494,11 +494,16 @@ public class EndpointTest : IAsyncLifetime
     {
         var groupId = await CreateGroup();
 
+        // The caller, who is the group's only member: a rule that puts the whole amount on
+        // one person has to name somebody in the group.
+        var me = (await Client.GetFromJsonAsync<UserInfo>(
+            "/users/me", Json, TestContext.Current.CancellationToken))!;
+
         var rule = await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
         {
             GroupId = groupId,
             Name = "Household",
-            Definition = new PayerSplitRuleDto()
+            Definition = new SoleSplitRuleDto(me.Id)
         }, Json, TestContext.Current.CancellationToken);
 
         rule.EnsureSuccessStatusCode();

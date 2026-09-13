@@ -274,6 +274,12 @@ public static class TransactionCommands
         {
             Description = "Member who paid. Defaults to you."
         };
+        var splitRule = new Option<Guid?>("--split-rule")
+        {
+            Description = "Divide by this rule whatever the category says, from "
+                          + "`groupsplit split-rules list --group <group-id>`. A group holds one per "
+                          + "member that puts the whole amount on them."
+        };
         var preview = new Option<bool>("--preview")
         {
             Description = "Show the split the server would apply without creating anything."
@@ -281,7 +287,7 @@ public static class TransactionCommands
 
         var command = new Command("create", "Record an expense.")
         {
-            name, amount, group, date, description, category, merchant, paidBy, preview
+            name, amount, group, date, description, category, merchant, paidBy, splitRule, preview
         };
 
         command.SetHandler(async (context, ct) =>
@@ -297,6 +303,7 @@ public static class TransactionCommands
                 CategoryId = parse.GetValue(category),
                 MerchantId = parse.GetValue(merchant),
                 PaidByUserId = parse.GetValue(paidBy),
+                SplitRuleId = parse.GetValue(splitRule),
                 Description = parse.GetValue(description)
             };
 
@@ -375,6 +382,11 @@ public static class TransactionCommands
             Description = "Forget where it was spent, so it shows no logo."
         };
         var paidBy = new Option<Guid?>("--paid-by") { Description = "Change who paid." };
+        var splitRule = new Option<Guid?>("--split-rule")
+        {
+            Description = "Divide it by this rule whatever its category says, from "
+                          + "`groupsplit split-rules list --group <group-id>`."
+        };
         var splits = new Option<string[]>("--split")
         {
             Description = "Set the exact shares as <user-id>=<amount>, repeatable. "
@@ -385,7 +397,8 @@ public static class TransactionCommands
         {
             Description = "Discard the shares it holds and divide it again by its category's rule. "
                           + "Uses the version that divided the expense, where it still records "
-                          + "one, rather than the rule as it reads today."
+                          + "one, rather than the rule as it reads today -- and it is the way "
+                          + "back from an expense recorded as one member's."
         };
         var preview = new Option<bool>("--preview")
         {
@@ -403,7 +416,8 @@ public static class TransactionCommands
         var command = new Command("update", "Change an expense. Only what you name is sent.")
         {
             TransactionId, name, amount, date, description,
-            group, personal, category, noCategory, merchant, noMerchant, paidBy, splits, redivide,
+            group, personal, category, noCategory, merchant, noMerchant, paidBy,
+            splitRule, splits, redivide,
             handSplit, dividedBy, preview
         };
 
@@ -431,6 +445,22 @@ public static class TransactionCommands
                 throw CliException.Input(
                     "--merchant-id and --no-merchant contradict each other.",
                     "Pass one or the other.");
+            }
+
+            if (parse.GetResult(splitRule) is not null && parse.GetValue(redivide))
+            {
+                throw CliException.Input(
+                    "--split-rule and --redivide contradict each other.",
+                    "--split-rule divides it by that rule; --redivide hands it back to its "
+                    + "category. Pass one or the other.");
+            }
+
+            if (parse.GetResult(splitRule) is not null && parse.GetValue(splits) is { Length: > 0 })
+            {
+                throw CliException.Input(
+                    "--split-rule and --split contradict each other.",
+                    "--split-rule has the server divide it; --split states the shares yourself. "
+                    + "The API refuses both in one request.");
             }
 
             if (parse.GetValue(splits) is { Length: > 0 } && parse.GetValue(redivide))
@@ -482,6 +512,7 @@ public static class TransactionCommands
                 parse.GetResult(category) is not null ||
                 parse.GetResult(merchant) is not null ||
                 parse.GetResult(paidBy) is not null ||
+                parse.GetResult(splitRule) is not null ||
                 parse.GetValue(personal) ||
                 parse.GetValue(noCategory) ||
                 parse.GetValue(noMerchant) ||
@@ -608,6 +639,12 @@ public static class TransactionCommands
                 MerchantId = from.GetValue(noMerchant) ? null : from.GetValue(merchant) ?? current.MerchantId,
                 PaidByUserId = from.GetValue(paidBy) ?? current.PaidByUserId,
 
+                // An instruction and not a value: naming a rule divides by it from now on,
+                // and saying nothing leaves the expense dividing by whatever divided it.
+                // There is no stored field to read back -- what an expense holds is the
+                // division itself -- and the way back to its category is --redivide.
+                SplitRuleId = from.GetValue(splitRule),
+
                 // Null unless somebody stated them. Null alone is not "divide it again" --
                 // the endpoint keeps the stored shares when a patch says nothing about them
                 // -- which is what --redivide is for, and it is carried separately rather than
@@ -637,7 +674,7 @@ public static class TransactionCommands
     /// rather than the value.
     /// </remarks>
     private static JsonPatchDocument<UpdateTransactionRequest> Patch(
-        TransactionResponse current, UpdateTransactionRequest edited, bool redivide)
+        TransactionDetailsResponse current, UpdateTransactionRequest edited, bool redivide)
     {
         var patch = new JsonPatchDocument<UpdateTransactionRequest>();
 
@@ -658,6 +695,13 @@ public static class TransactionCommands
 
         if (current.PaidByUserId != edited.PaidByUserId)
             patch.Replace(request => request.PaidByUserId, edited.PaidByUserId);
+
+        // Sent only when somebody named one. Like the shares below it is read as an
+        // instruction rather than compared against a stored value, because there is no
+        // stored value: an expense records the division it was written under, not the rule
+        // somebody picked to get it.
+        if (edited.SplitRuleId is not null)
+            patch.Replace(request => request.SplitRuleId, edited.SplitRuleId);
 
         // Three answers, not two. Shares stated means those amounts; --redivide means an
         // explicit null, which is the only way to ask the endpoint to work them out again;

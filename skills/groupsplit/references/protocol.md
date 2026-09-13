@@ -96,6 +96,9 @@ ones worth handling by name:
 | `CURRENCY_MISMATCH` | The amount is not in the group's currency. |
 | `CATEGORY_IN_USE`, `SPLIT_RULE_IN_USE` | Something still points at it. Move those first. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | An expense with no group cannot be divided. |
+| `SPLIT_RULE_NOT_EDITABLE` | The rule is one the group was given per member -- all of it is for them -- and nothing renames, restates or deletes one. Create a rule of your own instead. |
+| `SPLIT_RULE_NOT_IN_GROUP` | The `--split-rule` id belongs to another group, or the expense has no group for a rule to divide. |
+| `SPLIT_RULE_KIND_FIXED` | The update would change the rule's shape -- shares to percentages, or either to "all on one person". Change the numbers, or create a rule for the new shape. |
 
 ## The confirmation envelope
 

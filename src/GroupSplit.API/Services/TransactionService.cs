@@ -243,6 +243,9 @@ public class TransactionService(
             Group = group,
             Category = category,
             MerchantId = await MerchantFor(request.MerchantId, ct),
+            // The division it was told to use, which the splitter then keeps rather than
+            // reaching for the category's. Null is the ordinary expense.
+            SplitRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId, request.Splits, ct),
             User = payer
         };
 
@@ -281,6 +284,7 @@ public class TransactionService(
             Name = request.Name,
             GroupId = group?.Id,
             CategoryId = category?.Id,
+            SplitRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId, request.Splits, ct),
             UserId = payer.Id
         };
 
@@ -379,6 +383,11 @@ public class TransactionService(
             stated = null;
         }
 
+        // The one line this method exists for, worked out the way the save works it out: the
+        // division the expense was written under, replaced when the request names a rule and
+        // dropped when the edit is one that hands the expense back to its category.
+        var version = await DivisionFor(existing, request, group, asked: stated is null, ct);
+
         var draft = new Expense
         {
             Amount = request.Amount,
@@ -389,14 +398,12 @@ public class TransactionService(
             CategoryId = category?.Id,
             UserId = payer.Id,
 
-            // The one line this method exists for. The splitter keeps it when it is still a
-            // version of the category's rule and reaches for the current one otherwise,
-            // which is exactly what the save does.
-            SplitRuleVersionId = existing.SplitRuleVersionId,
+            SplitRuleVersionId = version,
 
             // The version itself and not only its id, because the answer names the rule that
-            // divided it and cannot load one from an id it was handed.
-            SplitRuleVersion = existing.SplitRuleVersion
+            // divided it and cannot load one from an id it was handed. Only where the draft
+            // kept the one the expense holds; a different one is loaded by the splitter.
+            SplitRuleVersion = version == existing.SplitRuleVersionId ? existing.SplitRuleVersion : null
         };
 
         // What it is divided into today, so the splitter can tell a division that changed
@@ -624,11 +631,17 @@ public class TransactionService(
             ? expense.Group
             : await GroupFor(request.GroupId, ct);
 
+        // Which division the expense holds from here on, asked while it still holds the
+        // category and the group the question is about: the one it was written under, a rule
+        // the request names instead, or none where the edit hands it back to its category.
+        var division = await DivisionFor(expense, request, group, asked: request.Splits is null, ct);
+
         if (group?.Id != expense.GroupId)
         {
             expense.Group = group;
             expense.GroupId = group?.Id;
             expense.Currency = group?.Currency ?? Currencies.Default;
+
             if (group == null)
             {
                 request.Splits = null;
@@ -651,6 +664,20 @@ public class TransactionService(
         expense.CategoryId = category?.Id;
         expense.MerchantId = await MerchantFor(request.MerchantId, ct);
         expense.User = expensePayer;
+
+        // Both halves together, and only where the answer actually moved. EF fixes the
+        // navigation up from the tracker as the expense is read, so assigning null to it
+        // severs a relationship that is still there -- and a severed navigation beats the
+        // key beside it, which nulled the division on every rename of an expense whose
+        // version happened to be tracked.
+        if (division != expense.SplitRuleVersionId)
+        {
+            expense.SplitRuleVersion = division is { } moved
+                ? await dbContext.Set<SplitRuleVersion>().FirstAsync(version => version.Id == moved, ct)
+                : null;
+
+            expense.SplitRuleVersionId = division;
+        }
 
         // The amount, the payer and the category can all have changed, and each of them
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
@@ -684,7 +711,10 @@ public class TransactionService(
         expense.Amount != request.Amount ||
         expense.UserId != request.PaidByUserId ||
         expense.CategoryId != request.CategoryId ||
-        expense.GroupId != request.GroupId;
+        expense.GroupId != request.GroupId ||
+        // Naming a rule is an edit to the division itself, and the loudest of them: it is
+        // somebody saying who the money was for.
+        request.SplitRuleId is not null;
 
     /// <summary>
     /// Whether the shares the request carries are the ones the expense already holds, and so
@@ -868,6 +898,115 @@ public class TransactionService(
                    .FirstOrDefaultAsync(category =>
                        category.Id == categoryId && category.Group.Id == group.Id, ct)
                ?? throw new NotFoundException(ErrorCodes.CategoryNotFound, "Category not found.");
+    }
+
+    /// <summary>
+    /// Which division an edited expense should hold: the one it was written under, the
+    /// version of a rule the request names instead, or none.
+    /// </summary>
+    /// <param name="asked">
+    /// Whether the caller asked outright for the division to be worked out again -- the
+    /// explicit <c>/splits</c> null that the edit dialog's <strong>Automatically</strong>
+    /// and <c>--redivide</c> send. Silence is not that: the endpoint hands every patch the
+    /// shares the expense already holds, so an ordinary edit arrives with them.
+    /// </param>
+    /// <remarks>
+    /// Three answers, and the order matters.
+    /// <para>
+    /// A rule named in the request wins: that is somebody saying "this one is Ana's", now,
+    /// about this expense.
+    /// </para>
+    /// <para>
+    /// Otherwise the expense keeps what it holds -- which is what "divide it again by the
+    /// rule it had at the time" means, and what keeps an expense recorded as one member's
+    /// from being handed back to its category by an edit to its amount.
+    /// </para>
+    /// <para>
+    /// It gives that up on a move to another group, where the version belongs to a rule the
+    /// destination does not have -- and, when the division names a person outright, on an
+    /// outright ask to divide it again, which is how somebody says "never mind who it was
+    /// for, divide it the way this category does". That ask leaves every other division
+    /// alone, because the splitter has a better answer for those: an expense asked to divide
+    /// again by an ordinary rule is divided by the version it was written under, not by the
+    /// rule as it reads today.
+    /// </para>
+    /// <para>
+    /// Re-filing under another category is not one of them either. The splitter reaches for
+    /// the new category's rule on its own when the version the expense holds belongs to a
+    /// rule it is no longer filed under -- and keeps a division that names a person, because
+    /// what a category says the money was for does not say who it was for.
+    /// </para>
+    /// </remarks>
+    private async Task<Guid?> DivisionFor(
+        Expense expense, UpdateTransactionRequest request, Group? group, bool asked, CancellationToken ct)
+    {
+        if (request.SplitRuleId is { } named)
+            return await VersionOfRuleFor(
+                group, named, SaysNothingNew(expense.Splits, request.Splits) ? null : request.Splits, ct);
+
+        if (group?.Id != expense.GroupId)
+            return null;
+
+        if (asked && expense.SplitRuleVersionId is { } held &&
+            await dbContext.Set<SoleSplitRuleVersion>().AnyAsync(version => version.Id == held, ct))
+        {
+            return null;
+        }
+
+        return expense.SplitRuleVersionId;
+    }
+
+    /// <summary>
+    /// The division an expense names for itself: the version the named rule stands for now,
+    /// checked to be one of its own group's rules.
+    /// </summary>
+    /// <remarks>
+    /// A version and not the rule, because the version is what an expense records -- the
+    /// division that produced its shares. Naming a rule is how a person says it ("all for
+    /// Ana"), and this is where that becomes the one thing worth storing. Which also means a
+    /// rule edited afterwards does not reach back: the expense holds the division it was
+    /// written under, exactly as one divided by its category does.
+    /// <para>
+    /// Scoped like the category, and refused with one answer whether or not the rule exists,
+    /// so guessing ids says nothing about another group's rules.
+    /// </para>
+    /// <para>
+    /// Stated shares and a named rule are two answers to one question, and a request carrying
+    /// both has not said which it means -- so it is refused rather than resolved by
+    /// precedence. Silence about the shares is not carrying both: the update endpoint hands
+    /// every patch the shares the expense already holds, so what tells them apart is whether
+    /// those shares differ from the stored ones, which the caller works out before getting
+    /// here.
+    /// </para>
+    /// </remarks>
+    private async Task<Guid?> VersionOfRuleFor(
+        Group? group, Guid? splitRuleId, IReadOnlyList<SplitInput>? stated, CancellationToken ct)
+    {
+        if (splitRuleId is null)
+            return null;
+
+        if (stated is not null)
+            throw new ValidationException(ErrorCodes.SplitsInvalid,
+                "An expense divides by a rule or by the shares you state, not both. Leave the "
+                + "shares out to divide by the rule.");
+
+        if (group is null)
+            throw new ConflictException(ErrorCodes.SplitRuleNotInGroup,
+                "A personal expense is not shared with anybody, so there is nothing for a rule to divide.");
+
+        var version = await dbContext.Set<SplitRuleVersion>()
+            .Where(candidate => candidate.SplitRuleId == splitRuleId &&
+                                candidate.SupersededAt == null &&
+                                candidate.SplitRule.Group.Id == group.Id)
+            .Select(candidate => (Guid?)candidate.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (version is null)
+            throw new ConflictException(ErrorCodes.SplitRuleNotInGroup,
+                    "That split rule does not belong to this group.")
+                .WithExtension("splitRuleId", splitRuleId);
+
+        return version;
     }
 
     /// <summary>
