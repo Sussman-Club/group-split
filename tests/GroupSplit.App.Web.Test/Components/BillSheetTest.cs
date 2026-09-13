@@ -161,6 +161,107 @@ public class BillSheetTest : ComponentTest
         Assert.Contains("Showing 2 of 3", page.Markup);
     }
 
+    // ---- a bill nothing divides by, which is most of them ------------------------------
+
+    /// <summary>
+    /// A line naming nobody is silent where nothing will ever read the claims.
+    /// </summary>
+    /// <remarks>
+    /// The mainline case, and the one the fixture here could not reach: every bill on a
+    /// charge still in the inbox comes back with this false, as does every bill under a
+    /// category that divides evenly. The itemised rule is the only thing that reads a claim,
+    /// so on any other bill a line with nobody on it is what a receipt looks like -- and
+    /// saying "nobody yet" against it is how a screen teaches people to ignore it.
+    /// </remarks>
+    [Fact]
+    public void A_bill_nothing_divides_by_says_nothing_about_lines_naming_nobody()
+    {
+        var receipt = Receipt(dividesItsExpense: false, tax: 0m, tip: 0m,
+            Line("Rotisserie chicken", 8.99m, Mine, claimed: false),
+            Line("Fleece jacket", 34.99m, Mine, claimed: false));
+
+        var page = Render<BillSheet>(parameters => parameters
+            .Add(sheet => sheet.Receipt, receipt)
+            .Add(sheet => sheet.Title, "Costco"));
+
+        Assert.DoesNotContain("nobody", page.Markup);
+        Assert.Empty(page.FindAll(".gs-slip-line.is-unclaimed"));
+
+        // And no tools at all: a six-line bill with nothing to answer is read by looking.
+        Assert.Empty(page.FindAll(".gs-slip-tools"));
+    }
+
+    /// <summary>And under the rule that does read them, it asks.</summary>
+    [Fact]
+    public void A_bill_its_expense_divides_by_asks_who_had_the_unclaimed_lines()
+    {
+        var receipt = Receipt(dividesItsExpense: true, tax: 0m, tip: 0m,
+            Line("Bistecca", 28.00m, Mine, claimed: true),
+            Line("Vongole", 19.50m, Mine, claimed: false));
+
+        var page = Render<BillSheet>(parameters => parameters
+            .Add(sheet => sheet.Receipt, receipt)
+            .Add(sheet => sheet.Title, "Trattoria da Enzo"));
+
+        Assert.Contains("nobody yet", page.Markup);
+        Assert.Contains("1 of 2 lines", page.Markup);
+        Assert.Equal(1, page.FindAll(".gs-slip-line.is-unclaimed").Count);
+    }
+
+    // ---- the extras --------------------------------------------------------------------
+
+    /// <summary>
+    /// Tax and tip are printed when there are any, and the exempt lines are marked.
+    /// </summary>
+    /// <remarks>
+    /// Every bill in this fixture used to charge no tax and mark every line taxable, so the
+    /// margin letter and the legend that explains it -- the slip's whole account of why one
+    /// line was charged tax and its neighbour was not -- were never rendered.
+    /// </remarks>
+    [Fact]
+    public void A_bill_that_charges_tax_marks_the_lines_it_was_not_charged_on()
+    {
+        var receipt = Receipt(dividesItsExpense: true, tax: 4.00m, tip: 6.00m,
+            Line("Rotisserie chicken", 8.99m, Mine, taxable: false),
+            Line("Fleece jacket", 34.99m, Mine));
+
+        var page = Render<BillSheet>(parameters => parameters
+            .Add(sheet => sheet.Receipt, receipt)
+            .Add(sheet => sheet.Title, "Costco"));
+
+        var marks = page.FindAll(".gs-slip-mark")
+            .Where(mark => !string.IsNullOrWhiteSpace(mark.TextContent))
+            .ToList();
+
+        Assert.Equal("N", Assert.Single(marks).TextContent.Trim());
+        Assert.Contains("no tax charged on this line", page.Markup);
+
+        var totals = page.Find(".gs-slip-totals").TextContent;
+
+        Assert.Contains("Tax", totals);
+        Assert.Contains("Tip", totals);
+    }
+
+    /// <summary>
+    /// And a bill with neither says neither: two rows of 0.00 are not information.
+    /// </summary>
+    [Fact]
+    public void A_bill_with_no_tax_and_no_tip_prints_neither()
+    {
+        var page = Render<BillSheet>(parameters => parameters
+            .Add(sheet => sheet.Receipt, Bill(shared: false))
+            .Add(sheet => sheet.Title, "Trattoria da Enzo"));
+
+        var totals = page.Find(".gs-slip-totals").TextContent;
+
+        Assert.DoesNotContain("Tax", totals);
+        Assert.DoesNotContain("Tip", totals);
+        Assert.Contains("Total", totals);
+
+        // The legend goes with the mark: with no tax charged, nothing is exempt from it.
+        Assert.DoesNotContain("no tax charged", page.Markup);
+    }
+
     /// <summary>
     /// One bill: two lines this expense's, one the other part's -- optionally with a line
     /// somewhere on it that nobody has claimed.
@@ -176,29 +277,33 @@ public class BillSheetTest : ComponentTest
     }
 
     private static ReceiptResponse Receipt(params ReceiptItemResponse[] items) =>
+        Receipt(dividesItsExpense: true, tax: 0m, tip: 0m, items);
+
+    private static ReceiptResponse Receipt(
+        bool dividesItsExpense, decimal tax, decimal tip, params ReceiptItemResponse[] items) =>
         new(
             Guid.NewGuid(),
             ExpenseId: Mine,
             BankTransactionId: null,
             Subtotal: items.Sum(line => line.TotalPrice),
-            Tax: 0m,
-            Tip: 0m,
-            Total: items.Sum(line => line.TotalPrice),
+            Tax: tax,
+            Tip: tip,
+            Total: items.Sum(line => line.TotalPrice) + tax + tip,
             UnclaimedItemCount: items.Count(line => line.Claims.Count == 0),
             CanDivide: false,
-            // The itemised rule, so the sheet asks about lines belonging to nobody at all.
-            DividesItsExpense: true,
+            DividesItsExpense: dividesItsExpense,
             Items: items);
 
     private static ReceiptItemResponse Line(
-        string name, decimal price, Guid expense, bool claimed = true, decimal quantity = 1) =>
+        string name, decimal price, Guid expense,
+        bool claimed = true, decimal quantity = 1, bool taxable = true) =>
         new(
             Guid.NewGuid(),
             name,
             UnitPrice: decimal.Round(price / quantity, 2),
             Quantity: quantity,
             TotalPrice: price,
-            IsTaxable: true,
+            IsTaxable: taxable,
             ExpenseId: expense,
             Claims: claimed
                 ? [new ReceiptClaimResponse(Mine, "Anabel", 1, price)]

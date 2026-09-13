@@ -186,6 +186,14 @@ public static class ReceiptSplitCalculator
             var part = PartOf(receipt, expenseId);
             RefuseIfAnythingIsUnclaimed(part);
 
+            // The claims themselves, which this used to take on trust. A weight of zero --
+            // or a negative one, which is the same mistake typed differently -- is refused
+            // by the division, and this answered yes to it: the flag exists precisely so a
+            // client is not shown a button that refuses when pressed, and it was lighting
+            // one up. Run rather than restated, for the reason above; the figures it works
+            // out are thrown away and only the refusal is wanted.
+            Claimed(part, Guid.Empty, []);
+
             return part.Any(item => item.Claims.Count > 0);
         }
         catch (UnprocessableException)

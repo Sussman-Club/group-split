@@ -220,6 +220,52 @@ public class ReceiptService(
                     .Select(line => line.ExpenseId!.Value).Distinct().ToList());
     }
 
+    /// <summary>
+    /// Refuses an operation that would rewrite a whole bill on behalf of one part of it.
+    /// </summary>
+    /// <remarks>
+    /// A split charge leaves several expenses sharing one piece of paper, and the routes that
+    /// take a whole bill -- saving one, deleting one -- carry the charge's figures and the
+    /// charge's lines. Run for one part they do exactly what they say and it is never what
+    /// anybody meant: the save drops every line the request did not name, which is every
+    /// sibling's, and the delete takes this part's lines while leaving the total they were
+    /// part of, so every untouched sibling then refuses to divide for not adding up.
+    /// <para>
+    /// The save could not have been meant, either. It refuses a request whose total is not
+    /// this expense's amount, and a part's amount is never the whole paper's total while a
+    /// sibling holds anything -- so every request that could have got this far was one that
+    /// would have destroyed the others.
+    /// </para>
+    /// <para>
+    /// Which leaves a split charge's bill unwritable except through the claims, and that is
+    /// the honest state of it: the shape these routes take is "the whole bill, for one
+    /// expense", and a part of a charge is not that. A charge typed wrong is fixed by deleting
+    /// its expenses and splitting it again.
+    /// </para>
+    /// </remarks>
+    private static void RefuseIfTheBillIsAlsoSomebodyElses(Receipt? receipt, Guid expenseId)
+    {
+        if (receipt is null)
+            return;
+
+        var others = receipt.Items
+            .Where(line => line.ExpenseId != expenseId)
+            .Select(line => line.ExpenseId)
+            .OfType<Guid>()
+            .Distinct()
+            .ToList();
+
+        if (others.Count == 0)
+            return;
+
+        throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled,
+                $"This charge was split, so its bill is shared with {others.Count} other " +
+                $"{(others.Count == 1 ? "expense" : "expenses")} and cannot be rewritten for " +
+                "one of them. Say who had what line by line, or delete the expenses and split " +
+                "the charge again.")
+            .WithExtension("transactionIds", others);
+    }
+
     public async Task<Receipt> ForBankRow(Guid bankTransactionId, CancellationToken ct = default)
     {
         await OwnedBankRow(bankTransactionId, ct);
@@ -259,6 +305,8 @@ public class ReceiptService(
 
         var existing = await Loaded()
             .FirstOrDefaultAsync(row => row.Items.Any(item => item.ExpenseId == expenseId), ct);
+
+        RefuseIfTheBillIsAlsoSomebodyElses(existing, expenseId);
 
         var receipt = existing ?? new Receipt
         {
@@ -329,9 +377,21 @@ public class ReceiptService(
         var expense = await MineToChange(expenseId, ct);
         var receipt = await ForExpense(expenseId, ct);
 
-        var item = receipt.Items.FirstOrDefault(line => line.Id == itemId)
+        // This expense's part of the paper, not the paper. A split charge leaves several
+        // expenses on one bill, and this looked up the line across all of them and then
+        // validated the claimants against the caller's group -- so a member of one group
+        // could rewrite who had a line belonging to another group's expense, or to the
+        // payer's own half of the same charge. Naming somebody who is in both groups, which
+        // whoever paid always is, re-apportioned the other group's balances on its next
+        // division with no error raised anywhere.
+        //
+        // Not found rather than forbidden, which is how the rest of this surface answers for
+        // something the caller is not entitled to: "that line is not on this expense's bill"
+        // is also simply true.
+        var item = ReceiptSplitCalculator.PartOf(receipt, expenseId)
+                       .FirstOrDefault(line => line.Id == itemId)
                    ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound,
-                       "That line is not on this receipt.");
+                       "That line is not on this expense's part of the bill.");
 
         RefuseStrangeClaims(request.Claims, await ParticipantsFor(expense, ct), item.Name);
 
@@ -361,7 +421,13 @@ public class ReceiptService(
 
         return new ReceiptDivisionResponse(
             receipt.Id,
-            receipt.Total,
+            // This expense's part, not the paper's total. They are the same figure on an
+            // ordinary bill and wildly different on a split charge -- and the CLI renders
+            // this straight into the confirmation it asks before dividing ("Divide this
+            // expense of {Total} by its bill?"), and into the machine-readable request an
+            // agent relays to its human. A consent gate quoting three times the money that
+            // is about to move is worse than one quoting none.
+            ReceiptSplitCalculator.PartAmounts(receipt).GetValueOrDefault(expense.Id),
             [
                 .. shares.Select(share => new ReceiptShareResponse(
                     share.UserId,
@@ -429,10 +495,18 @@ public class ReceiptService(
 
         var receipt = await ForExpense(expenseId, ct);
 
+        // A part of a split charge cannot give its lines back on its own. The figures at the
+        // foot of the paper are the charge's -- they are what the card was charged -- and
+        // taking this part's lines out from under them leaves a bill whose items no longer
+        // come to its own subtotal. RefuseIfFiguresDisagree runs at the head of every
+        // division, so every untouched sibling stops being dividable, for a reason none of
+        // their owners did anything to cause and none of them can undo.
+        RefuseIfTheBillIsAlsoSomebodyElses(receipt, expenseId);
+
         // This expense's lines come off the bill; the bill itself may well outlive them,
-        // because the same charge may be somebody else's groceries too. Only when nothing is
-        // left of it -- no line naming any expense, and no bank row behind it -- is there a
-        // receipt with nowhere to be, and then it goes.
+        // because the charge it was typed against is still in the inbox's history. Only when
+        // nothing is left of it -- no line naming any expense, and no bank row behind it --
+        // is there a receipt with nowhere to be, and then it goes.
         var mine = receipt.Items.Where(item => item.ExpenseId == expenseId).ToList();
 
         foreach (var item in mine)
@@ -442,11 +516,23 @@ public class ReceiptService(
             receipt.Items.Remove(item);
         }
 
-        var orphaned = receipt.BankTransactionId is null
-                       && receipt.Items.All(item => item.ExpenseId is null);
-
-        if (orphaned)
+        if (receipt.Items.Count == 0)
+        {
+            // Nothing left of it. The bank row it was typed against is not a reason to keep
+            // it: a receipt with no lines is a subtotal with nothing under it, which every
+            // division refuses and no screen can draw. It used to be kept for exactly that
+            // case, on the grounds that the row still pointed at it.
             dbContext.Remove(receipt);
+        }
+        else
+        {
+            // Lines nobody has filed yet -- a bank row's bill part-way through being placed.
+            // The figures follow what is left, because they are a description of the lines
+            // and the lines just changed. Tax and tip stay: they were charged on the paper
+            // and taking a purchase off it does not unbill them.
+            receipt.Subtotal = receipt.Items.Sum(item => item.TotalPrice);
+            receipt.Total = receipt.Subtotal + receipt.Tax + receipt.Tip;
+        }
 
         await dbContext.SaveChangesAsync(ct);
     }

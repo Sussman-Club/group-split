@@ -488,11 +488,6 @@ public sealed class InboxService(
 
         var parts = PartsOf(bill, request);
 
-        // What each part comes to, worked out before any expense exists -- an expense cannot
-        // be created without its amount, and the amount depends on which lines it holds.
-        // Cut from the charge rather than added up towards it, so the parts sum to it.
-        var amounts = ReceiptSplitCalculator.AmountsFor(bill, parts);
-
         // Every line told which purchase it is before any part is divided, rather than a part
         // at a time. A rule that divides by the bill re-derives its part from the receipt, and
         // a receipt half placed is a bill with half its lines: the tax gets apportioned over
@@ -518,6 +513,26 @@ public sealed class InboxService(
                     line.ExpenseId = ids[i];
             }
 
+            // Read off the placed bill, and deliberately not from AmountsFor -- which prices
+            // the same parts from the request and is what this used.
+            //
+            // The two agree on the money and disagree on which part gets the leftover cent of
+            // an apportioning, because Spread breaks a tie on the lowest key and they are
+            // keyed differently: by position in the request there, by expense id here. So
+            // roughly half the time -- any bill whose tax or tip has an odd cent over two
+            // parts of equal line value -- Split cut a part to one figure and the itemised
+            // rule then re-derived the other and refused the expense it had just made, with
+            // RECEIPT_DOES_NOT_ADD_UP over a bill that adds up exactly. Retrying drew new ids
+            // and sometimes worked, which is worse than failing.
+            //
+            // Sorting the ids would not have fixed it: where the largest part by line value
+            // has nothing taxable on it, both fall back to the first key of a dictionary --
+            // request order against bill order -- and disagree every time.
+            //
+            // So one function answers what a part comes to, and it is the one the division
+            // asks. AmountsFor now prices previews only, where nothing is stored against it.
+            var amounts = ReceiptSplitCalculator.PartAmounts(bill);
+
             for (var i = 0; i < request.Parts.Count; i++)
             {
                 var part = request.Parts[i];
@@ -535,7 +550,7 @@ public sealed class InboxService(
                     Splits = part.Splits,
                     Name = Named(part.Name, row),
                     Description = part.Description,
-                    Amount = amounts[i],
+                    Amount = amounts[ids[i]],
                     DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
                 }, bill, part.ItemIds, ids[i], ct);
 
