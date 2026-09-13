@@ -4541,6 +4541,12 @@ html:not([data-gs-ready]) .gs-group-card {
     border-radius: var(--gs-radius-sm);
     background: var(--gs-surface-2);
     overflow: hidden;
+
+    /* Bounded, so the parts beside it stay on screen. Without this a long bill pushed the
+       part cards -- which is where the money lands -- below everything. */
+    max-height: min(52vh, 30rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /* Suppresses the text selection a drag would otherwise make of the whole list. */
@@ -4644,6 +4650,13 @@ html:not([data-gs-ready]) .gs-group-card {
 /* ---- what is picked, and where it can go ---- */
 
 .gs-pick-bar {
+    /* Stays put while the bill scrolls under it. On a forty-line receipt the whole point of
+       picking a run is that you are moving down the paper, and the buttons that do something
+       with what you picked were scrolling away as you went. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -4892,6 +4905,24 @@ html:not([data-gs-ready]) .gs-group-card {
     list-style: none;
     margin: 0;
     padding: 8px 0;
+
+    /* Long bills scroll here rather than taking the dialog with them. The cap is in vh so a
+       short bill still prints at its own length and never leaves a box of empty paper. */
+    max-height: min(44vh, 27rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* A hairline where the list actually scrolls, so the cut edge reads as more paper rather
+   than as the end of the bill. Drawn on the scroller itself, which only shows it when the
+   content overflows. */
+.gs-slip-lines {
+    background:
+        linear-gradient(var(--gs-paper) 30%, transparent) top / 100% 12px no-repeat,
+        linear-gradient(transparent, var(--gs-paper) 70%) bottom / 100% 12px no-repeat,
+        radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 12%), transparent) top / 100% 5px no-repeat,
+        radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 12%), transparent) bottom / 100% 5px no-repeat;
+    background-attachment: local, local, scroll, scroll;
 }
 
 /* Four columns and a second row for the names: the item, the leader that carries the eye,

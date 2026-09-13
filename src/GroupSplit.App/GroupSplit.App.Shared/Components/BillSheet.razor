@@ -35,6 +35,10 @@
                 {
                     <span class="gs-slip-where">@Where</span>
                 }
+
+                @* What a till prints at the bottom, moved to the top because on screen it is
+                   the thing that says how much paper there is before you start scrolling. *@
+                <span class="gs-slip-where">@Receipt.Items.Count @(Receipt.Items.Count == 1 ? "item" : "items")</span>
             </div>
 
             @* Under the head and nowhere else. Without one there is nothing above it to
@@ -43,6 +47,10 @@
             <div class="gs-slip-rule" aria-hidden="true"></div>
         }
 
+        @* The lines scroll; the head above and the totals below do not. A real slip does not
+           behave this way and does not have to -- it is in your hand, and the total is one
+           glance down. A forty-line bill in a dialog pushes that total well past the fold,
+           which is the one figure somebody is here to check against the charge. *@
         <ul class="gs-slip-lines">
             @foreach (var line in Receipt.Items)
             {
