@@ -4847,7 +4847,7 @@ html:not([data-gs-ready]) .gs-group-card {
     display: flex;
     align-items: center;
     gap: 8px;
-    max-width: 27rem;
+    max-width: 32rem;
     margin: 0 auto 10px;
 }
 
@@ -4860,24 +4860,28 @@ html:not([data-gs-ready]) .gs-group-card {
     --gs-slip-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo,
         Consolas, "Liberation Mono", monospace;
 
-    max-width: 27rem;
+    /* Wider and larger than a paper slip, on purpose. A real receipt is read at arm's
+       length in the hand; this one is read on a screen across a desk, and at a till's own
+       measure it was a small grey column floating in the middle of a dialog. The column
+       still reads as narrow -- that is what makes it a slip -- it is just legible. */
+    max-width: 32rem;
     margin: 0 auto;
     color: var(--gs-paper-ink);
     font-family: var(--gs-slip-mono);
-    font-size: .8125rem;
-    line-height: 1.5;
+    font-size: .9375rem;
+    line-height: 1.55;
     filter: drop-shadow(0 2px 10px rgb(42 36 24 / 12%));
 }
 
 /* Torn top and bottom, which is what says "this is a piece of paper" before a word is read.
    A scalloped mask rather than an image, so it follows the width and costs no request. */
 .gs-slip-edge {
-    height: 8px;
+    height: 9px;
     background: var(--gs-paper);
-    -webkit-mask-image: radial-gradient(circle at 50% 0, transparent 5px, #000 5.5px);
-    mask-image: radial-gradient(circle at 50% 0, transparent 5px, #000 5.5px);
-    -webkit-mask-size: 12px 8px;
-    mask-size: 12px 8px;
+    -webkit-mask-image: radial-gradient(circle at 50% 0, transparent 6px, #000 6.5px);
+    mask-image: radial-gradient(circle at 50% 0, transparent 6px, #000 6.5px);
+    -webkit-mask-size: 14px 9px;
+    mask-size: 14px 9px;
     -webkit-mask-repeat: repeat-x;
     mask-repeat: repeat-x;
 }
@@ -4887,7 +4891,7 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 .gs-slip-body {
-    padding: 4px 18px 10px;
+    padding: 6px 22px 14px;
     background: var(--gs-paper);
 }
 
@@ -4903,14 +4907,14 @@ html:not([data-gs-ready]) .gs-group-card {
 /* Caps because a till prints caps -- the subject's own vernacular, not a label style. */
 .gs-slip-merchant {
     font-weight: 700;
-    font-size: .9375rem;
+    font-size: 1.0625rem;
     letter-spacing: .08em;
     text-transform: uppercase;
 }
 
 .gs-slip-where {
     color: var(--gs-paper-faint);
-    font-size: .75rem;
+    font-size: .8125rem;
 }
 
 .gs-slip-rule {
@@ -4924,7 +4928,7 @@ html:not([data-gs-ready]) .gs-group-card {
 
     /* Long bills scroll here rather than taking the dialog with them. The cap is in vh so a
        short bill still prints at its own length and never leaves a box of empty paper. */
-    max-height: min(44vh, 27rem);
+    max-height: min(46vh, 31rem);
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -4952,7 +4956,7 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 .gs-slip-line + .gs-slip-line {
-    margin-top: 5px;
+    margin-top: 7px;
 }
 
 .gs-slip-item {
@@ -4997,7 +5001,7 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-slip-count {
     grid-column: 1 / -1;
     color: var(--gs-paper-faint);
-    font-size: .6875rem;
+    font-size: .8125rem;
 }
 
 .gs-slip-none {
@@ -5010,7 +5014,7 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-slip-who {
     grid-column: 1 / -1;
     color: var(--gs-paper-faint);
-    font-size: .6875rem;
+    font-size: .8125rem;
 }
 
 /* The one line worth marking, and marked in the paper's own terms: a pencil note, not a
@@ -5061,7 +5065,7 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-slip-foot {
     margin: 10px 0 0;
     color: var(--gs-paper-faint);
-    font-size: .6875rem;
+    font-size: .8125rem;
 }
 
 .gs-slip-foot.is-unclaimed {

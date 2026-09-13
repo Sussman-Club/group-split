@@ -38,11 +38,10 @@
         else
         {
             <MudStack Spacing="3">
-                @* Nothing is owed yet -- this charge is nobody's expense. So the line says
-                   what claims are for here, rather than pointing at a refusal that only an
-                   expense's bill is heading towards. *@
-                <BillSheet Receipt="@_bill" Me="@Me" Title="@Row.Title" Where="@Where"
-                           Hint="You only need to say who had what if you divide this by the bill." />
+                @* Nothing is owed yet -- this charge is nobody's expense -- so the slip says
+                   nothing about lines naming nobody. Which of its parts will divide by the
+                   bill is the question being asked, not one anybody is behind on. *@
+                <BillSheet Receipt="@_bill" Me="@Me" Title="@Row.Title" Where="@Where" />
             </MudStack>
         }
     </DialogContent>

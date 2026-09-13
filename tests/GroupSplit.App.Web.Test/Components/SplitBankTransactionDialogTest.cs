@@ -343,7 +343,7 @@ public class SplitBankTransactionDialogTest : ComponentTest
     /// placement without restating the apportioning.
     /// </summary>
     private static ReceiptResponse Bill => new(
-        Guid.NewGuid(), null, RowId, 100m, 0m, 0m, 100m, 0, false,
+        Guid.NewGuid(), null, RowId, 100m, 0m, 0m, 100m, 0, false, false,
         [
             new ReceiptItemResponse(Groceries, "GROCERIES", 60m, 1, 60m, true, null, []),
             new ReceiptItemResponse(Jacket, "JACKET", 40m, 1, 40m, true, null, [])
@@ -361,7 +361,7 @@ public class SplitBankTransactionDialogTest : ComponentTest
             .ToList();
 
         var bill = new ReceiptResponse(
-            Guid.NewGuid(), null, RowId, lines * 10m, 0m, 0m, lines * 10m, lines, false, items);
+            Guid.NewGuid(), null, RowId, lines * 10m, 0m, 0m, lines * 10m, lines, false, false, items);
 
         _receipts
             .Setup(commands => commands.ForBankRowAsync(RowId, It.IsAny<CancellationToken>()))

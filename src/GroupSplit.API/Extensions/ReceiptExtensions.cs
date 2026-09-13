@@ -25,7 +25,8 @@ public static class ReceiptExtensions
         /// reading may write to it at all. Each of those was once a yes on this flag and a
         /// refusal one call later, on a button this answer had lit up.
         /// </param>
-        public ReceiptResponse ToResponse(Guid? expenseId, bool canDivide)
+        public ReceiptResponse ToResponse(
+            Guid? expenseId, bool canDivide, bool dividesItsExpense = false)
         {
             // In the order they are on the paper. Every caller that numbers the lines -- the
             // CLI's `receipts show`, and the split screen's shift-click run -- is reading
@@ -56,6 +57,7 @@ public static class ReceiptExtensions
                 receipt.Items.Count(item =>
                     (expenseId is null || item.ExpenseId == expenseId) && item.Claims.Count == 0),
                 canDivide,
+                dividesItsExpense,
                 items);
         }
     }

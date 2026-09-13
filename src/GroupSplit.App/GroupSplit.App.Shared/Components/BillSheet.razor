@@ -36,13 +36,13 @@
                       AdornmentIcon="@Icons.Material.Rounded.Search"
                       aria-label="Find a line on this bill" />
 
-        @if (Unclaimed > 0)
+        @if (Wanting > 0)
         {
             <MudButton Variant="@(_onlyUnclaimed ? Variant.Filled : Variant.Text)"
                        Color="@(_onlyUnclaimed ? Color.Primary : Color.Default)"
                        Size="Size.Small" Class="gs-btn-pill"
                        OnClick="@(() => _onlyUnclaimed = !_onlyUnclaimed)">
-                @Unclaimed with nobody
+                @Wanting with nobody
             </MudButton>
         }
     </div>
@@ -82,7 +82,7 @@
         <ul class="gs-slip-lines">
             @foreach (var row in Showing)
             {
-                <li class="gs-slip-line @(row.Unclaimed ? "is-unclaimed" : "")" @key="row.Key">
+                <li class="gs-slip-line @(row.Unclaimed && DividesByClaims ? "is-unclaimed" : "")" @key="row.Key">
                     <span class="gs-slip-item">
                         <span class="gs-slip-name">@row.Name</span>
                     </span>
@@ -161,13 +161,15 @@
             <p class="gs-slip-foot">N — no tax charged on this line</p>
         }
 
-        @if (Unclaimed > 0)
+        @* Only where the answer is wanted. Claims are read by one thing -- the rule that
+           divides an expense by its bill -- and on every other bill they are stored and never
+           looked at, so counting the lines that have none is nagging about something nothing
+           will read. *@
+        @if (Wanting > 0)
         {
-            @* The count, which is the one thing you cannot get by looking when the bill runs
-               to twenty lines. The lines themselves already say which. *@
             <p class="gs-slip-foot is-unclaimed">
-                @Unclaimed of @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "line" : "lines") @(Unclaimed == 1 ? "has" : "have") nobody on @(Unclaimed == 1 ? "it" : "them").
-                @Hint
+                @Wanting of @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "line" : "lines") @(Wanting == 1 ? "has" : "have") nobody on @(Wanting == 1 ? "it" : "them").
+                This expense cannot be divided by its bill until somebody says who had them.
             </p>
         }
     </div>
@@ -196,18 +198,25 @@
     /// <summary>The reader, so their own claims read as "You" rather than as their name.</summary>
     [Parameter] public Guid? Me { get; set; }
 
-    /// <summary>What the unclaimed lines mean here, in the caller's own words.</summary>
-    /// <remarks>
-    /// It differs by where the bill is, and the difference is the whole point: on an expense
-    /// an unclaimed line is what stops it being divided, and on a charge nobody has filed it
-    /// is nothing at all yet.
-    /// </remarks>
-    [Parameter] public string? Hint { get; set; }
-
     private string? _filter;
     private bool _onlyUnclaimed;
 
-    private bool Searchable => Receipt.Items.Count >= Long || Unclaimed > 0;
+    private bool Searchable => Receipt.Items.Count >= Long || Wanting > 0;
+
+    /// <summary>
+    /// Whether anything reads the claims on this bill.
+    /// </summary>
+    /// <remarks>
+    /// The itemised rule is the only thing that does. A bill under a category that divides
+    /// evenly, or one on a charge nobody has filed, keeps its claims and nothing looks at
+    /// them -- so a line naming nobody there is a fact about a receipt rather than a job
+    /// somebody has left undone, and saying otherwise is how a screen teaches people to
+    /// ignore it.
+    /// </remarks>
+    private bool DividesByClaims => Receipt.DividesItsExpense;
+
+    /// <summary>How many lines still need an answer -- none, where none is wanted.</summary>
+    private int Wanting => DividesByClaims ? Unclaimed : 0;
 
     private bool Filtered => !string.IsNullOrWhiteSpace(_filter) || _onlyUnclaimed;
 
@@ -272,7 +281,11 @@
     private string Who(ReceiptItemResponse line)
     {
         if (line.Claims.Count == 0)
-            return "nobody yet";
+        {
+            // Said only where somebody will be asked to answer it. On a bill nothing divides
+            // by, a line naming nobody is not an omission -- it is what a receipt looks like.
+            return DividesByClaims ? "nobody yet" : string.Empty;
+        }
 
         return string.Join(", ", line.Claims.Select(claim =>
         {

@@ -227,8 +227,7 @@
                            same line. *@
                         <BillSheet Receipt="@bill" Me="@Me"
                                    Title="@(details.MerchantName ?? details.Name)"
-                                   Where="@Clock.Local(details.DateTime).ToString(" d MMM yyyy")"
-                                   Hint="Until somebody has, this expense cannot be divided by its bill." />
+                                   Where="@Clock.Local(details.DateTime).ToString(" d MMM yyyy")" />
 
                         @if (bill.Tax != 0 || bill.Tip != 0)
                         {

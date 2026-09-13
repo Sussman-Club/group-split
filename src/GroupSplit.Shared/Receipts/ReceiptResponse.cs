@@ -22,6 +22,17 @@ namespace GroupSplit.Shared;
 /// Whether asking to divide by this bill would succeed: it adds up, every line is claimed,
 /// and there is an expense to write the shares to. Saves a client guessing at the rules.
 /// </param>
+/// <param name="DividesItsExpense">
+/// Whether anything actually reads the claims on this bill: its expense is filed under a
+/// rule that divides by it.
+/// </param>
+/// <remarks>
+/// Claims are read by exactly one thing, the itemised rule. On every other bill they are
+/// stored and never looked at -- so a line naming nobody is a fact, not a problem, and a
+/// client that warned about it either way was nagging about something nothing would read.
+/// False for a bill on a charge nobody has filed: there is no expense yet, and which of its
+/// parts will divide by it is the question being asked.
+/// </remarks>
 public sealed record ReceiptResponse(
     Guid Id,
     Guid? ExpenseId,
@@ -32,6 +43,7 @@ public sealed record ReceiptResponse(
     decimal Total,
     int UnclaimedItemCount,
     bool CanDivide,
+    bool DividesItsExpense,
     IReadOnlyList<ReceiptItemResponse> Items);
 
 /// <summary>One line on a bill, with how it divides and who had it.</summary>

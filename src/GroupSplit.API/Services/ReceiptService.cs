@@ -173,7 +173,10 @@ public class ReceiptService(
             // MineToChange refuses them.
             && await StillInTheGroup(expense, ct);
 
-        return receipt.ToResponse(id, canDivide);
+        // Whether the claims are read at all. Everything above is about whether a division
+        // would succeed; this is about whether one is ever going to be asked for -- a bill
+        // under a category that divides evenly keeps its claims and nothing looks at them.
+        return receipt.ToResponse(id, canDivide, await splitter.DividesByItsBill(expense, ct));
     }
 
     public async Task DeleteForBankRow(Guid bankTransactionId, CancellationToken ct = default)
