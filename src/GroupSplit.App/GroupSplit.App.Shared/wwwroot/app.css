@@ -4821,14 +4821,14 @@ html:not([data-gs-ready]) .gs-group-card {
 :root {
     --gs-paper: #fdfbf4;
     --gs-paper-ink: #2a2620;
-    --gs-paper-faint: #b9b0a0;
+    --gs-paper-faint: #786f60;
     --gs-paper-rule: #d8d0be;
 }
 
 :root[data-theme="dark"] {
     --gs-paper: #242019;
     --gs-paper-ink: #eae3d4;
-    --gs-paper-faint: #8b8271;
+    --gs-paper-faint: #a79d8a;
     --gs-paper-rule: #403927;
 }
 
@@ -4836,7 +4836,7 @@ html:not([data-gs-ready]) .gs-group-card {
     :root:not([data-theme="light"]) {
         --gs-paper: #242019;
         --gs-paper-ink: #eae3d4;
-        --gs-paper-faint: #8b8271;
+        --gs-paper-faint: #a79d8a;
         --gs-paper-rule: #403927;
     }
 }
@@ -5055,16 +5055,15 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 /*
-    One charge filed as several expenses leaves them sharing one piece of paper, and each of
-    them was drawing all of it. Faded rather than hidden: the lines really were on the bill,
-    and a reader checking a receipt against a charge needs to see the ones that account for
-    the difference -- they are just not what this expense is made of.
-
-    Opacity and not a colour, so it fades the price, the leader and the margin letter with
-    the name and needs no second rule per element.
+    The one line standing for the rest of a split charge. Italic rather than faded: it is the
+    only row on the slip that is not a line off the paper, and it has to read as an aside
+    without becoming unreadable -- the fade it replaces came out at 2.5:1 against the paper,
+    which is under AA for text this size, and it was also the only thing marking the rows it
+    applied to.
 */
-.gs-slip-line.is-elsewhere {
-    opacity: .42;
+.gs-slip-line.is-elsewhere .gs-slip-name,
+.gs-slip-line.is-elsewhere .gs-slip-price {
+    font-style: italic;
 }
 
 /* Double-ruled, which is how a slip says "this is the figure that was charged". */

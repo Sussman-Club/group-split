@@ -26,12 +26,28 @@ namespace GroupSplit.Shared;
 /// Whether anything actually reads the claims on this bill: its expense is filed under a
 /// rule that divides by it.
 /// </param>
+/// <param name="ElsewhereItemCount">
+/// How many lines of the paper belong to the other purchases on it -- zero for an ordinary
+/// bill, and zero when the whole paper is being read.
+/// </param>
+/// <param name="ElsewhereTotal">
+/// What those lines came to, before the tax and the tip.
+/// </param>
 /// <remarks>
 /// Claims are read by exactly one thing, the itemised rule. On every other bill they are
 /// stored and never looked at -- so a line naming nobody is a fact, not a problem, and a
 /// client that warned about it either way was nagging about something nothing would read.
 /// False for a bill on a charge nobody has filed: there is no expense yet, and which of its
 /// parts will divide by it is the question being asked.
+/// <para>
+/// <c>Items</c> is this part of the paper and not the paper. A split charge can put its parts
+/// in different groups -- one purchase the flat's, the other somebody's own -- and reading
+/// one of them is no reason to be told what was bought on the others, for how much, or who
+/// was on it. What they came to is reported instead, in
+/// <paramref name="ElsewhereItemCount"/> and <paramref name="ElsewhereTotal"/>, because a
+/// bill totalling more than the expense it was opened from is the first thing anybody
+/// queries.
+/// </para>
 /// </remarks>
 public sealed record ReceiptResponse(
     Guid Id,
@@ -44,6 +60,8 @@ public sealed record ReceiptResponse(
     int UnclaimedItemCount,
     bool CanDivide,
     bool DividesItsExpense,
+    int ElsewhereItemCount,
+    decimal ElsewhereTotal,
     IReadOnlyList<ReceiptItemResponse> Items);
 
 /// <summary>One line on a bill, with how it divides and who had it.</summary>

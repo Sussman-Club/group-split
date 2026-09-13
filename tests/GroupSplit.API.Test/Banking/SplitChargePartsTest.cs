@@ -205,6 +205,65 @@ public class SplitChargePartsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
+    /// Reading one part's bill says what the other parts came to and never what they were.
+    /// </summary>
+    /// <remarks>
+    /// The parts of a split charge can be in different groups -- one purchase the flat's, the
+    /// other somebody's own, which is most of the reason to split one -- and the reading
+    /// projected every line of the paper to whoever could see any one of them: what was
+    /// bought, for how much, and each claimant by name, which falls back to an email address.
+    /// <para>
+    /// The caller is only ever proved entitled to the part they asked about. What the rest
+    /// came to is still reported, because a bill totalling more than the expense it was
+    /// opened from is the first thing anybody queries.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Reading_one_part_reports_the_others_without_naming_them()
+    {
+        var (groceries, _) = await SplitCharge();
+
+        var bill = await Receipts.ForExpense(groceries, Ct);
+        var response = await Receipts.ResponseFor(bill, groceries, Ct);
+
+        var line = Assert.Single(response.Items);
+
+        Assert.Equal("GROCERIES", line.Name);
+        Assert.DoesNotContain(response.Items, item => item.Name == "JACKET");
+
+        // And what it came to, so the paper still adds up for the reader.
+        Assert.Equal(1, response.ElsewhereItemCount);
+        Assert.Equal(40m, response.ElsewhereTotal);
+        Assert.Equal(100m, response.Total);
+    }
+
+    /// <summary>
+    /// A bill nobody has filed is read whole, which is the point of reading it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing on an unfiled charge belongs to anybody yet, and deciding which lines are
+    /// which purchase is exactly what the reader is about to do.
+    /// </remarks>
+    [Fact]
+    public async Task A_bill_on_a_charge_nobody_has_filed_is_read_whole()
+    {
+        var row = await Row(100m);
+
+        var bill = await Receipts.SaveForBankRow(row.Id, new SaveReceiptRequest
+        {
+            Subtotal = 100m,
+            Total = 100m,
+            Items = [Line("GROCERIES", 60m), Line("JACKET", 40m)]
+        }, Ct);
+
+        var response = await Receipts.ResponseFor(bill, null, Ct);
+
+        Assert.Equal(2, response.Items.Count);
+        Assert.Equal(0, response.ElsewhereItemCount);
+        Assert.Equal(0m, response.ElsewhereTotal);
+    }
+
+    /// <summary>
     /// The division preview quotes this expense's part, not the whole paper.
     /// </summary>
     /// <remarks>

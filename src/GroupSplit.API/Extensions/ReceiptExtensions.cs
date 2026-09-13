@@ -28,11 +28,30 @@ public static class ReceiptExtensions
         public ReceiptResponse ToResponse(
             Guid? expenseId, bool canDivide, bool dividesItsExpense = false)
         {
+            // This part of the paper, where a part was asked for.
+            //
+            // A split charge can put its parts in different groups -- one purchase the
+            // flat's, the other your own -- and this projected every line of the bill to
+            // whoever could see any one of them: what was bought, for how much, and who was
+            // on it by name, which falls back to an email address. The caller is only ever
+            // proved entitled to the part they asked about. UnclaimedItemCount below was
+            // already counted this way, which is what made the rest an omission rather than
+            // a decision.
+            //
+            // What the other parts came to is still reported, just not what they were: a
+            // bill totalling more than the expense is the first thing somebody queries, and
+            // "four other lines, 104.53" answers it without naming anybody.
+            var mine = expenseId is { } part
+                ? receipt.Items.Where(item => item.ExpenseId == part).ToList()
+                : receipt.Items.ToList();
+
+            var elsewhere = receipt.Items.Except(mine).ToList();
+
             // In the order they are on the paper. Every caller that numbers the lines -- the
             // CLI's `receipts show`, and the split screen's shift-click run -- is reading
             // this order, and a listing that reordered itself between two reads would put
             // somebody's lines in the wrong part without refusing anything.
-            var items = receipt.Items
+            var items = mine
                 .OrderBy(item => item.Position)
                 .ThenBy(item => item.Id)
                 .Select(item => new ReceiptItemResponse(
@@ -54,10 +73,11 @@ public static class ReceiptExtensions
                 receipt.Tax,
                 receipt.Tip,
                 receipt.Total,
-                receipt.Items.Count(item =>
-                    (expenseId is null || item.ExpenseId == expenseId) && item.Claims.Count == 0),
+                mine.Count(item => item.Claims.Count == 0),
                 canDivide,
                 dividesItsExpense,
+                elsewhere.Count,
+                elsewhere.Sum(item => item.TotalPrice),
                 items);
         }
     }
