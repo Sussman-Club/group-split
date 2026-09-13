@@ -59,6 +59,12 @@ public class ReceiptItemSeedDto
     /// <remarks>
     /// Keyed by user the way <c>categories.json</c> writes shares and percentages, so the
     /// seed files say "who, how much" in one shape throughout.
+    /// <para>
+    /// Only on a bill whose expense is filed under an itemised rule, which is the one thing
+    /// that ever reads a claim. Stated anywhere else -- under a category that divides evenly,
+    /// or on a bank row still in the inbox -- the seed run stops and names the lines, rather
+    /// than seed an answer to a question nothing is going to ask.
+    /// </para>
     /// </remarks>
     public Dictionary<Guid, int> Had { get; init; } = [];
 }

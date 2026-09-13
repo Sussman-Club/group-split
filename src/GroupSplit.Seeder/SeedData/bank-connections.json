@@ -174,17 +174,11 @@
                 },
                 {
                   "Name": "Fleece jacket",
-                  "Price": 34.99,
-                  "Had": {
-                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
-                  }
+                  "Price": 34.99
                 },
                 {
                   "Name": "Running shoes",
-                  "Price": 49.99,
-                  "Had": {
-                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
-                  }
+                  "Price": 49.99
                 }
               ]
             }
@@ -206,49 +200,27 @@
               "Items": [
                 {
                   "Name": "Bistecca",
-                  "Price": 28.0,
-                  "Had": {
-                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
-                  }
+                  "Price": 28.0
                 },
                 {
                   "Name": "Vongole",
-                  "Price": 19.5,
-                  "Had": {
-                    "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
-                  }
+                  "Price": 19.5
                 },
                 {
                   "Name": "Gnocchi",
-                  "Price": 15.0,
-                  "Had": {
-                    "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
-                  }
+                  "Price": 15.0
                 },
                 {
                   "Name": "Polpo",
-                  "Price": 21.0,
-                  "Had": {
-                    "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
-                  }
+                  "Price": 21.0
                 },
                 {
                   "Name": "Bottle of white",
-                  "Price": 22.0,
-                  "Had": {
-                    "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
-                    "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
-                  }
+                  "Price": 22.0
                 },
                 {
                   "Name": "Tiramisu",
-                  "Price": 9.0,
-                  "Had": {
-                      "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
-                      "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
-                      "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
-                      "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
-                  }
+                  "Price": 9.0
                 }
               ]
             }

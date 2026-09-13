@@ -148,7 +148,7 @@ public class BankConnectionSeeder(
     {
         // Null-forgiving: the caller filtered on it, and a nullable parameter here would only
         // move the same fact somewhere it reads as an open question.
-        var receipt = SeededBill.From(row.Receipt!, expenseId: null);
+        var receipt = SeededBill.ForBankRow(row.Receipt!);
 
         if (receipt.Total != row.Amount)
         {

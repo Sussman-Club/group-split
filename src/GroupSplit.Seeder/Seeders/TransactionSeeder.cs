@@ -77,8 +77,15 @@ public class TransactionSeeder(
         // the bill off the expense, and ExpenseSplitter only goes looking in the table for
         // one the navigation does not already carry. Attached here, a seeded expense divides
         // by its own bill on the first pass with nothing written yet.
+        // Asked before the bill is built, because whether the seed file may say who had what
+        // depends on the answer: the itemised rule is the only thing that reads a claim, and
+        // a bill under any other rule would carry claims nothing would ever look at. Answered
+        // by the splitter rather than by reading the category's rule here, so the seeder and
+        // the app agree on what "split by its bill" means -- including for an expense whose
+        // category points at a rule that has been edited since.
         if (dto.Receipt is { } bill)
-            expense.Bill = SeededBill.From(bill, expense.Id);
+            expense.Bill = SeededBill.ForExpense(
+                bill, expense.Id, await splitter.DividesByItsBill(expense, ct));
 
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.

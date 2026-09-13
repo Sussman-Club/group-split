@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using GroupSplit.API.Services;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -143,6 +144,71 @@ public class TransactionSeederTest
         Assert.Single(db.ChangeTracker.Entries<Expense>());
     }
 
+    /// <summary>
+    /// A bill on an expense that divides some other way may not say who had what.
+    /// </summary>
+    /// <remarks>
+    /// The itemised rule is the only thing that reads a claim. Under any other rule the
+    /// shares come from somewhere else entirely, and the claims would sit on the slip as an
+    /// answer to a question nothing asked -- so the run stops and names the lines rather than
+    /// seed a demo that says more than the app does.
+    /// </remarks>
+    [Fact]
+    public async Task A_bill_on_an_expense_that_divides_some_other_way_may_not_say_who_had_what()
+    {
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Mapped(dividesByItsBill: false));
+
+        Assert.Contains("Bistecca", refusal.Message);
+    }
+
+    /// <summary>And under the rule that does read them, the same file seeds them.</summary>
+    [Fact]
+    public async Task A_bill_on_an_expense_split_by_its_bill_keeps_who_had_what()
+    {
+        var expense = await Mapped(dividesByItsBill: true);
+
+        var line = Assert.Single(expense!.Bill!.Items);
+
+        Assert.Equal(Anabel, Assert.Single(line.Claims).UserId);
+    }
+
+    private static readonly Guid Anabel = Guid.Parse("94F67FC0-F549-46ED-AD81-D6DF79225396");
+
+    /// <summary>
+    /// One seeded expense with a claimed bill, mapped as the seeder maps it -- under a rule
+    /// that divides by the bill, or one that does not.
+    /// </summary>
+    private static async Task<Expense?> Mapped(bool dividesByItsBill)
+    {
+        var db = Context();
+
+        db.Set<User>().Add(new User { Id = Anabel, FirstName = "Anabel", Email = "anabel@test.com" });
+        await db.SaveChangesAsync();
+
+        return await new Probe(db, new FixedClock(Now), new FakeSource([]),
+                new FakeSplitter(dividesByItsBill))
+            .Map(new TransactionSeedDto
+            {
+                Id = Guid.NewGuid(),
+                PayerId = Anabel,
+                Amount = 40m,
+                Name = "Dinner",
+                DateTime = Now,
+                Receipt = new ReceiptSeedDto
+                {
+                    Items =
+                    [
+                        new ReceiptItemSeedDto
+                        {
+                            Name = "Bistecca", Price = 40m,
+                            Had = new Dictionary<Guid, int> { [Anabel] = 1 }
+                        }
+                    ]
+                }
+            });
+    }
+
     private static Receipt SeededBill()
     {
         var receipt = new Receipt { Subtotal = 40m, Total = 40m };
@@ -188,13 +254,43 @@ public class TransactionSeederTest
     /// splitter; none of that is what this is about, and the context here is never connected
     /// to anything.
     /// </summary>
-    private sealed class Probe(AppDbContext db, TimeProvider clock, ISeedDataSource<TransactionSeedDto> source)
-        : TransactionSeeder(db, NullLogger<TransactionSeeder>.Instance, null!, clock, source)
+    private sealed class Probe(
+        AppDbContext db,
+        TimeProvider clock,
+        ISeedDataSource<TransactionSeedDto> source,
+        IExpenseSplitter? splitter = null)
+        : TransactionSeeder(db, NullLogger<TransactionSeeder>.Instance, splitter!, clock, source)
     {
         public DateTimeOffset On(TransactionSeedDto dto) => When(dto);
 
         public void Add(Expense expense, TransactionSeedDto dto) =>
             AddEntityAsync(expense, dto).GetAwaiter().GetResult();
+
+        public Task<Expense?> Map(TransactionSeedDto dto) => MapAsync(dto);
+    }
+
+    /// <summary>
+    /// A splitter that answers the one question mapping asks it and divides nothing.
+    /// </summary>
+    /// <remarks>
+    /// What is under test is which bills may name who had what, and the answer turns on
+    /// whether the expense divides by its bill. The division itself is
+    /// <c>ExpenseSplitter</c>'s, and is tested where it lives.
+    /// </remarks>
+    private sealed class FakeSplitter(bool dividesByItsBill) : IExpenseSplitter
+    {
+        public Task WriteSplitsAsync(Expense expense, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task WriteSplitsAsync(
+            Expense expense, IReadOnlyList<SplitInput>? given, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<bool> DividesByItsBill(Expense expense, CancellationToken ct = default) =>
+            Task.FromResult(dividesByItsBill);
+
+        public Task<bool> DivisionCameFromItsRule(Expense expense, CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 
     /// <summary>A clock that does not move, so a relative date is a fixed expectation.</summary>

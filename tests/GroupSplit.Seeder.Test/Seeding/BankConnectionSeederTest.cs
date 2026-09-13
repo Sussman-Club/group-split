@@ -97,6 +97,27 @@ public class BankConnectionSeederTest
         Assert.Empty(Tracked<Receipt>(db));
     }
 
+    /// <summary>
+    /// A bill in the inbox that says who had what stops the run, naming the lines.
+    /// </summary>
+    /// <remarks>
+    /// Nothing reads a claim except the rule that divides an expense by its bill, and a row
+    /// in the inbox has no expense and no rule. Seeded anyway, those claims would show on the
+    /// slip as an answer the app never asked for and would never act on -- and the screens
+    /// that draw a bill would have to decide whether to nag about the lines without one.
+    /// </remarks>
+    [Fact]
+    public async Task A_bill_on_an_unfiled_row_may_not_say_who_had_what()
+    {
+        var db = Context();
+        var dto = Connection(Warehouse(bill: BillNamingWhoHadWhat()));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => Add(db, dto));
+
+        Assert.Contains("Fleece jacket", thrown.Message);
+        Assert.Empty(Tracked<Receipt>(db));
+    }
+
     /// <summary>An ordinary row -- which is nearly every row -- gets no bill.</summary>
     [Fact]
     public async Task A_row_with_no_bill_seeds_none()
@@ -115,14 +136,15 @@ public class BankConnectionSeederTest
     /// The warehouse run: the flat's groceries, exempt, and a jacket that is nobody's
     /// business but yours, which is not.
     /// </summary>
-    private static BankTransactionSeedDto Warehouse(decimal charge = 158.07m, bool billed = true) => new()
+    private static BankTransactionSeedDto Warehouse(
+        decimal charge = 158.07m, bool billed = true, ReceiptSeedDto? bill = null) => new()
     {
         Id = Row,
         DaysAgo = 2,
         Amount = charge,
         Description = "COSTCO WHOLESALE 718",
         MerchantName = "Costco",
-        Receipt = billed ? Bill() : null
+        Receipt = billed ? bill ?? Bill() : null
     };
 
     private static ReceiptSeedDto Bill() => new()
@@ -131,18 +153,32 @@ public class BankConnectionSeederTest
         Items =
         [
             new ReceiptItemSeedDto { Name = "Rotisserie chicken", Price = 53.54m, Taxable = false },
-            new ReceiptItemSeedDto
-            {
-                Name = "Fleece jacket", Price = 34.99m,
-                Had = new Dictionary<Guid, int> { [Guid.Parse(Anabel)] = 1 }
-            },
-            new ReceiptItemSeedDto
-            {
-                Name = "Running shoes", Price = 49.99m,
-                Had = new Dictionary<Guid, int> { [Guid.Parse(Anabel)] = 1 }
-            }
+            new ReceiptItemSeedDto { Name = "Fleece jacket", Price = 34.99m },
+            new ReceiptItemSeedDto { Name = "Running shoes", Price = 49.99m }
         ]
     };
+
+    /// <summary>The same run, with the jacket claimed -- which a row in the inbox may not.</summary>
+    private static ReceiptSeedDto BillNamingWhoHadWhat()
+    {
+        var bill = Bill();
+
+        return new ReceiptSeedDto
+        {
+            Tax = bill.Tax,
+            Tip = bill.Tip,
+            Items =
+            [
+                bill.Items[0],
+                new ReceiptItemSeedDto
+                {
+                    Name = "Fleece jacket", Price = 34.99m,
+                    Had = new Dictionary<Guid, int> { [Guid.Parse(Anabel)] = 1 }
+                },
+                bill.Items[2]
+            ]
+        };
+    }
 
     private static BankConnectionSeedDto Connection(BankTransactionSeedDto row) => new()
     {
