@@ -82,6 +82,38 @@
                             }
                         </div>
 
+                        @* Finding lines, on the bills where finding them is the work. A
+                           warehouse receipt is forty lines and the groceries are thirty-six
+                           of them: picking those by hand is the job this screen exists to
+                           save, and dragging still means dragging past everything.
+
+                           Shown only where there is something to find. On a restaurant bill
+                           these are two controls nobody needs. *@
+                        @if (_bill.Items.Count >= Long)
+                        {
+                            <div class="gs-slip-tools">
+                                <MudTextField T="string" @bind-Value="_filter"
+                                              @bind-Value:after="StateHasChanged"
+                                              Immediate="true" DebounceInterval="150"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              Placeholder="Find a line" Clearable="true"
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Rounded.Search"
+                                              aria-label="Find a line on this bill" />
+
+                                @* What is left to do, as a button. The count is the same one
+                                   the strip at the bottom counts down, so pressing this is
+                                   the fastest honest way to finish a long bill. *@
+                                @if (Unplaced.Count > 0)
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               OnClick="PickUnplaced">
+                                        Pick the @Unplaced.Count with no part
+                                    </MudButton>
+                                }
+                            </div>
+                        }
+
                         @* Only while something is picked. A bar of buttons that is empty most
                            of the time teaches people to look past it. *@
                         @if (_picked.Count > 0)
@@ -113,7 +145,7 @@
                            are tabular and the names are allowed to run out of room. *@
                         <div class="gs-bill @(_brushing ? "is-brushing" : "")"
                              @onpointerup="EndBrush" @onpointerleave="EndBrush">
-                            @foreach (var line in _bill.Items)
+                            @foreach (var line in Visible)
                             {
                                 var id = line.Id;
                                 var part = PartOf(id);
@@ -308,6 +340,15 @@
     /// </remarks>
     private const int MaxParts = 4;
 
+    /// <summary>
+    /// How many lines a bill needs before finding one is worth a control of its own.
+    /// </summary>
+    /// <remarks>
+    /// The same threshold the read-only slip uses, and for the same reason: a restaurant
+    /// bill is picked through by looking at it.
+    /// </remarks>
+    private const int Long = 12;
+
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
@@ -360,6 +401,9 @@
 
     private bool _filing;
 
+    /// <summary>What is being looked for, on a bill too long to look through.</summary>
+    private string? _filter;
+
     /// <summary>
     /// Whether the person said to go ahead over a payment that may already be recorded.
     /// False until they tick it, and there is nothing to tick unless the row carries a
@@ -386,6 +430,45 @@
             : "tip";
 
     private IReadOnlyList<ReceiptItemResponse> Lines => _bill?.Items ?? [];
+
+    /// <summary>
+    /// The lines on screen: all of them, or the ones being looked for.
+    /// </summary>
+    /// <remarks>
+    /// Only what is drawn. Placement, pricing and the sum-to-the-charge check all read
+    /// <see cref="Lines"/>, so a filter narrows what you can see and never what you are
+    /// filing -- a half-built split that looked complete because the rest was hidden is
+    /// exactly the failure this screen exists to prevent.
+    /// </remarks>
+    private IReadOnlyList<ReceiptItemResponse> Visible
+    {
+        get
+        {
+            var wanted = _filter?.Trim();
+
+            return string.IsNullOrEmpty(wanted)
+                ? Lines
+                : [.. Lines.Where(line => line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase))];
+        }
+    }
+
+    /// <summary>
+    /// Picks every line that is in no part yet, whatever the filter is showing.
+    /// </summary>
+    /// <remarks>
+    /// Across the whole bill and not only the visible part, because what it answers is "what
+    /// is left" -- and the count on the button, the figure in the strip at the bottom and the
+    /// refusal the API would give all mean that same set.
+    /// </remarks>
+    private void PickUnplaced()
+    {
+        _picked.Clear();
+
+        foreach (var line in Unplaced)
+            _picked.Add(line.Id);
+
+        _anchor = null;
+    }
 
     private List<ReceiptItemResponse> Unplaced =>
         [.. Lines.Where(line => !_placement.ContainsKey(line.Id))];
@@ -523,13 +606,18 @@
             return;
         }
 
-        var from = Lines.ToList().FindIndex(line => line.Id == anchor);
-        var to = Lines.ToList().FindIndex(line => line.Id == id);
+        // Across what is on screen, not across the bill. With a filter on, two rows a
+        // centimetre apart can be twenty lines apart on the paper -- and a run that picked
+        // the eighteen in between would be picking things the person cannot see.
+        var shown = Visible;
+
+        var from = shown.ToList().FindIndex(line => line.Id == anchor);
+        var to = shown.ToList().FindIndex(line => line.Id == id);
 
         if (from < 0 || to < 0)
             return;
 
-        foreach (var line in Lines.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1))
+        foreach (var line in shown.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1))
             Set(line.Id, true);
     }
 

@@ -237,6 +237,68 @@ public class SplitBankTransactionDialogTest : ComponentTest
         Assert.True(_filed.FileAnyway);
     }
 
+    /// <summary>
+    /// Every line still has to have a part, whatever the filter is showing.
+    /// </summary>
+    /// <remarks>
+    /// The failure worth guarding: a filter that narrowed what counts as well as what is
+    /// drawn would let somebody file a half-built split that looked finished because the
+    /// rest of the bill was hidden. Placement, pricing and the sum-to-the-charge check all
+    /// read the whole bill; only the drawing is narrowed.
+    /// </remarks>
+    [Fact]
+    public async Task A_filter_narrows_what_is_shown_and_not_what_has_to_be_placed()
+    {
+        var dialog = await OpenAsync(Row(lines: 14));
+
+        var bill = _receipts.Object;
+
+        // Find the jacket, place it, and the bill is still thirteen lines short.
+        await FindAsync(dialog, "JACKET");
+
+        Assert.Single(dialog.FindAll(".gs-bill-line"));
+
+        await PickAsync(dialog, 0);
+        await SendAsync(dialog, 0);
+
+        Assert.Contains("13 lines need a part", dialog.Markup, StringComparison.Ordinal);
+        Assert.True(FileButton(dialog).Disabled);
+    }
+
+    /// <summary>
+    /// The button that picks what is left picks all of it, not only what is on screen.
+    /// </summary>
+    /// <remarks>
+    /// It answers "what is still to do", which is a fact about the bill. Answering it about
+    /// the filter would mean pressing it, seeing the count go down, and finding the charge
+    /// still refused.
+    /// </remarks>
+    [Fact]
+    public async Task Picking_what_has_no_part_reaches_past_the_filter()
+    {
+        var dialog = await OpenAsync(Row(lines: 14));
+
+        await FindAsync(dialog, "JACKET");
+
+        var pick = dialog.FindComponents<MudButton>()
+            .Single(component => component.Markup.Contains("with no part", StringComparison.Ordinal));
+
+        await dialog.InvokeAsync(() => pick.Instance.OnClick.InvokeAsync());
+
+        // All fourteen, though one of them is on screen.
+        Assert.Contains("14 lines", dialog.Find(".gs-pick-bar .count").TextContent,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>Types into the find box and lets it settle.</summary>
+    private static async Task FindAsync(IRenderedComponent<MudDialogProvider> dialog, string text)
+    {
+        var box = dialog.FindComponents<MudTextField<string>>()
+            .Single(component => component.Instance.Placeholder == "Find a line");
+
+        await dialog.InvokeAsync(() => box.Instance.ValueChanged.InvokeAsync(text));
+    }
+
     // ---- the screen, driven ----------------------------------------------------------
 
     private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync(BankTransactionResponse? row = null)
@@ -286,6 +348,27 @@ public class SplitBankTransactionDialogTest : ComponentTest
             new ReceiptItemResponse(Groceries, "GROCERIES", 60m, 1, 60m, true, null, []),
             new ReceiptItemResponse(Jacket, "JACKET", 40m, 1, 40m, true, null, [])
         ]);
+
+    /// <summary>
+    /// A bill long enough for the find box to appear: thirteen grocery lines and a jacket.
+    /// </summary>
+    private BankTransactionResponse Row(int lines)
+    {
+        var items = Enumerable.Range(0, lines - 1)
+            .Select(at => new ReceiptItemResponse(
+                Guid.NewGuid(), $"GROCERY {at + 1}", 10m, 1, 10m, true, null, []))
+            .Append(new ReceiptItemResponse(Jacket, "JACKET", 10m, 1, 10m, true, null, []))
+            .ToList();
+
+        var bill = new ReceiptResponse(
+            Guid.NewGuid(), null, RowId, lines * 10m, 0m, 0m, lines * 10m, lines, false, items);
+
+        _receipts
+            .Setup(commands => commands.ForBankRowAsync(RowId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bill);
+
+        return Row() with { BillLineCount = lines };
+    }
 
     private static BankTransactionResponse Row() =>
         new(RowId, new DateOnly(2026, 9, 10), 100m, "USD", "COSTCO WHOLESALE", "Costco",

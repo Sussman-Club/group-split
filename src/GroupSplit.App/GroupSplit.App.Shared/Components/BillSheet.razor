@@ -20,6 +20,34 @@
     Reading only. Who had what is set from the line itself, one level up.
 *@
 
+@* The tools sit on the app's surface above the paper rather than on it. A control printed on
+   a receipt is a foreign object, and the slip only reads as a document while nothing on it
+   could be pressed. They appear at all only where there is something to find: a bill of six
+   lines is read by looking at it, and a search box over it is a control that exists to be
+   ignored. *@
+@if (Searchable)
+{
+    <div class="gs-slip-tools">
+        <MudTextField T="string" @bind-Value="_filter" @bind-Value:after="StateHasChanged"
+                      Immediate="true" DebounceInterval="150"
+                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Placeholder="Find a line" Clearable="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                      aria-label="Find a line on this bill" />
+
+        @if (Unclaimed > 0)
+        {
+            <MudButton Variant="@(_onlyUnclaimed ? Variant.Filled : Variant.Text)"
+                       Color="@(_onlyUnclaimed ? Color.Primary : Color.Default)"
+                       Size="Size.Small" Class="gs-btn-pill"
+                       OnClick="@(() => _onlyUnclaimed = !_onlyUnclaimed)">
+                @Unclaimed with nobody
+            </MudButton>
+        }
+    </div>
+}
+
 <div class="gs-slip">
     <div class="gs-slip-edge is-top" aria-hidden="true"></div>
 
@@ -52,15 +80,11 @@
            glance down. A forty-line bill in a dialog pushes that total well past the fold,
            which is the one figure somebody is here to check against the charge. *@
         <ul class="gs-slip-lines">
-            @foreach (var line in Receipt.Items)
+            @foreach (var row in Showing)
             {
-                <li class="gs-slip-line @(line.Claims.Count == 0 ? "is-unclaimed" : "")" @key="line.Id">
+                <li class="gs-slip-line @(row.Unclaimed ? "is-unclaimed" : "")" @key="row.Key">
                     <span class="gs-slip-item">
-                        @if (line.Quantity != 1)
-                        {
-                            <span class="gs-slip-qty">@Trimmed(line.Quantity)</span>
-                        }
-                        <span class="gs-slip-name">@line.Name</span>
+                        <span class="gs-slip-name">@row.Name</span>
                     </span>
 
                     <span class="gs-slip-leader" aria-hidden="true"></span>
@@ -68,17 +92,33 @@
                     @* The letter in the margin, which is how a real bill says the tax at the
                        bottom was not charged on this line. Only where the bill charges tax at
                        all: a column of markers on a receipt with no tax explains nothing. *@
-                    <span class="gs-slip-mark">@(Exempt(line) ? "N" : "")</span>
+                    <span class="gs-slip-mark">@(row.Exempt && Receipt.Tax != 0 ? "N" : "")</span>
 
-                    <span class="gs-slip-price">@line.TotalPrice.ToMoney()</span>
+                    <span class="gs-slip-price">@row.Total.ToMoney()</span>
 
-                    <span class="gs-slip-who">@Who(line)</span>
+                    @* How many, at what each -- the way a till prints a repeated line instead
+                       of printing it again. It is also what folds identical rows into one,
+                       which is the difference between reading a warehouse bill and scrolling
+                       past it. *@
+                    @if (row.Count != 1)
+                    {
+                        <span class="gs-slip-count">@Trimmed(row.Count) @@ @row.Each.ToMoney()</span>
+                    }
+
+                    <span class="gs-slip-who">@row.Who</span>
                 </li>
             }
         </ul>
 
+        @if (Showing.Count == 0)
+        {
+            <p class="gs-slip-none">Nothing on this bill matches.</p>
+        }
+
         <div class="gs-slip-rule" aria-hidden="true"></div>
 
+        @* Always the whole bill, whatever is shown above. Totals that followed a filter would
+           be a receipt adding up to something the card was never charged. *@
         <dl class="gs-slip-totals">
             <div>
                 <dt>Items</dt>
@@ -109,7 +149,14 @@
             </div>
         </dl>
 
-        @if (Receipt.Items.Any(Exempt))
+        @if (Filtered)
+        {
+            <p class="gs-slip-foot">
+                Showing @Trimmed(Showing.Sum(row => row.Count)) of @Receipt.Items.Count. The totals are the whole bill.
+            </p>
+        }
+
+        @if (Receipt.Tax != 0 && Receipt.Items.Any(line => !line.IsTaxable))
         {
             <p class="gs-slip-foot">N — no tax charged on this line</p>
         }
@@ -129,6 +176,15 @@
 </div>
 
 @code {
+    /// <summary>
+    /// How many lines a bill needs before it is worth offering tools for reading it.
+    /// </summary>
+    /// <remarks>
+    /// A restaurant bill is read by looking at it. A warehouse receipt is not read, it is
+    /// searched -- and the difference is roughly where a bill stops fitting on a screen.
+    /// </remarks>
+    private const int Long = 12;
+
     [Parameter, EditorRequired] public ReceiptResponse Receipt { get; set; } = null!;
 
     /// <summary>What is printed across the top of the paper: where the money went.</summary>
@@ -148,9 +204,62 @@
     /// </remarks>
     [Parameter] public string? Hint { get; set; }
 
+    private string? _filter;
+    private bool _onlyUnclaimed;
+
+    private bool Searchable => Receipt.Items.Count >= Long || Unclaimed > 0;
+
+    private bool Filtered => !string.IsNullOrWhiteSpace(_filter) || _onlyUnclaimed;
+
     private int Unclaimed => Receipt.Items.Count(line => line.Claims.Count == 0);
 
-    private bool Exempt(ReceiptItemResponse line) => !line.IsTaxable && Receipt.Tax != 0;
+    /// <summary>One printed row: a line, or the identical lines it stands for.</summary>
+    private sealed record Row(
+        string Key, string Name, decimal Count, decimal Each, decimal Total,
+        bool Exempt, bool Unclaimed, string Who);
+
+    /// <summary>
+    /// What to print: the bill, narrowed to what is being looked for, with identical lines
+    /// folded together.
+    /// </summary>
+    /// <remarks>
+    /// Folded on everything that could make two lines different things -- the name, what one
+    /// costs, whether tax was charged on it, and who had it. Two jackets at the same price
+    /// become one row reading "2 @@ 59.99"; the same two with different people on them stay
+    /// two rows, because telling those apart is the whole reason the lines are stored
+    /// separately rather than as a quantity.
+    /// </remarks>
+    private IReadOnlyList<Row> Showing
+    {
+        get
+        {
+            var wanted = _filter?.Trim();
+
+            var lines = Receipt.Items
+                .Where(line => !_onlyUnclaimed || line.Claims.Count == 0)
+                .Where(line => string.IsNullOrEmpty(wanted)
+                               || line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
+
+            return
+            [
+                .. lines
+                    .GroupBy(line => (
+                        Name: line.Name.Trim().ToLowerInvariant(),
+                        line.UnitPrice,
+                        line.IsTaxable,
+                        Who: Who(line)))
+                    .Select(same => new Row(
+                        same.First().Id.ToString(),
+                        same.First().Name,
+                        same.Sum(line => line.Quantity),
+                        same.First().UnitPrice,
+                        same.Sum(line => line.TotalPrice),
+                        !same.First().IsTaxable,
+                        same.First().Claims.Count == 0,
+                        same.Key.Who))
+            ];
+        }
+    }
 
     /// <summary>
     /// Who had one line, by name.
@@ -178,8 +287,8 @@
     }
 
     /// <summary>
-    /// A quantity without its trailing zeros: a bill says "2", not "2.000", and says
-    /// "0.25" when that is what was weighed.
+    /// A count without its trailing zeros: a bill says "2", not "2.000", and says "0.25"
+    /// when that is what was weighed.
     /// </summary>
     private static string Trimmed(decimal quantity) =>
         quantity == decimal.Truncate(quantity)

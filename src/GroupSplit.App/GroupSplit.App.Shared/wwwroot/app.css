@@ -4529,7 +4529,8 @@ html:not([data-gs-ready]) .gs-group-card {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
     min-height: 30px;
     margin-bottom: 8px;
 }
@@ -4840,6 +4841,21 @@ html:not([data-gs-ready]) .gs-group-card {
     }
 }
 
+/* On the app's surface, above the paper. A control printed on a receipt is a foreign object,
+   and the slip only reads as a document while nothing on it could be pressed. */
+.gs-slip-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 27rem;
+    margin: 0 auto 10px;
+}
+
+.gs-slip-tools .mud-input-control {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
 .gs-slip {
     --gs-slip-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo,
         Consolas, "Liberation Mono", monospace;
@@ -4974,6 +4990,21 @@ html:not([data-gs-ready]) .gs-group-card {
 .gs-slip-price {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* "3 @ 5.99", under the name, the way a till prints a repeated line rather than printing it
+   again. Indented to sit under the item and not under the column of prices. */
+.gs-slip-count {
+    grid-column: 1 / -1;
+    color: var(--gs-paper-faint);
+    font-size: .6875rem;
+}
+
+.gs-slip-none {
+    margin: 0;
+    padding: 14px 0;
+    color: var(--gs-paper-faint);
+    text-align: center;
 }
 
 .gs-slip-who {
