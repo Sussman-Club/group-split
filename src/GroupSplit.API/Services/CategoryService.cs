@@ -9,9 +9,27 @@ namespace GroupSplit.API.Services;
 
 public interface ICategoryService
 {
-    Task<IQueryable<Category>> List(Guid? groupId, CancellationToken ct = default);
+    /// <param name="includeArchived">
+    /// True to list what the group has retired as well. False -- the default -- answers with
+    /// what it files under today, which is what every picker wants.
+    /// </param>
+    Task<IQueryable<Category>> List(Guid? groupId, bool includeArchived = false,
+        CancellationToken ct = default);
+
     Task<Category> Create(CreateCategoryRequest request, CancellationToken ct = default);
     Task<Category> Update(Guid id, UpdateCategoryRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retires a category, or brings it back.
+    /// </summary>
+    /// <remarks>
+    /// What a group means by "delete this" once it has been used for a year. Deleting is
+    /// refused outright while anything is filed under it, and rightly -- a category is how a
+    /// group's spending is read back, and dropping one would take months of that with it.
+    /// Archiving takes it out of the pickers and leaves every expense still naming it.
+    /// </remarks>
+    Task<Category> SetArchived(Guid id, bool archived, CancellationToken ct = default);
+
     Task Delete(Guid id, CancellationToken ct = default);
 }
 
@@ -30,13 +48,15 @@ public interface ICategoryService
 /// </remarks>
 public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) : ICategoryService
 {
-    public Task<IQueryable<Category>> List(Guid? groupId, CancellationToken ct = default)
+    public Task<IQueryable<Category>> List(Guid? groupId, bool includeArchived = false,
+        CancellationToken ct = default)
     {
         var groups = dbContext.Entry(userContext.User).Collection(u => u.Groups).Query();
 
         var query = from category in dbContext.Set<Category>()
                     where groups.Any(@group => @group.Id == category.Group.Id)
                           && (groupId == null || category.Group.Id == groupId)
+                          && (includeArchived || category.ArchivedAt == null)
                     select category;
 
         return Task.FromResult(query);
@@ -80,6 +100,23 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         return category;
     }
 
+    public async Task<Category> SetArchived(Guid id, bool archived, CancellationToken ct = default)
+    {
+        var category = await Existing(id, ct);
+
+        // Idempotent on purpose: archiving a category twice is the same category archived,
+        // and re-stamping the date would move a record of when the group stopped using it
+        // for no reason anybody asked for.
+        if (archived == category.ArchivedAt.HasValue)
+            return category;
+
+        category.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return category;
+    }
+
     public async Task Delete(Guid id, CancellationToken ct = default)
     {
         var category = await Existing(id, ct);
@@ -91,14 +128,17 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         // violation is not something a member can act on.
         if (stillUsed)
             throw new ConflictException(ErrorCodes.CategoryInUse,
-                "This category still has expenses filed under it.");
+                "This category still has expenses filed under it. Archive it instead.");
 
         dbContext.Remove(category);
         await dbContext.SaveChangesAsync(ct);
     }
 
+    // Archived ones included, or nothing could be brought back: the one call that must find
+    // a retired category is the one that un-retires it. Editing and deleting reach through
+    // here too, which is right -- a category the group has stopped using is still theirs.
     private async Task<Category> Existing(Guid id, CancellationToken ct) =>
-        await (await List(null, ct)).Include(category => category.Group)
+        await (await List(null, includeArchived: true, ct)).Include(category => category.Group)
             .FirstOrDefaultAsync(category => category.Id == id, ct)
         // A category in someone else's group takes this path too, and says what a missing
         // one says: whether it exists is not the caller's to learn.

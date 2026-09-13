@@ -46,7 +46,7 @@ public class SplitBankTransactionDialogTest : ComponentTest
             .ReturnsAsync([new GroupResponse(GroupId, "The flat", 4)]);
 
         _categories
-            .Setup(client => client.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         _receipts

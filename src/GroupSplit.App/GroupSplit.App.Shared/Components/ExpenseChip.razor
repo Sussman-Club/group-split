@@ -1,0 +1,72 @@
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    One decision on an expense, as a chip: what it is set to, and a way to change it.
+
+    The row of these is half of what the expense dialogs are. The other half is fields --
+    the amount, the name, the note -- and the line between them is what you do with each: a
+    field is free text you type, a chip is something you pick from what already exists. A
+    chip with a sensible default shows it and is one tap from changing; one with nothing in
+    it yet carries a plus and says what it would be.
+*@
+
+@* No caret. Each one was fifteen pixels plus its gap, five of them across a row that
+   then could not hold five chips on one line -- so the row wrapped, and a row of pills of
+   unequal width wraps ragged. A pill already reads as something you press, and the open
+   one turns teal, which says more than a flipped chevron did.
+
+   aria-expanded carries that state for a screen reader, and is spelled out rather than
+   bound as a bool: Razor omits a false bool attribute altogether, so a resting chip
+   advertised no expandable state at all. The comment sits here rather than among the
+   attributes, where Razor reads it as an attribute name and the render throws. *@
+
+<button type="button"
+        class="gs-expense-chip @(Set ? "" : "is-empty") @(Open ? "is-open" : "")"
+        aria-expanded="@(Open ? "true" : "false")"
+        aria-label="@(Set ? $"{Label}: {Value}. Change it" : $"Add {Label}")"
+        @onclick="OnClick">
+
+    @if (!Set)
+    {
+        <MudIcon Icon="@Icons.Material.Outlined.Add"/>
+    }
+
+    @Mark
+
+    @if (Set)
+    {
+        @if (Lead is { Length: > 0 })
+        {
+            <span class="k">@Lead</span>
+        }
+
+        <span class="v">@Value</span>
+    }
+    else
+    {
+        <span class="v">@Label</span>
+    }
+
+</button>
+
+@code {
+    /// <summary>What this decides, in a word: "category", "paid by", "when", "where".</summary>
+    [Parameter] public string Label { get; set; } = "";
+
+    /// <summary>The quiet word in front of the value -- "for" Groceries, "paid by" Ana.</summary>
+    [Parameter] public string? Lead { get; set; }
+
+    /// <summary>What it is set to, when it is set to anything.</summary>
+    [Parameter] public string? Value { get; set; }
+
+    /// <summary>Whether it has a value. False draws the plus and the label instead.</summary>
+    [Parameter] public bool Set { get; set; }
+
+    /// <summary>Whether its picker is open below, which the caret reflects.</summary>
+    [Parameter] public bool Open { get; set; }
+
+    /// <summary>A mark to carry inside the chip, such as a merchant's logo.</summary>
+    [Parameter] public RenderFragment? Mark { get; set; }
+
+    [Parameter] public EventCallback OnClick { get; set; }
+}

@@ -8,7 +8,19 @@ public static class AuthRoutes
 {
     public const string Logout = "/auth/logout";
 
-    public static string Login(string? returnUrl = null) => WithReturnUrl("/auth/login", returnUrl);
+    /// <param name="remember">
+    /// Whether "Keep me signed in" was ticked. Passed rather than remembered client-side:
+    /// the cookie it decides is written by the server, at the end of a round trip through
+    /// Keycloak that this page does not survive.
+    /// </param>
+    public static string Login(string? returnUrl = null, bool remember = false)
+    {
+        var login = WithReturnUrl("/auth/login", returnUrl);
+
+        return remember
+            ? $"{login}{(login.Contains('?') ? '&' : '?')}remember=true"
+            : login;
+    }
 
     /// <summary>
     /// Appends <paramref name="returnUrl"/> when it is a same-site path. The

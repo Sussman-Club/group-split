@@ -55,11 +55,11 @@ public class UpdateTransactionDialogTest : ComponentTest
             }.ToAsyncEnumerable());
 
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null)]);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => new[] { new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null) }.ToAsyncEnumerable());
 
         _merchants
@@ -73,7 +73,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         Services.AddSingleton(_login.Object);
 
         // The merchant picker reaches the API through the real command over a mocked
-        // client, the way ManageRulesDialogTest does.
+        // client, the way GroupSplitsTabTest does.
         Services.AddSingleton<IMerchantCommands, MerchantCommands>();
 
         // The transaction commands are mocked rather than real, and not for convenience:
@@ -85,13 +85,26 @@ public class UpdateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
-    /// Through step one to the split step, which is where Save lives. The dialog is two
-    /// steps now, matching the create dialog: everything that makes the expense, then how
-    /// it divides.
+    /// Nothing, now that there is nowhere to go.
     /// </summary>
-    private static async Task ToSplitStepAsync(IRenderedComponent<MudDialogProvider> provider) =>
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Next")
-            .ClickAsync(new MouseEventArgs());
+    /// <remarks>
+    /// The dialog was two steps and this pressed Next to reach the division. It is one
+    /// screen: the division is under the amount that decides it. The call survives as a
+    /// no-op so that each test still says where in the flow it is standing, and so that the
+    /// diff that collapsed the steps did not also rewrite twelve unrelated tests.
+    /// </remarks>
+    private static Task ToSplitStepAsync(IRenderedComponent<MudDialogProvider> provider) =>
+        Task.CompletedTask;
+
+    /// <summary>Opens one chip's picker, which is where its control now lives.</summary>
+    private static async Task OpenChipAsync(IRenderedComponent<MudDialogProvider> provider, string label)
+    {
+        var chip = provider.FindAll("button.gs-expense-chip")
+            .First(candidate => candidate.GetAttribute("aria-label")!
+                .Contains(label, StringComparison.Ordinal));
+
+        await chip.ClickAsync(new MouseEventArgs());
+    }
 
     private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference DialogRef)> OpenAsync(
         TransactionResponse original)
@@ -113,8 +126,75 @@ public class UpdateTransactionDialogTest : ComponentTest
         return (provider, dialogRef!);
     }
 
+    /// <summary>
+    /// An edit with a field the API will refuse does not close the dialog.
+    /// </summary>
+    /// <remarks>
+    /// The two-step version validated on the way into step two. Collapsing the steps onto
+    /// one screen took the check with it, and nothing put it back: clearing the name and
+    /// pressing Save closed the dialog, the patch came back a 400, and the amount and the
+    /// payer and everything else the person had just changed went with the dialog that was
+    /// already gone. The snackbar told them it failed, over a screen they could not get
+    /// back to.
+    /// </remarks>
     [Fact]
-    public async Task When_opened_with_null_category_id_it_hydrates_category_from_transaction_details()
+    public async Task An_edit_the_api_would_refuse_does_not_close_over_the_rest_of_it()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = GroupId,
+                PaidByUserId = MeId,
+                CategoryId = FoodCategoryId,
+                Category = "Food",
+                Splits =
+                [
+                    new TransactionSplitResponse(MeId, "Ana Benitez", 50m),
+                    new TransactionSplitResponse(Guid.NewGuid(), "Daniel Jones", 50m)
+                ]
+            });
+
+        var (provider, dialogRef) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId,
+            CategoryId = FoodCategoryId,
+            Category = "Food"
+        });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync(string.Empty));
+
+        await provider.FindAll("button")
+            .First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        // Still open, and still holding the edit: the dialog is the only place left where
+        // the name can be put back.
+        Assert.NotEmpty(provider.FindComponents<UpdateTransactionDialog>());
+        Assert.False(dialogRef.Result.IsCompleted);
+    }
+
+    /// <summary>
+    /// The expenses page lists rows with no category on them. Opening one for editing has
+    /// to find the category anyway, or saving any other field would file the expense under
+    /// nothing -- and it has to find it without writing on the row the page is showing.
+    /// </summary>
+    [Fact]
+    public async Task An_expense_opened_from_a_listing_that_carries_no_category_keeps_it_anyway()
     {
         var transactionId = Guid.NewGuid();
 
@@ -151,8 +231,10 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         var (provider, dialogRef) = await OpenAsync(original);
 
-        // Original.CategoryId should be hydrated from details
-        Assert.Equal(FoodCategoryId, original.CategoryId);
+        // Backfilled into the dialog and not into the row it was handed. The row belongs to
+        // the grid that is still showing it, and writing the category back onto it meant
+        // cancelling an edit left a category on a line nobody had saved.
+        Assert.Null(original.CategoryId);
 
         // Submit to verify the patch does not inadvertently wipe the category
         await ToSplitStepAsync(provider);
@@ -200,6 +282,9 @@ public class UpdateTransactionDialogTest : ComponentTest
         // listing row the edit was opened from does not.
         provider.WaitForAssertion(() =>
             Assert.Contains("Lidl", provider.Markup, StringComparison.Ordinal));
+
+        // The merchant search lives behind its chip, like every other thing you pick.
+        await OpenChipAsync(provider, "where");
 
         var picker = provider.FindComponent<MerchantPicker>();
         await provider.InvokeAsync(() => picker.Instance.ValueChanged.InvokeAsync(corner));
@@ -388,6 +473,8 @@ public class UpdateTransactionDialogTest : ComponentTest
         var popovers = Render<MudPopoverProvider>();
 
         var (provider, _) = await OpenAsync(Row(transactionId));
+
+        await OpenChipAsync(provider, "category");
 
         var select = provider.FindComponents<MudSelect<Guid?>>()
             .Single(component => component.Instance.Label == "Category");
@@ -606,11 +693,11 @@ public class UpdateTransactionDialogTest : ComponentTest
     private void WithCategories(params CategoryResponse[] categories)
     {
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(categories);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => categories.ToAsyncEnumerable());
     }
 
@@ -621,6 +708,10 @@ public class UpdateTransactionDialogTest : ComponentTest
     private static async Task PickCategoryAsync(
         IRenderedComponent<MudDialogProvider> provider, Guid categoryId)
     {
+        // The category is a chip, and its select is rendered only while that chip is open.
+        if (!provider.FindComponents<MudSelect<Guid?>>().Any(c => c.Instance.Label == "Category"))
+            await OpenChipAsync(provider, "category");
+
         var select = provider.FindComponents<MudSelect<Guid?>>()
             .Single(component => component.Instance.Label == "Category");
 
@@ -633,6 +724,295 @@ public class UpdateTransactionDialogTest : ComponentTest
     /// </summary>
     private static bool Touches(Operation<UpdateTransactionRequest> operation, string member) =>
         string.Equals(operation.path, $"/{member}", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Correcting an expense to "somebody set them by hand" leaves the split
+    /// control holding them, so the next Save states them.
+    /// </summary>
+    /// <remarks>
+    /// Only the other direction was handled. Recording a version cleared the stated shares,
+    /// correctly; recording "by hand" did nothing, so the control went on claiming the
+    /// division was automatic -- the exact false claim the strip above it exists to end, and
+    /// now made false <em>by</em> a correction the person had just made. The consequence is
+    /// not cosmetic: with no shares in the patch the expense keeps whatever the server
+    /// decides, which is what "by hand" was being recorded to prevent.
+    /// </remarks>
+    [Fact]
+    public async Task Recording_that_the_amounts_are_its_own_leaves_the_control_holding_them()
+    {
+        var transactionId = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
+
+        // A rule divided it, so the reader has a rule and a history to resolve it against.
+        // Through this class's own categories client, which it registers over the shared
+        // one -- the reader resolves whatever the container last had, so setting up the
+        // shared mock here would configure a client nothing asks.
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
+                [
+                    // Superseded, which is what puts the strip on screen at all. Correcting
+                    // is offered where there is something to correct; over an expense whose
+                    // recorded version is simply the current one, the dialog says nothing
+                    // and the split control below speaks for it.
+                    new SplitRuleVersionResponse(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-7),
+                        null, new EvenSplitRuleDto()),
+
+                    new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2),
+                        DateTimeOffset.UtcNow.AddDays(-7), new EvenSplitRuleDto())
+                ]));
+
+        _commands
+            .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await ToSplitStepAsync(provider);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
+            .ClickAsync(new MouseEventArgs());
+
+        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
+
+        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
+            .ClickAsync(new MouseEventArgs());
+
+        _commands.Verify(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        Assert.NotNull(patch);
+
+        // The amounts the expense is holding, stated -- not silence, which would leave the
+        // server free to divide it again.
+        var operation = Assert.Single(patch!.Operations, op => Touches(op, "splits"));
+
+        Assert.NotNull(operation.value);
+    }
+
+    /// <summary>
+    /// And the figures on screen after that correction are the ones the Save then sends.
+    /// </summary>
+    /// <remarks>
+    /// The test above pins that <em>something</em> about the shares reaches the patch. This
+    /// pins the harder half, which is the one somebody can be misled by: the preview sits
+    /// directly above the button, and recording "by hand" changes both what the expense's
+    /// division is taken to be and what the preview is therefore asking about. Refresh it
+    /// with the old question and the panel keeps the rule's division -- 540/360 under a rule
+    /// the expense no longer records -- while Save writes something else. Nobody reading the
+    /// screen could tell, which is exactly why it needs a test rather than an eye.
+    /// <para>
+    /// Snapshotted in the callback rather than read off the mock afterwards. The dialog hands
+    /// the same <c>UpdateTransactionRequest</c> instance to every preview, so reading it at
+    /// the end of the test would report the final state whatever the preview had been asked.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_preview_after_that_correction_is_asked_about_the_shares_that_are_saved()
+    {
+        var transactionId = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
+
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
+                [
+                    // Superseded, which is what puts the strip on screen at all. Correcting
+                    // is offered where there is something to correct; over an expense whose
+                    // recorded version is simply the current one, the dialog says nothing
+                    // and the split control below speaks for it.
+                    new SplitRuleVersionResponse(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-7),
+                        null, new EvenSplitRuleDto()),
+
+                    new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2),
+                        DateTimeOffset.UtcNow.AddDays(-7), new EvenSplitRuleDto())
+                ]));
+
+        _commands
+            .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        IReadOnlyList<SplitInput>? asked = null;
+        var askedToRedivide = true;
+
+        _commands
+            .Setup(c => c.PreviewUpdateAsync(transactionId, It.IsAny<UpdateTransactionRequest>(),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback((Guid _, UpdateTransactionRequest request, bool redivide, CancellationToken _) =>
+            {
+                asked = request.Splits is null ? null : [.. request.Splits];
+                askedToRedivide = redivide;
+            })
+            .ReturnsAsync(new SplitPreviewResponse(
+                [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)], "Household"));
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
+            .ClickAsync(new MouseEventArgs());
+
+        // The option in the words the person reads before choosing it, and in the same ones
+        // the strip above uses for the state they describe.
+        Assert.Contains("Somebody set them by hand", provider.Markup, StringComparison.Ordinal);
+
+        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
+
+        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
+            .ClickAsync(new MouseEventArgs());
+
+        // Asked about the amounts themselves, and asked not to divide them again -- which is
+        // the whole content of "the amounts are this expense's own".
+        Assert.False(askedToRedivide);
+        Assert.NotNull(asked);
+        Assert.Equal(100m, Assert.Single(asked!, split => split.UserId == MeId).Amount);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        var saved = Assert.IsAssignableFrom<IReadOnlyList<SplitInput>>(
+            Assert.Single(patch!.Operations, op => Touches(op, "splits")).value);
+
+        // The same figures, share for share: the preview is a promise about what Save does.
+        Assert.Equal(
+            asked!.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)),
+            saved.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)));
+    }
+
+    /// <summary>
+    /// And the other direction: recording that a version divided it gives up the shares the
+    /// expense was holding, so the save states none.
+    /// </summary>
+    /// <remarks>
+    /// The two are one rule read both ways, and only one of them was pinned. Stated shares
+    /// and a rule's division are the two answers to the same question: an edit that sends
+    /// both says the rule produced these amounts and then pins them against it, which is the
+    /// shape <c>UpdateTransactionRequest</c> reads as "divide it exactly this way".
+    /// </remarks>
+    [Fact]
+    public async Task Recording_that_a_version_divided_it_gives_up_the_shares_it_was_holding()
+    {
+        var transactionId = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        // No version recorded, so the dialog opens holding the stored shares.
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId));
+
+        // Through this class's own categories client, which it registers over the shared
+        // one -- the reader resolves whatever the container last had, so setting up the
+        // shared mock here would configure a client nothing asks.
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
+                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
+                    new EvenSplitRuleDto())]));
+
+        _commands
+            .Setup(c => c.DivisionSourceAsync(transactionId, version, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await ToSplitStepAsync(provider);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
+            .ClickAsync(new MouseEventArgs());
+
+        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
+
+        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(version));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
+            .ClickAsync(new MouseEventArgs());
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        Assert.NotNull(patch);
+
+        // Nothing about the shares at all: the expense is a rule's now, and the rule says
+        // what they are.
+        Assert.DoesNotContain(patch!.Operations, op => Touches(op, "splits"));
+    }
+
+    private static readonly Guid Household = Guid.NewGuid();
+
+    /// <summary>
+    /// The edit dialog says nothing at all about where an ordinary division came from.
+    /// </summary>
+    /// <remarks>
+    /// This is the create dialog's own default: no category, no rule, an even split. The
+    /// strip called it "Amounts set by hand" under a BY HAND tag, in a bordered card,
+    /// directly above a control still set to Automatically -- and once that was corrected
+    /// to a true sentence it was merely a redundant one, because the split control prints
+    /// how it divides in its own words a few lines below. So the whole strip goes, and what
+    /// is left of it is reserved for the four states no toggle can report.
+    /// </remarks>
+    [Fact]
+    public async Task The_strip_says_nothing_over_an_ordinary_division()
+    {
+        var transactionId = Guid.NewGuid();
+
+        var details = Details(transactionId) with
+        {
+            CategoryId = null,
+            Category = null,
+            Amount = 48.50m,
+            Splits =
+            [
+                new TransactionSplitResponse(MeId, "Ana Benitez", 12.14m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Lu Ferrer", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Dani Rivero", 12.12m),
+                new TransactionSplitResponse(Guid.NewGuid(), "Omar Rivero", 12.12m)
+            ]
+        };
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(details);
+
+        var (provider, _) = await OpenAsync(Row(transactionId) with { CategoryId = null, Category = null });
+
+        await ToSplitStepAsync(provider);
+
+        Assert.DoesNotContain("gs-provenance", provider.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Amounts set by hand", provider.Markup, StringComparison.Ordinal);
+
+        // And with it the button, which had nothing to offer: the expense records no
+        // version, and there is no rule behind it to point one at.
+        Assert.DoesNotContain(">Correct<", provider.Markup, StringComparison.Ordinal);
+    }
 
     private static TransactionDetailsResponse Details(
         Guid id, Guid? merchantId = null, Guid? splitRuleVersionId = null) => new()
@@ -670,11 +1050,11 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         // CategoriesClient returns empty (category deleted from group)
         _categories
-            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         _categories
-            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .Returns(() => AsyncEnumerable.Empty<CategoryResponse>());
 
         _transactions

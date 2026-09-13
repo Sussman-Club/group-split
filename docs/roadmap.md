@@ -158,8 +158,9 @@ build because every release breaks the WASM restore.
 ### Two write paths in the client
 
 Pages write through `*PageStateService`, which announces through `DataChangeNotifier`.
-`ManageRulesDialog` and `TransactionDetailsDialog` call the generated clients directly
-and announce themselves -- or, for rules, don't.
+The dialogs called the generated clients directly and announced themselves -- or, for
+rules, didn't. Every *write* goes through the command layer now; several components still
+inject the generated clients for reads, which is the half of this that is left.
 
 - **Instead:** one thin command layer per aggregate that every dialog uses; the notifier
   stays. Small, but it is the pattern the Plaid review inbox will copy, so fix it before

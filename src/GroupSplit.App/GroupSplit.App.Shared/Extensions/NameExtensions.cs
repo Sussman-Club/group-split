@@ -22,6 +22,19 @@ public static class NameExtensions
                 ? $"{person.FullName} (invited)"
                 : person.FullName;
 
+    /// <summary>
+    /// A list of names as a sentence says it: "Groceries, Utilities and Rent".
+    /// </summary>
+    /// <param name="conjunction">
+    /// "and" for things that are all true together -- the categories that divide by one rule
+    /// -- or "or" where the reader picks one out, as in the rules an unfitted expense might
+    /// belong to.
+    /// </param>
+    public static string Listed(this IReadOnlyList<string> names, string conjunction = "and") =>
+        names.Count < 2
+            ? string.Join(", ", names)
+            : $"{string.Join(", ", names.Take(names.Count - 1))} {conjunction} {names[^1]}";
+
     /// <summary>Up to two initials from a display name, e.g. "Anabel Benítez" → "AB".</summary>
     public static string Initials(this string? name) =>
         string.Concat(

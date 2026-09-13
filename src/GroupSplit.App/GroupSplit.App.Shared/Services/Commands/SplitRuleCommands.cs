@@ -1,24 +1,25 @@
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
+using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Commands;
 
 /// <inheritdoc cref="ISplitRuleCommands"/>
 /// <remarks>
-/// No snackbar anywhere in here, which is the one way these differ from the other commands:
-/// a rule is written as the division behind a category, in the same gesture, and
-/// <see cref="ICategoryCommands"/> says what happened to it. Two messages for one button
-/// would be the failure this pattern exists to stop, in the other direction.
-/// <para>
 /// The announcement is the transactions one, because it is the rule's name that a category
 /// row carries and the category's name that every expense row carries. It costs a re-read
 /// of the listings for a change that moves no figure; managing rules is a rare enough thing
 /// to pay for it, and the alternative is a caller reasoning about whose page cares.
+/// <para>
+/// Every message here says the same second thing -- that nothing already recorded moved --
+/// because that is the fear a person has when they change how something is divided, and the
+/// only way to find out otherwise is to go and look.
 /// </para>
 /// </remarks>
 public sealed class SplitRuleCommands(
     ISplitRulesClient rules,
     ApiErrorPresenter errors,
+    ISnackbar snackbar,
     DataChangeNotifier changes) : ISplitRuleCommands
 {
     public async Task<IReadOnlyList<SplitRuleResponse>?> ForGroupAsync(Guid groupId, CancellationToken ct = default)
@@ -62,6 +63,7 @@ public sealed class SplitRuleCommands(
         var done = await errors.TryAsync(async () =>
         {
             created = await rules.CreateSplitRuleAsync(request, ct);
+            snackbar.Add($"{created.Name} created. Point a category at it to use it.", Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not save the split.");
 
@@ -76,9 +78,24 @@ public sealed class SplitRuleCommands(
         var done = await errors.TryAsync(async () =>
         {
             updated = await rules.UpdateSplitRuleAsync(ruleId, request, ct);
+
+            // Says the part somebody would otherwise have to test to find out. Editing a
+            // division looks like it could reach backwards, and it cannot: the version that
+            // was current is closed and a new one opens beside it.
+            snackbar.Add($"{updated.Name} updated. Expenses already recorded keep their split.",
+                Severity.Success);
+
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not save the split.");
 
         return done ? updated : null;
     }
+
+    public Task<bool> DeleteAsync(Guid ruleId, string name, CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await rules.DeleteSplitRuleAsync(ruleId, ct);
+            snackbar.Add($"{name} deleted.", Severity.Success);
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not delete the split.");
 }
