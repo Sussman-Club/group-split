@@ -34,7 +34,7 @@ has to reach for `curl` and a bearer token to do.
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
-| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `reattach`, `delete` |
+| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `archive`, `unarchive`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
@@ -916,23 +916,16 @@ Deliberately narrow, and it refuses rather than guesses:
 
 ## Re-pointing a back catalogue
 
-Writing a history says what a rule stood for and when. `transactions reattach` says which of
-those each expense actually fell under:
+One expense at a time, with `transactions update <id> --divided-by <version-id>`. There is no
+pass over a whole group any more.
 
-```bash
-groupsplit transactions reattach --group <group-id> --dry-run   # the summary, saving nothing
-groupsplit transactions reattach --group <group-id>             # exit 4, then --yes
-```
-
-Every expense filed under a category with a rule is pointed at the version whose window
-contains its date. One older than its rule's history is left pointing at nothing, and the
-summary counts those separately -- that figure is how you find out the history does not go
-back far enough.
-
-**It moves no money.** Not one share is read, let alone written; the only thing that changes
-is which version each expense names, so every balance in the group is identical afterwards.
-Running it twice changes nothing the second time, so it is safe to run again once a history
-is corrected.
+There was one -- `transactions reattach` -- and it was removed because of what it had to
+guess. It found each expense's rule through its category's `defaultSplitRuleId` **as the
+category points now**, so a group that had since re-pointed Groceries from an even split to
+one by income got three years of Groceries expenses pointed at versions of a rule that had
+never divided them. Nothing records which rule a category named in 2023, so the pass could
+not tell the two cases apart, and the expenses it was most useful on were the ones it was
+most likely to be wrong about.
 
 ## Output
 

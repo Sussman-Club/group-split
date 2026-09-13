@@ -176,8 +176,9 @@ public static class SplitRuleCommands
                     "The version it is on now stays the open one and is backdated to "
                     + $"{entries[^1].From:yyyy-MM-dd}, so expenses already divided by it keep pointing at it.",
                     "Refused outright if the rule has already changed since it was created.",
-                    "No expense's shares are touched. Pointing expenses at the right version "
-                    + "is: groupsplit transactions reattach --group <group-id>"
+                    "No expense's shares are touched, and no expense is re-pointed: each "
+                    + "keeps the version it already records. Correcting one is: "
+                    + "groupsplit transactions update <id> --divided-by <version-id>"
                 ],
                 confirmCommand:
                 $"groupsplit split-rules versions set {id} --file {parse.GetValue(file)!.Name} --yes");

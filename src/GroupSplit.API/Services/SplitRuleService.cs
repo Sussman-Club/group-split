@@ -221,12 +221,11 @@ public class SplitRuleService(
 
         // A history is an account of what the rule has already said, so nothing in it may
         // start after now -- and the last entry least of all, because it becomes the open
-        // version. Two readers would then disagree about today's spending: ExpenseSplitter
-        // reaches for the version nothing has superseded and would divide a new expense by a
-        // window that has not opened, while ExpenseProvenance.Covering looks for the window
-        // containing the date and would reattach the very same expense to the entry before
-        // it. Only the last is checked because the entries strictly increase above, so it is
-        // the latest of them.
+        // version. ExpenseSplitter reaches for the version nothing has superseded, whatever
+        // the date on it, so a forward-dated entry is one the app divides by while the
+        // history says it has not started: the rule's own account of itself and today's
+        // spending would disagree. Only the last is checked because the entries strictly
+        // increase above, so it is the latest of them.
         if (versions[^1].From > DateTimeOffset.UtcNow)
             throw new ValidationException(ErrorCodes.SplitRuleHistoryInvalid,
                     "A history says what a rule has already stood for, so no entry can start " +

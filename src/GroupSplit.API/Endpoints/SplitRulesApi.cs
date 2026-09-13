@@ -90,7 +90,8 @@ public static class SplitRulesApi
         /// rule stands for now -- that entry becomes the open version, and the open version
         /// is the row every recorded expense already points at. For the same reason it
         /// refuses an entry dated after now: the open version would start in the future,
-        /// where a new expense is still divided by it and a reattach no longer finds it.
+        /// where a new expense is still divided by it while the history says it has not
+        /// begun.
         /// </para>
         /// </remarks>
         private RouteHandlerBuilder MapSetSplitRuleHistory()

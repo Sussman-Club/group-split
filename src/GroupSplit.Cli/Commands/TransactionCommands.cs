@@ -101,7 +101,6 @@ public static class TransactionCommands
         transactions.Subcommands.Add(Monthly());
         transactions.Subcommands.Add(Shares());
         transactions.Subcommands.Add(BankMatches());
-        transactions.Subcommands.Add(Reattach());
         transactions.Subcommands.Add(Delete());
 
         return transactions;
@@ -1145,106 +1144,6 @@ public static class TransactionCommands
                         + $"[grey]  groupsplit inbox link <row-id> {id}[/]\n"
                         + "[grey]Not a match:[/]\n"
                         + $"[grey]  groupsplit inbox dismiss-match <row-id> {id}[/]\n"));
-            });
-
-            return ExitCodes.Success;
-        });
-
-        return command;
-    }
-
-    /// <summary>
-    /// Points a group's expenses at the version of their rule that was in force on the day
-    /// each was spent.
-    /// </summary>
-    /// <remarks>
-    /// The second half of writing a rule's history, and useless without it: the history says
-    /// what the rule stood for and when, and this says which of those an expense actually
-    /// fell under. A migration out of a workbook pointed every categorised expense at the
-    /// only version there was, so a 2023 grocery bill claims a ratio agreed in 2026.
-    /// <para>
-    /// It moves no money. Not one share is read, let alone written -- the only thing that
-    /// changes is which version each expense names -- so the group's balances are the same
-    /// afterwards to the cent. It stops for a confirmation anyway, because it rewrites the
-    /// history of an entire ledger and <c>--dry-run</c> is right there.
-    /// </para>
-    /// </remarks>
-    private static Command Reattach()
-    {
-        var group = new Option<Guid>("--group")
-        {
-            Description = "The group whose expenses to re-point.",
-            Required = true
-        };
-
-        var dryRun = new Option<bool>("--dry-run")
-        {
-            Description = "Work out what would change and report it without saving anything."
-        };
-
-        var command = new Command(
-            "reattach",
-            "Point a group's expenses at the version of their rule in force when each was spent.")
-        {
-            group, dryRun
-        };
-
-        command.SetHandler(async (context, ct) =>
-        {
-            var parse = context.ParseResult;
-            var groupId = parse.GetValue(group);
-            var dry = parse.GetValue(dryRun);
-
-            if (!dry)
-            {
-                Confirmation.Require(
-                    context,
-                    action: "transactions.reattach",
-                    summary: $"Re-point every expense in group {groupId} at the rule version of its own date?",
-                    changes:
-                    [
-                        "Each expense filed under a category with a rule points at the version "
-                        + "that was in force on the day it was spent.",
-                        "An expense older than its rule's history is left pointing at nothing.",
-                        "No share and no balance changes: only which version each expense names.",
-                        $"See it first with: groupsplit transactions reattach --group {groupId} --dry-run"
-                    ],
-                    confirmCommand: $"groupsplit transactions reattach --group {groupId} --yes");
-            }
-
-            var summary = await context.Transactions.ReattachTransactionsAsync(
-                new ReattachTransactionsRequest { GroupId = groupId, DryRun = dry }, ct);
-
-            context.Output.Write(summary, value =>
-            {
-                var heading = value.DryRun
-                    ? "[grey]Dry run. Nothing was saved.[/]"
-                    : "[green]Reattached.[/]";
-
-                var totals = new Markup(
-                    $"{heading} [bold]{value.Examined}[/] expenses examined, "
-                    + $"[bold]{value.Changed}[/] re-pointed, "
-                    + $"[bold]{value.LeftWithoutAVersion}[/] left with no version.\n"
-                    + "[grey]No share and no balance changed.[/]\n");
-
-                if (value.ByRule.Count == 0)
-                {
-                    return new Rows(totals, new Markup(
-                        Tables.Empty("expenses filed under a category with a rule") + "\n"));
-                }
-
-                var table = Tables.Grid("Rule", "Examined", "Re-pointed", "No version");
-
-                foreach (var rule in value.ByRule)
-                {
-                    table.AddRow(
-                        Markup.Escape(rule.SplitRuleName),
-                        rule.Examined.ToString(),
-                        rule.Changed.ToString(),
-                        rule.Uncovered.ToString());
-                }
-
-                return new Rows(totals, table);
             });
 
             return ExitCodes.Success;

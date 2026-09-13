@@ -8,11 +8,10 @@ namespace GroupSplit.Cli.Test;
 /// The commands that write what divided an expense, rather than what it was divided into.
 /// </summary>
 /// <remarks>
-/// Three surfaces, one promise between them: none of them sends an amount. Writing a rule's
-/// history states what the rule said and when; reattaching points expenses at the entry that
-/// was in force when each was spent; <c>--hand-split</c> and <c>--divided-by</c> say the same
-/// thing about one expense. A request body carrying shares would be the first sign one of
-/// them had started moving money, so these assert on the bodies rather than on exit codes.
+/// Two surfaces, one promise between them: neither sends an amount. Writing a rule's history
+/// states what the rule said and when; <c>--hand-split</c> and <c>--divided-by</c> say what
+/// divided one expense. A request body carrying shares would be the first sign one of them
+/// had started moving money, so these assert on the bodies rather than on exit codes.
 /// </remarks>
 [Collection(EnvironmentCollection.Name)]
 public sealed class ProvenanceCommandTests : IDisposable
@@ -208,77 +207,6 @@ public sealed class ProvenanceCommandTests : IDisposable
             "--file", AFile("[]"), "--yes");
 
         Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
-        Assert.Empty(_api.Requests);
-    }
-
-    // ---- transactions reattach -------------------------------------------------------
-
-    private static object Summary(Guid groupId, bool dryRun) => new
-    {
-        groupId,
-        dryRun,
-        examined = 1411,
-        changed = 733,
-        leftWithoutAVersion = 12,
-        byRule = new[]
-        {
-            new
-            {
-                splitRuleId = Guid.NewGuid(),
-                splitRuleName = "Groceries",
-                examined = 900,
-                changed = 500,
-                uncovered = 12
-            }
-        }
-    };
-
-    [Fact]
-    public async Task Reattach_sends_the_group_and_renders_the_breakdown()
-    {
-        var groupId = Guid.NewGuid();
-        _api.Returns("/api/transactions/reattach", Summary(groupId, dryRun: false));
-
-        var result = await Cli.RunAsync(
-            "transactions", "reattach", "--group", groupId.ToString(), "--yes");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-
-        var sent = _api.Requests.Single(request => request.Path == "/api/transactions/reattach");
-
-        Assert.Equal(groupId, sent.Json.GetProperty("groupId").GetGuid());
-        Assert.False(sent.Json.GetProperty("dryRun").GetBoolean());
-
-        Assert.Equal(733, result.Json.GetProperty("changed").GetInt32());
-        Assert.Equal("Groceries", result.Json.GetProperty("byRule")[0].GetProperty("splitRuleName").GetString());
-    }
-
-    /// <summary>
-    /// A dry run is a read and needs no confirmation, which is what makes it the thing to
-    /// reach for first.
-    /// </summary>
-    [Fact]
-    public async Task Reattach_dry_run_goes_through_without_a_confirmation()
-    {
-        var groupId = Guid.NewGuid();
-        _api.Returns("/api/transactions/reattach", Summary(groupId, dryRun: true));
-
-        var result = await Cli.RunAsync(
-            "transactions", "reattach", "--group", groupId.ToString(), "--dry-run");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.True(_api.Requests.Single().Json.GetProperty("dryRun").GetBoolean());
-    }
-
-    [Fact]
-    public async Task Reattach_without_yes_asks_first_and_writes_nothing()
-    {
-        var groupId = Guid.NewGuid();
-
-        var result = await Cli.RunAsync("transactions", "reattach", "--group", groupId.ToString());
-
-        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
-        Assert.Equal("transactions.reattach", result.Json.GetProperty("action").GetString());
         Assert.Empty(_api.Requests);
     }
 

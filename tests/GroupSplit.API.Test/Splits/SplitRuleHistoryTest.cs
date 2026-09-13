@@ -303,11 +303,10 @@ public class SplitRuleHistoryTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// after now is refused rather than forward-dating the version it leaves open.
     /// </summary>
     /// <remarks>
-    /// Two readers disagree the moment it does. A new expense is divided by the version
-    /// nothing has superseded, whatever its date, so it would be billed under a window that
-    /// has not opened; a reattach looks for the window containing the date and would point
-    /// the very same expense at the entry before it. The rule's own history would then say
-    /// one thing and today's spending another.
+    /// A new expense is divided by the version nothing has superseded, whatever its date,
+    /// so a forward-dated last entry is one today's spending is billed under while the
+    /// history says it has not begun. The rule's own account of itself would say one thing
+    /// and its expenses another.
     /// </remarks>
     [Fact]
     public async Task An_entry_that_starts_after_now_is_refused()

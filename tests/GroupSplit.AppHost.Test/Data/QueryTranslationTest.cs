@@ -580,15 +580,10 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
 
         Assert.Contains(versions, version => version is SoleSplitRuleVersion);
 
-        // And the two reads that ask about one kind alone: the versions a hand-over moves,
-        // and the ones a reattach must leave where they are.
+        // And the read that asks about one kind alone: the versions a hand-over moves to
+        // whoever takes a departing member's place.
         await Service<AppDbContext>().Set<SoleSplitRuleVersion>()
             .Where(version => version.SplitRule.Group.Id == group && version.UserId == member.Id)
-            .ToListAsync(Ct);
-
-        await Service<AppDbContext>().Set<SoleSplitRuleVersion>()
-            .Where(version => version.SplitRule.Group.Id == group)
-            .Select(version => version.Id)
             .ToListAsync(Ct);
     }
 

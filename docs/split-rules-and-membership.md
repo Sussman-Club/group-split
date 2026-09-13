@@ -65,19 +65,27 @@ every edit that is not about the money.
 
 A rule imported from somewhere else arrives holding one version, dated whenever the import
 ran, and every expense imported with it points at that one -- so a 2023 grocery bill claims a
-ratio agreed in 2026. Three things put that right, and none of them touches a stored amount:
+ratio agreed in 2026. Two things put that right, and neither touches a stored amount:
 
 | | |
 | --- | --- |
 | `PUT /split-rules/{id}/versions` | States the divisions a rule stood for, oldest first, each with the date it started. Only for a rule that has stood for one division since it was made; the last entry has to be that division, and its row is reused rather than replaced, because recorded expenses already point at it. |
-| `POST /transactions/reattach` | Points every expense in a group at the version whose window contains its date. Writes `SplitRuleVersionId` and nothing else, so the group's balances are identical afterwards. `dryRun` reports without saving. |
-| `PUT /transactions/{id}/division-source` | The same for one expense, stated by hand. Null means the amounts are the expense's own. |
+| `PUT /transactions/{id}/division-source` | What divided one expense, stated by hand. Null means the amounts are the expense's own. |
 
-Provenance only, all three. None of them calls the splitter, and `ExpenseProvenance` -- which
-serves the last two -- does not take it as a dependency, so that is structural rather than a
-promise.
+Provenance only, both. Neither calls the splitter, and `ExpenseProvenance` -- which serves the
+second -- does not take it as a dependency, so that is structural rather than a promise.
 
-None of the three is reachable from the app, and neither is what they write. The app used to
+There was a third, `POST /transactions/reattach`: a pass over a group pointing every expense
+at the version of its category's rule whose window contained its date. It is gone. It found
+the rule through the category's pointer **as the category points now**, so a group that had
+since re-pointed Groceries from an even split to one by income got three years of Groceries
+expenses pointed at versions of a rule that had never divided them -- and the database has no
+way to tell that case from the honest one, because it records which version divided an
+expense and has never recorded which rule a category named in 2023. Writing a history is
+still worth doing: it makes the rule's own account of itself true, and expenses stay where
+they point.
+
+Neither is reachable from the app, and neither is what they write. The app used to
 print what divided an expense above its shares, with a panel behind it for correcting the
 answer, and it resolved the sentence through the category's rule **as the category points
 now** -- so a group that re-pointed Groceries from an even split to one by income had three

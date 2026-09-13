@@ -89,7 +89,6 @@ Expenses and settlements.
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
-| `transactions reattach --group <group-id>` | Point a group's expenses at the version of their rule in force when each was spent. Moves no money. `--dry-run` reports and saves nothing; the real run is exit-4 gated. |
 | `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. |
 
 ### users
@@ -319,11 +318,13 @@ the rule divides today** -- it is the row every recorded expense already points 
 reused rather than replaced. The refusals are `SPLIT_RULE_ALREADY_HAS_HISTORY`,
 `SPLIT_RULE_HISTORY_ENDS_ELSEWHERE` and `SPLIT_RULE_HISTORY_INVALID`.
 
-Then run `transactions reattach --group <group-id>` to point the expenses at the right
-entries. That pass moves no money at all -- only which version each expense names -- so the
-group's balances are identical afterwards. To say it for a single expense instead, use
-`transactions update <id> --divided-by <version-id>` or `--hand-split` (the amounts are the
-expense's own). Those two contradict each other and contradict `--split` and `--redivide`.
+Writing the history changes no expense: each keeps the version it already records, and the
+open one is backdated rather than replaced. To say which version divided a particular
+expense, use `transactions update <id> --divided-by <version-id>` or `--hand-split` (the
+amounts are the expense's own). Those two contradict each other and contradict `--split` and
+`--redivide`. There is no pass that does it for a whole group -- there was, and it guessed
+each expense's rule from its category's *current* pointer, which is wrong for exactly the
+groups that have re-pointed a category since.
 
 Either one alongside an ordinary edit is two requests -- the edit, then the record of what
 divided it -- so a failure says which half landed ("the edit was saved, but recording what
