@@ -730,9 +730,26 @@ bottom:
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00   --item "Steak=22.00@3f25c1a8-...-444455556666"   --item "Risotto=16.50@9ab77d10-...-111122223333"   --item "Wine=18.00@3f25c1a8-...-444455556666,9ab77d10-...-111122223333"
 ```
 
-A line reads `<name>=<price>[x<qty>][/notax][@<who>]`. After the `@` come user ids,
+A line reads `[<id>#]<name>=<price>[x<qty>][/notax][@<who>]`. After the `@` come user ids,
 comma-separated, each optionally `*<weight>` -- so `@alice,bob` is a bottle shared evenly and
 `@alice*2,bob` is one where Alice had twice as much.
+
+### Correcting a bill
+
+`receipts set` saves the bill **whole**, so a line the command does not mention is a line that
+has gone -- and its claims go with it. To fix one price without losing who had what, name the
+stored lines by their ids, which `receipts show` prints:
+
+```bash
+groupsplit receipts show 7c1e...
+groupsplit receipts set 7c1e... \
+  --item "a1b2c3d4-...#Steak=24.00@<ana>" \
+  --item "b2c3d4e5-...#Risotto=16.50@<omar>"
+```
+
+Only text before a `#` that parses as an id is read as one, so a line called `Table #4` is
+still a line called `Table #4`. A line with no id is a new line, which is what writing a bill
+out for the first time looks like.
 
 `/notax` says the bill's tax was not charged on that line, which is what a warehouse receipt
 needs: the groceries are exempt and the clothes are not, and weighing the tax over every line

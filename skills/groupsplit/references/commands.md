@@ -168,8 +168,8 @@ exactly as they are.
 | `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
 | `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. `--bank-row` removes one from an imported row instead. |
 
-A line is `<name>=<price>[x<qty>][/notax][@<who>]`, and `<who>` is comma-separated user ids
-each optionally `*<weight>`:
+A line is `[<id>#]<name>=<price>[x<qty>][/notax][@<who>]`, and `<who>` is comma-separated user
+ids each optionally `*<weight>`:
 
 ```bash
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
@@ -197,6 +197,17 @@ with an even rule instead, not an itemised one.
 `/notax` says the bill's tax was not charged on that line -- a warehouse receipt where the
 groceries are exempt and the clothes are not. Lines are taxable unless they say otherwise, so
 a restaurant bill never mentions it. It reads the same on either side of the `@`.
+
+**`receipts set` saves the bill whole**, so a line you do not mention is a line that has gone,
+and its claims go with it. Correcting one price means naming the stored lines by the ids
+`receipts show` prints:
+
+```bash
+groupsplit receipts set 7c1e... --item "a1b2c3d4-...#Steak=24.00@<ana>" --item "b2c3d4e5-...#Wine=18.00@<ana>,<omar>"
+```
+
+Only text before a `#` that parses as an id is read as one, so `Table #4` is still a name. A
+line with no id is a new line.
 
 **Tax and tip are apportioned in proportion to what each person claimed**, not per head --
 somebody holding a quarter of the food owes a quarter of both. It is one calculation, so

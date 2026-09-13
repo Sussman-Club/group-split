@@ -107,6 +107,61 @@ public sealed class ReceiptCommandTests : IDisposable
         Assert.Equal(Lines[0], first.GetProperty("claims")[0].GetProperty("userId").GetGuid());
     }
 
+    /// <summary>
+    /// A line can name the stored line it is correcting, and that is how claims survive.
+    /// </summary>
+    /// <remarks>
+    /// The API matches lines by the id the client sends back -- a line the request does not
+    /// name is one that has gone, with its claims -- and nothing here ever sent one. So every
+    /// save was a bill the server had never seen: fixing a mistyped price dropped every
+    /// stored line and re-created it unclaimed, the expense stopped being dividable, and
+    /// nothing anywhere said why.
+    /// </remarks>
+    [Fact]
+    public async Task A_line_can_say_which_stored_line_it_is()
+    {
+        _api.Returns($"/api/inbox/{RowId}/receipt", Bill());
+
+        var line = Guid.Parse("a1b2c3d4-0000-4000-8000-00000000000a");
+
+        var result = await Cli.RunAsync(
+            "receipts", "set", RowId.ToString(), "--bank-row",
+            "--item", $"{line}#Wine=19.00",
+            "--item", "Jacket=34.99");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var items = Sent().GetProperty("items");
+
+        Assert.Equal(line, items[0].GetProperty("id").GetGuid());
+        Assert.Equal("Wine", items[0].GetProperty("name").GetString());
+
+        // And a line with no id is a new line, which is what writing a bill out looks like.
+        Assert.True(items[1].GetProperty("id").ValueKind is System.Text.Json.JsonValueKind.Null
+                    || !items[1].TryGetProperty("id", out _));
+    }
+
+    /// <summary>
+    /// A name that merely contains a '#' is still a name.
+    /// </summary>
+    /// <remarks>
+    /// Only text that parses as a guid is read as one, so a line called "Table #4" is a line
+    /// called "Table #4" and not a malformed id.
+    /// </remarks>
+    [Fact]
+    public async Task A_name_with_a_hash_in_it_is_not_mistaken_for_an_id()
+    {
+        _api.Returns($"/api/inbox/{RowId}/receipt", Bill());
+
+        var result = await Cli.RunAsync(
+            "receipts", "set", RowId.ToString(), "--bank-row",
+            "--item", "Table #4=19.00");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        Assert.Equal("Table #4", Sent().GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
     /// <summary>A flag nobody defined is a typo, and is refused before anything is sent.</summary>
     [Fact]
     public async Task A_flag_that_is_not_one_is_refused_without_asking_the_server()

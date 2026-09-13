@@ -17,7 +17,15 @@ namespace GroupSplit.Cli.Infrastructure;
 /// <item><c>Wine=18.00@&lt;id&gt;,&lt;id&gt;</c> -- shared evenly between two.</item>
 /// <item><c>Wine=18.00@&lt;id&gt;*2,&lt;id&gt;</c> -- shared, one of them had twice as much.</item>
 /// <item><c>Bananas=1.99/notax</c> -- the bill's tax was not charged on this line.</item>
+/// <item><c>&lt;id&gt;#Wine=19.00</c> -- a line already on the bill, corrected.</item>
 /// </list>
+/// <para>
+/// The id is what separates "the wine cost 19.00 after all" from "there was no wine, and
+/// here is a different line". A bill is saved whole, so a line the request does not name is
+/// one that has gone -- and without an id every line of a re-sent bill was a new line, which
+/// meant correcting a price threw away who had what on every other line of the receipt.
+/// <c>receipts show</c> prints the ids.
+/// </para>
 /// <para>
 /// Claimants are the only thing that says how a line divides. A line could once be marked as
 /// the table's without naming anybody; that is gone, because dividing something between
@@ -64,6 +72,26 @@ public static class ReceiptItems
 
         if (name.Length == 0)
             throw Invalid(option, value, "the part before '=' is empty");
+
+        // Which stored line this is, for a bill being corrected rather than written. Without
+        // it every save was a bill the server had never seen: the API matches lines by the id
+        // the client sends back, and nothing here ever sent one -- so every stored line was
+        // dropped and re-created, and fixing one mistyped price silently un-claimed the whole
+        // receipt. The expense then could not be divided, and nothing said why.
+        //
+        // Read only when the text before '#' is a guid, so a line genuinely called
+        // "Table #4" is still a line called "Table #4".
+        Guid? id = null;
+
+        if (name.IndexOf('#') is var hash and > 0
+            && Guid.TryParse(name[..hash].Trim(), out var stored))
+        {
+            id = stored;
+            name = name[(hash + 1)..].Trim();
+
+            if (name.Length == 0)
+                throw Invalid(option, value, "there is an id but no name after it");
+        }
 
         var rest = value[(separator + 1)..].Trim();
         var claims = Array.Empty<ReceiptClaimInput>();
@@ -117,6 +145,7 @@ public static class ReceiptItems
 
         return new ReceiptItemInput
         {
+            Id = id,
             Name = name,
             TotalPrice = totalPrice,
             Quantity = quantity,
