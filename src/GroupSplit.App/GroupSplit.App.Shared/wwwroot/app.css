@@ -4574,6 +4574,13 @@ html:not([data-gs-ready]) .gs-group-card {
     background: var(--gs-surface-3);
 }
 
+/* Inset, because .gs-bill clips its children -- an outline drawn outside the first and last
+   rows would be cut in half by the container's own rounded corner. */
+.gs-bill-line:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: -2px;
+}
+
 .gs-bill-line.is-picked {
     background: var(--gs-teal-soft);
     box-shadow: inset 3px 0 0 var(--gs-teal);
@@ -4684,6 +4691,11 @@ html:not([data-gs-ready]) .gs-group-card {
     color: var(--gs-on-accent);
 }
 
+.gs-send:focus-visible {
+    outline: 2px solid var(--tone, var(--gs-part-none));
+    outline-offset: 2px;
+}
+
 .gs-send.is-none {
     border-style: dashed;
 }
@@ -4775,4 +4787,268 @@ html:not([data-gs-ready]) .gs-group-card {
 
 .gs-split-verdict.is-short {
     color: var(--gs-danger);
+}
+
+
+/* ----------------------------------------------------------- a bill, read -- */
+
+/*
+    The paper itself, drawn as paper.
+
+    A receipt is an object people have read thousands of, and its conventions are load-bearing:
+    the narrow column, the fixed pitch that lines the prices up, the leader dots that carry the
+    eye across, the ruled-off totals, the letter in the margin against the lines tax was not
+    charged on. Borrowing them means the shape of the thing explains itself.
+
+    This is the one place in the app that leaves the app's own voice, and it is deliberate:
+    everything around it stays quiet so that the slip reads as the document it is quoting.
+*/
+
+:root {
+    --gs-paper: #fdfbf4;
+    --gs-paper-ink: #2a2620;
+    --gs-paper-faint: #b9b0a0;
+    --gs-paper-rule: #d8d0be;
+}
+
+:root[data-theme="dark"] {
+    --gs-paper: #242019;
+    --gs-paper-ink: #eae3d4;
+    --gs-paper-faint: #8b8271;
+    --gs-paper-rule: #403927;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --gs-paper: #242019;
+        --gs-paper-ink: #eae3d4;
+        --gs-paper-faint: #8b8271;
+        --gs-paper-rule: #403927;
+    }
+}
+
+.gs-slip {
+    --gs-slip-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo,
+        Consolas, "Liberation Mono", monospace;
+
+    max-width: 27rem;
+    margin: 0 auto;
+    color: var(--gs-paper-ink);
+    font-family: var(--gs-slip-mono);
+    font-size: .8125rem;
+    line-height: 1.5;
+    filter: drop-shadow(0 2px 10px rgb(42 36 24 / 12%));
+}
+
+/* Torn top and bottom, which is what says "this is a piece of paper" before a word is read.
+   A scalloped mask rather than an image, so it follows the width and costs no request. */
+.gs-slip-edge {
+    height: 8px;
+    background: var(--gs-paper);
+    -webkit-mask-image: radial-gradient(circle at 50% 0, transparent 5px, #000 5.5px);
+    mask-image: radial-gradient(circle at 50% 0, transparent 5px, #000 5.5px);
+    -webkit-mask-size: 12px 8px;
+    mask-size: 12px 8px;
+    -webkit-mask-repeat: repeat-x;
+    mask-repeat: repeat-x;
+}
+
+.gs-slip-edge.is-bottom {
+    transform: rotate(180deg);
+}
+
+.gs-slip-body {
+    padding: 4px 18px 10px;
+    background: var(--gs-paper);
+}
+
+.gs-slip-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 0 8px;
+    text-align: center;
+}
+
+/* Caps because a till prints caps -- the subject's own vernacular, not a label style. */
+.gs-slip-merchant {
+    font-weight: 700;
+    font-size: .9375rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.gs-slip-where {
+    color: var(--gs-paper-faint);
+    font-size: .75rem;
+}
+
+.gs-slip-rule {
+    border-top: 1px dashed var(--gs-paper-rule);
+}
+
+.gs-slip-lines {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+}
+
+/* Four columns and a second row for the names: the item, the leader that carries the eye,
+   the margin letter, and the price. The names sit under the item, indented past the
+   quantity, the way a till prints a modifier under its line. */
+.gs-slip-line {
+    display: grid;
+    grid-template-columns: auto minmax(1ch, 1fr) 1.5ch auto;
+    align-items: baseline;
+    column-gap: 4px;
+}
+
+.gs-slip-line + .gs-slip-line {
+    margin-top: 5px;
+}
+
+.gs-slip-item {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gs-slip-qty {
+    color: var(--gs-paper-faint);
+}
+
+.gs-slip-qty::after {
+    content: "\00d7";
+}
+
+.gs-slip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* On the baseline, where a printed leader sits. The grid aligns to baseline already, and an
+   empty box takes its bottom edge as its baseline -- so the dots land under the text rather
+   than striking through it, which is what centring them did. */
+.gs-slip-leader {
+    border-bottom: 1px dotted var(--gs-paper-rule);
+}
+
+.gs-slip-mark {
+    color: var(--gs-paper-faint);
+    text-align: center;
+}
+
+.gs-slip-price {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.gs-slip-who {
+    grid-column: 1 / -1;
+    color: var(--gs-paper-faint);
+    font-size: .6875rem;
+}
+
+/* The one line worth marking, and marked in the paper's own terms: a pencil note, not a
+   coloured banner. A banner would fight the document it is sitting inside. */
+.gs-slip-line.is-unclaimed .gs-slip-who {
+    color: var(--gs-clay-deep);
+    font-style: italic;
+}
+
+:root[data-theme="dark"] .gs-slip-line.is-unclaimed .gs-slip-who {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-slip-line.is-unclaimed .gs-slip-who {
+        color: var(--gs-clay);
+    }
+}
+
+.gs-slip-totals {
+    margin: 0;
+    padding-top: 8px;
+}
+
+.gs-slip-totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gs-slip-totals dt,
+.gs-slip-totals dd {
+    margin: 0;
+}
+
+.gs-slip-totals dd {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Double-ruled, which is how a slip says "this is the figure that was charged". */
+.gs-slip-totals > div.is-total {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 3px double var(--gs-paper-rule);
+    font-weight: 700;
+}
+
+.gs-slip-foot {
+    margin: 10px 0 0;
+    color: var(--gs-paper-faint);
+    font-size: .6875rem;
+}
+
+.gs-slip-foot.is-unclaimed {
+    color: var(--gs-clay-deep);
+}
+
+:root[data-theme="dark"] .gs-slip-foot.is-unclaimed {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-slip-foot.is-unclaimed {
+        color: var(--gs-clay);
+    }
+}
+
+/* ---- the way in, on an inbox row ---- */
+
+/*
+    Under the row, like the duplicate suggestions and for the same reason: something known
+    about this charge that the person should see before deciding, with the answers it
+    suggests attached. It was a tag and a menu item three taps deep, which is how a feature
+    ships and is never found.
+*/
+.gs-bill-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: -2px 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--gs-line);
+    border-left: 3px solid var(--gs-teal);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-teal-soft);
+    font-size: .8125rem;
+}
+
+.gs-bill-strip .mud-icon-root {
+    color: var(--gs-teal-deep);
+    flex: 0 0 auto;
+}
+
+:root[data-theme="dark"] .gs-bill-strip .mud-icon-root {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-bill-strip .mud-icon-root {
+        color: var(--gs-teal-bright);
+    }
 }

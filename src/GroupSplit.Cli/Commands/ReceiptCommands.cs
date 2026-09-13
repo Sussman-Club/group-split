@@ -463,8 +463,8 @@ public static class ReceiptCommands
         ? "[yellow]nobody[/]"
         : Markup.Escape(string.Join(", ", item.Claims.Select(claim =>
             claim.Weight == 1
-                ? $"{claim.UserId} ({claim.Share})"
-                : $"{claim.UserId}*{claim.Weight} ({claim.Share})")));
+                ? $"{claim.UserName} ({claim.Share})"
+                : $"{claim.UserName}*{claim.Weight} ({claim.Share})")));
 
     private static IRenderable Render(ReceiptResponse receipt)
     {

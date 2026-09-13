@@ -76,6 +76,7 @@ public static class ReceiptExtensions
 
         return item.Claims.Select(claim => new ReceiptClaimResponse(
             claim.UserId,
+            People.Display(claim.User),
             claim.Weight,
             totalWeight == 0
                 ? 0m

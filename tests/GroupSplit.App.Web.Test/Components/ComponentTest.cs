@@ -1,6 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
@@ -56,6 +57,11 @@ public abstract class ComponentTest : BunitContext
         Services.AddSingleton(new LocalClock(Mock.Of<IJSRuntime>()));
 
         Services.AddSingleton(Mock.Of<IAuthService>());
+
+        // Who is reading, which several screens ask so they can mark the reader's own row.
+        // Answering "nobody" is a real state -- a page renders before the token is read --
+        // and a test that cares about the highlight registers its own.
+        Services.AddSingleton(Mock.Of<IUserLogin>());
 
         // The expense dialog reads the bill behind an expense, and nearly none has one. A
         // mock answering "no bill" keeps that read from being something every test about

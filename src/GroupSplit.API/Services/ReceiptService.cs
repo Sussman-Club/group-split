@@ -703,7 +703,11 @@ public class ReceiptService(
     private IQueryable<Receipt> Loaded() =>
         dbContext.Set<Receipt>()
             .Include(receipt => receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id))
-            .ThenInclude(item => item.Claims);
+            .ThenInclude(item => item.Claims)
+            // The people, not only their ids. A bill is read where there is no roster to
+            // resolve them against -- an imported charge belongs to no group -- so a screen
+            // without this prints a column of guids where the names should be.
+            .ThenInclude(claim => claim.User);
 
     /// <summary>
     /// The expense, if the caller may see it: one in a group they are in, or one of their

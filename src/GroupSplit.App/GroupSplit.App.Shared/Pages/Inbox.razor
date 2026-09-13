@@ -3,12 +3,14 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Banking
 @using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.Shared
 @inject IInboxStateService State
 @inject IBankCommands Bank
 @inject IDialogService DialogService
 @inject LocalClock Clock
 @inject ISnackbar Snackbar
+@inject IUserLogin UserLogin
 @implements IDisposable
 
 @*
@@ -158,14 +160,6 @@
                                 {
                                     <span class="gs-tag">Withdrawn by the bank</span>
                                 }
-                                @* Somebody typed the bill behind this charge, which is the
-                                   one thing on a row that says it can be broken up. Without
-                                   it the answer would have to be offered on every row and
-                                   refused on nearly all of them. *@
-                                @if (row.BillLineCount > 0)
-                                {
-                                    <span class="gs-tag neutral">@row.BillLineCount-line bill</span>
-                                }
                             </div>
                             <div class="meta">
                                 @row.AccountName · @row.SpentOn.ToShortDateString()
@@ -224,15 +218,6 @@
                                                  TransformOrigin="Origin.TopRight"
                                                  Disabled="@(_busy == row.Id)"
                                                  aria-label="@($"Other answers for {row.Title}")">
-                                            @* First, and only where there is a bill to
-                                               divide by. The row keeps its one primary
-                                               button -- most charges are one purchase, and
-                                               a second filled button on every row is what
-                                               this menu exists to undo. *@
-                                            @if (row.CanSplit)
-                                            {
-                                                <MudMenuItem OnClick="@(() => SplitAsync(row))">Split by the bill…</MudMenuItem>
-                                            }
                                             <MudMenuItem OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudMenuItem>
                                             <MudMenuItem OnClick="@(() => IgnoreAsync(row))">Ignore</MudMenuItem>
                                         </MudMenu>
@@ -247,6 +232,41 @@
                             }
                         </div>
                     </div>
+
+                    @*
+                        The bill behind this charge, where somebody typed one.
+
+                        On the row rather than behind the overflow menu, because it is the
+                        one thing on a charge that changes what the answer should be: a
+                        receipt covering two purchases files wrong as a single expense, and
+                        nothing about that is visible afterwards. It was a tag and a buried
+                        menu item, which is how a feature ships and is never found.
+
+                        Not a competing primary button either -- it sits under the row like
+                        the duplicate suggestions do, because it is the same kind of thing:
+                        something known about this charge that the person should see before
+                        deciding, with the answers it suggests attached.
+                    *@
+                    @if (row.Status == InboxStatus.New && row.BillLineCount > 0)
+                    {
+                        <div class="gs-bill-strip">
+                            <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
+
+                            @* The count, and nothing else. What can be done about it is on
+                               the buttons, which say it better than a clause would. *@
+                            <span>@row.BillLineCount @(row.BillLineCount == 1 ? "line" : "lines") on this bill</span>
+
+                            <span style="flex: 1 1 auto"></span>
+
+                            @* One answer here, and it is the one that needs no decision:
+                               look at it. What to do about the charge is a choice best made
+                               having read the paper, so both of those are on the bill itself
+                               rather than guessed at from a row. *@
+                            <MudButton Variant="Variant.Text" Size="Size.Small"
+                                       Disabled="@(_busy == row.Id)"
+                                       OnClick="@(() => ShowBillAsync(row))">See the bill</MudButton>
+                        </div>
+                    }
 
                     @* What is already in the ledger that this could be. Said on the row
                        itself, before anything is filed: a duplicate found afterwards is a
@@ -643,6 +663,39 @@
 
         if (answer.Request is { } request)
             await FileAsync(row, request, answer.Destination);
+    }
+
+    /// <summary>The reader, so their own claims on a bill read as "You".</summary>
+    private Guid? Me => UserLogin.User?.Id;
+
+    /// <summary>
+    /// Shows the bill behind a charge, and does whatever reading it made somebody decide.
+    /// </summary>
+    /// <remarks>
+    /// The answers are handed back rather than taken there, so that filing and splitting each
+    /// happen in one place however somebody arrived at them.
+    /// </remarks>
+    private async Task ShowBillAsync(BankTransactionResponse row)
+    {
+        var parameters = new DialogParameters<BankRowBillDialog>
+        {
+            { dialog => dialog.Row, row },
+            { dialog => dialog.Me, Me }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var reference = await DialogService.ShowAsync<BankRowBillDialog>("The bill", parameters, options);
+
+        switch (await reference.GetReturnValueAsync<BankRowBillDialog.Answer?>())
+        {
+            case BankRowBillDialog.Answer.Split:
+                await SplitAsync(row);
+                break;
+
+            case BankRowBillDialog.Answer.File:
+                await AddToGroupAsync(row);
+                break;
+        }
     }
 
     /// <summary>

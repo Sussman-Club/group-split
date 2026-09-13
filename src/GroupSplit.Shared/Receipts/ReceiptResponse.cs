@@ -56,6 +56,11 @@ public sealed record ReceiptItemResponse(
 /// <summary>
 /// One person's part of one line.
 /// </summary>
+/// <param name="UserName">
+/// Who they are, so a client can print a name. Carried here rather than looked up because a
+/// bill is read in places that have no roster to look one up in: a charge nobody has filed
+/// belongs to no group, and every screen showing one was printing raw ids.
+/// </param>
 /// <param name="Share">
 /// What their part of this line comes to, before tax and tip -- the line's price times their
 /// weight over the weights on it.
@@ -69,6 +74,7 @@ public sealed record ReceiptItemResponse(
 /// </remarks>
 public sealed record ReceiptClaimResponse(
     Guid UserId,
+    string UserName,
     int Weight,
     decimal Share);
 

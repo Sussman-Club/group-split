@@ -1,0 +1,180 @@
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+@*
+    The bill, drawn as the bill.
+
+    It was a list of rows in the app's own voice, which is the right treatment for the split
+    underneath an expense and the wrong one for this: a receipt is a physical object people
+    have read thousands of, and every convention it uses -- the narrow column, the fixed
+    pitch, the leader dots, the ruled-off totals, the letter in the margin against the lines
+    tax was not charged on -- is doing work. Set as a slip, "which line is which" needs no
+    explaining.
+
+    One component for the two places a bill is read: under the expense it divided, and on the
+    imported charge it was typed against before anybody filed it. They are the same piece of
+    paper, and were drawn twice -- so a line said "shared by everyone" in one and nothing at
+    all in the other, on the same receipt.
+
+    Reading only. Who had what is set from the line itself, one level up.
+*@
+
+<div class="gs-slip">
+    <div class="gs-slip-edge is-top" aria-hidden="true"></div>
+
+    <div class="gs-slip-body">
+        @* Caps because a till prints caps. Not the app's eyebrow label in another guise --
+           this is the merchant line off the top of the paper, and it is the one place on
+           the slip that names what you are looking at. *@
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <div class="gs-slip-head">
+                <span class="gs-slip-merchant">@Title</span>
+                @if (!string.IsNullOrWhiteSpace(Where))
+                {
+                    <span class="gs-slip-where">@Where</span>
+                }
+            </div>
+
+            @* Under the head and nowhere else. Without one there is nothing above it to
+               divide from, and the rule lands against whatever the caller put the slip
+               below -- which is where the two stacked dividers came from. *@
+            <div class="gs-slip-rule" aria-hidden="true"></div>
+        }
+
+        <ul class="gs-slip-lines">
+            @foreach (var line in Receipt.Items)
+            {
+                <li class="gs-slip-line @(line.Claims.Count == 0 ? "is-unclaimed" : "")" @key="line.Id">
+                    <span class="gs-slip-item">
+                        @if (line.Quantity != 1)
+                        {
+                            <span class="gs-slip-qty">@Trimmed(line.Quantity)</span>
+                        }
+                        <span class="gs-slip-name">@line.Name</span>
+                    </span>
+
+                    <span class="gs-slip-leader" aria-hidden="true"></span>
+
+                    @* The letter in the margin, which is how a real bill says the tax at the
+                       bottom was not charged on this line. Only where the bill charges tax at
+                       all: a column of markers on a receipt with no tax explains nothing. *@
+                    <span class="gs-slip-mark">@(Exempt(line) ? "N" : "")</span>
+
+                    <span class="gs-slip-price">@line.TotalPrice.ToMoney()</span>
+
+                    <span class="gs-slip-who">@Who(line)</span>
+                </li>
+            }
+        </ul>
+
+        <div class="gs-slip-rule" aria-hidden="true"></div>
+
+        <dl class="gs-slip-totals">
+            <div>
+                <dt>Items</dt>
+                <dd>@Receipt.Subtotal.ToMoney()</dd>
+            </div>
+
+            @* Tax and tip only where there are any: a supermarket receipt has neither, and
+               two rows of 0.00 say nothing. *@
+            @if (Receipt.Tax != 0)
+            {
+                <div>
+                    <dt>Tax</dt>
+                    <dd>@Receipt.Tax.ToMoney()</dd>
+                </div>
+            }
+
+            @if (Receipt.Tip != 0)
+            {
+                <div>
+                    <dt>Tip</dt>
+                    <dd>@Receipt.Tip.ToMoney()</dd>
+                </div>
+            }
+
+            <div class="is-total">
+                <dt>Total</dt>
+                <dd>@Receipt.Total.ToMoney()</dd>
+            </div>
+        </dl>
+
+        @if (Receipt.Items.Any(Exempt))
+        {
+            <p class="gs-slip-foot">N — no tax charged on this line</p>
+        }
+
+        @if (Unclaimed > 0)
+        {
+            @* The count, which is the one thing you cannot get by looking when the bill runs
+               to twenty lines. The lines themselves already say which. *@
+            <p class="gs-slip-foot is-unclaimed">
+                @Unclaimed of @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "line" : "lines") @(Unclaimed == 1 ? "has" : "have") nobody on @(Unclaimed == 1 ? "it" : "them").
+                @Hint
+            </p>
+        }
+    </div>
+
+    <div class="gs-slip-edge is-bottom" aria-hidden="true"></div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ReceiptResponse Receipt { get; set; } = null!;
+
+    /// <summary>What is printed across the top of the paper: where the money went.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>The line under it -- which card, which day -- where the caller knows.</summary>
+    [Parameter] public string? Where { get; set; }
+
+    /// <summary>The reader, so their own claims read as "You" rather than as their name.</summary>
+    [Parameter] public Guid? Me { get; set; }
+
+    /// <summary>What the unclaimed lines mean here, in the caller's own words.</summary>
+    /// <remarks>
+    /// It differs by where the bill is, and the difference is the whole point: on an expense
+    /// an unclaimed line is what stops it being divided, and on a charge nobody has filed it
+    /// is nothing at all yet.
+    /// </remarks>
+    [Parameter] public string? Hint { get; set; }
+
+    private int Unclaimed => Receipt.Items.Count(line => line.Claims.Count == 0);
+
+    private bool Exempt(ReceiptItemResponse line) => !line.IsTaxable && Receipt.Tax != 0;
+
+    /// <summary>
+    /// Who had one line, by name.
+    /// </summary>
+    /// <remarks>
+    /// A weight is shown only when it is not one. Two names side by side is a line two people
+    /// shared; a weight against one of them says they had more of it, and printing it against
+    /// every ordinary claim would bury that in punctuation.
+    /// </remarks>
+    private string Who(ReceiptItemResponse line)
+    {
+        if (line.Claims.Count == 0)
+            return "nobody yet";
+
+        return string.Join(", ", line.Claims.Select(claim =>
+        {
+            // The name off the claim itself. It used to be looked up in the expense's splits
+            // and fall back to eight characters of a guid -- which is what every bill on an
+            // imported charge got, because a charge nobody has filed has no splits to look
+            // in and no group to ask.
+            var name = claim.UserId == Me ? "You" : claim.UserName;
+
+            return claim.Weight == 1 ? name : $"{name} ×{claim.Weight}";
+        }));
+    }
+
+    /// <summary>
+    /// A quantity without its trailing zeros: a bill says "2", not "2.000", and says
+    /// "0.25" when that is what was weighed.
+    /// </summary>
+    private static string Trimmed(decimal quantity) =>
+        quantity == decimal.Truncate(quantity)
+            ? decimal.Truncate(quantity).ToString()
+            : quantity.ToString("0.###");
+}

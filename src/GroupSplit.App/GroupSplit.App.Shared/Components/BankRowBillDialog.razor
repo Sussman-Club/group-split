@@ -1,0 +1,112 @@
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+@inject IReceiptCommands Receipts
+
+@*
+    The bill behind an imported charge, before anybody has filed it.
+
+    There was no way to read one at all: the lines were typed from the CLI, and the app could
+    only show a bill once it belonged to an expense -- so the one moment the paper is worth
+    checking, before deciding what the charge was, was the one moment it could not be seen.
+
+    Reading only, with the two answers the bill itself suggests: file it whole, or break it up
+    into the purchases it turns out to be. Both are the inbox's own actions; this hands them
+    back rather than doing them, so there is one place each of them happens.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <div class="gs-dialog-head">
+            <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap; min-width: 0">
+                <MerchantMark MerchantName="@Row.Title" MerchantLogoUrl="@Row.Mark" />
+                <div style="min-width: 0">
+                    <div class="gs-eyebrow">@Where</div>
+                    <h2 class="gs-dialog-title">@Row.Title</h2>
+                </div>
+            </div>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_bill is null)
+        {
+            <div class="gs-empty" style="padding: 32px">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                @* Nothing is owed yet -- this charge is nobody's expense. So the line says
+                   what claims are for here, rather than pointing at a refusal that only an
+                   expense's bill is heading towards. *@
+                <BillSheet Receipt="@_bill" Me="@Me" Title="@Row.Title" Where="@Where"
+                           Hint="You only need to say who had what if you divide this by the bill." />
+            </MudStack>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+
+        @if (_bill is not null)
+        {
+            @* The two answers a bill suggests, in the order the charge usually wants them:
+               most bills are one purchase, and splitting is the exception that this dialog
+               happens to be the best place to notice. *@
+            <MudButton Variant="Variant.Text"
+                       OnClick="@(() => MudDialog.Close(DialogResult.Ok(Answer.File)))">
+                Add to a group
+            </MudButton>
+
+            @if (Row.CanSplit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                           OnClick="@(() => MudDialog.Close(DialogResult.Ok(Answer.Split)))">
+                    Split into parts
+                </MudButton>
+            }
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>What the reader decided to do about the charge, if anything.</summary>
+    public enum Answer
+    {
+        File,
+        Split
+    }
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
+
+    /// <summary>The reader, so their own claims read as "You".</summary>
+    [Parameter] public Guid? Me { get; set; }
+
+    private ReceiptResponse? _bill;
+
+    private string Where
+    {
+        get
+        {
+            var parts = new[] { Row.AccountName, Row.SpentOn.ToShortDateString() }
+                .Where(part => !string.IsNullOrWhiteSpace(part));
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _bill = await Receipts.ForBankRowAsync(Row.Id);
+
+        // Only opened from a row the listing said has one, so a null here is a bill that went
+        // away between the list and the click. Closing says that more honestly than an empty
+        // sheet would.
+        if (_bill is null)
+            MudDialog.Cancel();
+    }
+}
