@@ -619,7 +619,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // counted, and 0.250 kg is an ordinary line on a bill.
             entity.Property(item => item.Quantity).IsRequired().HasPrecision(18, 3);
 
-            entity.Property(item => item.IsTaxable).IsRequired().HasDefaultValue(true);
+            // What of the bill's tax this line carried, defaulting to none -- a restaurant
+            // under VAT charges no tax on top at all, and every line of one is zero.
+            entity.Property(item => item.TaxAmount)
+                .IsRequired()
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
 
             // Where the line sits on the paper. Never searched on and always read as part of
             // the whole bill, so it needs no index of its own -- the lines come back with

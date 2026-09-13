@@ -16,7 +16,8 @@ namespace GroupSplit.Cli.Infrastructure;
 /// <item><c>Wine=18.00@&lt;id&gt;</c> -- one person had it.</item>
 /// <item><c>Wine=18.00@&lt;id&gt;,&lt;id&gt;</c> -- shared evenly between two.</item>
 /// <item><c>Wine=18.00@&lt;id&gt;*2,&lt;id&gt;</c> -- shared, one of them had twice as much.</item>
-/// <item><c>Bananas=1.99/notax</c> -- the bill's tax was not charged on this line.</item>
+/// <item><c>Jacket=34.99/tax8.05</c> -- 8.05 of the bill's tax was charged on this line.</item>
+/// <item><c>Bananas=1.99/notax</c> -- none of it was, which is also the default.</item>
 /// <item><c>&lt;id&gt;#Wine=19.00</c> -- a line already on the bill, corrected.</item>
 /// </list>
 /// <para>
@@ -33,11 +34,15 @@ namespace GroupSplit.Cli.Infrastructure;
 /// an even rule instead.
 /// </para>
 /// <para>
-/// <c>/notax</c> is how a warehouse bill says its groceries were exempt and its clothes were
-/// not. A flag rather than a rate, because a flag is what the paper gives you: one tax total
-/// at the bottom and a letter beside the lines it was charged on. Lines are taxable unless
-/// they say otherwise, which is what a restaurant bill wants and what every line typed before
-/// this existed meant.
+/// The tax is written per line, as the amount charged on it, which is what the till prints.
+/// It used to be a flag, and the bill's single tax total was then weighed over the flagged
+/// lines by price -- exact only where every taxed line carries one rate, and wrong by euros on
+/// a supermarket receipt mixing 6% food with 23% household goods. The amounts have to come to
+/// the receipt's <c>--tax</c>, which the server checks.
+/// </para>
+/// <para>
+/// A line carries no tax unless it says so, which is what a restaurant bill under VAT wants:
+/// the price includes the tax, the bill charges none on top, and no line needs marking.
 /// </para>
 /// <para>
 /// Refused here rather than sent, for the reason <see cref="Pairs"/> gives: these are the
@@ -95,7 +100,7 @@ public static class ReceiptItems
 
         var rest = value[(separator + 1)..].Trim();
         var claims = Array.Empty<ReceiptClaimInput>();
-        var taxable = true;
+        var tax = 0m;
 
         // Lifted out before anything else is read, and spliced rather than truncated, so it
         // can be written on either side of the claimants -- "1.99/notax@<id>" and
@@ -106,16 +111,35 @@ public static class ReceiptItems
             var ends = after.IndexOf('@');
             var written = (ends >= 0 ? after[..ends] : after).Trim();
 
-            taxable = written.ToLowerInvariant() switch
+            var flag = written.ToLowerInvariant();
+
+            if (flag == "notax")
             {
-                "notax" => false,
-                // Accepted as well as refused, so a line can say outright that it was taxed
-                // -- which is what somebody transcribing a bill will want when the exempt
-                // ones are the majority and the taxed ones are worth marking.
-                "tax" => true,
-                _ => throw Invalid(option, value,
-                    $"'{written}' is not a flag; the only ones are 'notax' and 'tax'")
-            };
+                // Still accepted and still true: this line carried none of the bill's tax. It
+                // is now also the default, so it says nothing a bare line does not -- worth
+                // keeping, because on a warehouse bill the exempt lines are exactly the ones
+                // somebody is deliberately marking.
+                tax = 0m;
+            }
+            else if (flag.StartsWith("tax", StringComparison.Ordinal))
+            {
+                var amount = flag[3..].Trim();
+
+                if (amount.Length == 0)
+                {
+                    throw Invalid(option, value,
+                        "'/tax' needs the amount charged on this line, as in '/tax8.05'. A " +
+                        "bill can charge two rates, so which lines were taxed no longer says " +
+                        "how much each of them carried");
+                }
+
+                tax = Number(option, value, amount, "a tax amount");
+            }
+            else
+            {
+                throw Invalid(option, value,
+                    $"'{written}' is not a flag; the only ones are 'notax' and 'tax<amount>'");
+            }
 
             rest = (rest[..slash] + (ends >= 0 ? after[ends..] : string.Empty)).Trim();
         }
@@ -149,7 +173,7 @@ public static class ReceiptItems
             Name = name,
             TotalPrice = totalPrice,
             Quantity = quantity,
-            IsTaxable = taxable,
+            TaxAmount = tax,
             // What one of them cost, which is the line divided by how many -- and the line
             // itself when that is one, which is nearly always. Rounded because it is shown
             // and never divided by: the division reads TotalPrice, exactly as the bill does.

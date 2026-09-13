@@ -72,8 +72,8 @@ public class BankConnectionSeederTest
 
         var bill = Assert.Single(Tracked<Receipt>(db));
 
-        Assert.False(bill.Items.Single(line => line.Name == "Rotisserie chicken").IsTaxable);
-        Assert.True(bill.Items.Single(line => line.Name == "Fleece jacket").IsTaxable);
+        Assert.Equal(0m, bill.Items.Single(line => line.Name == "Rotisserie chicken").TaxAmount);
+        Assert.Equal(8.05m, bill.Items.Single(line => line.Name == "Fleece jacket").TaxAmount);
     }
 
     /// <summary>
@@ -152,9 +152,9 @@ public class BankConnectionSeederTest
         Tax = 19.55m,
         Items =
         [
-            new ReceiptItemSeedDto { Name = "Rotisserie chicken", Price = 53.54m, Taxable = false },
-            new ReceiptItemSeedDto { Name = "Fleece jacket", Price = 34.99m },
-            new ReceiptItemSeedDto { Name = "Running shoes", Price = 49.99m }
+            new ReceiptItemSeedDto { Name = "Rotisserie chicken", Price = 53.54m },
+            new ReceiptItemSeedDto { Name = "Fleece jacket", Price = 34.99m, Tax = 8.05m },
+            new ReceiptItemSeedDto { Name = "Running shoes", Price = 49.99m, Tax = 11.50m }
         ]
     };
 
@@ -172,7 +172,7 @@ public class BankConnectionSeederTest
                 bill.Items[0],
                 new ReceiptItemSeedDto
                 {
-                    Name = "Fleece jacket", Price = 34.99m,
+                    Name = "Fleece jacket", Price = 34.99m, Tax = 8.05m,
                     Had = new Dictionary<Guid, int> { [Guid.Parse(Anabel)] = 1 }
                 },
                 bill.Items[2]

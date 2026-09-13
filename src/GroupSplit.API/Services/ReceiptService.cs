@@ -689,7 +689,7 @@ public class ReceiptService(
 
             item.UnitPrice = line.UnitPrice;
             item.Quantity = line.Quantity;
-            item.IsTaxable = line.IsTaxable;
+            item.TaxAmount = line.TaxAmount;
 
             // Which purchase the line is part of. Stated by the caller only when the whole
             // bill is one expense's; a bill typed against a bank row leaves it open until

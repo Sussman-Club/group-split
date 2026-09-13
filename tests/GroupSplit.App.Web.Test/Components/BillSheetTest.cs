@@ -235,8 +235,8 @@ public class BillSheetTest : ComponentTest
     {
         var receipt = Receipt(
             dividesItsExpense: true, tax: 4.00m, tip: 6.00m,
-            Line("Rotisserie chicken", 8.99m, taxable: false),
-            Line("Fleece jacket", 34.99m));
+            Line("Rotisserie chicken", 8.99m),
+            Line("Fleece jacket", 34.99m, tax: 4.00m));
 
         var page = Render<BillSheet>(parameters => parameters
             .Add(sheet => sheet.Receipt, receipt)
@@ -343,14 +343,14 @@ public class BillSheetTest : ComponentTest
 
     private static ReceiptItemResponse Line(
         string name, decimal price,
-        bool claimed = true, decimal quantity = 1, bool taxable = true) =>
+        bool claimed = true, decimal quantity = 1, decimal tax = 0m) =>
         new(
             Guid.NewGuid(),
             name,
             UnitPrice: decimal.Round(price / quantity, 2),
             Quantity: quantity,
             TotalPrice: price,
-            IsTaxable: taxable,
+            TaxAmount: tax,
             ExpenseId: Me,
             Claims: claimed
                 ? [new ReceiptClaimResponse(Me, "Anabel", 1, price)]

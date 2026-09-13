@@ -730,7 +730,7 @@ bottom:
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00   --item "Steak=22.00@3f25c1a8-...-444455556666"   --item "Risotto=16.50@9ab77d10-...-111122223333"   --item "Wine=18.00@3f25c1a8-...-444455556666,9ab77d10-...-111122223333"
 ```
 
-A line reads `[<id>#]<name>=<price>[x<qty>][/notax][@<who>]`. After the `@` come user ids,
+A line reads `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<who>]`. After the `@` come user ids,
 comma-separated, each optionally `*<weight>` -- so `@alice,bob` is a bottle shared evenly and
 `@alice*2,bob` is one where Alice had twice as much.
 
@@ -751,13 +751,19 @@ Only text before a `#` that parses as an id is read as one, so a line called `Ta
 still a line called `Table #4`. A line with no id is a new line, which is what writing a bill
 out for the first time looks like.
 
-`/notax` says the bill's tax was not charged on that line, which is what a warehouse receipt
-needs: the groceries are exempt and the clothes are not, and weighing the tax over every line
-would tax the bananas and let the jacket off. It is a flag rather than a rate because a flag
-is what the paper gives you -- one tax total at the bottom and a letter beside the lines it
-was charged on. Lines are taxable unless they say otherwise, so a restaurant bill never
-mentions it. Either side of the `@` reads the same: `Bread=4.00/notax@<ana>` and
-`Bread=4.00@<ana>/notax` are one line.
+`/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount rather than a
+rate, because an amount is what the till prints -- and rather than a flag, which is what this
+used to be: one tax total was then weighed over the flagged lines by price, which is exact
+only where every taxed line carries the same rate. A supermarket receipt mixing 6% food with
+23% household goods divided wrongly by several euros, with the total still adding up and no
+screen able to say so.
+
+A line carries no tax unless it says so, which is what a restaurant bill under VAT wants: the
+price includes it and the bill charges none on top. `/notax` still reads, and says the same
+thing as saying nothing -- worth typing on a warehouse bill, where the exempt lines are the
+ones you are deliberately marking. The amounts have to come to `--tax`, which the server
+checks. Either side of the `@` reads the same: `Bread=4.00/tax0.92@<ana>` and
+`Bread=4.00@<ana>/tax0.92` are one line.
 
 **Claimants are the only thing that says how a line divides.** A plate the table shared names
 everybody who had it:

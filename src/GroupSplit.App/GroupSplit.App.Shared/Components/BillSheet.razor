@@ -214,7 +214,7 @@
         @* Both legends describe marks, so both are gated on a mark being on screen rather
            than on one being somewhere on the paper: after a filter that leaves neither,
            they explain nothing. *@
-        @if (Receipt.Tax != 0 && Narrowed().Any(line => !line.IsTaxable))
+        @if (Receipt.Tax != 0 && Narrowed().Any(line => line.TaxAmount == 0))
         {
             <p class="gs-slip-foot">N — no tax charged on this line</p>
         }
@@ -348,7 +348,7 @@
                     .GroupBy(line => (
                         Name: line.Name.Trim().ToLowerInvariant(),
                         line.UnitPrice,
-                        line.IsTaxable,
+                        line.TaxAmount,
                         // Which purchase the line is part of, so two identical items bought
                         // on one card and filed as two expenses stay two rows. Folding them
                         // would print one row that is half this expense's and half not, and
@@ -360,7 +360,7 @@
                         same.Sum(line => line.Quantity),
                         same.First().UnitPrice,
                         same.Sum(line => line.TotalPrice),
-                        !same.First().IsTaxable,
+                        same.First().TaxAmount == 0,
                         same.First().Claims.Count == 0,
                         same.Key.Who))
             ];

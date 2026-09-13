@@ -438,12 +438,13 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 [
                     new ReceiptItemInput
                     {
-                        Name = "GROCERIES", TotalPrice = 60m, IsTaxable = false,
+                        Name = "GROCERIES", TotalPrice = 60m,
                         Claims = [new ReceiptClaimInput { UserId = Self }]
                     },
                     new ReceiptItemInput
                     {
-                        Name = "JACKET", TotalPrice = 40m,
+                        // All 4.00 of the tax is the jacket's: the groceries were exempt.
+                        Name = "JACKET", TotalPrice = 40m, TaxAmount = 4m,
                         Claims = [new ReceiptClaimInput { UserId = Self }]
                     }
                 ]
@@ -549,7 +550,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                     {
                         // The flat's, so both of them are on it -- which is how an itemised
                         // bill says "shared" now that a line has nothing else to say it with.
-                        Name = "GROCERIES", TotalPrice = 60m,
+                        Name = "GROCERIES", TotalPrice = 60m, TaxAmount = 6m,
                         Claims =
                         [
                             new ReceiptClaimInput { UserId = Self },
@@ -558,7 +559,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                     },
                     new ReceiptItemInput
                     {
-                        Name = "JACKET", TotalPrice = 40m,
+                        Name = "JACKET", TotalPrice = 40m, TaxAmount = 4m,
                         Claims = [new ReceiptClaimInput { UserId = Self }]
                     }
                 ]
@@ -843,12 +844,13 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 [
                     new ReceiptItemInput
                     {
-                        Name = "GROCERIES", TotalPrice = 60m, IsTaxable = false,
+                        Name = "GROCERIES", TotalPrice = 60m,
                         Claims = [new ReceiptClaimInput { UserId = Self }]
                     },
                     new ReceiptItemInput
                     {
-                        Name = "JACKET", TotalPrice = 40m,
+                        // All 4.00 of the tax is the jacket's: the groceries were exempt.
+                        Name = "JACKET", TotalPrice = 40m, TaxAmount = 4m,
                         Claims = [new ReceiptClaimInput { UserId = Self }]
                     }
                 ]

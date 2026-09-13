@@ -153,32 +153,30 @@
               "Items": [
                 {
                   "Name": "Rotisserie chicken",
-                  "Price": 8.99,
-                  "Taxable": false
+                  "Price": 8.99
                 },
                 {
                   "Name": "Olive oil 2L",
-                  "Price": 18.5,
-                  "Taxable": false
+                  "Price": 18.5
                 },
                 {
                   "Name": "Coffee beans 1kg",
-                  "Price": 14.25,
-                  "Taxable": false
+                  "Price": 14.25
                 },
                 {
                   "Name": "Kitchen roll",
                   "Price": 11.8,
-                  "Quantity": 12,
-                  "Taxable": false
+                  "Quantity": 12
                 },
                 {
                   "Name": "Fleece jacket",
-                  "Price": 34.99
+                  "Price": 34.99,
+                  "Tax": 8.04
                 },
                 {
                   "Name": "Running shoes",
-                  "Price": 49.99
+                  "Price": 49.99,
+                  "Tax": 11.51
                 }
               ]
             }

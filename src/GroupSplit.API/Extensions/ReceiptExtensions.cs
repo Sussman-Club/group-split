@@ -60,7 +60,7 @@ public static class ReceiptExtensions
                     item.UnitPrice,
                     item.Quantity,
                     item.TotalPrice,
-                    item.IsTaxable,
+                    item.TaxAmount,
                     item.ExpenseId,
                     [.. ShareOf(item)]))
                 .ToList();

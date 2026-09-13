@@ -10,13 +10,15 @@ namespace GroupSplit.API.Test.Splits;
 /// at face value.
 /// </summary>
 /// <remarks>
-/// The gaps a review of this feature found, all of them in the same place: every bill in
-/// <c>ReceiptSplitCalculatorTest</c> has one part and every line on it is taxable, so the two
-/// rules that decide who pays the extras were never actually put to the question.
+/// Tax is on the lines and is never apportioned: a part's tax is its own lines' tax, and a
+/// person's is the tax of the lines they claimed. The tip belongs to no line -- nothing on
+/// the paper says whose it was -- so it is the one figure that gets spread.
 /// <para>
-/// They are the rules people check. Somebody who ordered the exempt thing and is charged a
-/// share of the tax on somebody else's will notice, and there is no screen that would have
-/// said so: the balances would simply be a little wrong for everybody.
+/// It was the other way round, and wrong for it. A single tax total was weighed over the lines
+/// a boolean marked as taxed, in proportion to their prices, which is exact only where every
+/// taxed line carries one rate. A Portuguese supermarket receipt does not, and the people who
+/// bought the 6% food paid part of the 23% on somebody else's household goods -- with the
+/// total still adding up, so no screen anywhere could have said so.
 /// </para>
 /// </remarks>
 public class ReceiptTaxAndTipTest
@@ -30,63 +32,79 @@ public class ReceiptTaxAndTipTest
     // ---- tax within one part -----------------------------------------------------------
 
     /// <summary>
-    /// Tax follows the lines it was charged on, even when both are in one expense.
+    /// Two rates on one bill, and each person pays the tax on what they actually bought.
     /// </summary>
     /// <remarks>
-    /// The only thing keeping tax off an exempt claimant on an ordinary bill, and it was
-    /// invisible to the suite: the tested case put the exempt line in a different part, which
-    /// exercises the between-parts arm of the same apportioning and not this one.
-    /// <para>
-    /// Alice had 40.00 of exempt groceries; Bob had 40.00 of taxable clothes carrying all
-    /// 8.00 of the tax. Spread over the lines instead, they would owe 44.00 each.
-    /// </para>
+    /// The case the whole change is for. 100.00 of food at 6% and 100.00 of household goods
+    /// at 23% is 29.00 of tax; weighed by price it came out 14.50 each, so whoever had only
+    /// the food was overcharged 8.50 and whoever had the rest was let off the same.
     /// </remarks>
     [Fact]
-    public void Tax_stays_off_the_exempt_line_when_both_are_one_expense()
+    public void Two_rates_on_one_bill_land_on_the_people_who_bought_them()
     {
-        var bill = Bill(tax: 8m, tip: 0m,
-            (40m, Alice, true),
-            (40m, Bob, false));
+        var bill = Bill(tip: 0m,
+            (100m, Alice, 6m),
+            (100m, Bob, 23m));
 
         var shares = ReceiptSplitCalculator.Divide(bill, Part, Alice, [Alice, Bob]);
 
-        Assert.Equal(48m, Share(shares, Alice));
-        Assert.Equal(40m, Share(shares, Bob));
-        Assert.Equal(88m, shares.Sum(share => share.Amount));
+        Assert.Equal(106m, Share(shares, Alice));
+        Assert.Equal(123m, Share(shares, Bob));
+        Assert.Equal(229m, shares.Sum(share => share.Amount));
     }
 
     /// <summary>
-    /// A bill where nothing is taxable spreads its tax over everything instead of losing it.
+    /// And a line carrying no tax carries none of anybody else's.
     /// </summary>
     /// <remarks>
-    /// The fallback exists so a transcription error does not make a real bill undividable,
-    /// and it is the reason the seed files are checked for a bill that charges tax with every
-    /// line marked exempt: the tax would land on the exempt lines and balance, which is the
-    /// one outcome <c>IsTaxable</c> was added to prevent.
+    /// The exempt-groceries case, which the boolean did get right on a single-rate bill. It
+    /// is the same arithmetic here with a rate of nothing.
     /// </remarks>
     [Fact]
-    public void Tax_on_a_bill_with_nothing_taxable_spreads_over_every_line()
+    public void A_line_that_carried_no_tax_pays_none()
     {
-        var bill = Bill(tax: 10m, tip: 0m,
-            (60m, Alice, true),
-            (40m, Bob, true));
+        var bill = Bill(tip: 0m,
+            (40m, Alice, 0m),
+            (40m, Bob, 8m));
 
         var shares = ReceiptSplitCalculator.Divide(bill, Part, Alice, [Alice, Bob]);
 
-        Assert.Equal(66m, Share(shares, Alice));
-        Assert.Equal(44m, Share(shares, Bob));
+        Assert.Equal(40m, Share(shares, Alice));
+        Assert.Equal(48m, Share(shares, Bob));
     }
 
     /// <summary>
-    /// The tip is about the bill rather than the goods, so it follows every line -- exempt
-    /// ones included.
+    /// Sharing a line shares what it was taxed, in the same proportion.
+    /// </summary>
+    /// <remarks>
+    /// A claim is a claim on the whole line: half the steak is half of what the steak cost and
+    /// half of what it was taxed. Nothing else would be defensible -- the alternative weighs
+    /// the part's tax over people by what their lines cost, which on a mixed-rate bill is a
+    /// different figure.
+    /// </remarks>
+    [Fact]
+    public void Two_people_sharing_a_line_share_its_tax_the_same_way()
+    {
+        var bill = Bill(tip: 0m, (100m, Alice, 23m));
+
+        bill.Items.Single().Claims.Add(new ReceiptItemClaim { UserId = Bob, Weight = 3 });
+
+        var shares = ReceiptSplitCalculator.Divide(bill, Part, Alice, [Alice, Bob]);
+
+        // A quarter of the line and a quarter of its tax.
+        Assert.Equal(30.75m, Share(shares, Alice));
+        Assert.Equal(92.25m, Share(shares, Bob));
+    }
+
+    /// <summary>
+    /// The tip is about the bill rather than the goods, so it follows every line.
     /// </summary>
     [Fact]
-    public void The_tip_follows_every_line_including_the_exempt_ones()
+    public void The_tip_follows_every_line_including_the_untaxed_ones()
     {
-        var bill = Bill(tax: 0m, tip: 10m,
-            (60m, Alice, true),
-            (40m, Bob, false));
+        var bill = Bill(tip: 10m,
+            (60m, Alice, 0m),
+            (40m, Bob, 0m));
 
         var shares = ReceiptSplitCalculator.Divide(bill, Part, Alice, [Alice, Bob]);
 
@@ -97,18 +115,18 @@ public class ReceiptTaxAndTipTest
     // ---- the extras across the parts of a split charge ---------------------------------
 
     /// <summary>
-    /// A tip on a split charge is apportioned between its parts in proportion to their lines.
+    /// A tip on a split charge is shared between its parts by what their lines came to.
     /// </summary>
     /// <remarks>
-    /// No multi-part bill anywhere carried a tip, so this arm of the apportioning had never
-    /// run: every split charge in the tests was a supermarket receipt.
+    /// No multi-part bill anywhere carried a tip, so this arm had never run: every split
+    /// charge in the tests was a supermarket receipt.
     /// </remarks>
     [Fact]
     public void A_tip_on_a_split_charge_is_shared_between_its_parts_by_what_they_came_to()
     {
-        var bill = Bill(tax: 0m, tip: 20m,
-            (60m, Alice, true, Part),
-            (40m, Bob, true, Other));
+        var bill = Bill(tip: 20m,
+            (60m, Alice, 0m, Part),
+            (40m, Bob, 0m, Other));
 
         var amounts = ReceiptSplitCalculator.PartAmounts(bill);
 
@@ -118,19 +136,20 @@ public class ReceiptTaxAndTipTest
     }
 
     /// <summary>
-    /// And a tax on one is apportioned over the taxable lines, wherever they sit.
+    /// And the tax on one is simply the tax of each part's own lines.
     /// </summary>
     /// <remarks>
-    /// The warehouse case, and the reason the whole bill has to be placed before any part of
-    /// it is divided: the clothes carry the tax and the groceries do not, so a part's amount
-    /// cannot be worked out from its own lines alone.
+    /// The warehouse case: the clothes carry the tax and the groceries do not. It used to need
+    /// the whole bill placed before any part of it could be priced, because a part's share of
+    /// one tax total depended on what the other parts held. It does not any more -- but the
+    /// placement still has to come first, because the tip is still spread.
     /// </remarks>
     [Fact]
-    public void Tax_on_a_split_charge_falls_on_the_part_holding_the_taxable_lines()
+    public void Each_part_of_a_split_charge_carries_its_own_lines_tax()
     {
-        var bill = Bill(tax: 10m, tip: 0m,
-            (60m, Alice, false, Part),
-            (40m, Bob, true, Other));
+        var bill = Bill(tip: 0m,
+            (60m, Alice, 0m, Part),
+            (40m, Bob, 10m, Other));
 
         var amounts = ReceiptSplitCalculator.PartAmounts(bill);
 
@@ -139,32 +158,29 @@ public class ReceiptTaxAndTipTest
     }
 
     /// <summary>
-    /// The leftover cent lands on the same part whatever order the lines arrive in.
+    /// The tip's leftover cent lands on the same part whatever order the lines arrive in.
     /// </summary>
     /// <remarks>
-    /// Where the largest part by line value has nothing taxable on it, the tax cannot favour
-    /// it and the leftover fell to the first key of a dictionary -- which is insertion order,
-    /// which is whatever order the caller's query happened to return the lines in. Two
-    /// queries loaded this bill, one ordering by position and one not ordering at all, so
-    /// pressing "divide again" could move a cent between two people with nothing on the bill
-    /// having changed.
+    /// The one figure still spread, so the one that can still have a leftover. It fell to the
+    /// first key of a dictionary -- insertion order, which is whatever order the caller's
+    /// query returned the lines in. Two queries load this bill, one ordering by position and
+    /// one that did not order at all, so pressing "divide again" moved a cent between two
+    /// people with nothing on the bill having changed.
     /// </remarks>
     [Fact]
     public void The_leftover_cent_does_not_depend_on_the_order_the_lines_arrive_in()
     {
         var third = Guid.Parse("66666666-6666-4666-8666-666666666666");
 
-        // 100.00 exempt and largest, then two taxable parts of 30.00 with a cent of tax
-        // between them: neither can be favoured, so the leftover has to be placed by rule.
-        var forwards = Bill(tax: 0.01m, tip: 0m,
-            (100m, Alice, false, Part),
-            (30m, Bob, true, Other),
-            (30m, Bob, true, third));
+        var forwards = Bill(tip: 0.01m,
+            (100m, Alice, 0m, Part),
+            (30m, Bob, 0m, Other),
+            (30m, Bob, 0m, third));
 
-        var backwards = Bill(tax: 0.01m, tip: 0m,
-            (100m, Alice, false, Part),
-            (30m, Bob, true, third),
-            (30m, Bob, true, Other));
+        var backwards = Bill(tip: 0.01m,
+            (100m, Alice, 0m, Part),
+            (30m, Bob, 0m, third),
+            (30m, Bob, 0m, Other));
 
         Assert.Equal(
             ReceiptSplitCalculator.PartAmounts(forwards).OrderBy(pair => pair.Key),
@@ -173,13 +189,39 @@ public class ReceiptTaxAndTipTest
 
     // ---- what the arithmetic refuses ---------------------------------------------------
 
+    /// <summary>
+    /// A bill charging tax that none of its lines accounts for is refused.
+    /// </summary>
+    /// <remarks>
+    /// This is what replaced a silent fallback. The tax used to be one figure spread over
+    /// whatever a boolean marked, and a bill charging tax while marking every line exempt
+    /// spread it over everything instead and balanced -- arriving at the one outcome the flag
+    /// existed to prevent, with no error anywhere. Now the lines have to come to the figure at
+    /// the bottom of the paper, and a bill that cannot say where its tax was charged is a
+    /// transcription that is not finished.
+    /// </remarks>
+    [Fact]
+    public void A_bill_whose_lines_do_not_account_for_its_tax_is_refused()
+    {
+        var bill = Bill(tip: 0m, (60m, Alice, 0m), (40m, Bob, 0m));
+
+        bill.Tax = 10m;
+        bill.Total = 110m;
+
+        var refusal = Assert.Throws<UnprocessableException>(
+            () => ReceiptSplitCalculator.Divide(bill, Part, Alice, [Alice, Bob]));
+
+        Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, refusal.Code);
+        Assert.Contains("tax on the lines", refusal.Message);
+    }
+
     /// <summary>A line nobody claimed stops the part it is in, and only that part.</summary>
     [Fact]
     public void A_line_belonging_to_nobody_stops_its_own_part_and_no_other()
     {
-        var bill = Bill(tax: 0m, tip: 0m,
-            (60m, Alice, true, Part),
-            (40m, (Guid?)null, true, Other));
+        var bill = Bill(tip: 0m,
+            (60m, Alice, 0m, Part),
+            (40m, null, 0m, Other));
 
         Assert.True(ReceiptSplitCalculator.CanDivide(bill, Part));
         Assert.False(ReceiptSplitCalculator.CanDivide(bill, Other));
@@ -203,7 +245,7 @@ public class ReceiptTaxAndTipTest
     [InlineData(-1)]
     public void A_claim_weighing_nothing_is_refused(int weight)
     {
-        var bill = Bill(tax: 0m, tip: 0m, (60m, Alice, true));
+        var bill = Bill(tip: 0m, (60m, Alice, 0m));
 
         bill.Items.Single().Claims.Single().Weight = weight;
 
@@ -218,15 +260,10 @@ public class ReceiptTaxAndTipTest
     /// A bill whose lines do not come to its own subtotal is refused before anything is
     /// apportioned.
     /// </summary>
-    /// <remarks>
-    /// Checked when the bill is stored as well, but this is the one that matters: it runs at
-    /// the head of every division, which is what keeps a receipt somebody edited around the
-    /// edges from quietly dividing into shares that do not sum to the charge.
-    /// </remarks>
     [Fact]
     public void A_bill_whose_lines_do_not_come_to_its_subtotal_is_refused()
     {
-        var bill = Bill(tax: 0m, tip: 0m, (60m, Alice, true));
+        var bill = Bill(tip: 0m, (60m, Alice, 0m));
 
         bill.Subtotal = 70m;
         bill.Total = 70m;
@@ -241,7 +278,7 @@ public class ReceiptTaxAndTipTest
     [Fact]
     public void A_bill_whose_extras_do_not_come_to_its_total_is_refused()
     {
-        var bill = Bill(tax: 5m, tip: 0m, (60m, Alice, true));
+        var bill = Bill(tip: 0m, (60m, Alice, 5m));
 
         bill.Total = 70m;
 
@@ -254,17 +291,12 @@ public class ReceiptTaxAndTipTest
     /// <summary>
     /// A part of nothing but free lines comes to nothing, and says so rather than throwing.
     /// </summary>
-    /// <remarks>
-    /// A promotional line on a warehouse bill. The arithmetic handles it -- the part's weight
-    /// is zero and it takes none of the extras -- and what a caller does about an expense of
-    /// 0.00 is the caller's business, not this function's.
-    /// </remarks>
     [Fact]
     public void A_part_of_nothing_but_free_lines_comes_to_nothing()
     {
-        var bill = Bill(tax: 0m, tip: 0m,
-            (60m, Alice, true, Part),
-            (0m, Bob, true, Other));
+        var bill = Bill(tip: 0m,
+            (60m, Alice, 0m, Part),
+            (0m, Bob, 0m, Other));
 
         var amounts = ReceiptSplitCalculator.PartAmounts(bill);
 
@@ -273,14 +305,18 @@ public class ReceiptTaxAndTipTest
     }
 
     /// <summary>
-    /// One bill. Each line is its price, who had it (null for nobody), whether tax was
-    /// charged on it, and which purchase it is part of.
+    /// One bill. Each line is its price, who had it (null for nobody), what of the bill's tax
+    /// it carried, and which purchase it is part of.
     /// </summary>
+    /// <remarks>
+    /// The receipt's own tax is the lines' added up, which is now an invariant rather than a
+    /// convenience: a fixture that stated both could state a bill the arithmetic refuses.
+    /// </remarks>
     private static Receipt Bill(
-        decimal tax, decimal tip,
-        params (decimal Price, Guid? Had, bool Taxable, Guid Part)[] lines)
+        decimal tip, params (decimal Price, Guid? Had, decimal Tax, Guid Part)[] lines)
     {
         var subtotal = lines.Sum(line => line.Price);
+        var tax = lines.Sum(line => line.Tax);
 
         var receipt = new Receipt
         {
@@ -290,14 +326,14 @@ public class ReceiptTaxAndTipTest
             Total = subtotal + tax + tip
         };
 
-        foreach (var (price, had, taxable, part) in lines)
+        foreach (var (price, had, lineTax, part) in lines)
         {
             var item = new ReceiptItem
             {
                 Name = $"Line {price}",
                 NormalizedName = $"line {price}",
                 TotalPrice = price,
-                IsTaxable = taxable,
+                TaxAmount = lineTax,
                 ExpenseId = part
             };
 
@@ -311,8 +347,8 @@ public class ReceiptTaxAndTipTest
     }
 
     private static Receipt Bill(
-        decimal tax, decimal tip, params (decimal Price, Guid? Had, bool Taxable)[] lines) =>
-        Bill(tax, tip, [.. lines.Select(line => (line.Price, line.Had, line.Taxable, Part))]);
+        decimal tip, params (decimal Price, Guid? Had, decimal Tax)[] lines) =>
+        Bill(tip, [.. lines.Select(line => (line.Price, line.Had, line.Tax, Part))]);
 
     private static decimal Share(IReadOnlyList<SplitAmount> shares, Guid userId) =>
         shares.SingleOrDefault(share => share.UserId == userId).Amount;

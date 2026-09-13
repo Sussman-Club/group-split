@@ -345,8 +345,8 @@ public class SplitBankTransactionDialogTest : ComponentTest
     private static ReceiptResponse Bill => new(
         Guid.NewGuid(), null, RowId, 100m, 0m, 0m, 100m, 0, false, false, 0, 0m,
         [
-            new ReceiptItemResponse(Groceries, "GROCERIES", 60m, 1, 60m, true, null, []),
-            new ReceiptItemResponse(Jacket, "JACKET", 40m, 1, 40m, true, null, [])
+            new ReceiptItemResponse(Groceries, "GROCERIES", 60m, 1, 60m, 0m, null, []),
+            new ReceiptItemResponse(Jacket, "JACKET", 40m, 1, 40m, 0m, null, [])
         ]);
 
     /// <summary>
@@ -356,8 +356,8 @@ public class SplitBankTransactionDialogTest : ComponentTest
     {
         var items = Enumerable.Range(0, lines - 1)
             .Select(at => new ReceiptItemResponse(
-                Guid.NewGuid(), $"GROCERY {at + 1}", 10m, 1, 10m, true, null, []))
-            .Append(new ReceiptItemResponse(Jacket, "JACKET", 10m, 1, 10m, true, null, []))
+                Guid.NewGuid(), $"GROCERY {at + 1}", 10m, 1, 10m, 0m, null, []))
+            .Append(new ReceiptItemResponse(Jacket, "JACKET", 10m, 1, 10m, 0m, null, []))
             .ToList();
 
         var bill = new ReceiptResponse(

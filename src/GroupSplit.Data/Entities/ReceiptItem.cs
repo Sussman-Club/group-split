@@ -111,28 +111,31 @@ public class ReceiptItem : Entity
     public required decimal TotalPrice { get; set; }
 
     /// <summary>
-    /// Whether the bill's tax was charged on this line. True unless somebody says otherwise.
+    /// What of the bill's tax was charged on this line. Zero for a line that was not taxed.
     /// </summary>
     /// <remarks>
-    /// A flag and not a rate, because a flag is what the paper gives you: a receipt prints
-    /// one tax total at the bottom and a letter beside the lines it was charged on. A rate
-    /// per line would be a more general model of something no till hands over, and it would
-    /// make <see cref="Receipt.Tax"/> derived rather than transcribed.
+    /// An amount and not a flag, and not a rate either. This was a boolean, and the tax was
+    /// then weighed over the lines it was charged on in proportion to their prices -- which
+    /// is exact only where every taxed line carries the same rate. A Portuguese supermarket
+    /// receipt does not: food at 6% and household goods at 23% on one piece of paper. A bill
+    /// of 100.00 at each carries 29.00 of tax, and weighing it by price split that 14.50
+    /// apiece, so whoever had only the food was overcharged 8.50 -- silently, because the
+    /// total still added up.
     /// <para>
-    /// It matters most on exactly the bill that made a receipt worth splitting: where
-    /// groceries are exempt and general goods are not, apportioning the tax across every
-    /// line taxes the bananas and lets the jacket off. So the tax is weighed over the lines
-    /// it was actually charged on -- and the tip, which is a fact about the bill rather than
-    /// about the goods, is weighed over all of them.
+    /// An amount rather than a rate because an amount is what the paper gives you: a till
+    /// prints the tax it charged, and a rate would be arithmetic somebody has to redo and can
+    /// get wrong. It is also what makes the apportioning disappear rather than improve: a
+    /// part's tax is the sum of its own lines' tax, exactly, with nothing to spread and no
+    /// remainder to place. <c>ReceiptSplitCalculator</c> lost half its difficulty to this.
     /// </para>
     /// <para>
-    /// Defaulted to true so that a bill nobody flags divides exactly as it did before this
-    /// existed, and so that the common case -- a restaurant, where everything is taxable --
-    /// needs no thought. Where the price already includes the tax, as it does under VAT,
-    /// <see cref="Receipt.Tax"/> is zero and this decides nothing.
+    /// <see cref="Receipt.Tax"/> stays as the figure off the bottom of the paper, and these
+    /// have to come to it -- which is the check that replaced the old silent fallback, where
+    /// a bill charging tax with every line marked exempt spread the tax over everything and
+    /// balanced.
     /// </para>
     /// </remarks>
-    public bool IsTaxable { get; set; } = true;
+    public decimal TaxAmount { get; set; }
 
     /// <summary>
     /// Who had it, and in what proportion.

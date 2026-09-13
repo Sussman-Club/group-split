@@ -77,15 +77,30 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Total = lines.Sum(line => line.Price) + tax + tip
         };
 
+        // The tax spread over the lines at one rate, which is what these bills are. It lives
+        // on the lines now -- a bill can charge two, and one figure cannot say which line
+        // carried which -- so the fixture does here what the migration did once to the stored
+        // data, and nothing any of these tests expects moves.
+        var subtotal = receipt.Subtotal;
+        var placed = 0m;
+        var at = 0;
+
         foreach (var (name, price, had) in lines)
         {
+            var share = ++at == lines.Length
+                ? tax - placed
+                : decimal.Truncate(tax * price / subtotal * 100m) / 100m;
+
+            placed += share;
+
             var item = new ReceiptItem
             {
                 ReceiptId = receipt.Id,
                 ExpenseId = expenseId,
                 Name = name,
                 NormalizedName = name.ToLowerInvariant(),
-                TotalPrice = price
+                TotalPrice = price,
+                TaxAmount = share
             };
 
             foreach (var userId in had)

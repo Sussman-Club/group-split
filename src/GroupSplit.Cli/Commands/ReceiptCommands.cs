@@ -504,7 +504,7 @@ public static class ReceiptCommands
                 item.TotalPrice.ToString(),
                 // Only worth marking where it is not the ordinary answer. A column of
                 // "taxed" down every restaurant bill says nothing.
-                item.IsTaxable ? string.Empty : "[grey]exempt[/]",
+                item.TaxAmount == 0 ? string.Empty : item.TaxAmount.ToString("0.00"),
                 Divided(item));
         }
 

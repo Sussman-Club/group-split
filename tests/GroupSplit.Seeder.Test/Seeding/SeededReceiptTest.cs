@@ -212,7 +212,7 @@ public class SeededReceiptTest
                 NormalizedName = line.Name.Trim().ToLowerInvariant(),
                 TotalPrice = line.Price,
                 Quantity = line.Quantity,
-                IsTaxable = line.Taxable,
+                TaxAmount = line.Tax,
                 ExpenseId = expenseId
             };
 
@@ -272,24 +272,25 @@ public class SeededReceiptTest
     }
 
     /// <summary>
-    /// A bill that charges tax marks something taxable.
+    /// A bill's lines account for the tax at the bottom of it.
     /// </summary>
     /// <remarks>
-    /// Checked here precisely because nothing else would say anything. Tax is weighed across
-    /// the taxable lines, and <c>ReceiptSplitCalculator</c> falls back to weighing it across
-    /// every line when none is taxable -- which keeps a real bill dividing rather than
-    /// refusing on a transcription error, and quietly does the one thing <c>Taxable</c> was
-    /// added to prevent. A seed file that hit that fallback would divide, balance, and be
-    /// wrong, with the demo showing tax on the exempt groceries.
+    /// The tax lives on the lines, so a bill that charges some has to say which lines carried
+    /// it -- and the division refuses one that does not, by name. This replaced a subtler
+    /// check on a subtler failure: the tax used to be one figure spread over whatever a
+    /// boolean marked, with a fallback to spreading it over everything when nothing was
+    /// marked, so a seed file that flagged nothing divided, balanced, and put tax on the
+    /// exempt groceries with no error anywhere.
     /// </remarks>
     [Fact]
-    public void No_seeded_bill_charges_tax_with_nothing_taxable_on_it()
+    public void Every_seeded_bills_lines_account_for_its_tax()
     {
-        foreach (var (where, _, bill) in Bills().Where(entry => entry.Bill.Tax != 0))
+        foreach (var (where, _, bill) in Bills())
         {
-            Assert.True(bill.Items.Any(line => line.Taxable),
-                $"Seeded {where} charges {bill.Tax} of tax and marks every line exempt, so the "
-                + "tax would fall back onto every line, exempt ones included.");
+            var lines = bill.Items.Sum(line => line.Tax);
+
+            Assert.True(lines == bill.Tax,
+                $"Seeded {where} charges {bill.Tax} of tax, but its lines carry {lines}.");
         }
     }
 }

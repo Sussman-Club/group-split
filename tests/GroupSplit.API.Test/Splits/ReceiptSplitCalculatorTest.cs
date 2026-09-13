@@ -39,6 +39,14 @@ public class ReceiptSplitCalculatorTest
 
         var receipt = new Receipt { Subtotal = subtotal, Total = subtotal + tax + tip, Tax = tax, Tip = tip };
 
+        // The tax spread over the lines at one rate, which is what every bill in this file is
+        // and what the single figure used to mean. It lives on the lines now -- a bill can
+        // charge two rates, and one figure plus a boolean cannot say which line carried
+        // which -- so the fixture does here what the migration did once to the stored data,
+        // and every expectation below is unchanged by it.
+        var cut = Apportioned(tax, [.. lines.Select(line => line.Price)]);
+        var at = 0;
+
         foreach (var (price, had) in lines)
         {
             var item = new ReceiptItem
@@ -46,6 +54,7 @@ public class ReceiptSplitCalculatorTest
                 Name = $"Line {price}",
                 NormalizedName = $"line {price}",
                 TotalPrice = price,
+                TaxAmount = cut[at++],
                 ExpenseId = Part
             };
 
@@ -56,6 +65,27 @@ public class ReceiptSplitCalculatorTest
         }
 
         return receipt;
+    }
+
+    /// <summary>
+    /// One amount cut between the lines in proportion to their prices: truncated to the cent,
+    /// with the leftover on the largest, so the parts come to the whole exactly.
+    /// </summary>
+    private static decimal[] Apportioned(decimal amount, decimal[] weights)
+    {
+        var cut = new decimal[weights.Length];
+        var total = weights.Sum();
+
+        if (amount == 0 || total == 0)
+            return cut;
+
+        for (var i = 0; i < weights.Length; i++)
+            cut[i] = decimal.Truncate(amount * weights[i] / total * 100m) / 100m;
+
+        var biggest = Array.IndexOf(weights, weights.Max());
+        cut[biggest] += amount - cut.Sum();
+
+        return cut;
     }
 
     private static (Guid, int)[] Had(params Guid[] users) => [.. users.Select(user => (user, 1))];

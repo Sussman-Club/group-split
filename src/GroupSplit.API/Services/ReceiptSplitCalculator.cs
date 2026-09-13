@@ -15,11 +15,17 @@ namespace GroupSplit.API.Services;
 /// between the people who claimed those lines. A restaurant bill is the same arithmetic
 /// with one part, which is why nothing about dividing a dinner changed when this arrived.
 /// <para>
-/// Tax and tip are weighed differently, and that is not a detail. Tax is charged on goods,
-/// and plenty of bills exempt some of them -- weighing it across every line taxes the
-/// bananas and lets the jacket off. A tip is a fact about the bill rather than about the
-/// goods, so it spreads over everything. Hence two weightings, each apportioned exactly, and
-/// a total that is still exact because a sum of exact parts is exact.
+/// Tax and tip are handled differently, and that is not a detail. Tax is charged on goods, so
+/// it is recorded on the line it was charged on and never apportioned at all: a part's tax is
+/// its own lines' tax, and a person's is the tax of the lines they claimed. A tip is a fact
+/// about the bill rather than about the goods -- nothing on the paper says whose it was -- so
+/// it is the one figure here that has to be spread.
+/// </para>
+/// <para>
+/// The tax used to be spread as well, over the lines a boolean marked as taxed, in proportion
+/// to their prices. That is exact only where every taxed line carries one rate, and a receipt
+/// mixing 6% food with 23% household goods was divided wrongly by several euros with the
+/// total still adding up.
 /// </para>
 /// <para>
 /// Every division here ends in <see cref="Spread"/>, which is the one place a whole is cut
@@ -75,9 +81,8 @@ public static class ReceiptSplitCalculator
     /// Each group of lines, plus its share of the bill's tax and tip.
     /// </summary>
     /// <remarks>
-    /// Tax over the lines it was charged on; the tip over all of them. Where nothing on the
-    /// bill is taxable the tax cannot have come from the goods, so it spreads like the tip
-    /// rather than vanishing.
+    /// The lines added up, each part's own tax added on, and the tip -- which belongs to no
+    /// line -- spread between them by what they came to.
     /// <para>
     /// Cut from the total rather than added up towards it, which is why the parts of a split
     /// charge sum to what the card was charged without anything having to reconcile them.
@@ -90,17 +95,26 @@ public static class ReceiptSplitCalculator
         var held = placed.ToList();
 
         var lines = Sum(held, pair => pair.Key, pair => pair.Item.TotalPrice);
-        var taxable = Sum(held.Where(pair => pair.Item.IsTaxable),
-            pair => pair.Key, pair => pair.Item.TotalPrice);
 
-        var biggest = Largest(lines);
-        var tax = Spread(Cents(receipt.Tax), taxable.Values.Sum() > 0 ? taxable : lines, biggest);
-        var tip = Spread(Cents(receipt.Tip), lines, biggest);
+        // Added up, not apportioned. The tax is on the lines now, so a part's tax is its own
+        // lines' tax exactly -- nothing to weigh, nothing to truncate, no leftover cent to
+        // place. This used to weigh one tax total over the taxed lines by price, which is
+        // exact only where every taxed line carries the same rate, and quietly wrong on any
+        // bill mixing two.
+        var tax = Sum(held, pair => pair.Key, pair => pair.Item.TaxAmount);
+
+        // The tip still is apportioned, because it genuinely is a fact about the bill rather
+        // than about any line: nothing on the paper says whose it was.
+        var tip = Spread(Cents(receipt.Tip), lines, Largest(lines));
 
         var amounts = new Dictionary<TKey, decimal>();
 
         foreach (var (key, subtotal) in lines)
-            amounts[key] = subtotal + (tax.GetValueOrDefault(key) + tip.GetValueOrDefault(key)) / 100m;
+        {
+            amounts[key] = subtotal
+                           + tax.GetValueOrDefault(key)
+                           + tip.GetValueOrDefault(key) / 100m;
+        }
 
         return amounts;
     }
@@ -139,8 +153,12 @@ public static class ReceiptSplitCalculator
         var lineTotal = part.Sum(item => item.TotalPrice);
         var taxTotal = Cents(amount) - Cents(lineTotal) - TipShareOf(receipt, expenseId);
 
-        var claimedAll = Claimed(part, payerId, participants);
-        var claimedTaxable = Claimed(part.Where(item => item.IsTaxable), payerId, participants);
+        var claimedAll = Claimed(part, item => item.TotalPrice, payerId, participants);
+
+        // Each person's own tax, not their share of the part's. Claiming half a line claims
+        // half of what that line was taxed -- which on a bill mixing two rates is a different
+        // figure from half of the part's tax weighed by what the line cost.
+        var claimedTax = Claimed(part, item => item.TaxAmount, payerId, participants);
 
         if (claimedAll.Count == 0)
             throw new UnprocessableException(ErrorCodes.ReceiptItemsUnclaimed,
@@ -149,7 +167,13 @@ public static class ReceiptSplitCalculator
         var favour = claimedAll.ContainsKey(payerId) ? payerId : Largest(claimedAll);
 
         var byLines = Spread(Cents(lineTotal), claimedAll, favour);
-        var byTax = Spread(taxTotal, claimedTaxable.Values.Sum() > 0 ? claimedTaxable : claimedAll, favour);
+
+        // The fallback is for a part carrying tax that none of its claimed lines accounts
+        // for, which per-line tax makes unreachable: the part's tax IS its lines' tax, and
+        // every line of a part being divided is claimed. Kept because the alternative to an
+        // unreachable branch here is cents vanishing out of a stored division.
+        var byTax = Spread(taxTotal, claimedTax.Values.Sum() > 0 ? claimedTax : claimedAll, favour);
+
         var byTip = Spread(TipShareOf(receipt, expenseId), claimedAll, favour);
 
         return
@@ -192,7 +216,7 @@ public static class ReceiptSplitCalculator
             // client is not shown a button that refuses when pressed, and it was lighting
             // one up. Run rather than restated, for the reason above; the figures it works
             // out are thrown away and only the refusal is wanted.
-            Claimed(part, Guid.Empty, []);
+            Claimed(part, item => item.TotalPrice, Guid.Empty, []);
 
             return part.Any(item => item.Claims.Count > 0);
         }
@@ -237,6 +261,20 @@ public static class ReceiptSplitCalculator
                     $"The items come to {lines}, but the receipt's subtotal is {receipt.Subtotal}.")
                 .WithExtension("itemTotal", lines)
                 .WithExtension("subtotal", receipt.Subtotal);
+
+        // The tax on the lines has to be the tax off the bottom of the paper. This is what
+        // replaced a silent fallback: the tax used to be a single figure spread over whatever
+        // a boolean marked as taxed, and a bill that charged tax while marking every line
+        // exempt spread it over everything instead and balanced -- which is the one outcome
+        // the flag existed to prevent, arrived at without an error anywhere.
+        var taxed = receipt.Items.Sum(item => item.TaxAmount);
+
+        if (taxed != receipt.Tax)
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    $"The tax on the lines comes to {taxed}, but the receipt's tax is " +
+                    $"{receipt.Tax}.")
+                .WithExtension("itemTaxTotal", taxed)
+                .WithExtension("tax", receipt.Tax);
     }
 
     /// <summary>
@@ -286,11 +324,17 @@ public static class ReceiptSplitCalculator
         ArgumentNullException.ThrowIfNull(lines);
         ArgumentNullException.ThrowIfNull(participants);
 
-        return Claimed(lines, payerId, participants);
+        return Claimed(lines, item => item.TotalPrice, payerId, participants);
     }
 
+    /// <param name="of">
+    /// What of each line is being divided: its price, or the tax charged on it. The same
+    /// apportioning serves both, because a claim is a claim on the whole line -- half the
+    /// steak is half of what the steak cost and half of what it was taxed.
+    /// </param>
     private static Dictionary<Guid, decimal> Claimed(
-        IEnumerable<ReceiptItem> lines, Guid payerId, IReadOnlyCollection<Guid> participants)
+        IEnumerable<ReceiptItem> lines, Func<ReceiptItem, decimal> of,
+        Guid payerId, IReadOnlyCollection<Guid> participants)
     {
         var claimed = new Dictionary<Guid, decimal>();
 
@@ -314,7 +358,7 @@ public static class ReceiptSplitCalculator
             var totalWeight = item.Claims.Sum(claim => (long)claim.Weight);
 
             foreach (var claim in item.Claims)
-                Add(claim.UserId, item.TotalPrice * claim.Weight / totalWeight);
+                Add(claim.UserId, of(item) * claim.Weight / totalWeight);
         }
 
         return claimed;

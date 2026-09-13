@@ -168,8 +168,8 @@ exactly as they are.
 | `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
 | `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. `--bank-row` removes one from an imported row instead. |
 
-A line is `[<id>#]<name>=<price>[x<qty>][/notax][@<who>]`, and `<who>` is comma-separated user
-ids each optionally `*<weight>`:
+A line is `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<who>]`, and `<who>` is comma-separated
+user ids each optionally `*<weight>`:
 
 ```bash
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
@@ -194,9 +194,12 @@ A line could once be marked as the table's without naming anybody; that is gone.
 division says everybody owes what they had -- a bill you want divided evenly wants a category
 with an even rule instead, not an itemised one.
 
-`/notax` says the bill's tax was not charged on that line -- a warehouse receipt where the
-groceries are exempt and the clothes are not. Lines are taxable unless they say otherwise, so
-a restaurant bill never mentions it. It reads the same on either side of the `@`.
+`/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount, not a rate and not
+a flag: a bill can charge two rates -- 6% food and 23% household goods on one supermarket
+receipt -- and knowing only which lines were taxed cannot say how much each carried. The
+amounts have to come to `--tax`. A line carries none unless it says so, which is what a
+restaurant bill under VAT wants; `/notax` still reads and means the same as saying nothing. It
+reads the same on either side of the `@`.
 
 **`receipts set` saves the bill whole**, so a line you do not mention is a line that has gone,
 and its claims go with it. Correcting one price means naming the stored lines by the ids

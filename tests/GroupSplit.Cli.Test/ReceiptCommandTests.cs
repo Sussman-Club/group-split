@@ -53,26 +53,43 @@ public sealed class ReceiptCommandTests : IDisposable
     /// A line says it was not taxed, and that reaches the request.
     /// </summary>
     /// <remarks>
-    /// The warehouse bill: groceries exempt, general goods not. Weighing the tax over every
-    /// line would tax the bananas and let the jacket off, and nothing downstream can tell the
-    /// difference once the flag is lost -- the total still adds up.
+    /// The warehouse bill: the groceries were exempt and the jacket was not. The tax is
+    /// written per line as the amount charged on it, because a bill can charge two rates and
+    /// a flag saying which lines were taxed cannot say how much each of them carried.
     /// </remarks>
     [Fact]
-    public async Task A_line_can_say_the_tax_was_not_charged_on_it()
+    public async Task A_line_can_say_what_tax_was_charged_on_it()
     {
         _api.Returns($"/api/inbox/{RowId}/receipt", Bill());
 
         var result = await Cli.RunAsync(
             "receipts", "set", RowId.ToString(), "--bank-row",
             "--item", "Bananas=1.99/notax",
-            "--item", "Jacket=34.99");
+            "--item", "Jacket=34.99/tax8.05");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
 
         var items = Sent().GetProperty("items");
 
-        Assert.False(items[0].GetProperty("isTaxable").GetBoolean());
-        Assert.True(items[1].GetProperty("isTaxable").GetBoolean());
+        Assert.Equal(0m, items[0].GetProperty("taxAmount").GetDecimal());
+        Assert.Equal(8.05m, items[1].GetProperty("taxAmount").GetDecimal());
+    }
+
+    /// <summary>A line that says it was taxed has to say by how much.</summary>
+    /// <remarks>
+    /// "/tax" on its own used to mean "taxed", which was all there was to say when one figure
+    /// was weighed over the flagged lines. It says nothing now, and a line carrying it would
+    /// silently record no tax at all -- so it is refused, with the reason.
+    /// </remarks>
+    [Fact]
+    public async Task A_line_that_says_it_was_taxed_without_saying_how_much_is_refused()
+    {
+        var result = await Cli.RunAsync(
+            "receipts", "set", RowId.ToString(), "--bank-row",
+            "--item", "Jacket=34.99/tax");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
     }
 
     /// <summary>
@@ -84,8 +101,8 @@ public sealed class ReceiptCommandTests : IDisposable
     /// refusal that says so.
     /// </remarks>
     [Theory]
-    [InlineData("Bread=4.00/notax@11111111-0000-4000-8000-000000000001")]
-    [InlineData("Bread=4.00@11111111-0000-4000-8000-000000000001/notax")]
+    [InlineData("Bread=4.00/tax0.92@11111111-0000-4000-8000-000000000001")]
+    [InlineData("Bread=4.00@11111111-0000-4000-8000-000000000001/tax0.92")]
     public async Task The_tax_flag_can_be_written_either_side_of_the_claimants(string line)
     {
         _api.Returns($"/api/inbox/{RowId}/receipt", Bill());
@@ -99,7 +116,7 @@ public sealed class ReceiptCommandTests : IDisposable
 
         var first = Sent().GetProperty("items")[0];
 
-        Assert.False(first.GetProperty("isTaxable").GetBoolean());
+        Assert.Equal(0.92m, first.GetProperty("taxAmount").GetDecimal());
         Assert.Equal(4.00m, first.GetProperty("totalPrice").GetDecimal());
 
         // The claimant survived the splice, which is the half of this that could break:

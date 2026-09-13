@@ -86,17 +86,22 @@ public record ReceiptItemInput
     public decimal TotalPrice { get; init; }
 
     /// <summary>
-    /// Whether the bill's tax was charged on this line. True unless you say otherwise.
+    /// What of the bill's tax was charged on this line. Zero unless you say otherwise.
     /// </summary>
     /// <remarks>
-    /// A flag rather than a rate, because a flag is what the paper gives you: one tax total
-    /// at the bottom and a letter beside the lines it was charged on. It matters on the bill
-    /// that made splitting worth doing -- where groceries are exempt and general goods are
-    /// not, taxing every line taxes the bananas and lets the jacket off. Where the price
-    /// already includes the tax, as under VAT, the receipt's tax is zero and this decides
-    /// nothing.
+    /// An amount rather than a flag, and rather than a rate: an amount is what the till
+    /// prints, and it is the only shape that is right on a bill charging two rates. This was
+    /// a flag, and the tax was then weighed over the flagged lines by price -- which is exact
+    /// only where every taxed line carries the same rate. A supermarket receipt mixing 6%
+    /// food with 23% household goods divided wrongly by several euros, with the total still
+    /// adding up.
+    /// <para>
+    /// These have to come to the receipt's <c>Tax</c>, which is the figure off the bottom of
+    /// the paper. Where the price already includes the tax, as it does under VAT, both are
+    /// zero and there is nothing to say.
+    /// </para>
     /// </remarks>
-    public bool IsTaxable { get; init; } = true;
+    public decimal TaxAmount { get; init; }
 
     /// <summary>
     /// Who had it, or empty to leave the line unclaimed for now.

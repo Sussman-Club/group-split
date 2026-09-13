@@ -40,17 +40,17 @@ public class ReceiptItemSeedDto
     public decimal Quantity { get; init; } = 1;
 
     /// <summary>
-    /// Whether the tax on the bill was charged on this line. True unless the file says
-    /// otherwise, which is what a restaurant bill wants and what every seeded dinner relies
-    /// on.
+    /// What of the bill's tax was charged on this line. None unless the file says otherwise,
+    /// which is what a restaurant bill under VAT wants and what every seeded dinner relies on.
     /// </summary>
     /// <remarks>
-    /// False is for the warehouse receipt, where the groceries are exempt and the clothes
-    /// are not. It is the difference between apportioning the tax over the lines that were
-    /// actually charged it and spreading it over everything -- which would tax the bananas
-    /// and let the jacket off.
+    /// These have to come to the receipt's <see cref="ReceiptSeedDto.Tax"/>, and the seed
+    /// files are checked for it. It was a boolean, and the tax was then weighed over the
+    /// flagged lines by price -- exact only where every taxed line carries one rate, which is
+    /// not the warehouse receipt this exists for: the groceries and the clothes are taxed
+    /// differently, not merely one of them and not the other.
     /// </remarks>
-    public bool Taxable { get; init; } = true;
+    public decimal Tax { get; init; }
 
     /// <summary>
     /// Who had it, and with what weight -- one apiece for a line shared between them, two

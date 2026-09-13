@@ -65,9 +65,10 @@ public sealed record ReceiptResponse(
     IReadOnlyList<ReceiptItemResponse> Items);
 
 /// <summary>One line on a bill, with how it divides and who had it.</summary>
-/// <param name="IsTaxable">
-/// Whether the bill's tax was charged on this line. The tax is weighed over the lines it was
-/// charged on; the tip, which is about the bill rather than the goods, over all of them.
+/// <param name="TaxAmount">
+/// What of the bill's tax was charged on this line, which is where tax lives: a part's tax is
+/// its own lines' tax and a person's is the tax of the lines they claimed, with nothing
+/// apportioned. The tip is about the bill rather than the goods, so that one is spread.
 /// </param>
 /// <param name="ExpenseId">
 /// Which purchase this line's money is part of, or null while nobody has said. Each distinct
@@ -79,7 +80,7 @@ public sealed record ReceiptItemResponse(
     decimal UnitPrice,
     decimal Quantity,
     decimal TotalPrice,
-    bool IsTaxable,
+    decimal TaxAmount,
     Guid? ExpenseId,
     IReadOnlyList<ReceiptClaimResponse> Claims);
 

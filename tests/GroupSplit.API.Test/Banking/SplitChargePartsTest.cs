@@ -168,8 +168,8 @@ public class SplitChargePartsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Total = 160.01m,
             Items =
             [
-                Line("RICE", 100m, taxable: false),
-                Line("CIDER", 30m),
+                Line("RICE", 100m),
+                Line("CIDER", 30m, tax: 0.01m),
                 Line("BEER", 30m)
             ]
         }, Ct);
@@ -318,12 +318,12 @@ public class SplitChargePartsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private async Task<IReadOnlyList<ReceiptItem>> Lines(Guid expenseId) =>
         ReceiptSplitCalculator.PartOf(await Receipts.ForExpense(expenseId, Ct), expenseId);
 
-    private ReceiptItemInput Line(string name, decimal price, bool taxable = true) =>
+    private ReceiptItemInput Line(string name, decimal price, decimal tax = 0m) =>
         new()
         {
             Name = name,
             TotalPrice = price,
-            IsTaxable = taxable,
+            TaxAmount = tax,
             Claims = [new ReceiptClaimInput { UserId = Self }]
         };
 

@@ -99,7 +99,7 @@ internal static class SeededBill
                 UnitPrice = line.Quantity == 0
                     ? line.Price
                     : decimal.Round(line.Price / line.Quantity, 2),
-                IsTaxable = line.Taxable,
+                TaxAmount = line.Tax,
                 ExpenseId = expenseId
             };
 
