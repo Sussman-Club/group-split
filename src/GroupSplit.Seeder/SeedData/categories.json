@@ -73,8 +73,7 @@
     "GroupId": "12345678-9ABC-DEF0-1234-56789ABCDEF0",
     "Category": "Takeaway",
     "SplitRule": {
-      "$type": "even",
-      "Among": []
+      "$type": "itemized"
     }
   },
   {

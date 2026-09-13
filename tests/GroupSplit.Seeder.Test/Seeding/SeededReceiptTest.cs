@@ -1,4 +1,6 @@
 using System.Text.Json;
+using GroupSplit.API.Services;
+using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Seeders.DTOs;
 using GroupSplit.Shared;
 
@@ -127,6 +129,145 @@ public class SeededReceiptTest
                     $"'{line.Name}' on seeded expense '{expense.Name}' ({expense.Id}) names "
                     + "nobody, so the bill cannot be divided.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Every seeded bill that is going to be divided actually divides, and comes to the
+    /// expense exactly.
+    /// </summary>
+    /// <remarks>
+    /// The checks above read the file; this runs the arithmetic the app runs -- the tax
+    /// weighed over the lines it was charged on, the tip over all of them, each share
+    /// truncated to the cent and the remainder going to the payer. A seed file can satisfy
+    /// every one of the other assertions and still produce shares that do not sum to the
+    /// charge, and the splitter refuses those: the run would stop somewhere in the middle of
+    /// a thousand expenses with a figure and no line number.
+    /// </remarks>
+    [Fact]
+    public void Every_seeded_bill_that_will_be_divided_divides_to_the_expense()
+    {
+        var itemized = Categories()
+            .Where(category => category.SplitRule is ItemizedSplitRuleDto)
+            .Select(category => category.Id)
+            .ToHashSet();
+
+        var divided = Transactions()
+            .Where(tx => tx.Receipt is not null)
+            .Where(tx => tx.CategoryId is { } id && itemized.Contains(id))
+            .ToList();
+
+        // A guard on the guard. Everything below is a loop over the seed file, and a loop
+        // over nothing passes: the day somebody points the last itemised category somewhere
+        // else, this should say so rather than go quietly green.
+        Assert.NotEmpty(divided);
+
+        foreach (var expense in divided)
+        {
+            var receipt = Receipt(expense.Receipt!, expense.Id);
+
+            // Everybody the bill names, which is who a seeded expense is divided between.
+            var participants = expense.Receipt!.Items
+                .SelectMany(line => line.Had.Keys)
+                .Append(expense.PayerId)
+                .Distinct()
+                .ToList();
+
+            var shares = ReceiptSplitCalculator.Divide(
+                receipt, expense.Id, expense.PayerId, participants);
+
+            Assert.True(shares.Sum(share => share.Amount) == expense.Amount,
+                $"Seeded expense '{expense.Name}' ({expense.Id}) divides by its bill into shares "
+                + $"coming to {shares.Sum(share => share.Amount)}, but the expense is "
+                + $"{expense.Amount}.");
+        }
+    }
+
+    /// <summary>
+    /// The bill as the seeder builds it, which is what the division is handed.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than through <c>SeededBill</c>, which is internal to the seeder.
+    /// The two have to agree on the same handful of derivations -- the lines are the
+    /// subtotal, the extras are on top -- and a disagreement would show up as this test
+    /// passing over a file the seeder then refuses.
+    /// </remarks>
+    private static Receipt Receipt(ReceiptSeedDto dto, Guid expenseId)
+    {
+        var subtotal = dto.Items.Sum(line => line.Price);
+
+        var receipt = new Receipt
+        {
+            Subtotal = subtotal,
+            Tax = dto.Tax,
+            Tip = dto.Tip,
+            Total = subtotal + dto.Tax + dto.Tip
+        };
+
+        foreach (var line in dto.Items)
+        {
+            var item = new ReceiptItem
+            {
+                Name = line.Name,
+                NormalizedName = line.Name.Trim().ToLowerInvariant(),
+                TotalPrice = line.Price,
+                Quantity = line.Quantity,
+                IsTaxable = line.Taxable,
+                ExpenseId = expenseId
+            };
+
+            foreach (var (userId, weight) in line.Had)
+                item.Claims.Add(new ReceiptItemClaim { UserId = userId, Weight = weight });
+
+            receipt.Items.Add(item);
+        }
+
+        return receipt;
+    }
+
+    /// <summary>
+    /// And no bill anywhere else says who had what.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the rule above, and the one the seeder enforces at run time: the
+    /// itemised rule is the only thing that ever reads a claim, so a bill under a category
+    /// that divides evenly -- or on a charge nobody has filed -- would store claims nothing
+    /// would look at. Checked against the files as well as in the seeder, because the seeder
+    /// says which line of which bill only after everything before it has been written.
+    /// </remarks>
+    [Fact]
+    public void Only_a_bill_its_expense_divides_by_says_who_had_what()
+    {
+        var itemized = Categories()
+            .Where(category => category.SplitRule is ItemizedSplitRuleDto)
+            .Select(category => category.Id)
+            .ToHashSet();
+
+        var elsewhere = Transactions()
+            .Where(tx => tx.Receipt is not null)
+            .Where(tx => tx.CategoryId is not { } id || !itemized.Contains(id));
+
+        foreach (var expense in elsewhere)
+        {
+            var claimed = expense.Receipt!.Items.Where(line => line.Had.Count > 0).ToList();
+
+            Assert.True(claimed.Count == 0,
+                $"Seeded expense '{expense.Name}' ({expense.Id}) is not split by its bill, but "
+                + $"its bill says who had {string.Join(", ", claimed.Select(line => line.Name))}.");
+        }
+
+        var rows = Read<BankConnectionSeedDto>("bank-connections.json")
+            .SelectMany(connection => connection.Accounts)
+            .SelectMany(account => account.Transactions)
+            .Where(row => row.Receipt is not null);
+
+        foreach (var row in rows)
+        {
+            var claimed = row.Receipt!.Items.Where(line => line.Had.Count > 0).ToList();
+
+            Assert.True(claimed.Count == 0,
+                $"Seeded bank row '{row.Description}' ({row.Id}) is nobody's expense yet, but "
+                + $"its bill says who had {string.Join(", ", claimed.Select(line => line.Name))}.");
         }
     }
 

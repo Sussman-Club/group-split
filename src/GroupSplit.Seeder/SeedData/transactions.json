@@ -235,7 +235,35 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 33.94,
     "DateTime": "2025-03-07T10:05:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 14.29,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 13.15,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Garlic bread",
+          "Price": 6.5,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000014-0000-4000-8000-000000000014",
@@ -299,7 +327,34 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 31.7,
     "DateTime": "2025-03-15T13:30:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 10.85,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 9.55,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 11.3,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000013-0000-4000-8000-000000000013",
@@ -410,7 +465,41 @@
     "Amount": 39.15,
     "DateTime": "2025-04-03T10:05:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 9.91,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 9.41,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 10.9,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Falafel wrap",
+          "Price": 8.93,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000021-0000-4000-8000-000000000021",
@@ -863,7 +952,34 @@
     "Amount": 20.48,
     "DateTime": "2025-05-21T18:00:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 6.82,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 7.23,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 6.43,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000003B-0000-4000-8000-00000000003B",
@@ -935,7 +1051,27 @@
     "Amount": 21.51,
     "DateTime": "2025-05-27T21:00:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 11.2,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 10.31,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000005D-0000-4000-8000-00000000005D",
@@ -1074,7 +1210,41 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 42.43,
     "DateTime": "2025-06-12T20:20:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 10.82,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 9.52,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 11.25,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Som tam",
+          "Price": 10.84,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000076-0000-4000-8000-000000000076",
@@ -1138,7 +1308,35 @@
     "Amount": 40.76,
     "DateTime": "2025-06-17T18:05:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 17.56,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 16.7,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Fries to share",
+          "Price": 6.5,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000084-0000-4000-8000-000000000084",
@@ -1259,7 +1457,34 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 33.0,
     "DateTime": "2025-07-01T17:15:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 11.0,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 11.66,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 10.34,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00000A2-0000-4000-8000-0000000000A2",
@@ -1787,7 +2012,41 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 41.03,
     "DateTime": "2025-08-23T08:45:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 10.46,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 9.62,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 10.46,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Som tam",
+          "Price": 10.49,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00000B3-0000-4000-8000-0000000000B3",
@@ -1903,7 +2162,43 @@
     "Amount": 54.12,
     "DateTime": "2025-09-08T08:30:00Z",
     "Name": "Uber Eats",
-    "Merchant": "Uber"
+    "Merchant": "Uber",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Double cheeseburger",
+          "Price": 16.3,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Halloumi burger",
+          "Price": 14.35,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Chicken wings",
+          "Price": 16.97,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Onion rings",
+          "Price": 6.5,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00000E5-0000-4000-8000-0000000000E5",
@@ -2075,7 +2370,27 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 55.03,
     "DateTime": "2025-09-27T20:15:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 28.22,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 26.81,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00000D9-0000-4000-8000-0000000000D9",
@@ -2092,7 +2407,41 @@
     "Amount": 21.88,
     "DateTime": "2025-10-02T10:45:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 5.47,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 5.79,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 5.14,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Falafel wrap",
+          "Price": 5.48,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00000FD-0000-4000-8000-0000000000FD",
@@ -2172,7 +2521,35 @@
     "Amount": 48.53,
     "DateTime": "2025-10-11T19:05:00Z",
     "Name": "Uber Eats",
-    "Merchant": "Uber"
+    "Merchant": "Uber",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Double cheeseburger",
+          "Price": 21.89,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Halloumi burger",
+          "Price": 20.14,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Onion rings",
+          "Price": 6.5,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000101-0000-4000-8000-000000000101",
@@ -2212,7 +2589,34 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 32.84,
     "DateTime": "2025-10-17T08:20:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 11.24,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 9.89,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Quattro formaggi",
+          "Price": 11.71,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00000F4-0000-4000-8000-0000000000F4",
@@ -2406,7 +2810,41 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 46.66,
     "DateTime": "2025-11-17T21:45:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 11.81,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 11.22,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 12.99,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Som tam",
+          "Price": 10.64,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000011B-0000-4000-8000-00000000011B",
@@ -2463,7 +2901,43 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 34.71,
     "DateTime": "2025-11-24T17:30:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 9.4,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 9.96,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 8.85,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Spring rolls",
+          "Price": 6.5,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1,
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000011D-0000-4000-8000-00000000011D",
@@ -2489,7 +2963,27 @@
     "Amount": 25.4,
     "DateTime": "2025-12-02T12:15:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 13.22,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 12.18,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000013A-0000-4000-8000-00000000013A",
@@ -2854,7 +3348,41 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 43.52,
     "DateTime": "2026-01-13T19:15:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 11.1,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 9.76,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Quattro formaggi",
+          "Price": 11.54,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Capricciosa",
+          "Price": 11.12,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000155-0000-4000-8000-000000000155",
@@ -2902,7 +3430,35 @@
     "Amount": 33.75,
     "DateTime": "2026-01-16T13:20:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 13.97,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 13.28,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Fries to share",
+          "Price": 6.5,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000145-0000-4000-8000-000000000145",
@@ -3091,7 +3647,34 @@
     "Amount": 20.11,
     "DateTime": "2026-02-03T12:45:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 6.7,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 7.1,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 6.31,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000017B-0000-4000-8000-00000000017B",
@@ -3310,7 +3893,41 @@
     "Amount": 56.21,
     "DateTime": "2026-02-28T13:20:00Z",
     "Name": "Uber Eats",
-    "Merchant": "Uber"
+    "Merchant": "Uber",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Double cheeseburger",
+          "Price": 14.33,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Halloumi burger",
+          "Price": 13.19,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Chicken wings",
+          "Price": 14.33,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Caesar salad",
+          "Price": 14.36,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000016F-0000-4000-8000-00000000016F",
@@ -3462,7 +4079,43 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 29.3,
     "DateTime": "2026-03-11T13:15:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 7.8,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 6.87,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Quattro formaggi",
+          "Price": 8.13,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Garlic bread",
+          "Price": 6.5,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000190-0000-4000-8000-000000000190",
@@ -3470,7 +4123,27 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 20.28,
     "DateTime": "2026-03-12T20:45:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 10.4,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 9.88,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000019E-0000-4000-8000-00000000019E",
@@ -3849,7 +4522,41 @@
     "Amount": 35.45,
     "DateTime": "2026-04-26T08:30:00Z",
     "Name": "Uber Eats",
-    "Merchant": "Uber"
+    "Merchant": "Uber",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Double cheeseburger",
+          "Price": 8.86,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Halloumi burger",
+          "Price": 9.39,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Chicken wings",
+          "Price": 8.33,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Caesar salad",
+          "Price": 8.87,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00001B1-0000-4000-8000-0000000001B1",
@@ -3971,7 +4678,35 @@
     "Amount": 63.84,
     "DateTime": "2026-05-10T16:00:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 29.86,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 27.48,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Fries to share",
+          "Price": 6.5,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00001EB-0000-4000-8000-0000000001EB",
@@ -4035,7 +4770,34 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 45.33,
     "DateTime": "2026-05-17T11:20:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 15.52,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 13.66,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Quattro formaggi",
+          "Price": 16.15,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00001D8-0000-4000-8000-0000000001D8",
@@ -4290,7 +5052,41 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 59.44,
     "DateTime": "2026-06-12T11:20:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 15.04,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 14.29,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Quattro formaggi",
+          "Price": 16.55,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Capricciosa",
+          "Price": 13.56,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E00001FB-0000-4000-8000-0000000001FB",
@@ -4299,7 +5095,43 @@
     "Amount": 31.88,
     "DateTime": "2026-06-12T14:05:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 8.46,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 8.96,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 7.96,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Fries to share",
+          "Price": 6.5,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1,
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000020E-0000-4000-8000-00000000020E",
@@ -4348,7 +5180,27 @@
     "Amount": 53.01,
     "DateTime": "2026-06-16T12:00:00Z",
     "Name": "Uber Eats",
-    "Merchant": "Uber"
+    "Merchant": "Uber",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Double cheeseburger",
+          "Price": 27.6,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Halloumi burger",
+          "Price": 25.41,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000214-0000-4000-8000-000000000214",
@@ -4528,7 +5380,41 @@
     "Amount": 51.21,
     "DateTime": "2026-07-03T14:20:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 13.06,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 11.49,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 13.58,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Falafel wrap",
+          "Price": 13.08,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000229-0000-4000-8000-000000000229",
@@ -4682,7 +5568,35 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 52.46,
     "DateTime": "2026-07-19T17:15:00Z",
-    "Name": "Pizza night"
+    "Name": "Pizza night",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Margherita",
+          "Price": 23.56,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Diavola",
+          "Price": 22.4,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Garlic bread",
+          "Price": 6.5,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000227-0000-4000-8000-000000000227",
@@ -4912,7 +5826,34 @@
     "Amount": 60.11,
     "DateTime": "2026-08-14T21:05:00Z",
     "Name": "Uber Eats",
-    "Merchant": "Uber"
+    "Merchant": "Uber",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Double cheeseburger",
+          "Price": 20.03,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Halloumi burger",
+          "Price": 21.23,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Chicken wings",
+          "Price": 18.85,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000256-0000-4000-8000-000000000256",
@@ -4928,7 +5869,41 @@
     "CategoryId": "CA7E0004-0000-4000-8000-000000000004",
     "Amount": 52.72,
     "DateTime": "2026-08-16T15:45:00Z",
-    "Name": "Thai takeaway"
+    "Name": "Thai takeaway",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Pad thai",
+          "Price": 13.44,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        },
+        {
+          "Name": "Green curry",
+          "Price": 12.37,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Massaman beef",
+          "Price": 13.44,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Som tam",
+          "Price": 13.47,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E000023D-0000-4000-8000-00000000023D",
@@ -4970,7 +5945,43 @@
     "Amount": 37.5,
     "DateTime": "2026-08-22T16:15:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 10.61,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 9.34,
+          "Had": {
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1
+          }
+        },
+        {
+          "Name": "Katsu curry",
+          "Price": 11.05,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Fries to share",
+          "Price": 6.5,
+          "Had": {
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000251-0000-4000-8000-000000000251",
@@ -5065,7 +6076,27 @@
     "Amount": 37.15,
     "DateTime": "2026-09-03T18:20:00Z",
     "Name": "Glovo",
-    "Merchant": "Glovo"
+    "Merchant": "Glovo",
+    "Receipt": {
+      "Tax": 0.0,
+      "Tip": 0.0,
+      "Items": [
+        {
+          "Name": "Chicken burrito",
+          "Price": 19.05,
+          "Had": {
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1
+          }
+        },
+        {
+          "Name": "Poke bowl",
+          "Price": 18.1,
+          "Had": {
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+          }
+        }
+      ]
+    }
   },
   {
     "Id": "E0000260-0000-4000-8000-000000000260",
@@ -5429,20 +6460,20 @@
           "Name": "Bread and olives",
           "Price": 12.0,
           "Had": {
-              "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
-              "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
-              "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
-              "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
           }
         },
         {
           "Name": "Paella for two",
           "Price": 28.0,
           "Had": {
-              "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
-              "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
-              "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
-              "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
+            "94F67FC0-F549-46ED-AD81-D6DF79225396": 1,
+            "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64": 1,
+            "0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52": 1,
+            "4A9B8D57-14D5-454F-9D06-5B32F5E4A88C": 1
           }
         }
       ]
