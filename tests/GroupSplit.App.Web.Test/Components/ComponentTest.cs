@@ -85,12 +85,10 @@ public abstract class ComponentTest : BunitContext
 
         Services.AddSingleton(Categories.Object);
         Services.AddSingleton(SplitRules.Object);
-        Services.AddSingleton<DivisionSourceReader>();
     }
 
     /// <summary>
-    /// The categories client the <see cref="DivisionSourceReader"/> reads through, for a
-    /// test that wants the strip above an expense's shares to say something.
+    /// The group's categories, which the expense dialogs read to fill their category picker.
     /// </summary>
     protected Mock<ICategoriesClient> Categories { get; } = new();
 

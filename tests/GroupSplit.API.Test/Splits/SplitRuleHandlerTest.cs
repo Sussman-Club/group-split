@@ -223,6 +223,72 @@ public class SplitRuleHandlerTest
     }
 
     [Fact]
+    public void A_rule_naming_one_person_puts_the_whole_amount_on_them_whoever_paid()
+    {
+        SplitRuleVersion ruleVersion = new SoleSplitRuleVersion { UserId = Carol };
+
+        var splits = Handler.Divide(ruleVersion, 100.00m, Alice, Members);
+
+        var only = Assert.Single(splits);
+
+        Assert.Equal(Carol, only.UserId);
+        Assert.Equal(100.00m, only.Amount);
+    }
+
+    /// <summary>
+    /// The one thing this kind can be wrong about, and the reason it goes through
+    /// <see cref="SplitCalculator"/> at all: who owes is written down, so it can be somebody
+    /// who has left. A share against them would belong to nobody the group's balances list.
+    /// </summary>
+    [Fact]
+    public void A_rule_naming_somebody_who_has_left_divides_between_nobody()
+    {
+        SplitRuleVersion ruleVersion = new SoleSplitRuleVersion { UserId = Carol };
+
+        Assert.Throws<ArgumentException>(
+            () => Handler.Divide(ruleVersion, 100.00m, Alice, [Alice, Bob]));
+    }
+
+    [Fact]
+    public void A_rule_naming_one_person_is_the_same_rule_only_when_it_is_the_same_person()
+    {
+        SplitRuleVersion forCarol = new SoleSplitRuleVersion { UserId = Carol };
+
+        Assert.True(Handler.SameAs(forCarol, new SoleSplitRuleVersion { UserId = Carol }));
+        Assert.False(Handler.SameAs(forCarol, new SoleSplitRuleVersion { UserId = Bob }));
+
+        // A version with nobody in it is not a rule anybody can save -- Invalid refuses it --
+        // and it is certainly not the same division as naming Carol.
+        Assert.False(Handler.SameAs(forCarol, new SoleSplitRuleVersion()));
+    }
+
+    [Fact]
+    public void A_rule_naming_one_person_round_trips_through_its_dto()
+    {
+        SplitRuleVersion ruleVersion = new SoleSplitRuleVersion { UserId = Bob };
+
+        var dto = Assert.IsType<SoleSplitRuleDto>(Handler.ToDto(ruleVersion));
+
+        Assert.Equal(Bob, dto.UserId);
+
+        var rebuilt = Assert.IsType<SoleSplitRuleVersion>(
+            new ServiceCollection().AddSplitRuleServices().BuildServiceProvider()
+                .GetRequiredService<ISplitRuleFactory>().FromDto(dto));
+
+        Assert.Equal(Bob, rebuilt.UserId);
+    }
+
+    [Fact]
+    public void A_rule_that_says_nobody_is_refused_in_words()
+    {
+        Assert.Equal(
+            "A rule that puts the whole amount on one person has to say which person.",
+            Handler.Invalid(new SoleSplitRuleVersion()));
+
+        Assert.Null(Handler.Invalid(new SoleSplitRuleVersion { UserId = Alice }));
+    }
+
+    [Fact]
     public void A_rule_that_is_not_proportional_needs_no_change_to_anything_existing()
     {
         var provider = new ServiceCollection()

@@ -341,6 +341,111 @@ public class RuleEditorFormTest : ComponentTest
         Assert.Equal(100m, split.Values.Sum());
     }
 
+    // ---- all on one person -------------------------------------------------------------
+
+    /// <summary>
+    /// Two kinds on the wire and one entry in the type list, because the difference between
+    /// them is not a difference in the shape of the division: both put the whole amount on
+    /// one person, and what the form asks next is which person.
+    /// </summary>
+    private static async Task ChooseAsync(IRenderedComponent<RuleEditorForm> form, RuleType type)
+    {
+        var select = form.FindComponent<MudSelect<RuleType?>>();
+
+        await form.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(type));
+    }
+
+    private static async Task ChoosePersonAsync(IRenderedComponent<RuleEditorForm> form, Guid? userId)
+    {
+        var select = form.FindComponents<MudSelect<Guid?>>().Last();
+
+        await form.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(userId));
+    }
+
+    /// <summary>
+    /// "Whoever paid" is the answer that needs nothing else chosen to be a complete rule,
+    /// which is what the type has to mean before anybody touches the second control.
+    /// </summary>
+    [Fact]
+    public async Task All_on_one_person_starts_as_all_on_whoever_paid()
+    {
+        var form = RenderEmptyPercentages();
+
+        await ChooseAsync(form, RuleType.AllOnOnePerson);
+
+        Assert.IsType<SoleSplitRuleDto>(form.Instance.Model.Version);
+    }
+
+    [Fact]
+    public async Task Naming_a_member_makes_it_all_on_them()
+    {
+        var form = RenderEmptyPercentages();
+
+        await ChooseAsync(form, RuleType.AllOnOnePerson);
+        await ChoosePersonAsync(form, Bob.Id);
+
+        Assert.Equal(Bob.Id, Assert.IsType<SoleSplitRuleDto>(form.Instance.Model.Version).UserId);
+    }
+
+    /// <summary>
+    /// And back, in one pick: the person list is one control with "whoever paid" at the top
+    /// of it, not a separate rule type somebody has to find again.
+    /// </summary>
+    [Fact]
+    public async Task Choosing_whoever_paid_again_gives_up_the_name()
+    {
+        var form = RenderEmptyPercentages();
+
+        await ChooseAsync(form, RuleType.AllOnOnePerson);
+        await ChoosePersonAsync(form, Bob.Id);
+        await ChoosePersonAsync(form, null);
+
+        Assert.IsType<SoleSplitRuleDto>(form.Instance.Model.Version);
+    }
+
+    /// <summary>
+    /// A rule that already names somebody opens on them rather than on "whoever paid",
+    /// which would be the form quietly proposing a different division on the way in.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_that_names_somebody_opens_on_them()
+    {
+        var form = Render(new SoleSplitRuleDto(Carol.Id));
+
+        var chosen = form.FindComponents<MudSelect<Guid?>>().Last();
+
+        Assert.Equal(Carol.Id, chosen.Instance.Value);
+    }
+
+    // ---- the shape is settled once the rule exists ---------------------------------------
+
+    /// <summary>
+    /// A rule keeps the shape it was written with, so the editor does not offer to change it
+    /// -- the API refuses (SPLIT_RULE_KIND_FIXED), and an control that can only fail is worse
+    /// than none.
+    /// </summary>
+    [Fact]
+    public void An_existing_rule_does_not_offer_to_change_how_it_divides()
+    {
+        var form = Render<RuleEditorForm>(parameters => parameters
+            .AddCascadingValue(Mock.Of<IMudDialogInstance>())
+            .Add(editor => editor.GroupId, GroupId)
+            .Add(editor => editor.Existing, true)
+            .Add(editor => editor.Model, SharesModel()));
+
+        Assert.True(form.FindComponent<MudSelect<RuleType?>>().Instance.Disabled);
+    }
+
+    /// <summary>
+    /// And a rule being written does, which is where choosing between shares and percentages
+    /// belongs -- including the conversion the tests above pin down.
+    /// </summary>
+    [Fact]
+    public void A_rule_being_written_still_chooses_how_it_divides()
+    {
+        Assert.False(RenderShares().FindComponent<MudSelect<RuleType?>>().Instance.Disabled);
+    }
+
     private sealed class AlwaysPolicy(Guid bearer) : IRemainderPolicy
     {
         public Guid CarriedBy(IReadOnlyCollection<UserInfo> members, Func<UserInfo, decimal> weight) => bearer;

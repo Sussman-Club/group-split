@@ -5,6 +5,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
+@inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
 @inject IMerchantCommands Merchants
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
@@ -115,6 +116,9 @@
                                      PayerId="@_model.PaidByUserId"
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
+                                     MemberRules="@_memberRules"
+                                     SplitRuleId="@_model.SplitRuleId"
+                                     SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                      Preview="@_preview"
                                      PreviewError="@_previewError"
                                      Awaiting="@_awaiting"/>
@@ -188,6 +192,13 @@
     private IReadOnlyList<GroupResponse> _groups = [];
     private IReadOnlyList<CategoryResponse> _categories = [];
     private IReadOnlyList<UserInfo> _members = [];
+
+    /// <summary>
+    /// The rules the group holds one of per member, for the "all for one" option. Empty
+    /// where the read failed, which turns the option off rather than offering an id the
+    /// dialog does not have.
+    /// </summary>
+    private IReadOnlyList<SplitRuleResponse> _memberRules = [];
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
@@ -294,6 +305,15 @@
 
 
     private bool IsShared => _groupId is not null;
+
+    /// <summary>
+    /// The rules a group holds one of per member, out of everything it has: the ones it was
+    /// given, each putting the whole amount on somebody. The others are divisions the group
+    /// wrote, reached through a category rather than picked per expense -- including one it
+    /// wrote in this same shape, which it may restate or delete tomorrow.
+    /// </summary>
+    internal static IReadOnlyList<SplitRuleResponse> MemberRulesOf(IReadOnlyList<SplitRuleResponse>? rules) =>
+        [.. (rules ?? []).Where(rule => rule.BuiltIn && rule.AllForUserId is not null)];
 
     /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
     private static string Divides(CategoryResponse category) =>
@@ -410,12 +430,16 @@
         // quietly leave the new group's members out of their own expense.
         _model.Splits = null;
         _model.CategoryId = null;
+        // The rule belongs to the group that was just left, and the API refuses one from
+        // anywhere else.
+        _model.SplitRuleId = null;
         _preview = null;
 
         if (_groupId is not { } groupId)
         {
             _categories = [];
             _members = [];
+            _memberRules = [];
             return;
         }
 
@@ -423,13 +447,26 @@
         // the members here only fill the payer picker -- the division itself is worked out
         // by the API. Asked together, one of them failing took the group with it and there
         // was no way to record the expense at all.
-        await Errors.TryAsync(
+        //
+        // At once, though. Three round trips one after another is three times the wait with
+        // the dialog already on screen, and every one of them lands as a re-render: the
+        // empty-state alert, then the members, then the rules. Nothing here reads what the
+        // others write, so the only thing the sequence bought was the flicker.
+        var categories = Errors.TryAsync(
             async () => _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
             "Could not load this group's categories.");
 
-        await Errors.TryAsync(
+        var members = Errors.TryAsync(
             async () => _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
             "Could not load who is in this group.");
+
+        // Silent on failure, unlike those two: what it costs is one of the three ways to
+        // divide, and the command has already said so if it went wrong.
+        var rules = SplitRules.ForGroupAsync(groupId);
+
+        await Task.WhenAll(categories, members, rules);
+
+        _memberRules = MemberRulesOf(await rules);
 
         // Whoever is recording it paid for it, until they say otherwise. The API already
         // assumed as much for an absent payer, so this was only ever missing from the
@@ -495,6 +532,12 @@
     private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)
     {
         _model.Splits = splits;
+        await RefreshPreviewAsync();
+    }
+
+    private async Task OnSplitRuleChangedAsync(Guid? splitRuleId)
+    {
+        _model.SplitRuleId = splitRuleId;
         await RefreshPreviewAsync();
     }
 

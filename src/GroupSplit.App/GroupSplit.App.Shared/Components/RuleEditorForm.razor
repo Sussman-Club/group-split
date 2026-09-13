@@ -19,6 +19,10 @@
         @* Required, so an unanswered one is said out loud. The form validated clean
            without it while IsValid refused on the same field, which made Create a button
            that did nothing and explained nothing. *@
+        @* Fixed once the rule exists. A rule is a named division a group refers to, and
+           what shape that division has is part of what the rule is: every category pointing
+           at it and every expense divided by it was pointed at a rule that divided that way.
+           The API refuses the change (SPLIT_RULE_KIND_FIXED); the form does not offer it. *@
         <MudSelect
             T="RuleType?"
             Label="How does it divide?"
@@ -27,9 +31,11 @@
             Variant="Variant.Outlined"
             Required="true"
             RequiredError="Choose how this divides."
+            Disabled="@KindFixed"
+            HelperText="@(KindFixed ? "A rule keeps the shape it was written with." : null)"
         >
-            <MudSelectItem T="RuleType?" Value="RuleType.Personal">
-                Personal (payer owes full amount)
+            <MudSelectItem T="RuleType?" Value="RuleType.AllOnOnePerson">
+                All on one person
             </MudSelectItem>
 
             <MudSelectItem T="RuleType?" Value="RuleType.Even">
@@ -44,6 +50,25 @@
                 Shares split
             </MudSelectItem>
         </MudSelect>
+
+        @* Which person, once the type says one person. Required, because that is the whole
+           of what this kind says: a rule putting the amount on nobody in particular is not a
+           division, and the API refuses one. *@
+        @if (_ruleType is RuleType.AllOnOnePerson)
+        {
+            <MudSelect T="Guid?"
+                       Label="Who owes it?"
+                       Value="@_allFor"
+                       ValueChanged="@OnAllForChanged"
+                       Variant="Variant.Outlined"
+                       Required="true"
+                       RequiredError="Choose who owes it.">
+                @foreach (var member in _members)
+                {
+                    <MudSelectItem T="Guid?" Value="@member.Id">@member.Label()</MudSelectItem>
+                }
+            </MudSelect>
+        }
 
         @if (Model.Version is PercentSplitRuleDto percent)
         {
@@ -126,9 +151,26 @@
 
     [Parameter] public string? NameHelp { get; set; } = "What the group calls this division, e.g. \"Household 3-way\".";
 
+    /// <summary>
+    /// Whether this is an existing rule, whose shape is settled: the numbers in a division
+    /// are edited, the shape it has is not. False while one is being written, which is where
+    /// choosing between shares and percentages belongs.
+    /// </summary>
+    [Parameter] public bool Existing { get; set; }
+
+    private bool KindFixed => Existing && _ruleType is not null;
+
     private MudForm _form;
 
     private RuleType? _ruleType;
+
+    /// <summary>
+    /// Who the whole amount is for, while the type says one person. Null until somebody is
+    /// picked, which is a form that cannot be saved yet -- see <see cref="IsValid"/>.
+    /// Meaningless for every other type and not read there.
+    /// </summary>
+    private Guid? _allFor;
+
     private ICollection<UserInfo> _members = [];
 
     // The form is meaningless without the members to split between, so a failed load
@@ -158,10 +200,12 @@
         {
             PercentSplitRuleDto => RuleType.Percent,
             SharesSplitRuleDto => RuleType.Shares,
-            PayerSplitRuleDto => RuleType.Personal,
+            SoleSplitRuleDto => RuleType.AllOnOnePerson,
             EvenSplitRuleDto => RuleType.Even,
             _ => _ruleType
         };
+
+        _allFor = (Model.Version as SoleSplitRuleDto)?.UserId;
 
         StateHasChanged();
     }
@@ -179,6 +223,7 @@
             return _ruleType switch
             {
                 null => false,
+                RuleType.AllOnOnePerson when _allFor is null => false,
                 RuleType.Percent when PercentTotal != 100 => false,
                 RuleType.Shares when SharesTotal <= 0 => false,
                 _ => true
@@ -195,7 +240,9 @@
     {
         Model.Version = _ruleType switch
         {
-            RuleType.Personal => new PayerSplitRuleDto(),
+            // Incomplete until somebody picks a person, which the select above insists on
+            // and IsValid refuses to save without.
+            RuleType.AllOnOnePerson => Division(_allFor),
 
             // Naming nobody, which is what makes it keep dividing evenly when somebody
             // joins. Listing today's members instead would freeze them in, and that is the
@@ -222,6 +269,21 @@
 
         StateHasChanged();
     }
+
+    private void OnAllForChanged(Guid? userId)
+    {
+        _allFor = userId;
+        Model.Version = Division(userId);
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The division "all on one person" comes to, with nobody picked yet standing for the
+    /// empty id the API refuses -- which is what keeps a half-answered form unsaveable
+    /// rather than saveable as something nobody meant.
+    /// </summary>
+    private static SplitRuleDto Division(Guid? userId) => new SoleSplitRuleDto(userId ?? Guid.Empty);
 
     private void SplitPercentEvenly()
     {
@@ -332,9 +394,13 @@
                     member => shares.Shares.GetValueOrDefault(member.Id, 0))
             },
 
-            // A personal rule names nobody, and a rule type not yet chosen is null: neither
-            // has weights to scope.
-            var unweighted => unweighted
+            // A rule naming somebody who is no longer a member is all the form can honestly
+            // show: the select renders one entry per member, so the person it names would
+            // have no row to appear in, and quietly dropping them would change what the rule
+            // says without anybody choosing to. Left as it is and saved as it is, unless
+            // somebody picks again -- which the API refuses, in the same words it refuses a
+            // weighted rule naming a stranger.
+            var unnamed => unnamed
         };
     }
 

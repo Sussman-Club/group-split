@@ -36,7 +36,6 @@ public static class TransactionApi
             group.MapPreviewUpdatedSplits();
             group.MapUpdate();
             group.MapSetDivisionSource();
-            group.MapReattach();
             group.MapDelete();
 
             return group;
@@ -448,32 +447,6 @@ public static class TransactionApi
                 .Produces<TransactionDetailsResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict);
-        }
-
-        /// <summary>
-        /// Points a group's expenses at the version of their rule that was in force on the
-        /// day each was spent.
-        /// </summary>
-        /// <remarks>
-        /// For a back catalogue whose provenance was guessed. A migration out of a workbook
-        /// pointed every categorised expense at its category's only version, because at the
-        /// time that was the only one; once the rule's real history is written, the dates on
-        /// the rows are enough to sort out which version each expense actually fell under.
-        /// <para>
-        /// It divides nothing. The splitter is not on this path at all -- the one column it
-        /// writes is the version pointer -- so the group's balances are the same afterwards
-        /// to the cent. <c>dryRun</c> answers the same summary and saves none of it.
-        /// </para>
-        /// </remarks>
-        private RouteHandlerBuilder MapReattach()
-        {
-            return group.MapPost("reattach", async (
-                    ReattachTransactionsRequest request,
-                    IExpenseProvenance provenance,
-                    CancellationToken ct) => Results.Ok(await provenance.Reattach(request, ct)))
-                .WithName("ReattachTransactions")
-                .Produces<ReattachSummaryResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
         /// <summary>

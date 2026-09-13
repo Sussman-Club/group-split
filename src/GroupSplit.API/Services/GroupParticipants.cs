@@ -299,8 +299,12 @@ public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions 
             transaction.UserId = toUserId;
         }
 
-        var rewrite = await revisions.WithoutParticipant(
-            groupId, fromUserId, rules is RuleHandling.Transfer ? toUserId : null, ct);
+        // Both, rather than the receiver only when the rules are to follow them: a rule
+        // that puts the whole amount on the person leaving has no weight to prune and
+        // nowhere to prune it to, and this hand-over is about to delete them -- so it moves
+        // to whoever is taking their position either way, which is what has just happened to
+        // their shares and to the expenses they were down as having paid for.
+        var rewrite = await revisions.WithoutParticipant(groupId, fromUserId, toUserId, rules, ct);
 
         return new ParticipantHandover(
             shares.Count, amountOwed, paid.Count, amountPaid, rewrite.Rules, rewrite.Emptied);

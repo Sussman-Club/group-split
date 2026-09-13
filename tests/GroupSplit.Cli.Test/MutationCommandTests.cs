@@ -1103,6 +1103,63 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal(["/amount"], paths);
     }
 
+    /// <summary>
+    /// The expense that divides unlike its neighbours names the rule it divides by, and the
+    /// id has to reach the request -- it is the whole of what "all for Ana" comes to.
+    /// </summary>
+    [Fact]
+    public async Task Transactions_create_sends_the_rule_the_expense_names()
+    {
+        var ruleId = Guid.NewGuid();
+
+        _api.Returns("/api/transactions", Transaction("The gym"));
+
+        var result = await Cli.RunAsync(
+            "transactions", "create", "The gym", "60",
+            "--group", Guid.NewGuid().ToString(), "--split-rule", ruleId.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        Assert.Equal(
+            ruleId,
+            _api.Requests.Single(request => request.Method == "POST").Json
+                .GetProperty("splitRuleId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Transactions_update_patches_the_rule_and_leaves_the_shares_alone()
+    {
+        var id = Guid.NewGuid();
+        var ruleId = Guid.NewGuid();
+
+        _api.Returns($"/api/transactions/{id}", Transaction("The gym"));
+
+        await Cli.RunAsync("transactions", "update", id.ToString(), "--split-rule", ruleId.ToString());
+
+        var patch = _api.Requests.Single(request => request.Method == "PATCH").Json;
+
+        var operation = Assert.Single(patch.EnumerateArray());
+
+        Assert.Equal("/splitRuleId", operation.GetProperty("path").GetString(), ignoreCase: true);
+        Assert.Equal(ruleId, operation.GetProperty("value").GetGuid());
+    }
+
+    /// <summary>
+    /// Two answers to one question. The API refuses both in one request, and there is no
+    /// reading of the pair that makes them agree.
+    /// </summary>
+    [Fact]
+    public async Task Naming_a_rule_and_stating_the_shares_is_refused_before_it_is_sent()
+    {
+        var result = await Cli.RunAsync(
+            "transactions", "update", Guid.NewGuid().ToString(),
+            "--split-rule", Guid.NewGuid().ToString(),
+            "--split", $"{Guid.NewGuid()}=10");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
+    }
+
     // ---- split rules -----------------------------------------------------------------
 
     [Fact]
@@ -1141,6 +1198,106 @@ public sealed class MutationCommandTests : IDisposable
         // Empty rather than today's members: it keeps dividing evenly when somebody joins.
         Assert.Equal("even", definition.GetProperty("$type").GetString());
         Assert.Equal(0, definition.GetProperty("among").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Split_rules_create_sends_a_rule_that_names_one_member()
+    {
+        var groupId = Guid.NewGuid();
+        var ana = Guid.NewGuid();
+
+        _api.Returns("/api/split-rules", Rule("Ana\'s gym", groupId));
+
+        var result = await Cli.RunAsync(
+            "split-rules", "create", "Ana\'s gym", "--group", groupId.ToString(), "--sole", ana.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var definition = _api.Requests.Single(r => r.Method == "POST").Json.GetProperty("definition");
+
+        Assert.Equal("sole", definition.GetProperty("$type").GetString());
+        Assert.Equal(ana, definition.GetProperty("userId").GetGuid());
+    }
+
+    /// <summary>
+    /// <c>--payer</c> is <c>--sole</c> with your own id, and the id is the CLI's to find:
+    /// what reaches the API is a rule naming a member like any other.
+    /// </summary>
+    /// <remarks>
+    /// There is no kind on the wire that means "whoever paid" any more. A rule that named
+    /// nobody was the one division that changed meaning when the payer was corrected, so the
+    /// person is written down -- and writing it down is the one thing a person at a terminal
+    /// should not have to look up.
+    /// </remarks>
+    [Fact]
+    public async Task All_on_the_payer_names_the_signed_in_member()
+    {
+        var groupId = Guid.NewGuid();
+        var me = Guid.NewGuid();
+
+        _api.Returns("/api/users/me", new
+        {
+            id = me, fullName = "Anabel Benitez", email = "anabel@example.com"
+        });
+
+        _api.Returns("/api/split-rules", Rule("Mine", groupId));
+
+        var result = await Cli.RunAsync(
+            "split-rules", "create", "Mine", "--group", groupId.ToString(), "--payer");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var definition = _api.Requests.Single(r => r.Method == "POST").Json.GetProperty("definition");
+
+        Assert.Equal("sole", definition.GetProperty("$type").GetString());
+        Assert.Equal(me, definition.GetProperty("userId").GetGuid());
+    }
+
+    /// <summary>
+    /// And it is still one division per rule: naming yourself and naming somebody else in
+    /// the same breath says nothing a rule could be written from.
+    /// </summary>
+    [Fact]
+    public async Task All_on_the_payer_and_all_on_a_named_member_are_not_interchangeable()
+    {
+        var result = await Cli.RunAsync(
+            "split-rules", "create", "Muddle", "--group", Guid.NewGuid().ToString(),
+            "--payer", "--sole", Guid.NewGuid().ToString());
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
+    }
+
+    /// <summary>
+    /// Short of the API rather than after it: the confirmation protocol would otherwise
+    /// print a summary, take a --yes, and then meet a refusal -- which reads as the CLI
+    /// having agreed to something it could not do.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_the_group_was_given_cannot_be_deleted_from_here()
+    {
+        var id = Guid.NewGuid();
+        var ana = Guid.NewGuid();
+
+        _api.Returns($"/api/split-rules/{id}", new
+        {
+            id,
+            groupId = Guid.NewGuid(),
+            name = "All for Ana",
+            versionId = Guid.NewGuid(),
+            changedAt = DateTimeOffset.UtcNow,
+            builtIn = true,
+            definition = new Dictionary<string, object>
+            {
+                ["$type"] = "sole",
+                ["userId"] = ana.ToString()
+            }
+        });
+
+        var result = await Cli.RunAsync("split-rules", "delete", id.ToString());
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests, request => request.Method == "DELETE");
     }
 
     [Fact]

@@ -45,6 +45,18 @@ public record UpdateTransactionRequest
     public Guid? MerchantId { get; set; }
 
     /// <summary>
+    /// The rule the expense divides by, whatever its category says, or null to let the
+    /// category decide. See <see cref="CreateTransactionRequest.SplitRuleId"/>.
+    /// </summary>
+    /// <remarks>
+    /// The model a patch is applied to carries the rule the expense already named, so a
+    /// patch saying nothing about it leaves the expense dividing by what it divided by.
+    /// Moving it is an edit to the division, so the shares are worked out again from it --
+    /// the same as moving the amount, the payer or the category.
+    /// </remarks>
+    public Guid? SplitRuleId { get; set; }
+
+    /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
     /// </summary>
     /// <remarks>

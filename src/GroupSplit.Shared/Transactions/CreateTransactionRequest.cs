@@ -37,6 +37,22 @@ public record CreateTransactionRequest
     public Guid? MerchantId { get; set; }
 
     /// <summary>
+    /// A rule to divide by, whatever the category says, or null to let the category decide.
+    /// </summary>
+    /// <remarks>
+    /// For the expense that divides unlike its neighbours: the weekly shop is even, but this
+    /// one is the birthday cake and all of it is Ana's. Naming the rule rather than typing
+    /// the shares is what keeps it re-dividable -- correcting the amount afterwards divides
+    /// again by the same rule, where shares somebody typed are refused because they no
+    /// longer sum to the new total.
+    /// <para>
+    /// It has to be a rule of the expense's own group. Both this and
+    /// <see cref="Splits"/> is refused: they are two answers to one question.
+    /// </para>
+    /// </remarks>
+    public Guid? SplitRuleId { get; set; }
+
+    /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
     /// </summary>
     /// <remarks>

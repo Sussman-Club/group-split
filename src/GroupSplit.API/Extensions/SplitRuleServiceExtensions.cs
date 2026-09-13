@@ -23,9 +23,9 @@ public static class SplitRuleServiceExtensions
         public IServiceCollection AddSplitRuleServices()
         {
             services.AddSplitRuleHandler<EvenSplitRuleVersion, EvenSplitRuleDto, EvenSplitRuleHandler>();
-            services.AddSplitRuleHandler<PayerSplitRuleVersion, PayerSplitRuleDto, PayerSplitRuleHandler>();
             services.AddSplitRuleHandler<PercentSplitRuleVersion, PercentSplitRuleDto, PercentSplitRuleHandler>();
             services.AddSplitRuleHandler<SharesSplitRuleVersion, SharesSplitRuleDto, SharesSplitRuleHandler>();
+            services.AddSplitRuleHandler<SoleSplitRuleVersion, SoleSplitRuleDto, SoleSplitRuleHandler>();
 
             // The dispatcher, which knows no kind by name: it makes the generic interface
             // from the runtime type and asks for it. Registered under both directions,

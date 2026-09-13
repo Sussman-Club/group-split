@@ -2168,85 +2168,13 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 
-/* ---------------------------------------------------------- provenance ---- */
+/* ------------------------------------------------------- quiet captions ---- */
 
 /*
-    Where an expense's shares came from, said outright rather than guessed at. It sits
-    above the shares themselves, in both the dialog that shows an expense and the one that
-    edits it, and it is the same strip in each -- which is why it is a component and these
-    are classes rather than a paragraph written twice.
+    A small muted note beside something else -- "Used by", under a rule's name on the
+    splits tab. There was a strip above every expense's shares saying what divided them,
+    and this is what is left of it.
 */
-/*
-    The ordinary case: one line, no chrome. It is under a heading that already says "Split
-    between 4 people", so it finishes that sentence rather than opening a new box.
-*/
-.gs-provenance-line {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin: 0 0 10px;
-    font-size: 0.8125rem;
-    color: var(--gs-muted);
-    text-wrap: pretty;
-}
-
-/* The sentence yields; a control beside it does not. */
-.gs-provenance-line > span {
-    min-width: 0;
-}
-
-.gs-provenance-line .mud-button-root {
-    flex: 0 0 auto;
-}
-
-.gs-provenance {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 14px;
-    border-radius: var(--gs-radius);
-    background: var(--gs-surface-2);
-    border: 1px solid var(--gs-line);
-}
-
-/* A version that began after the money was spent. The record is wrong, and the one state
-   here that is worth the colour of a problem rather than the colour of a remark. */
-.gs-provenance.is-wrong {
-    background: var(--gs-clay-soft);
-    border-color: var(--gs-clay-glow);
-}
-
-.gs-provenance.is-wrong .mud-icon-root {
-    color: var(--gs-clay-deep);
-}
-
-.gs-provenance .mud-icon-root {
-    flex: 0 0 auto;
-    width: 20px;
-    height: 20px;
-    margin-top: 1px;
-    color: var(--gs-teal);
-}
-
-/* A division nobody's rule produced. The mark is quieter because the fact is quieter. */
-.gs-provenance.is-own .mud-icon-root {
-    color: var(--gs-muted);
-}
-
-.gs-provenance-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.gs-provenance-what {
-    font-size: 0.875rem;
-    font-weight: 700;
-}
-
 .gs-provenance-when {
     font-size: 0.75rem;
     color: var(--gs-muted);

@@ -39,4 +39,17 @@ public record TransactionDetailsResponse : TransactionResponse
     /// </para>
     /// </remarks>
     public Guid? SplitRuleVersionId { get; init; }
+
+    /// <summary>
+    /// The rule the expense named for itself, whatever its category says, or null when it
+    /// named none. See <see cref="CreateTransactionRequest.SplitRuleId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not the same question as <see cref="SplitRuleVersionId"/>, which is what divided it:
+    /// an expense divided by its category's rule carries a version and no rule of its own.
+    /// The edit dialog reads this one to open its split control on the right answer -- "all
+    /// for Ana" rather than "automatically" -- and to know what the person is changing away
+    /// from when they pick something else.
+    /// </remarks>
+    public Guid? SplitRuleId { get; init; }
 }

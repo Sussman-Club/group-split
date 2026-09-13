@@ -17,7 +17,7 @@
         }
         else
         {
-            <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model"/>
+            <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model" Existing="true"/>
 
             @* Said here, where the decision is made. A person editing a division reasonably
                fears they are about to restate what everyone owed last month; they are not,
@@ -136,7 +136,7 @@
             Shares = shares.Shares.ToDictionary(entry => entry.Key, entry => entry.Value)
         },
 
-        PayerSplitRuleDto => new PayerSplitRuleDto(),
+        SoleSplitRuleDto sole => new SoleSplitRuleDto(sole.UserId),
 
         EvenSplitRuleDto even => new EvenSplitRuleDto([.. even.Among]),
 

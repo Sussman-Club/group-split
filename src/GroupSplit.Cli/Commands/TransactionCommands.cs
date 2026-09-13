@@ -101,7 +101,6 @@ public static class TransactionCommands
         transactions.Subcommands.Add(Monthly());
         transactions.Subcommands.Add(Shares());
         transactions.Subcommands.Add(BankMatches());
-        transactions.Subcommands.Add(Reattach());
         transactions.Subcommands.Add(Delete());
 
         return transactions;
@@ -274,6 +273,12 @@ public static class TransactionCommands
         {
             Description = "Member who paid. Defaults to you."
         };
+        var splitRule = new Option<Guid?>("--split-rule")
+        {
+            Description = "Divide by this rule whatever the category says, from "
+                          + "`groupsplit split-rules list --group <group-id>`. A group holds one per "
+                          + "member that puts the whole amount on them."
+        };
         var preview = new Option<bool>("--preview")
         {
             Description = "Show the split the server would apply without creating anything."
@@ -281,7 +286,7 @@ public static class TransactionCommands
 
         var command = new Command("create", "Record an expense.")
         {
-            name, amount, group, date, description, category, merchant, paidBy, preview
+            name, amount, group, date, description, category, merchant, paidBy, splitRule, preview
         };
 
         command.SetHandler(async (context, ct) =>
@@ -297,6 +302,7 @@ public static class TransactionCommands
                 CategoryId = parse.GetValue(category),
                 MerchantId = parse.GetValue(merchant),
                 PaidByUserId = parse.GetValue(paidBy),
+                SplitRuleId = parse.GetValue(splitRule),
                 Description = parse.GetValue(description)
             };
 
@@ -375,6 +381,11 @@ public static class TransactionCommands
             Description = "Forget where it was spent, so it shows no logo."
         };
         var paidBy = new Option<Guid?>("--paid-by") { Description = "Change who paid." };
+        var splitRule = new Option<Guid?>("--split-rule")
+        {
+            Description = "Divide it by this rule whatever its category says, from "
+                          + "`groupsplit split-rules list --group <group-id>`."
+        };
         var splits = new Option<string[]>("--split")
         {
             Description = "Set the exact shares as <user-id>=<amount>, repeatable. "
@@ -385,7 +396,8 @@ public static class TransactionCommands
         {
             Description = "Discard the shares it holds and divide it again by its category's rule. "
                           + "Uses the version that divided the expense, where it still records "
-                          + "one, rather than the rule as it reads today."
+                          + "one, rather than the rule as it reads today -- and it is the way "
+                          + "back from an expense recorded as one member's."
         };
         var preview = new Option<bool>("--preview")
         {
@@ -403,7 +415,8 @@ public static class TransactionCommands
         var command = new Command("update", "Change an expense. Only what you name is sent.")
         {
             TransactionId, name, amount, date, description,
-            group, personal, category, noCategory, merchant, noMerchant, paidBy, splits, redivide,
+            group, personal, category, noCategory, merchant, noMerchant, paidBy,
+            splitRule, splits, redivide,
             handSplit, dividedBy, preview
         };
 
@@ -431,6 +444,22 @@ public static class TransactionCommands
                 throw CliException.Input(
                     "--merchant-id and --no-merchant contradict each other.",
                     "Pass one or the other.");
+            }
+
+            if (parse.GetResult(splitRule) is not null && parse.GetValue(redivide))
+            {
+                throw CliException.Input(
+                    "--split-rule and --redivide contradict each other.",
+                    "--split-rule divides it by that rule; --redivide hands it back to its "
+                    + "category. Pass one or the other.");
+            }
+
+            if (parse.GetResult(splitRule) is not null && parse.GetValue(splits) is { Length: > 0 })
+            {
+                throw CliException.Input(
+                    "--split-rule and --split contradict each other.",
+                    "--split-rule has the server divide it; --split states the shares yourself. "
+                    + "The API refuses both in one request.");
             }
 
             if (parse.GetValue(splits) is { Length: > 0 } && parse.GetValue(redivide))
@@ -482,6 +511,7 @@ public static class TransactionCommands
                 parse.GetResult(category) is not null ||
                 parse.GetResult(merchant) is not null ||
                 parse.GetResult(paidBy) is not null ||
+                parse.GetResult(splitRule) is not null ||
                 parse.GetValue(personal) ||
                 parse.GetValue(noCategory) ||
                 parse.GetValue(noMerchant) ||
@@ -608,6 +638,12 @@ public static class TransactionCommands
                 MerchantId = from.GetValue(noMerchant) ? null : from.GetValue(merchant) ?? current.MerchantId,
                 PaidByUserId = from.GetValue(paidBy) ?? current.PaidByUserId,
 
+                // An instruction and not a value: naming a rule divides by it from now on,
+                // and saying nothing leaves the expense dividing by whatever divided it.
+                // There is no stored field to read back -- what an expense holds is the
+                // division itself -- and the way back to its category is --redivide.
+                SplitRuleId = from.GetValue(splitRule),
+
                 // Null unless somebody stated them. Null alone is not "divide it again" --
                 // the endpoint keeps the stored shares when a patch says nothing about them
                 // -- which is what --redivide is for, and it is carried separately rather than
@@ -637,7 +673,7 @@ public static class TransactionCommands
     /// rather than the value.
     /// </remarks>
     private static JsonPatchDocument<UpdateTransactionRequest> Patch(
-        TransactionResponse current, UpdateTransactionRequest edited, bool redivide)
+        TransactionDetailsResponse current, UpdateTransactionRequest edited, bool redivide)
     {
         var patch = new JsonPatchDocument<UpdateTransactionRequest>();
 
@@ -658,6 +694,13 @@ public static class TransactionCommands
 
         if (current.PaidByUserId != edited.PaidByUserId)
             patch.Replace(request => request.PaidByUserId, edited.PaidByUserId);
+
+        // Sent only when somebody named one. Like the shares below it is read as an
+        // instruction rather than compared against a stored value, because there is no
+        // stored value: an expense records the division it was written under, not the rule
+        // somebody picked to get it.
+        if (edited.SplitRuleId is not null)
+            patch.Replace(request => request.SplitRuleId, edited.SplitRuleId);
 
         // Three answers, not two. Shares stated means those amounts; --redivide means an
         // explicit null, which is the only way to ask the endpoint to work them out again;
@@ -1101,106 +1144,6 @@ public static class TransactionCommands
                         + $"[grey]  groupsplit inbox link <row-id> {id}[/]\n"
                         + "[grey]Not a match:[/]\n"
                         + $"[grey]  groupsplit inbox dismiss-match <row-id> {id}[/]\n"));
-            });
-
-            return ExitCodes.Success;
-        });
-
-        return command;
-    }
-
-    /// <summary>
-    /// Points a group's expenses at the version of their rule that was in force on the day
-    /// each was spent.
-    /// </summary>
-    /// <remarks>
-    /// The second half of writing a rule's history, and useless without it: the history says
-    /// what the rule stood for and when, and this says which of those an expense actually
-    /// fell under. A migration out of a workbook pointed every categorised expense at the
-    /// only version there was, so a 2023 grocery bill claims a ratio agreed in 2026.
-    /// <para>
-    /// It moves no money. Not one share is read, let alone written -- the only thing that
-    /// changes is which version each expense names -- so the group's balances are the same
-    /// afterwards to the cent. It stops for a confirmation anyway, because it rewrites the
-    /// history of an entire ledger and <c>--dry-run</c> is right there.
-    /// </para>
-    /// </remarks>
-    private static Command Reattach()
-    {
-        var group = new Option<Guid>("--group")
-        {
-            Description = "The group whose expenses to re-point.",
-            Required = true
-        };
-
-        var dryRun = new Option<bool>("--dry-run")
-        {
-            Description = "Work out what would change and report it without saving anything."
-        };
-
-        var command = new Command(
-            "reattach",
-            "Point a group's expenses at the version of their rule in force when each was spent.")
-        {
-            group, dryRun
-        };
-
-        command.SetHandler(async (context, ct) =>
-        {
-            var parse = context.ParseResult;
-            var groupId = parse.GetValue(group);
-            var dry = parse.GetValue(dryRun);
-
-            if (!dry)
-            {
-                Confirmation.Require(
-                    context,
-                    action: "transactions.reattach",
-                    summary: $"Re-point every expense in group {groupId} at the rule version of its own date?",
-                    changes:
-                    [
-                        "Each expense filed under a category with a rule points at the version "
-                        + "that was in force on the day it was spent.",
-                        "An expense older than its rule's history is left pointing at nothing.",
-                        "No share and no balance changes: only which version each expense names.",
-                        $"See it first with: groupsplit transactions reattach --group {groupId} --dry-run"
-                    ],
-                    confirmCommand: $"groupsplit transactions reattach --group {groupId} --yes");
-            }
-
-            var summary = await context.Transactions.ReattachTransactionsAsync(
-                new ReattachTransactionsRequest { GroupId = groupId, DryRun = dry }, ct);
-
-            context.Output.Write(summary, value =>
-            {
-                var heading = value.DryRun
-                    ? "[grey]Dry run. Nothing was saved.[/]"
-                    : "[green]Reattached.[/]";
-
-                var totals = new Markup(
-                    $"{heading} [bold]{value.Examined}[/] expenses examined, "
-                    + $"[bold]{value.Changed}[/] re-pointed, "
-                    + $"[bold]{value.LeftWithoutAVersion}[/] left with no version.\n"
-                    + "[grey]No share and no balance changed.[/]\n");
-
-                if (value.ByRule.Count == 0)
-                {
-                    return new Rows(totals, new Markup(
-                        Tables.Empty("expenses filed under a category with a rule") + "\n"));
-                }
-
-                var table = Tables.Grid("Rule", "Examined", "Re-pointed", "No version");
-
-                foreach (var rule in value.ByRule)
-                {
-                    table.AddRow(
-                        Markup.Escape(rule.SplitRuleName),
-                        rule.Examined.ToString(),
-                        rule.Changed.ToString(),
-                        rule.Uncovered.ToString());
-                }
-
-                return new Rows(totals, table);
             });
 
             return ExitCodes.Success;

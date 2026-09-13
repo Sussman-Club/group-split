@@ -39,6 +39,7 @@ public static class DomainServiceExtensions
             services.AddScoped<IMerchantService, MerchantService>();
             services.AddScoped<ISplitRuleService, SplitRuleService>();
             services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
+            services.AddScoped<IMemberSplitRules, MemberSplitRules>();
             services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
             services.AddBankingServices();
 

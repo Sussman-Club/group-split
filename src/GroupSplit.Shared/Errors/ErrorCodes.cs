@@ -99,6 +99,33 @@ public static class ErrorCodes
     /// rules by guessing ids.
     /// </summary>
     public const string SplitRuleVersionNotInGroup = "SPLIT_RULE_VERSION_NOT_IN_GROUP";
+
+    /// <summary>
+    /// A rename, a restatement or a deletion was asked for on a rule the group was given
+    /// rather than wrote: the one that puts the whole amount on one member. It exists for
+    /// every member, it says one thing, and it goes on saying it -- which is what lets an
+    /// expense name it without anybody having created it and without anybody being able to
+    /// change what it means underneath the expenses that did. A group wanting a division of
+    /// its own creates one, and that one is editable like any other.
+    /// </summary>
+    public const string SplitRuleNotEditable = "SPLIT_RULE_NOT_EDITABLE";
+
+    /// <summary>
+    /// An edit gave a rule a division of a different kind -- shares where it stood for
+    /// percentages, or "all on whoever paid" where it stood for shares. A rule is a named
+    /// division a group refers to, and what shape that division has is part of what the rule
+    /// is: the categories pointing at it, and every expense divided by it, were pointed at a
+    /// rule that divided that way. Changing the numbers is an edit; changing the shape is a
+    /// different rule wearing the name, and is done by making one.
+    /// </summary>
+    public const string SplitRuleKindFixed = "SPLIT_RULE_KIND_FIXED";
+
+    /// <summary>
+    /// An expense named a rule belonging to some other group, or named one at all while
+    /// having no group to divide between. Says the same thing whether the rule exists or
+    /// not, so nothing is learned about another group's rules by guessing ids.
+    /// </summary>
+    public const string SplitRuleNotInGroup = "SPLIT_RULE_NOT_IN_GROUP";
     public const string BankSyncUnavailable = "BANK_SYNC_UNAVAILABLE";
     public const string BankTransactionAlreadyFiled = "BANK_TRANSACTION_ALREADY_FILED";
     public const string BankConnectionNeedsAttention = "BANK_CONNECTION_NEEDS_ATTENTION";

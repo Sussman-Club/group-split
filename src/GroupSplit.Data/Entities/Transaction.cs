@@ -7,9 +7,14 @@ namespace GroupSplit.Data.Entities;
 /// <remarks>
 /// One table, one level of inheritance, shared columns here and leaf-only columns on the
 /// leaves -- where they are nullable in the table by construction, which is expected
-/// rather than a smell. What went wrong with <c>RuleVersion</c> was TPT: four
-/// tables and a join per read, over a three-level chain. This is EF's default mapping and
-/// a single table.
+/// rather than a smell. What went wrong with <c>RuleVersion</c> was TPT: four tables and a
+/// join per read, over a three-level chain. This is EF's default mapping and a single table.
+/// <para>
+/// <see cref="SplitRuleVersion"/> is TPT and that is not a contradiction: it is five shapes
+/// rather than two readings of one, and the columns any of them needs belong to that one
+/// alone. Here there are two kinds, they differ in nothing a table holds, and the leaf
+/// columns are few -- so a table apiece would buy a join and nothing else. The rule is which
+/// mapping tells the truth about the shapes, not which mapping is fashionable.
 /// <para>
 /// The discriminator is the discriminator. There is no <c>Kind</c> property beside it;
 /// branch with <c>is Transfer</c> or, better, read <c>Set&lt;Expense&gt;()</c>, which EF

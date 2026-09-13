@@ -68,7 +68,7 @@ public class GroupSplitsTabTest : ComponentTest
 
         SplitRules
             .Setup(client => client.GetSplitRuleAsync(WhoeverPaid, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ARule(WhoeverPaid, "Whoever paid", new PayerSplitRuleDto()));
+            .ReturnsAsync(ARule(WhoeverPaid, "Whoever paid", new SoleSplitRuleDto(Guid.NewGuid())));
 
         _groups
             .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
