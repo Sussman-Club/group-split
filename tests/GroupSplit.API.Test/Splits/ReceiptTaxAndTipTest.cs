@@ -138,6 +138,39 @@ public class ReceiptTaxAndTipTest
         Assert.Equal(50m, amounts[Other]);
     }
 
+    /// <summary>
+    /// The leftover cent lands on the same part whatever order the lines arrive in.
+    /// </summary>
+    /// <remarks>
+    /// Where the largest part by line value has nothing taxable on it, the tax cannot favour
+    /// it and the leftover fell to the first key of a dictionary -- which is insertion order,
+    /// which is whatever order the caller's query happened to return the lines in. Two
+    /// queries loaded this bill, one ordering by position and one not ordering at all, so
+    /// pressing "divide again" could move a cent between two people with nothing on the bill
+    /// having changed.
+    /// </remarks>
+    [Fact]
+    public void The_leftover_cent_does_not_depend_on_the_order_the_lines_arrive_in()
+    {
+        var third = Guid.Parse("66666666-6666-4666-8666-666666666666");
+
+        // 100.00 exempt and largest, then two taxable parts of 30.00 with a cent of tax
+        // between them: neither can be favoured, so the leftover has to be placed by rule.
+        var forwards = Bill(tax: 0.01m, tip: 0m,
+            (100m, Alice, false, Part),
+            (30m, Bob, true, Other),
+            (30m, Bob, true, third));
+
+        var backwards = Bill(tax: 0.01m, tip: 0m,
+            (100m, Alice, false, Part),
+            (30m, Bob, true, third),
+            (30m, Bob, true, Other));
+
+        Assert.Equal(
+            ReceiptSplitCalculator.PartAmounts(forwards).OrderBy(pair => pair.Key),
+            ReceiptSplitCalculator.PartAmounts(backwards).OrderBy(pair => pair.Key));
+    }
+
     // ---- what the arithmetic refuses ---------------------------------------------------
 
     /// <summary>A line nobody claimed stops the part it is in, and only that part.</summary>

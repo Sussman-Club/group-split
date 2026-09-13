@@ -290,8 +290,13 @@ public class ExpenseSplitter(
         // How much of the tax and the tip is this part's depends on what the other parts of
         // the same charge hold, so a receipt loaded with half its items would divide a
         // warehouse run as though the jacket had never been on it.
+        // Ordered, and that is not cosmetic here: an apportioning hands its leftover cent to
+        // one holder, and where the largest part carries nothing taxable that holder used to
+        // fall out of the enumeration order. ReceiptService.Loaded() orders by Position for
+        // the same reason and this did not, so the same bill divided differently depending on
+        // which query had loaded it.
         expense.Bill = await dbContext.Set<Receipt>()
-            .Include(receipt => receipt.Items)
+            .Include(receipt => receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id))
             .ThenInclude(item => item.Claims)
             .FirstOrDefaultAsync(
                 receipt => receipt.Items.Any(item => item.ExpenseId == expense.Id), ct);

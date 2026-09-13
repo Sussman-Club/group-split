@@ -376,8 +376,17 @@ public static class ReceiptSplitCalculator
             placed += share;
         }
 
+        // The largest of the weights actually being spread, when the caller's choice is not
+        // among them -- the tax of a bill whose biggest part has nothing taxable on it.
+        //
+        // It was the dictionary's first key, which is its insertion order, which is the order
+        // the caller happened to enumerate the bill in. ReceiptService.Loaded() orders the
+        // lines by Position and ExpenseSplitter's own include did not order them at all, so
+        // the same bill handed to the same arithmetic by two different queries could put the
+        // leftover cent on two different people -- and "divide again" would then move a cent
+        // between two members with nothing on the bill having changed.
         if (!result.ContainsKey(favour))
-            favour = result.Keys.First();
+            favour = Largest(weights);
 
         result[favour] += amount - placed;
 
