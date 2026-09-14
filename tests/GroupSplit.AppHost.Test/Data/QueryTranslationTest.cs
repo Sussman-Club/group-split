@@ -535,8 +535,118 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         // of the rules that name them. Nobody is leaving here -- a user id nothing names
         // matches nothing -- and the query still has to translate to find that out.
         await Service<ISplitRuleRevisions>()
-            .WithoutParticipant(group, Guid.NewGuid(), toUserId: null, Ct);
+            .WithoutParticipant(group, Guid.NewGuid(), toUserId: null, RuleHandling.Prune, Ct);
 
+        // The listing itself, which is the projection the app reads: a rule's name, whether
+        // the group was given it, and -- read off the open version, one table down -- the
+        // member it puts the whole amount on.
+        await (await rules.List(group, Ct)).SelectDto().ToListAsync(Ct);
+    }
+
+    /// <summary>
+    /// The rule a group keeps for each of its members, found the way everything finds one:
+    /// by the division it stands for.
+    /// </summary>
+    /// <remarks>
+    /// The reads this covers are the ones the in-memory suite is blindest to. Versions are
+    /// a table per kind, so "a rule whose open version names this person" is a predicate
+    /// across two tables with a downcast in it, and the division every expense is written by
+    /// left-joins all five kinds to find out which one it turned out to be. EF's in-memory
+    /// provider has no tables at all and answers both from objects it already holds.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task The_rules_a_group_holds_per_member_translate()
+    {
+        var group = await AGroupOfTheirs();
+
+        var loaded = await Service<AppDbContext>().Set<Group>()
+            .Include(candidate => candidate.Users)
+            .FirstAsync(candidate => candidate.Id == group, Ct);
+
+        var member = loaded.Users.First();
+
+        // Find-or-create, which the seeder has already run: this is the find, and it is the
+        // predicate that reaches through a version into the table of one kind.
+        var rule = await Service<IMemberSplitRules>().EnsureFor(loaded, member, Ct);
+
+        Assert.True(rule.BuiltIn);
+
+        // Every version in the group, materialised as whatever kind each turns out to be.
+        // The five left joins are the whole of how that question is answered now.
+        var versions = await Service<AppDbContext>().Set<SplitRuleVersion>()
+            .Include(version => (version as WeightedSplitRuleVersion)!.Participants)
+            .Where(version => version.SplitRule.Group.Id == group)
+            .ToListAsync(Ct);
+
+        Assert.Contains(versions, version => version is SoleSplitRuleVersion);
+
+        // And the read that asks about one kind alone: the versions a hand-over moves to
+        // whoever takes a departing member's place.
+        await Service<AppDbContext>().Set<SoleSplitRuleVersion>()
+            .Where(version => version.SplitRule.Group.Id == group && version.UserId == member.Id)
+            .ToListAsync(Ct);
+    }
+
+    /// <summary>
+    /// Recording an expense as one member's, on the real database: the rule is named, the
+    /// division it stands for is what the expense keeps, and correcting the amount divides
+    /// it again by the same one.
+    /// </summary>
+    /// <remarks>
+    /// End to end through the services the API uses, because the parts that could only fail
+    /// here are spread across them -- resolving a named rule to its open version, dividing by
+    /// a version that lives in a table of its own, and asking afterwards whether the division
+    /// an expense holds is one that names a person.
+    /// </remarks>
+    [Fact(Timeout = 120_000)]
+    public async Task An_expense_recorded_as_one_members_own_translates()
+    {
+        var group = await AGroupOfTheirs();
+
+        var loaded = await Service<AppDbContext>().Set<Group>()
+            .Include(candidate => candidate.Users)
+            .FirstAsync(candidate => candidate.Id == group, Ct);
+
+        var member = loaded.Users.First();
+
+        var theirs = await Service<IMemberSplitRules>().EnsureFor(loaded, member, Ct);
+
+        var transactions = Service<ITransactionService>();
+
+        var expense = await transactions.Create(new CreateTransactionRequest
+        {
+            Name = "The gym",
+            Amount = 60.00m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = group,
+            PaidByUserId = member.Id,
+            SplitRuleId = theirs.Id
+        }, Ct);
+
+        var share = Assert.Single(expense.Splits);
+
+        Assert.Equal(member.Id, share.UserId);
+        Assert.Equal(60.00m, share.Amount);
+
+        // Corrected, and divided again by the division it holds rather than handed back to
+        // the group's even split.
+        var edit = await transactions.GetUpdateModel(expense.Id, Ct);
+
+        Assert.NotNull(edit);
+
+        edit.Amount = 75.00m;
+
+        await transactions.Update(expense.Id, edit, Ct);
+
+        var divided = await Service<AppDbContext>().Set<TransactionSplit>()
+            .Where(split => split.TransactionId == expense.Id)
+            .ToListAsync(Ct);
+
+        Assert.Equal(75.00m, Assert.Single(divided).Amount);
+
+        // Left as it was found: this suite runs against the seeded database, and an expense
+        // nobody recorded has no business staying in a group's ledger.
+        await transactions.Delete(expense.Id, Ct);
     }
 
     /// <summary>

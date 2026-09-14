@@ -28,7 +28,7 @@ public interface IGroupJoiner
     Task<bool> Join(Group group, User user, CancellationToken ct = default);
 }
 
-public sealed class GroupJoiner(AppDbContext context) : IGroupJoiner
+public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRules) : IGroupJoiner
 {
     public async Task<bool> Join(Group group, User user, CancellationToken ct = default)
     {
@@ -56,6 +56,12 @@ public sealed class GroupJoiner(AppDbContext context) : IGroupJoiner
             membership.JoinedAt = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync(ct);
         }
+
+        // And the rule that says an expense is all theirs, which every member has and
+        // nobody writes. Here rather than beside each way in, for the reason this class
+        // exists: a member joined by link must be a member joined by invitation in every
+        // respect.
+        await memberRules.EnsureFor(group, user, ct);
 
         return true;
     }

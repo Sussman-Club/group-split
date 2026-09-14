@@ -34,7 +34,7 @@ has to reach for `curl` and a bearer token to do.
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
 | `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
-| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `reattach`, `delete` |
+| `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `archive`, `unarchive`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
 | `receipts` | `show`, `set`, `rule`, `preview`, `divide`, `delete` |
@@ -874,7 +874,9 @@ So a command that names nothing is refused (exit code 3) rather than sent as an 
 which the server would accept as a successful no-op.
 
 `--group` and `--personal` contradict each other, as do `--category-id` and `--no-category`
-and `--merchant-id` and `--no-merchant`; any such pair is refused before anything is sent.
+and `--merchant-id` and `--no-merchant`; any such pair is refused before anything is sent. So
+is `--split-rule` alongside either `--split` or `--redivide`, which are three answers to one
+question -- see [an expense that is one person's](#an-expense-that-is-one-persons).
 
 The patch carries what actually **moved**, not every flag you passed: the command reads the
 expense first and sends the difference. Setting a field to the value it already holds is a
@@ -956,6 +958,68 @@ what divided it was not" -- and re-running the same command is the fix. It is sa
 command reads the expense first and sends only what still differs, so the half that landed
 produces no operation the second time.
 
+## An expense that is one person's
+
+Every group holds one rule per member that puts the whole amount on them, provisioned rather
+than written -- `split-rules list` shows which member each one is for, and that column is
+empty for the rules the group wrote itself:
+
+```bash
+groupsplit split-rules list --group <group-id>
+```
+
+```
+ Id                                    Name              All for                               Built in
+ 6f1e...                               All for Anabel    0d1ac8ae-709c-4c4c-8f0f-0c7e951b3a52  yes
+ 9a20...                               Household 3-way   -                                     -
+```
+
+**All for** is the member a rule puts the whole amount on, read off the division it stands
+for; **built in** is whether the group was given the rule rather than writing it.
+
+Naming one on an expense divides the whole of it that way, whatever the category says:
+
+```bash
+groupsplit tx create "The gym" 60 --group <group-id> --split-rule <rule-id>
+groupsplit tx update <id> --split-rule <rule-id>      # this one was not ours, it was Ana's
+groupsplit tx update <id> --redivide                  # back to what its category says
+groupsplit inbox file <row-id> --group <group-id> --split-rule <rule-id>
+```
+
+`--split-rule` is an instruction, not a field: the expense stores the division it was written
+under, and there is no rule id on it to read back or clear. Saying nothing leaves it dividing
+the way it divides -- through a rename, a correction to the amount, even a move to another
+category -- and `--redivide` is the way back to what its category says.
+
+Why name a rule rather than type the amount against one person with `--split`: a rule keeps
+the expense divisible. Correcting the amount afterwards divides it again by the same rule,
+where hand-typed shares are refused because they no longer sum to the new total. The two are
+two answers to one question and passing both is refused before anything is sent.
+
+A group that wants a division of its own in the same shape writes one, and that one is
+editable like any other rule:
+
+```bash
+groupsplit split-rules create "Ana's gym" --group <group-id> --sole <user-id>
+groupsplit split-rules create "Mine" --group <group-id> --payer
+```
+
+`--payer` is `--sole` with your own id, which the CLI looks up so you do not have to. What
+reaches the API is the same thing either way: a rule naming a member. There is no kind that
+means "whoever paid" -- a rule that named nobody was the one division that changed meaning
+when the payer was corrected.
+
+The provisioned ones are not. `split-rules update` and `split-rules delete` on one are
+refused before anything is sent (`SPLIT_RULE_NOT_EDITABLE` from the API, which says the same
+thing): they exist for every member without anybody creating them, and an expense may name
+one the same way, so what one says is fixed.
+
+No rule changes **kind**, provisioned or not: `split-rules update --percent` on a rule that
+divides by shares is refused with `SPLIT_RULE_KIND_FIXED`. A rule is a named division, and the
+shape of that division is part of what the rule is -- every category pointing at it was
+pointed at a rule that divided that way. Writing a history is the exception, because it
+records a past that really did change shape.
+
 ## Rewriting what a rule used to say
 
 Editing a rule opens a new version dated now, which is right for a decision made now and no
@@ -990,23 +1054,16 @@ Deliberately narrow, and it refuses rather than guesses:
 
 ## Re-pointing a back catalogue
 
-Writing a history says what a rule stood for and when. `transactions reattach` says which of
-those each expense actually fell under:
+One expense at a time, with `transactions update <id> --divided-by <version-id>`. There is no
+pass over a whole group any more.
 
-```bash
-groupsplit transactions reattach --group <group-id> --dry-run   # the summary, saving nothing
-groupsplit transactions reattach --group <group-id>             # exit 4, then --yes
-```
-
-Every expense filed under a category with a rule is pointed at the version whose window
-contains its date. One older than its rule's history is left pointing at nothing, and the
-summary counts those separately -- that figure is how you find out the history does not go
-back far enough.
-
-**It moves no money.** Not one share is read, let alone written; the only thing that changes
-is which version each expense names, so every balance in the group is identical afterwards.
-Running it twice changes nothing the second time, so it is safe to run again once a history
-is corrected.
+There was one -- `transactions reattach` -- and it was removed because of what it had to
+guess. It found each expense's rule through its category's `defaultSplitRuleId` **as the
+category points now**, so a group that had since re-pointed Groceries from an even split to
+one by income got three years of Groceries expenses pointed at versions of a rule that had
+never divided them. Nothing records which rule a category named in 2023, so the pass could
+not tell the two cases apart, and the expenses it was most useful on were the ones it was
+most likely to be wrong about.
 
 ## Output
 

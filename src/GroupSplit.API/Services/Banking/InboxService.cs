@@ -179,6 +179,7 @@ public sealed class InboxService(
             GroupId = request.GroupId,
             CategoryId = request.CategoryId,
             PaidByUserId = request.PaidByUserId,
+            SplitRuleId = request.SplitRuleId,
             Splits = request.Splits,
             Name = Named(request.Name, row),
             Description = request.Description,

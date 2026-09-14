@@ -38,7 +38,9 @@ public static class SplitRuleExtensions
         /// <summary>What this division does, as a phrase to put on a row.</summary>
         public string Summary(IReadOnlyDictionary<Guid, string>? names = null) => definition switch
         {
-            PayerSplitRuleDto => "All on whoever paid",
+            SoleSplitRuleDto sole => names is null
+                ? "All on one person"
+                : $"All on {Named(names, sole.UserId)}",
 
             // Names nobody, and cannot: who owes what is on each expense's own bill rather
             // than on the rule. Without this it fell through to the "divides evenly" default
@@ -81,7 +83,7 @@ public static class SplitRuleExtensions
             SharesSplitRuleDto shares when shares.Shares.Count > 0 =>
                 string.Join(" : ", Ordered(shares.Shares).Select(held => held.Value.ToString())),
 
-            PayerSplitRuleDto => "whoever paid",
+            SoleSplitRuleDto => "all on one",
 
             // There is no ratio to show: it is a different one on every expense.
             ItemizedSplitRuleDto => "by the bill",
@@ -91,8 +93,8 @@ public static class SplitRuleExtensions
 
         /// <summary>
         /// Who the division names and what each of them holds, in the order the rule states
-        /// it. Empty for a division that names nobody -- the whole group evenly, or all on
-        /// whoever paid -- which has no per-person row to draw.
+        /// it. Empty for a division that names nobody -- the whole group, evenly -- which has
+        /// no per-person row to draw.
         /// </summary>
         public IReadOnlyList<SplitRuleWeight> Weights(IReadOnlyDictionary<Guid, string>? names = null)
         {
@@ -131,6 +133,12 @@ public static class SplitRuleExtensions
                             new SplitRuleWeight(id, Named(names, id), "1 share", each))
                     ];
                 }
+
+                // One row, and the whole of it. A weight would be a proportion of
+                // something being shared out, and nothing here is: 100% is what it comes
+                // to, not what it says.
+                case SoleSplitRuleDto sole:
+                    return [new SplitRuleWeight(sole.UserId, Named(names, sole.UserId), "all of it", 100m)];
 
                 default:
                     return [];

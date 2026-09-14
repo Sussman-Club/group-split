@@ -30,6 +30,26 @@ public class SplitRule : Entity
     public required string Name { get; set; }
 
     /// <summary>
+    /// Whether the group was given this rule rather than writing it: the one it holds per
+    /// member, putting the whole amount on them.
+    /// </summary>
+    /// <remarks>
+    /// Why the rule exists, which is the one thing about it no version says. <em>Who</em> it
+    /// is for is not here -- that is the division, and
+    /// <c>SplitRuleExtensions.AllFor</c> reads it off the version that states it.
+    /// <para>
+    /// What the flag buys is the difference between this and the same division a group
+    /// writes for itself -- "Ana's gym", on the joint card, every month -- which is an
+    /// ordinary rule it may rename, restate and delete. These are not any of the three: they
+    /// appear when somebody joins, they stand for one division for as long as they exist, and
+    /// an expense may name one without anybody having created it, so a restatement would move
+    /// money on expenses recorded under a division nobody chose. <see cref="SplitRule"/> only
+    /// records the fact; <c>SplitRuleService</c> is what refuses.
+    /// </para>
+    /// </remarks>
+    public bool BuiltIn { get; init; }
+
+    /// <summary>
     /// Every division this rule has stood for, newest last. Exactly one of them has no
     /// <see cref="SplitRuleVersion.SupersededAt"/>, which is the one it is on now --
     /// <c>SplitRuleExtensions.Current</c> reads it.

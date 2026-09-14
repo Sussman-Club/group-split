@@ -90,7 +90,8 @@ public static class SplitRulesApi
         /// rule stands for now -- that entry becomes the open version, and the open version
         /// is the row every recorded expense already points at. For the same reason it
         /// refuses an entry dated after now: the open version would start in the future,
-        /// where a new expense is still divided by it and a reattach no longer finds it.
+        /// where a new expense is still divided by it while the history says it has not
+        /// begun.
         /// </para>
         /// </remarks>
         private RouteHandlerBuilder MapSetSplitRuleHistory()
@@ -164,6 +165,17 @@ public static class SplitRulesApi
         internal IQueryable<SplitRuleResponse> SelectDto() =>
             from rule in rules
             orderby rule.Name
-            select new SplitRuleResponse(rule.Id, rule.Group.Id, rule.Name);
+            select new SplitRuleResponse(
+                rule.Id,
+                rule.Group.Id,
+                rule.Name,
+                rule.BuiltIn,
+                // The person a rule puts the whole amount on, read off the division it
+                // stands for now. The listing carries no definition, and a client offering
+                // "all for Ana" has to find Ana's rule without reading every one of them.
+                rule.Versions
+                    .Where(version => version.SupersededAt == null)
+                    .Select(version => (version as SoleSplitRuleVersion)!.UserId)
+                    .FirstOrDefault());
     }
 }

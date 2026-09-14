@@ -33,7 +33,9 @@ public class SplitRuleContractTest
     public static TheoryData<string, SplitRuleDto> EveryRuleKind() => new()
     {
         { "even", new EvenSplitRuleDto([Alice, Bob]) },
-        { "payer", new PayerSplitRuleDto() },
+        // No "payer" beside it: the kind that puts the whole amount on one person carries
+        // the person, and carrying nobody is how it says "whoever paid".
+        { "sole", new SoleSplitRuleDto(Guid.NewGuid()) },
         {
             "percent",
             new PercentSplitRuleDto
@@ -69,7 +71,7 @@ public class SplitRuleContractTest
             case SharesSplitRuleDto shares:
                 Assert.Equal(shares.Shares, ((SharesSplitRuleDto)actual).Shares);
                 break;
-            case PayerSplitRuleDto:
+            case SoleSplitRuleDto:
                 break;
             default:
                 Assert.Fail($"No comparison written for {expected.GetType().Name}.");

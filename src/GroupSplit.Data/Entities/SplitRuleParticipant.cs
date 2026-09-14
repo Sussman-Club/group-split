@@ -17,6 +17,12 @@ namespace GroupSplit.Data.Entities;
 /// </remarks>
 public class SplitRuleParticipant : Entity
 {
+    /// <summary>
+    /// The version this weight belongs to, which can only be one that has weights: the
+    /// hierarchy is TPT, so this points at <see cref="WeightedSplitRuleVersion"/>'s own
+    /// table rather than at the one every kind shared. A weight hanging off a rule that
+    /// divides between nobody is a row the database will not take.
+    /// </summary>
     public virtual WeightedSplitRuleVersion SplitRuleVersion { get; set; } = null!;
 
     public Guid SplitRuleVersionId { get; set; }

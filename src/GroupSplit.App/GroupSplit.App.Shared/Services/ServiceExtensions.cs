@@ -53,7 +53,6 @@ public static class ServiceExtensions
 
             // Reads what divided an expense, for the dialog that shows one and the dialog
             // that corrects it. A read rather than a write, so it is not a command.
-            services.TryAddScoped<DivisionSourceReader>();
 
             services.TryAdd<TransactionsTracker>(sessionLifetime);
             services.TryAddScoped<ITransactionsPageStateService, TransactionsPageStateService>();

@@ -65,8 +65,11 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (expense, other, even, sole) = await Setup();
         await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, even)), Ct);
         var version = await DbContext.Set<SplitRuleVersion>().FindAsync([even], Ct);
+        // Restated, not re-shaped: a rule keeps the kind it was written with, so the edit
+        // that matters here is the one the group can actually make -- the same even split,
+        // now naming one person instead of the whole group.
         await Rules.Update(version!.SplitRuleId, new UpdateSplitRuleRequest
-            { Name = "Together", Definition = new PayerSplitRuleDto() }, Ct);
+            { Name = "Together", Definition = new EvenSplitRuleDto([Self]) }, Ct);
         DbContext.ChangeTracker.Clear();
         var preview = await Receipts.Preview(expense.Id, Ct);
         Assert.Equal(24m, preview.Shares.Single(s => s.UserId == other).Amount);
@@ -123,8 +126,8 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Per_line_tax_and_proportional_tip_follow_the_item_rules()
     {
         var (expense, other, even, sole) = await Setup(239m);
-        var payer = await Rule(expense.GroupId!.Value, "Payer", new PayerSplitRuleDto());
-        await Receipts.SaveForExpense(expense.Id, Bill(Item("Food", 100, payer.Id, 6), Item("Goods", 100, sole, 23))
+        var mine = await Rule(expense.GroupId!.Value, "Mine", new SoleSplitRuleDto(Self));
+        await Receipts.SaveForExpense(expense.Id, Bill(Item("Food", 100, mine.Id, 6), Item("Goods", 100, sole, 23))
             with { Tip = 10, Total = 239 }, Ct);
         var shares = (await Receipts.Preview(expense.Id, Ct)).Shares;
         Assert.Equal(111m, shares.Single(s => s.UserId == Self).Amount);

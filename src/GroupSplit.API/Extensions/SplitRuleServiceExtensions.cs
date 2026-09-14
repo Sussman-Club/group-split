@@ -23,9 +23,9 @@ public static class SplitRuleServiceExtensions
         public IServiceCollection AddSplitRuleServices()
         {
             services.AddSplitRuleHandler<EvenSplitRuleVersion, EvenSplitRuleDto, EvenSplitRuleHandler>();
-            services.AddSplitRuleHandler<PayerSplitRuleVersion, PayerSplitRuleDto, PayerSplitRuleHandler>();
             services.AddSplitRuleHandler<PercentSplitRuleVersion, PercentSplitRuleDto, PercentSplitRuleHandler>();
             services.AddSplitRuleHandler<SharesSplitRuleVersion, SharesSplitRuleDto, SharesSplitRuleHandler>();
+            services.AddSplitRuleHandler<SoleSplitRuleVersion, SoleSplitRuleDto, SoleSplitRuleHandler>();
             services
                 .AddSplitRuleHandler<ItemizedSplitRuleVersion, ItemizedSplitRuleDto, ItemizedSplitRuleHandler>();
 

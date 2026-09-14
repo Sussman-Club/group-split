@@ -99,6 +99,18 @@ public static class ErrorMessages
             "The last entry is not how this rule divides today. Correct the rule first, then write its past.",
         [ErrorCodes.SplitRuleVersionNotInGroup] =
             "That division belongs to another group, so it cannot be the one behind this expense.",
+        // Reachable from the app only by a screen that offered the button it should not
+        // have, so it says what to do instead rather than only what went wrong.
+        [ErrorCodes.SplitRuleNotEditable] =
+            "This is the rule the group holds for one of its members, so it cannot be changed. "
+            + "Create a rule of your own to divide differently.",
+        // The app does not offer the change -- the editor fixes the kind on an existing rule
+        // -- so this reaches somebody only through a client that did. It still says what to
+        // do, because "you cannot" without "instead" is the worst kind of refusal.
+        [ErrorCodes.SplitRuleKindFixed] =
+            "A rule keeps the shape it was written with. Create a rule for the new one.",
+        [ErrorCodes.SplitRuleNotInGroup] =
+            "That split rule belongs to another group, so it cannot divide this expense.",
         // "Already" and not "this group already": a merchant is shared, so the one it
         // collides with may well be a place somebody else's bank reported.
         [ErrorCodes.MerchantNameTaken] = "There is already a merchant with that name.",

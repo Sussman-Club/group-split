@@ -183,34 +183,54 @@
 
                         <div class="gs-rule" @key="rule.Id">
                             <div class="gs-rule-head">
-                                <span class="title"><span>@rule.Name</span></span>
+                                <span class="title">
+                                    <span>@NameOf(rule)</span>
+                                    @if (rule.BuiltIn)
+                                    {
+                                        @* Said on the row rather than left to be discovered
+                                           at a refusal: the two buttons beside it are gone,
+                                           and a row with fewer actions than its neighbours
+                                           and no reason given reads as a bug. *@
+                                        <span class="gs-tag neutral">Built in</span>
+                                    }
+                                </span>
 
                                 <span class="gs-inline" style="gap: 2px">
                                     <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small"
-                                                   aria-label="@($"History of the {rule.Name} rule")"
+                                                   aria-label="@($"History of the {NameOf(rule)} rule")"
                                                    OnClick="@(() => ShowHistoryAsync(rule.Id))"/>
-                                    @* "the X rule", because a category and the rule it
-                                       divides by usually share a name, and two buttons a
-                                       row apart both announcing "Edit Household" is two
-                                       different actions under one spoken label. *@
-                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
-                                                   aria-label="@($"Edit the {rule.Name} rule")"
-                                                   OnClick="@(() => EditRuleAsync(rule, used))"/>
-                                    @* Not offered while a category still points at it: the
-                                       API refuses to delete a rule in use, and an action
-                                       that can only fail is worse than none. Re-point the
-                                       categories and it comes back. *@
-                                    <MudTooltip Text="@(_stale
-                                                          ? "Held back until the categories can be read again"
-                                                          : used.Count > 0
-                                                              ? "In use by a category"
-                                                              : "Delete this rule")">
-                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
-                                                       Color="Color.Error"
-                                                       Disabled="@(_stale || used.Count > 0)"
-                                                       aria-label="@($"Delete the {rule.Name} rule")"
-                                                       OnClick="@(() => DeleteRuleAsync(rule))"/>
-                                    </MudTooltip>
+                                    @* Neither is offered on a rule the group was given
+                                       rather than wrote. It says one thing -- all of it is
+                                       for one member -- and goes on saying it, which is what
+                                       lets an expense name it without anybody having created
+                                       it. The API refuses both, and an action that can only
+                                       fail is worse than none. *@
+                                    @if (!rule.BuiltIn)
+                                    {
+                                        @* "the X rule", because a category and the rule it
+                                           divides by usually share a name, and two buttons a
+                                           row apart both announcing "Edit Household" is two
+                                           different actions under one spoken label. *@
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                                       aria-label="@($"Edit the {rule.Name} rule")"
+                                                       OnClick="@(() => EditRuleAsync(rule, used))"/>
+
+                                        @* Not offered while a category still points at it:
+                                           the API refuses to delete a rule in use, and an
+                                           action that can only fail is worse than none.
+                                           Re-point the categories and it comes back. *@
+                                        <MudTooltip Text="@(_stale
+                                                              ? "Held back until the categories can be read again"
+                                                              : used.Count > 0
+                                                                  ? "In use by a category"
+                                                                  : "Delete this rule")">
+                                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                                           Color="Color.Error"
+                                                           Disabled="@(_stale || used.Count > 0)"
+                                                           aria-label="@($"Delete the {rule.Name} rule")"
+                                                           OnClick="@(() => DeleteRuleAsync(rule))"/>
+                                        </MudTooltip>
+                                    }
                                 </span>
                             </div>
 
@@ -446,6 +466,22 @@
             ? $"divides by {named}"
             : "divides by a rule that is not in this list";
     }
+
+    /// <summary>
+    /// What to call a rule: the member it was provisioned for, where there is one, and
+    /// otherwise the name the group gave it.
+    /// </summary>
+    /// <remarks>
+    /// A provisioned rule's name is written once, out of whatever profile the member had the
+    /// day they joined, and nothing renames it afterwards -- so somebody who filled theirs in
+    /// since would go on being listed by the address they were invited at. The member is on
+    /// the row as an id and the names are already here.
+    /// </remarks>
+    private string NameOf(SplitRuleResponse rule) =>
+        rule.BuiltIn && rule.AllForUserId is { } userId &&
+        _names?.GetValueOrDefault(userId) is { Length: > 0 } named
+            ? $"All for {named}"
+            : rule.Name;
 
     private static string Initials(string name) => name.Initials();
 

@@ -23,6 +23,7 @@ public class UpdateTransactionDialogTest : ComponentTest
     private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<ITransactionsClient> _transactions = new();
     private readonly Mock<ICategoriesClient> _categories = new();
+    private readonly Mock<ISplitRuleCommands> _splitRules = new();
     private readonly Mock<IMerchantsClient> _merchants = new();
     private readonly Mock<ITransactionCommands> _commands = new();
     private readonly Mock<IUserLogin> _login = new();
@@ -69,6 +70,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_transactions.Object);
         Services.AddSingleton(_categories.Object);
+        Services.AddSingleton(_splitRules.Object);
         Services.AddSingleton(_merchants.Object);
         Services.AddSingleton(_login.Object);
 
@@ -726,268 +728,30 @@ public class UpdateTransactionDialogTest : ComponentTest
         string.Equals(operation.path, $"/{member}", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Correcting an expense to "somebody set them by hand" leaves the split
-    /// control holding them, so the next Save states them.
+    /// The edit dialog says nothing about what divided an expense, whatever it was divided
+    /// by and however long ago.
     /// </summary>
     /// <remarks>
-    /// Only the other direction was handled. Recording a version cleared the stated shares,
-    /// correctly; recording "by hand" did nothing, so the control went on claiming the
-    /// division was automatic -- the exact false claim the strip above it exists to end, and
-    /// now made false <em>by</em> a correction the person had just made. The consequence is
-    /// not cosmetic: with no shares in the patch the expense keeps whatever the server
-    /// decides, which is what "by hand" was being recorded to prevent.
+    /// There was a strip here naming the rule and the window its version stood for, with a
+    /// panel behind it for correcting either. Both are gone, and this is what keeps them
+    /// gone: the sentence was resolved through the category's rule <em>as it is now</em>, so
+    /// a group that re-pointed Groceries from an even split to one by income had every
+    /// Groceries expense of the previous three years describing itself in the words of a
+    /// rule that had never touched it. A screen that cannot tell the truth about an old
+    /// expense is better silent -- the shares themselves are records and are still here, and
+    /// the split control below states what the <em>next</em> save will do in its own words.
     /// </remarks>
     [Fact]
-    public async Task Recording_that_the_amounts_are_its_own_leaves_the_control_holding_them()
+    public async Task Nothing_here_says_what_divided_the_expense()
     {
         var transactionId = Guid.NewGuid();
+
         var version = Guid.NewGuid();
 
-        _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
-
-        // A rule divided it, so the reader has a rule and a history to resolve it against.
-        // Through this class's own categories client, which it registers over the shared
-        // one -- the reader resolves whatever the container last had, so setting up the
-        // shared mock here would configure a client nothing asks.
-        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
-
-        SplitRules
-            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
-                [
-                    // Superseded, which is what puts the strip on screen at all. Correcting
-                    // is offered where there is something to correct; over an expense whose
-                    // recorded version is simply the current one, the dialog says nothing
-                    // and the split control below speaks for it.
-                    new SplitRuleVersionResponse(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-7),
-                        null, new EvenSplitRuleDto()),
-
-                    new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2),
-                        DateTimeOffset.UtcNow.AddDays(-7), new EvenSplitRuleDto())
-                ]));
-
-        _commands
-            .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
-
-        await ToSplitStepAsync(provider);
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
-            .ClickAsync(new MouseEventArgs());
-
-        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
-
-        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
-            .ClickAsync(new MouseEventArgs());
-
-        _commands.Verify(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Once);
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
-
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
-
-        Assert.NotNull(patch);
-
-        // The amounts the expense is holding, stated -- not silence, which would leave the
-        // server free to divide it again.
-        var operation = Assert.Single(patch!.Operations, op => Touches(op, "splits"));
-
-        Assert.NotNull(operation.value);
-    }
-
-    /// <summary>
-    /// And the figures on screen after that correction are the ones the Save then sends.
-    /// </summary>
-    /// <remarks>
-    /// The test above pins that <em>something</em> about the shares reaches the patch. This
-    /// pins the harder half, which is the one somebody can be misled by: the preview sits
-    /// directly above the button, and recording "by hand" changes both what the expense's
-    /// division is taken to be and what the preview is therefore asking about. Refresh it
-    /// with the old question and the panel keeps the rule's division -- 540/360 under a rule
-    /// the expense no longer records -- while Save writes something else. Nobody reading the
-    /// screen could tell, which is exactly why it needs a test rather than an eye.
-    /// <para>
-    /// Snapshotted in the callback rather than read off the mock afterwards. The dialog hands
-    /// the same <c>UpdateTransactionRequest</c> instance to every preview, so reading it at
-    /// the end of the test would report the final state whatever the preview had been asked.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public async Task The_preview_after_that_correction_is_asked_about_the_shares_that_are_saved()
-    {
-        var transactionId = Guid.NewGuid();
-        var version = Guid.NewGuid();
-
-        _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId, splitRuleVersionId: version));
-
-        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
-
-        SplitRules
-            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
-                [
-                    // Superseded, which is what puts the strip on screen at all. Correcting
-                    // is offered where there is something to correct; over an expense whose
-                    // recorded version is simply the current one, the dialog says nothing
-                    // and the split control below speaks for it.
-                    new SplitRuleVersionResponse(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-7),
-                        null, new EvenSplitRuleDto()),
-
-                    new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2),
-                        DateTimeOffset.UtcNow.AddDays(-7), new EvenSplitRuleDto())
-                ]));
-
-        _commands
-            .Setup(c => c.DivisionSourceAsync(transactionId, null, It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        IReadOnlyList<SplitInput>? asked = null;
-        var askedToRedivide = true;
-
-        _commands
-            .Setup(c => c.PreviewUpdateAsync(transactionId, It.IsAny<UpdateTransactionRequest>(),
-                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .Callback((Guid _, UpdateTransactionRequest request, bool redivide, CancellationToken _) =>
-            {
-                asked = request.Splits is null ? null : [.. request.Splits];
-                askedToRedivide = redivide;
-            })
-            .ReturnsAsync(new SplitPreviewResponse(
-                [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)], "Household"));
-
-        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
-            .ClickAsync(new MouseEventArgs());
-
-        // The option in the words the person reads before choosing it, and in the same ones
-        // the strip above uses for the state they describe.
-        Assert.Contains("Somebody set them by hand", provider.Markup, StringComparison.Ordinal);
-
-        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
-
-        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(null));
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
-            .ClickAsync(new MouseEventArgs());
-
-        // Asked about the amounts themselves, and asked not to divide them again -- which is
-        // the whole content of "the amounts are this expense's own".
-        Assert.False(askedToRedivide);
-        Assert.NotNull(asked);
-        Assert.Equal(100m, Assert.Single(asked!, split => split.UserId == MeId).Amount);
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
-
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
-
-        var saved = Assert.IsAssignableFrom<IReadOnlyList<SplitInput>>(
-            Assert.Single(patch!.Operations, op => Touches(op, "splits")).value);
-
-        // The same figures, share for share: the preview is a promise about what Save does.
-        Assert.Equal(
-            asked!.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)),
-            saved.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)));
-    }
-
-    /// <summary>
-    /// And the other direction: recording that a version divided it gives up the shares the
-    /// expense was holding, so the save states none.
-    /// </summary>
-    /// <remarks>
-    /// The two are one rule read both ways, and only one of them was pinned. Stated shares
-    /// and a rule's division are the two answers to the same question: an edit that sends
-    /// both says the rule produced these amounts and then pins them against it, which is the
-    /// shape <c>UpdateTransactionRequest</c> reads as "divide it exactly this way".
-    /// </remarks>
-    [Fact]
-    public async Task Recording_that_a_version_divided_it_gives_up_the_shares_it_was_holding()
-    {
-        var transactionId = Guid.NewGuid();
-        var version = Guid.NewGuid();
-
-        // No version recorded, so the dialog opens holding the stored shares.
-        _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId));
-
-        // Through this class's own categories client, which it registers over the shared
-        // one -- the reader resolves whatever the container last had, so setting up the
-        // shared mock here would configure a client nothing asks.
-        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", Household, "Household"));
-
-        SplitRules
-            .Setup(client => client.GetSplitRuleVersionsAsync(Household, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SplitRuleHistoryResponse(Household, GroupId, "Household",
-                [new SplitRuleVersionResponse(version, DateTimeOffset.UtcNow.AddMonths(-2), null,
-                    new EvenSplitRuleDto())]));
-
-        _commands
-            .Setup(c => c.DivisionSourceAsync(transactionId, version, It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
-
-        await ToSplitStepAsync(provider);
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Correct")
-            .ClickAsync(new MouseEventArgs());
-
-        var choice = provider.FindComponent<MudRadioGroup<Guid?>>();
-
-        await provider.InvokeAsync(() => choice.Instance.ValueChanged.InvokeAsync(version));
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save this")
-            .ClickAsync(new MouseEventArgs());
-
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
-
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
-
-        Assert.NotNull(patch);
-
-        // Nothing about the shares at all: the expense is a rule's now, and the rule says
-        // what they are.
-        Assert.DoesNotContain(patch!.Operations, op => Touches(op, "splits"));
-    }
-
-    private static readonly Guid Household = Guid.NewGuid();
-
-    /// <summary>
-    /// The edit dialog says nothing at all about where an ordinary division came from.
-    /// </summary>
-    /// <remarks>
-    /// This is the create dialog's own default: no category, no rule, an even split. The
-    /// strip called it "Amounts set by hand" under a BY HAND tag, in a bordered card,
-    /// directly above a control still set to Automatically -- and once that was corrected
-    /// to a true sentence it was merely a redundant one, because the split control prints
-    /// how it divides in its own words a few lines below. So the whole strip goes, and what
-    /// is left of it is reserved for the four states no toggle can report.
-    /// </remarks>
-    [Fact]
-    public async Task The_strip_says_nothing_over_an_ordinary_division()
-    {
-        var transactionId = Guid.NewGuid();
-
-        var details = Details(transactionId) with
+        // Divided by a rule, and recorded as such: the case the strip had the most to say
+        // about.
+        var details = Details(transactionId, splitRuleVersionId: version) with
         {
-            CategoryId = null,
-            Category = null,
             Amount = 48.50m,
             Splits =
             [
@@ -1002,16 +766,15 @@ public class UpdateTransactionDialogTest : ComponentTest
             .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(details);
 
-        var (provider, _) = await OpenAsync(Row(transactionId) with { CategoryId = null, Category = null });
+        var (provider, _) = await OpenAsync(Row(transactionId));
 
         await ToSplitStepAsync(provider);
 
         Assert.DoesNotContain("gs-provenance", provider.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Amounts set by hand", provider.Markup, StringComparison.Ordinal);
-
-        // And with it the button, which had nothing to offer: the expense records no
-        // version, and there is no rule behind it to point one at.
         Assert.DoesNotContain(">Correct<", provider.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Where did these amounts come from?", provider.Markup, StringComparison.Ordinal);
     }
 
     private static TransactionDetailsResponse Details(

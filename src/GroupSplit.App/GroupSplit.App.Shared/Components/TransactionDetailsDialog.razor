@@ -2,17 +2,15 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
-@using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.App.Shared.Services.Commands
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
-@inject IReceiptCommands Receipts
 @inject ApiErrorPresenter Errors
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
-@inject DivisionSourceReader Source
 @inject IDialogService DialogService
+@inject IReceiptCommands Receipts
 
 @*
     One expense, and how it was divided. Reading only.
@@ -60,53 +58,10 @@
     </TitleContent>
 
     <DialogContent>
-        @*
-            The shape of what is coming, not a spinner in an empty box.
-
-            A centred spinner made the dialog as tall as a spinner, so it opened small and
-            then jumped to the size of an expense while the open transition was still
-            playing -- which is what the flash was. This stands in the same room: two
-            figures, four facts, a few rows of division. The dialog opens at about the
-            height it will keep, and the content swaps in place.
-        *@
         @if (details is null)
         {
-            <div class="gs-stack" style="gap: 20px" aria-busy="true" aria-label="Loading the expense">
-                <div class="gs-figures">
-                    <div class="gs-figure">
-                        <MudSkeleton Width="48px" Height="12px" />
-                        <MudSkeleton Width="120px" Height="34px" />
-                    </div>
-                    <div class="gs-figure">
-                        <MudSkeleton Width="64px" Height="12px" />
-                        <MudSkeleton Width="96px" Height="34px" />
-                    </div>
-                </div>
-
-                <dl class="gs-kv">
-                    @for (var row = 0; row < 4; row++)
-                    {
-                        <div class="gs-kv-row">
-                            <dt><MudSkeleton Width="72px" Height="14px" /></dt>
-                            <dd><MudSkeleton Width="140px" Height="14px" /></dd>
-                        </div>
-                    }
-                </dl>
-
-                <div>
-                    <MudSkeleton Width="180px" Height="18px" Class="mb-3" />
-
-                    <div class="gs-splits">
-                        @for (var row = 0; row < 3; row++)
-                        {
-                            <div class="gs-split">
-                                <MudSkeleton SkeletonType="SkeletonType.Circle" Width="32px" Height="32px" />
-                                <span class="gs-split-who"><MudSkeleton Width="120px" Height="14px" /></span>
-                                <span class="gs-split-amount"><MudSkeleton Width="64px" Height="14px" /></span>
-                            </div>
-                        }
-                    </div>
-                </div>
+            <div class="gs-empty" style="padding: 32px">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             </div>
         }
         else
@@ -198,14 +153,6 @@
                             <h3 style="margin: 0; font-size: 1rem">@SplitHeadline</h3>
                         </div>
 
-                        @* What produced the figures below, which the figures themselves do
-                           not say. This used to be an "evenly" tag worked out by comparing
-                           the amounts to each other; see DivisionSource for why that reading
-                           was wrong in both directions. *@
-                        <DivisionSource Info="@_source"
-                                        On="@details.DateTime"
-                                        Splits="@details.Splits"/>
-
                         @* A row per person and nothing else. There was a bar under each one
                            drawing the share as a proportion, and it earned nothing: an
                            evenly split expense -- which is most of them -- drew a column of
@@ -228,21 +175,6 @@
                                 </div>
                             }
                         </div>
-
-                        @* Only where there is a history to open. A rule that has stood for
-                           one division since it was made has nothing to show that the line
-                           above has not already said. *@
-                        @if (_source is { RuleId: { } rule, RuleName: { Length: > 0 } name }
-                             && _versions > 1)
-                        {
-                            <MudButton Variant="Variant.Text"
-                                       Size="Size.Small"
-                                       Class="gs-btn-quiet mt-3"
-                                       EndIcon="@Icons.Material.Rounded.ArrowForward"
-                                       OnClick="@(() => ShowHistoryAsync(rule))">
-                                See how @name has changed
-                            </MudButton>
-                        }
                     </div>
                 }
 
@@ -328,24 +260,12 @@
         ? $"Split between {count} {(count == 1 ? "person" : "people")}"
         : "Split";
 
-    /// <summary>What divided it, once the version it records has been resolved to a rule.</summary>
-    private DivisionSourceInfo? _source;
-
-    /// <summary>
-    /// How many divisions that rule has stood for, which decides whether there is a history
-    /// worth offering. Zero until the expense has loaded, and zero for one nothing divided.
-    /// </summary>
-    private int _versions;
-
     // Failures go through the presenter, which names the reason the API gave; a dialog
     // that cannot load its subject has nothing to show, so it closes.
     protected override async Task OnInitializedAsync()
     {
-        // Both at once, because both only ever needed the id this dialog was opened with.
-        // The bill used to be read last, after the expense and after the rule, and each
-        // answer grew the dialog under the reader's hand: it opened at the size of a
-        // spinner, jumped to the size of an expense, then twice more. That succession
-        // during the open transition is what read as a flash.
+        // Both at once, because both only ever needed the id this dialog was opened with:
+        // read one after the other, each answer grew the dialog under the reader's hand.
         var bill = Receipts.GetAsync(TransactionId);
 
         var loaded = await Errors.TryAsync(
@@ -358,73 +278,18 @@
             return;
         }
 
-        // And what divided it, before anything is painted. It is one read, it lands in the
-        // same breath as the other two, and the line it fills sits above the figures -- so
-        // arriving late moved everything under it. An expense on screen that reflows while
-        // somebody is reading it is worse than a spinner for one more moment.
-        await ReadSourceAsync();
-
         // Null for most expenses, which have no bill, and null for a failure just the same:
         // there is nothing to report either way and the strip simply does not appear.
         receipt = await bill;
 
-        // The title has to be told separately, and this is not belt and braces: TitleContent
-        // is hoisted into the dialog provider's own tree, so it does not re-render when this
-        // component's state changes. Without it the dialog stays headed "Expense" over a
-        // body full of the thing it is refusing to name. Both go together here so the
-        // heading and everything under it appear in one frame.
+        // The title has to be told separately, and this is not belt and braces:
+        // TitleContent is hoisted into the dialog provider's own tree, so it does not
+        // re-render when this component's state changes. Without it the dialog stays headed
+        // "Expense" over a body full of the thing it is refusing to name. Both go together
+        // here so the heading and the figures under it appear in the same frame.
         StateHasChanged();
         MudDialog.StateHasChanged();
     }
-
-    /// <summary>
-    /// Resolves the version the expense records into a rule and a window.
-    /// </summary>
-    /// <remarks>
-    /// A personal expense is skipped outright: rules belong to groups, so there is nothing
-    /// to resolve and the strip renders nothing. The history is asked for only when a
-    /// version is actually recorded, which keeps an expense somebody split by hand to one
-    /// round trip -- the one that loaded it.
-    /// </remarks>
-    private async Task ReadSourceAsync()
-    {
-        if (details is not { } loaded) return;
-
-        if (loaded.GroupId is not { } group)
-            return;
-
-        _source = await Source.ReadAsync(
-            group, loaded.CategoryId, loaded.SplitRuleVersionId,
-            withHistory: loaded.SplitRuleVersionId is not null);
-
-        _versions = _source?.Versions.Count ?? 0;
-    }
-
-    /// <summary>
-    /// The rule's history, and a re-read if it changed anything.
-    /// </summary>
-    /// <remarks>
-    /// That dialog can edit the rule or put an old division back into service, and either
-    /// opens a new version -- which supersedes the one this expense records. Without the
-    /// re-read the strip above would go on saying "Current" over a version that stopped
-    /// being current while the person was looking at the proof.
-    /// </remarks>
-    private async Task ShowHistoryAsync(Guid ruleId)
-    {
-        var parameters = new DialogParameters<RuleHistoryDialog> { { dialog => dialog.SplitRuleId, ruleId } };
-
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
-
-        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
-
-        // Unconditionally, and not off the dialog's answer: it carries none when somebody
-        // dismisses it with the corner button, which is also a way to leave it after an edit
-        // that saved. One read is cheaper than a strip that goes on saying "Current" over a
-        // version that stopped being current while the person was looking at the proof.
-        await ReadSourceAsync();
-        StateHasChanged();
-    }
-
 
     /// <summary>
     /// The bill, on its own, handed over rather than read again.

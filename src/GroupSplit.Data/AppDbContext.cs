@@ -213,28 +213,69 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(version => new { version.SplitRuleId, version.SupersededAt });
         });
 
-        // TPH, like Transaction: how a rule divides is which type it is -- answered by the
-        // handler registered for that type, not by a Kind column and a switch. One table,
-        // and the participants are declared once, on the middle layer that has them.
+        // TPT: a table per kind, which is what the kinds are. The base holds what every
+        // version has -- which rule it belongs to, and the window it was the answer in --
+        // and each kind holds what only it has, which for three of them is nothing at all.
         //
-        // Declared before the discriminator is indexed, because until EF has been told the
-        // subtypes exist there is no hierarchy and therefore no discriminator to index.
+        // Unlike Transaction, which is TPH and says why. The difference is not taste: a
+        // transaction is one shape with two readings, and the leaf columns it does have are
+        // few and nullable by nature. A rule version is five shapes that share a window, and
+        // TPH gave the one column any of them needs -- who the whole amount is for -- to all
+        // five, nullable, with nothing but a discriminator and a check constraint standing
+        // between a payer rule and a person it has no use for. Here it is a column in a table
+        // that only exists for the kind that has it, required, and a row of the wrong kind
+        // cannot hold it because there is nowhere to put it.
+        //
+        // What it buys beyond that is the participants. They hang off WeightedSplitRuleVersion
+        // -- the middle layer, the only one that has weights -- so "a weight belongs to a
+        // rule that divides in proportion" is a foreign key rather than care. Under one table
+        // it pointed at the base, and nothing stopped a weight hanging off a rule with no
+        // weights.
+        //
+        // The cost is joins, and there are five of them: a read that does not know which kind
+        // it is about left-joins every leaf table and reads the kind off whichever one
+        // matched, because that is where the discriminator went. Measured, not assumed --
+        // EF prints it, and the shape is
+        //
+        //   FROM "SplitRuleVersion" LEFT JOIN each of the five ... INNER JOIN "SplitRule"
+        //
+        // which is what the old RuleVersion's four-table chain looked like too. The
+        // difference is what the joins are on: every one of these is the primary key, one
+        // row at most, on tables with a row per version and nothing else in them. It is the
+        // price of the columns being where they belong, and it is paid on every division
+        // read -- which is every expense written, edited or previewed. Worth knowing before
+        // adding a sixth kind.
+        modelBuilder.Entity<SplitRuleVersion>().UseTptMappingStrategy();
+
         modelBuilder.Entity<WeightedSplitRuleVersion>();
         modelBuilder.Entity<EvenSplitRuleVersion>();
-
-        modelBuilder.Entity<PayerSplitRuleVersion>();
-
         modelBuilder.Entity<PercentSplitRuleVersion>();
-
         modelBuilder.Entity<SharesSplitRuleVersion>();
 
         // Not optional, and quiet about it if forgotten: EF discovers a derived type only
         // where the model names it, so an unregistered kind is not a mapping error -- it is
         // stored as its base, read back as its base, and dispatched to the wrong handler.
-        // Which looks like a rule that divides evenly for no reason anybody can see.
+        // Which looks like a rule that divides evenly for no reason anybody can see. It
+        // carries nothing of its own, so its table is the key and nothing else: what an
+        // itemized rule divides by is on each expense's bill.
         modelBuilder.Entity<ItemizedSplitRuleVersion>();
 
-        modelBuilder.Entity<SplitRuleVersion>().HasIndex("Discriminator");
+        modelBuilder.Entity<SoleSplitRuleVersion>(entity =>
+        {
+            // Required, and required in the table too, the table being this kind's alone: a
+            // rule that puts the whole amount on somebody cannot be written without the
+            // somebody.
+            //
+            // Restrict, like every other reference to a person: an account is anonymised
+            // rather than erased, so nothing here should ever block -- except a stand-in for
+            // an invitee, which really is deleted when the invitation is claimed or closed,
+            // and which ISplitRuleRevisions moves these off first.
+            entity.HasOne(version => version.User)
+                .WithMany()
+                .HasForeignKey(version => version.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         modelBuilder.Entity<SplitRuleParticipant>(entity =>
         {

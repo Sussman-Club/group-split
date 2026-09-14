@@ -51,6 +51,13 @@ public static class Extensions
             builder.Services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
             builder.Services.AddScoped<IGroupParticipants, GroupParticipants>();
 
+            // The rule each group holds for each of its members -- all of it is for them.
+            // The API provisions one as somebody joins and a seeded membership joins nobody,
+            // so without this the demo data is the one place the expense dialog cannot say
+            // "this one was Ana's".
+            builder.Services.AddScoped<IMemberSplitRules, MemberSplitRules>();
+            builder.AddSeeder<MemberSplitRuleSeeder>();
+
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 

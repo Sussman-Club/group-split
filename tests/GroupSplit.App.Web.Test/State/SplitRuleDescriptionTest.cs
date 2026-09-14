@@ -101,8 +101,13 @@ public class SplitRuleDescriptionTest
     [Fact]
     public void A_payer_rule_names_nobody_because_who_owes_depends_on_who_paid()
     {
-        Assert.Equal("All on whoever paid", new PayerSplitRuleDto().Summary(Names));
-        Assert.Empty(new PayerSplitRuleDto().Weights(Names));
+        Assert.Equal("All on Ana", new SoleSplitRuleDto(Ana).Summary(Names));
+
+        // One row, and the whole of it: a proportion of the whole is not what this kind
+        // says, but what it comes to is all of it.
+        var weight = Assert.Single(new SoleSplitRuleDto(Ana).Weights(Names));
+
+        Assert.Equal("all of it", weight.Held);
     }
 
     /// <summary>
@@ -169,7 +174,7 @@ public class SplitRuleDescriptionTest
             new PercentSplitRuleDto { Percentages = { [Ana] = 60m, [Lu] = 40m } }.Ratio());
 
         Assert.Equal("evenly", new EvenSplitRuleDto().Ratio());
-        Assert.Equal("whoever paid", new PayerSplitRuleDto().Ratio());
+        Assert.Equal("all on one", new SoleSplitRuleDto(Ana).Ratio());
     }
 
     /// <summary>
