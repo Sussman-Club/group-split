@@ -1,6 +1,4 @@
-using System.CommandLine;
-using System.Net;
-using GroupSplit.Cli.Api;
+﻿using System.CommandLine;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -24,8 +22,9 @@ namespace GroupSplit.Cli.Commands;
 /// touches the ledger until <c>divide</c>.
 /// </para>
 /// <para>
-/// The tax and the tip are apportioned in proportion to what each person claimed, which is
-/// the only division of them that does not depend on who ordered the expensive thing.
+/// Tax is carried by the line it was charged on, so one bill can charge two rates. The tip
+/// belongs to no line and is spread over them by price, which is the only division of it
+/// that does not depend on who ordered the expensive thing.
 /// </para>
 /// </remarks>
 public static class ReceiptCommands
@@ -35,13 +34,6 @@ public static class ReceiptCommands
         Description = "The expense's id, as shown by `groupsplit transactions list`."
     };
 
-    private static Option<bool> BankRow() => new("--bank-row")
-    {
-        Description = "Read the id as an imported bank row's, from `groupsplit inbox list`, "
-                      + "rather than an expense's. Lets a dinner be itemised at the table "
-                      + "before anybody files the card charge."
-    };
-
     public static Command Build()
     {
         var receipts = new Command("receipts",
@@ -49,10 +41,9 @@ public static class ReceiptCommands
 
         receipts.Subcommands.Add(Show());
         receipts.Subcommands.Add(Set());
-        receipts.Subcommands.Add(Claim());
+        receipts.Subcommands.Add(Rule());
         receipts.Subcommands.Add(Preview());
         receipts.Subcommands.Add(Divide());
-        receipts.Subcommands.Add(Split());
         receipts.Subcommands.Add(Delete());
 
         return receipts;
@@ -60,11 +51,9 @@ public static class ReceiptCommands
 
     private static Command Show()
     {
-        var bankRow = BankRow();
-
-        var command = new Command("show", "Show a bill, its lines, and who has claimed them.")
+        var command = new Command("show", "Show a bill, its lines, and the rule each line divides by.")
         {
-            TransactionId, bankRow
+            TransactionId
         };
 
         command.SetHandler(async (context, ct) =>
@@ -72,9 +61,7 @@ public static class ReceiptCommands
             var id = context.ParseResult.GetValue(TransactionId);
             var client = new Api.ReceiptsClient(context.ApiHttpClient);
 
-            var receipt = context.ParseResult.GetValue(bankRow)
-                ? await client.GetBankRowReceiptAsync(id, ct)
-                : await client.GetReceiptAsync(id, ct);
+            var receipt = await client.GetReceiptAsync(id, ct);
 
             context.Output.Write(receipt, Render);
 
@@ -88,10 +75,10 @@ public static class ReceiptCommands
     {
         var items = new Option<string[]>("--item")
         {
-            Description = "A line on the bill, as <name>=<price>[x<qty>][/notax][@<user-id>[*<weight>],...], "
+            Description = "A line on the bill, as <name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>], "
                           + "repeatable. /notax says the bill's tax was not charged on it. "
-                          + "Claimants are optional here and can be set later with "
-                          + "`groupsplit receipts claim`.",
+                          + "Rules are optional while editing and can be set later with "
+                          + "`groupsplit receipts rule`.",
             AllowMultipleArgumentsPerToken = false
         };
 
@@ -110,12 +97,10 @@ public static class ReceiptCommands
                           + "equal the expense's amount."
         };
 
-        var bankRow = BankRow();
-
         var command = new Command("set",
             "Transcribe a bill, replacing whatever was there. Does not divide anything.")
         {
-            TransactionId, items, subtotal, tax, tip, total, bankRow
+            TransactionId, items, subtotal, tax, tip, total
         };
 
         command.SetHandler(async (context, ct) =>
@@ -152,9 +137,7 @@ public static class ReceiptCommands
 
             var client = new Api.ReceiptsClient(context.ApiHttpClient);
 
-            var receipt = parse.GetValue(bankRow)
-                ? await client.SaveBankRowReceiptAsync(id, request, ct)
-                : await client.SaveReceiptAsync(id, request, ct);
+            var receipt = await client.SaveReceiptAsync(id, request, ct);
 
             context.Output.Write(receipt, Render);
 
@@ -164,48 +147,19 @@ public static class ReceiptCommands
         return command;
     }
 
-    private static Command Claim()
+    private static Command Rule()
     {
-        var itemId = new Argument<Guid>("item-id")
-        {
-            Description = "The line's id, as shown by `groupsplit receipts show`."
-        };
-
-        var users = new Option<string[]>("--user")
-        {
-            Description = "Who had it, as <user-id>[*<weight>], repeatable. "
-                          + "Pass none to un-claim the line.",
-            AllowMultipleArgumentsPerToken = true
-        };
-
-        var command = new Command("claim", "Say who had one line of the bill.")
-        {
-            TransactionId, itemId, users
-        };
-
+        var itemId = new Argument<Guid>("item-id");
+        var version = new Option<Guid?>("--rule-version") { Description = "Saved rule version to assign. Omit to clear the item rule." };
+        var command = new Command("rule", "Choose the split rule version for an item.") { TransactionId, itemId, version };
         command.SetHandler(async (context, ct) =>
         {
-            var parse = context.ParseResult;
-            var named = parse.GetValue(users) ?? [];
-
-            // Through the item parser, so one line's claimants read exactly as they do
-            // inside --item and a weight means the same thing in both places.
-            var claims = named.Length > 0
-                ? ReceiptItems.Parse("--user", [$"line={0m}@{string.Join(',', named)}"]).Single().Claims
-                : [];
-
-            var receipt = await new Api.ReceiptsClient(context.ApiHttpClient)
-                .SetReceiptItemClaimsAsync(
-                    parse.GetValue(TransactionId),
-                    parse.GetValue(itemId),
-                    new SetReceiptItemClaimsRequest { Claims = claims },
-                    ct);
-
+            var receipt = await new Api.ReceiptsClient(context.ApiHttpClient).SetReceiptItemRuleAsync(
+                context.ParseResult.GetValue(TransactionId), context.ParseResult.GetValue(itemId),
+                new SetReceiptItemRuleRequest { SplitRuleVersionId = context.ParseResult.GetValue(version) }, ct);
             context.Output.Write(receipt, Render);
-
             return ExitCodes.Success;
         });
-
         return command;
     }
 
@@ -250,7 +204,7 @@ public static class ReceiptCommands
                 [
                     .. division.Shares.Select(share =>
                         $"{share.UserId} owes {share.Amount} "
-                        + $"({share.ClaimedSubtotal} of items, the rest tax and tip)."),
+                        + $"({share.Subtotal} of items, the rest tax and tip)."),
                     "Replaces whatever shares the expense holds now, and every balance in "
                     + "the group moves with them."
                 ],
@@ -266,197 +220,17 @@ public static class ReceiptCommands
         return command;
     }
 
-    /// <summary>
-    /// Files one imported charge as several expenses, by saying which lines are which.
-    /// </summary>
-    /// <remarks>
-    /// The other half of the feature, at the other scale. <c>divide</c> splits one expense
-    /// between the people who had each line; this splits one charge between the purchases it
-    /// turns out to be -- the flat's groceries and a jacket that is nobody's business but
-    /// yours, on one warehouse receipt.
-    /// <para>
-    /// Everything at once. Every line has to land in exactly one part, so there is no
-    /// half-split row to come back to and nothing to reconcile: either every part exists or
-    /// the charge is still waiting.
-    /// </para>
-    /// <para>
-    /// Where the charge has a bill the amounts are not given and cannot be. Each part is cut
-    /// from the charge in proportion to the lines it holds, with the tip apportioned over
-    /// them, so the parts sum to what the card was charged by construction rather than by the
-    /// caller getting the arithmetic right.
-    /// </para>
-    /// <para>
-    /// Where it has none they are given and nothing else could give them -- a charge nobody
-    /// itemised is still two purchases, and with no lines to cut it by the only thing that
-    /// knows where the money went is the person who was there. The bill is read first either
-    /// way, so which of the two applies is never guessed and never the caller's to pick.
-    /// </para>
-    /// </remarks>
-    private static Command Split()
-    {
-        var rowId = new Argument<Guid>("bank-transaction-id")
-        {
-            Description = "The imported row's id, as shown by `groupsplit inbox list`."
-        };
-
-        var parts = new Option<string[]>("--part")
-        {
-            Description = "One purchase, as <name>=<lines>[@<group-id>[/<category-id>]], "
-                          + "repeatable and needed at least twice. <lines> is line numbers, "
-                          + "ranges or ids from `groupsplit receipts show --bank-row`; no "
-                          + "@group keeps that part on your own ledger. On a charge with no "
-                          + "bill, give an amount instead of lines -- \"Groceries=48.20\" -- "
-                          + "and the parts have to come to the charge exactly.",
-            AllowMultipleArgumentsPerToken = false
-        };
-
-        var fileAnyway = new Option<bool>("--file-anyway")
-        {
-            Description = "Go ahead even though this charge looks like an expense already "
-                          + "recorded."
-        };
-
-        var command = new Command("split",
-            "File one imported charge as several expenses, by its bill or by amount.")
-        {
-            rowId, parts, fileAnyway
-        };
-
-        command.SetHandler(async (context, ct) =>
-        {
-            var parse = context.ParseResult;
-            var id = parse.GetValue(rowId);
-
-            if (parse.GetValue(parts) is not { Length: > 1 } given)
-            {
-                throw CliException.Input(
-                    "Splitting a charge needs at least two --part.",
-                    "One part is an ordinary filing -- use `groupsplit inbox file`. Try "
-                    + "--part \"Groceries=1-4@<group-id>\" --part \"Clothes=5,6\".");
-            }
-
-            // Read first, because a part names lines by where they are on the paper and only
-            // the bill knows what is there. It also means a position that is not on the bill
-            // is refused before anything is created, naming the number the caller typed
-            // rather than an id they never saw.
-            //
-            // And because whether there is one decides how --part reads at all. Asked rather
-            // than inferred from the text: "Jacket=5" is line five of a bill and five pounds
-            // without one, and a charge either has a bill or it does not.
-            ReceiptResponse? bill = null;
-
-            try
-            {
-                bill = await new Api.ReceiptsClient(context.ApiHttpClient)
-                    .GetBankRowReceiptAsync(id, ct);
-            }
-            catch (ApiException api) when (api.StatusCode == (int)HttpStatusCode.NotFound
-                                           && Missing(api) == Shared.Errors.ErrorCodes.ReceiptNotFound)
-            {
-                // Nobody itemised this charge, which is an ordinary thing rather than a
-                // failure: the parts say what they are worth. A row that does not exist, or
-                // is not the caller's, still comes back as the refusal it is -- it answers
-                // BANK_TRANSACTION_NOT_FOUND, not this.
-            }
-
-            var request = new SplitBankTransactionRequest
-            {
-                Parts = bill is null
-                    ? ReceiptParts.ParseAmounts("--part", given)
-                    : ReceiptParts.Parse("--part", given, bill.Items),
-                // Never defaulted true for convenience. A split files several expenses at
-                // once, so going ahead over a payment already recorded is several wrong
-                // balances rather than one, and this flag is the person saying they were
-                // told.
-                FileAnyway = parse.GetValue(fileAnyway)
-            };
-
-            var split = await new Api.InboxClient(context.ApiHttpClient)
-                .SplitBankTransactionAsync(id, request, ct);
-
-            context.Output.Write(split, RenderSplit);
-
-            return ExitCodes.Success;
-        });
-
-        return command;
-    }
-
-    /// <summary>The problem's code, for telling two 404s apart.</summary>
-    private static string? Missing(ApiException exception) =>
-        (exception as ApiException<ProblemDetails>)?.Result.Code;
-
-    private static IRenderable RenderSplit(SplitBankTransactionResponse split)
-    {
-        var table = Tables.Grid("Expense", "Name", "Lines", "Amount");
-
-        foreach (var part in split.Parts)
-        {
-            table.AddRow(
-                part.TransactionId.ToString(),
-                Markup.Escape(part.Name),
-                part.ItemCount.ToString(),
-                part.Amount.ToString());
-        }
-
-        return new Rows(
-            new Markup($"[green]Split[/] {split.Charge} into {split.Parts.Count} expenses.\n\n"),
-            table,
-            // The invariant, said once where it can be checked: the parts account for the
-            // charge, so this is arithmetic the caller can follow rather than trust.
-            new Markup($"\n[grey]{Apportioning(split)} The parts come to "
-                       + $"{split.Parts.Sum(part => part.Amount)}, against a charge of "
-                       + $"{split.Charge}.[/]\n"));
-    }
-
-    /// <summary>Where the parts' amounts came from, which is not the same in both cases.</summary>
-    private static string Apportioning(SplitBankTransactionResponse split) =>
-        split.Parts.Any(part => part.ItemCount > 0)
-            ? "Tax and tip are apportioned between the parts in proportion to the lines each "
-              + "holds."
-            : "This charge has no itemised bill, so the parts are the amounts you gave.";
-
     private static Command Delete()
     {
-        var bankRow = BankRow();
-
-        var command = new Command("delete", "Take a bill off an expense, or off an imported row.")
+        var command = new Command("delete", "Take a bill off an expense. The shares it produced stay.")
         {
-            TransactionId, bankRow
+            TransactionId
         };
 
         command.SetHandler(async (context, ct) =>
         {
             var id = context.ParseResult.GetValue(TransactionId);
             var client = new Api.ReceiptsClient(context.ApiHttpClient);
-
-            // A bill on a row is the simpler act: nothing has been divided by it, so there are
-            // no shares to reassure anybody about. It is also the only way to be rid of one
-            // that filing declined to take -- a row filed into a personal expense keeps its
-            // bill, and file and link both refuse a row that is already filed.
-            if (context.ParseResult.GetValue(bankRow))
-            {
-                var onTheRow = await client.GetBankRowReceiptAsync(id, ct);
-
-                Confirmation.Require(
-                    context,
-                    action: "receipts.delete",
-                    summary: $"Delete the bill of {onTheRow.Total} on this imported row?",
-                    changes:
-                    [
-                        $"{onTheRow.Items.Count} line(s) and every claim on them go.",
-                        "Nothing has been divided by it, so no balance moves."
-                    ],
-                    confirmCommand: $"groupsplit receipts delete {id} --bank-row --yes");
-
-                await client.DeleteBankRowReceiptAsync(id, ct);
-
-                context.Output.Write(
-                    new { status = "deleted", bankTransactionId = id },
-                    _ => new Markup("[green]Deleted[/] the bill.\n"));
-
-                return ExitCodes.Success;
-            }
 
             var receipt = await client.GetReceiptAsync(id, ct);
 
@@ -466,7 +240,7 @@ public static class ReceiptCommands
                 summary: $"Delete the bill of {receipt.Total} on this expense?",
                 changes:
                 [
-                    $"{receipt.Items.Count} line(s) and every claim on them go.",
+                    $"{receipt.Items.Count} line(s) and their item rules go.",
                     // The shares are the ledger's and the bill is only what produced them,
                     // so removing the bill is not a refund. Said out loud because somebody
                     // deleting a receipt to "undo the split" would otherwise be surprised.
@@ -498,12 +272,7 @@ public static class ReceiptCommands
     /// stops the bill being divided -- and a blank cell in a column of names reads as a
     /// rendering gap rather than as an answer.
     /// </remarks>
-    private static string Divided(ReceiptItemResponse item) => item.Claims.Count == 0
-        ? "[yellow]nobody[/]"
-        : Markup.Escape(string.Join(", ", item.Claims.Select(claim =>
-            claim.Weight == 1
-                ? $"{claim.UserName} ({claim.Share})"
-                : $"{claim.UserName}*{claim.Weight} ({claim.Share})")));
+    private static string Divided(ReceiptItemResponse item) => item.SplitRuleName ?? "Choose a rule";
 
     private static IRenderable Render(ReceiptResponse receipt)
     {
@@ -514,22 +283,15 @@ public static class ReceiptCommands
         summary.AddRow("Tip", receipt.Tip.ToString());
         summary.AddRow("Total", receipt.Total.ToString());
 
-        summary.AddRow("Unclaimed", receipt.UnclaimedItemCount == 0
+        summary.AddRow("Missing rule", receipt.MissingRuleItemCount == 0
             ? "none"
-            : $"{receipt.UnclaimedItemCount} line(s)");
+            : $"{receipt.MissingRuleItemCount} line(s)");
 
         // Why it cannot be divided is more useful than that it cannot, and the two reasons a
         // caller can act on are the two stated here.
-        summary.AddRow("Can divide", receipt.CanDivide
-            ? "yes"
-            : receipt.ExpenseId is null
-                ? "no -- not filed as an expense yet"
-                : "no -- see Unclaimed, or the figures do not add up");
+        summary.AddRow("Can divide", receipt.CanDivide ? "yes" : "no -- check item rules and totals");
 
-        // The position first, because that is what `receipts split --part` refers to: a
-        // warehouse bill is twenty lines and nobody is pasting twenty guids. The id stays
-        // beside it for anything that wants to be unambiguous.
-        var items = Tables.Grid("#", "Line", "Name", "Qty", "Price", "Tax", "Had by");
+        var items = Tables.Grid("#", "Line", "Name", "Qty", "Price", "Tax", "Split rule");
 
         var position = 1;
 
@@ -558,13 +320,13 @@ public static class ReceiptCommands
         {
             table.AddRow(
                 share.UserId.ToString(),
-                share.ClaimedSubtotal.ToString(),
+                share.Subtotal.ToString(),
                 share.Amount.ToString());
         }
 
         return new Rows(
             table,
-            new Markup($"\n[grey]Tax and tip are shared out in proportion to what each "
-                       + $"person claimed. Total {division.Total}.[/]\n"));
+            new Markup($"\n[grey]Each line is divided by its own rule -- its price, the tax "
+                       + $"charged on it, and its share of the tip. Total {division.Total}.[/]\n"));
     }
 }

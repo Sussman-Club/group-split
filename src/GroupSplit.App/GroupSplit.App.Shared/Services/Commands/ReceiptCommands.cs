@@ -1,35 +1,32 @@
 using GroupSplit.Shared;
-
+using GroupSplit.App.Shared.Services.Errors;
 namespace GroupSplit.App.Shared.Services.Commands;
 
-/// <inheritdoc cref="IReceiptCommands"/>
-public sealed class ReceiptCommands(IReceiptsClient receipts) : IReceiptCommands
+public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter errors, DataChangeNotifier changes) : IReceiptCommands
 {
-    public Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default) =>
-        Read(() => receipts.GetReceiptAsync(transactionId, ct));
-
-    public Task<ReceiptResponse?> ForBankRowAsync(Guid rowId, CancellationToken ct = default) =>
-        Read(() => receipts.GetBankRowReceiptAsync(rowId, ct));
-
-    private static async Task<ReceiptResponse?> Read(Func<Task<ReceiptResponse>> read)
+    public async Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default)
     {
-        try
-        {
-            return await read();
-        }
-        catch (OperationCanceledException)
-        {
-            // The dialog that asked has closed. Rethrown rather than swallowed, so a
-            // cancelled read is not mistaken for an expense that has no bill.
-            throw;
-        }
-        catch
-        {
-            // Every other outcome is the same to the caller: there is nothing to show. A
-            // 404 is the ordinary case -- most expenses were never itemised -- and the rest
-            // are not worth interrupting somebody for, since the bill is supplementary to a
-            // dialog whose subject loaded fine.
-            return null;
-        }
+        try { return await receipts.GetReceiptAsync(transactionId, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch { return null; }
     }
+    public async Task<ReceiptResponse?> SetRuleAsync(Guid transactionId, Guid itemId, Guid? versionId)
+    {
+        ReceiptResponse? result = null;
+        await errors.TryAsync(async () => result = await receipts.SetReceiptItemRuleAsync(transactionId, itemId,
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = versionId }), "Could not change the item's rule.");
+        return result;
+    }
+    public async Task<ReceiptDivisionResponse?> PreviewAsync(Guid transactionId)
+    {
+        ReceiptDivisionResponse? result = null;
+        await errors.TryAsync(async () => result = await receipts.PreviewReceiptDivisionAsync(transactionId),
+            "Could not preview the item split.");
+        return result;
+    }
+    public Task<bool> DivideAsync(Guid transactionId) => errors.TryAsync(async () =>
+    {
+        await receipts.DivideByReceiptAsync(transactionId);
+        await changes.NotifyTransactionsChangedAsync();
+    }, "Could not divide the expense.");
 }

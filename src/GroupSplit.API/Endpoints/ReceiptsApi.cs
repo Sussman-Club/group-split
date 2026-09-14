@@ -35,19 +35,9 @@ public static class ReceiptsApi
             group.MapGetReceipt();
             group.MapSaveReceipt();
             group.MapDeleteReceipt();
-            group.MapSetClaims();
+            group.MapSetRule();
             group.MapPreviewDivision();
             group.MapDivide();
-
-            var inbox = routes.MapGroup("/inbox/{id:guid}/receipt")
-                .RequireAuthorization()
-                .ProducesStandardProblems();
-
-            inbox.WithTags("Receipts");
-
-            inbox.MapGetBankRowReceipt();
-            inbox.MapSaveBankRowReceipt();
-            inbox.MapDeleteBankRowReceipt();
 
             return group;
         }
@@ -122,20 +112,20 @@ public static class ReceiptsApi
         /// than adds: un-claiming is then the same operation as claiming, and a client never
         /// has to work out which of the two it is doing.
         /// </remarks>
-        private RouteHandlerBuilder MapSetClaims()
+        private RouteHandlerBuilder MapSetRule()
         {
-            return group.MapPut("/items/{itemId:guid}/claims", async (
+            return group.MapPut("/items/{itemId:guid}/rule", async (
                     Guid id,
                     Guid itemId,
-                    SetReceiptItemClaimsRequest request,
+                    SetReceiptItemRuleRequest request,
                     IReceiptService receipts,
                     CancellationToken ct) =>
                 {
-                    var receipt = await receipts.SetClaims(id, itemId, request, ct);
+                    var receipt = await receipts.SetRule(id, itemId, request, ct);
 
                     return Results.Ok(await receipts.ResponseFor(receipt, id, ct));
                 })
-                .WithName("SetReceiptItemClaims")
+                .WithName("SetReceiptItemRule")
                 .Produces<ReceiptResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict);
@@ -179,69 +169,5 @@ public static class ReceiptsApi
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
-        /// <summary>
-        /// Takes a bill off an imported row.
-        /// </summary>
-        /// <remarks>
-        /// The way out for a bill nothing will take. Filing a row into a personal expense
-        /// leaves its bill where it is -- there is nobody to divide it between -- and the row
-        /// is then filed, which both file and link refuse. Without this the bill would sit in
-        /// the inbox forever with overwriting it as the only thing anybody could do.
-        /// </remarks>
-        private RouteHandlerBuilder MapDeleteBankRowReceipt()
-        {
-            return group.MapDelete(string.Empty, async (
-                    Guid id,
-                    IReceiptService receipts,
-                    CancellationToken ct) =>
-                {
-                    await receipts.DeleteForBankRow(id, ct);
-
-                    return Results.NoContent();
-                })
-                .WithName("DeleteBankRowReceipt")
-                .Produces(StatusCodes.Status204NoContent)
-                .ProducesProblem(StatusCodes.Status404NotFound);
-        }
-
-        private RouteHandlerBuilder MapGetBankRowReceipt()
-        {
-            return group.MapGet(string.Empty, async (
-                    Guid id,
-                    IReceiptService receipts,
-                    CancellationToken ct) =>
-                {
-                    var receipt = await receipts.ForBankRow(id, ct);
-
-                    // No part named: an unfiled row is the whole piece of paper, and none of
-                    // its lines belongs to a purchase yet.
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct: ct));
-                })
-                .WithName("GetBankRowReceipt")
-                .Produces<ReceiptResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
-        }
-
-        /// <summary>
-        /// Transcribes a bill against an imported row nobody has filed yet, so a dinner can
-        /// be itemised at the table and carried over when the row is filed.
-        /// </summary>
-        private RouteHandlerBuilder MapSaveBankRowReceipt()
-        {
-            return group.MapPut(string.Empty, async (
-                    Guid id,
-                    SaveReceiptRequest request,
-                    IReceiptService receipts,
-                    CancellationToken ct) =>
-                {
-                    var receipt = await receipts.SaveForBankRow(id, request, ct);
-
-                    return Results.Ok(await receipts.ResponseFor(receipt, ct: ct));
-                })
-                .WithName("SaveBankRowReceipt")
-                .Produces<ReceiptResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-        }
     }
 }

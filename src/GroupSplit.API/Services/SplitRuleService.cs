@@ -314,7 +314,8 @@ public class SplitRuleService(
         var everUsed = await dbContext.Set<Transaction>()
             .AnyAsync(transaction => transaction.SplitRuleVersion!.SplitRuleId == id, ct);
 
-        if (everUsed)
+        if (everUsed || await dbContext.Set<ReceiptItem>()
+            .AnyAsync(item => item.SplitRuleVersion!.SplitRuleId == id, ct))
             throw new ConflictException(ErrorCodes.SplitRuleInUse,
                 "Expenses have been divided by this rule, so it is part of their history and cannot be deleted.");
 

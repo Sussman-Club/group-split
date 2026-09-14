@@ -128,15 +128,6 @@ public static class ErrorCodes
     public const string GroupInvitationNoName = "GROUP_INVITATION_NO_NAME";
     public const string SplitsInvalid = "SPLITS_INVALID";
 
-    /// <summary>
-    /// The parts a charge was to be split into do not account for it. On a charge with a
-    /// bill that is a line named twice, a line named that is not on it, or a line left out:
-    /// every line has to land in exactly one part, because a part's amount is cut from the
-    /// charge in proportion to the lines it holds, so a line belonging to nobody is money the
-    /// parts would not sum to. Carries the lines at fault. On a charge with none it is a part
-    /// that does not say what it is worth, or one that names lines there are none of.
-    /// </summary>
-    public const string SplitPartsInvalid = "SPLIT_PARTS_INVALID";
 
     /// <summary>
     /// A receipt was sent that could not describe a bill at all -- no items, a line with no
@@ -160,13 +151,6 @@ public static class ErrorCodes
 
     public const string SplitsDoNotSumToAmount = "SPLITS_DO_NOT_SUM_TO_AMOUNT";
 
-    /// <summary>
-    /// A charge with no bill was to be split into parts whose stated amounts do not come to
-    /// it. Nothing here can be cut from the paper, so the figures are the caller's and this
-    /// is the only thing standing between them and a charge filed as more or less money than
-    /// was actually paid. Carries what the parts came to and what the charge is.
-    /// </summary>
-    public const string SplitPartsDoNotSumToCharge = "SPLIT_PARTS_DO_NOT_SUM_TO_CHARGE";
     public const string BankTransactionIsCredit = "BANK_TRANSACTION_IS_CREDIT";
 
     /// <summary>
@@ -177,21 +161,14 @@ public static class ErrorCodes
     /// </summary>
     public const string ReceiptDoesNotAddUp = "RECEIPT_DOES_NOT_ADD_UP";
 
-    /// <summary>
-    /// A bill whose claimed subtotals are too large to weigh against each other in a 32-bit
-    /// integer -- past roughly 21 million in the expense's currency. Nothing is wrong with
-    /// the receipt except its size, which is why it is not <see cref="ReceiptDoesNotAddUp"/>:
-    /// that code tells somebody their figures disagree, and here they agree perfectly.
-    /// </summary>
-    public const string ReceiptTooLargeToDivide = "RECEIPT_TOO_LARGE_TO_DIVIDE";
 
     /// <summary>
-    /// Lines on the bill belong to nobody, so it cannot be divided yet. Refused rather than
-    /// spread over everybody: a forgotten line and one genuinely shared by the table look
-    /// identical from here, and charging five people for one person's steak is the kind of
-    /// wrong nobody checks for afterwards. Carries the ids and names of the unclaimed lines.
+    /// Lines on the bill name no split rule, so it cannot be divided yet. Refused rather
+    /// than spread over everybody: a line somebody forgot and one genuinely shared by the
+    /// table look identical from here, and charging five people for one person's steak is
+    /// the kind of wrong nobody checks for afterwards. Carries the ids of those lines.
     /// </summary>
-    public const string ReceiptItemsUnclaimed = "RECEIPT_ITEMS_UNCLAIMED";
+    public const string ReceiptItemsMissingRule = "RECEIPT_ITEMS_MISSING_RULE";
 
     // ---- Bad gateway (502): somebody else's service is in the path and did not answer ---
 

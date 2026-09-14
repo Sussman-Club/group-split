@@ -154,45 +154,41 @@ nobody ate the same thing: an even split is wrong for it, a percentage rule is a
 it, and stating amounts by hand means adding the column up and then apportioning the tax and
 the tip, which is the part people get wrong.
 
+Every line divides by a **saved split rule version** -- the same kind of rule a whole expense
+divides by. There is no separate notion of claiming a line: "Ana had the steak" is a rule
+naming Ana, and the line points at it. `split-rules list --group <id>` prints the rules with
+their current version ids.
+
 Transcribing a bill and dividing by it are separate commands. **Nothing touches the ledger
-until `receipts divide`** -- `set`, `claim` and `preview` all leave the expense's shares
+until `receipts divide`** -- `set`, `rule` and `preview` all leave the expense's shares
 exactly as they are.
 
 | Command | |
 | --- | --- |
-| `receipts show <transaction-id>` | The bill, its lines with their ids, who has claimed each, and whether it can be divided yet. `--bank-row` reads the id as an imported row's. |
-| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. `--bank-row` as above. |
-| `receipts claim <transaction-id> <item-id>` | Say who had one line. `--user` repeatable; naming nobody un-claims it. |
+| `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. |
+| `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
-| `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill or -- where it has none -- by amount. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
-| `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. `--bank-row` removes one from an imported row instead. |
+| `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. |
 
-A line is `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<who>]`, and `<who>` is comma-separated
-user ids each optionally `*<weight>`:
+A line is `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>]`, and after the `@`
+comes exactly one split rule version id:
 
 ```bash
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
-  --item "Steak=22.00@<ana>" \
-  --item "Wine=18.00@<ana>,<omar>" \
-  --item "Beers=9.00x3@<omar>*2,<ana>"
+  --item "Steak=22.00@<ana-only-version>" \
+  --item "Wine=18.00@<ana-and-omar-version>" \
+  --item "Beers=9.00x3@<omar-twice-as-much-version>"
 ```
 
-`@<ana>,<omar>` is a line the two of them shared evenly; `@<omar>*2,<ana>` is one where Omar
-had twice as much. A line with no `@` belongs to nobody yet, which is fine until you divide.
+A plate the table shared is a line naming a rule that divides between them, and a bottle Omar
+had twice as much of is a shares rule weighted that way -- the weighting lives in the rule,
+which the group can reuse and edit, rather than in the line. A line with no `@` has no rule
+yet, which is fine until you divide.
 
-**Claims are the only thing that says how a line divides.** A plate the table shared names
-everybody who had it:
-
-```bash
-groupsplit receipts set 7c1e... --tip 8.00 \
-  --item "Ribeye=26.00@<ana>" --item "Oysters=14.00@<carl>" \
-  --item "Bread=12.00@<ana>,<carl>,<omar>" --item "Paella=28.00@<ana>,<carl>,<omar>"
-```
-
-A line could once be marked as the table's without naming anybody; that is gone. An itemised
-division says everybody owes what they had -- a bill you want divided evenly wants a category
-with an even rule instead, not an itemised one.
+A line cannot name an itemised rule (a bill inside a line of a bill divides nothing) nor a
+rule belonging to another group. Both are `RECEIPT_INVALID`.
 
 `/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount, not a rate and not
 a flag: a bill can charge two rates -- 6% food and 23% household goods on one supermarket
@@ -202,84 +198,33 @@ restaurant bill under VAT wants; `/notax` still reads and means the same as sayi
 reads the same on either side of the `@`.
 
 **`receipts set` saves the bill whole**, so a line you do not mention is a line that has gone,
-and its claims go with it. Correcting one price means naming the stored lines by the ids
+and its rule goes with it. Correcting one price means naming the stored lines by the ids
 `receipts show` prints:
 
 ```bash
-groupsplit receipts set 7c1e... --item "a1b2c3d4-...#Steak=24.00@<ana>" --item "b2c3d4e5-...#Wine=18.00@<ana>,<omar>"
+groupsplit receipts set 7c1e... --item "a1b2c3d4-...#Steak=24.00@<version>" --item "b2c3d4e5-...#Wine=18.00@<version>"
 ```
 
 Only text before a `#` that parses as an id is read as one, so `Table #4` is still a name. A
-line with no id is a new line.
+line with no id is a new line. An id from another bill, or the same id twice, is refused.
 
-**Tax and tip are apportioned in proportion to what each person claimed**, not per head --
-somebody holding a quarter of the food owes a quarter of both. It is one calculation, so
-there is a single rounding and the remainder goes to whoever paid, as in every other
-division.
+**Tax is per line and the tip is spread over the lines by price**, so each line is divided by
+its own rule as one amount -- price, plus its tax, plus its share of the tip. It is one
+calculation, so there is a single rounding and a single remainder, as in every other division.
 
 What it refuses, before dividing rather than after:
 
 | Code | |
 | --- | --- |
-| `RECEIPT_ITEMS_UNCLAIMED` | A line belongs to nobody. Carries `unclaimedItemNames`. Refused rather than spread over everybody: charging five people for one person's steak is the kind of wrong nobody checks for afterwards. |
-| `RECEIPT_DOES_NOT_ADD_UP` | The lines do not come to the subtotal, the parts do not come to the total, or the total is not the expense's amount. Carries the figures it compared. |
+| `RECEIPT_ITEMS_MISSING_RULE` | A line has no split rule. Carries `itemIds`. Refused rather than spread over everybody: charging five people for one person's steak is the kind of wrong nobody checks for afterwards. The bill is still stored and readable; it just will not divide. |
+| `RECEIPT_DOES_NOT_ADD_UP` | The lines do not come to the subtotal, the per-line tax does not come to the bill's tax, the parts do not come to the total, or the total is not the expense's amount. Carries the figures it compared. |
 | `RECEIPT_NOT_FOUND` | No bill on that expense -- or, when dividing, the expense is filed under an itemised rule and nobody has attached one. |
+| `SPLIT_ON_A_PERSONAL_EXPENSE` | A personal expense has nobody to divide lines between, so it takes no bill. |
+| `TRANSACTION_GROUP_LEFT` | Somebody who has left the group can still read the bill on an expense they paid for, and can no longer change or divide by it. |
 
-#### One charge, several purchases
-
-`divide` splits one expense between the people who had each line. `receipts split` splits one
-**charge** between the purchases it turns out to be -- the flat's groceries and a jacket of
-your own, on one warehouse receipt. Filing that whole would put the clothes in the group's
-ledger and file them under Groceries.
-
-```bash
-groupsplit receipts show <bank-row-id> --bank-row
-
-groupsplit receipts split <bank-row-id> \
-  --part "Groceries=1-4@<group-id>/<category-id>" \
-  --part "Clothes=5,6"
-```
-
-Lines only need claims when the part's category divides *by the bill*; a part going to a
-category that divides evenly never reads them.
-
-A part is `<name>=<lines>[@<group-id>[/<category-id>]]`. `<lines>` is line numbers, ranges of
-them, or line ids -- the numbers are the first column of `receipts show`. The category nests
-inside the group because a category belongs to one group. **No `@` keeps that part on your own
-ledger**, which is the jacket and the reason to split at all.
-
-Amounts are never given for a charge that has a bill: each part is cut from the charge in
-proportion to the lines it holds, with the tip apportioned over them, so the parts sum to the
-charge by construction. A part that states one anyway is refused.
-
-A charge with **no** bill splits by amount instead, with the figure where the lines would be:
-
-```bash
-groupsplit receipts split <bank-row-id> \
-  --part "Groceries=65.50@<group-id>/<category-id>" \
-  --part "Jacket=34.50"
-```
-
-Which of the two applies is not yours to pick and is never guessed from the text -- `Jacket=5`
-is line five with a bill and five pounds without one. The command reads the bill first either
-way. The amounts have to come to the charge exactly; there is no part that takes the
-remainder, and a part of zero or less is refused.
-
-| Code | |
-| --- | --- |
-| `SPLIT_PARTS_INVALID` | With a bill: a line is in no part, in two parts, or is not on this bill -- every line lands in exactly one part, since a line left out is money no part accounts for and one named twice is money counted twice. Carries the offending lines. Without one: a part that does not say what it is worth, one worth nothing or less, or one naming lines there are none of. |
-| `SPLIT_PARTS_DO_NOT_SUM_TO_CHARGE` | A charge with no bill whose parts do not come to it. Carries both figures and the difference. |
-| `POSSIBLE_DUPLICATE_EXPENSE` | The charge looks like an expense already recorded. `--file-anyway` goes ahead. Worth more care here than on an ordinary filing: a split files several expenses at once, so a duplicate is several wrong balances. |
-
-All or nothing -- either every part exists or the charge is still waiting. Two parts minimum;
-one part is an ordinary `inbox file`.
-
-A bill can be typed against an imported bank row before anybody files it, with `--bank-row`,
-so a dinner can be divided at the table. Filing carries it onto the expense but does **not**
-divide it -- filing already decided the division. Filing the row into your own ledger rather
-than a group leaves the bill on the row untouched, since a personal expense has nobody to
-divide between; `receipts delete --bank-row` removes it. A claim naming somebody who is not in the
-destination group is dropped and its line goes back to unclaimed.
+A bill belongs to an expense: an imported bank row is itemised by filing it first
+(`inbox file`) and typing the bill against the expense it became. One charge files as one
+expense.
 
 A split rule can be `--itemized`, so a category divides by the bill by default:
 
@@ -288,7 +233,10 @@ groupsplit split-rules create --group <id> --name "By the bill" --itemized
 ```
 
 An expense filed under that category with a bill divides by it and records which version did
-so. One with no bill is refused by name rather than silently split evenly.
+so. One with no bill is refused by name rather than silently split evenly. An expense under
+any other rule can still be divided by its bill -- `receipts divide` stores the result as
+stated shares, the same as typing them.
+
 
 To say where an expense was spent, name the merchant on the expense rather than here:
 `transactions create --merchant-id`, or `transactions update --merchant-id` to add it

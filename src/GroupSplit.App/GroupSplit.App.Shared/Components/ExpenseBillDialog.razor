@@ -1,82 +1,87 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
 @namespace GroupSplit.App.Shared.Components
-
-@*
-    The bill behind an expense, on its own.
-
-    It used to be printed inside the expense's own dialog, under the split, and on a warehouse
-    run that made one dialog carrying two documents: the shares somebody came for, then forty
-    lines of paper they had to scroll past to reach the Close button. A receipt is a thing you
-    pick up and read, not a section of something else.
-
-    So the expense keeps a line saying there is one, and this is where it is read -- the same
-    treatment the inbox gives a bill on an imported charge, which is the same piece of paper
-    at an earlier moment.
-
-    Handed the bill rather than fetching it. The expense's dialog has already read it to know
-    there is one, and a second round trip here would open a dialog onto a spinner for a
-    document that is already in memory.
-*@
+@inject IReceiptCommands Bills
+@inject ISplitRuleCommands Rules
+@inject IDialogService Dialogs
 
 <MudDialog>
-    <TitleContent>
-        <div class="gs-dialog-head">
-            <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap; min-width: 0">
-                <MerchantMark MerchantName="@Title" MerchantLogoUrl="@Mark" />
-                <div style="min-width: 0">
-                    <div class="gs-eyebrow">@Where</div>
-                    <h2 class="gs-dialog-title">@Title</h2>
-                </div>
-            </div>
-        </div>
-    </TitleContent>
-
+    <TitleContent><h2 class="gs-dialog-title">@Title</h2></TitleContent>
     <DialogContent>
-        <BillSheet Receipt="@Receipt" Me="@Me" PartAmount="@PartAmount"
-                   Title="@Title" Where="@Where" />
-
-        @if (Receipt.Tax != 0 || Receipt.Tip != 0)
+        <BillSheet Receipt="Receipt" Title="Title" Where="Where" />
+        @if (GroupId is not null)
         {
-            @* Said here and nowhere else, because it is the part people expect to be wrong:
-               the extras follow what each person had rather than being divided by the number
-               of people at the table. *@
-            <p class="gs-muted" style="margin: 10px 0 0; font-size: .75rem">
-                Tax and tip are shared out in proportion to what each person had.
-            </p>
+            <h3>Split each item</h3>
+            @foreach (var item in Receipt.Items)
+            {
+                <MudSelect T="Guid?" Label="@item.Name" Value="item.SplitRuleVersionId"
+                           ValueChanged="@(value => SetRule(item.Id, value))" Disabled="_busy" Clearable="true">
+                    @if (item.SplitRuleVersionId is { } held && _rules.All(r => r.VersionId != held))
+                    { <MudSelectItem T="Guid?" Value="@((Guid?)held)">@item.SplitRuleName (saved version)</MudSelectItem> }
+                    @foreach (var rule in _rules)
+                    { <MudSelectItem T="Guid?" Value="@((Guid?)rule.VersionId)">@rule.Name</MudSelectItem> }
+                </MudSelect>
+            }
+            <MudButton OnClick="CreateRule" Disabled="_busy">Create a group split rule</MudButton>
+            <p class="gs-muted">Each item uses its chosen rule for its price, tax, and proportional share of the tip. Saving item rules leaves the current expense shares in place until you apply the split.</p>
+            <MudButton OnClick="Preview" Disabled="@(_busy || !Receipt.CanDivide)">Preview split</MudButton>
+            @if (_preview is not null)
+            {
+                @foreach (var share in _preview.Shares)
+                { <p>@share.UserId: @share.Amount.ToString("0.00")</p> }
+                <MudButton OnClick="Divide" Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy">Apply split</MudButton>
+            }
         }
     </DialogContent>
-
-    <DialogActions>
-        <MudButton Variant="Variant.Text" Class="gs-btn-quiet"
-                   OnClick="@(() => MudDialog.Close())">
-            Close
-        </MudButton>
-    </DialogActions>
+    <DialogActions><MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton></DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
-
     [Parameter, EditorRequired] public ReceiptResponse Receipt { get; set; } = null!;
-
-    /// <summary>Where the money went, across the top of the paper.</summary>
+    [Parameter] public Guid TransactionId { get; set; }
+    [Parameter] public Guid? GroupId { get; set; }
     [Parameter] public string? Title { get; set; }
-
-    /// <summary>The line under it: which day, which card.</summary>
     [Parameter] public string? Where { get; set; }
-
-    /// <summary>The shop's logo, where there is one.</summary>
     [Parameter] public string? Mark { get; set; }
+    private readonly List<SplitRuleDetailsResponse> _rules = [];
+    private ReceiptDivisionResponse? _preview;
+    private bool _busy;
 
-    /// <summary>The reader, so their own claims read as "You".</summary>
-    [Parameter] public Guid? Me { get; set; }
-
-    /// <summary>
-    /// What the expense came to, for a bill covering more than one purchase.
-    /// </summary>
-    /// <remarks>
-    /// The slip prints it beside the charged total. Without it a shared bill reads as a
-    /// receipt that does not match the expense it was opened from.
-    /// </remarks>
-    [Parameter] public decimal? PartAmount { get; set; }
+    protected override async Task OnInitializedAsync() => await LoadRules();
+    private async Task LoadRules()
+    {
+        if (GroupId is not { } groupId) return;
+        var rules = await Rules.ForGroupAsync(groupId);
+        if (rules is null) return;
+        var details = await Task.WhenAll(rules.Select(r => Rules.GetAsync(r.Id)));
+        _rules.Clear();
+        _rules.AddRange(details.OfType<SplitRuleDetailsResponse>().Where(r => r.Definition is not ItemizedSplitRuleDto));
+    }
+    private async Task SetRule(Guid itemId, Guid? versionId)
+    {
+        _busy = true; _preview = null;
+        try { if (await Bills.SetRuleAsync(TransactionId, itemId, versionId) is { } bill) Receipt = bill; }
+        finally { _busy = false; }
+    }
+    private async Task Preview()
+    {
+        _busy = true;
+        try { _preview = await Bills.PreviewAsync(TransactionId); }
+        finally { _busy = false; }
+    }
+    private async Task Divide()
+    {
+        _busy = true;
+        try { if (await Bills.DivideAsync(TransactionId)) MudDialog.Close(DialogResult.Ok(true)); }
+        finally { _busy = false; }
+    }
+    private async Task CreateRule()
+    {
+        if (GroupId is not { } groupId) return;
+        var dialog = await Dialogs.ShowAsync<CreateRuleDialog>("New item split rule",
+            new DialogParameters<CreateRuleDialog> { { d => d.GroupId, groupId }, { d => d.AllowItemized, false } });
+        await dialog.Result;
+        await LoadRules();
+    }
 }

@@ -26,7 +26,7 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 public class SplitRuleHandler(IServiceProvider provider) : ISplitRuleHandler, ISplitRuleFactory
 {
     public IReadOnlyList<SplitAmount> Divide(
-        SplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members) =>
+        SplitRuleVersion ruleVersion, SplitRuleContext transaction, IReadOnlyCollection<Guid> members) =>
         For(ruleVersion).Divide(ruleVersion, transaction, members);
 
     public string? Invalid(SplitRuleVersion ruleVersion) => For(ruleVersion).Invalid(ruleVersion);

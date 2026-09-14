@@ -143,28 +143,11 @@ public class BankTransaction : Entity
     /// </summary>
     /// <remarks>
     /// The inverse of <see cref="Transaction.BankTransaction"/>, and the reason the inbox
-    /// can show what a filed row became without a second query per row. A row leaves this
-    /// list rather than dangling if its expense is deleted, because deleting an expense is
-    /// undoing the filing, not undoing the import.
-    /// <para>
-    /// Several, not one, since a bill may be split: a single charge covering the flat's
-    /// groceries and a jacket of your own files as two expenses, and both point back here.
-    /// The ordinary row still becomes exactly one.
-    /// </para>
+    /// can show a filed row's expense without a second query per row. It goes null rather
+    /// than dangling if the expense is deleted, because deleting an expense is undoing the
+    /// filing, not undoing the import.
     /// </remarks>
-    public virtual ICollection<Transaction> FiledAs { get; } = [];
-
-    /// <summary>
-    /// The itemised bill somebody typed against this charge, when there is one.
-    /// </summary>
-    /// <remarks>
-    /// The inverse of <see cref="Data.Entities.Receipt.BankTransaction"/>, and what lets the
-    /// inbox say a row has a bill without a query per row. A bill is not a fact from the
-    /// bank -- the row arrives with a total and a merchant, and somebody types the lines --
-    /// so this is empty for nearly every row, and the few that have one are the ones a
-    /// charge covering two purchases can be split by.
-    /// </remarks>
-    public virtual Receipt? Receipt { get; set; }
+    public virtual Transaction? FiledAs { get; set; }
 
     /// <summary>
     /// When the provider withdrew a row that had already been filed. The expense stays --

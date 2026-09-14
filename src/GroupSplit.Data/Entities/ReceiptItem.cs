@@ -1,156 +1,28 @@
 namespace GroupSplit.Data.Entities;
 
-/// <summary>
-/// One line on a bill: what it was, how many, what it cost, which purchase it belongs to,
-/// and who had it.
-/// </summary>
-/// <remarks>
-/// <see cref="TotalPrice"/> is stored rather than multiplied out of <see cref="UnitPrice"/>
-/// and <see cref="Quantity"/>, because the paper does not always agree with the arithmetic
-/// -- a two-for-one, a line discount, a price rounded at the till -- and the bill is the
-/// record. The division reads this one and nothing else, so a line that does not multiply
-/// out is transcribed faithfully instead of being corrected into something nobody was
-/// charged.
-/// </remarks>
+/// <summary>A line on an expense's bill, divided by a saved rule version.</summary>
 public class ReceiptItem : Entity
 {
     public virtual Receipt Receipt { get; set; } = null!;
-
-    /// <summary>
-    /// Public, because which bill a line belongs to is the line's own data -- the service
-    /// that divides a receipt reads it outside this assembly.
-    /// </summary>
     public Guid ReceiptId { get; set; }
-
     /// <summary>
-    /// The expense this line's money is part of, or null while nobody has said.
+    /// Where the line sits on the paper. Stored rather than left to the database, because a
+    /// bill is read against the receipt in somebody's hand -- and because the division breaks
+    /// its rounding ties on a stable order, which an unordered read would not give it.
     /// </summary>
-    /// <remarks>
-    /// What makes one charge able to be two purchases. A warehouse run is the flat's
-    /// groceries and a jacket that is yours alone on one piece of paper; each distinct
-    /// expense the lines name is one part of the bill, with its own group, its own category
-    /// and its own place in the ledger. A restaurant bill names one expense on every line,
-    /// which is the same shape with one part.
-    /// <para>
-    /// Null is the ordinary state of a bill somebody is still working through and a refusal
-    /// once it comes to filing: a line nobody has placed is money belonging to no purchase,
-    /// and there is no honest guess to make about which one.
-    /// </para>
-    /// <para>
-    /// Distinct from <see cref="Claims"/>, which answers a different question about the same
-    /// line. This one says <em>which purchase this is</em>; the claims say <em>who owed it</em>
-    /// within that purchase. They ran together while a bill could only be one expense, and the
-    /// jacket is what pulled them apart: claiming it for yourself divides it correctly and
-    /// still files it under Groceries in the flat's ledger.
-    /// </para>
-    /// </remarks>
-    public virtual Expense? Expense { get; set; }
-
-    public Guid? ExpenseId { get; set; }
-
-    /// <summary>
-    /// Where this line sits on the paper, from zero. What makes "line 4" mean anything.
-    /// </summary>
-    /// <remarks>
-    /// A bill is a piece of paper and its order is part of what it says -- the groceries are
-    /// the first fourteen lines and the clothes are the last two, which is why a split can be
-    /// written as a range at all. Without a column for it the order is whatever the database
-    /// hands back, and on Postgres that changes the moment a row is updated: somebody could
-    /// read the numbers off one listing, claim a line, and put the wrong lines in the wrong
-    /// part with nothing refusing it.
-    /// <para>
-    /// Stored rather than derived from insertion order, because there is nothing to derive it
-    /// from: the ids are client-generated and random, so they sort into no order the paper
-    /// has.
-    /// </para>
-    /// </remarks>
     public int Position { get; set; }
-
     public required string Name { get; set; }
-
-    /// <summary>
-    /// <see cref="Name"/> folded for matching: lower-cased and trimmed. What says two lines
-    /// are the same product.
-    /// </summary>
-    /// <remarks>
-    /// A bill prints "2 @ 59.99" for two of a thing, and that is one line -- which is fine
-    /// until the two are headed different ways. <see cref="ExpenseId"/> and
-    /// <see cref="Division"/> are facts about a line, so one line cannot be one jacket of
-    /// yours and one of Ana's, nor a pack of paper towels for the flat beside an identical
-    /// one for your office. Two lines can. Splitting the quantity is therefore how that is
-    /// said, and this is what lets the two be shown as what they are rather than as an
-    /// accidental duplicate: a reader collapses on it.
-    /// <para>
-    /// Not derived by splitting <see cref="Quantity"/> automatically, because a quantity is
-    /// not always a count. Three-quarters of a kilo of salmon is a measure and has no units
-    /// to separate; a twelve-pack does, and turning it into twelve rows nobody asked for
-    /// would be worse than the problem.
-    /// </para>
-    /// <para>
-    /// Stored rather than folded in the query, the same way <see cref="Merchant.NormalizedName"/>
-    /// is and for the same reason: an index can be on it. Which is also what would let a
-    /// later feature recognise a thing across bills -- "you bought this last month" -- without
-    /// anything here having to change.
-    /// </para>
-    /// </remarks>
     public required string NormalizedName { get; set; }
-
-    /// <summary>What one of them cost.</summary>
     public decimal UnitPrice { get; set; }
-
-    /// <summary>
-    /// How many. Decimal rather than an integer count, because bills are written in kilos
-    /// and litres as readily as in units.
-    /// </summary>
     public decimal Quantity { get; set; } = 1;
-
-    /// <summary>
-    /// What the line came to, and the only figure the division uses. See the remarks on the
-    /// type for why it is not derived.
-    /// </summary>
+    // Kept as printed: discounts and till rounding need not equal quantity * unit price.
     public required decimal TotalPrice { get; set; }
-
     /// <summary>
-    /// What of the bill's tax was charged on this line. Zero for a line that was not taxed.
+    /// The tax charged on this line, which is zero unless the bill said otherwise: a
+    /// restaurant bill under VAT charges none on top of its prices.
     /// </summary>
-    /// <remarks>
-    /// An amount and not a flag, and not a rate either. This was a boolean, and the tax was
-    /// then weighed over the lines it was charged on in proportion to their prices -- which
-    /// is exact only where every taxed line carries the same rate. A Portuguese supermarket
-    /// receipt does not: food at 6% and household goods at 23% on one piece of paper. A bill
-    /// of 100.00 at each carries 29.00 of tax, and weighing it by price split that 14.50
-    /// apiece, so whoever had only the food was overcharged 8.50 -- silently, because the
-    /// total still added up.
-    /// <para>
-    /// An amount rather than a rate because an amount is what the paper gives you: a till
-    /// prints the tax it charged, and a rate would be arithmetic somebody has to redo and can
-    /// get wrong. It is also what makes the apportioning disappear rather than improve: a
-    /// part's tax is the sum of its own lines' tax, exactly, with nothing to spread and no
-    /// remainder to place. <c>ReceiptSplitCalculator</c> lost half its difficulty to this.
-    /// </para>
-    /// <para>
-    /// <see cref="Receipt.Tax"/> stays as the figure off the bottom of the paper, and these
-    /// have to come to it -- which is the check that replaced the old silent fallback, where
-    /// a bill charging tax with every line marked exempt spread the tax over everything and
-    /// balanced.
-    /// </para>
-    /// </remarks>
     public decimal TaxAmount { get; set; }
-
-    /// <summary>
-    /// Who had it, and in what proportion.
-    /// </summary>
-    /// <remarks>
-    /// The only thing that says how a line divides, and deliberately the only thing. A line
-    /// carried a marker for "the table's, rather than anybody's" for a while; it is gone,
-    /// because dividing something between everybody is not what an itemised bill is for. An
-    /// itemised division says everybody owes what they had -- a category that wants an even
-    /// split has an even rule to name, and naming both was two ways to say one thing with a
-    /// silent disagreement between them.
-    /// <para>
-    /// Empty means nobody has claimed the line yet: an ordinary state while a bill is being
-    /// worked through, and a refusal once it comes to dividing its part.
-    /// </para>
-    /// </remarks>
-    public virtual ICollection<ReceiptItemClaim> Claims { get; } = [];
+    /// <summary>Null while editing; required before division. Never follows later rule edits.</summary>
+    public Guid? SplitRuleVersionId { get; set; }
+    public virtual SplitRuleVersion? SplitRuleVersion { get; set; }
 }

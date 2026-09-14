@@ -274,11 +274,9 @@
                         <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
 
                         <span>
-                            @* What is on the paper, and -- when the charge was split -- how
-                               much of it is this expense, which is the question a bill
-                               totalling more than the expense immediately raises. *@
+                            @* What is on the paper. *@
                             <strong>@bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items")</strong>
-                            · @bill.Total.ToMoney()@(Partly(bill) is { Length: > 0 } part ? $" · {part}" : "")
+                            Â· @bill.Total.ToMoney()
                         </span>
 
                         <MudButton Variant="Variant.Text" Size="Size.Small"
@@ -427,20 +425,6 @@
         StateHasChanged();
     }
 
-    /// <summary>
-    /// How much of the paper this expense is, for a charge that was split into parts.
-    /// </summary>
-    /// <remarks>
-    /// Empty for the ordinary bill, which is the whole of one purchase: "6 of 6 items" is
-    /// furniture. Counted off the lines rather than asked for, since the reading already
-    /// carries which part each line belongs to.
-    /// </remarks>
-    private static string Partly(ReceiptResponse bill)
-    {
-        var mine = bill.Items.Count(line => line.ExpenseId == bill.ExpenseId);
-
-        return mine == bill.Items.Count ? string.Empty : $"{mine} on this expense";
-    }
 
     /// <summary>
     /// The bill, on its own, handed over rather than read again.
@@ -453,8 +437,8 @@
             { dialog => dialog.Title, details!.MerchantName ?? details.Name },
             { dialog => dialog.Where, Clock.Local(details.DateTime).ToString("d MMM yyyy") },
             { dialog => dialog.Mark, details.MerchantLogoUrl },
-            { dialog => dialog.Me, Me },
-            { dialog => dialog.PartAmount, details.Amount }
+            { dialog => dialog.GroupId, details.GroupId },
+            { dialog => dialog.TransactionId, TransactionId }
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };

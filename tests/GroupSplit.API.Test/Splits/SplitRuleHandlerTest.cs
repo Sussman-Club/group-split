@@ -1,4 +1,4 @@
-using GroupSplit.API.Services;
+﻿using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
@@ -216,7 +216,7 @@ public class SplitRuleHandlerTest
     private sealed class FixedThenEvenSplitRuleHandler : ISplitRuleHandler<FixedThenEvenSplitRuleVersion>
     {
         public IReadOnlyList<SplitAmount> Divide(
-            FixedThenEvenSplitRuleVersion ruleVersion, Data.Entities.Transaction transaction,
+            FixedThenEvenSplitRuleVersion ruleVersion, SplitRuleContext transaction,
             IReadOnlyCollection<Guid> members)
         {
             var rest = members.Where(member => member != ruleVersion.FixedUserId).ToArray();
@@ -275,5 +275,40 @@ public class SplitRuleHandlerTest
             () => Handler.Divide(ruleVersion, Spending(10m, Alice), Members));
 
         Assert.Contains(nameof(FixedThenEvenSplitRuleVersion), exception.Message);
+    }
+
+    /// <summary>
+    /// An expense is divided before it is added, so its group is only on the navigation --
+    /// the FK stays null until EF fixes it up on save. Read off the FK alone, every
+    /// itemized expense built that way looked like it belonged to no group, and no item
+    /// rule can belong to that: the seeder's whole history stopped on the first bill.
+    /// </summary>
+    [Fact]
+    public void An_item_rule_matches_the_group_an_unsaved_expense_names()
+    {
+        var group = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "Dinner" };
+        var expense = Spending(30.00m, Alice);
+        expense.Group = group;
+        expense.Receipt = new Receipt
+        {
+            Subtotal = 30.00m, Total = 30.00m,
+            Items = { new ReceiptItem
+            {
+                Name = "Pizza", NormalizedName = "pizza", Position = 0, Quantity = 1,
+                UnitPrice = 30.00m, TotalPrice = 30.00m,
+                SplitRuleVersion = InGroup(new EvenSplitRuleVersion(), group)
+            } }
+        };
+
+        var splits = Handler.Divide(new ItemizedSplitRuleVersion(), expense, Members);
+
+        Assert.Equal(10.00m, AmountFor(splits, Bob));
+        Assert.Equal(30.00m, splits.Sum(split => split.Amount));
+    }
+
+    private static T InGroup<T>(T version, Data.Entities.Group group) where T : SplitRuleVersion
+    {
+        version.SplitRule = new SplitRule { Name = "Together", Group = group, Versions = { version } };
+        return version;
     }
 }

@@ -52,8 +52,6 @@ public static class InboxApi
             group.MapSummary();
             group.MapMatches();
             group.MapFile();
-            group.MapSplit();
-            group.MapSplitPreview();
             group.MapLink();
             group.MapDismissMatch();
             group.MapIgnore();
@@ -139,50 +137,6 @@ public static class InboxApi
         /// now carrying the bank's row -- the same link filing would have made for a new
         /// one, and no change to anything else about it.
         /// </remarks>
-        /// <summary>
-        /// Files one charge as several expenses, by saying which lines of its bill are which.
-        /// </summary>
-        /// <remarks>
-        /// Beside filing rather than a mode of it, because what it takes is different in
-        /// kind: filing needs one destination, and this needs a destination per part and an
-        /// account of every line on the paper -- or, where nobody itemised it, of every penny
-        /// of it.
-        /// </remarks>
-        private RouteHandlerBuilder MapSplit()
-        {
-            return group.MapPost("{id:guid}/split", async (
-                    Guid id,
-                    SplitBankTransactionRequest request,
-                    IInboxService inbox,
-                    CancellationToken ct) =>
-                {
-                    return Results.Ok(await inbox.Split(id, request, ct));
-                })
-                .WithName("SplitBankTransaction")
-                .Produces<SplitBankTransactionResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-        }
-
-        /// <summary>
-        /// What the parts of a proposed split would come to. Creates nothing.
-        /// </summary>
-        private RouteHandlerBuilder MapSplitPreview()
-        {
-            return group.MapPost("{id:guid}/split/preview", async (
-                    Guid id,
-                    SplitChargePreviewRequest request,
-                    IInboxService inbox,
-                    CancellationToken ct) =>
-                {
-                    return Results.Ok(await inbox.PreviewSplit(id, request, ct));
-                })
-                .WithName("PreviewBankTransactionSplit")
-                .Produces<SplitChargePreviewResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
-        }
-
         private RouteHandlerBuilder MapLink()
         {
             return group.MapPost("{id:guid}/link", async (
@@ -316,19 +270,10 @@ public static class InboxApi
                     : row.Status == BankTransactionStatus.Ignored
                         ? InboxStatus.Ignored
                         : InboxStatus.New,
-                // All of them, not the first. A charge whose bill covers two purchases is
-                // filed as two expenses, and a row that reported one of them would send
-                // anybody following it to a part of a purchase labelled as the whole.
-                row.FiledAs.Select(filed => filed.Id).ToList(),
+                row.FiledAs == null ? null : row.FiledAs.Id,
                 row.RemovedAt,
                 row.Account.Name,
-                row.Account.Connection.InstitutionName)
-            {
-                // Zero for the ordinary row, which is every charge nobody typed a bill for.
-                // Counted here rather than fetched, because the list only has to say the
-                // charge can be broken up; the screen that breaks it up asks for the lines.
-                BillLineCount = row.Receipt == null ? 0 : row.Receipt.Items.Count
-            });
+                row.Account.Connection.InstitutionName));
     }
 
     extension(PagedResponse<BankTransactionResponse> page)

@@ -1,148 +1,39 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 using GroupSplit.Shared.CustomValidationAttributes;
 
 namespace GroupSplit.Shared;
 
 /// <summary>
-/// An itemised bill, as the client states it: the whole receipt in one go.
+/// The bill, whole. A line the request does not carry is a line that has gone, so correcting
+/// one price means sending the others back with the ids they were saved under.
 /// </summary>
-/// <remarks>
-/// Whole rather than line by line, because a bill is transcribed in one sitting -- scanned,
-/// or typed at the table -- and its figures only make sense together. Sending it replaces
-/// whatever was there, which is also how a correction is made: re-send the bill as it should
-/// have read.
-/// <para>
-/// The claims come with the items rather than in a second call, so that the common case is
-/// one request. They can be left off and set afterwards through
-/// <see cref="SetReceiptItemClaimsRequest"/>, which is what a client that lets people tap
-/// their own lines will do.
-/// </para>
-/// </remarks>
 public record SaveReceiptRequest
 {
-    /// <summary>
-    /// What the items came to, before tax and tip. Must equal the lines' total, which is
-    /// checked rather than assumed: the two disagreeing is the ordinary sign of a
-    /// transcription slip.
-    /// </summary>
-    [Required(ErrorMessage = "Subtotal is required.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "Subtotal must be a number with no more than 2 decimal places.")]
-    public decimal Subtotal { get; init; }
-
-    [MaxDecimalPlaces(2, ErrorMessage = "Tax must be a number with no more than 2 decimal places.")]
-    public decimal Tax { get; init; }
-
-    [MaxDecimalPlaces(2, ErrorMessage = "Tip must be a number with no more than 2 decimal places.")]
-    public decimal Tip { get; init; }
-
-    /// <summary>
-    /// What was paid. Must equal the subtotal plus tax plus tip, and -- once the receipt is
-    /// on an expense -- the expense's own amount.
-    /// </summary>
-    [Required(ErrorMessage = "Total is required.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "Total must be a number with no more than 2 decimal places.")]
-    public decimal Total { get; init; }
-
-    /// <summary>The lines on the bill. At least one: a receipt with no items divides nothing.</summary>
-    [MinLength(1, ErrorMessage = "A receipt needs at least one item.")]
-    public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
+    [MaxDecimalPlaces(2)] public decimal Subtotal { get; init; }
+    [MaxDecimalPlaces(2)] public decimal Tax { get; init; }
+    [MaxDecimalPlaces(2)] public decimal Tip { get; init; }
+    [MaxDecimalPlaces(2)] public decimal Total { get; init; }
+    [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
 }
 
-/// <summary>One line on a bill.</summary>
-/// <remarks>
-/// <see cref="TotalPrice"/> is sent rather than multiplied out of the unit price and the
-/// quantity, because the paper does not always agree with the arithmetic -- a two-for-one,
-/// a line discount, a price rounded at the till -- and the bill is the record. It is the only
-/// figure the division reads.
-/// </remarks>
 public record ReceiptItemInput
 {
     /// <summary>
-    /// The line's own id, to keep claims attached to it across an edit. Null for a new line,
-    /// which is given one.
+    /// Which stored line this is, for a bill being corrected. Null is a new line, which is
+    /// every line of a bill being written down for the first time.
     /// </summary>
-    /// <remarks>
-    /// Sending the id back is what separates "the wine cost 24.00, not 22.00" from "there was
-    /// no wine, there was a 24.00 something-else": the first keeps the three people who
-    /// claimed it, the second should not. A client re-sending a bill it has just read gets
-    /// the first for free by echoing what it was given.
-    /// </remarks>
     public Guid? Id { get; init; }
-
-    [Required(ErrorMessage = "An item needs a name.")]
-    [StringLength(128, ErrorMessage = "An item name must be less than 128 characters.")]
-    public string Name { get; init; } = null!;
-
-    [MaxDecimalPlaces(2, ErrorMessage = "A unit price must be a number with no more than 2 decimal places.")]
-    public decimal UnitPrice { get; init; }
-
-    /// <summary>How many, or how much: bills are written in kilos and litres as well as in units.</summary>
-    [MaxDecimalPlaces(3, ErrorMessage = "A quantity must be a number with no more than 3 decimal places.")]
-    public decimal Quantity { get; init; } = 1;
-
-    [Required(ErrorMessage = "An item needs a total price.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "A total price must be a number with no more than 2 decimal places.")]
-    public decimal TotalPrice { get; init; }
-
-    /// <summary>
-    /// What of the bill's tax was charged on this line. Zero unless you say otherwise.
-    /// </summary>
-    /// <remarks>
-    /// An amount rather than a flag, and rather than a rate: an amount is what the till
-    /// prints, and it is the only shape that is right on a bill charging two rates. This was
-    /// a flag, and the tax was then weighed over the flagged lines by price -- which is exact
-    /// only where every taxed line carries the same rate. A supermarket receipt mixing 6%
-    /// food with 23% household goods divided wrongly by several euros, with the total still
-    /// adding up.
-    /// <para>
-    /// These have to come to the receipt's <c>Tax</c>, which is the figure off the bottom of
-    /// the paper. Where the price already includes the tax, as it does under VAT, both are
-    /// zero and there is nothing to say.
-    /// </para>
-    /// </remarks>
-    public decimal TaxAmount { get; init; }
-
-    /// <summary>
-    /// Who had it, or empty to leave the line unclaimed for now.
-    /// </summary>
-    /// <remarks>
-    /// The only thing that says how a line divides. Unclaimed lines are perfectly ordinary
-    /// while a bill is being worked through, and are refused when it comes to dividing it --
-    /// there is no longer a way for a line to say it divides some other way, because an
-    /// itemised division is "everybody owes what they had" and a bill that wants an even
-    /// split wants a different rule.
-    /// </remarks>
-    public IReadOnlyList<ReceiptClaimInput> Claims { get; init; } = [];
+    [Required, StringLength(128)] public string Name { get; init; } = null!;
+    [MaxDecimalPlaces(2)] public decimal UnitPrice { get; init; }
+    [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
+    [MaxDecimalPlaces(2)] public decimal TotalPrice { get; init; }
+    [MaxDecimalPlaces(2)] public decimal TaxAmount { get; init; }
+    /// <summary>The exact saved version to use. Null leaves this line unfinished.</summary>
+    public Guid? SplitRuleVersionId { get; init; }
 }
 
-/// <summary>One person's part of one line.</summary>
-public record ReceiptClaimInput
+/// <summary>One line's rule. No version clears it, which leaves the bill undividable.</summary>
+public record SetReceiptItemRuleRequest
 {
-    [Required]
-    public Guid UserId { get; init; }
-
-    /// <summary>
-    /// Their part of the line, in proportion to the other claims on it. One apiece -- the
-    /// default -- is an even share between whoever claimed it, which is what "we shared the
-    /// wine" means. Two against one says somebody had twice as much.
-    /// </summary>
-    [Range(1, int.MaxValue, ErrorMessage = "A claim's weight must be at least 1.")]
-    public int Weight { get; init; } = 1;
-}
-
-/// <summary>
-/// Who had one line, replacing whoever was on it.
-/// </summary>
-/// <remarks>
-/// The call behind tapping your own name on a line. Replaces rather than adds, so that
-/// un-claiming is the same operation as claiming and a client never has to work out which of
-/// the two it is doing: send the list as it should now read, including empty.
-/// </remarks>
-public record SetReceiptItemClaimsRequest
-{
-    /// <summary>
-    /// Who had the line from now on, replacing whoever was on it. Empty un-claims it.
-    /// </summary>
-    public IReadOnlyList<ReceiptClaimInput> Claims { get; init; } = [];
+    public Guid? SplitRuleVersionId { get; init; }
 }

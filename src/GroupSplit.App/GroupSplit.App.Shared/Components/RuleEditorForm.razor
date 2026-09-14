@@ -44,9 +44,12 @@
                 Shares split
             </MudSelectItem>
 
+            @if (AllowItemized)
+            {
             <MudSelectItem T="RuleType?" Value="RuleType.Itemized">
                 By the bill (itemised)
             </MudSelectItem>
+            }
         </MudSelect>
 
         @* Itemised names nobody, so the member rows below have nothing to show for it. A
@@ -129,6 +132,7 @@
 </MudForm>
 
 @code {
+    [Parameter] public bool AllowItemized { get; set; } = true;
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid GroupId { get; set; }
     [Parameter] public RuleEditorModel Model { get; set; } = null!;

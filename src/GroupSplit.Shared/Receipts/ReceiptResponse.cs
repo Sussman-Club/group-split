@@ -1,135 +1,35 @@
 namespace GroupSplit.Shared;
 
 /// <summary>
-/// An itemised bill as the client reads it back.
+/// A bill as a screen needs it: the paper, plus the two things only the server can say about
+/// it -- whether dividing by it would work right now, and whether the expense divides by it
+/// at all or merely has one attached.
 /// </summary>
-/// <param name="ExpenseId">
-/// The purchase this reading is about -- one part of the bill -- or null when the whole
-/// paper is being read rather than any one part of it, which is what an unfiled bank row
-/// gets. The lines carry their own, so a split charge can be read whole.
-/// </param>
-/// <param name="BankTransactionId">
-/// The imported row this bill is waiting on, or null once it has been filed onto an expense.
-/// Exactly one of this and <paramref name="ExpenseId"/> is ever set: filing hands the receipt
-/// over. Where a filed expense came from is on the expense itself.
-/// </param>
-/// <param name="UnclaimedItemCount">
-/// How many lines of this part still belong to nobody -- of the whole bill, when no part was
-/// asked for. The figure a client needs to say "3 items left to claim" without walking the
-/// list, and the one thing standing between a part and being dividable.
-/// </param>
-/// <param name="CanDivide">
-/// Whether asking to divide by this bill would succeed: it adds up, every line is claimed,
-/// and there is an expense to write the shares to. Saves a client guessing at the rules.
-/// </param>
-/// <param name="DividesItsExpense">
-/// Whether anything actually reads the claims on this bill: its expense is filed under a
-/// rule that divides by it.
-/// </param>
-/// <param name="ElsewhereItemCount">
-/// How many lines of the paper belong to the other purchases on it -- zero for an ordinary
-/// bill, and zero when the whole paper is being read.
-/// </param>
-/// <param name="ElsewhereTotal">
-/// What those lines came to, before the tax and the tip.
-/// </param>
 /// <remarks>
-/// Claims are read by exactly one thing, the itemised rule. On every other bill they are
-/// stored and never looked at -- so a line naming nobody is a fact, not a problem, and a
-/// client that warned about it either way was nagging about something nothing would read.
-/// False for a bill on a charge nobody has filed: there is no expense yet, and which of its
-/// parts will divide by it is the question being asked.
-/// <para>
-/// <c>Items</c> is this part of the paper and not the paper. A split charge can put its parts
-/// in different groups -- one purchase the flat's, the other somebody's own -- and reading
-/// one of them is no reason to be told what was bought on the others, for how much, or who
-/// was on it. What they came to is reported instead, in
-/// <paramref name="ElsewhereItemCount"/> and <paramref name="ElsewhereTotal"/>, because a
-/// bill totalling more than the expense it was opened from is the first thing anybody
-/// queries.
-/// </para>
+/// <see cref="MissingRuleItemCount"/> is sent as a count so a screen can say "2 lines need a
+/// rule" without walking the list, and <see cref="CanDivide"/> is computed by attempting the
+/// division rather than by a second set of checks: a button that offers itself and then
+/// refuses is worse than one that never offered.
 /// </remarks>
 public sealed record ReceiptResponse(
-    Guid Id,
-    Guid? ExpenseId,
-    Guid? BankTransactionId,
-    decimal Subtotal,
-    decimal Tax,
-    decimal Tip,
-    decimal Total,
-    int UnclaimedItemCount,
-    bool CanDivide,
-    bool DividesItsExpense,
-    int ElsewhereItemCount,
-    decimal ElsewhereTotal,
+    Guid Id, Guid ExpenseId, decimal Subtotal, decimal Tax, decimal Tip, decimal Total,
+    int MissingRuleItemCount, bool CanDivide, bool DividesItsExpense,
     IReadOnlyList<ReceiptItemResponse> Items);
 
-/// <summary>One line on a bill, with how it divides and who had it.</summary>
-/// <param name="TaxAmount">
-/// What of the bill's tax was charged on this line, which is where tax lives: a part's tax is
-/// its own lines' tax and a person's is the tax of the lines they claimed, with nothing
-/// apportioned. The tip is about the bill rather than the goods, so that one is spread.
-/// </param>
-/// <param name="ExpenseId">
-/// Which purchase this line's money is part of, or null while nobody has said. Each distinct
-/// expense across the lines is one part of the bill.
-/// </param>
+/// <summary>
+/// One line, carrying its rule three ways: the version id to send back, the rule's name to
+/// print, and the definition so a screen can say what that rule actually does.
+/// </summary>
 public sealed record ReceiptItemResponse(
-    Guid Id,
-    string Name,
-    decimal UnitPrice,
-    decimal Quantity,
-    decimal TotalPrice,
-    decimal TaxAmount,
-    Guid? ExpenseId,
-    IReadOnlyList<ReceiptClaimResponse> Claims);
+    Guid Id, string Name, decimal UnitPrice, decimal Quantity, decimal TotalPrice,
+    decimal TaxAmount, Guid? SplitRuleVersionId, string? SplitRuleName, SplitRuleDto? SplitRule);
 
-/// <summary>
-/// One person's part of one line.
-/// </summary>
-/// <param name="UserName">
-/// Who they are, so a client can print a name. Carried here rather than looked up because a
-/// bill is read in places that have no roster to look one up in: a charge nobody has filed
-/// belongs to no group, and every screen showing one was printing raw ids.
-/// </param>
-/// <param name="Share">
-/// What their part of this line comes to, before tax and tip -- the line's price times their
-/// weight over the weights on it.
-/// </param>
-/// <remarks>
-/// <paramref name="Share"/> is here so a client can show "4.00" beside a name without
-/// redoing the arithmetic, and it is deliberately <em>not</em> what anybody owes: the tax and
-/// the tip are still to come, and they are apportioned across the whole bill rather than
-/// line by line. What somebody owes is their split on the expense, which is the figure the
-/// ledger keeps.
-/// </remarks>
-public sealed record ReceiptClaimResponse(
-    Guid UserId,
-    string UserName,
-    int Weight,
-    decimal Share);
-
-/// <summary>
-/// What dividing a bill by its items would come to, per person.
-/// </summary>
-/// <remarks>
-/// The same shape a split preview has, and for the same reason: somebody about to hand a
-/// division to five people should see it first. Nothing is stored by asking.
-/// </remarks>
 public sealed record ReceiptDivisionResponse(
-    Guid ReceiptId,
-    decimal Total,
-    IReadOnlyList<ReceiptShareResponse> Shares);
+    Guid ReceiptId, decimal Total, IReadOnlyList<ReceiptShareResponse> Shares);
 
 /// <summary>
-/// What one person owes on a bill, and the part of it that is tax and tip rather than food.
+/// What one person owes, and how much of that was food: the two figures side by side are
+/// what makes the apportioning of tax and tip checkable rather than something to take on
+/// trust.
 /// </summary>
-/// <param name="ClaimedSubtotal">What their lines came to, before tax and tip.</param>
-/// <param name="Amount">
-/// What they owe in total: <paramref name="ClaimedSubtotal"/> plus their share of the tax and
-/// the tip, with the rounding settled. This is the figure that becomes their split.
-/// </param>
-public sealed record ReceiptShareResponse(
-    Guid UserId,
-    decimal ClaimedSubtotal,
-    decimal Amount);
+public sealed record ReceiptShareResponse(Guid UserId, decimal Subtotal, decimal Amount);

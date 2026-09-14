@@ -323,17 +323,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(transaction => transaction.GroupId);
 
             // Filing copies, then links. Unlinking a bank deletes its rows, and the
-            // expenses they became lose the link and nothing else -- they are history, not
-            // an import.
-            //
-            // Many to one now, not one to one. A charge whose bill covers two purchases
-            // files as two expenses, and both point back at the row it came from; the
-            // ordinary charge still becomes exactly one. What that gives up is the unique
-            // index that used to stop a second expense claiming a row by mistake -- the
-            // inbox's own already-filed guard is what holds that now.
+            // expenses they became lose the link and nothing else -- they are history,
+            // not an import.
+            // One to one: a bank row files into at most one expense, and an expense came
+            // from at most one row. The unique index EF builds for it lets the nulls
+            // through, which is every typed transaction.
             entity.HasOne(transaction => transaction.BankTransaction)
-                .WithMany(row => row.FiledAs)
-                .HasForeignKey(transaction => transaction.BankTransactionId)
+                .WithOne(row => row.FiledAs)
+                .HasForeignKey<Transaction>(transaction => transaction.BankTransactionId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             // Restrict, not cascade: a merchant row is shared by every expense filed
@@ -573,107 +570,27 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<Receipt>(entity =>
         {
-            // The same precision the ledger keeps, and for the same reason: the division
-            // truncates to the cent and hands the leftover to the payer, so a figure
-            // carrying a third decimal would push a fraction nobody can pay onto somebody
-            // on every bill it appears in.
-            entity.Property(receipt => receipt.Subtotal).IsRequired().HasPrecision(18, 2);
-            entity.Property(receipt => receipt.Tax).IsRequired().HasPrecision(18, 2);
-            entity.Property(receipt => receipt.Tip).IsRequired().HasPrecision(18, 2);
-            entity.Property(receipt => receipt.Total).IsRequired().HasPrecision(18, 2);
-
-            // The bank row is the receipt's only owner the database knows about, and it
-            // cascades: a row that is removed takes its bill with it. A receipt with no row
-            // is owned by the expenses its lines name -- a rule spanning two tables, which no
-            // check constraint could carry, so ReceiptService removes such a receipt when the
-            // last expense holding its lines goes.
-            //
-            // There is no longer a link to an expense here at all, and that is what dissolved
-            // the ownership problem rather than managing it: a bill is not an expense, it is
-            // a piece of paper whose lines may be two purchases. The check constraint that
-            // used to hold "exactly one owner" went with it.
-            entity.HasOne(receipt => receipt.BankTransaction)
-                .WithOne(row => row.Receipt)
-                .HasForeignKey<Receipt>(receipt => receipt.BankTransactionId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // One bill per bank row. The nulls are ordinary -- a bill typed straight onto an
-            // expense has no row -- and a unique index lets them through, exactly as the one
-            // behind Transaction.BankTransactionId does.
-            entity.HasIndex(receipt => receipt.BankTransactionId).IsUnique();
+            entity.Property(r => r.Subtotal).HasPrecision(18, 2);
+            entity.Property(r => r.Tax).HasPrecision(18, 2);
+            entity.Property(r => r.Tip).HasPrecision(18, 2);
+            entity.Property(r => r.Total).HasPrecision(18, 2);
+            entity.HasOne(r => r.Expense).WithOne(e => e.Receipt)
+                .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ReceiptItem>(entity =>
         {
-            entity.Property(item => item.Name).HasMaxLength(128).IsRequired();
-            entity.Property(item => item.NormalizedName).HasMaxLength(128).IsRequired();
-
-            // What a reader groups two of the same thing by, and the access path a later
-            // "you have bought this before" would want. Not unique: two lines sharing a
-            // folded name on one bill is the point of having it.
-            entity.HasIndex(item => item.NormalizedName);
-            entity.Property(item => item.UnitPrice).IsRequired().HasPrecision(18, 2);
-            entity.Property(item => item.TotalPrice).IsRequired().HasPrecision(18, 2);
-
-            // Three decimals, unlike the money columns: a quantity is weighed as well as
-            // counted, and 0.250 kg is an ordinary line on a bill.
-            entity.Property(item => item.Quantity).IsRequired().HasPrecision(18, 3);
-
-            // What of the bill's tax this line carried, defaulting to none -- a restaurant
-            // under VAT charges no tax on top at all, and every line of one is zero.
-            entity.Property(item => item.TaxAmount)
-                .IsRequired()
-                .HasPrecision(18, 2)
-                .HasDefaultValue(0m);
-
-            // Where the line sits on the paper. Never searched on and always read as part of
-            // the whole bill, so it needs no index of its own -- the lines come back with
-            // their receipt and are ordered in memory.
-            entity.Property(item => item.Position).IsRequired();
-
-            // Which purchase this line's money is part of. Set-null rather than cascade:
-            // deleting an expense that was one part of a split bill must not take the lines
-            // with it -- they go back to belonging to no purchase, which is exactly what they
-            // were before somebody split the charge, and the bill goes on saying what was
-            // bought.
-            entity.HasOne(item => item.Expense)
-                .WithMany(expense => expense.ReceiptItems)
-                .HasForeignKey(item => item.ExpenseId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            // Every line of one expense, which is how a division finds its part of the bill.
-            entity.HasIndex(item => item.ExpenseId);
-
-            entity.HasOne(item => item.Receipt)
-                .WithMany(receipt => receipt.Items)
-                .HasForeignKey(item => item.ReceiptId)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasIndex(item => item.ReceiptId);
-        });
-
-        modelBuilder.Entity<ReceiptItemClaim>(entity =>
-        {
-            entity.HasOne(claim => claim.ReceiptItem)
-                .WithMany(item => item.Claims)
-                .HasForeignKey(claim => claim.ReceiptItemId)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Restrict, not cascade: a claim is what produced somebody's share of the
-            // expense, and losing it silently would leave shares no longer explained by the
-            // bill they came from. Removing a member from a group is an act that already
-            // has to reckon with their balance; this makes it reckon with their claims too.
-            entity.HasOne(claim => claim.User)
-                .WithMany()
-                .HasForeignKey(claim => claim.UserId)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // One row per person per line: a second would be two opinions about how much of
-            // the bottle they had. Sharing is expressed by the weight, not by more rows.
-            entity.HasIndex(claim => new { claim.ReceiptItemId, claim.UserId }).IsUnique();
+            entity.Property(i => i.Name).HasMaxLength(128).IsRequired();
+            entity.Property(i => i.NormalizedName).HasMaxLength(128).IsRequired();
+            entity.HasIndex(i => i.NormalizedName);
+            entity.Property(i => i.UnitPrice).HasPrecision(18, 2);
+            entity.Property(i => i.Quantity).HasPrecision(18, 3);
+            entity.Property(i => i.TotalPrice).HasPrecision(18, 2);
+            entity.Property(i => i.TaxAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+            entity.HasOne(i => i.Receipt).WithMany(r => r.Items)
+                .HasForeignKey(i => i.ReceiptId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(i => i.SplitRuleVersion).WithMany()
+                .HasForeignKey(i => i.SplitRuleVersionId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<UserIdentity>(entity =>

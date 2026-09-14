@@ -16,7 +16,7 @@ public abstract class WeightedSplitRuleHandler<TRule> : ISplitRuleHandler<TRule>
     where TRule : WeightedSplitRuleVersion
 {
     public IReadOnlyList<SplitAmount> Divide(
-        TRule rule, Transaction transaction, IReadOnlyCollection<Guid> members) =>
+        TRule rule, SplitRuleContext transaction, IReadOnlyCollection<Guid> members) =>
         SplitCalculator.Divide(
             transaction.Amount, transaction.Payer, Among(WeightsFor(rule, members), members));
 

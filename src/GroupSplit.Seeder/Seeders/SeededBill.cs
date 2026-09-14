@@ -1,114 +1,62 @@
+using GroupSplit.API.Services.SplitRuleHandlers;
+using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Seeder.Seeders.DTOs;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Seeder.Seeders;
 
 /// <summary>
-/// A seeded bill, built from the few figures the seed file states and with the rest worked
-/// out from them.
+/// The bill behind a seeded expense, and the rules its lines divide by.
 /// </summary>
 /// <remarks>
-/// Shared by the two seeders that can carry one, because there are two ways a bill arrives
-/// in the app and a demo wants both: typed straight onto an expense somebody recorded, or
-/// typed against an imported bank row and left in the inbox to become one expense or several.
-/// <para>
-/// The subtotal is the lines added up and the total is that plus the extras, so a seed file
-/// cannot state a receipt that disagrees with itself. What it can still state is one that
-/// disagrees with the money it is a bill for, and that is left to fail: dividing an expense
-/// and splitting a charge both refuse a bill whose total is not the sum being divided, by
-/// name and with both figures, which is a better thing for a seed run to say than a balance
-/// nobody checked.
-/// </para>
+/// A seed line names its rule by name rather than by id, because the ids are made here: the
+/// first line to name "Items: Ana" creates that rule in the expense's group and every later
+/// line in the group -- in this bill or another -- points at the same one. Written that way
+/// so the demo's rules read as a group's real handful of rules rather than as one per line.
 /// </remarks>
 internal static class SeededBill
 {
-    /// <summary>The bill on a seeded expense.</summary>
-    /// <param name="dividedByIt">
-    /// Whether the expense is filed under a rule that divides by its bill -- which is the
-    /// only thing that ever reads who had what. See <see cref="Build"/>.
-    /// </param>
-    public static Receipt ForExpense(ReceiptSeedDto dto, Guid expenseId, bool dividedByIt) =>
-        Build(dto, expenseId, claimsAreRead: dividedByIt,
-            $"expense {expenseId}, which is not split by its bill");
-
-    /// <summary>The bill on an imported charge nobody has filed yet.</summary>
-    /// <remarks>
-    /// Its lines belong to no expense, which is not an omission: which line belongs to which
-    /// purchase is precisely the question an unfiled warehouse receipt has not answered, and
-    /// answering it is what filing or splitting the charge does. So it carries no claims
-    /// either -- there is no expense to divide, no rule to divide it by, and no group whose
-    /// members a claim could name.
-    /// </remarks>
-    public static Receipt ForBankRow(ReceiptSeedDto dto) =>
-        Build(dto, expenseId: null, claimsAreRead: false, "a bank row nobody has filed");
-
-    /// <param name="claimsAreRead">Whether anything will ever look at who had what.</param>
-    /// <param name="where">
-    /// The bill's place, for the refusal to name. The caller's own words, because only the
-    /// caller knows whether this is an expense that divides some other way or a charge with
-    /// no expense at all.
-    /// </param>
-    /// <remarks>
-    /// Exactly one thing reads a claim: the itemised rule, dividing the expense whose lines
-    /// these are. A bill under a category that divides evenly, and a bill on a charge still
-    /// in the inbox, would store their claims and never be asked about them.
-    /// <para>
-    /// Refused rather than seeded, and refused rather than quietly dropped. A claim nothing
-    /// reads is a statement the demo makes and the app does not: it shows "who had it" beside
-    /// a line whose share is worked out from something else entirely, and it puts the screens
-    /// that draw a bill in the position of deciding whether to nag about the lines that have
-    /// none. Dropping it silently would leave the seed file going on saying it.
-    /// </para>
-    /// </remarks>
-    private static Receipt Build(
-        ReceiptSeedDto dto, Guid? expenseId, bool claimsAreRead, string where)
+    public static async Task<Receipt> ForExpense(ReceiptSeedDto dto, Expense expense,
+        AppDbContext db, ISplitRuleFactory factory, CancellationToken ct)
     {
-        if (!claimsAreRead && dto.Items.Any(line => line.Had.Count > 0))
+        var receipt = new Receipt { Expense = expense, ExpenseId = expense.Id,
+            Subtotal = dto.Items.Sum(i => i.Price), Tax = dto.Tax, Tip = dto.Tip,
+            Total = dto.Items.Sum(i => i.Price) + dto.Tax + dto.Tip };
+        foreach (var input in dto.Items)
         {
-            var named = dto.Items.Where(line => line.Had.Count > 0).Select(line => line.Name);
-
-            throw new InvalidOperationException(
-                $"Seeded bill for {where} says who had {string.Join(", ", named)}. Only a bill " +
-                "on an expense split by its bill is ever asked who had what, so take the claims " +
-                "off it, or file it under a category whose rule is itemised.");
-        }
-
-        var subtotal = dto.Items.Sum(line => line.Price);
-
-        var receipt = new Receipt
-        {
-            Subtotal = subtotal,
-            Tax = dto.Tax,
-            Tip = dto.Tip,
-            Total = subtotal + dto.Tax + dto.Tip
-        };
-
-        var position = 0;
-
-        foreach (var line in dto.Items)
-        {
-            var item = new ReceiptItem
+            SplitRuleVersion? version = null;
+            if (input.SplitRule is { } definition)
             {
-                // The order the seed file lists them in, which is the order they are on the
-                // paper -- and what makes a demo bill's line numbers mean anything.
-                Position = position++,
-                Name = line.Name,
-                NormalizedName = line.Name.Trim().ToLowerInvariant(),
-                TotalPrice = line.Price,
-                Quantity = line.Quantity,
-                UnitPrice = line.Quantity == 0
-                    ? line.Price
-                    : decimal.Round(line.Price / line.Quantity, 2),
-                TaxAmount = line.Tax,
-                ExpenseId = expenseId
-            };
-
-            foreach (var (userId, weight) in line.Had)
-                item.Claims.Add(new ReceiptItemClaim { UserId = userId, Weight = weight });
-
-            receipt.Items.Add(item);
+                var name = input.RuleName ?? throw new InvalidOperationException("A seeded item rule needs a name.");
+                // The tracked ones first: a run seeds several bills before it saves, so a
+                // rule this run has already made is in the change tracker and nowhere else,
+                // and querying past it would make a second rule of the same name.
+                var rule = db.Set<SplitRule>().Local.FirstOrDefault(r => r.Group.Id == expense.Group!.Id && r.Name == name)
+                    ?? await db.Set<SplitRule>().Include(r => r.Group).Include(r => r.Versions)
+                        .ThenInclude(v => (v as WeightedSplitRuleVersion)!.Participants)
+                        .FirstOrDefaultAsync(r => r.Group.Id == expense.Group!.Id && r.Name == name, ct);
+                if (rule is null)
+                {
+                    version = factory.FromDto(definition);
+                    // Started long before any seeded expense, so every one of them falls
+                    // inside this version's window and is divided by it rather than by
+                    // whatever the rule said before it existed.
+                    version.StartedAt = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                    rule = new SplitRule { Name = name, Group = expense.Group!, Versions = { version } };
+                    db.Add(rule);
+                }
+                // Current rather than the one just made: where the rule was already there,
+                // the seed file's definition is a description of it and not a new version of
+                // it -- the line divides by what the group's rule says now.
+                version = rule.Current;
+            }
+            receipt.Items.Add(new ReceiptItem { Name = input.Name, NormalizedName = input.Name.Trim().ToLowerInvariant(),
+                Position = receipt.Items.Count, UnitPrice = decimal.Round(input.Price / input.Quantity, 2),
+                Quantity = input.Quantity, TotalPrice = input.Price, TaxAmount = input.TaxAmount,
+                SplitRuleVersion = version, SplitRuleVersionId = version?.Id });
         }
-
         return receipt;
     }
 }

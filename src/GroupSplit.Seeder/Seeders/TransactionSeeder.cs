@@ -1,5 +1,6 @@
 using GroupSplit.Data;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
@@ -19,6 +20,7 @@ public class TransactionSeeder(
     AppDbContext db,
     ILogger<TransactionSeeder> logger,
     IExpenseSplitter splitter,
+    ISplitRuleFactory ruleFactory,
     TimeProvider clock,
     ISeedDataSource<TransactionSeedDto> source)
     : AppDbContextSeeder<Expense, TransactionSeedDto>(db, source, logger)
@@ -73,50 +75,14 @@ public class TransactionSeeder(
             Merchant = await MerchantAsync(dto.Merchant, ct)
         };
 
-        // Before the division, and in memory rather than saved first: an itemised rule reads
-        // the bill off the expense, and ExpenseSplitter only goes looking in the table for
-        // one the navigation does not already carry. Attached here, a seeded expense divides
-        // by its own bill on the first pass with nothing written yet.
-        // Asked before the bill is built, because whether the seed file may say who had what
-        // depends on the answer: the itemised rule is the only thing that reads a claim, and
-        // a bill under any other rule would carry claims nothing would ever look at. Answered
-        // by the splitter rather than by reading the category's rule here, so the seeder and
-        // the app agree on what "split by its bill" means -- including for an expense whose
-        // category points at a rule that has been edited since.
         if (dto.Receipt is { } bill)
-            expense.Bill = SeededBill.ForExpense(
-                bill, expense.Id, await splitter.DividesByItsBill(expense, ct));
+            expense.Receipt = await SeededBill.ForExpense(bill, expense, DbContext, ruleFactory, ct);
 
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.
         await splitter.WriteSplitsAsync(expense, ct);
 
         return expense;
-    }
-
-    /// <summary>
-    /// Adds the expense and, for the ones that have a bill, the bill.
-    /// </summary>
-    /// <remarks>
-    /// The bill needs adding by hand because <see cref="Expense.Bill"/> is not a mapped
-    /// navigation -- it is how the splitter is handed the whole receipt, and a saved expense
-    /// reaches its lines through <see cref="Expense.ReceiptItems"/> instead. So a receipt
-    /// attached while mapping divides the expense and is then dropped on the floor, which is
-    /// the quietest possible failure: the balances are right, every itemised expense in the
-    /// demo has no bill behind it, and the app's own bill section never appears.
-    /// <para>
-    /// Here rather than in <c>MapAsync</c> for the same reason the bank rows' bills are: an
-    /// expense already seeded is mapped and then dropped without being added, and a receipt
-    /// added while mapping would be a receipt added on every run.
-    /// </para>
-    /// </remarks>
-    protected override Task AddEntityAsync(
-        Expense entity, TransactionSeedDto dto, CancellationToken ct = default)
-    {
-        if (entity.Bill is { } bill)
-            DbContext.Set<Receipt>().Add(bill);
-
-        return base.AddEntityAsync(entity, dto, ct);
     }
 
     /// <summary>

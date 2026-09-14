@@ -79,7 +79,7 @@ public class ReceiptEndpointTest : IAsyncLifetime
     /// even split wants a category with an even rule.
     /// </remarks>
     [Fact]
-    public async Task A_bill_nobody_has_claimed_is_stored_and_refuses_to_divide()
+    public async Task A_bill_missing_item_rules_is_stored_and_refuses_to_divide()
     {
         var expense = await AGroupExpense();
 
@@ -94,7 +94,7 @@ public class ReceiptEndpointTest : IAsyncLifetime
 
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
 
-        Assert.Equal(1, body.GetProperty("unclaimedItemCount").GetInt32());
+        Assert.Equal(1, body.GetProperty("missingRuleItemCount").GetInt32());
         Assert.False(body.GetProperty("canDivide").GetBoolean());
 
         var divided = await Client.PostAsync($"/transactions/{expense}/receipt/divide", null, Ct);

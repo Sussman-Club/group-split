@@ -15,7 +15,7 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 public class PayerSplitRuleHandler : ISplitRuleHandler<PayerSplitRuleVersion>, ISplitRuleFactory<PayerSplitRuleDto>
 {
     public IReadOnlyList<SplitAmount> Divide(
-        PayerSplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members) =>
+        PayerSplitRuleVersion ruleVersion, SplitRuleContext transaction, IReadOnlyCollection<Guid> members) =>
         [new SplitAmount(transaction.Payer, transaction.Amount)];
 
     public string? Invalid(PayerSplitRuleVersion ruleVersion) => null;

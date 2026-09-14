@@ -37,7 +37,7 @@ public interface ISplitRuleHandler
     /// </para>
     /// </remarks>
     IReadOnlyList<SplitAmount> Divide(
-        SplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members);
+        SplitRuleVersion ruleVersion, SplitRuleContext transaction, IReadOnlyCollection<Guid> members);
 
     /// <summary>
     /// What is wrong with the rule, or null when nothing is. A complaint rather than an
@@ -84,7 +84,7 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
     where TRule : SplitRuleVersion
 {
     IReadOnlyList<SplitAmount> Divide(
-        TRule rule, Transaction transaction, IReadOnlyCollection<Guid> members);
+        TRule rule, SplitRuleContext transaction, IReadOnlyCollection<Guid> members);
 
     string? Invalid(TRule rule);
 
@@ -93,7 +93,7 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler
     bool SameAs(TRule rule, TRule other);
 
     IReadOnlyList<SplitAmount> ISplitRuleHandler.Divide(
-        SplitRuleVersion ruleVersion, Transaction transaction, IReadOnlyCollection<Guid> members) =>
+        SplitRuleVersion ruleVersion, SplitRuleContext transaction, IReadOnlyCollection<Guid> members) =>
         Divide(Expected(ruleVersion), transaction, members);
 
     string? ISplitRuleHandler.Invalid(SplitRuleVersion ruleVersion) => Invalid(Expected(ruleVersion));
