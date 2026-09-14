@@ -55,13 +55,11 @@ public sealed class DefinitionOptions
         AllowMultipleArgumentsPerToken = true
     };
 
-    private readonly Option<bool> _itemized = new("--itemized")
-    {
-        Description = "Divide by the receipt on the expense: everybody owes what they "
-                      + "claimed, plus their share of the tax and the tip. Names nobody -- "
-                      + "who owes what is on each expense's own bill. See "
-                      + "`groupsplit receipts`."
-    };
+    // No --itemized. "Divide it by the bill" is the one division nobody writes: every group
+    // is given exactly one and the API refuses a second, because the rule holds no settings
+    // for a second to differ by -- what it divides by lives on the receipt, one line at a
+    // time. The group's own is in `groupsplit rules list`, and an expense is pointed at it
+    // like any other rule. A flag here would be one the server answers 409 to every time.
 
     public void AddTo(Command command)
     {
@@ -71,7 +69,6 @@ public sealed class DefinitionOptions
         command.Options.Add(_payer);
         command.Options.Add(_percent);
         command.Options.Add(_shares);
-        command.Options.Add(_itemized);
     }
 
     /// <summary>
@@ -100,13 +97,12 @@ public sealed class DefinitionOptions
         if (parse.GetValue(_payer)) chosen.Add("--payer");
         if (parse.GetResult(_percent) is not null) chosen.Add("--percent");
         if (parse.GetResult(_shares) is not null) chosen.Add("--shares");
-        if (parse.GetValue(_itemized)) chosen.Add("--itemized");
 
         if (chosen.Count > 1)
         {
             throw CliException.Input(
                 $"{string.Join(" and ", chosen)} describe different divisions.",
-                "Pass exactly one of --even, --sole, --payer, --percent, --shares or --itemized.");
+                "Pass exactly one of --even, --sole, --payer, --percent or --shares.");
         }
 
         if (chosen.Count == 0)
@@ -123,7 +119,6 @@ public sealed class DefinitionOptions
             {
                 Percentages = Pairs.Decimals("--percent", parse.GetValue(_percent) ?? [])
             },
-            "--itemized" => new ItemizedSplitRuleDto(),
             _ => new SharesSplitRuleDto
             {
                 Shares = Pairs.Ints("--shares", parse.GetValue(_shares) ?? [])

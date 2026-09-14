@@ -2,6 +2,7 @@ using GroupSplit.Shared;
 ﻿using System.Security.Claims;
 using GroupSplit.API.Services;
 using GroupSplit.Data;
+using GroupSplit.Data.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -162,12 +163,20 @@ public class ApiUnitTest : IAsyncLifetime
     /// </remarks>
     protected async Task<Guid> CreateCategory(Guid groupId, string name, SplitRuleDto definition)
     {
-        var rule = await GetService<ISplitRuleService>().Create(new CreateSplitRuleRequest
-        {
-            GroupId = groupId,
-            Name = name,
-            Definition = definition
-        }, TestContext.Current.CancellationToken);
+        // "Divide it by the bill" is the one kind nobody writes: every group is given exactly
+        // one and a second is refused, so a category that wants it points at the one the group
+        // already holds.
+        var rule = definition is ItemizedSplitRuleDto
+            ? await GetService<IBillSplitRule>().EnsureFor(
+                await GetService<AppDbContext>().Set<GroupSplit.Data.Entities.Group>()
+                    .FirstAsync(group => group.Id == groupId, TestContext.Current.CancellationToken),
+                TestContext.Current.CancellationToken)
+            : (await GetService<ISplitRuleService>().Create(new CreateSplitRuleRequest
+            {
+                GroupId = groupId,
+                Name = name,
+                Definition = definition
+            }, TestContext.Current.CancellationToken));
 
         var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
         {

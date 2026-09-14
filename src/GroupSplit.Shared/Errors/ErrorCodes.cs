@@ -129,6 +129,17 @@ public static class ErrorCodes
     public const string SplitRuleKindFixed = "SPLIT_RULE_KIND_FIXED";
 
     /// <summary>
+    /// Somebody tried to write a second "divide it by the bill" rule. Every group is given
+    /// exactly one and it is not written by hand, because it holds no settings for a second
+    /// one to differ by: what it divides by lives on the receipt, one line at a time, so two
+    /// of them are the same rule under two names. The names were the only thing a second one
+    /// ever bought, and they cost more than they were worth -- a client offering "divide it
+    /// by the bill" had to pick among indistinguishable rules and got it wrong. The refusal
+    /// names the one the group already holds, so a caller can use it instead.
+    /// </summary>
+    public const string SplitRuleBillIsProvisioned = "SPLIT_RULE_BILL_IS_PROVISIONED";
+
+    /// <summary>
     /// An expense named a rule belonging to some other group, or named one at all while
     /// having no group to divide between. Says the same thing whether the rule exists or
     /// not, so nothing is learned about another group's rules by guessing ids.

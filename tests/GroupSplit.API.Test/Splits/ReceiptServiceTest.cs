@@ -84,6 +84,7 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal(48m, (await Receipts.ForExpense(expense.Id, Ct)).Total);
         Assert.False((await Receipts.ResponseFor(bill, ct: Ct)).CanDivide);
+        Assert.False((await Receipts.ResponseFor(bill, ct: Ct)).CanEdit);
 
         foreach (var refused in new Func<Task>[]
                  {

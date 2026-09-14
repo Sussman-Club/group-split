@@ -14,7 +14,7 @@
             may divide by the same one.
         </MudText>
 
-        <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model" AllowItemized="AllowItemized"/>
+        <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model"/>
     </DialogContent>
 
     <DialogActions>
@@ -27,7 +27,6 @@
 </MudDialog>
 
 @code {
-    [Parameter] public bool AllowItemized { get; set; } = true;
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public Guid GroupId { get; set; }

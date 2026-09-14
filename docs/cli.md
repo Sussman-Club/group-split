@@ -831,13 +831,18 @@ on an expense they paid for but no longer change it (`TRANSACTION_GROUP_LEFT`).
 
 ### Making it a group's default
 
-A split rule can be `itemized`, so a category points at "divide it by the bill" the way it
-points at any other division:
+Every group is given one "divide it by the bill" rule and cannot write a second: the rule
+holds no settings for a second to differ by, so two of them would be one division under two
+names. It is in the listing like any other, and a category points at it the way it points at
+any other division:
 
 ```bash
-groupsplit split-rules create --group <id> --name "By the bill" --itemized
+groupsplit split-rules list --group <id>          # the given one is named "Divide by the bill"
 groupsplit categories update <category-id> --split-rule <rule-id>
 ```
+
+There is no `--itemized` on `split-rules create`; asking for one is refused with
+`SPLIT_RULE_BILL_IS_PROVISIONED`, and the refusal names the rule the group already holds.
 
 An expense filed under that category with a receipt on it divides by the receipt, and records
 which version of the rule did it. One with no receipt is refused by name -- `RECEIPT_NOT_FOUND`

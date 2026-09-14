@@ -1,9 +1,11 @@
+using GroupSplit.API.Services;
 using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
+using GroupSplit.Shared;
 
 namespace GroupSplit.Seeder.Seeders;
 
@@ -21,6 +23,7 @@ public class CategorySeeder(
     AppDbContext db,
     ILogger<CategorySeeder> logger,
     ISplitRuleFactory splitRules,
+    IBillSplitRule billRule,
     ISeedDataSource<CategorySeedDto> source)
     : AppDbContextSeeder<Category, CategorySeedDto>(db, source, logger)
 {
@@ -36,6 +39,21 @@ public class CategorySeeder(
 
         if (group is null)
             return null;
+
+        // "Divide it by the bill" is not written, it is given: one per group. A seeded
+        // category that divides that way points at the one the group already has, or the
+        // seed would put three of them back -- which is the state the app was just taken
+        // out of.
+        if (dto.SplitRule is ItemizedSplitRuleDto)
+        {
+            return new Category
+            {
+                Id = dto.Id,
+                Name = dto.Category,
+                Group = group,
+                DefaultSplitRule = await billRule.EnsureFor(group, ct)
+            };
+        }
 
         var first = splitRules.FromDto(dto.SplitRule);
 

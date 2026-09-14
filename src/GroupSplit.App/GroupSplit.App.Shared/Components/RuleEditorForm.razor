@@ -50,12 +50,10 @@
                 Shares split
             </MudSelectItem>
 
-            @if (AllowItemized)
-            {
-            <MudSelectItem T="RuleType?" Value="RuleType.Itemized">
-                By the bill (itemised)
-            </MudSelectItem>
-            }
+            @* No "by the bill" here. Every group is given exactly one of those and the
+               API refuses a second: the rule holds no settings, so a second would divide
+               identically under another name. It is reached from the expense editor, as
+               the option beside "All for one". *@
         </MudSelect>
 
         @* Which person, once the type says one person. Required, because that is the whole
@@ -158,7 +156,6 @@
 </MudForm>
 
 @code {
-    [Parameter] public bool AllowItemized { get; set; } = true;
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid GroupId { get; set; }
     [Parameter] public RuleEditorModel Model { get; set; } = null!;

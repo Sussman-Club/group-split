@@ -262,11 +262,20 @@ public class AllForOneMemberTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
 
-        var listed = Assert.Single(
-            await (await Rules.List(group.Id, Ct)).SelectDto().ToListAsync(Ct));
+        // Two provisioned rules now, and the listing has to tell them apart without a
+        // definition: the member's, and the one that divides by the bill.
+        var all = await (await Rules.List(group.Id, Ct)).SelectDto().ToListAsync(Ct);
+
+        var listed = Assert.Single(all, rule => rule.AllForUserId is not null);
 
         Assert.True(listed.BuiltIn);
         Assert.Equal(Self, listed.AllForUserId);
+        Assert.False(listed.DividesByBill);
+
+        var bill = Assert.Single(all, rule => rule.DividesByBill);
+
+        Assert.True(bill.BuiltIn);
+        Assert.Null(bill.AllForUserId);
 
         // And the details answer the same question through the division itself, which is
         // where a rule says who it is for.

@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
@@ -22,7 +22,8 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Dinner" }, Ct);
         var other = await CreateNewUser();
         await JoinGroup(group.Id, other);
-        var itemized = await Rule(group.Id, "By items", new ItemizedSplitRuleDto());
+        // The one the group was given, not one made here: a second is refused now.
+        var itemized = await BillRuleOf(group.Id);
         var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
             { GroupId = group.Id, Name = "Food", DefaultSplitRuleId = itemized.SplitRuleId }, Ct);
         var expense = await Transactions.Create(new CreateTransactionRequest
@@ -35,6 +36,16 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var sole = await Rule(group.Id, "Other only", new SharesSplitRuleDto { Shares = new Dictionary<Guid, int> { [other.Id] = 1 } });
         return (expense, other.Id, even.Id, sole.Id);
     }
+    /// <summary>
+    /// The open version of the "divide it by the bill" rule every group is given.
+    /// </summary>
+    private async Task<SplitRuleVersion> BillRuleOf(Guid group) =>
+        await DbContext.Set<SplitRuleVersion>()
+            .Include(version => version.SplitRule)
+            .FirstAsync(version => version.SplitRule.Group.Id == group
+                && version.SupersededAt == null
+                && version is ItemizedSplitRuleVersion, Ct);
+
     private async Task<SplitRuleVersion> Rule(Guid group, string name, SplitRuleDto definition) =>
         (await Rules.Create(new CreateSplitRuleRequest { GroupId = group, Name = name, Definition = definition }, Ct)).Current!;
     private static ReceiptItemInput Item(string name, decimal price, Guid? rule, decimal tax = 0) =>
@@ -42,6 +53,32 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private static SaveReceiptRequest Bill(params ReceiptItemInput[] items) => new()
     { Items = items, Subtotal = items.Sum(i => i.TotalPrice), Tax = items.Sum(i => i.TaxAmount),
         Total = items.Sum(i => i.TotalPrice + i.TaxAmount) };
+
+    [Fact]
+    public async Task Departed_sole_recipient_keeps_bill_readable_but_cannot_be_divided()
+    {
+        var (expense, other, even, _) = await Setup();
+        var sole = await Rule(expense.GroupId!.Value, "Other", new SoleSplitRuleDto(other));
+        var receipt = await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, sole.Id)), Ct);
+        var membership = await DbContext.Set<GroupMembership>().SingleAsync(
+            m => m.GroupId == expense.GroupId && m.UserId == other, Ct);
+        DbContext.Remove(membership);
+        await DbContext.SaveChangesAsync(Ct);
+        DbContext.ChangeTracker.Clear();
+
+        receipt = await Receipts.ForExpense(expense.Id, Ct);
+        var response = await Receipts.ResponseFor(receipt, ct: Ct);
+        Assert.True(response.CanEdit);
+        Assert.False(response.CanDivide);
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Receipts.Preview(expense.Id, Ct));
+        Assert.Equal(ErrorCodes.SplitUserNotInGroup, error.Code);
+        await Assert.ThrowsAsync<ConflictException>(() => Receipts.Divide(expense.Id, Ct));
+        await Assert.ThrowsAsync<ConflictException>(() => Receipts.SetRule(expense.Id,
+            receipt.Items.Single().Id, new SetReceiptItemRuleRequest { SplitRuleVersionId = sole.Id }, Ct));
+        await Receipts.SetRule(expense.Id, receipt.Items.Single().Id,
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = even }, Ct);
+        Assert.True((await Receipts.ResponseFor(receipt, ct: Ct)).CanDivide);
+    }
 
     [Fact]
     public async Task Mixed_item_rules_aggregate_to_one_expense_and_preserve_parent_rule()
@@ -106,7 +143,9 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var (expense, _, even, _) = await Setup();
         var receipt = await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, even)), Ct);
-        var nested = await Rule(expense.GroupId!.Value, "Nested", new ItemizedSplitRuleDto());
+        // The group's own bill rule, which is the only itemized one there is now -- and the
+        // only way this nesting can still be attempted.
+        var nested = await BillRuleOf(expense.GroupId!.Value);
         await Assert.ThrowsAsync<ValidationException>(() => Receipts.SetRule(expense.Id, receipt.Items.Single().Id,
             new SetReceiptItemRuleRequest { SplitRuleVersionId = nested.Id }, Ct));
         Assert.Equal(even, receipt.Items.Single().SplitRuleVersionId);
@@ -155,6 +194,99 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Assert.ThrowsAsync<UnprocessableException>(() => Receipts.SaveForExpense(expense.Id,
             Bill(Item("Wrong", 45, even)) with { Total = 48 }, Ct));
         Assert.Equal("Dinner", receipt.Items.Single().Name);
+    }
+
+    /// <summary>
+    /// Previewing an edit that divides by the bill answers with the bill's own figures.
+    /// </summary>
+    /// <remarks>
+    /// The draft the preview divides is built field by field rather than loaded, and it was
+    /// built without the receipt -- so the itemized rule, which reads the bill off the
+    /// context, refused every one of these with "this expense has no itemised bill on it"
+    /// while the screen asking was displaying that very bill. It only bites when the division
+    /// is actually recomputed, which is what choosing "By its bill" on the edit screen does,
+    /// so nothing caught it until the option existed.
+    /// </remarks>
+    [Fact]
+    public async Task Previewing_an_edit_divided_by_its_bill_reads_the_bill()
+    {
+        var (expense, other, even, _) = await Setup();
+        var mine = await Rule(expense.GroupId!.Value, "Mine", new SoleSplitRuleDto(Self));
+        var theirs = await Rule(expense.GroupId!.Value, "Theirs", new SoleSplitRuleDto(other));
+
+        await Receipts.SaveForExpense(expense.Id,
+            Bill(Item("Mine", 30, mine.Id), Item("Theirs", 18, theirs.Id)), Ct);
+
+        DbContext.ChangeTracker.Clear();
+
+        var preview = await Transactions.PreviewUpdate(expense.Id, new UpdateTransactionRequest
+        {
+            Name = expense.Name,
+            Amount = 48m,
+            DateTime = expense.DateTime,
+            GroupId = expense.GroupId,
+            CategoryId = expense.CategoryId,
+            PaidByUserId = Self
+        }, redivide: true, Ct);
+
+        // The bill's own division, line by line, and not an even split of the total.
+        Assert.Equal(30m, preview.Splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(18m, preview.Splits.Single(split => split.UserId == other).Amount);
+    }
+
+    /// <summary>
+    /// Every group is given one, so nothing has to be created before a bill can divide one.
+    /// </summary>
+    [Fact]
+    public async Task A_new_group_is_given_the_rule_that_divides_by_the_bill()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
+
+        var held = await DbContext.Set<SplitRule>()
+            .Where(rule => rule.Group.Id == group.Id)
+            .Where(rule => rule.Versions.Any(v => v.SupersededAt == null && v is ItemizedSplitRuleVersion))
+            .ToListAsync(Ct);
+
+        var bill = Assert.Single(held);
+        Assert.True(bill.BuiltIn);
+    }
+
+    /// <summary>
+    /// And a second is refused, naming the one the group already holds. Two of them divide
+    /// identically -- the rule has no settings -- so a second is a second name, and the names
+    /// are what made clients pick the wrong one.
+    /// </summary>
+    [Fact]
+    public async Task A_second_rule_that_divides_by_the_bill_is_refused()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group.Id, Name = "By items too", Definition = new ItemizedSplitRuleDto()
+        }, Ct));
+
+        Assert.Equal(ErrorCodes.SplitRuleBillIsProvisioned, refused.Code);
+    }
+
+    /// <summary>
+    /// The one it was given is not the group's to rename or delete, like the per-member rules
+    /// -- and the refusal says which of the two kinds it is rather than calling it a member's.
+    /// </summary>
+    [Fact]
+    public async Task The_bill_rule_cannot_be_renamed_or_deleted()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
+
+        var bill = await DbContext.Set<SplitRule>()
+            .Include(rule => rule.Versions)
+            .FirstAsync(rule => rule.Group.Id == group.Id
+                && rule.Versions.Any(v => v.SupersededAt == null && v is ItemizedSplitRuleVersion), Ct);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => Rules.Delete(bill.Id, Ct));
+
+        Assert.Equal(ErrorCodes.SplitRuleNotEditable, refused.Code);
+        Assert.Contains("dividing an expense by its own bill", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

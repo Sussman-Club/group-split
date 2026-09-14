@@ -102,8 +102,13 @@ public static class ErrorMessages
         // Reachable from the app only by a screen that offered the button it should not
         // have, so it says what to do instead rather than only what went wrong.
         [ErrorCodes.SplitRuleNotEditable] =
-            "This is the rule the group holds for one of its members, so it cannot be changed. "
+            "This is a rule the group was given rather than wrote, so it cannot be changed. "
             + "Create a rule of your own to divide differently.",
+        // Not reachable from the app, which stopped offering "by the bill" as a kind somebody
+        // writes once every group was given one. Carried because the CLI can still ask.
+        [ErrorCodes.SplitRuleBillIsProvisioned] =
+            "This group already has its rule for dividing an expense by its own bill, and a "
+            + "second would divide exactly the same way.",
         // The app does not offer the change -- the editor fixes the kind on an existing rule
         // -- so this reaches somebody only through a client that did. It still says what to
         // do, because "you cannot" without "instead" is the worst kind of refusal.

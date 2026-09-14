@@ -225,11 +225,17 @@ A bill belongs to an expense: an imported bank row is itemised by filing it firs
 (`inbox file`) and typing the bill against the expense it became. One charge files as one
 expense.
 
-A split rule can be `--itemized`, so a category divides by the bill by default:
+Every group is given one "divide it by the bill" rule and cannot write a second -- the rule
+holds no settings for a second to differ by. Find it in the listing and point a category at
+it to divide by the bill by default:
 
 ```bash
-groupsplit split-rules create --group <id> --name "By the bill" --itemized
+groupsplit split-rules list --group <id>          # the given one is named "Divide by the bill"
+groupsplit categories update <category-id> --split-rule <rule-id>
 ```
+
+`split-rules create` has no `--itemized`: a second is refused with
+`SPLIT_RULE_BILL_IS_PROVISIONED`, which names the one the group holds.
 
 An expense filed under that category with a bill divides by it and records which version did
 so. One with no bill is refused by name rather than silently split evenly. An expense under

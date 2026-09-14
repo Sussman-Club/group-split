@@ -69,6 +69,12 @@ public abstract class ComponentTest : BunitContext
         // below, and a test that is about a bill registers its own.
         Services.AddSingleton(Mock.Of<IReceiptCommands>());
 
+        // And the rules a bill's lines divide by, for the same reason: the split control now
+        // offers "By its bill", and choosing it renders a component that reads them. A test
+        // about something else must not have to know that. One that cares registers its own
+        // after this constructor, and the later registration is the one resolved.
+        Services.AddSingleton(Mock.Of<ISplitRuleCommands>());
+
         // The production default. A test wanting a different answer registers its own after
         // this one, which is the point of the policy being a registration at all.
         Services.AddSingleton<IRemainderPolicy, LargestShareRemainderPolicy>();
