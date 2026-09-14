@@ -78,6 +78,7 @@ routing, authentication, model binding, an unhandled exception.
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
 | `RECEIPT_NOT_FOUND` | The expense, or the imported row, has no itemised bill on it. Also raised when dividing an expense whose category names an itemised rule and which nobody has attached a bill to -- the division says so by name rather than falling back to an even split. |
+| `RECEIPT_ATTACHMENT_NOT_FOUND` | The source file does not exist on this expense, or is not visible to the caller. |
 | `TRANSACTION_NOT_FOUND` (on a receipt route) | The id names a repayment rather than an expense. A transfer is one member paying another back and has no items to divide, so the receipt routes read it as no expense of that id -- there is no separate code for it. |
 | `RECEIPT_ITEM_NOT_FOUND` | The line named is not on this receipt. |
 
@@ -135,6 +136,7 @@ no `errors` member; the code is the whole message.
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | Shares were stated on an expense with no group. There is nobody to divide it with. |
 | `GROUP_INVITATION_NO_NAME` | An invitation was asked for with nothing to make it out to. A name is the whole of what a group knows about somebody who has not joined -- it is what every listing shows them as -- so there is no sensible row to write without one. |
 | `RECEIPT_INVALID` | The bill could not describe a receipt at all: no lines, a line with a negative price or no name, a line id that is repeated or belongs to another bill, or a line naming a rule that is itemised, unknown, or another group's. Distinct from `RECEIPT_DOES_NOT_ADD_UP`, which is a well-formed bill whose figures disagree. Carries `receiptItemId` where one line is at fault. |
+| `RECEIPT_ATTACHMENT_INVALID` | The upload is empty, larger than 10 MB, or does not use one of the supported JPG, PNG, WebP, or PDF file types. |
 
 ### Unprocessable (422)
 

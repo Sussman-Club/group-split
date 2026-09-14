@@ -123,6 +123,15 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 }
             }
         }
+        var receiptId = existing?.Id ?? draft.Id;
+        var unlinkedAttachments = await dbContext.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.ExpenseId == expenseId && attachment.ReceiptId == null)
+            .ToListAsync(ct);
+        foreach (var attachment in unlinkedAttachments)
+        {
+            attachment.ReceiptId = receiptId;
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return await ForExpense(expenseId, ct);
     }

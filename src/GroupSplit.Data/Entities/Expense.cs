@@ -32,4 +32,7 @@ public class Expense : Transaction
 
     /// <summary>The itemized bill owned by this expense.</summary>
     public virtual Receipt? Receipt { get; set; }
+
+    /// <summary>Source images and documents attached to this expense.</summary>
+    public virtual ICollection<ReceiptAttachment> ReceiptAttachments { get; } = [];
 }

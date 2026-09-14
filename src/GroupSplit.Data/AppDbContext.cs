@@ -619,6 +619,21 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ReceiptAttachment>(entity =>
+        {
+            entity.Property(attachment => attachment.ObjectKey).HasMaxLength(512).IsRequired();
+            entity.Property(attachment => attachment.FileName).HasMaxLength(256).IsRequired();
+            entity.Property(attachment => attachment.ContentType).HasMaxLength(128).IsRequired();
+            entity.Property(attachment => attachment.UploadedAt).IsRequired();
+            entity.HasOne(attachment => attachment.Expense).WithMany(expense => expense.ReceiptAttachments)
+                .HasForeignKey(attachment => attachment.ExpenseId).IsRequired().OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(attachment => attachment.Receipt).WithMany(receipt => receipt.Attachments)
+                .HasForeignKey(attachment => attachment.ReceiptId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(attachment => attachment.ExpenseId);
+            entity.HasIndex(attachment => attachment.ReceiptId);
+            entity.HasIndex(attachment => attachment.ObjectKey).IsUnique();
+        });
+
         modelBuilder.Entity<ReceiptItem>(entity =>
         {
             entity.Property(i => i.Name).HasMaxLength(128).IsRequired();

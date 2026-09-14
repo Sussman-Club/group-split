@@ -58,6 +58,7 @@ public class ReceiptEndpointTest : IAsyncLifetime
     [Theory]
     [InlineData("/transactions/{0}/receipt")]
     [InlineData("/transactions/{0}/receipt/preview")]
+    [InlineData("/transactions/{0}/receipt-attachments")]
     public async Task An_anonymous_request_is_refused(string route)
     {
         using var anonymous = _host.AnonymousClient();

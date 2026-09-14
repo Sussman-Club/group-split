@@ -21,4 +21,7 @@ public class Receipt : Entity
     /// <summary>Subtotal, tax and tip -- and the expense's amount, or it will not divide.</summary>
     public required decimal Total { get; set; }
     public virtual ICollection<ReceiptItem> Items { get; } = [];
+
+    /// <summary>Source photos and documents used to transcribe this bill.</summary>
+    public virtual ICollection<ReceiptAttachment> Attachments { get; } = [];
 }

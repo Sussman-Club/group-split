@@ -10,6 +10,7 @@
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
 @inject IReceiptCommands Receipts
+@inject IReceiptAttachmentCommands ReceiptAttachments
 
 @*
     One expense, and how it was divided. Reading only.
@@ -26,10 +27,11 @@
     at all for a single expense, though a group's ledger has had the column for months.
     Then the facts, then the division.
 
-    No edit and no delete. They were two icons under the heading, which put a destructive
-    action in the corner of a dialog somebody opened to look something up, and they made the
-    header carry three things at once. Both live on the rows instead -- the You page's grid
-    and a group's ledger both have them -- so this dialog does one thing.
+    No editing or deleting the expense itself. Those were two icons under the heading, which
+    put a destructive action in the corner of a dialog somebody opened to look something up,
+    and they made the header carry three things at once. Both live on the rows instead -- the
+    You page's grid and a group's ledger both have them. The original receipt file is kept
+    here, beside the itemised bill it came from.
 *@
 
 <MudDialog>
@@ -177,6 +179,50 @@
                     </div>
                 }
 
+                @if (details.Kind == ActivityKind.Expense)
+                {
+                    <div class="gs-stack" style="gap: 10px">
+                        <div class="gs-inline" style="justify-content: space-between; align-items: center; gap: 12px">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1rem">Receipt files</h3>
+                                <span class="gs-muted" style="font-size: .8rem">Original photos or documents</span>
+                            </div>
+                            <InputFile OnChange="UploadAttachment"
+                                       accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                                       disabled="@_uploading" />
+                        </div>
+
+                        @if (_uploading)
+                        {
+                            <div class="gs-inline" role="status" style="gap: 8px">
+                                <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
+                                <span class="gs-muted">Uploading…</span>
+                            </div>
+                        }
+
+                        @if (_attachments.Count == 0)
+                        {
+                            <span class="gs-muted" style="font-size: .875rem">No receipt files attached yet.</span>
+                        }
+                        else
+                        {
+                            <div class="gs-stack" style="gap: 6px">
+                                @foreach (var attachment in _attachments)
+                                {
+                                    <div class="gs-inline" @key="attachment.Id" style="gap: 10px; min-width: 0">
+                                        <MudIcon Icon="@Icons.Material.Rounded.AttachFile" Size="Size.Small" />
+                                        <a href="@DownloadUrl(attachment)" download="@attachment.FileName"
+                                           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                                            @attachment.FileName
+                                        </a>
+                                        <span class="gs-muted ms-auto" style="white-space: nowrap">@FormatFileSize(attachment.Length)</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
                 @*
                     The bill, for the expenses that have one.
 
@@ -257,6 +303,8 @@
 
     private TransactionDetailsResponse? details;
     private ReceiptResponse? receipt;
+    private IReadOnlyList<ReceiptAttachmentResponse> _attachments = [];
+    private bool _uploading;
 
     /// <summary>
     /// Who is reading, so the dialog can say "You" and single their share out.
@@ -290,7 +338,6 @@
         // Both at once, because both only ever needed the id this dialog was opened with:
         // read one after the other, each answer grew the dialog under the reader's hand.
         var bill = Receipts.GetAsync(TransactionId);
-
         var loaded = await Errors.TryAsync(
             async () => details = await TransactionsClient.GetTransactionAsync(TransactionId),
             "Could not load the expense.");
@@ -304,6 +351,10 @@
         // Null for most expenses, which have no bill, and null for a failure just the same:
         // there is nothing to report either way and the strip simply does not appear.
         receipt = await bill;
+        if (details is { Kind: ActivityKind.Expense })
+        {
+            _attachments = await ReceiptAttachments.GetAsync(TransactionId);
+        }
 
         // The title has to be told separately, and this is not belt and braces:
         // TitleContent is hoisted into the dialog provider's own tree, so it does not
@@ -321,6 +372,35 @@
     /// dialog was redesigned out of once already.
     /// </remarks>
     private bool _showBill;
+
+    private async Task UploadAttachment(InputFileChangeEventArgs args)
+    {
+        if (args.FileCount == 0) return;
+
+        _uploading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var uploaded = await ReceiptAttachments.UploadAsync(TransactionId, args.File);
+            if (uploaded is not null)
+            {
+                _attachments = _attachments.Append(uploaded)
+                    .OrderByDescending(attachment => attachment.UploadedAt)
+                    .ToList();
+            }
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private string DownloadUrl(ReceiptAttachmentResponse attachment) =>
+        $"/api/transactions/{TransactionId}/receipt-attachments/{attachment.Id}";
+
+    private static string FormatFileSize(long length) => length < 1024 * 1024
+        ? $"{Math.Max(1, length / 1024)} KB"
+        : $"{length / 1024d / 1024d:0.0} MB";
 
     private void Close() => MudDialog.Close();
 }

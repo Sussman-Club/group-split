@@ -44,6 +44,7 @@ public static class ErrorCodes
     public const string ReceiptNotFound = "RECEIPT_NOT_FOUND";
 
     public const string ReceiptItemNotFound = "RECEIPT_ITEM_NOT_FOUND";
+    public const string ReceiptAttachmentNotFound = "RECEIPT_ATTACHMENT_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -165,6 +166,7 @@ public static class ErrorCodes
     /// </summary>
     public const string GroupInvitationNoName = "GROUP_INVITATION_NO_NAME";
     public const string SplitsInvalid = "SPLITS_INVALID";
+    public const string ReceiptAttachmentInvalid = "RECEIPT_ATTACHMENT_INVALID";
 
 
     /// <summary>

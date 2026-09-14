@@ -5,6 +5,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared.Errors;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Splits;
 
@@ -154,6 +155,41 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var details = await Transactions.GetDetails(expense.Id, Ct);
         Assert.Equal(48m, details!.Amount);
         Assert.Equal(divided, details.Splits.ToDictionary(split => split.UserId, split => split.Amount));
+    }
+
+    /// <summary>
+    /// The source file belongs to the expense even before its bill is transcribed. Saving
+    /// the itemisation associates it with that bill, and deleting the bill preserves the
+    /// source file while clearing only that association.
+    /// </summary>
+    [Fact]
+    public async Task Source_files_are_linked_when_the_bill_is_transcribed_and_survive_its_removal()
+    {
+        var (expense, _, even) = await AnExpense();
+        var attachment = new ReceiptAttachment
+        {
+            ExpenseId = expense.Id,
+            ObjectKey = $"{expense.Id:N}/{Guid.NewGuid():N}",
+            FileName = "dinner.jpg",
+            ContentType = "image/jpeg",
+            Length = 42,
+            UploadedByUserId = Self,
+            UploadedAt = DateTimeOffset.UtcNow
+        };
+        DbContext.Add(attachment);
+        await DbContext.SaveChangesAsync(Ct);
+
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48m, even)), Ct);
+
+        Assert.Equal(bill.Id, attachment.ReceiptId);
+        Assert.Same(bill, attachment.Receipt);
+
+        await Receipts.DeleteForExpense(expense.Id, Ct);
+
+        var preserved = await DbContext.Set<ReceiptAttachment>()
+            .SingleAsync(candidate => candidate.Id == attachment.Id, Ct);
+        Assert.Equal(expense.Id, preserved.ExpenseId);
+        Assert.Null(preserved.ReceiptId);
     }
 
     /// <summary>

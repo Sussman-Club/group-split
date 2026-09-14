@@ -12,6 +12,10 @@ var dbServer = builder
 
 var db = dbServer.AddDatabase("db", "groupsplit");
 
+var receipts = builder.AddRustFs("receipts")
+    .WithDataVolume()
+    .AddBucket("receipts");
+
 var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
 // Backs the web app's sign-in ticket and token stores. Held in the web container's own
@@ -41,6 +45,8 @@ var api = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WithReference(db)
     .WithReference(keycloak)
+    .WithReference(receipts)
+    .WaitFor(receipts)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)
     .WithHealthEndpoints()
