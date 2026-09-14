@@ -724,6 +724,35 @@ html:not([data-gs-ready]) .gs-group-card {
     white-space: nowrap;
 }
 
+/*
+    Four options do not fit across a phone. "Automatically" alone is a third of a 375px screen,
+    and equal columns -- which the thumb requires -- multiply that by four: the row overflowed
+    and clipped "By hand" to "By hanc".
+
+    Two rows of two instead, and the sliding thumb gives way to a lit segment. Its position is
+    a one-dimensional sum, `i / n` along the track, and there is no honest place for that on a
+    grid; a background on the chosen button says the same thing without lying about where it
+    is. Only where there are four -- the create dialog's three still slide.
+*/
+@media (max-width: 560px) {
+    .gs-seg.gs-seg-labels.is-wide {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        gap: 3px;
+        border-radius: var(--gs-radius);
+    }
+
+    .gs-seg-labels.is-wide .gs-seg-thumb {
+        display: none;
+    }
+
+    .gs-seg-labels.is-wide .gs-seg-btn.active {
+        background: var(--gs-surface-2);
+        box-shadow: var(--gs-shadow-sm);
+    }
+}
+
 .gs-seg-btn:disabled {
     cursor: default;
     opacity: .5;
@@ -2500,18 +2529,37 @@ html:not([data-gs-ready]) .gs-group-card {
     What one edit moved, per person. Clay for a share that fell and teal for one that rose,
     which is the same reading as every other figure in the app.
 */
+/*
+    One person's share moving. It was a single nowrap string -- "Loraine Monteagudo 31% ->
+    30.6%" -- which is wider than a phone inside a dialog, and a chip that cannot wrap and
+    cannot shrink runs off the edge instead.
+
+    So the name may wrap and the figures may not: "31% -> 30.6%" split across two lines reads
+    as two different numbers, and the arrow orphaned on a line of its own reads as nothing.
+*/
 .gs-delta {
     display: inline-flex;
     align-items: center;
-    height: 22px;
-    padding: 0 9px;
+    flex-wrap: wrap;
+    gap: 0 4px;
+    max-width: 100%;
+    min-height: 22px;
+    padding: 2px 9px;
     border-radius: var(--gs-radius-pill);
     font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    line-height: 1.5;
     background: var(--gs-surface-3);
     color: var(--gs-muted);
+}
+
+.gs-delta .who {
+    overflow-wrap: anywhere;
+}
+
+.gs-delta .change {
+    white-space: nowrap;
 }
 
 .gs-delta.is-up {
@@ -4392,4 +4440,894 @@ html:not([data-gs-ready]) .gs-group-card {
     margin-top: 4px;
     padding-top: 4px;
     border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+
+/* ------------------------------------------------- splitting one charge -- */
+
+/*
+    Sorting the lines of a bill into the purchases they belong to.
+
+    Two panes and one question between them: which of these lines are the same purchase.
+    The bill is set in tabular figures because it is a till slip and the column of prices is
+    read down; the parts beside it are cards, because each one is about to be an expense.
+
+    Colour is the only thing tying a line to its part, so the part tones are the load-bearing
+    decoration here rather than ornament -- four of them, which is also why a split is capped
+    at four parts. Past that nobody can tell the chips apart, and a charge that is really five
+    purchases is two trips to this screen.
+*/
+
+:root {
+    --gs-part-a: var(--gs-teal);
+    --gs-part-a-soft: var(--gs-teal-soft);
+    --gs-part-b: var(--gs-clay);
+    --gs-part-b-soft: var(--gs-clay-soft);
+    --gs-part-c: #5c6f9c;
+    --gs-part-c-soft: rgb(92 111 156 / 12%);
+    --gs-part-d: #8a5a77;
+    --gs-part-d-soft: rgb(138 90 119 / 12%);
+    --gs-part-none: var(--gs-muted);
+    --gs-part-none-soft: color-mix(in srgb, var(--gs-muted) 10%, transparent);
+}
+
+:root[data-theme="dark"] {
+    --gs-part-c: #8fa2cd;
+    --gs-part-c-soft: rgb(143 162 205 / 16%);
+    --gs-part-d: #c08fb0;
+    --gs-part-d-soft: rgb(192 143 176 / 16%);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --gs-part-c: #8fa2cd;
+        --gs-part-c-soft: rgb(143 162 205 / 16%);
+        --gs-part-d: #c08fb0;
+        --gs-part-d-soft: rgb(192 143 176 / 16%);
+    }
+}
+
+.gs-split-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .gs-split-panes {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+}
+
+.gs-pane-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-height: 30px;
+    margin-bottom: 8px;
+}
+
+/* ---- the bill ---- */
+
+.gs-bill {
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+    overflow: hidden;
+
+    /* Bounded, so the parts beside it stay on screen. Without this a long bill pushed the
+       part cards -- which is where the money lands -- below everything. */
+    max-height: min(52vh, 30rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Suppresses the text selection a drag would otherwise make of the whole list. */
+.gs-bill.is-brushing {
+    user-select: none;
+    cursor: crosshair;
+}
+
+.gs-bill-line {
+    display: grid;
+    grid-template-columns: 16px 104px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--gs-line);
+    background: none;
+    color: var(--gs-ink);
+    font: inherit;
+    font-size: .8125rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gs-bill-line:last-child {
+    border-bottom: 0;
+}
+
+.gs-bill-line:hover {
+    background: var(--gs-surface-3);
+}
+
+/* Inset, because .gs-bill clips its children -- an outline drawn outside the first and last
+   rows would be cut in half by the container's own rounded corner. */
+.gs-bill-line:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: -2px;
+}
+
+.gs-bill-line.is-picked {
+    background: var(--gs-teal-soft);
+    box-shadow: inset 3px 0 0 var(--gs-teal);
+}
+
+.gs-bill-line .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-bill-line .amt {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.gs-bill-tick {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--gs-line-strong);
+    border-radius: 4px;
+    background: var(--gs-surface);
+}
+
+.gs-bill-line.is-picked .gs-bill-tick {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal);
+}
+
+/* A line's part, and the only thing on the row that says which one it is. */
+.gs-part-chip {
+    padding: 2px 6px;
+    border: 1px solid var(--tone, var(--gs-part-none));
+    border-radius: var(--gs-radius-pill);
+    background: var(--tone-soft, var(--gs-part-none-soft));
+    color: var(--tone, var(--gs-part-none));
+    font-size: .6875rem;
+    font-weight: 600;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-part-chip.is-none {
+    border-style: dashed;
+}
+
+.gs-bill-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--gs-surface-3);
+    border-top: 1px solid var(--gs-line);
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- what is picked, and where it can go ---- */
+
+.gs-pick-bar {
+    /* Stays put while the bill scrolls under it. On a forty-line receipt the whole point of
+       picking a run is that you are moving down the paper, and the buttons that do something
+       with what you picked were scrolling away as you went. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 7px 10px;
+    border: 1px solid var(--gs-teal);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-teal-soft);
+}
+
+.gs-pick-bar .count {
+    margin-right: 4px;
+    color: var(--gs-teal-deep);
+    font-size: .8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="dark"] .gs-pick-bar .count {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-pick-bar .count {
+        color: var(--gs-teal-bright);
+    }
+}
+
+/* The one control that is a verb on this screen: send what is picked to a part. */
+.gs-send {
+    padding: 3px 10px;
+    border: 1px solid var(--tone, var(--gs-part-none));
+    border-radius: var(--gs-radius-pill);
+    background: var(--tone-soft, var(--gs-part-none-soft));
+    color: var(--tone, var(--gs-part-none));
+    font: inherit;
+    font-size: .8125rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.gs-send:hover {
+    background: var(--tone, var(--gs-part-none));
+    color: var(--gs-on-accent);
+}
+
+.gs-send:focus-visible {
+    outline: 2px solid var(--tone, var(--gs-part-none));
+    outline-offset: 2px;
+}
+
+.gs-send.is-none {
+    border-style: dashed;
+}
+
+/* ---- the parts ---- */
+
+.gs-parts {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gs-part {
+    padding: 12px 14px;
+    border: 1px solid var(--gs-line);
+    border-left: 3px solid var(--tone, var(--gs-part-none));
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+}
+
+.gs-part-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.gs-part-sum {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-part-ledger {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--gs-line);
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--gs-muted);
+}
+
+.gs-part-ledger > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.gs-part-ledger > div + div {
+    margin-top: 2px;
+}
+
+/* ---- the invariant, said once, at the bottom ---- */
+
+.gs-split-tally {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+    width: 100%;
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-split-tally .k {
+    color: var(--gs-muted);
+}
+
+.gs-split-tally .v {
+    font-weight: 600;
+}
+
+.gs-split-verdict {
+    font-weight: 600;
+}
+
+.gs-split-verdict.is-ok {
+    color: var(--gs-teal-deep);
+}
+
+:root[data-theme="dark"] .gs-split-verdict.is-ok {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-split-verdict.is-ok {
+        color: var(--gs-teal-bright);
+    }
+}
+
+.gs-split-verdict.is-short {
+    color: var(--gs-danger);
+}
+
+
+/* ----------------------------------------------------------- a bill, read -- */
+
+/*
+    The paper itself, drawn as paper.
+
+    A receipt is an object people have read thousands of, and its conventions are load-bearing:
+    the narrow column, the fixed pitch that lines the prices up, the leader dots that carry the
+    eye across, the ruled-off totals, the letter in the margin against the lines tax was not
+    charged on. Borrowing them means the shape of the thing explains itself.
+
+    This is the one place in the app that leaves the app's own voice, and it is deliberate:
+    everything around it stays quiet so that the slip reads as the document it is quoting.
+*/
+
+:root {
+    --gs-paper: #fdfbf4;
+    --gs-paper-ink: #2a2620;
+    --gs-paper-faint: #786f60;
+    --gs-paper-rule: #d8d0be;
+}
+
+:root[data-theme="dark"] {
+    --gs-paper: #242019;
+    --gs-paper-ink: #eae3d4;
+    --gs-paper-faint: #a79d8a;
+    --gs-paper-rule: #403927;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --gs-paper: #242019;
+        --gs-paper-ink: #eae3d4;
+        --gs-paper-faint: #a79d8a;
+        --gs-paper-rule: #403927;
+    }
+}
+
+/* On the app's surface, above the paper. A control printed on a receipt is a foreign object,
+   and the slip only reads as a document while nothing on it could be pressed. */
+.gs-slip-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 32rem;
+    margin: 0 auto 10px;
+}
+
+.gs-slip-tools .mud-input-control {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.gs-slip {
+    --gs-slip-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo,
+        Consolas, "Liberation Mono", monospace;
+
+    /* Wider and larger than a paper slip, on purpose. A real receipt is read at arm's
+       length in the hand; this one is read on a screen across a desk, and at a till's own
+       measure it was a small grey column floating in the middle of a dialog. The column
+       still reads as narrow -- that is what makes it a slip -- it is just legible. */
+    max-width: 32rem;
+    margin: 0 auto;
+    color: var(--gs-paper-ink);
+    font-family: var(--gs-slip-mono);
+    font-size: .9375rem;
+    line-height: 1.55;
+    filter: drop-shadow(0 2px 10px rgb(42 36 24 / 12%));
+}
+
+/* Torn top and bottom, which is what says "this is a piece of paper" before a word is read.
+   A scalloped mask rather than an image, so it follows the width and costs no request. */
+.gs-slip-edge {
+    height: 9px;
+    background: var(--gs-paper);
+    -webkit-mask-image: radial-gradient(circle at 50% 0, transparent 6px, #000 6.5px);
+    mask-image: radial-gradient(circle at 50% 0, transparent 6px, #000 6.5px);
+    -webkit-mask-size: 14px 9px;
+    mask-size: 14px 9px;
+    -webkit-mask-repeat: repeat-x;
+    mask-repeat: repeat-x;
+}
+
+.gs-slip-edge.is-bottom {
+    transform: rotate(180deg);
+}
+
+.gs-slip-body {
+    padding: 6px 22px 14px;
+    background: var(--gs-paper);
+}
+
+.gs-slip-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 0 8px;
+    text-align: center;
+}
+
+/* Caps because a till prints caps -- the subject's own vernacular, not a label style. */
+.gs-slip-merchant {
+    font-weight: 700;
+    font-size: 1.0625rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.gs-slip-where {
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+.gs-slip-rule {
+    border-top: 1px dashed var(--gs-paper-rule);
+}
+
+.gs-slip-lines {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+
+    /* Long bills scroll here rather than taking the dialog with them. The cap is in vh so a
+       short bill still prints at its own length and never leaves a box of empty paper. */
+    max-height: min(46vh, 31rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* A hairline where the list actually scrolls, so the cut edge reads as more paper rather
+   than as the end of the bill. Drawn on the scroller itself, which only shows it when the
+   content overflows. */
+.gs-slip-lines {
+    background:
+        linear-gradient(var(--gs-paper) 30%, transparent) top / 100% 12px no-repeat,
+        linear-gradient(transparent, var(--gs-paper) 70%) bottom / 100% 12px no-repeat,
+        radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 12%), transparent) top / 100% 5px no-repeat,
+        radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 12%), transparent) bottom / 100% 5px no-repeat;
+    background-attachment: local, local, scroll, scroll;
+}
+
+/* Four columns and a second row for the names: the item, the leader that carries the eye,
+   the margin letter, and the price. The names sit under the item, indented past the
+   quantity, the way a till prints a modifier under its line. */
+.gs-slip-line {
+    display: grid;
+    grid-template-columns: auto minmax(1ch, 1fr) 1.5ch auto;
+    align-items: baseline;
+    column-gap: 4px;
+}
+
+.gs-slip-line + .gs-slip-line {
+    margin-top: 7px;
+}
+
+.gs-slip-item {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gs-slip-qty {
+    color: var(--gs-paper-faint);
+}
+
+.gs-slip-qty::after {
+    content: "\00d7";
+}
+
+.gs-slip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* On the baseline, where a printed leader sits. The grid aligns to baseline already, and an
+   empty box takes its bottom edge as its baseline -- so the dots land under the text rather
+   than striking through it, which is what centring them did. */
+.gs-slip-leader {
+    border-bottom: 1px dotted var(--gs-paper-rule);
+}
+
+.gs-slip-mark {
+    color: var(--gs-paper-faint);
+    text-align: center;
+}
+
+.gs-slip-price {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* "3 @ 5.99", under the name, the way a till prints a repeated line rather than printing it
+   again. Indented to sit under the item and not under the column of prices. */
+.gs-slip-count {
+    grid-column: 1 / -1;
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+.gs-slip-none {
+    margin: 0;
+    padding: 14px 0;
+    color: var(--gs-paper-faint);
+    text-align: center;
+}
+
+.gs-slip-who {
+    grid-column: 1 / -1;
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+/* The one line worth marking, and marked in the paper's own terms: a pencil note, not a
+   coloured banner. A banner would fight the document it is sitting inside. */
+.gs-slip-line.is-unclaimed .gs-slip-who {
+    color: var(--gs-clay-deep);
+    font-style: italic;
+}
+
+:root[data-theme="dark"] .gs-slip-line.is-unclaimed .gs-slip-who {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-slip-line.is-unclaimed .gs-slip-who {
+        color: var(--gs-clay);
+    }
+}
+
+.gs-slip-totals {
+    margin: 0;
+    padding-top: 8px;
+}
+
+.gs-slip-totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gs-slip-totals dt,
+.gs-slip-totals dd {
+    margin: 0;
+}
+
+.gs-slip-totals dd {
+    font-variant-numeric: tabular-nums;
+}
+
+/*
+    The one line standing for the rest of a split charge. Italic rather than faded: it is the
+    only row on the slip that is not a line off the paper, and it has to read as an aside
+    without becoming unreadable -- the fade it replaces came out at 2.5:1 against the paper,
+    which is under AA for text this size, and it was also the only thing marking the rows it
+    applied to.
+*/
+.gs-slip-line.is-elsewhere .gs-slip-name,
+.gs-slip-line.is-elsewhere .gs-slip-price {
+    font-style: italic;
+}
+
+/* Double-ruled, which is how a slip says "this is the figure that was charged". */
+.gs-slip-totals > div.is-total {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 3px double var(--gs-paper-rule);
+    font-weight: 700;
+}
+
+/*
+    Under the charged total and set apart from it, because it is not a figure the till
+    printed -- it is this expense's share of one that was. A single rule rather than the
+    total's double one, which stays the mark of "what the card paid".
+*/
+.gs-slip-totals > div.is-part {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--gs-paper-rule);
+    font-weight: 700;
+}
+
+.gs-slip-foot {
+    margin: 10px 0 0;
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+.gs-slip-foot.is-unclaimed {
+    color: var(--gs-clay-deep);
+}
+
+:root[data-theme="dark"] .gs-slip-foot.is-unclaimed {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-slip-foot.is-unclaimed {
+        color: var(--gs-clay);
+    }
+}
+
+/* ---- the way in, on an inbox row ---- */
+
+/*
+    Under the row, like the duplicate suggestions and for the same reason: something known
+    about this charge that the person should see before deciding, with the answers it
+    suggests attached. It was a tag and a menu item three taps deep, which is how a feature
+    ships and is never found.
+*/
+.gs-bill-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: -2px 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--gs-line);
+    border-left: 3px solid var(--gs-teal);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-teal-soft);
+    font-size: .8125rem;
+}
+
+/* Open, the paper follows immediately underneath, so the strip stops reserving the space it
+   keeps when it is the last thing in the stack. */
+.gs-bill-strip.is-open {
+    margin-bottom: 0;
+}
+
+.gs-bill-strip .mud-icon-root {
+    color: var(--gs-teal-deep);
+    flex: 0 0 auto;
+}
+
+:root[data-theme="dark"] .gs-bill-strip .mud-icon-root {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-bill-strip .mud-icon-root {
+        color: var(--gs-teal-bright);
+    }
+}
+
+/* ---- a bill inside a dialog ---- */
+
+/* The paper takes the width it is given rather than the dialog's own, which on a phone is
+   the difference between a slip and a slip with a horizontal scrollbar under it. */
+.gs-itemized-slip {
+    width: 100%;
+    min-width: 0;
+}
+
+.gs-itemized-dialog .mud-dialog-content {
+    min-width: 0;
+}
+
+@media (max-width: 480px) {
+    .gs-itemized-slip .gs-slip-body {
+        padding-inline: 14px;
+    }
+}
+
+/* Off the paper, on the app's surface: it is a note about the document, not part of it. */
+.gs-slip-aside {
+    max-width: 32rem;
+    margin: 14px auto 0;
+    color: var(--gs-muted);
+    font-size: .8125rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* ---- the bill as a form: one line, one rule ---- */
+
+/*
+    What is left to do, held above the lines.
+
+    Two states and they have to be told apart at a glance, because the whole of the progress
+    on this screen is a number going down: clay while anything is unanswered, and the app's
+    own teal once nothing is.
+*/
+.gs-divide-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--gs-line);
+    border-left: 3px solid var(--gs-teal);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-teal-soft);
+    font-size: .8125rem;
+    line-height: 1.45;
+}
+
+.gs-divide-progress.is-wanting {
+    border-left-color: var(--gs-clay);
+    background: var(--gs-clay-soft);
+}
+
+.gs-divide-progress .mud-icon-root {
+    flex: 0 0 auto;
+    color: var(--gs-teal-deep);
+}
+
+.gs-divide-progress.is-wanting .mud-icon-root {
+    color: var(--gs-clay-deep);
+}
+
+.gs-divide-progress-total {
+    flex: 0 0 auto;
+    font-weight: 700;
+}
+
+.gs-divide-lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+/*
+    One line of the bill and the one decision it carries.
+
+    A card rather than a row, because the decision is a control with a target of its own and
+    rows of unboxed selects run together into a column of identical rectangles with no way of
+    telling which label belongs to which.
+*/
+.gs-divide-line {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    min-width: 0;
+}
+
+/* The lines with something still to answer, marked down the edge where the eye can run the
+   column and find them without reading a word. */
+.gs-divide-line.is-wanting {
+    border-left: 3px solid var(--gs-clay);
+    background: var(--gs-clay-soft);
+}
+
+.gs-divide-line-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+}
+
+.gs-divide-line-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.gs-divide-line-qty {
+    color: var(--gs-muted);
+    font-weight: 400;
+}
+
+.gs-divide-line-price {
+    flex: 0 0 auto;
+    font-weight: 700;
+}
+
+.gs-divide-line-note {
+    color: var(--gs-muted);
+    font-size: .8125rem;
+}
+
+.gs-divide-line .mud-input-control {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+/* The figures off the paper, in one strip, so that dividing the bill can still be checked
+   against the charge without the slip being printed over the form. */
+.gs-divide-recap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--gs-line);
+    font-size: .8125rem;
+}
+
+.gs-divide-recap > div {
+    display: flex;
+    gap: 6px;
+}
+
+.gs-divide-recap dt,
+.gs-divide-recap dd {
+    margin: 0;
+}
+
+.gs-divide-recap dt {
+    color: var(--gs-muted);
+}
+
+.gs-divide-recap > div.is-total {
+    margin-left: auto;
+    font-weight: 700;
+}
+
+/* The body of the "By its bill" option: the same rhythm as the other options' bodies, which
+   are MudStack Spacing="2" -- this one is plain markup and sets its own. */
+.gs-divide {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* ---- the way in, from an expense ---- */
+
+.gs-receipt-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+:root[data-theme="dark"] .gs-divide-progress .mud-icon-root {
+    color: var(--gs-teal-bright);
+}
+
+:root[data-theme="dark"] .gs-divide-progress.is-wanting .mud-icon-root {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-divide-progress .mud-icon-root {
+        color: var(--gs-teal-bright);
+    }
+
+    :root:not([data-theme="light"]) .gs-divide-progress.is-wanting .mud-icon-root {
+        color: var(--gs-clay);
+    }
 }

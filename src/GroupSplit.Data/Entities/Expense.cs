@@ -29,4 +29,7 @@ public class Expense : Transaction
     public virtual Category? Category { get; set; }
 
     public Guid? CategoryId { get; set; }
+
+    /// <summary>The itemized bill owned by this expense.</summary>
+    public virtual Receipt? Receipt { get; set; }
 }

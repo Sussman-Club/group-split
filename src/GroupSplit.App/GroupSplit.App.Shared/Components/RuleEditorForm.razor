@@ -49,6 +49,11 @@
             <MudSelectItem T="RuleType?" Value="RuleType.Shares">
                 Shares split
             </MudSelectItem>
+
+            @* No "by the bill" here. Every group is given exactly one of those and the
+               API refuses a second: the rule holds no settings, so a second would divide
+               identically under another name. It is reached from the expense editor, as
+               the option beside "All for one". *@
         </MudSelect>
 
         @* Which person, once the type says one person. Required, because that is the whole
@@ -68,6 +73,19 @@
                     <MudSelectItem T="Guid?" Value="@member.Id">@member.Label()</MudSelectItem>
                 }
             </MudSelect>
+        }
+
+        @* Itemised names nobody, so the member rows below have nothing to show for it. A
+           line saying where the division actually comes from is worth more than an empty
+           table: without it the form reads as though something failed to load. *@
+        @if (_ruleType == RuleType.Itemized)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">
+                Each expense is divided by the bill attached to it -- every line by the rule
+                chosen for it, so everybody owes what they had plus its tax and its share of
+                the tip. An expense filed here with no bill, or with a line that has no rule,
+                cannot be divided.
+            </MudAlert>
         }
 
         @if (Model.Version is PercentSplitRuleDto percent)
@@ -201,6 +219,7 @@
             PercentSplitRuleDto => RuleType.Percent,
             SharesSplitRuleDto => RuleType.Shares,
             SoleSplitRuleDto => RuleType.AllOnOnePerson,
+            ItemizedSplitRuleDto => RuleType.Itemized,
             EvenSplitRuleDto => RuleType.Even,
             _ => _ruleType
         };
@@ -248,6 +267,11 @@
             // joins. Listing today's members instead would freeze them in, and that is the
             // shares rule one row down.
             RuleType.Even => new EvenSplitRuleDto(),
+
+            // Carries nothing either, and for a different reason: what each person owes is
+            // on the expense's own bill, so there is nothing here to carry over from
+            // whatever division was selected before.
+            RuleType.Itemized => new ItemizedSplitRuleDto(),
 
             RuleType.Percent when Model.Version is SharesSplitRuleDto shares => new PercentSplitRuleDto
             {

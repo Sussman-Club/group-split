@@ -1,5 +1,6 @@
-using GroupSplit.API.Services;
+﻿using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.SplitRuleHandlers;
@@ -25,6 +26,18 @@ public class SplitRuleHandlerTest
         new ServiceCollection().AddSplitRuleServices().BuildServiceProvider()
             .GetRequiredService<ISplitRuleHandler>();
 
+    /// <summary>
+    /// An expense of that size, paid by that person -- the two facts a division reads off a
+    /// transaction, and now the way it is handed them.
+    /// </summary>
+    private static Expense Spending(decimal amount, Guid payerId) => new()
+    {
+        UserId = payerId,
+        Amount = amount,
+        Name = "Dinner",
+        DateTime = DateTimeOffset.UnixEpoch
+    };
+
     private static decimal AmountFor(IReadOnlyList<SplitAmount> splits, Guid userId) =>
         splits.SingleOrDefault(split => split.UserId == userId).Amount;
 
@@ -42,7 +55,7 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = new EvenSplitRuleVersion();
 
-        var splits = Handler.Divide(ruleVersion, 100.00m, Alice, Members);
+        var splits = Handler.Divide(ruleVersion, Spending(100.00m, Alice), Members);
 
         Assert.Equal(3, splits.Count);
         Assert.Equal(33.34m, AmountFor(splits, Alice));
@@ -58,7 +71,7 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = new EvenSplitRuleVersion();
 
-        var afterOmarJoins = Handler.Divide(ruleVersion, 100.00m, Alice, [..Members, Guid.NewGuid()]);
+        var afterOmarJoins = Handler.Divide(ruleVersion, Spending(100.00m, Alice), [..Members, Guid.NewGuid()]);
 
         Assert.Equal(4, afterOmarJoins.Count);
         Assert.Equal(25.00m, AmountFor(afterOmarJoins, Bob));
@@ -69,7 +82,7 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = Naming(new EvenSplitRuleVersion(), (Alice, 1), (Bob, 1));
 
-        var splits = Handler.Divide(ruleVersion, 100.00m, Alice, Members);
+        var splits = Handler.Divide(ruleVersion, Spending(100.00m, Alice), Members);
 
         Assert.Equal(2, splits.Count);
         Assert.Equal(0m, AmountFor(splits, Carol));
@@ -87,8 +100,8 @@ public class SplitRuleHandlerTest
         SplitRuleVersion percent = Naming(new PercentSplitRuleVersion(),
             (Alice, 5000), (Bob, 2500), (Carol, 2500));
 
-        var bySplits = Handler.Divide(shares, 220.50m, Bob, Members).OrderBy(split => split.UserId).ToArray();
-        var byPercent = Handler.Divide(percent, 220.50m, Bob, Members).OrderBy(split => split.UserId).ToArray();
+        var bySplits = Handler.Divide(shares, Spending(220.50m, Bob), Members).OrderBy(split => split.UserId).ToArray();
+        var byPercent = Handler.Divide(percent, Spending(220.50m, Bob), Members).OrderBy(split => split.UserId).ToArray();
 
         Assert.Equal(byPercent, bySplits);
         Assert.Equal(220.50m, bySplits.Sum(split => split.Amount));
@@ -144,7 +157,7 @@ public class SplitRuleHandlerTest
         // Bob has gone; Alice is the group.
         foreach (var ruleVersion in new[] { shares, percent, even })
         {
-            var splits = Handler.Divide(ruleVersion, 200.00m, Alice, [Alice]);
+            var splits = Handler.Divide(ruleVersion, Spending(200.00m, Alice), [Alice]);
 
             Assert.Equal(200.00m, Assert.Single(splits).Amount);
             Assert.Equal(Alice, splits[0].UserId);
@@ -165,7 +178,7 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = Naming(new SharesSplitRuleVersion(), (Bob, 1), (Carol, 2));
 
-        Assert.Throws<ArgumentException>(() => Handler.Divide(ruleVersion, 200.00m, Alice, [Alice]));
+        Assert.Throws<ArgumentException>(() => Handler.Divide(ruleVersion, Spending(200.00m, Alice), [Alice]));
     }
 
     /// <summary>
@@ -178,7 +191,7 @@ public class SplitRuleHandlerTest
         SplitRuleVersion ruleVersion = Naming(new SharesSplitRuleVersion(), (Alice, 1), (Bob, 1));
 
         // Bob is an unanswered invitation, which is what IGroupParticipants hands in.
-        var splits = Handler.Divide(ruleVersion, 200.00m, Alice, [Alice, Bob]);
+        var splits = Handler.Divide(ruleVersion, Spending(200.00m, Alice), [Alice, Bob]);
 
         Assert.Equal(100.00m, AmountFor(splits, Bob));
     }
@@ -203,11 +216,13 @@ public class SplitRuleHandlerTest
     private sealed class FixedThenEvenSplitRuleHandler : ISplitRuleHandler<FixedThenEvenSplitRuleVersion>
     {
         public IReadOnlyList<SplitAmount> Divide(
-            FixedThenEvenSplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members)
+            FixedThenEvenSplitRuleVersion ruleVersion, SplitRuleContext transaction,
+            IReadOnlyCollection<Guid> members)
         {
             var rest = members.Where(member => member != ruleVersion.FixedUserId).ToArray();
 
-            var evenly = SplitCalculator.Divide(amount - ruleVersion.FixedAmount, payerId,
+            var evenly = SplitCalculator.Divide(
+                transaction.Amount - ruleVersion.FixedAmount, transaction.Payer,
                 [..rest.Select(member => new SplitWeight(member, 1))]);
 
             return [new SplitAmount(ruleVersion.FixedUserId, ruleVersion.FixedAmount), ..evenly];
@@ -227,7 +242,7 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = new SoleSplitRuleVersion { UserId = Carol };
 
-        var splits = Handler.Divide(ruleVersion, 100.00m, Alice, Members);
+        var splits = Handler.Divide(ruleVersion, Spending(100.00m, Alice), Members);
 
         var only = Assert.Single(splits);
 
@@ -246,7 +261,7 @@ public class SplitRuleHandlerTest
         SplitRuleVersion ruleVersion = new SoleSplitRuleVersion { UserId = Carol };
 
         Assert.Throws<ArgumentException>(
-            () => Handler.Divide(ruleVersion, 100.00m, Alice, [Alice, Bob]));
+            () => Handler.Divide(ruleVersion, Spending(100.00m, Alice), [Alice, Bob]));
     }
 
     [Fact]
@@ -302,7 +317,8 @@ public class SplitRuleHandlerTest
             FixedAmount = 10.00m
         };
 
-        var splits = provider.GetRequiredService<ISplitRuleHandler>().Divide(ruleVersion, 100.00m, Alice, Members);
+        var splits = provider.GetRequiredService<ISplitRuleHandler>()
+            .Divide(ruleVersion, Spending(100.00m, Alice), Members);
 
         Assert.Equal(10.00m, AmountFor(splits, Carol));
         Assert.Equal(45.00m, AmountFor(splits, Bob));
@@ -322,8 +338,43 @@ public class SplitRuleHandlerTest
         };
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => Handler.Divide(ruleVersion, 10m, Alice, Members));
+            () => Handler.Divide(ruleVersion, Spending(10m, Alice), Members));
 
         Assert.Contains(nameof(FixedThenEvenSplitRuleVersion), exception.Message);
+    }
+
+    /// <summary>
+    /// An expense is divided before it is added, so its group is only on the navigation --
+    /// the FK stays null until EF fixes it up on save. Read off the FK alone, every
+    /// itemized expense built that way looked like it belonged to no group, and no item
+    /// rule can belong to that: the seeder's whole history stopped on the first bill.
+    /// </summary>
+    [Fact]
+    public void An_item_rule_matches_the_group_an_unsaved_expense_names()
+    {
+        var group = new Data.Entities.Group { Id = Guid.NewGuid(), Name = "Dinner" };
+        var expense = Spending(30.00m, Alice);
+        expense.Group = group;
+        expense.Receipt = new Receipt
+        {
+            Subtotal = 30.00m, Total = 30.00m,
+            Items = { new ReceiptItem
+            {
+                Name = "Pizza", NormalizedName = "pizza", Position = 0, Quantity = 1,
+                UnitPrice = 30.00m, TotalPrice = 30.00m,
+                SplitRuleVersion = InGroup(new EvenSplitRuleVersion(), group)
+            } }
+        };
+
+        var splits = Handler.Divide(new ItemizedSplitRuleVersion(), expense, Members);
+
+        Assert.Equal(10.00m, AmountFor(splits, Bob));
+        Assert.Equal(30.00m, splits.Sum(split => split.Amount));
+    }
+
+    private static T InGroup<T>(T version, Data.Entities.Group group) where T : SplitRuleVersion
+    {
+        version.SplitRule = new SplitRule { Name = "Together", Group = group, Versions = { version } };
+        return version;
     }
 }

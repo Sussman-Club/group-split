@@ -121,6 +121,12 @@ public class SplitRuleService(
 
         var version = factory.FromDto(request.Definition);
 
+        // One per group, and the group was given it. A second would divide identically --
+        // this rule has no settings to differ by -- so it would be a second name for the
+        // same thing, and every client offering "divide it by the bill" would then have to
+        // guess which one an expense meant.
+        await RefuseASecondBillRule(version, group, ct);
+
         await Validate(version, group, ct);
 
         var rule = new SplitRule
@@ -322,7 +328,8 @@ public class SplitRuleService(
         var everUsed = await dbContext.Set<Transaction>()
             .AnyAsync(transaction => transaction.SplitRuleVersion!.SplitRuleId == id, ct);
 
-        if (everUsed)
+        if (everUsed || await dbContext.Set<ReceiptItem>()
+            .AnyAsync(item => item.SplitRuleVersion!.SplitRuleId == id, ct))
             throw new ConflictException(ErrorCodes.SplitRuleInUse,
                 "Expenses have been divided by this rule, so it is part of their history and cannot be deleted.");
 
@@ -398,14 +405,49 @@ public class SplitRuleService(
             .WithExtension("splitRuleId", rule.Id);
     }
 
+    /// <summary>
+    /// Refuses a second "divide it by the bill" rule, naming the one the group already has.
+    /// </summary>
+    /// <remarks>
+    /// The group is given one when it is created, so in practice this always has one to point
+    /// at; it is written to survive a group that somehow has none rather than to report a
+    /// state the API can reach.
+    /// </remarks>
+    private async Task RefuseASecondBillRule(SplitRuleVersion version, Group group, CancellationToken ct)
+    {
+        if (version is not ItemizedSplitRuleVersion)
+            return;
+
+        var held = await dbContext.Set<SplitRule>()
+            .FirstOrDefaultAsync(rule =>
+                rule.Group.Id == group.Id &&
+                rule.Versions.Any(open =>
+                    open.SupersededAt == null && open is ItemizedSplitRuleVersion), ct);
+
+        if (held is null)
+            return;
+
+        throw new ConflictException(ErrorCodes.SplitRuleBillIsProvisioned,
+                $"This group already divides bills by \"{held.Name}\", which it was given and "
+                + "keeps. A bill is divided by the rule on each of its lines, so a second of "
+                + "these would divide exactly the same way under another name.")
+            .WithExtension("splitRuleId", held.Id);
+    }
+
     private static void RefuseIfProvisioned(SplitRule rule, string what)
     {
         if (!rule.BuiltIn)
             return;
 
+        // Two kinds of provisioned rule now, and they are held for different reasons: saying
+        // "for one of its members" about the bill rule would be simply untrue.
+        var why = rule.Versions.Any(version => version.SupersededAt is null && version is ItemizedSplitRuleVersion)
+            ? "is the rule this group holds for dividing an expense by its own bill"
+            : "is the rule this group holds for one of its members";
+
         throw new ConflictException(ErrorCodes.SplitRuleNotEditable,
-                $"\"{rule.Name}\" is the rule this group holds for one of its members, so it "
-                + $"cannot be {what}. Create a rule of your own to divide differently.")
+                $"\"{rule.Name}\" {why}, so it cannot be {what}. Create a rule of your own to "
+                + "divide differently.")
             .WithExtension("splitRuleId", rule.Id)
             // Read off the division rather than off the rule, because that is where it is
             // said. A caller that wants to name the person in a message has it already.

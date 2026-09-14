@@ -43,6 +43,18 @@ public static class ErrorMessages
         [ErrorCodes.MerchantNotFound] = "That merchant no longer exists.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
 
+        // A bill is the exception rather than the rule, so this reads as a statement about
+        // the expense rather than as something having gone missing.
+        [ErrorCodes.ReceiptNotFound] = "That expense has no itemised bill on it.",
+        [ErrorCodes.ReceiptItemNotFound] = "That line is no longer on the bill.",
+        [ErrorCodes.ReceiptInvalid] = "That bill could not be read. Check the lines and who is on them.",
+        [ErrorCodes.ReceiptDoesNotAddUp] = "The bill does not add up to what was paid.",
+
+        // The one refusal somebody can act on directly, so it says what to do rather than
+        // what went wrong.
+        [ErrorCodes.ReceiptItemsMissingRule] = "Some items need a split rule. "
+                                             + "Choose a rule for each item before dividing it.",
+
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
         [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
         [ErrorCodes.GroupJoinLinkNotFound] = "That join link is not one of ours. Check you copied the whole of it.",
@@ -90,8 +102,13 @@ public static class ErrorMessages
         // Reachable from the app only by a screen that offered the button it should not
         // have, so it says what to do instead rather than only what went wrong.
         [ErrorCodes.SplitRuleNotEditable] =
-            "This is the rule the group holds for one of its members, so it cannot be changed. "
+            "This is a rule the group was given rather than wrote, so it cannot be changed. "
             + "Create a rule of your own to divide differently.",
+        // Not reachable from the app, which stopped offering "by the bill" as a kind somebody
+        // writes once every group was given one. Carried because the CLI can still ask.
+        [ErrorCodes.SplitRuleBillIsProvisioned] =
+            "This group already has its rule for dividing an expense by its own bill, and a "
+            + "second would divide exactly the same way.",
         // The app does not offer the change -- the editor fixes the kind on an existing rule
         // -- so this reaches somebody only through a client that did. It still says what to
         // do, because "you cannot" without "instead" is the worst kind of refusal.

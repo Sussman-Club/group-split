@@ -146,6 +146,103 @@ row still waiting in an inbox.
 | `merchants update <merchant-id>` | Rename it, or change its logo. `--no-logo` clears the logo. |
 | `merchants delete <merchant-id>` | Delete a merchant. |
 
+### receipts
+
+The itemised bill behind an expense, and dividing by who had what. For the dinner where
+nobody ate the same thing: an even split is wrong for it, a percentage rule is a guess at
+it, and stating amounts by hand means adding the column up and then apportioning the tax and
+the tip, which is the part people get wrong.
+
+Every line divides by a **saved split rule version** -- the same kind of rule a whole expense
+divides by. There is no separate notion of claiming a line: "Ana had the steak" is a rule
+naming Ana, and the line points at it. `split-rules list --group <id>` prints the rules with
+their current version ids.
+
+Transcribing a bill and dividing by it are separate commands. **Nothing touches the ledger
+until `receipts divide`** -- `set`, `rule` and `preview` all leave the expense's shares
+exactly as they are.
+
+| Command | |
+| --- | --- |
+| `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. |
+| `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. |
+| `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
+| `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
+| `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. |
+
+A line is `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>]`, and after the `@`
+comes exactly one split rule version id:
+
+```bash
+groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
+  --item "Steak=22.00@<ana-only-version>" \
+  --item "Wine=18.00@<ana-and-omar-version>" \
+  --item "Beers=9.00x3@<omar-twice-as-much-version>"
+```
+
+A plate the table shared is a line naming a rule that divides between them, and a bottle Omar
+had twice as much of is a shares rule weighted that way -- the weighting lives in the rule,
+which the group can reuse and edit, rather than in the line. A line with no `@` has no rule
+yet, which is fine until you divide.
+
+A line cannot name an itemised rule (a bill inside a line of a bill divides nothing) nor a
+rule belonging to another group. Both are `RECEIPT_INVALID`.
+
+`/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount, not a rate and not
+a flag: a bill can charge two rates -- 6% food and 23% household goods on one supermarket
+receipt -- and knowing only which lines were taxed cannot say how much each carried. The
+amounts have to come to `--tax`. A line carries none unless it says so, which is what a
+restaurant bill under VAT wants; `/notax` still reads and means the same as saying nothing. It
+reads the same on either side of the `@`.
+
+**`receipts set` saves the bill whole**, so a line you do not mention is a line that has gone,
+and its rule goes with it. Correcting one price means naming the stored lines by the ids
+`receipts show` prints:
+
+```bash
+groupsplit receipts set 7c1e... --item "a1b2c3d4-...#Steak=24.00@<version>" --item "b2c3d4e5-...#Wine=18.00@<version>"
+```
+
+Only text before a `#` that parses as an id is read as one, so `Table #4` is still a name. A
+line with no id is a new line. An id from another bill, or the same id twice, is refused.
+
+**Tax is per line and the tip is spread over the lines by price**, so each line is divided by
+its own rule as one amount -- price, plus its tax, plus its share of the tip. It is one
+calculation, so there is a single rounding and a single remainder, as in every other division.
+
+What it refuses, before dividing rather than after:
+
+| Code | |
+| --- | --- |
+| `RECEIPT_ITEMS_MISSING_RULE` | A line has no split rule. Carries `itemIds`. Refused rather than spread over everybody: charging five people for one person's steak is the kind of wrong nobody checks for afterwards. The bill is still stored and readable; it just will not divide. |
+| `RECEIPT_DOES_NOT_ADD_UP` | The lines do not come to the subtotal, the per-line tax does not come to the bill's tax, the parts do not come to the total, or the total is not the expense's amount. Carries the figures it compared. |
+| `RECEIPT_NOT_FOUND` | No bill on that expense -- or, when dividing, the expense is filed under an itemised rule and nobody has attached one. |
+| `SPLIT_ON_A_PERSONAL_EXPENSE` | A personal expense has nobody to divide lines between, so it takes no bill. |
+| `TRANSACTION_GROUP_LEFT` | Somebody who has left the group can still read the bill on an expense they paid for, and can no longer change or divide by it. |
+
+A bill belongs to an expense: an imported bank row is itemised by filing it first
+(`inbox file`) and typing the bill against the expense it became. One charge files as one
+expense.
+
+Every group is given one "divide it by the bill" rule and cannot write a second -- the rule
+holds no settings for a second to differ by. Find it in the listing and point a category at
+it to divide by the bill by default:
+
+```bash
+groupsplit split-rules list --group <id>          # the given one is named "Divide by the bill"
+groupsplit categories update <category-id> --split-rule <rule-id>
+```
+
+`split-rules create` has no `--itemized`: a second is refused with
+`SPLIT_RULE_BILL_IS_PROVISIONED`, which names the one the group holds.
+
+An expense filed under that category with a bill divides by it and records which version did
+so. One with no bill is refused by name rather than silently split evenly. An expense under
+any other rule can still be divided by its bill -- `receipts divide` stores the result as
+stated shares, the same as typing them.
+
+
 To say where an expense was spent, name the merchant on the expense rather than here:
 `transactions create --merchant-id`, or `transactions update --merchant-id` to add it
 afterwards and `--no-merchant` to forget it. Filing a bank row sets it from the row itself,

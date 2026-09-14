@@ -22,12 +22,13 @@ namespace GroupSplit.API.Services.SplitRuleHandlers;
 public class SoleSplitRuleHandler : ISplitRuleHandler<SoleSplitRuleVersion>, ISplitRuleFactory<SoleSplitRuleDto>
 {
     public IReadOnlyList<SplitAmount> Divide(
-        SoleSplitRuleVersion ruleVersion, decimal amount, Guid payerId, IReadOnlyCollection<Guid> members)
+        SoleSplitRuleVersion ruleVersion, SplitRuleContext transaction, IReadOnlyCollection<Guid> members)
     {
         ArgumentNullException.ThrowIfNull(ruleVersion);
+        ArgumentNullException.ThrowIfNull(transaction);
         ArgumentNullException.ThrowIfNull(members);
 
-        return SplitCalculator.Divide(amount, payerId,
+        return SplitCalculator.Divide(transaction.Amount, transaction.Payer,
             members.Contains(ruleVersion.UserId) ? [new SplitWeight(ruleVersion.UserId, 1)] : []);
     }
 

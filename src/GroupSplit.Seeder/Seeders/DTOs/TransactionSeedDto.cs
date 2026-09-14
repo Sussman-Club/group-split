@@ -43,4 +43,15 @@ public class TransactionSeedDto
     /// two expenses at one place, and a name in the seed file is how the file says that.
     /// </remarks>
     public string? Merchant { get; init; }
+
+    /// <summary>
+    /// The itemised bill behind it, or null -- which is nearly all of them.
+    /// </summary>
+    /// <remarks>
+    /// Required in practice for an expense filed under a category whose rule is itemised:
+    /// that division reads the bill and refuses by name when there is none, so a seed entry
+    /// without one fails the run rather than quietly dividing some other way. Which is the
+    /// behaviour worth having, and worth seeing once in the demo data.
+    /// </remarks>
+    public ReceiptSeedDto? Receipt { get; init; }
 }

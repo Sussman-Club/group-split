@@ -95,6 +95,12 @@ about an old expense is better silent, so the app says nothing about provenance 
 these stay CLI commands -- where the person running one knows what a re-pointed category
 means, and `dryRun` will say what a pass would do before it does it.
 
+One of the three is reachable from the app: the edit dialog offers to correct which version
+divided one expense. The other two stay CLI commands. Writing a rule's past wholesale was
+never going to be a dialog -- 42 months of a workbook are not re-lived one at a time -- and
+re-pointing a whole group is a migration somebody runs once, knowing why, rather than a
+button a group sees for ever after.
+
 Three edits, three effects, and none of them reaches the others: renaming a rule touches no
 version, pointing a category somewhere else touches no rule, and editing a division touches
 no category and nothing already recorded.

@@ -2,11 +2,12 @@
 name: groupsplit
 description: >-
   Drive the GroupSplit CLI (`groupsplit`) to read and change shared expenses: groups,
-  members, expenses, balances, settlements, split rules, categories, invitations, linked
-  bank accounts and imported bank rows.
+  members, expenses, balances, settlements, split rules, categories, itemised receipts,
+  invitations, linked bank accounts and imported bank rows.
   USE FOR: splitting an expense with a group, who owes whom, settling up with one person
   across every group at once, recording what somebody paid, a group's ledger or totals, what
-  you have paid and what it cost you month by month, inviting or removing members, join
+  you have paid and what it cost you month by month, splitting a restaurant bill by its
+  items so everybody pays for what they ordered, inviting or removing members, join
   links, filing an imported bank row; or whenever a `groupsplit` binary or a
   `~/.config/groupsplit/config.json` is present.
   DO NOT USE FOR: working on the GroupSplit codebase itself -- builds, tests, Aspire, EF
@@ -17,7 +18,7 @@ description: >-
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # GroupSplit from the command line

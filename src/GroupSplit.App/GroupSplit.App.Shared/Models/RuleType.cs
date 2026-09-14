@@ -23,5 +23,16 @@ public enum RuleType
     AllOnOnePerson,
     Even,
     Percent,
-    Shares
+    Shares,
+
+    /// <summary>
+    /// By the receipt on each expense: every line is divided by the rule pinned to it, and
+    /// everybody owes what they had, plus the tax charged on it and their share of the tip.
+    /// </summary>
+    /// <remarks>
+    /// The one kind that names nobody and weighs nothing, so the editor shows no member rows
+    /// for it -- who owes what is on each expense's own bill and is not knowable when the
+    /// rule is written.
+    /// </remarks>
+    Itemized
 }

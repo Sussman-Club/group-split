@@ -9,6 +9,7 @@
 @inject ITransactionsClient TransactionsClient
 @inject ICategoriesClient CategoriesClient
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
+@inject IReceiptCommands Receipts
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
@@ -125,6 +126,9 @@
                 else
                 {
                     <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                        @* The bill is one of the answers in here, not a card above it: an
+                           expense divides by its receipt the same way it divides by any other
+                           rule, and this is the one place the screen asks how it divides. *@
                         <SplitEditor Members="@_members"
                                      Amount="@_model.Amount"
                                      PayerId="@_model.PaidByUserId"
@@ -135,6 +139,12 @@
                                      MemberRules="@_memberRules"
                                      SplitRuleId="@_model.SplitRuleId"
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
+                                     ShowByBill="true"
+                                     Bill="@_receipt"
+                                     BillRuleId="@_billRuleId"
+                                     TransactionId="@Original.Id"
+                                     GroupId="@_model.GroupId"
+                                     BillChanged="@OnBillChangedAsync"
                                      Preview="@_preview"
                                      PreviewError="@_previewError"
                                      Awaiting="@_awaiting"/>
@@ -160,6 +170,39 @@
 
     /// <summary>The row the edit was opened from.</summary>
     [Parameter] public TransactionResponse Original { get; set; } = null!;
+
+    /// <summary>The expense's itemised bill, where it has one. Null for nearly every expense.</summary>
+    private ReceiptResponse? _receipt;
+
+    /// <summary>
+    /// The group's "divide it by the bill" rule.
+    /// </summary>
+    /// <remarks>
+    /// Read off the listing with the rest of the group and not looked up again. A group is
+    /// given exactly one and cannot write a second, so there is nothing to choose between;
+    /// null means a group from before that rule was provisioned, and the option is offered
+    /// but not enabled.
+    /// </remarks>
+    private Guid? _billRuleId;
+
+    /// <summary>
+    /// A line of the bill was pointed at a different rule.
+    /// </summary>
+    /// <remarks>
+    /// The change is already stored -- which rule a line divides by is a fact about the
+    /// receipt, and the component writes it as it is picked. What is left is the consequence:
+    /// if this expense divides by that bill, the shares it comes to have just moved, so the
+    /// preview is asked again. Nothing about the expense itself is saved here.
+    /// </remarks>
+    private async Task OnBillChangedAsync(ReceiptResponse bill)
+    {
+        _receipt = bill;
+
+        if (_model.SplitRuleId == _billRuleId)
+            await RefreshPreviewAsync();
+        else
+            StateHasChanged();
+    }
 
     private MudForm _form = null!;
 
@@ -446,9 +489,20 @@
 
         StateHasChanged();
 
+        // Started here and awaited below: the bill and the preview need nothing from each
+        // other, and one after the other is two waits where the dialog is already on screen.
+        var bill = Receipts.GetAsync(Original.Id);
+
         // The division is on this screen, so it is asked for on the way in rather than on
         // the way into a second step that no longer exists.
         await RefreshPreviewAsync();
+
+        // Null for nearly every expense, which has no bill, and null for a failure just the
+        // same: there is nothing to report either way, and "By its bill" stays disabled.
+        // The option is drawn either way -- see SplitEditor.ShowByBill -- so this arriving
+        // late enables a button rather than adding one.
+        _receipt = await bill;
+        StateHasChanged();
     }
 
     /// <summary>The categories and members of one group, or none for personal.</summary>
@@ -471,13 +525,21 @@
 
             _categories = await categories;
             _members = [.. await members];
-            _memberRules = CreateTransactionDialog.MemberRulesOf(await rules);
+
+            var listed = await rules;
+
+            _memberRules = CreateTransactionDialog.MemberRulesOf(listed);
+            // Off the same listing as the member rules, and for the same reason: the split
+            // control offers "By its bill" and has to name the rule that means, without
+            // reading the definition of every rule the group holds.
+            _billRuleId = listed?.FirstOrDefault(rule => rule.DividesByBill)?.Id;
         }
         else
         {
             _categories = [];
             _members = [];
             _memberRules = [];
+            _billRuleId = null;
         }
     }
 

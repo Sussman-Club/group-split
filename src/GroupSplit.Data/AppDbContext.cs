@@ -252,6 +252,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<PercentSplitRuleVersion>();
         modelBuilder.Entity<SharesSplitRuleVersion>();
 
+        // Not optional, and quiet about it if forgotten: EF discovers a derived type only
+        // where the model names it, so an unregistered kind is not a mapping error -- it is
+        // stored as its base, read back as its base, and dispatched to the wrong handler.
+        // Which looks like a rule that divides evenly for no reason anybody can see. It
+        // carries nothing of its own, so its table is the key and nothing else: what an
+        // itemized rule divides by is on each expense's bill.
+        modelBuilder.Entity<ItemizedSplitRuleVersion>();
+
         modelBuilder.Entity<SoleSplitRuleVersion>(entity =>
         {
             // Required, and required in the table too, the table being this kind's alone: a
@@ -599,6 +607,31 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // One row per place. The resolver reads this index before every insert, so a
             // sync that meets Lidl on forty rows creates one merchant and links forty.
             entity.HasIndex(merchant => merchant.NormalizedName).IsUnique();
+        });
+
+        modelBuilder.Entity<Receipt>(entity =>
+        {
+            entity.Property(r => r.Subtotal).HasPrecision(18, 2);
+            entity.Property(r => r.Tax).HasPrecision(18, 2);
+            entity.Property(r => r.Tip).HasPrecision(18, 2);
+            entity.Property(r => r.Total).HasPrecision(18, 2);
+            entity.HasOne(r => r.Expense).WithOne(e => e.Receipt)
+                .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReceiptItem>(entity =>
+        {
+            entity.Property(i => i.Name).HasMaxLength(128).IsRequired();
+            entity.Property(i => i.NormalizedName).HasMaxLength(128).IsRequired();
+            entity.HasIndex(i => i.NormalizedName);
+            entity.Property(i => i.UnitPrice).HasPrecision(18, 2);
+            entity.Property(i => i.Quantity).HasPrecision(18, 3);
+            entity.Property(i => i.TotalPrice).HasPrecision(18, 2);
+            entity.Property(i => i.TaxAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+            entity.HasOne(i => i.Receipt).WithMany(r => r.Items)
+                .HasForeignKey(i => i.ReceiptId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(i => i.SplitRuleVersion).WithMany()
+                .HasForeignKey(i => i.SplitRuleVersionId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<UserIdentity>(entity =>

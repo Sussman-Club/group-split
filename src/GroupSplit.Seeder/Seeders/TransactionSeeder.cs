@@ -1,5 +1,6 @@
 using GroupSplit.Data;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
@@ -19,6 +20,7 @@ public class TransactionSeeder(
     AppDbContext db,
     ILogger<TransactionSeeder> logger,
     IExpenseSplitter splitter,
+    ISplitRuleFactory ruleFactory,
     TimeProvider clock,
     ISeedDataSource<TransactionSeedDto> source)
     : AppDbContextSeeder<Expense, TransactionSeedDto>(db, source, logger)
@@ -72,6 +74,9 @@ public class TransactionSeeder(
             // without this every list in the demo shows initials and nothing else.
             Merchant = await MerchantAsync(dto.Merchant, ct)
         };
+
+        if (dto.Receipt is { } bill)
+            expense.Receipt = await SeededBill.ForExpense(bill, expense, DbContext, ruleFactory, ct);
 
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.

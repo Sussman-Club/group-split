@@ -72,6 +72,18 @@ For each row, in order:
 Do not pick for them. The three are not interchangeable and the wrong one is not obviously
 wrong afterwards.
 
+## A charge is one expense
+
+One card charge files as one expense. A warehouse run that was the flat's groceries *and* a
+jacket of the payer's is still one charge here: file it where most of it belongs, and correct
+the rest with an ordinary expense. Splitting a charge into several expenses is not something
+the API does, so do not offer it.
+
+What a bill on the expense *does* answer is who owes what within it -- see the `groupsplit`
+skill's `receipts` reference. Type the bill against the expense the row became, not against
+the row.
+
+
 ## How sure a suggestion is
 
 Every candidate carries a `confidence`, and it changes how you should put it -- not whether

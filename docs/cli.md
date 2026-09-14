@@ -37,6 +37,7 @@ has to reach for `curl` and a bearer token to do.
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `archive`, `unarchive`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
+| `receipts` | `show`, `set`, `rule`, `preview`, `divide`, `delete` |
 | `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
 | `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
@@ -51,8 +52,11 @@ arguments, so this table can go stale and that one cannot.
 
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
-`groups settle`. `bank unlink`, `categories delete`, `split-rules delete` and
-`merchants delete` do the same. `merchants update` is the one command whose confirmation is
+`groups settle`. `bank unlink`, `categories delete`, `split-rules delete`,
+`merchants delete` and `receipts delete` do the same. `receipts divide` goes further and
+reads the division itself, so the prompt lists what each person ends up owing rather than
+saying the shares will change -- it is money moving between people's balances, and the
+figures are the thing worth reading before agreeing to them. `merchants update` is the one command whose confirmation is
 conditional on which field is being changed: a merchant belongs to no group, so renaming one
 is felt by every group that has spent there and the prompt carries the count, while giving
 one a logo needs no agreement from anybody.
@@ -710,6 +714,145 @@ Your share of your own dinner is money you already have -- you are owed the rest
 so `64.00` is not a debt and `45.00` is. Both are gross: a settlement is a transfer rather
 than an expense, so nothing here has been paid back yet. Where you actually stand is
 `groupsplit users position`.
+
+## Splitting a bill by its items
+
+For the dinner where nobody ate the same thing. An even split is wrong for it, a percentage
+rule is a guess at it, and typing five amounts by hand means adding the column up yourself
+and then working out everybody's share of the tax and the tip -- which is the part people get
+wrong.
+
+Every line divides by a **saved split rule version**, the same kind of rule a whole expense
+divides by. "Who had what" is therefore written the way the group already writes divisions:
+a rule naming Ana, a rule naming Ana and Omar, a payer rule for the thing the payer is
+standing. `groupsplit split-rules list --group <id>` prints the rules and their current
+version ids, which is what a line names after its `@`.
+
+Transcribe the bill first. The subtotal and the total default to the lines added up and the
+extras added on, so on an ordinary receipt you type the lines and the two figures at the
+bottom:
+
+```bash
+groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
+  --item "Steak=22.00@3f25c1a8-...-444455556666" \
+  --item "Risotto=16.50@9ab77d10-...-111122223333" \
+  --item "Wine=18.00@5c0ffee0-...-777788889999"
+```
+
+A line reads `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>]`. After the `@`
+comes **one** split rule version id, and a plate the table shared is a line naming a rule
+that divides between them -- the bottle above points at a rule naming Ana and Omar. Nothing
+about a line says "these two people" directly: the rule says it, the line points at the rule,
+and the rule is the thing the group can edit and reuse.
+
+A line with no `@` has no rule yet, which is the ordinary state of a bill somebody is still
+working through. `receipts rule` sets one line's rule afterwards, and naming no version
+clears it:
+
+```bash
+groupsplit receipts rule 7c1e... <line-id> --rule-version 3f25c1a8-...-444455556666
+groupsplit receipts rule 7c1e... <line-id>          # back to no rule
+```
+
+An itemized rule cannot be a line's rule -- a bill inside a line of a bill divides nothing --
+and neither can a rule belonging to another group. Both are refused with `RECEIPT_INVALID`.
+
+### Correcting a bill
+
+`receipts set` saves the bill **whole**, so a line the command does not mention is a line that
+has gone -- and its rule goes with it. To fix one price without losing which rule each line
+divides by, name the stored lines by their ids, which `receipts show` prints:
+
+```bash
+groupsplit receipts show 7c1e...
+groupsplit receipts set 7c1e... \
+  --item "a1b2c3d4-...#Steak=24.00@3f25c1a8-...-444455556666" \
+  --item "b2c3d4e5-...#Risotto=16.50@9ab77d10-...-111122223333"
+```
+
+Only text before a `#` that parses as an id is read as one, so a line called `Table #4` is
+still a line called `Table #4`. A line with no id is a new line, which is what writing a bill
+out for the first time looks like. An id that names a line of some other bill, or the same
+line twice, is refused rather than guessed at.
+
+`/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount rather than a
+rate, because an amount is what the till prints -- and rather than a flag, which is what this
+used to be: one tax total was then weighed over the flagged lines by price, which is exact
+only where every taxed line carries the same rate. A supermarket receipt mixing 6% food with
+23% household goods divided wrongly by several euros, with the total still adding up and no
+screen able to say so.
+
+A line carries no tax unless it says so, which is what a restaurant bill under VAT wants: the
+price includes it and the bill charges none on top. `/notax` still reads, and says the same
+thing as saying nothing -- worth typing on a warehouse bill, where the exempt lines are the
+ones you are deliberately marking. The amounts have to come to `--tax`, which the server
+checks. Either side of the `@` reads the same: `Bread=4.00/tax0.92@<version>` and
+`Bread=4.00@<version>/tax0.92` are one line.
+
+Nothing has touched the ledger yet -- `preview` says what the division would be, and `divide`
+is what stores it:
+
+```bash
+groupsplit receipts preview 7c1e...
+groupsplit receipts divide 7c1e...
+```
+
+### How the tax and the tip are shared out
+
+Line by line: each line's tax is that line's, and the tip is spread over the lines in
+proportion to their prices, so every line is divided by its own rule as one amount --
+price, plus its tax, plus its share of the tip. Somebody holding a quarter of the food owes
+a quarter of the tip, and only the tax that was actually charged on what they had.
+
+It falls out of one calculation rather than two, so there is a single rounding and a single
+remainder -- truncated to the cent, with the leftover going to the largest line, exactly as
+in every other division GroupSplit does. `preview` shows both halves per person, the items
+and the total, so the apportioning can be checked rather than taken on trust.
+
+### What it refuses
+
+A bill that does not describe the money it claims to, before dividing anything rather than
+after:
+
+- lines that do not come to the subtotal, per-line tax that does not come to the bill's tax,
+  or a subtotal, tax and tip that do not come to the total (`RECEIPT_DOES_NOT_ADD_UP`)
+- a total that is not the expense's amount (the same code -- the bill has to be the expense's
+  own money)
+- any line with no rule on it (`RECEIPT_ITEMS_MISSING_RULE`, carrying the line ids)
+
+The last one is refused rather than spread over everybody on purpose: quietly charging five
+people for one person's steak is the kind of wrong nobody checks for afterwards. A bill in
+that state is still saved and still readable -- `receipts show` says how many lines are
+waiting for a rule -- it simply will not divide.
+
+A personal expense has nobody to divide lines between, so it takes no bill at all
+(`SPLIT_ON_A_PERSONAL_EXPENSE`), and somebody who has left the group can still read the bill
+on an expense they paid for but no longer change it (`TRANSACTION_GROUP_LEFT`).
+
+### Making it a group's default
+
+Every group is given one "divide it by the bill" rule and cannot write a second: the rule
+holds no settings for a second to differ by, so two of them would be one division under two
+names. It is in the listing like any other, and a category points at it the way it points at
+any other division:
+
+```bash
+groupsplit split-rules list --group <id>          # the given one is named "Divide by the bill"
+groupsplit categories update <category-id> --split-rule <rule-id>
+```
+
+There is no `--itemized` on `split-rules create`; asking for one is refused with
+`SPLIT_RULE_BILL_IS_PROVISIONED`, and the refusal names the rule the group already holds.
+
+An expense filed under that category with a receipt on it divides by the receipt, and records
+which version of the rule did it. One with no receipt is refused by name -- `RECEIPT_NOT_FOUND`
+-- rather than quietly falling back to an even split, which is the thing somebody itemising a
+dinner was trying to avoid.
+
+An expense under any other rule can still be divided by its bill: `receipts divide` stores
+the shares the lines come to as stated amounts, the same as typing them, and the expense goes
+on being an expense that divides by its own rule.
+
 
 ## Editing an expense
 

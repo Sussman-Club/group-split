@@ -5,8 +5,8 @@ using GroupSplit.Shared;
 namespace GroupSplit.Cli.Commands;
 
 /// <summary>
-/// The four ways a split rule can divide, as command-line flags -- five flags, because the
-/// one that names a person offers to look your own id up.
+/// The ways a split rule can divide, as command-line flags -- one more flag than there are
+/// kinds, because the one that names a person offers to look your own id up.
 /// </summary>
 /// <remarks>
 /// On the wire the division is one polymorphic object told apart by <c>$type</c>, which a
@@ -54,6 +54,12 @@ public sealed class DefinitionOptions
         Description = "Divide by whole shares, as <user-id>=<shares>. Repeatable.",
         AllowMultipleArgumentsPerToken = true
     };
+
+    // No --itemized. "Divide it by the bill" is the one division nobody writes: every group
+    // is given exactly one and the API refuses a second, because the rule holds no settings
+    // for a second to differ by -- what it divides by lives on the receipt, one line at a
+    // time. The group's own is in `groupsplit rules list`, and an expense is pointed at it
+    // like any other rule. A flag here would be one the server answers 409 to every time.
 
     public void AddTo(Command command)
     {
@@ -129,6 +135,7 @@ public static class Definitions
         EvenSplitRuleDto { Among.Count: 0 } => "evenly, between the whole group",
         EvenSplitRuleDto even => $"evenly, between {even.Among.Count} named members",
         SoleSplitRuleDto => "not shared: all of it is for one member",
+        ItemizedSplitRuleDto => "by the bill: what each person had, plus its tax and a share of the tip",
         PercentSplitRuleDto => "by percentage",
         SharesSplitRuleDto => "by whole shares",
         _ => definition.GetType().Name

@@ -42,6 +42,11 @@ public static class SplitRuleExtensions
                 ? "All on one person"
                 : $"All on {Named(names, sole.UserId)}",
 
+            // Names nobody, and cannot: who owes what is on each expense's own bill rather
+            // than on the rule. Without this it fell through to the "divides evenly" default
+            // below, which is the one thing an itemised rule does not do.
+            ItemizedSplitRuleDto => "By the bill on each expense",
+
             EvenSplitRuleDto { Among.Count: 0 } => "Evenly, between everyone in the group",
 
             EvenSplitRuleDto even => names is null
@@ -79,6 +84,9 @@ public static class SplitRuleExtensions
                 string.Join(" : ", Ordered(shares.Shares).Select(held => held.Value.ToString())),
 
             SoleSplitRuleDto => "all on one",
+
+            // There is no ratio to show: it is a different one on every expense.
+            ItemizedSplitRuleDto => "by the bill",
 
             _ => "evenly"
         };

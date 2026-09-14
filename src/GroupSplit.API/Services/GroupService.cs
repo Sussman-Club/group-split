@@ -182,7 +182,8 @@ public class GroupService(
     AppDbContext context,
     IGroupParticipants participants,
     ISplitRuleRevisions revisions,
-    IMemberSplitRules memberRules) : IGroupService
+    IMemberSplitRules memberRules,
+    IBillSplitRule billRule) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -214,6 +215,11 @@ public class GroupService(
         // The first member's own rule: all of it is for them. Everybody who joins later
         // gets theirs from IGroupJoiner, which is the only other way into a group.
         await memberRules.EnsureFor(group, user, cancellationToken);
+
+        // And the one the group keeps for dividing an expense by its own receipt. One per
+        // group, given rather than written, because it holds no settings for a second one
+        // to differ by.
+        await billRule.EnsureFor(group, cancellationToken);
 
         return group;
     }

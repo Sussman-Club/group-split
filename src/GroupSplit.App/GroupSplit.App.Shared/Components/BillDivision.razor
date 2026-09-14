@@ -1,0 +1,356 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Commands
+@namespace GroupSplit.App.Shared.Components
+@inject IReceiptCommands Bills
+@inject ISplitRuleCommands Rules
+@inject IDialogService Dialogs
+
+@*
+    The bill, as an answer to "how is this divided".
+
+    Not a screen and not a dialog: this is the body of one option in the split control, and it
+    sits where every other answer to that question sits. The bill used to be reached through a
+    card in the middle of the form that opened a second dialog on top of the first -- so the
+    one question the expense editor exists to ask had its fourth answer behind a door.
+
+    What is saved when is the thing to be careful about, and it divides cleanly. Which rule a
+    line divides by is a fact about the receipt, and it is written as it is picked, the way a
+    correction to the bill itself would be. Whether this expense divides by that bill is a
+    fact about the expense, and it is saved with everything else when somebody presses Save.
+    So there is no Apply button here, and no second thing that moves money: choosing this
+    option and saving is the whole of it.
+*@
+
+<div class="gs-divide">
+    @if (_loading)
+    {
+        <MudText Typo="Typo.caption" role="status">Reading the group's split rules…</MudText>
+    }
+    else if (!_ready)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true">
+            Could not load the split rules to divide these lines by.
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Load">Try again</MudButton>
+        </MudAlert>
+    }
+    else
+    {
+        @*
+            Whether dividing by this bill can work at all, said before the lines rather than
+            found out at the Save button. Two things stop it and they are different problems,
+            so they are not one message: a line nobody has given a rule, and paper that does
+            not come to what the expense says was spent.
+        *@
+        @if (Mismatch is { } gap)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                The bill comes to <strong>@Receipt.Total.ToMoney()</strong> and the expense says
+                <strong>@Amount.ToMoney()</strong>. They have to match before it can be divided
+                this way &mdash; @(gap > 0 ? "the bill is over by " : "the bill is short by ")<strong>@Math.Abs(gap).ToMoney()</strong>.
+            </MudAlert>
+        }
+
+        <div class="gs-divide-progress @(Wanting > 0 ? "is-wanting" : "is-done")" role="status">
+            <MudIcon Icon="@(Wanting > 0 ? Icons.Material.Rounded.RuleFolder : Icons.Material.Rounded.TaskAlt)"
+                     Size="Size.Small" />
+            <span>
+                @if (Wanting > 0)
+                {
+                    <strong>@Wanting of @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "line" : "lines")</strong>
+                    <text> still to answer for.</text>
+                }
+                else
+                {
+                    <strong>Every line has a rule.</strong>
+                }
+            </span>
+            <span class="gs-divide-progress-total gs-num ms-auto">@Receipt.Total.ToMoney()</span>
+        </div>
+
+        @* A long bill is searched, not read. The one search worth offering on a bill being
+           divided is "show me what is not done yet", and both appear only where they would
+           do something. *@
+        @if (Receipt.Items.Count >= BillSheet.Long || Wanting > 0)
+        {
+            <div class="gs-slip-tools">
+                @if (Receipt.Items.Count >= BillSheet.Long)
+                {
+                    <MudTextField T="string" @bind-Value="_filter" @bind-Value:after="StateHasChanged"
+                                  Immediate="true" DebounceInterval="150"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Placeholder="Find a line" Clearable="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Rounded.Search"
+                                  aria-label="Find a line on this bill" />
+                }
+
+                @* aria-pressed as a string: Blazor drops an attribute whose value is false,
+                   and an absent aria-pressed is a button with no state rather than one that
+                   is off. *@
+                @if (Wanting > 0)
+                {
+                    <MudButton Variant="@(_onlyWanting ? Variant.Filled : Variant.Text)"
+                               Color="@(_onlyWanting ? Color.Primary : Color.Default)"
+                               Size="Size.Small" Class="gs-btn-pill"
+                               aria-pressed="@(_onlyWanting ? "true" : "false")"
+                               OnClick="@(() => _onlyWanting = !_onlyWanting)">
+                        @Wanting without a rule
+                    </MudButton>
+                }
+            </div>
+        }
+
+        <ul class="gs-divide-lines">
+            @foreach (var item in Showing)
+            {
+                <li class="gs-divide-line @(item.SplitRuleVersionId is null ? "is-wanting" : "")" @key="item.Id">
+                    <div class="gs-divide-line-head">
+                        <span class="gs-divide-line-name">
+                            @if (item.Quantity != 1)
+                            {
+                                <span class="gs-divide-line-qty">@Trimmed(item.Quantity) ×</span>
+                            }
+                            @item.Name
+                        </span>
+                        <span class="gs-divide-line-price gs-num">@item.TotalPrice.ToMoney()</span>
+                    </div>
+
+                    @* The line's own tax, because it divides with the line and not at the
+                       foot: two rates on one bill are two amounts riding two different rules. *@
+                    @if (item.TaxAmount != 0)
+                    {
+                        <span class="gs-divide-line-note">plus @item.TaxAmount.ToMoney() tax</span>
+                    }
+
+                    @* No label: the item name above is the label, and MudBlazor's would print
+                       it a second time inside the control. ToStringFunc, because the options
+                       load after the first render and MudSelect works its display text out
+                       from the child items it had at the time -- without it every line showed
+                       the raw version id it was holding. *@
+                    <MudSelect T="Guid?" Value="item.SplitRuleVersionId"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Placeholder="Choose a split rule"
+                               ToStringFunc="@NameOfRule"
+                               aria-label="@($"How {item.Name} is split")"
+                               ValueChanged="@(value => SetRule(item.Id, value))"
+                               Disabled="_busy" Clearable="true">
+                        @* The version this line is pinned to, where the rule has moved on
+                           since: it is not in the group's list any more, and without it the
+                           select shows a blank for a line that is in fact answered. *@
+                        @if (item.SplitRuleVersionId is { } held && _rules.All(rule => rule.VersionId != held))
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)held)">@item.SplitRuleName (as saved)</MudSelectItem>
+                        }
+
+                        @foreach (var rule in _rules)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)rule.VersionId)">@rule.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </li>
+            }
+        </ul>
+
+        @if (Showing.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Align="Align.Center">No line on this bill matches.</MudText>
+        }
+
+        <dl class="gs-divide-recap">
+            <div><dt>Items</dt><dd class="gs-num">@Receipt.Subtotal.ToMoney()</dd></div>
+            @if (Receipt.Tax != 0)
+            {
+                <div><dt>Tax</dt><dd class="gs-num">@Receipt.Tax.ToMoney()</dd></div>
+            }
+            @if (Receipt.Tip != 0)
+            {
+                <div><dt>Tip</dt><dd class="gs-num">@Receipt.Tip.ToMoney()</dd></div>
+            }
+            <div class="is-total"><dt>Total</dt><dd class="gs-num">@Receipt.Total.ToMoney()</dd></div>
+        </dl>
+
+        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                   StartIcon="@Icons.Material.Rounded.Add"
+                   OnClick="CreateRule" Disabled="_busy">
+            New split rule for this group
+        </MudButton>
+
+        @* One sentence per element. Razor keeps the source's line breaks and indentation, so
+           a sentence wrapped across two lines is printed with the wrap inside it. *@
+        <MudText Typo="Typo.caption">A rule divides its line's price, the tax on it, and its share of the tip.</MudText>
+        <MudText Typo="Typo.caption">Save the expense to divide it this way.</MudText>
+    }
+</div>
+
+@code {
+    /// <summary>The bill being divided by.</summary>
+    [Parameter, EditorRequired] public ReceiptResponse Receipt { get; set; } = null!;
+
+    /// <summary>The expense the bill belongs to, so a line's rule can be written to it.</summary>
+    [Parameter, EditorRequired] public Guid TransactionId { get; set; }
+
+    /// <summary>The group whose rules the lines divide by.</summary>
+    [Parameter] public Guid? GroupId { get; set; }
+
+    /// <summary>
+    /// What the expense says was spent, which the bill has to agree with.
+    /// </summary>
+    /// <remarks>
+    /// The division refuses outright when the two differ -- see ItemizedSplitRuleHandler,
+    /// which raises ReceiptDoesNotAddUp -- and the two drift apart easily: the amount is
+    /// edited, or a linked bank row was recorded for a different figure. Said here rather
+    /// than met at the Save button.
+    /// </remarks>
+    [Parameter] public decimal Amount { get; set; }
+
+    /// <summary>
+    /// The bill as it stands after a line was pointed somewhere else.
+    /// </summary>
+    /// <remarks>
+    /// Raised rather than kept, because the counts the caller shows are read off the same
+    /// receipt and the API answers every rule change with the whole of it. An EventCallback
+    /// and not an Action: the caller re-reads its preview in response, which is async.
+    /// </remarks>
+    [Parameter] public EventCallback<ReceiptResponse> ReceiptChanged { get; set; }
+
+    private readonly List<SplitRuleDetailsResponse> _rules = [];
+    private bool _busy;
+    private bool _loading;
+    private bool _ready;
+    private string? _filter;
+    private bool _onlyWanting;
+
+    /// <summary>How many lines are still unanswered.</summary>
+    private int Wanting => Receipt.Items.Count(item => item.SplitRuleVersionId is null);
+
+    /// <summary>
+    /// What the bill is over or under the expense by, or null when they agree.
+    /// </summary>
+    private decimal? Mismatch => Receipt.Total == Amount ? null : Receipt.Total - Amount;
+
+    /// <summary>
+    /// The lines being worked on: the bill, narrowed by whatever the tools are set to.
+    /// </summary>
+    /// <remarks>
+    /// Not folded, unlike the printed slip. Two identical jackets are one row to read and two
+    /// rows to answer -- they are separately assignable, and folding them would offer one
+    /// control over two lines that could legitimately divide differently.
+    /// </remarks>
+    private IReadOnlyList<ReceiptItemResponse> Showing
+    {
+        get
+        {
+            var wanted = _filter?.Trim();
+
+            return
+            [
+                .. Receipt.Items
+                    .Where(item => !_onlyWanting || item.SplitRuleVersionId is null)
+                    .Where(item => string.IsNullOrEmpty(wanted)
+                                   || item.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+            ];
+        }
+    }
+
+    /// <summary>
+    /// The rules to divide lines by, read when this option is first opened.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the dialog above, and that is the point of the lazy read: every
+    /// rule's definition is a round trip of its own, and an expense with no bill -- which is
+    /// nearly all of them -- must not pay for them. This component only exists while somebody
+    /// is actually dividing by a bill.
+    /// </remarks>
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        if (GroupId is not { } groupId || _loading) return;
+
+        _loading = true;
+        _ready = false;
+
+        try
+        {
+            var listed = await Rules.ForGroupAsync(groupId);
+            if (listed is null) return;
+
+            var details = await Task.WhenAll(listed.Select(rule => Rules.GetAsync(rule.Id)));
+            if (details.Any(detail => detail is null)) return;
+
+            _rules.Clear();
+            // Not the bill rule itself: a line of a bill dividing by "divide by the bill" is
+            // the expense pointing at itself.
+            _rules.AddRange(details
+                .OfType<SplitRuleDetailsResponse>()
+                .Where(rule => rule.Definition is not ItemizedSplitRuleDto));
+
+            _ready = true;
+        }
+        finally { _loading = false; }
+    }
+
+    /// <summary>
+    /// What to call the rule a line divides by: the name of one the group holds now, or the
+    /// name the bill itself carries for a version the rule has since moved past.
+    /// </summary>
+    private string NameOfRule(Guid? versionId) =>
+        versionId is not { } held
+            ? "Choose a split rule"
+            : _rules.FirstOrDefault(rule => rule.VersionId == held)?.Name
+              ?? Receipt.Items.FirstOrDefault(item => item.SplitRuleVersionId == held)?.SplitRuleName
+              ?? "A saved version of a rule";
+
+    /// <summary>
+    /// Points one line at a rule, or stops pointing it anywhere.
+    /// </summary>
+    /// <remarks>
+    /// Written as it is picked. A line's rule is a fact about the receipt -- the same kind of
+    /// thing as the price printed beside it -- and the expense's own division does not move
+    /// until the expense is saved.
+    /// </remarks>
+    private async Task SetRule(Guid itemId, Guid? versionId)
+    {
+        if (!_ready || _busy) return;
+
+        _busy = true;
+
+        try
+        {
+            if (await Bills.SetRuleAsync(TransactionId, itemId, versionId) is { } bill)
+            {
+                Receipt = bill;
+
+                // Answering the last one takes the toggle away with it, and a filter left
+                // latched on with nothing to show is a screen saying the bill is empty.
+                if (Wanting == 0)
+                    _onlyWanting = false;
+
+                await ReceiptChanged.InvokeAsync(bill);
+            }
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task CreateRule()
+    {
+        if (!_ready || _busy || GroupId is not { } groupId) return;
+
+        var dialog = await Dialogs.ShowAsync<CreateRuleDialog>("New item split rule",
+            new DialogParameters<CreateRuleDialog> { { d => d.GroupId, groupId } });
+
+        await dialog.Result;
+
+        await Load();
+    }
+
+    /// <summary>
+    /// A count without its trailing zeros: a bill says "2", not "2.000", and says "0.25" when
+    /// that is what was weighed.
+    /// </summary>
+    private static string Trimmed(decimal quantity) =>
+        quantity == decimal.Truncate(quantity)
+            ? decimal.Truncate(quantity).ToString()
+            : quantity.ToString("0.###");
+}

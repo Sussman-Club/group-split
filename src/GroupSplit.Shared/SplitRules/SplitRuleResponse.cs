@@ -14,8 +14,19 @@ namespace GroupSplit.Shared;
 /// who it is for; the listing carries it because it carries no definition, and a client
 /// offering "all for Ana" would otherwise have to read every rule to find Ana's.
 /// </param>
+/// <param name="DividesByBill">
+/// Whether this is the rule that defers to the expense's own receipt, one line at a time.
+/// </param>
+/// <remarks>
+/// Carried for the same reason as <paramref name="AllForUserId"/> and no other: a group holds
+/// exactly one of these and a client offering "divide it by the bill" has to find it without
+/// reading the definition of every rule the group has. It is a fact about the rule, not a
+/// fact about any expense -- whether an expense actually divides by its bill is answered by
+/// <c>ReceiptResponse.DividesItsExpense</c>.
+/// </remarks>
 public record SplitRuleResponse(
-    Guid Id, Guid GroupId, string Name, bool BuiltIn = false, Guid? AllForUserId = null);
+    Guid Id, Guid GroupId, string Name, bool BuiltIn = false, Guid? AllForUserId = null,
+    bool DividesByBill = false);
 
 /// <summary>A split rule with the division it stands for now.</summary>
 /// <param name="VersionId">

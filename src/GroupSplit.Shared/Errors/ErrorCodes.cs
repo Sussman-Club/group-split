@@ -37,6 +37,14 @@ public static class ErrorCodes
     public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
     public const string MerchantNotFound = "MERCHANT_NOT_FOUND";
 
+    /// <summary>
+    /// The expense has no itemised bill attached. Says the same thing whether the expense
+    /// exists and has no receipt or the caller cannot see the expense at all.
+    /// </summary>
+    public const string ReceiptNotFound = "RECEIPT_NOT_FOUND";
+
+    public const string ReceiptItemNotFound = "RECEIPT_ITEM_NOT_FOUND";
+
     // ---- Forbidden (403) ----------------------------------------------------------------
 
     public const string GroupCannotRemoveSelf = "GROUP_CANNOT_REMOVE_SELF";
@@ -121,6 +129,17 @@ public static class ErrorCodes
     public const string SplitRuleKindFixed = "SPLIT_RULE_KIND_FIXED";
 
     /// <summary>
+    /// Somebody tried to write a second "divide it by the bill" rule. Every group is given
+    /// exactly one and it is not written by hand, because it holds no settings for a second
+    /// one to differ by: what it divides by lives on the receipt, one line at a time, so two
+    /// of them are the same rule under two names. The names were the only thing a second one
+    /// ever bought, and they cost more than they were worth -- a client offering "divide it
+    /// by the bill" had to pick among indistinguishable rules and got it wrong. The refusal
+    /// names the one the group already holds, so a caller can use it instead.
+    /// </summary>
+    public const string SplitRuleBillIsProvisioned = "SPLIT_RULE_BILL_IS_PROVISIONED";
+
+    /// <summary>
     /// An expense named a rule belonging to some other group, or named one at all while
     /// having no group to divide between. Says the same thing whether the rule exists or
     /// not, so nothing is learned about another group's rules by guessing ids.
@@ -146,6 +165,14 @@ public static class ErrorCodes
     /// </summary>
     public const string GroupInvitationNoName = "GROUP_INVITATION_NO_NAME";
     public const string SplitsInvalid = "SPLITS_INVALID";
+
+
+    /// <summary>
+    /// A receipt was sent that could not describe a bill at all -- no items, a line with no
+    /// name or a negative price, or a claim with no share in it. Distinct from
+    /// <see cref="ReceiptDoesNotAddUp"/>, which is a well-formed bill whose figures disagree.
+    /// </summary>
+    public const string ReceiptInvalid = "RECEIPT_INVALID";
     public const string SplitOnAPersonalExpense = "SPLIT_ON_A_PERSONAL_EXPENSE";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";
 
@@ -161,7 +188,25 @@ public static class ErrorCodes
     // ---- be carried out, because acting on it would break an invariant ------------------
 
     public const string SplitsDoNotSumToAmount = "SPLITS_DO_NOT_SUM_TO_AMOUNT";
+
     public const string BankTransactionIsCredit = "BANK_TRANSACTION_IS_CREDIT";
+
+    /// <summary>
+    /// A receipt's figures contradict each other: the subtotal, tax and tip do not come to
+    /// the total, the items do not come to the subtotal, or the total is not what the expense
+    /// says was paid. Carries the figures it compared, so a client can show which half is
+    /// wrong rather than making somebody add the column up.
+    /// </summary>
+    public const string ReceiptDoesNotAddUp = "RECEIPT_DOES_NOT_ADD_UP";
+
+
+    /// <summary>
+    /// Lines on the bill name no split rule, so it cannot be divided yet. Refused rather
+    /// than spread over everybody: a line somebody forgot and one genuinely shared by the
+    /// table look identical from here, and charging five people for one person's steak is
+    /// the kind of wrong nobody checks for afterwards. Carries the ids of those lines.
+    /// </summary>
+    public const string ReceiptItemsMissingRule = "RECEIPT_ITEMS_MISSING_RULE";
 
     // ---- Bad gateway (502): somebody else's service is in the path and did not answer ---
 

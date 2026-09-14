@@ -101,7 +101,7 @@ public class TransactionSeederTest
     /// to anything.
     /// </summary>
     private sealed class Probe(AppDbContext db, TimeProvider clock, ISeedDataSource<TransactionSeedDto> source)
-        : TransactionSeeder(db, NullLogger<TransactionSeeder>.Instance, null!, clock, source)
+        : TransactionSeeder(db, NullLogger<TransactionSeeder>.Instance, null!, null!, clock, source)
     {
         public DateTimeOffset On(TransactionSeedDto dto) => When(dto);
     }

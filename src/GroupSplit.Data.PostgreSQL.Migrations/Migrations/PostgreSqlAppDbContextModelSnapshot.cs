@@ -509,6 +509,93 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("PendingBankLink");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ExpenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("Tax")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("Tip")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseId")
+                        .IsUnique();
+
+                    b.ToTable("Receipt");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SplitRuleVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TaxAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.HasIndex("SplitRuleVersionId");
+
+                    b.ToTable("ReceiptItem");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -760,6 +847,13 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("DataProtectionKeys");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.ItemizedSplitRuleVersion", b =>
+                {
+                    b.HasBaseType("GroupSplit.Data.Entities.SplitRuleVersion");
+
+                    b.ToTable("ItemizedSplitRuleVersion");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SoleSplitRuleVersion", b =>
                 {
                     b.HasBaseType("GroupSplit.Data.Entities.SplitRuleVersion");
@@ -988,6 +1082,35 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
+                        .WithOne("Receipt")
+                        .HasForeignKey("GroupSplit.Data.Entities.Receipt", "ExpenseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptItem", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Receipt", "Receipt")
+                        .WithMany("Items")
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.SplitRuleVersion", "SplitRuleVersion")
+                        .WithMany()
+                        .HasForeignKey("SplitRuleVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Receipt");
+
+                    b.Navigation("SplitRuleVersion");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
@@ -1097,6 +1220,15 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.ItemizedSplitRuleVersion", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.SplitRuleVersion", null)
+                        .WithOne()
+                        .HasForeignKey("GroupSplit.Data.Entities.ItemizedSplitRuleVersion", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SoleSplitRuleVersion", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.SplitRuleVersion", null)
@@ -1191,6 +1323,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Transactions");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.Navigation("Versions");
@@ -1217,6 +1354,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.WeightedSplitRuleVersion", b =>
                 {
                     b.Navigation("Participants");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.Expense", b =>
+                {
+                    b.Navigation("Receipt");
                 });
 #pragma warning restore 612, 618
         }

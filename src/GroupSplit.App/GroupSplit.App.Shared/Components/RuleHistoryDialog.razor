@@ -149,7 +149,16 @@
                                             <span class="gs-version-count">What changed</span>
                                             @foreach (var delta in deltas)
                                             {
-                                                <span class="gs-delta @delta.Class">@delta.Text</span>
+                                                @* Two spans, so the chip may wrap between
+                                                   them and nowhere else: a name is allowed to
+                                                   break across lines, "31% → 30.6%" is not. *@
+                                                <span class="gs-delta @delta.Class">
+                                                    @if (delta.Who is { Length: > 0 })
+                                                    {
+                                                        <span class="who">@delta.Who</span>
+                                                    }
+                                                    <span class="change">@delta.Change</span>
+                                                </span>
                                             }
                                         </span>
                                     </div>
@@ -316,7 +325,15 @@
     /// names nobody -- evenly between the whole group, or all on whoever paid -- there is no
     /// per-person comparison to make and the shapes are named instead.
     /// </remarks>
-    private IReadOnlyList<(string Text, string Class)> Deltas(
+    /// <summary>
+    /// What moved between two versions: who, by how much, and which way.
+    /// </summary>
+    /// <remarks>
+    /// The person and the figures are kept apart rather than joined into one string, because
+    /// the chip that prints them has to be able to wrap between the two on a phone and must
+    /// never wrap inside the figures.
+    /// </remarks>
+    private IReadOnlyList<(string Who, string Change, string Class)> Deltas(
         SplitRuleVersionResponse version, SplitRuleVersionResponse? older)
     {
         if (older is null) return [];
@@ -324,16 +341,16 @@
         // Per-person, so it needs the people. Without them every chip would name the same
         // stranger twice over; the shapes below still say what moved.
         if (_names is null)
-            return [(older.Definition.Ratio() + " → " + version.Definition.Ratio(), "")];
+            return [("", older.Definition.Ratio() + " → " + version.Definition.Ratio(), "")];
 
         var now = version.Definition.Weights(_names);
         var before = older.Definition.Weights(_names);
 
         if (now.Count == 0 || before.Count == 0)
-            return [(older.Definition.Ratio() + " → " + version.Definition.Ratio(), "")];
+            return [("", older.Definition.Ratio() + " → " + version.Definition.Ratio(), "")];
 
         var was = before.ToDictionary(weight => weight.UserId, weight => weight.Share);
-        var moved = new List<(string, string)>();
+        var moved = new List<(string, string, string)>();
 
         foreach (var weight in now)
         {
@@ -348,14 +365,15 @@
             // transition there is after a departure -- was drawn in clay, the colour that
             // means a share was cut.
             moved.Add((
-                $"{weight.Name} {Percent(from)} → {Percent(to)}",
+                weight.Name,
+                $"{Percent(from)} → {Percent(to)}",
                 (to ?? 0m) > (from ?? 0m) ? "is-up" : "is-down"));
         }
 
         // Somebody the older version named and this one does not: their share went to zero,
         // which is the largest move of the lot and the one most worth saying.
         foreach (var gone in before.Where(weight => now.All(held => held.UserId != weight.UserId)))
-            moved.Add(($"{gone.Name} {Percent(gone.Share)} → none", "is-down"));
+            moved.Add((gone.Name, $"{Percent(gone.Share)} → none", "is-down"));
 
         return moved;
     }

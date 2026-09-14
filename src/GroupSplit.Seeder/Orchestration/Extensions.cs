@@ -56,6 +56,7 @@ public static class Extensions
             // so without this the demo data is the one place the expense dialog cannot say
             // "this one was Ana's".
             builder.Services.AddScoped<IMemberSplitRules, MemberSplitRules>();
+            builder.Services.AddScoped<IBillSplitRule, BillSplitRule>();
             builder.AddSeeder<MemberSplitRuleSeeder>();
 
             builder.AddSeeder<CategorySeeder>();
