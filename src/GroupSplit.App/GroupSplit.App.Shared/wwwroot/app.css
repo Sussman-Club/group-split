@@ -724,6 +724,35 @@ html:not([data-gs-ready]) .gs-group-card {
     white-space: nowrap;
 }
 
+/*
+    Four options do not fit across a phone. "Automatically" alone is a third of a 375px screen,
+    and equal columns -- which the thumb requires -- multiply that by four: the row overflowed
+    and clipped "By hand" to "By hanc".
+
+    Two rows of two instead, and the sliding thumb gives way to a lit segment. Its position is
+    a one-dimensional sum, `i / n` along the track, and there is no honest place for that on a
+    grid; a background on the chosen button says the same thing without lying about where it
+    is. Only where there are four -- the create dialog's three still slide.
+*/
+@media (max-width: 560px) {
+    .gs-seg.gs-seg-labels.is-wide {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        gap: 3px;
+        border-radius: var(--gs-radius);
+    }
+
+    .gs-seg-labels.is-wide .gs-seg-thumb {
+        display: none;
+    }
+
+    .gs-seg-labels.is-wide .gs-seg-btn.active {
+        background: var(--gs-surface-2);
+        box-shadow: var(--gs-shadow-sm);
+    }
+}
+
 .gs-seg-btn:disabled {
     cursor: default;
     opacity: .5;
@@ -2500,18 +2529,37 @@ html:not([data-gs-ready]) .gs-group-card {
     What one edit moved, per person. Clay for a share that fell and teal for one that rose,
     which is the same reading as every other figure in the app.
 */
+/*
+    One person's share moving. It was a single nowrap string -- "Loraine Monteagudo 31% ->
+    30.6%" -- which is wider than a phone inside a dialog, and a chip that cannot wrap and
+    cannot shrink runs off the edge instead.
+
+    So the name may wrap and the figures may not: "31% -> 30.6%" split across two lines reads
+    as two different numbers, and the arrow orphaned on a line of its own reads as nothing.
+*/
 .gs-delta {
     display: inline-flex;
     align-items: center;
-    height: 22px;
-    padding: 0 9px;
+    flex-wrap: wrap;
+    gap: 0 4px;
+    max-width: 100%;
+    min-height: 22px;
+    padding: 2px 9px;
     border-radius: var(--gs-radius-pill);
     font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    line-height: 1.5;
     background: var(--gs-surface-3);
     color: var(--gs-muted);
+}
+
+.gs-delta .who {
+    overflow-wrap: anywhere;
+}
+
+.gs-delta .change {
+    white-space: nowrap;
 }
 
 .gs-delta.is-up {

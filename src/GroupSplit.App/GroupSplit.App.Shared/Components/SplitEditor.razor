@@ -47,7 +47,7 @@
            switcher established this shape and a second, differently-drawn two-option
            selector in the same product reads as a component from somewhere else. The
            filled thumb says which side is chosen, so no tick is needed beside it. *@
-        <div class="gs-seg gs-seg-labels"
+        <div class="gs-seg gs-seg-labels @(Options > 3 ? "is-wide" : "")"
              role="radiogroup"
              aria-label="How to divide it"
              style="--gs-seg-n: @Options; --gs-seg-i: @Position">
