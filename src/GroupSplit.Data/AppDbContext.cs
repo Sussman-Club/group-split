@@ -638,6 +638,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         {
             entity.Property(i => i.Name).HasMaxLength(128).IsRequired();
             entity.Property(i => i.NormalizedName).HasMaxLength(128).IsRequired();
+            entity.Property(i => i.Description).HasMaxLength(1000);
             entity.HasIndex(i => i.NormalizedName);
             entity.Property(i => i.UnitPrice).HasPrecision(18, 2);
             entity.Property(i => i.Quantity).HasPrecision(18, 3);

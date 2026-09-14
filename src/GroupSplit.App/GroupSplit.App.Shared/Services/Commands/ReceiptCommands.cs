@@ -10,6 +10,16 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
         catch (OperationCanceledException) { throw; }
         catch { return null; }
     }
+    public async Task<ReceiptResponse?> SaveAsync(Guid transactionId, SaveReceiptRequest request, CancellationToken ct = default)
+    {
+        ReceiptResponse? result = null;
+        await errors.TryAsync(async () =>
+        {
+            result = await receipts.SaveReceiptAsync(transactionId, request, ct);
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not save the receipt.");
+        return result;
+    }
     public async Task<ReceiptResponse?> SetRuleAsync(Guid transactionId, Guid itemId, Guid? versionId)
     {
         ReceiptResponse? result = null;

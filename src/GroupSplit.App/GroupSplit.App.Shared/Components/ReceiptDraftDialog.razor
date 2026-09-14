@@ -1,0 +1,203 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Commands
+@namespace GroupSplit.App.Shared.Components
+@inject IReceiptCommands Receipts
+
+<MudDialog Class="gs-sheet">
+    <TitleContent>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Review receipt</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="gs-stack" style="gap: 16px">
+            <MudAlert Severity="Severity.Info" Dense="true">
+                Read the extracted values before saving. OCR can misread a price or miss a line;
+                you will choose who had each item after this step.
+            </MudAlert>
+
+            @if (!string.IsNullOrWhiteSpace(_validationError))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_validationError</MudAlert>
+            }
+
+            <div class="gs-grid-2">
+                <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                <MudNumericField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                <MudNumericField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                <MudNumericField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
+                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+            </div>
+
+            <div class="gs-muted" style="font-size: .85rem">
+                Recorded expense amount: <strong>@ExpenseAmount.ToMoney()</strong>
+            </div>
+
+            @if (_total != ExpenseAmount)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    The receipt total is @(_total < ExpenseAmount ? "short" : "over") by
+                    @Math.Abs(ExpenseAmount - _total).ToMoney(). It must match the expense amount.
+                    Adjust the receipt figures, or correct the expense amount, before saving.
+                    Save is disabled until the totals match.
+                </MudAlert>
+            }
+
+            <div class="gs-inline" style="justify-content: space-between; align-items: center">
+                <div>
+                    <h3 style="margin: 0; font-size: 1rem">Items</h3>
+                    <span class="gs-muted" style="font-size: .8rem">Edit anything the receipt reader got wrong.</span>
+                </div>
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
+                           OnClick="AddItem">Add item</MudButton>
+            </div>
+
+            @for (var index = 0; index < _items.Count; index++)
+            {
+                var item = _items[index];
+                <div class="gs-stack" @key="item.Key" style="gap: 8px; padding: 12px; border: 1px solid var(--gs-line); border-radius: 8px">
+                    <div class="gs-inline" style="justify-content: space-between; gap: 8px">
+                        <MudTextField @bind-Value="item.Name" Label="Item" Variant="Variant.Outlined" Immediate="true"
+                                      style="flex: 1" />
+                        <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline" Color="Color.Default"
+                                       aria-label="Remove item" OnClick="@(() => RemoveItem(item))" />
+                    </div>
+                    <div class="gs-grid-2">
+                        <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
+                                         Format="N3" HideSpinButtons="true" />
+                        <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                        <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                        <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                    </div>
+                </div>
+            }
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
+                   Disabled="@(_saving || _total != ExpenseAmount)" OnClick="SaveAsync">
+            @(_saving ? "Saving…" : "Save receipt")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter, EditorRequired] public Guid TransactionId { get; set; }
+    [Parameter, EditorRequired] public decimal ExpenseAmount { get; set; }
+    [Parameter, EditorRequired] public ReceiptTranscriptionResponse Transcription { get; set; } = null!;
+
+    private decimal _subtotal;
+    private decimal _tax;
+    private decimal _tip;
+    private decimal _total;
+    private List<EditableLine> _items = [];
+    private bool _saving;
+    private string? _validationError;
+
+    protected override void OnParametersSet()
+    {
+        _subtotal = Transcription.Receipt.Subtotal;
+        _tax = Transcription.Receipt.Tax;
+        _tip = Transcription.Receipt.Tip;
+        _total = Transcription.Receipt.Total;
+        _items = Transcription.Receipt.Items.Select(item => new EditableLine(item)).ToList();
+    }
+
+    private void AddItem() => _items.Add(new EditableLine());
+
+    private void RemoveItem(EditableLine item) => _items = _items.Where(candidate => candidate != item).ToList();
+
+    private async Task SaveAsync()
+    {
+        if (_items.Count == 0 || _items.Any(item => string.IsNullOrWhiteSpace(item.Name)))
+        {
+            _validationError = "Add at least one named item before saving.";
+            return;
+        }
+
+        // This bill is attached to an existing expense, so the total must agree with
+        // its recorded amount. Show the expected amount and discrepancy before making
+        // a request that the API is required to reject.
+        if (_total != ExpenseAmount)
+            return;
+
+        _validationError = null;
+        _saving = true;
+        try
+        {
+            var saved = await Receipts.SaveAsync(TransactionId, new SaveReceiptRequest
+            {
+                Subtotal = _subtotal,
+                Tax = _tax,
+                Tip = _tip,
+                Total = _total,
+                Items = _items.Select(item => new ReceiptItemInput
+                {
+                    Name = item.Name.Trim(),
+                    NormalizedName = item.NormalizedName,
+                    Description = item.Description,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    TotalPrice = item.TotalPrice,
+                    TaxAmount = item.TaxAmount
+                }).ToArray()
+            });
+
+            if (saved is not null)
+                MudDialog.Close(DialogResult.Ok(saved));
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class EditableLine
+    {
+        public EditableLine()
+        {
+        }
+
+        public EditableLine(ReceiptItemInput item)
+        {
+            Name = item.Name;
+            NormalizedName = item.NormalizedName ?? NormalizeName(item.Name);
+            Description = item.Description;
+            UnitPrice = item.UnitPrice;
+            Quantity = item.Quantity;
+            TotalPrice = item.TotalPrice;
+            TaxAmount = item.TaxAmount;
+        }
+
+        public Guid Key { get; } = Guid.NewGuid();
+        private string _name = string.Empty;
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                _name = value;
+                NormalizedName = NormalizeName(value);
+            }
+        }
+        public string NormalizedName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Quantity { get; set; } = 1m;
+        public decimal TotalPrice { get; set; }
+        public decimal TaxAmount { get; set; }
+
+        private static string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;
+    }
+}

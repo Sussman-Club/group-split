@@ -87,7 +87,10 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 : null;
             if (version is not null) ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, members, handlers);
             draft.Items.Add(new ReceiptItem { Id = input.Id ?? Guid.NewGuid(), Position = position,
-                Name = input.Name?.Trim() ?? "", NormalizedName = input.Name?.Trim().ToLowerInvariant() ?? "",
+                Name = input.Name?.Trim() ?? "",
+                NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
+                    ?? input.Name?.Trim().ToLowerInvariant() ?? "",
+                Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
                 UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
                 TaxAmount = input.TaxAmount, SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
         }
@@ -117,6 +120,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 else
                 {
                     stored.Position = line.Position; stored.Name = line.Name; stored.NormalizedName = line.NormalizedName;
+                    stored.Description = line.Description;
                     stored.UnitPrice = line.UnitPrice; stored.Quantity = line.Quantity; stored.TotalPrice = line.TotalPrice;
                     stored.TaxAmount = line.TaxAmount; stored.SplitRuleVersionId = line.SplitRuleVersionId;
                     stored.SplitRuleVersion = line.SplitRuleVersion;

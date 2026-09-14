@@ -116,6 +116,7 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_JOIN_LINK_EXPIRED` | The join link is past its expiry. Somebody in the group makes a new one. | |
 | `GROUP_JOIN_LINK_REVOKED` | The join link was withdrawn by the group before it expired. Kept apart from expiry because they are different things to have happened to the person holding the link. | |
 | `BANK_SYNC_UNAVAILABLE` | This deployment has no bank provider configured, so there is nothing to link through. `GET /bank-connections` says the same thing without failing, through `enabled`. | |
+| `RECEIPT_TRANSCRIPTION_UNAVAILABLE` | This deployment has no receipt transcription provider configured. Uploading and viewing receipt files still works. | |
 | `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment; deleting the expense is how you undo it. | |
 | `BANK_CONNECTION_NEEDS_ATTENTION` | The bank wants the person to sign in again, so a sync would only be told so. Link in update mode is the way out. | |
 | `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another -- or, when attaching an imported row to an expense already recorded, in a different one from that expense. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency`, and `groupCurrency` or `expenseCurrency` depending on what it was compared against. |
@@ -162,6 +163,7 @@ with.
 | Code | When | Extra members |
 | --- | --- | --- |
 | `BANK_PROVIDER_UNAVAILABLE` | The bank provider did not answer, or refused. Nothing was changed here. | |
+| `RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` | The receipt transcription provider did not answer, or could not process the attachment. Nothing was saved; retrying is safe. | |
 
 ### Server error (500) with something to say
 

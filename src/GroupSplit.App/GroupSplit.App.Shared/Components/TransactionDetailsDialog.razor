@@ -11,6 +11,7 @@
 @inject LocalClock Clock
 @inject IReceiptCommands Receipts
 @inject IReceiptAttachmentCommands ReceiptAttachments
+@inject IDialogService DialogService
 
 @*
     One expense, and how it was divided. Reading only.
@@ -216,6 +217,11 @@
                                             @attachment.FileName
                                         </a>
                                         <span class="gs-muted ms-auto" style="white-space: nowrap">@FormatFileSize(attachment.Length)</span>
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-quiet"
+                                                   Disabled="@(_transcribingAttachmentId is not null)"
+                                                   OnClick="@(() => TranscribeAttachmentAsync(attachment))">
+                                            @(_transcribingAttachmentId == attachment.Id ? "Reading…" : "Transcribe")
+                                        </MudButton>
                                     </div>
                                 }
                             </div>
@@ -305,6 +311,7 @@
     private ReceiptResponse? receipt;
     private IReadOnlyList<ReceiptAttachmentResponse> _attachments = [];
     private bool _uploading;
+    private Guid? _transcribingAttachmentId;
 
     /// <summary>
     /// Who is reading, so the dialog can say "You" and single their share out.
@@ -397,6 +404,34 @@
 
     private string DownloadUrl(ReceiptAttachmentResponse attachment) =>
         $"/api/transactions/{TransactionId}/receipt-attachments/{attachment.Id}";
+
+    private async Task TranscribeAttachmentAsync(ReceiptAttachmentResponse attachment)
+    {
+        _transcribingAttachmentId = attachment.Id;
+        try
+        {
+            var transcription = await ReceiptAttachments.TranscribeAsync(TransactionId, attachment.Id);
+            if (transcription is null || details is not { } expenseDetails)
+                return;
+
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Review receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { x => x.TransactionId, TransactionId },
+                { x => x.ExpenseAmount, expenseDetails.Amount },
+                { x => x.Transcription, transcription }
+            }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: ReceiptResponse saved })
+            {
+                receipt = saved;
+                _showBill = true;
+            }
+        }
+        finally
+        {
+            _transcribingAttachmentId = null;
+        }
+    }
 
     private static string FormatFileSize(long length) => length < 1024 * 1024
         ? $"{Math.Max(1, length / 1024)} KB"

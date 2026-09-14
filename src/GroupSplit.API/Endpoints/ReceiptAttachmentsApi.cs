@@ -23,6 +23,7 @@ public static class ReceiptAttachmentsApi
             group.MapList();
             group.MapUpload();
             group.MapDownload();
+            group.MapTranscribe();
             group.MapDelete();
 
             return group;
@@ -75,6 +76,21 @@ public static class ReceiptAttachmentsApi
                 .WithName("DownloadReceiptAttachment")
                 .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapTranscribe()
+        {
+            return group.MapPost("{attachmentId:guid}/transcribe", async (
+                    Guid id,
+                    Guid attachmentId,
+                    IReceiptTranscriptionService transcription,
+                    CancellationToken ct) =>
+                    Results.Ok(await transcription.Transcribe(id, attachmentId, ct)))
+                .WithName("TranscribeReceiptAttachment")
+                .Produces<ReceiptTranscriptionResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status502BadGateway);
         }
 
         private RouteHandlerBuilder MapDelete()

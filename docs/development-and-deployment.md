@@ -77,6 +77,8 @@ AppHost needs only a GitHub entry of the matching name.
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no, empty keeps the popup flow | Where an OAuth bank returns to. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
+| `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
+| `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when receipt transcription is enabled | Veryfi API credentials. |
 
 The optional ones are declared with
 [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),

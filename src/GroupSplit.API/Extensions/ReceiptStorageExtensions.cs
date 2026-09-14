@@ -10,7 +10,9 @@ public static class ReceiptStorageExtensions
 {
     public static IServiceCollection AddReceiptStorage(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("receipts");
+        // AddRustFs("storage").AddBucket("receipts") exposes the bucket connection
+        // to consumers under this generated resource name.
+        var connectionString = configuration.GetConnectionString("storage-receipts");
         var options = configuration.GetAWSOptions();
         var bucketName = "receipts";
 

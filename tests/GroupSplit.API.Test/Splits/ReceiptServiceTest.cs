@@ -192,6 +192,33 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Null(preserved.ReceiptId);
     }
 
+    [Fact]
+    public async Task Item_name_normalization_and_original_description_are_preserved()
+    {
+        var (expense, _, even) = await AnExpense();
+        var item = new ReceiptItemInput
+        {
+            Name = "Pizza, large",
+            NormalizedName = "Pizza large",
+            Description = "PZA LG",
+            UnitPrice = 48m,
+            TotalPrice = 48m,
+            SplitRuleVersionId = even
+        };
+
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(item), Ct);
+        var saved = Assert.Single(bill.Items);
+
+        Assert.Equal("Pizza, large", saved.Name);
+        Assert.Equal("pizza large", saved.NormalizedName);
+        Assert.Equal("PZA LG", saved.Description);
+
+        var response = await Receipts.ResponseFor(bill, ct: Ct);
+        var responseItem = Assert.Single(response.Items);
+        Assert.Equal("pizza large", responseItem.NormalizedName);
+        Assert.Equal("PZA LG", responseItem.Description);
+    }
+
     /// <summary>
     /// A bill under a category that divides some other way is still divisible by its lines,
     /// and the shares it produces are written as amounts somebody chose -- the expense's own

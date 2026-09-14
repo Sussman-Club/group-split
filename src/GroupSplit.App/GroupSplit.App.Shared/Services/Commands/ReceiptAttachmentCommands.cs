@@ -37,4 +37,15 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, ApiError
 
         return succeeded ? uploaded : null;
     }
+
+    public async Task<ReceiptTranscriptionResponse?> TranscribeAsync(
+        Guid transactionId, Guid attachmentId, CancellationToken ct = default)
+    {
+        ReceiptTranscriptionResponse? transcription = null;
+        var succeeded = await errors.TryAsync(async () =>
+                transcription = await receipts.TranscribeReceiptAttachmentAsync(transactionId, attachmentId, ct),
+            "Could not transcribe receipt file.");
+
+        return succeeded ? transcription : null;
+    }
 }

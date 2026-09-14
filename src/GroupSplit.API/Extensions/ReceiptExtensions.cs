@@ -21,5 +21,9 @@ public static class ReceiptExtensions
         receipt.Items.OrderBy(i => i.Position).ThenBy(i => i.Id).Select(i => new ReceiptItemResponse(
             i.Id, i.Name, i.UnitPrice, i.Quantity, i.TotalPrice, i.TaxAmount, i.SplitRuleVersionId,
             i.SplitRuleVersion?.SplitRule.Name,
-            i.SplitRuleVersion is { } version ? handlers.ToDto(version) : null)).ToList());
+            i.SplitRuleVersion is { } version ? handlers.ToDto(version) : null)
+        {
+            NormalizedName = i.NormalizedName,
+            Description = i.Description
+        }).ToList());
 }
