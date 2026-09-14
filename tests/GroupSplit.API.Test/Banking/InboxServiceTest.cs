@@ -497,13 +497,21 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(BankTransactionStatus.New, (await Reload(row)).Status);
     }
 
-    /// <summary>A charge with no bill has nothing to divide up.</summary>
+    /// <summary>
+    /// A charge with no bill has no lines for a part to name.
+    /// </summary>
+    /// <remarks>
+    /// It is split by amount instead, which <c>SplitChargeWithoutABillTest</c> covers. What
+    /// is checked here is the caller who is in the wrong mode: the ids came from somewhere,
+    /// and somewhere is a bill on a different charge, so it is worth saying out loud rather
+    /// than quietly ignoring.
+    /// </remarks>
     [Fact]
-    public async Task A_charge_with_no_bill_cannot_be_split()
+    public async Task A_charge_with_no_bill_has_no_lines_for_a_part_to_name()
     {
         var row = await Row(amount: 100m);
 
-        await Assert.ThrowsAsync<NotFoundException>(
+        var thrown = await Assert.ThrowsAsync<ValidationException>(
             () => Inbox.Split(row.Id, new SplitBankTransactionRequest
             {
                 Parts =
@@ -512,6 +520,9 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                     new BankTransactionPartInput { Name = "Two", ItemIds = [Guid.NewGuid()] }
                 ]
             }, Ct));
+
+        Assert.Equal(ErrorCodes.SplitPartsInvalid, thrown.Code);
+        Assert.Equal(BankTransactionStatus.New, (await Reload(row)).Status);
     }
 
     private Guid Self => GetService<ICurrentUser>().User.Id;

@@ -165,7 +165,7 @@ exactly as they are.
 | `receipts claim <transaction-id> <item-id>` | Say who had one line. `--user` repeatable; naming nobody un-claims it. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
-| `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
+| `receipts split <bank-transaction-id>` | File one imported charge as several expenses, by its bill or -- where it has none -- by amount. `--part` per purchase, repeatable, at least twice. `--file-anyway` goes ahead over a suspected duplicate. |
 | `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. `--bank-row` removes one from an imported row instead. |
 
 A line is `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<who>]`, and `<who>` is comma-separated
@@ -248,13 +248,27 @@ them, or line ids -- the numbers are the first column of `receipts show`. The ca
 inside the group because a category belongs to one group. **No `@` keeps that part on your own
 ledger**, which is the jacket and the reason to split at all.
 
-Amounts are never given: each part is cut from the charge in proportion to the lines it holds,
-with the tax and the tip apportioned over them, so the parts sum to the charge by
-construction.
+Amounts are never given for a charge that has a bill: each part is cut from the charge in
+proportion to the lines it holds, with the tip apportioned over them, so the parts sum to the
+charge by construction. A part that states one anyway is refused.
+
+A charge with **no** bill splits by amount instead, with the figure where the lines would be:
+
+```bash
+groupsplit receipts split <bank-row-id> \
+  --part "Groceries=65.50@<group-id>/<category-id>" \
+  --part "Jacket=34.50"
+```
+
+Which of the two applies is not yours to pick and is never guessed from the text -- `Jacket=5`
+is line five with a bill and five pounds without one. The command reads the bill first either
+way. The amounts have to come to the charge exactly; there is no part that takes the
+remainder, and a part of zero or less is refused.
 
 | Code | |
 | --- | --- |
-| `SPLIT_PARTS_INVALID` | A line is in no part, in two parts, or is not on this bill. Carries the offending lines. Every line has to land in exactly one part -- a line left out is money no part accounts for, and one named twice is money counted twice. |
+| `SPLIT_PARTS_INVALID` | With a bill: a line is in no part, in two parts, or is not on this bill -- every line lands in exactly one part, since a line left out is money no part accounts for and one named twice is money counted twice. Carries the offending lines. Without one: a part that does not say what it is worth, one worth nothing or less, or one naming lines there are none of. |
+| `SPLIT_PARTS_DO_NOT_SUM_TO_CHARGE` | A charge with no bill whose parts do not come to it. Carries both figures and the difference. |
 | `POSSIBLE_DUPLICATE_EXPENSE` | The charge looks like an expense already recorded. `--file-anyway` goes ahead. Worth more care here than on an ordinary filing: a split files several expenses at once, so a duplicate is several wrong balances. |
 
 All or nothing -- either every part exists or the charge is still waiting. Two parts minimum;

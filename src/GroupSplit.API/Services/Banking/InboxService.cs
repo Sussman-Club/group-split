@@ -53,7 +53,7 @@ public interface IInboxService
 
     /// <summary>
     /// Files one charge as several expenses, by saying which lines of its bill belong to
-    /// which purchase.
+    /// which purchase -- or, where it has no bill, what each purchase was worth.
     /// </summary>
     /// <remarks>
     /// For the charge that is two purchases -- the flat's groceries and a jacket of your own
@@ -61,8 +61,8 @@ public interface IInboxService
     /// and file them under Groceries; this gives each part its own expense, its own group and
     /// its own category, while the money stays one charge.
     /// <para>
-    /// Everything at once. Every line lands in a part, so there is no half-split state to
-    /// leave a row in and nothing to reconcile afterwards.
+    /// Everything at once. Every line -- or every penny -- lands in a part, so there is no
+    /// half-split state to leave a row in and nothing to reconcile afterwards.
     /// </para>
     /// </remarks>
     Task<SplitBankTransactionResponse> Split(Guid id, SplitBankTransactionRequest request,
@@ -467,9 +467,13 @@ public sealed class InboxService(
             }
         }
 
-        // There is nothing to split without one. A charge with no bill is filed whole, which
-        // is what File is for.
-        var bill = await receipts.ForBankRow(row.Id, ct);
+        var bill = await receipts.BillOnBankRow(row.Id, ct);
+
+        // A charge nobody itemised is still two purchases -- the trolley and the jacket are
+        // two purchases whether or not anybody typed the receipt in. With no lines to cut it
+        // by, the parts say what they are worth and this checks them against the charge.
+        if (bill is null)
+            return await ByAmount(row, request, ct);
 
         // Checked again here, not only when the bill was typed. A pending row's amount is the
         // bank's to change before it posts, so a bill typed at the table against 100.00 can
@@ -484,6 +488,16 @@ public sealed class InboxService(
                     "charge before splitting it.")
                 .WithExtension("receiptTotal", bill.Total)
                 .WithExtension("amount", row.Amount);
+        }
+
+        var stated = request.Parts.Count(part => part.Amount is not null);
+
+        if (stated > 0)
+        {
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    "This charge has an itemised bill, so each part is worth the lines it " +
+                    "holds and cannot be given an amount of its own. Move the lines instead.")
+                .WithExtension("partsWithAnAmount", stated);
         }
 
         var parts = PartsOf(bill, request);
@@ -583,13 +597,134 @@ public sealed class InboxService(
         return new SplitBankTransactionResponse(row.Id, row.Amount, filed);
     }
 
+    /// <summary>
+    /// The same split, on a charge nobody itemised: the parts say what they are worth.
+    /// </summary>
+    /// <remarks>
+    /// Everything the bill would have answered is asked of the caller here, so everything it
+    /// would have guaranteed has to be checked. A bill makes the parts sum to the charge by
+    /// construction -- they are cuts of one figure -- and stated amounts do not; they are
+    /// four numbers somebody typed on a phone in a car park, and nothing but this stands
+    /// between a slip of the thumb and a group balance that is wrong by the difference.
+    /// <para>
+    /// Deliberately no "and the rest" part. It would be the one figure nobody checked, and it
+    /// is the figure most worth checking, since the whole point of splitting a charge is that
+    /// somebody is about to be asked to pay for a piece of it.
+    /// </para>
+    /// </remarks>
+    private async Task<SplitBankTransactionResponse> ByAmount(
+        BankTransaction row, SplitBankTransactionRequest request, CancellationToken ct)
+    {
+        var lines = request.Parts.Sum(part => part.ItemIds.Count);
+
+        if (lines > 0)
+        {
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    "This charge has no itemised bill, so there are no lines for a part to " +
+                    "name. Say what each part is worth instead, or write the bill down first.")
+                .WithExtension("namedItemIds",
+                    request.Parts.SelectMany(part => part.ItemIds).ToList());
+        }
+
+        // By position, because a part of a charge with no bill has nothing else to be called
+        // by -- no line, no id, and a name that is optional and often absent.
+        var blank = request.Parts
+            .Index()
+            .Where(part => part.Item.Amount is null)
+            .Select(part => part.Index)
+            .ToList();
+
+        if (blank.Count > 0)
+        {
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    "This charge has no itemised bill, so every part has to say what it is " +
+                    "worth. There is no part that takes whatever is left over.")
+                .WithExtension("partsWithoutAnAmount", blank);
+        }
+
+        var amounts = request.Parts.Select(part => part.Amount!.Value).ToList();
+
+        // An expense of nothing is not a purchase, and one of less than nothing is a refund.
+        // Both would pass the sum below as long as another part made up for them, which is
+        // exactly how a typo becomes a balance nobody can account for.
+        var empty = amounts.Index().Where(part => part.Item <= 0).Select(part => part.Index).ToList();
+
+        if (empty.Count > 0)
+        {
+            throw new ValidationException(ErrorCodes.SplitPartsInvalid,
+                    "A part of a charge is worth more than nothing. A part of zero is not a " +
+                    "purchase, and a negative one is a refund rather than a piece of this " +
+                    "payment.")
+                .WithExtension("emptyParts", empty);
+        }
+
+        var placed = amounts.Sum();
+
+        if (placed != row.Amount)
+        {
+            throw new UnprocessableException(ErrorCodes.SplitPartsDoNotSumToCharge,
+                    $"The parts come to {placed} and the charge is {row.Amount}. Every penny " +
+                    "of a charge belongs to one of its parts.")
+                .WithExtension("placed", placed)
+                .WithExtension("amount", row.Amount)
+                .WithExtension("unplaced", row.Amount - placed);
+        }
+
+        var filed = new List<SplitPartResponse>();
+
+        for (var i = 0; i < request.Parts.Count; i++)
+        {
+            var part = request.Parts[i];
+
+            // Built and not saved, exactly as the bill path is: the whole split commits once,
+            // so a part that cannot be built takes the parts before it with it rather than
+            // leaving them in the ledger against a row that still reads as waiting.
+            var expense = await transactions.Build(new CreateTransactionRequest
+            {
+                GroupId = part.GroupId,
+                CategoryId = part.CategoryId,
+                PaidByUserId = part.PaidByUserId,
+                Splits = part.Splits,
+                Name = Named(part.Name, row),
+                Description = part.Description,
+                Amount = amounts[i],
+                DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+            }, bill: null, ct: ct);
+
+            dbContext.Add(expense);
+
+            expense.BankTransaction = row;
+            expense.BankTransactionId = row.Id;
+            expense.MerchantId = row.MerchantId;
+
+            filed.Add(new SplitPartResponse(
+                expense.Id, expense.Name, expense.GroupId, expense.Amount, ItemCount: 0));
+        }
+
+        row.Status = BankTransactionStatus.Filed;
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return new SplitBankTransactionResponse(row.Id, row.Amount, filed);
+    }
+
     public async Task<SplitChargePreviewResponse> PreviewSplit(
         Guid id, SplitChargePreviewRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         var row = await Existing(id, ct);
-        var bill = await receipts.ForBankRow(row.Id, ct);
+        var bill = await receipts.BillOnBankRow(row.Id, ct);
+
+        // With no bill the figures are the caller's own, and the useful half of the answer is
+        // the other one: what is still in no part. A part nobody has filled in yet counts as
+        // nothing placed, which is what it is worth.
+        if (bill is null)
+        {
+            var stated = request.Parts.Select(part => part.Amount ?? 0).ToList();
+
+            return new SplitChargePreviewResponse(stated, row.Amount, stated.Sum());
+        }
 
         var byId = bill.Items.ToDictionary(item => item.Id);
 

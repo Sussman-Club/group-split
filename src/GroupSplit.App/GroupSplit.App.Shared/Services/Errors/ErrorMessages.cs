@@ -48,7 +48,11 @@ public static class ErrorMessages
         [ErrorCodes.ReceiptNotFound] = "That expense has no itemised bill on it.",
         [ErrorCodes.ReceiptItemNotFound] = "That line is no longer on the bill.",
         [ErrorCodes.ReceiptInvalid] = "That bill could not be read. Check the lines and who is on them.",
-        [ErrorCodes.SplitPartsInvalid] = "Every line of the bill has to be in exactly one part.",
+        [ErrorCodes.SplitPartsInvalid] =
+            "Every line of the bill has to be in exactly one part, and a charge with no bill "
+            + "needs each part to say what it is worth.",
+        [ErrorCodes.SplitPartsDoNotSumToCharge] =
+            "The parts have to come to the charge exactly.",
         [ErrorCodes.ReceiptDoesNotAddUp] = "The bill does not add up to what was paid.",
         [ErrorCodes.ReceiptTooLargeToDivide] = "This bill is too large to divide by its items.",
 

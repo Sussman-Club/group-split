@@ -129,11 +129,12 @@ public static class ErrorCodes
     public const string SplitsInvalid = "SPLITS_INVALID";
 
     /// <summary>
-    /// The parts a charge was to be split into do not account for its bill: a line named
-    /// twice, a line named that is not on it, or a line left out. Every line has to land in
-    /// exactly one part, because a part's amount is cut from the charge in proportion to the
-    /// lines it holds -- so a line belonging to nobody is money the parts would not sum to.
-    /// Carries the lines at fault.
+    /// The parts a charge was to be split into do not account for it. On a charge with a
+    /// bill that is a line named twice, a line named that is not on it, or a line left out:
+    /// every line has to land in exactly one part, because a part's amount is cut from the
+    /// charge in proportion to the lines it holds, so a line belonging to nobody is money the
+    /// parts would not sum to. Carries the lines at fault. On a charge with none it is a part
+    /// that does not say what it is worth, or one that names lines there are none of.
     /// </summary>
     public const string SplitPartsInvalid = "SPLIT_PARTS_INVALID";
 
@@ -158,6 +159,14 @@ public static class ErrorCodes
     // ---- be carried out, because acting on it would break an invariant ------------------
 
     public const string SplitsDoNotSumToAmount = "SPLITS_DO_NOT_SUM_TO_AMOUNT";
+
+    /// <summary>
+    /// A charge with no bill was to be split into parts whose stated amounts do not come to
+    /// it. Nothing here can be cut from the paper, so the figures are the caller's and this
+    /// is the only thing standing between them and a charge filed as more or less money than
+    /// was actually paid. Carries what the parts came to and what the charge is.
+    /// </summary>
+    public const string SplitPartsDoNotSumToCharge = "SPLIT_PARTS_DO_NOT_SUM_TO_CHARGE";
     public const string BankTransactionIsCredit = "BANK_TRANSACTION_IS_CREDIT";
 
     /// <summary>

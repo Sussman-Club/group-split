@@ -1,4 +1,6 @@
 using System.CommandLine;
+using System.Net;
+using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -278,10 +280,16 @@ public static class ReceiptCommands
     /// the charge is still waiting.
     /// </para>
     /// <para>
-    /// The amounts are not given and cannot be. Each part is cut from the charge in
-    /// proportion to the lines it holds, with the tax and the tip apportioned over them, so
-    /// the parts sum to what the card was charged by construction rather than by the caller
-    /// getting the arithmetic right.
+    /// Where the charge has a bill the amounts are not given and cannot be. Each part is cut
+    /// from the charge in proportion to the lines it holds, with the tip apportioned over
+    /// them, so the parts sum to what the card was charged by construction rather than by the
+    /// caller getting the arithmetic right.
+    /// </para>
+    /// <para>
+    /// Where it has none they are given and nothing else could give them -- a charge nobody
+    /// itemised is still two purchases, and with no lines to cut it by the only thing that
+    /// knows where the money went is the person who was there. The bill is read first either
+    /// way, so which of the two applies is never guessed and never the caller's to pick.
     /// </para>
     /// </remarks>
     private static Command Split()
@@ -296,7 +304,9 @@ public static class ReceiptCommands
             Description = "One purchase, as <name>=<lines>[@<group-id>[/<category-id>]], "
                           + "repeatable and needed at least twice. <lines> is line numbers, "
                           + "ranges or ids from `groupsplit receipts show --bank-row`; no "
-                          + "@group keeps that part on your own ledger.",
+                          + "@group keeps that part on your own ledger. On a charge with no "
+                          + "bill, give an amount instead of lines -- \"Groceries=48.20\" -- "
+                          + "and the parts have to come to the charge exactly.",
             AllowMultipleArgumentsPerToken = false
         };
 
@@ -307,7 +317,7 @@ public static class ReceiptCommands
         };
 
         var command = new Command("split",
-            "File one imported charge as several expenses, by its bill.")
+            "File one imported charge as several expenses, by its bill or by amount.")
         {
             rowId, parts, fileAnyway
         };
@@ -329,12 +339,31 @@ public static class ReceiptCommands
             // the bill knows what is there. It also means a position that is not on the bill
             // is refused before anything is created, naming the number the caller typed
             // rather than an id they never saw.
-            var bill = await new Api.ReceiptsClient(context.ApiHttpClient)
-                .GetBankRowReceiptAsync(id, ct);
+            //
+            // And because whether there is one decides how --part reads at all. Asked rather
+            // than inferred from the text: "Jacket=5" is line five of a bill and five pounds
+            // without one, and a charge either has a bill or it does not.
+            ReceiptResponse? bill = null;
+
+            try
+            {
+                bill = await new Api.ReceiptsClient(context.ApiHttpClient)
+                    .GetBankRowReceiptAsync(id, ct);
+            }
+            catch (ApiException api) when (api.StatusCode == (int)HttpStatusCode.NotFound
+                                           && Missing(api) == Shared.Errors.ErrorCodes.ReceiptNotFound)
+            {
+                // Nobody itemised this charge, which is an ordinary thing rather than a
+                // failure: the parts say what they are worth. A row that does not exist, or
+                // is not the caller's, still comes back as the refusal it is -- it answers
+                // BANK_TRANSACTION_NOT_FOUND, not this.
+            }
 
             var request = new SplitBankTransactionRequest
             {
-                Parts = ReceiptParts.Parse("--part", given, bill.Items),
+                Parts = bill is null
+                    ? ReceiptParts.ParseAmounts("--part", given)
+                    : ReceiptParts.Parse("--part", given, bill.Items),
                 // Never defaulted true for convenience. A split files several expenses at
                 // once, so going ahead over a payment already recorded is several wrong
                 // balances rather than one, and this flag is the person saying they were
@@ -353,6 +382,10 @@ public static class ReceiptCommands
         return command;
     }
 
+    /// <summary>The problem's code, for telling two 404s apart.</summary>
+    private static string? Missing(ApiException exception) =>
+        (exception as ApiException<ProblemDetails>)?.Result.Code;
+
     private static IRenderable RenderSplit(SplitBankTransactionResponse split)
     {
         var table = Tables.Grid("Expense", "Name", "Lines", "Amount");
@@ -369,13 +402,19 @@ public static class ReceiptCommands
         return new Rows(
             new Markup($"[green]Split[/] {split.Charge} into {split.Parts.Count} expenses.\n\n"),
             table,
-            // The invariant, said once where it can be checked: the parts are cut from the
+            // The invariant, said once where it can be checked: the parts account for the
             // charge, so this is arithmetic the caller can follow rather than trust.
-            new Markup($"\n[grey]Tax and tip are apportioned between the parts in proportion "
-                       + $"to the lines each holds. The parts come to "
+            new Markup($"\n[grey]{Apportioning(split)} The parts come to "
                        + $"{split.Parts.Sum(part => part.Amount)}, against a charge of "
                        + $"{split.Charge}.[/]\n"));
     }
+
+    /// <summary>Where the parts' amounts came from, which is not the same in both cases.</summary>
+    private static string Apportioning(SplitBankTransactionResponse split) =>
+        split.Parts.Any(part => part.ItemCount > 0)
+            ? "Tax and tip are apportioned between the parts in proportion to the lines each "
+              + "holds."
+            : "This charge has no itemised bill, so the parts are the amounts you gave.";
 
     private static Command Delete()
     {

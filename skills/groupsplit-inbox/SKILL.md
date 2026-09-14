@@ -79,13 +79,17 @@ payer's: one card charge, two purchases. Filing it whole puts the clothes in the
 ledger and files them under Groceries, and neither is visible as wrong afterwards -- the
 balance moves and the by-category totals are quietly off.
 
-`inbox list` marks the rows this can apply to: `billLineCount` is how many lines the bill
-behind that charge has, and `canSplit` says it is worth offering. Both are zero and false for
-nearly every row, because a bill is something a person typed rather than something the bank
-sent.
+`inbox list` carries two signals, and they answer different questions. `canSplit` is whether
+the API would accept a split, which is nearly every waiting row -- a charge with no bill
+splits by amount. `billLineCount` is how many lines the bill behind the charge has, which is
+zero for nearly every row, because a bill is something a person typed rather than something
+the bank sent.
 
-When `canSplit` is true, **ask before filing whole.** The user knows whether the charge was
-one purchase; you do not, and the bill's line names are usually enough for them to say.
+**Lead with the count, not the flag.** Somebody typing a bill against a charge is already them
+saying its lines matter, so when `billLineCount > 1`, **ask before filing whole** -- the user
+knows whether the charge was one purchase, you do not, and the line names are usually enough
+for them to say. Asking on `canSplit` would mean asking "was this really two purchases?" about
+the weekly shop, the bus fare and every coffee.
 
 ```bash
 groupsplit receipts show <row-id> --bank-row --json    # the lines, numbered
@@ -99,9 +103,20 @@ ledger. The amounts are never given -- each part is cut from the charge in propo
 lines it holds. See the `groupsplit` skill's `receipts` reference for the grammar and the
 refusals.
 
-A charge with no bill cannot be split. Typing one up is `receipts set --bank-row`, and that
-is a fair thing to offer when somebody says a charge was two purchases -- but it is their
-receipt to transcribe, so ask for the lines rather than inventing them.
+When the user says a charge with **no** bill was two purchases, split it by amount rather than
+asking them to transcribe a receipt first:
+
+```bash
+groupsplit receipts split <row-id> \
+  --part "Groceries=65.50@<group-id>/<category-id>" \
+  --part "Jacket=34.50"
+```
+
+The amounts have to come to the charge exactly, and there is no part that takes the remainder,
+so **ask for every figure** -- do not work the last one out and present it as theirs. Typing
+the bill up with `receipts set --bank-row` is still the better answer when they want the
+division to follow who had what, but it is their receipt, so ask for the lines rather than
+inventing them.
 
 ## How sure a suggestion is
 

@@ -1146,10 +1146,16 @@ public class BankEndpointTest : IAsyncLifetime
 
     /// <summary>
     /// A row nobody typed a bill for -- which is nearly every row -- says nothing about one,
-    /// and cannot be split.
+    /// and can still be split.
     /// </summary>
+    /// <remarks>
+    /// The two answer different questions, which is why both are here. The count is whether
+    /// anybody itemised this charge, and so whether a screen has anything to lead with; the
+    /// flag is whether splitting would be accepted, and a charge with no bill splits by
+    /// amount.
+    /// </remarks>
     [Fact]
-    public async Task A_row_with_no_bill_reports_none_and_cannot_be_split()
+    public async Task A_row_with_no_bill_reports_none_and_can_still_be_split()
     {
         var connection = await LinkAsync();
 
@@ -1158,6 +1164,28 @@ public class BankEndpointTest : IAsyncLifetime
         var listed = Assert.Single(await ItemsAsync("/inbox"));
 
         Assert.Equal(0, listed.GetProperty("billLineCount").GetInt32());
+        Assert.True(listed.GetProperty("canSplit").GetBoolean());
+    }
+
+    /// <summary>
+    /// A bill of one line is the one charge that cannot be split at all.
+    /// </summary>
+    /// <remarks>
+    /// Every line lands in exactly one part and a split needs two parts, so there are not
+    /// enough lines to go round -- and it cannot fall back to splitting by amount either,
+    /// because its figures are the bill's rather than the caller's.
+    /// </remarks>
+    [Fact]
+    public async Task A_bill_of_one_line_cannot_be_split()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+
+        await BillAsync(row, ("EVERYTHING", 10m));
+
+        var listed = Assert.Single(await ItemsAsync("/inbox"));
+
+        Assert.Equal(1, listed.GetProperty("billLineCount").GetInt32());
         Assert.False(listed.GetProperty("canSplit").GetBoolean());
     }
 

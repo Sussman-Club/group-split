@@ -18,10 +18,16 @@ namespace GroupSplit.Shared;
 /// value three call sites would have to learn.
 /// </para>
 /// <para>
-/// The parts' amounts are not sent. They are cut from the charge here, in proportion to the
-/// lines each part holds, with the tax and the tip apportioned over them -- so the parts sum
-/// to what the card was charged by construction rather than by the caller getting the
-/// arithmetic right.
+/// Where the charge has a bill, the parts' amounts are not sent. They are cut from the
+/// charge here, in proportion to the lines each part holds, with the tip apportioned over
+/// them -- so the parts sum to what the card was charged by construction rather than by the
+/// caller getting the arithmetic right.
+/// </para>
+/// <para>
+/// Where it has none, they are sent and nothing else could send them: a charge nobody
+/// itemised still turns out to be two purchases, and with no lines to cut it by the only
+/// thing that can say where the money goes is the person who was there. They have to come to
+/// the charge exactly, which is checked rather than assumed.
 /// </para>
 /// </remarks>
 public record SplitBankTransactionRequest
@@ -69,8 +75,24 @@ public record BankTransactionPartInput
     /// The lines of the bill that are this part's money. Every line of the bill has to appear
     /// in exactly one part.
     /// </summary>
-    [MinLength(1, ErrorMessage = "A part needs at least one line of the bill.")]
+    /// <remarks>
+    /// Empty exactly when the charge has no bill, where <see cref="Amount"/> takes over. The
+    /// two are checked against the charge rather than against each other, because which of
+    /// them applies is not the caller's to choose: a charge either has a bill or it does not.
+    /// </remarks>
     public IReadOnlyList<Guid> ItemIds { get; init; } = [];
+
+    /// <summary>
+    /// What this part is worth, for a charge with no bill. Null when there is one, where the
+    /// lines say what the part comes to and a figure here could only disagree with them.
+    /// </summary>
+    /// <remarks>
+    /// Every part's amount is stated, and together they have to come to the charge exactly --
+    /// there is no "and the rest" part. A remainder part would be the one figure nobody
+    /// checked, and it is the figure most worth checking: the whole reason to split a charge
+    /// is that somebody is about to be asked to pay for a piece of it.
+    /// </remarks>
+    public decimal? Amount { get; init; }
 
     /// <summary>
     /// Exactly how to divide this part, or null to divide it the way its category says.

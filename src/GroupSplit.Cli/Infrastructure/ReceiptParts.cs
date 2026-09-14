@@ -1,3 +1,4 @@
+using System.Globalization;
 using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Infrastructure;
@@ -32,6 +33,13 @@ namespace GroupSplit.Cli.Infrastructure;
 /// it too, naming an id the caller never typed -- and by then the interesting part, which
 /// line of the paper they meant, is gone.
 /// </para>
+/// <para>
+/// A charge nobody itemised is split the same way with an amount where the lines would be --
+/// <c>Groceries=48.20@&lt;group-id&gt;</c> -- and <see cref="ParseAmounts"/> reads those.
+/// Which of the two applies is never the caller's to choose and never guessed from the text:
+/// the charge either has a bill or it does not, and the command has read it either way
+/// before it parses anything.
+/// </para>
 /// </remarks>
 public static class ReceiptParts
 {
@@ -47,8 +55,45 @@ public static class ReceiptParts
         return [.. values.Select(value => One(option, value, lines))];
     }
 
+    /// <summary>
+    /// The same parts on a charge with no bill, where each says what it is worth instead of
+    /// which lines it holds.
+    /// </summary>
+    /// <remarks>
+    /// The amounts have to come to the charge exactly and the API says so when they do not,
+    /// naming both figures. Not checked here: the charge is the bank's and this reads
+    /// strings, so a second copy of that comparison would only ever be the one that was
+    /// wrong.
+    /// </remarks>
+    public static IReadOnlyList<BankTransactionPartInput> ParseAmounts(
+        string option, IEnumerable<string> values)
+    {
+        return [.. values.Select(value => OneAmount(option, value))];
+    }
+
+    private static BankTransactionPartInput OneAmount(string option, string value)
+    {
+        var (part, rest) = Head(option, value);
+
+        if (!decimal.TryParse(rest, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
+            throw InvalidAmount(option, value, $"'{rest}' is not an amount");
+
+        return part with { Amount = amount };
+    }
+
     private static BankTransactionPartInput One(
         string option, string value, IReadOnlyList<ReceiptItemResponse> lines)
+    {
+        var (part, rest) = Head(option, value);
+
+        return part with { ItemIds = [.. Lines(option, value, rest, lines)] };
+    }
+
+    /// <summary>
+    /// Everything a part carries except what it holds: its name, and where it goes.
+    /// </summary>
+    /// <returns>The part so far, and the text between '=' and '@' for the caller to read.</returns>
+    private static (BankTransactionPartInput Part, string Text) Head(string option, string value)
     {
         var separator = value.IndexOf('=');
 
@@ -83,15 +128,14 @@ public static class ReceiptParts
         }
 
         if (rest.Length == 0)
-            throw Invalid(option, value, "it names no lines");
+            throw Invalid(option, value, "the part after '=' is empty");
 
-        return new BankTransactionPartInput
+        return (new BankTransactionPartInput
         {
             Name = name,
             GroupId = groupId,
-            CategoryId = categoryId,
-            ItemIds = [.. Lines(option, value, rest, lines)]
-        };
+            CategoryId = categoryId
+        }, rest);
     }
 
     /// <summary>
@@ -154,6 +198,14 @@ public static class ReceiptParts
         => Guid.TryParse(text.Trim(), out var parsed)
             ? parsed
             : throw Invalid(option, value, $"'{text.Trim()}' is not {what}");
+
+    private static CliException InvalidAmount(string option, string value, string why)
+        => CliException.Input(
+            $"Could not read {option} '{value}': {why}.",
+            "This charge has no itemised bill, so a part says what it is worth rather than "
+            + $"which lines it holds. Use {option} <name>=<amount>[@<group-id>[/<category-id>]] "
+            + $"-- e.g. {option} \"Groceries=48.20@<group-id>\" and {option} \"Jacket=34.99\" "
+            + "for the part that is yours alone. The parts have to come to the charge exactly.");
 
     private static CliException Invalid(string option, string value, string why)
         => CliException.Input(

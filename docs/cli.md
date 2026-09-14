@@ -882,8 +882,36 @@ nests inside the group because that is where it lives: a category belongs to one
 jacket, and it is the whole reason a charge gets split.
 
 The amounts are not given and cannot be. Each part is cut from the charge in proportion to
-the lines it holds, with the tax and the tip apportioned over them, so the parts sum to what
-the card was charged by construction rather than by you getting the arithmetic right.
+the lines it holds, with the tip apportioned over them, so the parts sum to what the card was
+charged by construction rather than by you getting the arithmetic right. A part that states
+an amount anyway is refused, because the bill has already answered that question and a second
+answer could only agree by luck.
+
+#### When nobody typed the bill in
+
+The trolley and the jacket are two purchases whether or not anybody itemised the receipt, and
+typing twenty lines of groceries to answer a question about two of them is not worth doing.
+So a charge with no bill splits by amount, with the figures where the lines would be:
+
+```bash
+groupsplit receipts split <bank-row-id> \
+  --part "Groceries=65.50@<group-id>/<category-id>" \
+  --part "Jacket=34.50"
+```
+
+Which of the two applies is never yours to pick and never guessed from what you typed --
+`Jacket=5` is line five of a bill and five pounds without one. The command reads the bill
+first either way, and the charge either has one or it does not.
+
+The amounts have to come to the charge **exactly** (`SPLIT_PARTS_DO_NOT_SUM_TO_CHARGE`,
+carrying both figures and the difference). There is deliberately no part that takes whatever
+is left over: it would be the one figure nobody checked, and it is the figure most worth
+checking, since the point of splitting a charge is that somebody is about to be asked to pay
+for a piece of it. A part of zero, or of less than nothing, is refused for the same reason --
+both sum correctly as long as another part makes up for them, which is how a typo becomes a
+balance nobody can account for.
+
+Everything else is the same: `@group`, the personal part, `--file-anyway`, all or nothing.
 
 It is all or nothing. Every line has to land in exactly one part:
 

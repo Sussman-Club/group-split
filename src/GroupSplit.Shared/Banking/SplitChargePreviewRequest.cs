@@ -32,6 +32,18 @@ public record SplitChargePreviewRequest
 public record SplitChargePreviewPartInput
 {
     public IReadOnlyList<Guid> ItemIds { get; init; } = [];
+
+    /// <summary>
+    /// What this part is worth, for a charge with no bill -- where there are no lines to
+    /// price and the figure is the caller's own.
+    /// </summary>
+    /// <remarks>
+    /// Priced back rather than worked out here, so the screen that splits a charge asks the
+    /// same question whether or not anybody itemised it and reads the same answer: what each
+    /// part comes to, and how much of the charge is still in no part. Null reads as nothing
+    /// placed, which is what a part somebody has not filled in yet is worth.
+    /// </remarks>
+    public decimal? Amount { get; init; }
 }
 
 /// <summary>

@@ -145,8 +145,8 @@ public static class InboxApi
         /// <remarks>
         /// Beside filing rather than a mode of it, because what it takes is different in
         /// kind: filing needs one destination, and this needs a destination per part and an
-        /// account of every line on the paper. A charge with no bill cannot be split at all,
-        /// which is the other reason it is its own route -- there is nothing to divide up.
+        /// account of every line on the paper -- or, where nobody itemised it, of every penny
+        /// of it.
         /// </remarks>
         private RouteHandlerBuilder MapSplit()
         {

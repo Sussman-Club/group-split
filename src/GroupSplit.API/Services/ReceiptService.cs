@@ -18,6 +18,16 @@ public interface IReceiptService
     Task<Receipt> ForBankRow(Guid bankTransactionId, CancellationToken ct = default);
 
     /// <summary>
+    /// The same bill, or null where the row has none.
+    /// </summary>
+    /// <remarks>
+    /// For the caller to whom no bill is an ordinary answer rather than a failure. Splitting
+    /// a charge is one: a charge nobody itemised is still two purchases, and the parts are
+    /// then stated as amounts instead of cut from lines.
+    /// </remarks>
+    Task<Receipt?> BillOnBankRow(Guid bankTransactionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Stores the bill on an expense, replacing whatever was there. Does not divide it --
     /// see <see cref="Divide"/>, which is a separate act because a bill is usually written
     /// down before everybody has said what they had.
@@ -267,13 +277,17 @@ public class ReceiptService(
     }
 
     public async Task<Receipt> ForBankRow(Guid bankTransactionId, CancellationToken ct = default)
+        => await BillOnBankRow(bankTransactionId, ct)
+           ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound,
+               "This imported row has no itemised bill.");
+
+    public async Task<Receipt?> BillOnBankRow(
+        Guid bankTransactionId, CancellationToken ct = default)
     {
         await OwnedBankRow(bankTransactionId, ct);
 
         return await Loaded()
-                   .FirstOrDefaultAsync(receipt => receipt.BankTransactionId == bankTransactionId, ct)
-               ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound,
-                   "This imported row has no itemised bill.");
+            .FirstOrDefaultAsync(receipt => receipt.BankTransactionId == bankTransactionId, ct);
     }
 
     public async Task<Receipt> SaveForExpense(

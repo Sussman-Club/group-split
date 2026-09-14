@@ -315,6 +315,87 @@ public sealed class ReceiptCommandTests : IDisposable
         Assert.True(Sent($"/api/inbox/{RowId}/split").GetProperty("fileAnyway").GetBoolean());
     }
 
+    /// <summary>
+    /// A charge nobody itemised splits by amount, and the command works out which applies.
+    /// </summary>
+    /// <remarks>
+    /// Not guessed from the text, which cannot tell: "Jacket=5" is line five of a bill and
+    /// five pounds without one. The bill is read first either way, and a row with none
+    /// answers RECEIPT_NOT_FOUND -- an ordinary answer rather than a failure.
+    /// </remarks>
+    [Fact]
+    public async Task A_charge_with_no_bill_is_split_by_amount()
+    {
+        _api.Problem($"/api/inbox/{RowId}/receipt", 404,
+            Shared.Errors.ErrorCodes.ReceiptNotFound, "This imported row has no itemised bill.");
+        _api.Returns($"/api/inbox/{RowId}/split", Split());
+
+        var result = await Cli.RunAsync(
+            "receipts", "split", RowId.ToString(),
+            "--part", $"Groceries=65.50@{GroupId}/{CategoryId}",
+            "--part", "Jacket=34.50");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var parts = Sent($"/api/inbox/{RowId}/split").GetProperty("parts");
+
+        Assert.Equal(65.50m, parts[0].GetProperty("amount").GetDecimal());
+        Assert.Equal(GroupId, parts[0].GetProperty("groupId").GetGuid());
+
+        // Still the part that stays on your own ledger, which is the whole reason to split a
+        // charge nobody itemised either.
+        Assert.Equal(34.50m, parts[1].GetProperty("amount").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, parts[1].GetProperty("groupId").ValueKind);
+
+        // And no lines, because there are none -- rather than an empty list the API would
+        // have to read as "the caller is in the other mode".
+        Assert.Empty(parts[0].GetProperty("itemIds").EnumerateArray());
+    }
+
+    /// <summary>
+    /// A part that is not an amount is refused here, where the shell line is still in view.
+    /// </summary>
+    [Fact]
+    public async Task A_part_that_is_not_an_amount_is_refused_before_filing()
+    {
+        _api.Problem($"/api/inbox/{RowId}/receipt", 404,
+            Shared.Errors.ErrorCodes.ReceiptNotFound, "This imported row has no itemised bill.");
+
+        var result = await Cli.RunAsync(
+            "receipts", "split", RowId.ToString(),
+            "--part", "Groceries=1-3",
+            "--part", "Jacket=34.50");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Contains("no itemised bill", result.Stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(_api.Requests,
+            request => request.Path.EndsWith("/split", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A row that is not the caller's is still the refusal it is.
+    /// </summary>
+    /// <remarks>
+    /// Both answer 404 and only one of them means "split this by amount instead". Told apart
+    /// by the code, because the alternative is a missing row quietly becoming a split whose
+    /// every part the API then refuses for a reason that has nothing to do with it.
+    /// </remarks>
+    [Fact]
+    public async Task A_row_that_is_not_there_is_refused_rather_than_split_by_amount()
+    {
+        _api.Problem($"/api/inbox/{RowId}/receipt", 404,
+            Shared.Errors.ErrorCodes.BankTransactionNotFound, "No such imported transaction.");
+
+        var result = await Cli.RunAsync(
+            "receipts", "split", RowId.ToString(),
+            "--part", "Groceries=65.50",
+            "--part", "Jacket=34.50");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.DoesNotContain(_api.Requests,
+            request => request.Path.EndsWith("/split", StringComparison.Ordinal));
+    }
+
     // ---- the stub ----------------------------------------------------------------------
 
     /// <summary>The body of the last request sent to that route.</summary>

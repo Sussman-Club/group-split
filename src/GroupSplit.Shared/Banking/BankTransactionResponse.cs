@@ -123,8 +123,24 @@ public sealed record BankTransactionResponse(
     /// </remarks>
     public int BillLineCount { get; init; }
 
-    /// <summary>Whether this charge can be split: it has a bill, and the bill has lines.</summary>
-    public bool CanSplit => BillLineCount > 1 && Status == InboxStatus.New && !IsCredit;
+    /// <summary>
+    /// Whether this charge can be split at all: it is still waiting, it is money going out,
+    /// and it is not a bill of one single line.
+    /// </summary>
+    /// <remarks>
+    /// Not the same question as whether to offer it. Since a charge with no bill splits by
+    /// amount this is true of nearly every waiting row, and a screen that led with it would
+    /// be asking "was this really two purchases?" about the weekly shop, the bus fare and
+    /// every coffee. <see cref="BillLineCount"/> is the signal worth leading with: somebody
+    /// typed a bill against this charge, which is already them saying its lines matter.
+    /// <para>
+    /// The one-line bill is excluded because it genuinely cannot be split: every line has to
+    /// land in exactly one part and a split needs two parts, so there are not enough lines to
+    /// go round. Its amounts are the bill's, not the caller's, so it cannot fall back to the
+    /// other way either.
+    /// </para>
+    /// </remarks>
+    public bool CanSplit => BillLineCount != 1 && Status == InboxStatus.New && !IsCredit;
 
     /// <summary>
     /// The one expense this row became, or null when it became none -- or several.
