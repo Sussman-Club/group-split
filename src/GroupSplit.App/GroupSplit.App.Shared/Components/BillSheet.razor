@@ -1,38 +1,295 @@
+@using GroupSplit.App.Shared.Extensions
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 
-@if (Receipt.Items.Count >= 12)
+@*
+    The bill, drawn as the bill. Reading only.
+
+    A receipt is a physical object people have read thousands of, and every convention it
+    uses -- the narrow column, the fixed pitch, the leader dots, the ruled-off totals, the
+    letter in the margin against the lines tax was not charged on -- is doing work. Set as a
+    slip, "which line is which" needs no explaining.
+
+    Nothing here can be pressed except the box that finds a line, and that sits on the app's
+    surface above the paper. A control printed on a receipt is a foreign object; the slip
+    only reads as a document while nothing on it could be clicked. Changing how a line
+    divides is a different job, and it has its own screen in the app's own voice -- see the
+    BillDivision, which is full of controls for exactly that reason.
+*@
+
+@* Only where there is something to find: a bill of six lines is read by looking at it, and
+   a search box over it is a control that exists to be ignored. *@
+@if (Receipt.Items.Count >= Long)
 {
-    <MudTextField T="string" @bind-Value="_filter" Immediate="true" Placeholder="Find a line" Clearable="true" />
-}
-<div class="gs-slip">
-    <div class="gs-slip-edge" aria-hidden="true"></div>
-    <div class="gs-slip-paper">
-        <h3>@Title</h3>
-        <p>@Where</p>
-        @foreach (var item in Receipt.Items.Where(i => string.IsNullOrWhiteSpace(_filter) || i.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
-        {
-            <div class="gs-slip-line" @key="item.Id">
-                <div><strong>@item.Name</strong> · @item.Quantity.ToString("0.###")</div>
-                <div>@item.TotalPrice.ToString("0.00")</div>
-                <div class="gs-muted">@(item.SplitRuleName ?? "Choose a split rule")</div>
-                @if (item.TaxAmount != 0) { <div class="gs-muted">Tax @item.TaxAmount.ToString("0.00")</div> }
-            </div>
-        }
-        <hr />
-        <div>Subtotal @Receipt.Subtotal.ToString("0.00")</div>
-        <div>Tax @Receipt.Tax.ToString("0.00")</div>
-        <div>Tip @Receipt.Tip.ToString("0.00")</div>
-        <strong>Total @Receipt.Total.ToString("0.00")</strong>
-        @if (Receipt.MissingRuleItemCount > 0)
-        { <p>@Receipt.MissingRuleItemCount item(s) need a split rule before this bill can be divided.</p> }
+    <div class="gs-slip-tools">
+        <MudTextField T="string" @bind-Value="_filter" @bind-Value:after="StateHasChanged"
+                      Immediate="true" DebounceInterval="150"
+                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Placeholder="Find a line" Clearable="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                      aria-label="Find a line on this bill" />
     </div>
+}
+
+<div class="gs-slip gs-itemized-slip">
+    <div class="gs-slip-edge" aria-hidden="true"></div>
+
+    <div class="gs-slip-body">
+        @* Caps because a till prints caps -- the merchant line off the top of the paper,
+           not the app's eyebrow label in another guise. *@
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <header class="gs-slip-head">
+                <h3 class="gs-slip-merchant">@Title</h3>
+
+                @if (!string.IsNullOrWhiteSpace(Where))
+                {
+                    <p class="gs-slip-where">@Where</p>
+                }
+
+                @* What a till prints at the bottom, moved to the top because on screen it is
+                   what says how much paper there is before you start scrolling. *@
+                <p class="gs-slip-where">
+                    @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "item" : "items")
+                </p>
+            </header>
+
+            <div class="gs-slip-rule" aria-hidden="true"></div>
+        }
+
+        @* The lines scroll; the head above and the totals below do not. A real slip does not
+           behave this way and does not have to -- it is in your hand, and the total is one
+           glance down. A forty-line bill in a dialog pushes that total well past the fold,
+           which is the one figure somebody is here to check against the charge. *@
+        <ul class="gs-slip-lines">
+            @foreach (var row in Showing)
+            {
+                <li class="gs-slip-line @(row.Ruleless && Receipt.DividesItsExpense ? "is-unclaimed" : "")" @key="row.Key">
+                    <span class="gs-slip-item">
+                        @if (row.Count != 1)
+                        {
+                            <span class="gs-slip-qty">@Trimmed(row.Count)</span>
+                        }
+                        <span class="gs-slip-name">@row.Name</span>
+                    </span>
+
+                    <span class="gs-slip-leader" aria-hidden="true"></span>
+
+                    @* The letter in the margin, which is how a real bill says the tax at the
+                       bottom was not charged on this line. Only where the bill charges tax
+                       at all: a column of markers on a receipt with no tax explains nothing. *@
+                    <span class="gs-slip-mark">@(row.Tax == 0 && Receipt.Tax != 0 ? "N" : "")</span>
+
+                    <span class="gs-slip-price">@row.Total.ToMoney()</span>
+
+                    @* How many at what each, and what tax this line carried -- the working
+                       printed under a line the way a till prints it, rather than a second
+                       line saying the same thing again. Tax is per line now, so a bill
+                       charging two rates has to say which line carried which; the figure at
+                       the foot cannot. *@
+                    @if (row.Count != 1 || row.Tax != 0)
+                    {
+                        <span class="gs-slip-count">
+                            @if (row.Count != 1)
+                            {
+                                @($"{Trimmed(row.Count)} @ {row.Each.ToMoney()}")
+                            }
+                            @if (row.Count != 1 && row.Tax != 0)
+                            {
+                                <text> · </text>
+                            }
+                            @if (row.Tax != 0)
+                            {
+                                @($"tax {row.Tax.ToMoney()}")
+                            }
+                        </span>
+                    }
+
+                    @* How this line divides. Named only: what the rule actually does is the
+                       rule's own screen, and spelling it out forty times down a bill would
+                       bury the bill. *@
+                    <span class="gs-slip-who">@Divides(row)</span>
+                </li>
+            }
+        </ul>
+
+        @if (Showing.Count == 0)
+        {
+            <p class="gs-slip-none">Nothing on this bill matches.</p>
+        }
+
+        <div class="gs-slip-rule" aria-hidden="true"></div>
+
+        @* Always the whole bill, whatever is shown above. Totals that followed a filter would
+           be a receipt adding up to something the card was never charged. *@
+        <dl class="gs-slip-totals">
+            <div>
+                <dt>Items</dt>
+                <dd>@Receipt.Subtotal.ToMoney()</dd>
+            </div>
+
+            @* Tax and tip only where there are any: a supermarket receipt has neither, and
+               two rows of 0.00 say nothing. *@
+            @if (Receipt.Tax != 0)
+            {
+                <div>
+                    <dt>Tax</dt>
+                    <dd>@Receipt.Tax.ToMoney()</dd>
+                </div>
+            }
+
+            @if (Receipt.Tip != 0)
+            {
+                <div>
+                    <dt>Tip</dt>
+                    <dd>@Receipt.Tip.ToMoney()</dd>
+                </div>
+            }
+
+            <div class="is-total">
+                <dt>Total</dt>
+                <dd>@Receipt.Total.ToMoney()</dd>
+            </div>
+        </dl>
+
+        @* Lines against lines: what is showing, counted the same way as what is on the bill,
+           so a warehouse bill with a folded line of twelve cannot read "Showing 15 of 6". *@
+        @if (Filtered)
+        {
+            <p class="gs-slip-foot">
+                Showing @Narrowed().Count() of @Receipt.Items.Count. The totals are the whole bill.
+            </p>
+        }
+
+        @* The legend describes a mark, so it is gated on a mark being on screen rather than
+           on one being somewhere on the paper: after a filter that leaves none, it explains
+           nothing. *@
+        @if (Receipt.Tax != 0 && Narrowed().Any(line => line.TaxAmount == 0))
+        {
+            <p class="gs-slip-foot">N — no tax charged on this line</p>
+        }
+
+        @* Only where the answer is wanted. A bill's rules are read for exactly one reason --
+           the itemised rule -- and on every other expense a line naming no rule is what a
+           receipt looks like rather than a job somebody has left undone. Saying otherwise is
+           how a screen teaches people to ignore it. *@
+        @if (Wanting > 0)
+        {
+            <p class="gs-slip-foot is-unclaimed">@Outstanding</p>
+        }
+    </div>
+
     <div class="gs-slip-edge is-bottom" aria-hidden="true"></div>
 </div>
 
 @code {
+    /// <summary>
+    /// How many lines a bill needs before it is worth offering a way to search it.
+    /// </summary>
+    /// <remarks>
+    /// A restaurant bill is read by looking at it. A warehouse receipt is not read, it is
+    /// searched -- and the difference is roughly where a bill stops fitting on a screen.
+    /// </remarks>
+    internal const int Long = 12;
+
     [Parameter, EditorRequired] public ReceiptResponse Receipt { get; set; } = null!;
+
+    /// <summary>What is printed across the top of the paper: where the money went.</summary>
     [Parameter] public string? Title { get; set; }
+
+    /// <summary>The line under it -- which day, which card -- where the caller knows.</summary>
     [Parameter] public string? Where { get; set; }
+
     private string? _filter;
+
+    private bool Filtered => !string.IsNullOrWhiteSpace(_filter);
+
+    /// <summary>How many lines still need an answer -- none, where none is wanted.</summary>
+    private int Wanting => Receipt.DividesItsExpense ? Receipt.MissingRuleItemCount : 0;
+
+    /// <summary>
+    /// What is left undone, as one sentence.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than laid out in the markup, where a sentence that wraps over four
+    /// source lines is printed with the indentation of all four in the middle of it.
+    /// </remarks>
+    private string Outstanding =>
+        $"{Wanting} of {Receipt.Items.Count} {(Receipt.Items.Count == 1 ? "line" : "lines")} "
+        + $"{(Wanting == 1 ? "has" : "have")} no split rule. This expense cannot be divided by "
+        + $"its bill until {(Wanting == 1 ? "it does" : "they do")}.";
+
+    /// <summary>The lines being looked at: the paper, narrowed to what is being searched for.</summary>
+    /// <remarks>
+    /// Before folding, and that is the point of it being its own thing: the footnote counts
+    /// what is showing against what is on the bill, and both halves have to be counts of the
+    /// same kind -- a sum of folded quantities against a count of lines is how a bill with a
+    /// line of twelve came to read "Showing 15 of 6".
+    /// </remarks>
+    private IEnumerable<ReceiptItemResponse> Narrowed()
+    {
+        var wanted = _filter?.Trim();
+
+        return string.IsNullOrEmpty(wanted)
+            ? Receipt.Items
+            : Receipt.Items.Where(line => line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>One printed row: a line, or the identical lines it stands for.</summary>
+    private sealed record Row(
+        string Key, string Name, decimal Count, decimal Each, decimal Total, decimal Tax,
+        bool Ruleless, string? Rule);
+
+    /// <summary>
+    /// What to print: the bill, narrowed to what is being looked for, with identical lines
+    /// folded together.
+    /// </summary>
+    /// <remarks>
+    /// Folded on everything that could make two lines different things -- the name, what one
+    /// costs, the tax it carried, and the rule it divides by. Two jackets at the same price
+    /// become one row reading "2 @@ 59.99"; the same two divided by different rules stay two
+    /// rows, because telling those apart is the whole reason they are stored separately.
+    /// </remarks>
+    private IReadOnlyList<Row> Showing =>
+    [
+        .. Narrowed()
+            .GroupBy(line => (
+                Name: line.Name.Trim().ToLowerInvariant(),
+                line.UnitPrice,
+                line.TaxAmount,
+                line.SplitRuleVersionId))
+            .Select(same => new Row(
+                same.First().Id.ToString(),
+                same.First().Name,
+                same.Sum(line => line.Quantity),
+                same.First().UnitPrice,
+                same.Sum(line => line.TotalPrice),
+                same.Sum(line => line.TaxAmount),
+                same.First().SplitRuleVersionId is null,
+                same.First().SplitRuleName))
+    ];
+
+    /// <summary>
+    /// How a line divides, in the few words the slip has room for.
+    /// </summary>
+    /// <remarks>
+    /// A line with no rule is called out only on a bill whose rules something reads. On any
+    /// other, it is not an omission -- it is what a receipt looks like.
+    /// </remarks>
+    private string Divides(Row row) => row switch
+    {
+        { Rule: { Length: > 0 } named } => named,
+        _ when Receipt.DividesItsExpense => "no split rule yet",
+        _ => string.Empty
+    };
+
+    /// <summary>
+    /// A count without its trailing zeros: a bill says "2", not "2.000", and says "0.25"
+    /// when that is what was weighed.
+    /// </summary>
+    private static string Trimmed(decimal quantity) =>
+        quantity == decimal.Truncate(quantity)
+            ? decimal.Truncate(quantity).ToString()
+            : quantity.ToString("0.###");
 }

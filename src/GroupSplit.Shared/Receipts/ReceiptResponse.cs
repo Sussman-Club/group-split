@@ -14,7 +14,10 @@ namespace GroupSplit.Shared;
 public sealed record ReceiptResponse(
     Guid Id, Guid ExpenseId, decimal Subtotal, decimal Tax, decimal Tip, decimal Total,
     int MissingRuleItemCount, bool CanDivide, bool DividesItsExpense,
-    IReadOnlyList<ReceiptItemResponse> Items);
+    IReadOnlyList<ReceiptItemResponse> Items)
+{
+    public bool CanEdit { get; init; }
+}
 
 /// <summary>
 /// One line, carrying its rule three ways: the version id to send back, the rule's name to

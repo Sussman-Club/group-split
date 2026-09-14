@@ -5056,6 +5056,12 @@ html:not([data-gs-ready]) .gs-group-card {
     font-size: .8125rem;
 }
 
+/* Open, the paper follows immediately underneath, so the strip stops reserving the space it
+   keeps when it is the last thing in the stack. */
+.gs-bill-strip.is-open {
+    margin-bottom: 0;
+}
+
 .gs-bill-strip .mud-icon-root {
     color: var(--gs-teal-deep);
     flex: 0 0 auto;
@@ -5068,5 +5074,212 @@ html:not([data-gs-ready]) .gs-group-card {
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .gs-bill-strip .mud-icon-root {
         color: var(--gs-teal-bright);
+    }
+}
+
+/* ---- a bill inside a dialog ---- */
+
+/* The paper takes the width it is given rather than the dialog's own, which on a phone is
+   the difference between a slip and a slip with a horizontal scrollbar under it. */
+.gs-itemized-slip {
+    width: 100%;
+    min-width: 0;
+}
+
+.gs-itemized-dialog .mud-dialog-content {
+    min-width: 0;
+}
+
+@media (max-width: 480px) {
+    .gs-itemized-slip .gs-slip-body {
+        padding-inline: 14px;
+    }
+}
+
+/* Off the paper, on the app's surface: it is a note about the document, not part of it. */
+.gs-slip-aside {
+    max-width: 32rem;
+    margin: 14px auto 0;
+    color: var(--gs-muted);
+    font-size: .8125rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* ---- the bill as a form: one line, one rule ---- */
+
+/*
+    What is left to do, held above the lines.
+
+    Two states and they have to be told apart at a glance, because the whole of the progress
+    on this screen is a number going down: clay while anything is unanswered, and the app's
+    own teal once nothing is.
+*/
+.gs-divide-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--gs-line);
+    border-left: 3px solid var(--gs-teal);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-teal-soft);
+    font-size: .8125rem;
+    line-height: 1.45;
+}
+
+.gs-divide-progress.is-wanting {
+    border-left-color: var(--gs-clay);
+    background: var(--gs-clay-soft);
+}
+
+.gs-divide-progress .mud-icon-root {
+    flex: 0 0 auto;
+    color: var(--gs-teal-deep);
+}
+
+.gs-divide-progress.is-wanting .mud-icon-root {
+    color: var(--gs-clay-deep);
+}
+
+.gs-divide-progress-total {
+    flex: 0 0 auto;
+    font-weight: 700;
+}
+
+.gs-divide-lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+/*
+    One line of the bill and the one decision it carries.
+
+    A card rather than a row, because the decision is a control with a target of its own and
+    rows of unboxed selects run together into a column of identical rectangles with no way of
+    telling which label belongs to which.
+*/
+.gs-divide-line {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    min-width: 0;
+}
+
+/* The lines with something still to answer, marked down the edge where the eye can run the
+   column and find them without reading a word. */
+.gs-divide-line.is-wanting {
+    border-left: 3px solid var(--gs-clay);
+    background: var(--gs-clay-soft);
+}
+
+.gs-divide-line-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+}
+
+.gs-divide-line-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.gs-divide-line-qty {
+    color: var(--gs-muted);
+    font-weight: 400;
+}
+
+.gs-divide-line-price {
+    flex: 0 0 auto;
+    font-weight: 700;
+}
+
+.gs-divide-line-note {
+    color: var(--gs-muted);
+    font-size: .8125rem;
+}
+
+.gs-divide-line .mud-input-control {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+/* The figures off the paper, in one strip, so that dividing the bill can still be checked
+   against the charge without the slip being printed over the form. */
+.gs-divide-recap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--gs-line);
+    font-size: .8125rem;
+}
+
+.gs-divide-recap > div {
+    display: flex;
+    gap: 6px;
+}
+
+.gs-divide-recap dt,
+.gs-divide-recap dd {
+    margin: 0;
+}
+
+.gs-divide-recap dt {
+    color: var(--gs-muted);
+}
+
+.gs-divide-recap > div.is-total {
+    margin-left: auto;
+    font-weight: 700;
+}
+
+/* The body of the "By its bill" option: the same rhythm as the other options' bodies, which
+   are MudStack Spacing="2" -- this one is plain markup and sets its own. */
+.gs-divide {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* ---- the way in, from an expense ---- */
+
+.gs-receipt-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+:root[data-theme="dark"] .gs-divide-progress .mud-icon-root {
+    color: var(--gs-teal-bright);
+}
+
+:root[data-theme="dark"] .gs-divide-progress.is-wanting .mud-icon-root {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-divide-progress .mud-icon-root {
+        color: var(--gs-teal-bright);
+    }
+
+    :root:not([data-theme="light"]) .gs-divide-progress.is-wanting .mud-icon-root {
+        color: var(--gs-clay);
     }
 }

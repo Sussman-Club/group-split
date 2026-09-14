@@ -9,7 +9,6 @@
 @inject ApiErrorPresenter Errors
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
-@inject IDialogService DialogService
 @inject IReceiptCommands Receipts
 
 @*
@@ -192,32 +191,56 @@
                 *@
                 @if (receipt is { Items.Count: > 0 } bill)
                 {
-                    @* A line, not the document.
+                    @* A line that opens into the document, in place.
 
-                       The slip was printed here in full, which made one dialog carry two
-                       things: the division somebody opened it for, and then a receipt --
-                       forty lines of it on a warehouse run -- between them and the Close
-                       button. It also arrived last, after two other reads, so the dialog
-                       grew twice under the reader's hand while they were trying to read it.
+                       The slip was printed here in full once, which made one dialog carry two
+                       things: the division somebody opened it for, and then a receipt -- forty
+                       lines of it on a warehouse run -- between them and the Close button. So
+                       it became a line that opened the bill in a dialog of its own, and that
+                       was worse in a different way: two sheets on a phone, two scrims, two
+                       ways to close, and nothing saying the first one was still there.
 
-                       So this says what there is and opens it. Same shape as the inbox's
-                       way into a bill, because it is the same piece of paper. *@
-                    <div class="gs-bill-strip">
+                       Folded away instead. Shut, it is the line it was; open, the paper is
+                       right here, and the slip's own lines scroll inside it so a long bill
+                       cannot push Close off the screen. One surface either way. *@
+                    <div class="gs-bill-strip @(_showBill ? "is-open" : "")">
                         <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
 
-                        <span>
+                        <span class="gs-receipt-summary">
                             @* What is on the paper. *@
-                            <strong>@bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items")</strong>
-                            Â· @bill.Total.ToMoney()
+                            <strong>Receipt</strong>
+                            <span>@bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items") · @bill.Total.ToMoney()</span>
+
+                            @* And the one thing about it that is somebody's to do. Only on a
+                               bill whose rules something actually reads: elsewhere a line
+                               naming none is what a receipt looks like, not an omission. *@
+                            @if (bill.DividesItsExpense && bill.MissingRuleItemCount > 0)
+                            {
+                                <span class="gs-tag clay">@bill.MissingRuleItemCount without a rule</span>
+                            }
                         </span>
 
+                        @* aria-expanded written as a string: Blazor drops an attribute whose
+                           value is false, and an absent aria-expanded is a control with no
+                           state rather than one that is shut. *@
                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                    Class="gs-btn-quiet ms-auto"
-                                   EndIcon="@Icons.Material.Rounded.ArrowForward"
-                                   OnClick="@(() => ShowBillAsync(bill))">
-                            See the bill
+                                   EndIcon="@(_showBill ? Icons.Material.Rounded.ExpandLess : Icons.Material.Rounded.ExpandMore)"
+                                   aria-expanded="@(_showBill ? "true" : "false")"
+                                   aria-controls="gs-bill-panel"
+                                   OnClick="@(() => _showBill = !_showBill)">
+                            @(_showBill ? "Hide receipt" : "View receipt")
                         </MudButton>
                     </div>
+
+                    @if (_showBill)
+                    {
+                        <div id="gs-bill-panel">
+                            <BillSheet Receipt="bill"
+                                       Title="@(details.MerchantName ?? details.Name)"
+                                       Where="@Clock.Local(details.DateTime).ToString("d MMM yyyy")" />
+                        </div>
+                    }
                 }
             </div>
         }
@@ -291,25 +314,13 @@
         MudDialog.StateHasChanged();
     }
 
-    /// <summary>
-    /// The bill, on its own, handed over rather than read again.
-    /// </summary>
-    private async Task ShowBillAsync(ReceiptResponse bill)
-    {
-        var parameters = new DialogParameters<ExpenseBillDialog>
-        {
-            { dialog => dialog.Receipt, bill },
-            { dialog => dialog.Title, details!.MerchantName ?? details.Name },
-            { dialog => dialog.Where, Clock.Local(details.DateTime).ToString("d MMM yyyy") },
-            { dialog => dialog.Mark, details.MerchantLogoUrl },
-            { dialog => dialog.GroupId, details.GroupId },
-            { dialog => dialog.TransactionId, TransactionId }
-        };
-
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
-
-        await DialogService.ShowAsync<ExpenseBillDialog>("Bill", parameters, options);
-    }
+    /// <summary>Whether the bill is folded open under its line.</summary>
+    /// <remarks>
+    /// Shut to begin with, which is the point: nearly every reader wants the shares and the
+    /// figure, and a receipt unrolled between them and the Close button is the state this
+    /// dialog was redesigned out of once already.
+    /// </remarks>
+    private bool _showBill;
 
     private void Close() => MudDialog.Close();
 }

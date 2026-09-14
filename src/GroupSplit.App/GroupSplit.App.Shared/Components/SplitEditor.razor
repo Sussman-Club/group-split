@@ -77,6 +77,23 @@
                 All for one
             </button>
 
+            @* Only where an expense can have a bill at all, which is a fact the dialog knows
+               before this renders and never changes while it is open -- a create dialog has
+               nowhere to put a receipt, so offering the option there would be a control that
+               is permanently off. Drawn from the start on an edit, disabled until the bill
+               read lands, for the reason given above. *@
+            @if (ShowByBill)
+            {
+                <button type="button"
+                        class="gs-seg-btn @(Chosen is Mode.ByBill ? "active" : "")"
+                        role="radio"
+                        aria-checked="@(Chosen is Mode.ByBill ? "true" : "false")"
+                        disabled="@(!Members.Any() || Bill is null || BillRuleId is null)"
+                        @onclick="@(() => OnModeChanged(Mode.ByBill))">
+                    By its bill
+                </button>
+            }
+
             <button type="button"
                     class="gs-seg-btn @(Chosen is Mode.ByHand ? "active" : "")"
                     role="radio"
@@ -112,6 +129,22 @@
                 </MudSelectItem>
             }
         </MudSelect>
+
+        @Divided
+    }
+    else if (Chosen is Mode.ByBill)
+    {
+        @* The lines, and then the same read-only list every automatic division shows: this
+           names a rule like the two above it, and the API divides by it and answers with the
+           figures. Nothing here is applied separately -- see BillDivision. *@
+        @if (Bill is { } bill)
+        {
+            <BillDivision Receipt="bill"
+                          TransactionId="TransactionId"
+                          GroupId="GroupId"
+                          Amount="Amount"
+                          ReceiptChanged="OnBillChanged" />
+        }
 
         @Divided
     }
@@ -277,6 +310,43 @@
     [Parameter] public IReadOnlyList<SplitRuleResponse> MemberRules { get; set; } = [];
 
     /// <summary>
+    /// Whether "By its bill" is one of the options at all.
+    /// </summary>
+    /// <remarks>
+    /// A property of the dialog and not of the expense: a create dialog has nowhere to put a
+    /// receipt, so the option would be permanently off there. Settled before the first render
+    /// and constant afterwards, which is what keeps the control from resizing under the
+    /// pointer -- whether there is <em>actually</em> a bill is <see cref="Bill"/>, and that
+    /// only enables or disables the button.
+    /// </remarks>
+    [Parameter] public bool ShowByBill { get; set; }
+
+    /// <summary>The expense's itemised bill, when it has one.</summary>
+    [Parameter] public ReceiptResponse? Bill { get; set; }
+
+    /// <summary>
+    /// The group's "divide it by the bill" rule, which is what that option names.
+    /// </summary>
+    /// <remarks>
+    /// One, because a group is given exactly one and cannot write a second: the rule holds no
+    /// settings for a second to differ by. That is what lets this be an id rather than a set
+    /// to search -- groups used to hold several, and reading the first meant an expense on
+    /// another of them matched nothing and lit "All for one" over an empty picker.
+    /// </remarks>
+    [Parameter] public Guid? BillRuleId { get; set; }
+
+    /// <summary>The expense the bill belongs to, so a line's rule can be written to it.</summary>
+    [Parameter] public Guid TransactionId { get; set; }
+
+    /// <summary>The group whose rules the bill's lines divide by.</summary>
+    [Parameter] public Guid? GroupId { get; set; }
+
+    /// <summary>Raised when a line of the bill was pointed at a different rule.</summary>
+    [Parameter] public EventCallback<ReceiptResponse> BillChanged { get; set; }
+
+    private Task OnBillChanged(ReceiptResponse bill) => BillChanged.InvokeAsync(bill);
+
+    /// <summary>
     /// The rule the expense names for itself, or null to divide the way its category does.
     /// </summary>
     [Parameter] public Guid? SplitRuleId { get; set; }
@@ -359,40 +429,67 @@
     protected override void OnParametersSet() => _shares = Value;
 
     /// <summary>
-    /// The three answers to "how is this divided", in the order the control draws them.
+    /// The answers to "how is this divided", in the order the control draws them.
     /// </summary>
     /// <remarks>
-    /// The numbers are the thumb's position, so the order here is the order on screen.
+    /// The order here is the order on screen. The thumb is placed from the position within
+    /// <see cref="Drawn"/> rather than from the enum's own number, so an option that is not
+    /// drawn does not leave a gap where it would have been.
     /// </remarks>
     private enum Mode
     {
         Automatic,
         AllForOne,
+        ByBill,
         ByHand
     }
 
     /// <summary>
-    /// Which of the three is true now, read off the values rather than remembered.
+    /// Which of them is true now, read off the values rather than remembered.
     /// </summary>
     /// <remarks>
     /// Stated shares first: an expense may have been recorded under a rule and then split by
     /// hand, and the hand-typed amounts are what it holds. The API says the same thing in
     /// the other direction -- stating shares clears the rule the expense named -- so the two
     /// cannot both be true for long, and the one that is true of the figures on screen wins.
+    /// <para>
+    /// Then the bill, before the member rules, because both are "the expense names a rule"
+    /// and only the id tells them apart.
+    /// </para>
+    /// <para>
+    /// And the bill again, for the expense that does not name it. Nearly none of them do:
+    /// the division comes from the category -- "Takeaway" points at the bill rule -- so the
+    /// expense names nothing and the id test above says nothing either. Reading the id alone
+    /// opened every one of those on "Automatically", which is true in the sense that the
+    /// category decides, and useless: what somebody wants to see on an expense divided by
+    /// its receipt is the receipt. <c>DividesItsExpense</c> is the API answering what
+    /// actually divides it, whichever way it got there.
+    /// </para>
     /// </remarks>
     private Mode Chosen =>
         _shares is not null ? Mode.ByHand
+        : SplitRuleId is not null && SplitRuleId == BillRuleId ? Mode.ByBill
+        : SplitRuleId is null && Bill is { DividesItsExpense: true } ? Mode.ByBill
         : SplitRuleId is not null ? Mode.AllForOne
         : Mode.Automatic;
 
     /// <summary>
-    /// Three, always. What the control is made of cannot depend on a read that is still in
-    /// flight, or it changes shape while somebody is looking at it.
+    /// The options actually on screen, in order.
     /// </summary>
-    private const int Options = 3;
+    /// <remarks>
+    /// Whether the bill is among them is settled before the first render and does not move
+    /// afterwards: what the control is made of cannot depend on a read that is still in
+    /// flight, or it changes shape while somebody is looking at it. That is also why the
+    /// button is drawn disabled rather than added late once the bill arrives.
+    /// </remarks>
+    private IReadOnlyList<Mode> Drawn => ShowByBill
+        ? [Mode.Automatic, Mode.AllForOne, Mode.ByBill, Mode.ByHand]
+        : [Mode.Automatic, Mode.AllForOne, Mode.ByHand];
+
+    private int Options => Drawn.Count;
 
     /// <summary>Which slot the lit one is in.</summary>
-    private int Position => (int)Chosen;
+    private int Position => Math.Max(0, Drawn.ToList().IndexOf(Chosen));
 
     private decimal Remaining => Amount - (_shares?.Sum(split => split.Amount) ?? 0m);
 
@@ -430,7 +527,14 @@
             return;
 
         var shares = mode is Mode.ByHand ? StartingPoint() : null;
-        var rule = mode is Mode.AllForOne ? Suggested() : null;
+
+        var rule = mode switch
+        {
+            Mode.AllForOne => Suggested(),
+            // One rule, not a suggestion: the group holds exactly one of these.
+            Mode.ByBill => BillRuleId,
+            _ => null
+        };
 
         _shares = shares;
 

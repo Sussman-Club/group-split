@@ -173,9 +173,19 @@ public static class SplitRulesApi
                 // The person a rule puts the whole amount on, read off the division it
                 // stands for now. The listing carries no definition, and a client offering
                 // "all for Ana" has to find Ana's rule without reading every one of them.
+                // Narrowed before the cast, not after. Casting every open version and
+                // trusting the null-forgiving worked only while the one kind that is not a
+                // sole rule never reached here; every group is given a bill rule now, so the
+                // listing always contains one and the cast met it.
+                rule.Versions
+                    .Where(version => version.SupersededAt == null && version is SoleSplitRuleVersion)
+                    .Select(version => (Guid?)((SoleSplitRuleVersion)version).UserId)
+                    .FirstOrDefault(),
+                // And the same for the one rule that has no division of its own. A client
+                // offering "divide it by the bill" would otherwise have to read every rule
+                // the group holds to find which one it is.
                 rule.Versions
                     .Where(version => version.SupersededAt == null)
-                    .Select(version => (version as SoleSplitRuleVersion)!.UserId)
-                    .FirstOrDefault());
+                    .Any(version => version is ItemizedSplitRuleVersion));
     }
 }

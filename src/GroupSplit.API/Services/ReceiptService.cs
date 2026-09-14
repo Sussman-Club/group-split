@@ -45,7 +45,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     public async Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null, CancellationToken ct = default)
     {
         var expense = await VisibleExpense(receipt.ExpenseId, ct);
-        var canDivide = expense.GroupId is not null && await StillInTheGroup(expense, ct);
+        var canEdit = expense.GroupId is not null && await StillInTheGroup(expense, ct);
+        var canDivide = canEdit;
         if (canDivide)
         {
             try { await Calculate(expense, receipt, ct); }
@@ -53,7 +54,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             catch (UnprocessableException) { canDivide = false; }
             catch (ConflictException) { canDivide = false; }
         }
-        return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct));
+        return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct))
+            with { CanEdit = canEdit };
     }
 
     public async Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request, CancellationToken ct = default)

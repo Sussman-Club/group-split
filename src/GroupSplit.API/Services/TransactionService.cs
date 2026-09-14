@@ -322,6 +322,20 @@ public class TransactionService(
             .ThenInclude(split => split.User)
             .Include(expense => expense.SplitRuleVersion)
             .ThenInclude(version => version!.SplitRule)
+            // The bill, loaded the way the receipt service loads one, because the draft below
+            // is divided by it when the rule says to. Without it the draft carries no bill at
+            // all and the itemized rule refuses -- so previewing an expense that divides by
+            // its receipt reported "that expense has no itemised bill on it" about an expense
+            // whose bill the screen was displaying at the time.
+            .Include(expense => expense.Receipt!)
+            .ThenInclude(receipt => receipt.Items)
+            .ThenInclude(item => item.SplitRuleVersion)
+            .ThenInclude(version => (version as WeightedSplitRuleVersion)!.Participants)
+            .Include(expense => expense.Receipt!)
+            .ThenInclude(receipt => receipt.Items)
+            .ThenInclude(item => item.SplitRuleVersion)
+            .ThenInclude(version => version!.SplitRule)
+            .ThenInclude(rule => rule.Group)
             .FirstOrDefaultAsync(ct)
             ?? throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
@@ -403,7 +417,13 @@ public class TransactionService(
             // The version itself and not only its id, because the answer names the rule that
             // divided it and cannot load one from an id it was handed. Only where the draft
             // kept the one the expense holds; a different one is loaded by the splitter.
-            SplitRuleVersion = version == existing.SplitRuleVersionId ? existing.SplitRuleVersion : null
+            SplitRuleVersion = version == existing.SplitRuleVersionId ? existing.SplitRuleVersion : null,
+
+            // The stored bill, which an edit never changes: a line's rule is written to the
+            // receipt as it is picked, and the fields on this draft are the ones that are
+            // still being typed. The itemized rule reads it off the context and refuses
+            // without it.
+            Receipt = existing.Receipt
         };
 
         // What it is divided into today, so the splitter can tell a division that changed
