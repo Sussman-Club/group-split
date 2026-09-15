@@ -10,6 +10,7 @@ public static class VeryfiReceiptTranscriptionExtensions
     private const string ClientIdParameterName = "veryfi-client-id";
     private const string UsernameParameterName = "veryfi-username";
     private const string ApiKeyParameterName = "veryfi-api-key";
+    private const string LogRawResponsesParameterName = "veryfi-log-raw-responses";
 
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
     {
@@ -25,6 +26,8 @@ public static class VeryfiReceiptTranscriptionExtensions
                 .WithDescription("Veryfi API username.");
             var apiKey = builder.AddOptionalParameter(ApiKeyParameterName, string.Empty, secret: true)
                 .WithDescription("Veryfi API key.");
+            var logRawResponses = builder.AddOptionalParameter(LogRawResponsesParameterName, "false")
+                .WithDescription("Whether to log Veryfi's whole response, for diagnosing a misread receipt (true/false).");
 
             builder.Pipeline.AddStep(
                 "validate-veryfi",
@@ -36,7 +39,8 @@ public static class VeryfiReceiptTranscriptionExtensions
                 .WithEnvironment("Veryfi__Enabled", enabled)
                 .WithEnvironment("Veryfi__ClientId", clientId)
                 .WithEnvironment("Veryfi__Username", username)
-                .WithEnvironment("Veryfi__ApiKey", apiKey);
+                .WithEnvironment("Veryfi__ApiKey", apiKey)
+                .WithEnvironment("Veryfi__LogRawResponses", logRawResponses);
         }
     }
 }

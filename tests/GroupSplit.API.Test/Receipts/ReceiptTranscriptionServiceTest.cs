@@ -165,6 +165,257 @@ public class ReceiptTranscriptionServiceTest
         Assert.Equal(0.43m, receipt.Items[1].TaxAmount);
     }
 
+    /// <summary>
+    /// A warehouse receipt: gross line prices, with each instant saving printed as its own row
+    /// naming the item number it comes off. Spreading that saving over the whole bill would move
+    /// every price on it, so the coupon goes on the one line and the rest stand as printed.
+    /// </summary>
+    [Fact]
+    public async Task A_coupon_that_names_its_line_comes_off_that_line_and_leaves_the_rest_as_printed()
+    {
+        var server = new VeryfiServer("""
+            {
+              "subtotal": 99.62,
+              "tax": 1.95,
+              "tip": 0.00,
+              "total": 101.57,
+              "line_items": [
+                { "sku": "91385", "description": "FLAP MEAT", "price": null, "quantity": null, "total": 51.67 },
+                { "sku": "782796", "description": "KSWTR40PK", "price": 3.99, "quantity": 2, "total": 7.98 },
+                { "sku": "1776788", "description": "JCHS5PCKTPNT", "price": 14.99, "quantity": 2, "total": 29.98, "tax": 1.95 },
+                { "sku": "388175", "type": "discount", "text": "388175 / 1776788 4.00-", "total": -4.00 },
+                { "sku": "2008132", "description": "ALWAYS FLEX", "price": 17.99, "quantity": 1, "total": 17.99 },
+                { "sku": "387813", "type": "discount", "text": "387813 / 2008132 4.00-", "total": -4.00 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "costco.pdf", "application/pdf", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        Assert.Equal(4, receipt.Items.Count);
+        Assert.Equal(99.62m, receipt.Items.Sum(item => item.TotalPrice));
+
+        // Undiscounted lines keep the figures the till printed, to the cent.
+        var meat = receipt.Items[0];
+        Assert.Equal(51.67m, meat.TotalPrice);
+        Assert.Equal(51.67m, meat.UnitPrice);
+        Assert.Equal(1m, meat.Quantity);
+        var water = receipt.Items[1];
+        Assert.Equal(7.98m, water.TotalPrice);
+        Assert.Equal(3.99m, water.UnitPrice);
+        Assert.Equal(2m, water.Quantity);
+
+        // Discounted lines lose exactly their own coupon, and the unit price follows the line
+        // down: two pairs of trousers at 14.99 less 4.00 are 12.99 each, not 14.99.
+        var trousers = receipt.Items[2];
+        Assert.Equal(25.98m, trousers.TotalPrice);
+        Assert.Equal(12.99m, trousers.UnitPrice);
+        Assert.Equal(2m, trousers.Quantity);
+        Assert.Equal(1.95m, trousers.TaxAmount);
+        var pads = receipt.Items[3];
+        Assert.Equal(13.99m, pads.TotalPrice);
+        Assert.Equal(13.99m, pads.UnitPrice);
+
+        // The one taxable line keeps all the tax; it is not smeared over the bill.
+        Assert.Equal(1.95m, receipt.Tax);
+        Assert.Equal(0m, meat.TaxAmount);
+    }
+
+    /// <summary>
+    /// Costco prints the item number where a quantity would go, so "8 2% MILK 1GAL 2.99" reads
+    /// as eight jugs of milk at 37c. Price, quantity and total owe each other a product, and
+    /// that is enough to catch it.
+    /// </summary>
+    [Fact]
+    public async Task A_quantity_that_contradicts_the_price_and_total_is_read_again()
+    {
+        var server = new VeryfiServer("""
+            {
+              "subtotal": 8.98,
+              "tax": 0.00,
+              "tip": 0.00,
+              "total": 8.98,
+              "line_items": [
+                { "description": "2% MILK 1GAL", "price": 2.99, "quantity": 8, "total": 2.99 },
+                { "description": "ROMA TOMATO", "price": 5.99, "quantity": 1344, "total": 5.99 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "costco.pdf", "application/pdf", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        Assert.Collection(receipt.Items,
+            milk =>
+            {
+                Assert.Equal(1m, milk.Quantity);
+                Assert.Equal(2.99m, milk.UnitPrice);
+                Assert.Equal(2.99m, milk.TotalPrice);
+            },
+            tomatoes =>
+            {
+                Assert.Equal(1m, tomatoes.Quantity);
+                Assert.Equal(5.99m, tomatoes.UnitPrice);
+                Assert.Equal(5.99m, tomatoes.TotalPrice);
+            });
+    }
+
+    /// <summary>
+    /// Veryfi names a coupon by type, not only by sign. A discount row reported with a positive
+    /// total must not become something the group is asked to divide up and pay for.
+    /// </summary>
+    [Fact]
+    public async Task A_discount_row_is_never_an_item_even_when_its_total_reads_positive()
+    {
+        var server = new VeryfiServer("""
+            {
+              "subtotal": 9.00,
+              "tax": 0.00,
+              "tip": 0.00,
+              "total": 9.00,
+              "line_items": [
+                { "description": "Cheese", "price": 10.00, "quantity": 1, "total": 10.00 },
+                { "description": "Member saving", "type": "discount", "total": 1.00, "discount": 1.00 },
+                { "description": "Card ending 5430", "type": "payment", "total": 9.00 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "shop.jpg", "image/jpeg", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        var cheese = Assert.Single(receipt.Items);
+        Assert.Equal("Cheese", cheese.Name);
+        // The coupon names no line, so it cannot be placed on one: the subtotal is spread
+        // instead, and the bill still adds up to what was paid.
+        Assert.Equal(9m, cheese.TotalPrice);
+        Assert.Equal(9m, receipt.Items.Sum(item => item.TotalPrice));
+    }
+
+    /// <summary>
+    /// Rows as Veryfi really returned them for a Costco receipt, whose "N @ price" qualifiers
+    /// sit in a column of their own and get read onto whichever row they land beside. It glues
+    /// one onto the mozzarella, which never had a quantity, and another onto a coupon row,
+    /// which comes back with a positive total for a saving of 2.70.
+    /// </summary>
+    [Fact]
+    public async Task A_qualifier_read_onto_the_wrong_row_costs_neither_a_price_nor_a_coupon()
+    {
+        var server = new VeryfiServer("""
+            {
+              "subtotal": 47.74,
+              "tax": 0.00,
+              "tip": null,
+              "total": 47.74,
+              "discount": 6.70,
+              "line_items": [
+                { "type": "food", "sku": "1189000", "description": "MOZZARELLA", "quantity": 2.0, "price": 3.99, "total": 7.79 },
+                { "type": "product", "sku": "782796", "description": "***KSWTR40PK", "quantity": 1.0, "price": null, "total": 7.98 },
+                { "type": "food", "sku": "2062082", "description": "TERIYAKIUDON", "quantity": 1.0, "price": null, "total": 8.69 },
+                { "type": null, "sku": "388233/2062082", "description": null, "quantity": 2.0, "price": 14.99, "total": 27.28, "discount": -2.70 },
+                { "type": "food", "sku": "1776788", "description": "JCHS5PCKTPNT", "quantity": 1.0, "price": null, "total": 29.98 },
+                { "type": null, "sku": "388175/1776788", "description": null, "quantity": 1.0, "price": null, "total": -4.00, "discount": -4.00 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "costco.pdf", "application/pdf", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        // The 27.28 row is a coupon, not a purchase: nothing bought is named on it, and it
+        // takes 2.70 off. It must not arrive as a thing the group is asked to pay for.
+        Assert.Equal(4, receipt.Items.Count);
+        Assert.DoesNotContain(receipt.Items, item => item.TotalPrice == 27.28m);
+        Assert.Equal(47.74m, receipt.Items.Sum(item => item.TotalPrice));
+
+        // A quantity belonging to another line does not turn one block of mozzarella into
+        // 1.952 of them. The printed total stands, as one of what it is.
+        var mozzarella = receipt.Items[0];
+        Assert.Equal(1m, mozzarella.Quantity);
+        Assert.Equal(7.79m, mozzarella.UnitPrice);
+        Assert.Equal(7.79m, mozzarella.TotalPrice);
+
+        // Both coupons land on the lines they name, and everything else stands as printed.
+        Assert.Equal(7.98m, receipt.Items[1].TotalPrice);
+        Assert.Equal(5.99m, receipt.Items[2].TotalPrice);
+        Assert.Equal(25.98m, receipt.Items[3].TotalPrice);
+    }
+
+    /// <summary>
+    /// A line whose name wrapped onto the next row of the paper comes back with nothing but its
+    /// item number and its price. The money is real, so the line has to stay on the bill under
+    /// a name somebody can match against the receipt and correct.
+    /// </summary>
+    [Fact]
+    public async Task A_line_with_no_name_of_its_own_is_named_rather_than_dropped()
+    {
+        var server = new VeryfiServer("""
+            {
+              "subtotal": 12.28,
+              "tax": 0.00,
+              "tip": null,
+              "total": 12.28,
+              "line_items": [
+                { "type": "food", "sku": "568915", "description": null, "text": "568915\t\t5.29 N", "quantity": 1.0, "total": 5.29 },
+                { "type": "food", "sku": "1189000", "description": null, "text": "1189000 MOZZARELLA\t6.99 N", "quantity": 1.0, "total": 6.99 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "costco.pdf", "application/pdf", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, receipt.Items.Count);
+        // Nothing but numbers on the row, so it is called after the number on the paper --
+        // never "568915\t\t5.29 N", and never quietly dropped along with its 5.29.
+        Assert.Equal("Item 568915", receipt.Items[0].Name);
+        Assert.Equal(5.29m, receipt.Items[0].TotalPrice);
+        // Where the raw text does carry a name, the item number and the price come off it.
+        Assert.Equal("MOZZARELLA", receipt.Items[1].Name);
+        Assert.Equal(6.99m, receipt.Items[1].TotalPrice);
+    }
+
     [Fact]
     public async Task A_provider_refusal_is_a_retryable_bad_gateway()
     {

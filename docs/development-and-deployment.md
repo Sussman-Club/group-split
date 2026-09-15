@@ -79,6 +79,7 @@ AppHost needs only a GitHub entry of the matching name.
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
 | `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
 | `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when receipt transcription is enabled | Veryfi API credentials. |
+| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response, which is how a provider misreading is told apart from a mapping mistake. Leave it off outside an investigation: a receipt body is somebody's shopping, and the log is a wider audience than the expense the file was attached to. |
 
 The optional ones are declared with
 [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
