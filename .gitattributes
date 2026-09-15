@@ -1,0 +1,4 @@
+# Assets shipped into Linux containers are read there by a shell, which treats a trailing
+# carriage return as part of the command. With core.autocrlf on -- the default on Windows --
+# a checkout would hand `sh` a file it cannot run, so keep these at LF whatever the platform.
+*.sh text eol=lf
