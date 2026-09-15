@@ -230,6 +230,8 @@ public class TransactionService(
                             : "The paying user is neither a member of the group nor invited to it.");
 
         var category = await CategoryFor(group, request.CategoryId, ct);
+        var selectedRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId,
+            request.Splits, ct);
 
         var expense = new Expense
         {
@@ -246,11 +248,14 @@ public class TransactionService(
             MerchantId = await MerchantFor(request.MerchantId, ct),
             // The division it was told to use, which the splitter then keeps rather than
             // reaching for the category's. Null is the ordinary expense.
-            SplitRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId, request.Splits, ct),
+            SplitRuleVersionId = selectedRuleVersionId,
             User = payer
         };
 
-        await splitter.WriteSplitsAsync(expense, request.Splits, ct);
+        if (selectedRuleVersionId is { } selected)
+            await splitter.WriteSplitsByRuleAsync(expense, selected, ct);
+        else
+            await splitter.WriteSplitsAsync(expense, request.Splits, ct);
 
         dbContext.Add(expense);
         await dbContext.SaveChangesAsync(ct);
@@ -273,6 +278,8 @@ public class TransactionService(
                             : "The paying user is neither a member of the group nor invited to it.");
 
         var category = await CategoryFor(group, request.CategoryId, ct);
+        var selectedRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId,
+            request.Splits, ct);
 
         // Ids only, and never added to the context: the splitter reads the ids when the
         // navigations are absent, so nothing here is reachable from a tracked entity and
@@ -285,11 +292,14 @@ public class TransactionService(
             Name = request.Name,
             GroupId = group?.Id,
             CategoryId = category?.Id,
-            SplitRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId, request.Splits, ct),
+            SplitRuleVersionId = selectedRuleVersionId,
             UserId = payer.Id
         };
 
-        await splitter.WriteSplitsAsync(draft, request.Splits, ct);
+        if (selectedRuleVersionId is { } selected)
+            await splitter.WriteSplitsByRuleAsync(draft, selected, ct);
+        else
+            await splitter.WriteSplitsAsync(draft, request.Splits, ct);
 
         return await Describe(draft, group?.Id, ct);
     }
@@ -434,7 +444,10 @@ public class TransactionService(
         foreach (var split in existing.Splits)
             draft.Splits.Add(new TransactionSplit { UserId = split.UserId, Amount = split.Amount });
 
-        await splitter.WriteSplitsAsync(draft, stated, ct);
+        if (request.SplitRuleId is not null)
+            await splitter.WriteSplitsByRuleAsync(draft, version!.Value, ct);
+        else
+            await splitter.WriteSplitsAsync(draft, stated, ct);
 
         return await Describe(draft, group?.Id, ct);
     }
@@ -704,10 +717,13 @@ public class TransactionService(
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
         // edit for which keeping the old split would be right -- unless the caller stated
         // the division itself, which is the one case where keeping it is the whole point.
-        await splitter.WriteSplitsAsync(
-            expense,
-            cameFromRule && inputsMoved && saysNothingNew ? null : request.Splits,
-            ct);
+        if (request.SplitRuleId is not null)
+            await splitter.WriteSplitsByRuleAsync(expense, division!.Value, ct);
+        else
+            await splitter.WriteSplitsAsync(
+                expense,
+                cameFromRule && inputsMoved && saysNothingNew ? null : request.Splits,
+                ct);
 
         await dbContext.SaveChangesAsync(ct);
 

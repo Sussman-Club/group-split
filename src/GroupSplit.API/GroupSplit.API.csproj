@@ -7,7 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.5.3-preview.1.26425.3" />
+        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.5.4-preview.1.26464.4" />
         <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.101.3" />
         <PackageReference Include="AWSSDK.S3" Version="4.0.103.2" />
         <PackageReference Include="Going.Plaid" Version="6.67.0" />

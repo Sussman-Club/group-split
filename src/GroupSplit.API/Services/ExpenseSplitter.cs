@@ -21,6 +21,15 @@ public interface IExpenseSplitter
     Task WriteSplitsAsync(Expense expense, IReadOnlyList<SplitInput>? given, CancellationToken ct = default);
 
     /// <summary>
+    /// Divides the expense by the explicitly selected rule version.
+    /// </summary>
+    /// <remarks>
+    /// This is distinct from the ordinary null-input path: an explicitly selected rule must
+    /// win over the category, while a null input normally means that the category decides.
+    /// </remarks>
+    Task WriteSplitsByRuleAsync(Expense expense, Guid ruleVersionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Whether this expense would be divided by the bill attached to it.
     /// </summary>
     /// <remarks>
@@ -127,15 +136,31 @@ public class ExpenseSplitter(
         Replace(expense, await DividedByRule(expense, payerId, members, ct), members);
     }
 
+    public async Task WriteSplitsByRuleAsync(Expense expense, Guid ruleVersionId,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(expense);
+
+        var members = await MembersOf(expense, ct);
+        var version = await Versions().FirstAsync(candidate => candidate.Id == ruleVersionId, ct);
+
+        Replace(expense, await DividedByRule(expense, expense.Payer, members, version, ct), members);
+    }
+
     /// <summary>
     /// The division the expense's rule calls for -- see <see cref="VersionFor"/> for which
     /// version of it -- or an even one when it has no category or the category names no
     /// rule. Records the version on the expense either way, including as null.
     /// </summary>
     private async Task<IReadOnlyList<SplitAmount>> DividedByRule(
-        Expense expense, Guid payerId, IReadOnlyCollection<Guid> members, CancellationToken ct)
+        Expense expense, Guid payerId, IReadOnlyCollection<Guid> members, CancellationToken ct) =>
+        await DividedByRule(expense, payerId, members, version: null, ct);
+
+    private async Task<IReadOnlyList<SplitAmount>> DividedByRule(
+        Expense expense, Guid payerId, IReadOnlyCollection<Guid> members,
+        SplitRuleVersion? version, CancellationToken ct)
     {
-        var version = await VersionFor(expense, ct);
+        version ??= await VersionFor(expense, ct);
 
         expense.SplitRuleVersion = version;
         expense.SplitRuleVersionId = version?.Id;
