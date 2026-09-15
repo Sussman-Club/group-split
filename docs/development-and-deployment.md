@@ -54,11 +54,23 @@ shipping files as configs, healthchecks, the external network, and the restart a
 ## Deployment parameters
 
 Anything that differs between deployments is an Aspire parameter. Parameter names are
-kebab-case; the deploy workflow exports every GitHub secret and variable of the
-`production` environment as `Parameters__<lower-cased name>`, the spelling Aspire documents
-for CI (dashes in a parameter name are written as underscores), so a GitHub entry called
-`WEB_HOSTNAME` is what the parameter `web-hostname` resolves to. Adding a parameter to the
-AppHost needs only a GitHub entry of the matching name.
+kebab-case; the deploy workflow exports an explicit allowlist of the `production`
+environment's secrets and variables as `Parameters__<lower-cased name>`, the spelling
+Aspire documents for CI (dashes in a parameter name are written as underscores), so a
+GitHub entry called `WEB_HOSTNAME` is what the parameter `web-hostname` resolves to.
+
+The allowlist is deliberate: it is what stops a future, unrelated repository secret from
+being forwarded into the AppHost and written into the generated deployment environment.
+
+The workflow reads each entry from exactly one place -- a variable or a secret, whichever
+the table below names -- so the column is load-bearing. An entry stored as the other kind
+is read as empty: required ones fail the pre-flight check, and optional ones quietly fall
+back to their default.
+
+The cost is that **adding a parameter takes two edits, not one** -- a GitHub entry of the
+matching name, and the same name added to the deploy workflow's allowlist. A GitHub entry
+the workflow does not name is simply never seen by the AppHost, and the parameter falls
+back to whatever default it declares.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
@@ -73,7 +85,7 @@ AppHost needs only a GitHub entry of the matching name.
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
-| `plaid-client-id`, `plaid-secret` | variable `PLAID_CLIENT_ID`; secret `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
+| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no, empty keeps the popup flow | Where an OAuth bank returns to. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
@@ -459,22 +471,100 @@ pipeline the workflow uses is `aspire do --list-steps` with the same `--environm
 
 ## How a deploy runs
 
-A push to `main`, in practice a `dev` to `main` merge, triggers
-[`deploy.yml`](../.github/workflows/deploy.yml):
+Merging to `main` deploys production. There is no separate release step: the workflow
+claims the next version itself, so the thing that gets deployed always has one immutable
+identifier behind it.
 
-1. The required secrets and variables are checked before anything is built, so a missing
-   value fails in seconds rather than after the images exist.
-2. Every secret and variable is exported as `Parameters__*`, so the AppHost sees them the
-   way Aspire's CI guidance describes.
-3. `aspire do push --environment production` builds the API, web and migration images,
-   pushes them to `registry.sussman.win/group-split` under one timestamp tag, and
-   generates the Compose file that references that tag. The generation rides on `push`
-   because the AppHost declares the Compose prepare step as required by it, so the two
-   share one pipeline run; run separately they would stamp different tags. The workflow
-   knows only the documented command, not any step or resource name of the AppHost's.
-4. The Compose file and `.env.production` are handed to Komodo, which owns the stack on
-   the Docker host, and the stack is redeployed. The job polls the update and fails if the
-   deploy did.
+### Shipping a change
+
+1. Open a pull request into `dev` and merge it as usual.
+2. Open a pull request from `dev` into `main`. It needs one approving review, every
+   conversation resolved, and a green CI run.
+3. Merge it. That push to `main` is the deploy.
+
+Only `dev` may merge into `main`. GitHub cannot express that as a setting -- neither
+branch protection nor rulesets can restrict where a pull request comes from -- so
+[`main-merge-policy.yml`](../.github/workflows/main-merge-policy.yml) says it as a check,
+and the check is required on `main`. A pull request from anywhere else fails it and
+explains that the change belongs in `dev` first.
+
+### Version numbers
+
+A merge to `main` raises the **patch**: the job reads the newest `app-v*` tag, adds one,
+and writes the new tag before it builds anything. A minor or major release has to be
+asked for, because nothing in a commit says which it should be -- run the workflow
+manually (`Actions` -> `Deploy` -> `Run workflow`) and choose the `bump`. It is the CLI's
+release job in shape, [`release-cli.yml`](../.github/workflows/release-cli.yml), including
+that a tag already on `HEAD` is reused, so re-running a failed deploy ships the same
+version rather than burning a new number.
+
+The version is the image tag and the `Deployment__Version` the AppHost refuses to publish
+without, so a deployed stack, its images and its tag all name the same thing. Note the tag
+is claimed *before* the build: a build that then fails leaves a version number spent and a
+tag on a commit that never shipped.
+
+`app-v*` is the application. `cli-v*` is the command line, which releases on its own and
+never touches the deployed stack.
+
+### What has to be in place
+
+| Prerequisite | Why |
+| --- | --- |
+| The `production` environment allows `main` | The job runs `environment: production`, and the run happens at `refs/heads/main`, so the environment needs a deployment **branch** policy for `main`. |
+| Every required secret and variable on that environment | See [Deployment parameters](#deployment-parameters). Checked before anything is built. |
+| A Komodo stack named `group-split` in `file_contents` mode | The workflow writes the generated Compose file into it. It does not create the stack. |
+
+### What the workflow does
+
+1. Runs CI and waits for it. `deploy.yml` calls
+   [`ci.yml`](../.github/workflows/ci.yml) as a reusable workflow and depends on it, so
+   unit and integration tests both have to pass before anything is built or pushed. It is a
+   call rather than a `workflow_run` trigger for a specific reason: `workflow_run` reports
+   the run against the default branch, and the environment's `main`-only policy would then
+   refuse every deployment.
+2. Checks the allowlisted secrets and variables, so a missing value fails in seconds rather
+   than after the images exist. A feature switch that is off is a notice; one that is on but
+   missing its credentials is a failure.
+3. Claims the release version and writes its tag.
+4. Pins the Aspire CLI to the version the AppHost SDK declares, so the CLI and the
+   evaluated model agree.
+5. Exports the allowlist as `Parameters__*`, then unsets the GitHub-facing names so nothing
+   the build spawns inherits them.
+6. `aspire do push --environment production` builds the API, web and migration images,
+   pushes them to `ghcr.io/sussman-club/group-split`, and generates the Compose file that
+   references them. The generation rides on `push` because the AppHost declares the Compose
+   prepare step as required by it, so the two share one pipeline run; run separately they
+   would stamp different tags. The workflow knows only the documented command, not any step
+   or resource name of the AppHost's.
+7. Resolves each pushed tag to its registry digest, so the host pulls exactly what CI built
+   rather than a tag that could later be moved.
+8. Runs `docker compose config` over the generated file, so a malformed stack fails on the
+   runner instead of on the host.
+9. Hands the Compose file and `.env.production` to Komodo, which owns the stack on the
+   Docker host, and redeploys it. `/execute` is asynchronous, so the job polls the update.
+   A deploy that is still running after five minutes is reported as still running, not as
+   failed, because the two need different responses. `DeployStack` is deliberately not
+   retried: a retry after a lost response would start a second deploy of the same stack.
+10. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
+    completed Komodo update proves the stack operation finished, not that the release is
+    being served.
+
+The Compose file and a secret-free deployment manifest are kept as run artifacts for a
+month, so a past deploy can be inspected. The `.env.production` beside them is not: it holds
+every secret in the clear, and artifacts are readable by anyone with read access to the
+repository.
+
+Only one deploy runs at a time. Two concurrent runs would push different image tags into the
+same Komodo stack and race each other, so a second merge waits rather than cancelling the
+first.
+
+### What this does not do
+
+There is no rollback. The smoke test runs after Komodo has deployed, so a release that
+fails it is already the one being served; recovering means deploying a known-good version,
+and the digest-pinned manifest from an earlier run is what names one. Nothing backs the
+database up before the migration container runs either, and migrations are forward-only --
+so rolling images back does not roll the schema back with them.
 
 Nothing on the runner starts a container. `aspire deploy` would, which is why the
 workflow uses `aspire do` instead.
