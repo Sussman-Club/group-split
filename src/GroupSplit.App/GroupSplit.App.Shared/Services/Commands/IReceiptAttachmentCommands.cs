@@ -7,6 +7,7 @@ public interface IReceiptAttachmentCommands
 {
     Task<IReadOnlyList<ReceiptAttachmentResponse>> GetAsync(Guid transactionId, CancellationToken ct = default);
     Task<ReceiptAttachmentResponse?> UploadAsync(Guid transactionId, IBrowserFile file, CancellationToken ct = default);
+    Task<bool> DeleteAsync(Guid transactionId, Guid attachmentId, CancellationToken ct = default);
     Task<IReadOnlyList<ReceiptAttachmentResponse>> GetForBankAsync(Guid bankTransactionId, CancellationToken ct = default);
     Task<ReceiptAttachmentResponse?> UploadForBankAsync(Guid bankTransactionId, IBrowserFile file, CancellationToken ct = default);
     Task<ReceiptTranscriptionResponse?> TranscribeForBankAsync(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default);

@@ -3349,6 +3349,391 @@ html:not([data-gs-ready]) .gs-group-card {
     }
 }
 
+/* ---- the unified receipt section ---- */
+
+/* Original files and their optional itemized reading belong together, but neither should
+   compete with the expense's amount or split. The section is quiet when empty and becomes
+   a small document shelf only after somebody asks to see it. */
+.gs-receipts {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--gs-line);
+    container-type: inline-size;
+    container-name: receipts;
+}
+
+.gs-receipts-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.gs-receipts-heading,
+.gs-receipt-file,
+.gs-receipt-itemized,
+.gs-receipts-add {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.gs-receipts-heading {
+    gap: 10px;
+}
+
+.gs-receipts-mark,
+.gs-receipt-file-mark {
+    display: grid;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 11px;
+    color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+}
+
+.gs-receipt-file-mark {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+}
+
+.gs-receipt-file-mark.is-pdf {
+    color: var(--gs-clay);
+    background: var(--gs-clay-soft);
+}
+
+.gs-receipt-file-mark.is-itemized {
+    color: var(--gs-teal-deep);
+    background: var(--gs-teal-soft);
+}
+
+.gs-receipts-heading-copy,
+.gs-receipt-file-copy {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.gs-receipts-heading h3 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+.gs-receipts-summary,
+.gs-receipt-file-kind,
+.gs-receipt-file-meta {
+    color: var(--gs-muted);
+    font-size: .75rem;
+    line-height: 1.35;
+}
+
+.gs-receipts-summary {
+    display: block;
+}
+
+.gs-receipts-head-actions,
+.gs-receipt-file-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+}
+
+.gs-receipts-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    margin-top: 12px;
+}
+
+.gs-receipt-file,
+.gs-receipt-itemized {
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+}
+
+.gs-receipt-file {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 8px;
+}
+
+.gs-receipt-file-name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
+    font-size: .8125rem;
+    line-height: 1.3;
+}
+
+.gs-receipt-file-actions {
+    grid-column: 3;
+    margin-left: auto;
+    row-gap: 4px;
+    column-gap: 4px;
+}
+
+.gs-receipt-action,
+.gs-receipt-file-actions .mud-button-root {
+    min-height: 32px;
+    padding: 6px 8px;
+    border-radius: var(--gs-radius-pill);
+    font-size: .75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.gs-receipt-action {
+    display: inline-flex;
+    align-items: center;
+    color: var(--gs-teal-deep);
+    text-decoration: none;
+}
+
+.gs-receipt-action:hover,
+.gs-receipt-action:focus-visible {
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal-deep);
+    text-decoration: none;
+}
+
+.gs-receipt-remove {
+    color: var(--gs-danger) !important;
+}
+
+.gs-receipt-preview {
+    overflow: hidden;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-3);
+}
+
+.gs-receipt-preview img,
+.gs-receipt-preview iframe {
+    display: block;
+    width: 100%;
+    max-height: 440px;
+    border: 0;
+    object-fit: contain;
+}
+
+.gs-receipt-preview img {
+    max-height: 440px;
+}
+
+.gs-receipt-preview iframe {
+    height: min(440px, 70vh);
+    background: var(--gs-surface-2);
+}
+
+.gs-receipt-pdf-fallback {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 112px;
+    padding: 16px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--gs-clay) 9%, var(--gs-surface-2)),
+        var(--gs-surface-2));
+}
+
+.gs-receipt-pdf-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gs-receipt-pdf-title {
+    font-size: .8125rem;
+    line-height: 1.3;
+}
+
+.gs-receipt-pdf-message {
+    max-width: 42ch;
+    color: var(--gs-muted);
+    font-size: .75rem;
+    line-height: 1.45;
+}
+
+.gs-receipt-pdf-download {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--gs-clay) !important;
+}
+
+.gs-receipt-pdf-download:hover,
+.gs-receipt-pdf-download:focus-visible {
+    background: var(--gs-clay-soft);
+    color: var(--gs-clay) !important;
+}
+
+.gs-receipt-itemized {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.gs-receipt-itemized .gs-receipt-file-copy {
+    align-self: center;
+}
+
+.gs-receipt-itemized > .mud-button-root {
+    margin-left: auto;
+    align-self: center;
+}
+
+.gs-receipt-rule-warning {
+    flex: 0 0 auto;
+    align-self: center;
+    margin-left: auto;
+}
+
+.gs-receipt-itemized > .gs-receipt-rule-warning + .mud-button-root {
+    margin-left: 0;
+}
+
+.gs-receipt-itemized-panel {
+    overflow: hidden;
+    min-width: 0;
+    padding: 2px 0 4px;
+}
+
+.gs-receipts-uploader {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--gs-teal) 28%, var(--gs-line));
+    border-radius: var(--gs-radius-sm);
+    background: color-mix(in srgb, var(--gs-teal) 4%, var(--gs-surface));
+}
+
+.gs-receipts-cancel {
+    align-self: flex-start;
+}
+
+.gs-receipts-add {
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px dashed var(--gs-line-strong);
+    border-radius: var(--gs-radius-sm);
+    color: var(--gs-muted);
+    font-size: .75rem;
+}
+
+.gs-receipts-add .mud-button-root {
+    flex: 0 0 auto;
+}
+
+@container receipts (max-width: 760px) {
+    .gs-receipt-file {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        padding: 12px;
+    }
+
+    .gs-receipt-file-copy {
+        align-self: center;
+    }
+
+    .gs-receipt-file-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+        margin-left: 44px;
+        padding-top: 8px;
+        border-top: 1px solid color-mix(in srgb, var(--gs-line) 72%, transparent);
+    }
+}
+
+@container receipts (max-width: 480px) {
+    .gs-receipt-file-actions {
+        margin-left: 0;
+    }
+
+    .gs-receipt-file-actions .mud-button-root,
+    .gs-receipt-action {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 620px) {
+    .gs-receipt-file,
+    .gs-receipt-itemized {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .gs-receipt-file-actions,
+    .gs-receipt-itemized > .mud-button-root,
+    .gs-receipt-rule-warning {
+        grid-column: 1 / -1;
+        margin-left: 44px;
+        justify-content: flex-start;
+    }
+
+    .gs-receipt-itemized > .mud-button-root,
+    .gs-receipt-rule-warning {
+        align-self: center;
+    }
+
+    .gs-receipt-itemized > .mud-button-root {
+        margin-left: 44px;
+    }
+
+    .gs-receipt-itemized > .gs-receipt-rule-warning + .mud-button-root {
+        margin-left: 44px;
+    }
+}
+
+@media (max-width: 420px) {
+    .gs-receipt-pdf-fallback {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .gs-receipt-pdf-download {
+        margin-left: 46px;
+    }
+
+    .gs-receipts-head {
+        align-items: flex-start;
+    }
+
+    .gs-receipts-head-actions {
+        margin-top: -4px;
+    }
+
+    .gs-receipts-add {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
 /* Two form fields side by side, until there is not room for two. Date and time in the
    expense dialogs: at 375px each got about 140px, part of which the picker spends on its
    own calendar or clock button, so both values were clipped mid-string -- "9/9/20" and

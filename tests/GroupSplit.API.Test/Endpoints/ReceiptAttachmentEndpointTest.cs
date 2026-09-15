@@ -120,6 +120,14 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         Assert.Equal(StoredFile, await downloaded.Content.ReadAsByteArrayAsync(Ct));
         Assert.Contains("dinner.jpg", downloaded.Content.Headers.ContentDisposition?.FileNameStar ?? "");
 
+        var preview = await Client.GetAsync(
+            $"/transactions/{expenseId}/receipt-attachments/{attachment.Id}?inline=true", Ct);
+        Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+        Assert.Equal("image/jpeg", preview.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(StoredFile, await preview.Content.ReadAsByteArrayAsync(Ct));
+        Assert.Equal("inline", preview.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Contains("dinner.jpg", preview.Content.Headers.ContentDisposition?.FileNameStar ?? "");
+
         var transcribed = await Client.PostAsync(
             $"/transactions/{expenseId}/receipt-attachments/{attachment.Id}/transcribe", null, Ct);
         Assert.Equal(HttpStatusCode.OK, transcribed.StatusCode);
@@ -141,7 +149,7 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         _storage.Verify(storage => storage.GetObjectAsync(
             "receipts-test",
             It.Is<string>(key => key.StartsWith($"{expenseId:N}/", StringComparison.Ordinal)),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
         _storage.Verify(storage => storage.DeleteObjectAsync(
             "receipts-test", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         _transcription.Verify(service => service.Transcribe(

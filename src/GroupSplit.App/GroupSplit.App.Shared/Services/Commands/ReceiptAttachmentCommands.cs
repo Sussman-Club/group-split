@@ -38,6 +38,12 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         return succeeded ? uploaded : null;
     }
 
+    public Task<bool> DeleteAsync(Guid transactionId, Guid attachmentId, CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await receipts.DeleteReceiptAttachmentAsync(transactionId, attachmentId, ct);
+        }, "Could not remove receipt file.");
+
     public async Task<IReadOnlyList<ReceiptAttachmentResponse>> GetForBankAsync(Guid bankTransactionId,
         CancellationToken ct = default)
     {

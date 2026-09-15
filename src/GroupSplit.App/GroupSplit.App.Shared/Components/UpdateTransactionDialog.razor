@@ -10,9 +10,11 @@
 @inject ICategoriesClient CategoriesClient
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject IReceiptCommands Receipts
+@inject IReceiptAttachmentCommands ReceiptAttachments
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@inject IDialogService DialogService
 @inject IMerchantCommands Merchants
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @implements IDisposable
@@ -150,6 +152,17 @@
                                      Awaiting="@_awaiting"/>
                     </div>
                 }
+
+                <ReceiptSection TransactionId="@Original.Id"
+                                Title="@(_merchantName ?? _model.Name)"
+                                Where="@WhenSpent"
+                                Receipt="@_receipt"
+                                Attachments="@_attachments"
+                                IsUploading="@_uploading"
+                                TranscribingAttachmentId="@_transcribingAttachmentId"
+                                UploadRequested="UploadAttachment"
+                                TranscribeRequested="TranscribeAttachmentAsync"
+                                DeleteRequested="DeleteAttachmentAsync" />
             </div>
         </MudForm>
     </DialogContent>
@@ -173,6 +186,9 @@
 
     /// <summary>The expense's itemised bill, where it has one. Null for nearly every expense.</summary>
     private ReceiptResponse? _receipt;
+    private IReadOnlyList<ReceiptAttachmentResponse> _attachments = [];
+    private bool _uploading;
+    private Guid? _transcribingAttachmentId;
 
     /// <summary>
     /// The group's "divide it by the bill" rule.
@@ -492,6 +508,7 @@
         // Started here and awaited below: the bill and the preview need nothing from each
         // other, and one after the other is two waits where the dialog is already on screen.
         var bill = Receipts.GetAsync(Original.Id);
+        var attachments = ReceiptAttachments.GetAsync(Original.Id);
 
         // The division is on this screen, so it is asked for on the way in rather than on
         // the way into a second step that no longer exists.
@@ -502,7 +519,82 @@
         // The option is drawn either way -- see SplitEditor.ShowByBill -- so this arriving
         // late enables a button rather than adding one.
         _receipt = await bill;
+        _attachments = await attachments;
         StateHasChanged();
+    }
+
+    private async Task UploadAttachment(InputFileChangeEventArgs args)
+    {
+        if (args.FileCount == 0)
+            return;
+
+        _uploading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var uploaded = await ReceiptAttachments.UploadAsync(Original.Id, args.File);
+            if (uploaded is not null)
+            {
+                _attachments = _attachments.Append(uploaded)
+                    .OrderByDescending(attachment => attachment.UploadedAt)
+                    .ToList();
+            }
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task TranscribeAttachmentAsync(ReceiptAttachmentResponse attachment)
+    {
+        _transcribingAttachmentId = attachment.Id;
+        try
+        {
+            var transcription = await ReceiptAttachments.TranscribeAsync(Original.Id, attachment.Id);
+            if (transcription is null)
+                return;
+
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(
+                "Review receipt", new DialogParameters<ReceiptDraftDialog>
+                {
+                    { x => x.TransactionId, Original.Id },
+                    { x => x.ExpenseAmount, _model.Amount },
+                    { x => x.Transcription, transcription }
+                }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: ReceiptResponse saved })
+            {
+                _receipt = saved;
+                _attachments = await ReceiptAttachments.GetAsync(Original.Id);
+
+                if (_model.SplitRuleId == _billRuleId)
+                    await RefreshPreviewAsync();
+            }
+        }
+        finally
+        {
+            _transcribingAttachmentId = null;
+        }
+    }
+
+    private async Task DeleteAttachmentAsync(ReceiptAttachmentResponse attachment)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Remove \"{attachment.FileName}\" from this expense? The itemized receipt will stay available if it has already been saved." },
+            { x => x.ButtonText, "Remove" },
+            { x => x.Color, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
+            "Remove receipt", parameters,
+            new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        if (await ReceiptAttachments.DeleteAsync(Original.Id, attachment.Id))
+            _attachments = _attachments.Where(existing => existing.Id != attachment.Id).ToList();
     }
 
     /// <summary>The categories and members of one group, or none for personal.</summary>

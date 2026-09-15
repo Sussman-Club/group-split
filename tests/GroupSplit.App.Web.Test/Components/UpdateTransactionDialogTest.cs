@@ -256,6 +256,46 @@ public class UpdateTransactionDialogTest : ComponentTest
         Assert.DoesNotContain(result.Operations, op => Touches(op, "categoryId"));
     }
 
+    [Fact]
+    public async Task A_personal_expense_edit_includes_existing_receipt_attachments()
+    {
+        var transactionId = Guid.NewGuid();
+        var attachment = new ReceiptAttachmentResponse(
+            Guid.NewGuid(), transactionId, null, null, "dinner.jpg", "image/jpeg", 2048,
+            DateTimeOffset.UtcNow);
+
+        ReceiptAttachments
+            .Setup(client => client.GetAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([attachment]);
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = null,
+                PaidByUserId = MeId,
+                Splits = []
+            });
+
+        var (provider, _) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = null,
+            PaidByUserId = MeId
+        });
+
+        provider.WaitForAssertion(() => Assert.Contains("dinner.jpg", provider.Markup));
+        Assert.Contains("Receipts", provider.Markup);
+        Assert.Contains("Original receipt", provider.Markup);
+    }
+
     /// <summary>
     /// The place an expense names is editable everywhere else -- the API takes it, the CLI
     /// sets and clears it -- and was unreachable from the app, because the read that fed

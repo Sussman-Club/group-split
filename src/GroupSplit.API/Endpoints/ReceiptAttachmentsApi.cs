@@ -3,6 +3,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -67,11 +68,21 @@ public static class ReceiptAttachmentsApi
             return group.MapGet("{attachmentId:guid}", async (
                     Guid id,
                     Guid attachmentId,
+                    [FromQuery] bool? inline,
                     IReceiptAttachmentService attachments,
+                    HttpResponse response,
                     CancellationToken ct) =>
                 {
                     var file = await attachments.Download(id, attachmentId, ct);
-                    return Results.File(file.Content, file.ContentType, file.FileName);
+
+                    if (inline is true)
+                    {
+                        var disposition = new ContentDispositionHeaderValue("inline");
+                        disposition.SetHttpFileName(file.FileName);
+                        response.Headers.ContentDisposition = disposition.ToString();
+                    }
+
+                    return Results.File(file.Content, file.ContentType, inline is true ? null : file.FileName);
                 })
                 .WithName("DownloadReceiptAttachment")
                 .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
