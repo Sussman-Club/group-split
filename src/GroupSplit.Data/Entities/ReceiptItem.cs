@@ -13,6 +13,8 @@ public class ReceiptItem : Entity
     public int Position { get; set; }
     public required string Name { get; set; }
     public required string NormalizedName { get; set; }
+    /// <summary>The original extracted wording, retained separately from the display name.</summary>
+    public string? Description { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Quantity { get; set; } = 1;
     // Kept as printed: discounts and till rounding need not equal quantity * unit price.

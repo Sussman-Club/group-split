@@ -45,8 +45,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     public async Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null, CancellationToken ct = default)
     {
         var expense = await VisibleExpense(receipt.ExpenseId, ct);
-        var canEdit = expense.GroupId is not null && await StillInTheGroup(expense, ct);
-        var canDivide = canEdit;
+        // Personal receipts are useful as itemized records even though they never produce
+        // a group division. They remain editable by their owner, while division stays a
+        // shared-expense concern.
+        var canEdit = await StillInTheGroup(expense, ct);
+        var canDivide = expense.GroupId is not null && canEdit;
         if (canDivide)
         {
             try { await Calculate(expense, receipt, ct); }
@@ -62,10 +65,10 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     {
         ArgumentNullException.ThrowIfNull(request);
         var expense = await MineToChange(expenseId, ct);
-        if (expense.GroupId is null)
-            throw new ValidationException(ErrorCodes.SplitOnAPersonalExpense, "A personal expense has nobody to split items with.");
         var existing = await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct);
-        var members = await participants.IdsOf(expense.GroupId.Value, ct);
+        var members = expense.GroupId is { } groupId
+            ? await participants.IdsOf(groupId, ct)
+            : [expense.Payer];
         var versions = await Versions().Where(v => request.Items.Select(i => i.SplitRuleVersionId).Contains(v.Id)).ToListAsync(ct);
         // An id on an incoming line says "this is that stored line, corrected", so it has to
         // name a line of this bill and name it once. One from another bill would move a line
@@ -87,7 +90,10 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 : null;
             if (version is not null) ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, members, handlers);
             draft.Items.Add(new ReceiptItem { Id = input.Id ?? Guid.NewGuid(), Position = position,
-                Name = input.Name?.Trim() ?? "", NormalizedName = input.Name?.Trim().ToLowerInvariant() ?? "",
+                Name = input.Name?.Trim() ?? "",
+                NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
+                    ?? input.Name?.Trim().ToLowerInvariant() ?? "",
+                Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
                 UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
                 TaxAmount = input.TaxAmount, SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
         }
@@ -117,12 +123,22 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 else
                 {
                     stored.Position = line.Position; stored.Name = line.Name; stored.NormalizedName = line.NormalizedName;
+                    stored.Description = line.Description;
                     stored.UnitPrice = line.UnitPrice; stored.Quantity = line.Quantity; stored.TotalPrice = line.TotalPrice;
                     stored.TaxAmount = line.TaxAmount; stored.SplitRuleVersionId = line.SplitRuleVersionId;
                     stored.SplitRuleVersion = line.SplitRuleVersion;
                 }
             }
         }
+        var receiptId = existing?.Id ?? draft.Id;
+        var unlinkedAttachments = await dbContext.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.ExpenseId == expenseId && attachment.ReceiptId == null)
+            .ToListAsync(ct);
+        foreach (var attachment in unlinkedAttachments)
+        {
+            attachment.ReceiptId = receiptId;
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return await ForExpense(expenseId, ct);
     }

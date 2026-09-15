@@ -5,6 +5,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared.Errors;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Splits;
 
@@ -53,19 +54,48 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// A personal expense is one person's money, so there is nobody to divide its lines
-    /// between and the bill is refused before anything is stored.
+    /// A personal expense is one person's money, so its itemized receipt is stored as a
+    /// record but is never offered as a group division.
     /// </summary>
     [Fact]
-    public async Task A_personal_expense_has_nobody_to_split_a_bill_with()
+    public async Task A_personal_expense_keeps_an_itemized_receipt_without_dividing()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
             { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
 
-        var refusal = await Assert.ThrowsAsync<ValidationException>(() =>
-            Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, null)), Ct));
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, null)), Ct);
+        var response = await Receipts.ResponseFor(bill, ct: Ct);
 
-        Assert.Equal(ErrorCodes.SplitOnAPersonalExpense, refusal.Code);
+        Assert.Equal("Sandwich", Assert.Single(bill.Items).Name);
+        Assert.True(response.CanEdit);
+        Assert.False(response.CanDivide);
+
+        var updated = await Receipts.SaveForExpense(expense.Id, Bill(Item("Soup", 10m, null)), Ct);
+
+        Assert.Equal("Soup", Assert.Single(updated.Items).Name);
+    }
+
+    [Fact]
+    public async Task A_personal_receipt_cannot_use_a_group_split_rule()
+    {
+        var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Dinner" }, Ct);
+        var even = await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group.Id,
+            Name = "Together",
+            Definition = new EvenSplitRuleDto()
+        }, Ct);
+        var expense = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Lunch",
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+
+        var refusal = await Assert.ThrowsAsync<ValidationException>(() =>
+            Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, even.Current!.Id)), Ct));
+
+        Assert.Equal(ErrorCodes.ReceiptInvalid, refusal.Code);
     }
 
     /// <summary>
@@ -154,6 +184,68 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var details = await Transactions.GetDetails(expense.Id, Ct);
         Assert.Equal(48m, details!.Amount);
         Assert.Equal(divided, details.Splits.ToDictionary(split => split.UserId, split => split.Amount));
+    }
+
+    /// <summary>
+    /// The source file belongs to the expense even before its bill is transcribed. Saving
+    /// the itemisation associates it with that bill, and deleting the bill preserves the
+    /// source file while clearing only that association.
+    /// </summary>
+    [Fact]
+    public async Task Source_files_are_linked_when_the_bill_is_transcribed_and_survive_its_removal()
+    {
+        var (expense, _, even) = await AnExpense();
+        var attachment = new ReceiptAttachment
+        {
+            ExpenseId = expense.Id,
+            ObjectKey = $"{expense.Id:N}/{Guid.NewGuid():N}",
+            FileName = "dinner.jpg",
+            ContentType = "image/jpeg",
+            Length = 42,
+            UploadedByUserId = Self,
+            UploadedAt = DateTimeOffset.UtcNow
+        };
+        DbContext.Add(attachment);
+        await DbContext.SaveChangesAsync(Ct);
+
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48m, even)), Ct);
+
+        Assert.Equal(bill.Id, attachment.ReceiptId);
+        Assert.Same(bill, attachment.Receipt);
+
+        await Receipts.DeleteForExpense(expense.Id, Ct);
+
+        var preserved = await DbContext.Set<ReceiptAttachment>()
+            .SingleAsync(candidate => candidate.Id == attachment.Id, Ct);
+        Assert.Equal(expense.Id, preserved.ExpenseId);
+        Assert.Null(preserved.ReceiptId);
+    }
+
+    [Fact]
+    public async Task Item_name_normalization_and_original_description_are_preserved()
+    {
+        var (expense, _, even) = await AnExpense();
+        var item = new ReceiptItemInput
+        {
+            Name = "Pizza, large",
+            NormalizedName = "Pizza large",
+            Description = "PZA LG",
+            UnitPrice = 48m,
+            TotalPrice = 48m,
+            SplitRuleVersionId = even
+        };
+
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(item), Ct);
+        var saved = Assert.Single(bill.Items);
+
+        Assert.Equal("Pizza, large", saved.Name);
+        Assert.Equal("pizza large", saved.NormalizedName);
+        Assert.Equal("PZA LG", saved.Description);
+
+        var response = await Receipts.ResponseFor(bill, ct: Ct);
+        var responseItem = Assert.Single(response.Items);
+        Assert.Equal("pizza large", responseItem.NormalizedName);
+        Assert.Equal("PZA LG", responseItem.Description);
     }
 
     /// <summary>

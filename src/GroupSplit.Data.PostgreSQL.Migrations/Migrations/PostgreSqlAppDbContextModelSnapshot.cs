@@ -542,11 +542,68 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("Receipt");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BankTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("ExpenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankTransactionId");
+
+                    b.HasIndex("ExpenseId");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("ReceiptId");
+
+                    b.ToTable("ReceiptAttachment");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptItem", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1093,6 +1150,30 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Expense");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
+                        .WithMany("ReceiptAttachments")
+                        .HasForeignKey("BankTransactionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
+                        .WithMany("ReceiptAttachments")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("GroupSplit.Data.Entities.Receipt", "Receipt")
+                        .WithMany("Attachments")
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("BankTransaction");
+
+                    b.Navigation("Expense");
+
+                    b.Navigation("Receipt");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptItem", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Receipt", "Receipt")
@@ -1300,6 +1381,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.BankTransaction", b =>
                 {
                     b.Navigation("FiledAs");
+
+                    b.Navigation("ReceiptAttachments");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>
@@ -1325,6 +1408,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("Items");
                 });
 
@@ -1359,6 +1444,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.Expense", b =>
                 {
                     b.Navigation("Receipt");
+
+                    b.Navigation("ReceiptAttachments");
                 });
 #pragma warning restore 612, 618
         }

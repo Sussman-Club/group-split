@@ -44,6 +44,7 @@ public static class ServiceExtensions
             services.TryAddScoped<ISplitRuleCommands, SplitRuleCommands>();
             services.TryAddScoped<IMerchantCommands, MerchantCommands>();
             services.TryAddScoped<IReceiptCommands, ReceiptCommands>();
+            services.TryAddScoped<IReceiptAttachmentCommands, ReceiptAttachmentCommands>();
 
             // Read by the inbox page and by the nav badge, so one service rather than two
             // that would each fetch the count.

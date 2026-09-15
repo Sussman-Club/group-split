@@ -8,9 +8,18 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var dbServer = builder
     .AddPostgres("db-server")
-    .WithDataVolume();
+    .WithDataVolume()
+    .WithOtlpExporter();
 
 var db = dbServer.AddDatabase("db", "groupsplit");
+
+var storage = builder.AddRustFs("storage")
+    .WithDataVolume()
+    .AddBucket("receipts");
+
+// Veryfi remains SaaS-managed; this external resource gives its API calls a named
+// dependency in the Aspire dashboard without routing or persisting receipt content there.
+var veryfi = builder.AddExternalService("veryfi", new Uri("https://api.veryfi.com"));
 
 var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
@@ -19,7 +28,8 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 // named was gone, and everybody was challenged again.
 var cache = builder.AddRedis("cache")
     .WithDataVolume()
-    .WithPersistence(TimeSpan.FromSeconds(30));
+    .WithPersistence(TimeSpan.FromSeconds(30))
+    .WithOtlpExporter();
 
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn()
@@ -41,12 +51,16 @@ var api = builder.AddProject<GroupSplit_API>("api")
     .WaitFor(db)
     .WithReference(db)
     .WithReference(keycloak)
+    .WithReference(storage)
+    .WithReference(veryfi)
+    .WaitFor(storage)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)
     .WithHealthEndpoints()
     // In both modes: locally the credentials come from user secrets and default to nothing,
     // which leaves the API running with bank sync reported as off.
-    .WithPlaid();
+    .WithPlaid()
+    .WithVeryfiReceiptTranscription();
 
 var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)

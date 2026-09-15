@@ -4,7 +4,8 @@ description: >-
   Turn imported bank rows into GroupSplit expenses without recording the same money twice.
   USE FOR: the GroupSplit inbox, imported or synced bank rows, filing a bank row as an
   expense, reconciling a card statement against what a group already recorded, a
-  POSSIBLE_DUPLICATE_EXPENSE refusal, `groupsplit inbox`, `groupsplit bank`, or
+  POSSIBLE_DUPLICATE_EXPENSE refusal, `groupsplit inbox`, `groupsplit bank`, pending receipt
+  attachments, or
   `groupsplit transactions bank-matches`.
   DO NOT USE FOR: recording an expense somebody typed (that is `transactions create`),
   balances, settling up, or anything else in the CLI -- use the groupsplit skill.
@@ -13,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Filing bank rows
@@ -33,6 +34,23 @@ not to make it for them.
 
 Read the **groupsplit** skill first: the JSON contract, the exit codes and the confirmation
 protocol all apply here unchanged.
+
+## Attach a receipt before filing
+
+A pending bank row may carry a source receipt while the person is still deciding which
+group and split rule it belongs to:
+
+```bash
+groupsplit inbox attachments upload <row-id> ./receipt.pdf
+groupsplit inbox attachments list <row-id> --json
+groupsplit inbox attachments transcribe <row-id> <attachment-id> --json
+```
+
+Uploading and transcribing do not file the row, choose a group, save an itemised bill, or
+change shares. The transcription is a draft for review. Once the row is filed or linked,
+the pending attachments move to the resulting expense; use `groupsplit receipts attachments`
+and `groupsplit receipts set` there to continue. `inbox attachments delete` is confirmation
+gated, and `inbox attachments download` writes a copy to a new local path.
 
 ## The loop
 

@@ -1,4 +1,5 @@
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.App.Shared.Services.Transactions;
@@ -41,6 +42,9 @@ public interface ITransactionsPageStateService
     Task LoadAsync(TransactionQuery query, CancellationToken cancellationToken = default);
 
     Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
+
+    Task<bool> CreateWithReceiptAsync(CreateTransactionRequest request, IBrowserFile file,
+        SaveReceiptRequest? receipt, CancellationToken cancellationToken = default);
 
     Task<bool> UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
         CancellationToken cancellationToken = default);

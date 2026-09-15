@@ -55,6 +55,7 @@ public static class Problems
         [ErrorCodes.SplitRuleHistoryEndsElsewhere] = "The history does not end where the rule stands",
         [ErrorCodes.SplitRuleVersionNotInGroup] = "That version belongs to another group",
         [ErrorCodes.BankSyncUnavailable] = "Bank sync is not available",
+        [ErrorCodes.ReceiptTranscriptionUnavailable] = "Receipt transcription is not available",
         [ErrorCodes.BankTransactionAlreadyFiled] = "This row has already been filed",
         [ErrorCodes.BankConnectionNeedsAttention] = "The bank connection needs signing in again",
         [ErrorCodes.CurrencyMismatch] = "The currencies do not match",
@@ -66,7 +67,8 @@ public static class Problems
         [ErrorCodes.SplitRuleHistoryInvalid] = "The history is not a chain",
         [ErrorCodes.BankTransactionIsCredit] = "Money coming in cannot be filed as an expense",
 
-        [ErrorCodes.BankProviderUnavailable] = "The bank service did not answer"
+        [ErrorCodes.BankProviderUnavailable] = "The bank service did not answer",
+        [ErrorCodes.ReceiptTranscriptionProviderUnavailable] = "The receipt transcription service did not answer"
     };
 
     /// <summary>The <c>type</c> URI for a code: <c>GROUP_NOT_FOUND</c> becomes <c>.../group-not-found</c>.</summary>

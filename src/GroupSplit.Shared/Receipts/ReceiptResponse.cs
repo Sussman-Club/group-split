@@ -25,7 +25,11 @@ public sealed record ReceiptResponse(
 /// </summary>
 public sealed record ReceiptItemResponse(
     Guid Id, string Name, decimal UnitPrice, decimal Quantity, decimal TotalPrice,
-    decimal TaxAmount, Guid? SplitRuleVersionId, string? SplitRuleName, SplitRuleDto? SplitRule);
+    decimal TaxAmount, Guid? SplitRuleVersionId, string? SplitRuleName, SplitRuleDto? SplitRule)
+{
+    public string NormalizedName { get; init; } = string.Empty;
+    public string? Description { get; init; }
+}
 
 public sealed record ReceiptDivisionResponse(
     Guid ReceiptId, decimal Total, IReadOnlyList<ReceiptShareResponse> Shares);

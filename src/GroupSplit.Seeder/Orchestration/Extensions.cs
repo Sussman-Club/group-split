@@ -58,6 +58,7 @@ public static class Extensions
             builder.Services.AddScoped<IMemberSplitRules, MemberSplitRules>();
             builder.Services.AddScoped<IBillSplitRule, BillSplitRule>();
             builder.AddSeeder<MemberSplitRuleSeeder>();
+            builder.AddSeeder<BillSplitRuleSeeder>();
 
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();

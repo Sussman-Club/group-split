@@ -843,10 +843,19 @@
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<CreateTransactionRequest>();
+        var result = await dialog.Result;
+        if (result is null || result.Canceled)
+            return;
 
-        if (request is not null)
+        if (result.Data is CreateTransactionDialog.Answer withReceipt)
+        {
+            await TransactionsService.CreateWithReceiptAsync(
+                withReceipt.Request, withReceipt.File, withReceipt.Receipt, CancellationToken);
+        }
+        else if (result.Data is CreateTransactionRequest request)
+        {
             await TransactionsService.CreateAsync(request, CancellationToken);
+        }
     }
 
     // ---------------------------------------------------------------- plumbing --

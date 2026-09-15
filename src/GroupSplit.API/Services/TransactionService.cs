@@ -116,7 +116,8 @@ public class TransactionService(
     ICurrentUser userContext,
     AppDbContext dbContext,
     IExpenseSplitter splitter,
-    IGroupParticipants participants) : ITransactionService
+    IGroupParticipants participants,
+    IReceiptAttachmentService receiptAttachments) : ITransactionService
 {
     /// <summary>
     /// The caller's expenses, and only their expenses.
@@ -807,6 +808,9 @@ public class TransactionService(
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
         await RefuseIfLeft(transaction, ct);
+
+        if (transaction is Expense)
+            await receiptAttachments.DeleteForExpense(id, ct);
 
         dbContext.Remove(transaction);
 

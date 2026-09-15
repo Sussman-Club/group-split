@@ -44,6 +44,7 @@ public static class ErrorCodes
     public const string ReceiptNotFound = "RECEIPT_NOT_FOUND";
 
     public const string ReceiptItemNotFound = "RECEIPT_ITEM_NOT_FOUND";
+    public const string ReceiptAttachmentNotFound = "RECEIPT_ATTACHMENT_NOT_FOUND";
 
     // ---- Forbidden (403) ----------------------------------------------------------------
 
@@ -146,6 +147,7 @@ public static class ErrorCodes
     /// </summary>
     public const string SplitRuleNotInGroup = "SPLIT_RULE_NOT_IN_GROUP";
     public const string BankSyncUnavailable = "BANK_SYNC_UNAVAILABLE";
+    public const string ReceiptTranscriptionUnavailable = "RECEIPT_TRANSCRIPTION_UNAVAILABLE";
     public const string BankTransactionAlreadyFiled = "BANK_TRANSACTION_ALREADY_FILED";
     public const string BankConnectionNeedsAttention = "BANK_CONNECTION_NEEDS_ATTENTION";
     public const string CurrencyMismatch = "CURRENCY_MISMATCH";
@@ -165,6 +167,7 @@ public static class ErrorCodes
     /// </summary>
     public const string GroupInvitationNoName = "GROUP_INVITATION_NO_NAME";
     public const string SplitsInvalid = "SPLITS_INVALID";
+    public const string ReceiptAttachmentInvalid = "RECEIPT_ATTACHMENT_INVALID";
 
 
     /// <summary>
@@ -211,6 +214,7 @@ public static class ErrorCodes
     // ---- Bad gateway (502): somebody else's service is in the path and did not answer ---
 
     public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
+    public const string ReceiptTranscriptionProviderUnavailable = "RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE";
 
     /// <summary>
     /// The access this connection was holding can no longer be read, so nothing can be done

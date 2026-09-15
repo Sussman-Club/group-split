@@ -10,6 +10,8 @@
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
 @inject IReceiptCommands Receipts
+@inject IReceiptAttachmentCommands ReceiptAttachments
+@inject IDialogService DialogService
 
 @*
     One expense, and how it was divided. Reading only.
@@ -26,13 +28,14 @@
     at all for a single expense, though a group's ledger has had the column for months.
     Then the facts, then the division.
 
-    No edit and no delete. They were two icons under the heading, which put a destructive
-    action in the corner of a dialog somebody opened to look something up, and they made the
-    header carry three things at once. Both live on the rows instead -- the You page's grid
-    and a group's ledger both have them -- so this dialog does one thing.
+    No editing or deleting the expense itself. Those were two icons under the heading, which
+    put a destructive action in the corner of a dialog somebody opened to look something up,
+    and they made the header carry three things at once. Both live on the rows instead -- the
+    You page's grid and a group's ledger both have them. The original receipt file is kept
+    here, beside the itemised bill it came from.
 *@
 
-<MudDialog>
+<MudDialog Class="gs-transaction-dialog">
     <TitleContent>
         @* The subject, not the screen. Until it loads there is no subject, so the heading
            says what kind of thing is coming rather than sitting empty. *@
@@ -59,7 +62,7 @@
     <DialogContent>
         @if (details is null)
         {
-            <div class="gs-empty" style="padding: 32px">
+            <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             </div>
         }
@@ -177,70 +180,18 @@
                     </div>
                 }
 
-                @*
-                    The bill, for the expenses that have one.
-
-                    Below the split rather than above it, and that ordering is the whole
-                    point: the shares are what somebody owes and the bill is why. Anyone
-                    opening this is here for the figure first; the lines answer the next
-                    question, which is why mine is the big one.
-
-                    Absent entirely when there is no receipt, which is nearly every expense.
-                    An empty heading on hundreds of ordinary expenses would be furniture
-                    explaining a feature they do not use.
-                *@
-                @if (receipt is { Items.Count: > 0 } bill)
+                @if (details.Kind == ActivityKind.Expense)
                 {
-                    @* A line that opens into the document, in place.
-
-                       The slip was printed here in full once, which made one dialog carry two
-                       things: the division somebody opened it for, and then a receipt -- forty
-                       lines of it on a warehouse run -- between them and the Close button. So
-                       it became a line that opened the bill in a dialog of its own, and that
-                       was worse in a different way: two sheets on a phone, two scrims, two
-                       ways to close, and nothing saying the first one was still there.
-
-                       Folded away instead. Shut, it is the line it was; open, the paper is
-                       right here, and the slip's own lines scroll inside it so a long bill
-                       cannot push Close off the screen. One surface either way. *@
-                    <div class="gs-bill-strip @(_showBill ? "is-open" : "")">
-                        <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
-
-                        <span class="gs-receipt-summary">
-                            @* What is on the paper. *@
-                            <strong>Receipt</strong>
-                            <span>@bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items") · @bill.Total.ToMoney()</span>
-
-                            @* And the one thing about it that is somebody's to do. Only on a
-                               bill whose rules something actually reads: elsewhere a line
-                               naming none is what a receipt looks like, not an omission. *@
-                            @if (bill.DividesItsExpense && bill.MissingRuleItemCount > 0)
-                            {
-                                <span class="gs-tag clay">@bill.MissingRuleItemCount without a rule</span>
-                            }
-                        </span>
-
-                        @* aria-expanded written as a string: Blazor drops an attribute whose
-                           value is false, and an absent aria-expanded is a control with no
-                           state rather than one that is shut. *@
-                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                   Class="gs-btn-quiet ms-auto"
-                                   EndIcon="@(_showBill ? Icons.Material.Rounded.ExpandLess : Icons.Material.Rounded.ExpandMore)"
-                                   aria-expanded="@(_showBill ? "true" : "false")"
-                                   aria-controls="gs-bill-panel"
-                                   OnClick="@(() => _showBill = !_showBill)">
-                            @(_showBill ? "Hide receipt" : "View receipt")
-                        </MudButton>
-                    </div>
-
-                    @if (_showBill)
-                    {
-                        <div id="gs-bill-panel">
-                            <BillSheet Receipt="bill"
-                                       Title="@(details.MerchantName ?? details.Name)"
-                                       Where="@Clock.Local(details.DateTime).ToString("d MMM yyyy")" />
-                        </div>
-                    }
+                    <ReceiptSection TransactionId="@TransactionId"
+                                    Title="@(details.MerchantName ?? details.Name)"
+                                    Where="@Clock.Local(details.DateTime).ToString("d MMM yyyy")"
+                                    Receipt="@receipt"
+                                    Attachments="@_attachments"
+                                    IsUploading="@_uploading"
+                                    TranscribingAttachmentId="@_transcribingAttachmentId"
+                                    UploadRequested="UploadAttachment"
+                                    TranscribeRequested="TranscribeAttachmentAsync"
+                                    DeleteRequested="DeleteAttachmentAsync" />
                 }
             </div>
         }
@@ -257,6 +208,9 @@
 
     private TransactionDetailsResponse? details;
     private ReceiptResponse? receipt;
+    private IReadOnlyList<ReceiptAttachmentResponse> _attachments = [];
+    private bool _uploading;
+    private Guid? _transcribingAttachmentId;
 
     /// <summary>
     /// Who is reading, so the dialog can say "You" and single their share out.
@@ -290,7 +244,6 @@
         // Both at once, because both only ever needed the id this dialog was opened with:
         // read one after the other, each answer grew the dialog under the reader's hand.
         var bill = Receipts.GetAsync(TransactionId);
-
         var loaded = await Errors.TryAsync(
             async () => details = await TransactionsClient.GetTransactionAsync(TransactionId),
             "Could not load the expense.");
@@ -304,23 +257,91 @@
         // Null for most expenses, which have no bill, and null for a failure just the same:
         // there is nothing to report either way and the strip simply does not appear.
         receipt = await bill;
+        if (details is { Kind: ActivityKind.Expense })
+        {
+            _attachments = await ReceiptAttachments.GetAsync(TransactionId);
+        }
 
-        // The title has to be told separately, and this is not belt and braces:
+        // The title has to be told separately:
         // TitleContent is hoisted into the dialog provider's own tree, so it does not
         // re-render when this component's state changes. Without it the dialog stays headed
         // "Expense" over a body full of the thing it is refusing to name. Both go together
         // here so the heading and the figures under it appear in the same frame.
-        StateHasChanged();
         MudDialog.StateHasChanged();
     }
 
-    /// <summary>Whether the bill is folded open under its line.</summary>
-    /// <remarks>
-    /// Shut to begin with, which is the point: nearly every reader wants the shares and the
-    /// figure, and a receipt unrolled between them and the Close button is the state this
-    /// dialog was redesigned out of once already.
-    /// </remarks>
-    private bool _showBill;
+    private async Task UploadAttachment(InputFileChangeEventArgs args)
+    {
+        if (args.FileCount == 0) return;
+
+        _uploading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var uploaded = await ReceiptAttachments.UploadAsync(TransactionId, args.File);
+            if (uploaded is not null)
+            {
+                _attachments = _attachments.Append(uploaded)
+                    .OrderByDescending(attachment => attachment.UploadedAt)
+                    .ToList();
+            }
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task TranscribeAttachmentAsync(ReceiptAttachmentResponse attachment)
+    {
+        _transcribingAttachmentId = attachment.Id;
+        try
+        {
+            var transcription = await ReceiptAttachments.TranscribeAsync(TransactionId, attachment.Id);
+            if (transcription is null || details is not { } expenseDetails)
+                return;
+
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Review receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { x => x.TransactionId, TransactionId },
+                { x => x.ExpenseAmount, expenseDetails.Amount },
+                { x => x.Transcription, transcription }
+            }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: ReceiptResponse saved })
+            {
+                receipt = saved;
+                _attachments = await ReceiptAttachments.GetAsync(TransactionId);
+            }
+        }
+        finally
+        {
+            _transcribingAttachmentId = null;
+        }
+    }
+
+    private async Task DeleteAttachmentAsync(ReceiptAttachmentResponse attachment)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Remove \"{attachment.FileName}\" from this expense? The itemized receipt will stay available if it has already been saved." },
+            { x => x.ButtonText, "Remove" },
+            { x => x.Color, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
+            "Remove receipt", parameters,
+            new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        if (await ReceiptAttachments.DeleteAsync(TransactionId, attachment.Id))
+            _attachments = _attachments.Where(existing => existing.Id != attachment.Id).ToList();
+    }
+
+    private static string FormatFileSize(long length) => length < 1024 * 1024
+        ? $"{Math.Max(1, length / 1024)} KB"
+        : $"{length / 1024d / 1024d:0.0} MB";
 
     private void Close() => MudDialog.Close();
 }

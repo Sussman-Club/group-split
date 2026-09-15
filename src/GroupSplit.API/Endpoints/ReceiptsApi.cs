@@ -2,6 +2,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -22,6 +23,32 @@ namespace GroupSplit.API.Endpoints;
 /// </remarks>
 public static class ReceiptsApi
 {
+    extension(IEndpointRouteBuilder routes)
+    {
+        public RouteGroupBuilder MapReceiptDraftsApi()
+        {
+            var group = routes.MapGroup("/receipts")
+                .RequireAuthorization()
+                .ProducesStandardProblems()
+                .WithTags("Receipts");
+
+            group.MapPost("/transcribe", async (
+                    IFormFile file,
+                    [FromServices] IReceiptTranscriptionService transcription,
+                    CancellationToken ct) =>
+                Results.Ok(await transcription.Transcribe(file, ct)))
+                .WithName("TranscribeReceiptDraft")
+                .Accepts<IFormFile>("multipart/form-data")
+                .Produces<ReceiptDraftResponse>()
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status502BadGateway)
+                .DisableAntiforgery();
+
+            return group;
+        }
+    }
+
     extension(IEndpointRouteBuilder routes)
     {
         public RouteGroupBuilder MapReceiptsApi()

@@ -8,9 +8,11 @@
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
 @inject IMerchantCommands Merchants
+@inject IReceiptCommands Receipts
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@inject IDialogService DialogService
 @implements IDisposable
 
 @*
@@ -54,6 +56,21 @@
     <DialogContent>
         <MudForm @ref="_form" Model="_model">
             <div class="gs-stack" style="gap: 16px">
+
+                <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                    <ReceiptFilePicker FileChanged="SelectReceiptAsync"
+                                       ReadRequested="ReadReceiptAsync"
+                                       Title="Create an expense from a receipt"
+                                       Description="Read a photo or PDF to fill in the amount and itemized bill."
+                                       FileName="@_receiptFile?.Name"
+                                       IsAttached="@(_receiptFile is not null)"
+                                       AttachedDescription="Ready to attach when you add this expense"
+                                       IsBusy="@_readingReceipt"
+                                       BusyText="Reading receipt…"
+                                       HasTranscript="@(_receipt is not null)"
+                                       TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
+                                       Error="@_receiptError" />
+                </div>
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
                 <MudNumericField @bind-Value="_model.Amount"
@@ -149,6 +166,10 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
+    /// <summary>The result when a receipt has to be attached after the new expense exists.</summary>
+    public sealed record Answer(CreateTransactionRequest Request, IBrowserFile File,
+        SaveReceiptRequest? Receipt);
+
     /// <summary>Hides "paid by": the expenses page records what the caller paid.</summary>
     [Parameter] public bool DisablePayingUserSelection { get; set; }
 
@@ -209,6 +230,11 @@
     /// </summary>
     private string? _awaiting;
 
+    private IBrowserFile? _receiptFile;
+    private SaveReceiptRequest? _receipt;
+    private bool _readingReceipt;
+    private string? _receiptError;
+
 
     /// <summary>
     /// The ask in flight, so a late answer cannot paint over a newer one.
@@ -260,6 +286,71 @@
         _groupId = id;
 
         await OnGroupChangedAsync();
+    }
+
+    private Task SelectReceiptAsync(InputFileChangeEventArgs args)
+    {
+        if (args.FileCount == 0)
+            return Task.CompletedTask;
+
+        _receiptFile = args.File;
+        _receipt = null;
+        _receiptError = null;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ReadReceiptAsync()
+    {
+        if (_receiptFile is not { } file)
+            return;
+
+        _readingReceipt = true;
+        _receiptError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var draft = await Receipts.TranscribeAsync(file);
+            if (draft is null)
+                return;
+
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Review receipt",
+                new DialogParameters<ReceiptDraftDialog>
+                {
+                    { dialog => dialog.Transcription,
+                        new ReceiptTranscriptionResponse(Guid.Empty, draft.Provider, draft.Receipt) }
+                },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
+
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: SaveReceiptRequest receipt })
+            {
+                _receipt = receipt;
+                _model.Amount = receipt.Total;
+
+                if (string.IsNullOrWhiteSpace(_model.Name))
+                    _model.Name = SuggestedName(receipt);
+
+                await OnMoneyChangedAsync();
+            }
+        }
+        finally
+        {
+            _readingReceipt = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string SuggestedName(SaveReceiptRequest receipt)
+    {
+        var names = receipt.Items
+            .Select(item => item.Name.Trim())
+            .Where(name => name.Length > 0)
+            .Take(2)
+            .ToArray();
+
+        var suggestion = names.Length == 0 ? "Receipt" : string.Join(", ", names);
+        return suggestion.Length <= 124 ? suggestion : suggestion[..124].TrimEnd();
     }
 
     private async Task OnCategoryPickedAsync(Guid? id)
@@ -622,8 +713,40 @@
         if (!_form.IsValid)
             return;
 
+        if (_receipt is not null && _receiptFile is not null && _receipt.Total != _model.Amount)
+        {
+            _receiptError = "The receipt total must match the expense amount before saving.";
+            return;
+        }
+
         ApplyDate();
-        MudDialog.Close(DialogResult.Ok(Request()));
+        var request = Request();
+
+        // IBrowserFile is backed by the InputFile DOM element. The dialog is disposed as
+        // soon as this result is returned, so hand the page a buffered copy instead of a
+        // handle that would point at an element that no longer exists.
+        IBrowserFile? file = null;
+        if (_receiptFile is { } selectedFile)
+        {
+            try
+            {
+                await using var input = selectedFile.OpenReadStream(10 * 1024 * 1024);
+                await using var buffer = new MemoryStream();
+                await input.CopyToAsync(buffer);
+                file = new BufferedBrowserFile(selectedFile.Name, selectedFile.ContentType,
+                    selectedFile.LastModified, buffer.ToArray());
+            }
+            catch (Exception exception) when (exception is IOException or InvalidOperationException)
+            {
+                _receiptError = "The receipt file could not be prepared for saving. Choose it again and retry.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+        }
+
+        MudDialog.Close(file is { } bufferedFile
+            ? DialogResult.Ok(new Answer(request, bufferedFile, _receipt))
+            : DialogResult.Ok(request));
     }
 
     private void Cancel() => MudDialog.Cancel();

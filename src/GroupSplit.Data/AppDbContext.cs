@@ -619,10 +619,29 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ReceiptAttachment>(entity =>
+        {
+            entity.Property(attachment => attachment.ObjectKey).HasMaxLength(512).IsRequired();
+            entity.Property(attachment => attachment.FileName).HasMaxLength(256).IsRequired();
+            entity.Property(attachment => attachment.ContentType).HasMaxLength(128).IsRequired();
+            entity.Property(attachment => attachment.UploadedAt).IsRequired();
+            entity.HasOne(attachment => attachment.Expense).WithMany(expense => expense.ReceiptAttachments)
+                .HasForeignKey(attachment => attachment.ExpenseId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(attachment => attachment.BankTransaction).WithMany(row => row.ReceiptAttachments)
+                .HasForeignKey(attachment => attachment.BankTransactionId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(attachment => attachment.Receipt).WithMany(receipt => receipt.Attachments)
+                .HasForeignKey(attachment => attachment.ReceiptId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(attachment => attachment.ExpenseId);
+            entity.HasIndex(attachment => attachment.BankTransactionId);
+            entity.HasIndex(attachment => attachment.ReceiptId);
+            entity.HasIndex(attachment => attachment.ObjectKey).IsUnique();
+        });
+
         modelBuilder.Entity<ReceiptItem>(entity =>
         {
             entity.Property(i => i.Name).HasMaxLength(128).IsRequired();
             entity.Property(i => i.NormalizedName).HasMaxLength(128).IsRequired();
+            entity.Property(i => i.Description).HasMaxLength(1000);
             entity.HasIndex(i => i.NormalizedName);
             entity.Property(i => i.UnitPrice).HasPrecision(18, 2);
             entity.Property(i => i.Quantity).HasPrecision(18, 3);

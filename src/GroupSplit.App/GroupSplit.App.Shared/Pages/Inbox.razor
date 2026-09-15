@@ -6,6 +6,7 @@
 @using GroupSplit.Shared
 @inject IInboxStateService State
 @inject IBankCommands Bank
+@inject IReceiptCommands Receipts
 @inject IDialogService DialogService
 @inject LocalClock Clock
 @inject ISnackbar Snackbar
@@ -543,22 +544,25 @@
     /// because pressing this with one on screen is the person saying it is a second payment
     /// -- and the API refuses to file over an unseen one, which is what that flag answers.
     /// </summary>
-    private Task KeepPersonalAsync(BankTransactionResponse row) =>
-        FileAsync(row, new FileBankTransactionRequest { FileAnyway = row.PossibleDuplicates.Count > 0 },
+    private async Task KeepPersonalAsync(BankTransactionResponse row) =>
+        await FileAsync(row, new FileBankTransactionRequest { FileAnyway = row.PossibleDuplicates.Count > 0 },
             "your own expenses");
 
-    private async Task AttachAsync(BankTransactionResponse row, Guid transactionId)
+    private async Task<TransactionResponse?> AttachAsync(BankTransactionResponse row, Guid transactionId)
     {
         _busy = row.Id;
+        TransactionResponse? expense = null;
 
         try
         {
-            await Bank.AttachAsync(row.Id, transactionId);
+            expense = await Bank.AttachAsync(row.Id, transactionId);
         }
         finally
         {
             _busy = null;
         }
+
+        return expense;
     }
 
     /// <summary>
@@ -620,26 +624,41 @@
         // Two answers come back from that dialog, and only one of them records anything.
         if (answer.AttachTo is { } transactionId)
         {
-            await AttachAsync(row, transactionId);
+            var expense = await AttachAsync(row, transactionId);
+            await SaveReceiptAsync(expense, answer.Receipt);
             return;
         }
 
         if (answer.Request is { } request)
-            await FileAsync(row, request, answer.Destination);
+        {
+            var expense = await FileAsync(row, request, answer.Destination);
+            await SaveReceiptAsync(expense, answer.Receipt);
+        }
     }
 
-    private async Task FileAsync(BankTransactionResponse row, FileBankTransactionRequest request, string destination)
+    private async Task<TransactionResponse?> FileAsync(BankTransactionResponse row, FileBankTransactionRequest request, string destination)
     {
         _busy = row.Id;
+        TransactionResponse? expense = null;
 
         try
         {
-            await Bank.FileAsync(row.Id, request, destination);
+            expense = await Bank.FileAsync(row.Id, request, destination);
         }
         finally
         {
             _busy = null;
         }
+
+        return expense;
+    }
+
+    private async Task SaveReceiptAsync(TransactionResponse? expense, SaveReceiptRequest? receipt)
+    {
+        if (expense is null || receipt is null)
+            return;
+
+        await Receipts.SaveAsync(expense.Id, receipt);
     }
 
     private async Task IgnoreAsync(BankTransactionResponse row)

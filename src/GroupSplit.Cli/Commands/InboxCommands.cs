@@ -32,11 +32,171 @@ public static class InboxCommands
         inbox.Subcommands.Add(Matches());
         inbox.Subcommands.Add(File());
         inbox.Subcommands.Add(Link());
+        inbox.Subcommands.Add(Attachments());
         inbox.Subcommands.Add(DismissMatch());
         inbox.Subcommands.Add(Ignore());
         inbox.Subcommands.Add(Restore());
 
         return inbox;
+    }
+
+    private static readonly Argument<Guid> AttachmentId = new("attachment-id")
+    {
+        Description = "The file's id, as shown by `groupsplit inbox attachments list`."
+    };
+
+    private static Command Attachments()
+    {
+        var attachments = new Command("attachments",
+            "Private receipt files attached to an imported bank row.");
+        attachments.Aliases.Add("attachment");
+        attachments.Subcommands.Add(ListAttachments());
+        attachments.Subcommands.Add(UploadAttachment());
+        attachments.Subcommands.Add(DownloadAttachment());
+        attachments.Subcommands.Add(TranscribeAttachment());
+        attachments.Subcommands.Add(DeleteAttachment());
+        return attachments;
+    }
+
+    private static Command ListAttachments()
+    {
+        var command = new Command("list", "List the receipt files attached to a bank row.")
+        {
+            RowId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var rowId = context.ParseResult.GetValue(RowId);
+            var attachments = await new Api.InboxClient(context.ApiHttpClient)
+                .GetBankReceiptAttachmentsAsync(rowId, ct);
+
+            context.Output.Write(attachments, RenderAttachments);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command UploadAttachment()
+    {
+        var file = new Argument<string>("file")
+        {
+            Description = "A JPG, PNG, WebP, or PDF receipt file."
+        };
+        var command = new Command("upload", "Attach a receipt file to a bank row.")
+        {
+            RowId, file
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var path = parse.GetValue(file)!;
+            await using var stream = ReceiptFiles.OpenForUpload(path);
+
+            var attachment = await new Api.InboxClient(context.ApiHttpClient)
+                .UploadBankReceiptAttachmentAsync(
+                    parse.GetValue(RowId),
+                    new FileParameter(stream, Path.GetFileName(path), ReceiptFiles.ContentTypeFor(path)),
+                    ct);
+
+            context.Output.Write(attachment, RenderAttachment);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command DownloadAttachment()
+    {
+        var destination = new Argument<string>("destination")
+        {
+            Description = "A new local path to save the receipt file to."
+        };
+        var command = new Command("download", "Download an attached receipt file.")
+        {
+            RowId, AttachmentId, destination
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var rowId = parse.GetValue(RowId);
+            var attachmentId = parse.GetValue(AttachmentId);
+            var path = await ReceiptFiles.DownloadAsync(
+                context.ApiHttpClient,
+                $"inbox/{rowId}/receipt-attachments/{attachmentId}",
+                parse.GetValue(destination)!,
+                ct);
+
+            context.Output.WriteMessage(
+                $"Downloaded receipt attachment {attachmentId} to {path}.",
+                new { status = "downloaded", attachmentId, path });
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command TranscribeAttachment()
+    {
+        var command = new Command("transcribe",
+            "Read an attached receipt into an editable bill. Saves no itemised bill.")
+        {
+            RowId, AttachmentId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var transcription = await new Api.InboxClient(context.ApiHttpClient)
+                .TranscribeBankReceiptAttachmentAsync(
+                    parse.GetValue(RowId), parse.GetValue(AttachmentId), ct);
+
+            context.Output.Write(transcription, RenderTranscription);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command DeleteAttachment()
+    {
+        var command = new Command("delete", "Delete an attached receipt file from a bank row.")
+        {
+            RowId, AttachmentId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var rowId = parse.GetValue(RowId);
+            var attachmentId = parse.GetValue(AttachmentId);
+            var attachments = await new Api.InboxClient(context.ApiHttpClient)
+                .GetBankReceiptAttachmentsAsync(rowId, ct);
+            var attachment = attachments.SingleOrDefault(item => item.Id == attachmentId)
+                ?? throw CliException.Input(
+                    $"Receipt attachment {attachmentId} was not found on bank row {rowId}.",
+                    "List the row's files with: groupsplit inbox attachments list " + rowId);
+
+            Confirmation.Require(
+                context,
+                action: "inbox.attachments.delete",
+                summary: $"Delete receipt file '{attachment.FileName}'?",
+                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this bank row."],
+                confirmCommand: $"groupsplit inbox attachments delete {rowId} {attachmentId} --yes");
+
+            await new Api.InboxClient(context.ApiHttpClient)
+                .DeleteBankReceiptAttachmentAsync(rowId, attachmentId, ct);
+
+            context.Output.WriteMessage(
+                $"Deleted receipt attachment {attachmentId}.",
+                new { status = "deleted", rowId, attachmentId });
+            return ExitCodes.Success;
+        });
+
+        return command;
     }
 
     private static Command List()
@@ -520,5 +680,50 @@ public static class InboxCommands
         });
 
         return command;
+    }
+
+    private static IRenderable RenderAttachment(ReceiptAttachmentResponse attachment)
+    {
+        var table = Tables.KeyValue();
+        table.AddRow("Id", attachment.Id.ToString());
+        table.AddRow("File", Markup.Escape(attachment.FileName));
+        table.AddRow("Type", Markup.Escape(attachment.ContentType));
+        table.AddRow("Size", $"{attachment.Length:N0} bytes");
+        table.AddRow("Uploaded", attachment.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+        return table;
+    }
+
+    private static IRenderable RenderAttachments(ICollection<ReceiptAttachmentResponse> attachments)
+    {
+        if (attachments.Count == 0)
+        {
+            return new Markup(Tables.Empty("receipt attachments") + "\n");
+        }
+
+        var table = Tables.Grid("Id", "File", "Type", "Size", "Uploaded");
+        foreach (var attachment in attachments)
+        {
+            table.AddRow(
+                attachment.Id.ToString(),
+                Markup.Escape(attachment.FileName),
+                Markup.Escape(attachment.ContentType),
+                $"{attachment.Length:N0} bytes",
+                attachment.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+        }
+
+        return table;
+    }
+
+    private static IRenderable RenderTranscription(ReceiptTranscriptionResponse transcription)
+    {
+        var summary = Tables.KeyValue();
+        summary.AddRow("Provider", Markup.Escape(transcription.Provider));
+        summary.AddRow("Attachment", transcription.AttachmentId.ToString());
+        summary.AddRow("Subtotal", transcription.Receipt.Subtotal.ToString());
+        summary.AddRow("Tax", transcription.Receipt.Tax.ToString());
+        summary.AddRow("Tip", transcription.Receipt.Tip.ToString());
+        summary.AddRow("Total", transcription.Receipt.Total.ToString());
+        summary.AddRow("Items", transcription.Receipt.Items.Count.ToString());
+        return summary;
     }
 }

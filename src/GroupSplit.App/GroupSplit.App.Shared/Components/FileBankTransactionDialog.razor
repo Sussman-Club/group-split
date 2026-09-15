@@ -3,6 +3,7 @@
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
+@using Microsoft.AspNetCore.Components.Forms
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
@@ -10,6 +11,9 @@
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
+@inject IReceiptCommands Receipts
+@inject IReceiptAttachmentCommands ReceiptAttachments
+@inject IDialogService DialogService
 @implements IDisposable
 
 @*
@@ -56,6 +60,22 @@
                     </div>
                     <Money Value="@Row.Amount" Currency="@Row.Currency" Class="gs-money" />
                 </div>
+            </div>
+
+            <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                <div class="gs-eyebrow">Have a receipt?</div>
+                <div class="gs-muted" style="font-size: .8125rem; margin-bottom: 12px">
+                    Attach the original now. Reading it is optional and can happen after it is safely kept with this payment.
+                </div>
+                <ReceiptFilePicker FileChanged="AttachReceiptAsync"
+                                   ReadRequested="ReadReceiptAsync"
+                                   FileName="@_receiptAttachment?.FileName"
+                                   IsAttached="@(_receiptAttachment is not null)"
+                                   IsBusy="@(_attachingReceipt || _readingReceipt)"
+                                   BusyText="@(_readingReceipt ? "Reading receipt…" : "Attaching receipt…")"
+                                   HasTranscript="@(_receipt is not null)"
+                                   TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
+                                   Error="@_receiptError" />
             </div>
 
             @* Near the top, because it is the reason to stop. Nothing is decided by showing
@@ -165,7 +185,8 @@
     /// The expense this row is the same money as. Set only when the person said so, and
     /// then nothing new is recorded: the row is attached to that one.
     /// </param>
-    public sealed record Answer(FileBankTransactionRequest? Request, string Destination, Guid? AttachTo = null);
+    public sealed record Answer(FileBankTransactionRequest? Request, string Destination, Guid? AttachTo = null,
+        ReceiptAttachmentResponse? ReceiptAttachment = null, SaveReceiptRequest? Receipt = null);
 
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
@@ -192,6 +213,11 @@
     private string _name = string.Empty;
     private string? _description;
     private IReadOnlyList<SplitInput>? _splits;
+    private ReceiptAttachmentResponse? _receiptAttachment;
+    private SaveReceiptRequest? _receipt;
+    private bool _attachingReceipt;
+    private bool _readingReceipt;
+    private string? _receiptError;
 
     /// <summary>The rule this row is to be divided by, when the person named one.</summary>
     private Guid? _splitRuleId;
@@ -281,7 +307,12 @@
         }, "Could not load your groups.");
 
         if (!loaded)
+        {
             MudDialog.Cancel();
+            return;
+        }
+
+        _receiptAttachment = (await ReceiptAttachments.GetForBankAsync(Row.Id)).FirstOrDefault();
     }
 
     private async Task OnGroupChangedAsync()
@@ -422,7 +453,68 @@
     /// The other answer: this is the expense, so attach the row to it and record nothing.
     /// </summary>
     private void Attach(ExpenseMatchResponse match) =>
-        MudDialog.Close(DialogResult.Ok(new Answer(null, match.Where, match.TransactionId)));
+        MudDialog.Close(DialogResult.Ok(new Answer(null, match.Where, match.TransactionId, _receiptAttachment, _receipt)));
+
+    private async Task AttachReceiptAsync(InputFileChangeEventArgs args)
+    {
+        _attachingReceipt = true;
+        _receiptError = null;
+        try
+        {
+            var attachment = await ReceiptAttachments.UploadForBankAsync(Row.Id, args.File);
+            if (attachment is null)
+            {
+                _receiptError = "The receipt could not be saved for this payment.";
+                return;
+            }
+
+            _receiptAttachment = attachment;
+            _receipt = null;
+        }
+        finally
+        {
+            _attachingReceipt = false;
+        }
+    }
+
+    private async Task ReadReceiptAsync()
+    {
+        if (_receiptAttachment is not { } attachment)
+            return;
+
+        _readingReceipt = true;
+        _receiptError = null;
+        try
+        {
+            var transcription = await ReceiptAttachments.TranscribeForBankAsync(Row.Id, attachment.Id);
+            if (transcription is null)
+                return;
+
+            var reference = await DialogService.ShowAsync<ReceiptDraftDialog>("Review receipt",
+                new DialogParameters<ReceiptDraftDialog>
+                {
+                    { dialog => dialog.ExpenseAmount, Row.Amount },
+                    { dialog => dialog.Transcription, transcription }
+                }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+            var receipt = await reference.GetReturnValueAsync<SaveReceiptRequest>();
+            if (receipt is null)
+                return;
+
+            _receipt = receipt;
+            _name = string.IsNullOrWhiteSpace(_name) ? SuggestedName(receipt) : _name;
+        }
+        finally
+        {
+            _readingReceipt = false;
+        }
+    }
+
+    private static string SuggestedName(SaveReceiptRequest receipt)
+    {
+        var names = receipt.Items.Select(item => item.Name).Where(name => !string.IsNullOrWhiteSpace(name)).Take(2);
+        var name = string.Join(", ", names);
+        return string.IsNullOrWhiteSpace(name) ? "Receipt" : name[..Math.Min(name.Length, 124)];
+    }
 
     private void Submit()
     {
@@ -443,6 +535,6 @@
             FileAnyway = Match is not null
         };
 
-        MudDialog.Close(DialogResult.Ok(new Answer(request, Destination)));
+        MudDialog.Close(DialogResult.Ok(new Answer(request, Destination, null, _receiptAttachment, _receipt)));
     }
 }

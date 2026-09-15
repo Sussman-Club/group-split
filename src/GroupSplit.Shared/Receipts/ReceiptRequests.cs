@@ -24,6 +24,8 @@ public record ReceiptItemInput
     /// </summary>
     public Guid? Id { get; init; }
     [Required, StringLength(128)] public string Name { get; init; } = null!;
+    [StringLength(128)] public string? NormalizedName { get; init; }
+    [StringLength(1000)] public string? Description { get; init; }
     [MaxDecimalPlaces(2)] public decimal UnitPrice { get; init; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
     [MaxDecimalPlaces(2)] public decimal TotalPrice { get; init; }

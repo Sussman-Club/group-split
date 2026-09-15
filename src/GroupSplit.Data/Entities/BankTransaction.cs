@@ -149,6 +149,9 @@ public class BankTransaction : Entity
     /// </remarks>
     public virtual Transaction? FiledAs { get; set; }
 
+    /// <summary>Receipt files collected before this row is filed.</summary>
+    public virtual ICollection<ReceiptAttachment> ReceiptAttachments { get; } = [];
+
     /// <summary>
     /// When the provider withdrew a row that had already been filed. The expense stays --
     /// it is somebody's history -- and the inbox can say what happened. A row nobody had

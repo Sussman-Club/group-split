@@ -1,0 +1,337 @@
+@using GroupSplit.App.Shared.Extensions
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@namespace GroupSplit.App.Shared.Components
+
+<section class="gs-receipts" aria-labelledby="@_headingId">
+    <div class="gs-receipts-head">
+        <div class="gs-receipts-heading">
+            <span class="gs-receipts-mark" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
+            </span>
+            <div class="gs-receipts-heading-copy">
+                <h3 id="@_headingId">Receipts</h3>
+                <span class="gs-receipts-summary">@Summary</span>
+            </div>
+        </div>
+
+        <div class="gs-receipts-head-actions">
+            @if (HasContent || _showUploader)
+            {
+                <MudButton Variant="Variant.Text"
+                           Size="Size.Small"
+                           Class="gs-btn-quiet"
+                           aria-expanded="@(_showContent ? "true" : "false")"
+                           aria-controls="@_contentId"
+                           OnClick="ToggleContent">
+                    @(_showContent ? "Hide" : "View")
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Text"
+                           Size="Size.Small"
+                           Class="gs-btn-quiet"
+                           StartIcon="@Icons.Material.Rounded.Add"
+                           OnClick="OpenUploader">
+                    Add receipt
+                </MudButton>
+            }
+        </div>
+    </div>
+
+    @if (_showContent)
+    {
+        <div id="@_contentId" class="gs-receipts-body">
+            @foreach (var attachment in Attachments)
+            {
+                <div class="gs-receipt-file" @key="attachment.Id">
+                    <span class="gs-receipt-file-mark @(IsPdf(attachment) ? "is-pdf" : "")" aria-hidden="true">
+                        <MudIcon Icon="@AttachmentIcon(attachment)" Size="Size.Small" />
+                    </span>
+
+                    <div class="gs-receipt-file-copy">
+                        <span class="gs-receipt-file-kind">Original receipt</span>
+                        <strong class="gs-receipt-file-name">@attachment.FileName</strong>
+                        <span class="gs-receipt-file-meta">@AttachmentType(attachment) · @FormatFileSize(attachment.Length)</span>
+                    </div>
+
+                    <div class="gs-receipt-file-actions">
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Class="gs-btn-quiet"
+                                   OnClick="@(() => TogglePreview(attachment.Id))">
+                            @(_previewingAttachmentId == attachment.Id ? "Hide preview" : "View original")
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Class="gs-btn-quiet"
+                                   Disabled="@(TranscribingAttachmentId is not null)"
+                                   OnClick="@(() => TranscribeRequested.InvokeAsync(attachment))">
+                            @(TranscribingAttachmentId == attachment.Id
+                                ? "Reading…"
+                                : HasItemizedReceipt ? "Read again" : "Read receipt")
+                        </MudButton>
+
+                        <a class="gs-receipt-action gs-btn-quiet"
+                           href="@DownloadUrl(attachment)"
+                           download="@attachment.FileName">
+                            Download
+                        </a>
+
+                        @if (DeleteRequested.HasDelegate)
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       Class="gs-btn-quiet gs-receipt-remove"
+                                       OnClick="@(() => RequestDeleteAsync(attachment))">
+                                Remove
+                            </MudButton>
+                        }
+                    </div>
+                </div>
+
+                @if (_previewingAttachmentId == attachment.Id)
+                {
+                    <div class="gs-receipt-preview">
+                        @if (IsPdf(attachment))
+                        {
+                            <div class="gs-receipt-pdf-fallback" role="status">
+                                <span class="gs-receipt-file-mark is-pdf" aria-hidden="true">
+                                    <MudIcon Icon="@Icons.Material.Rounded.PictureAsPdf" Size="Size.Small" />
+                                </span>
+                                <div class="gs-receipt-pdf-copy">
+                                    <strong class="gs-receipt-pdf-title">PDF preview</strong>
+                                    <span class="gs-receipt-pdf-message">
+                                        This browser can’t show PDF pages inline. Download the original to view it.
+                                    </span>
+                                </div>
+                                <a class="gs-receipt-action gs-btn-quiet gs-receipt-pdf-download"
+                                   href="@DownloadUrl(attachment)"
+                                   download="@attachment.FileName">
+                                    Download PDF
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <img src="@InlineUrl(attachment)"
+                                 alt="Preview of @attachment.FileName"
+                                 loading="lazy" />
+                        }
+                    </div>
+                }
+            }
+
+            @if (Receipt is { Items.Count: > 0 } bill)
+            {
+                <div class="gs-receipt-itemized">
+                    <span class="gs-receipt-file-mark is-itemized" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Rounded.ListAlt" Size="Size.Small" />
+                    </span>
+
+                    <div class="gs-receipt-file-copy">
+                        <span class="gs-receipt-file-kind">Itemized receipt</span>
+                        <strong class="gs-receipt-file-name">
+                            @bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items") · @bill.Total.ToMoney()
+                        </strong>
+                        <span class="gs-receipt-file-meta">
+                            @(bill.DividesItsExpense && bill.MissingRuleItemCount > 0
+                                ? $"{bill.MissingRuleItemCount} {(bill.MissingRuleItemCount == 1 ? "line" : "lines")} still need a split rule"
+                                : "Ready to use for splitting")
+                        </span>
+                    </div>
+
+                    @if (bill.DividesItsExpense && bill.MissingRuleItemCount > 0)
+                    {
+                        <span class="gs-tag clay gs-receipt-rule-warning">@bill.MissingRuleItemCount without a rule</span>
+                    }
+
+                    <MudButton Variant="Variant.Text"
+                               Size="Size.Small"
+                               Class="gs-btn-quiet"
+                               aria-expanded="@(_showBill ? "true" : "false")"
+                               aria-controls="@_billId"
+                               OnClick="ToggleBill">
+                        @(_showBill ? "Hide itemized receipt" : "View itemized receipt")
+                    </MudButton>
+                </div>
+
+                @if (_showBill)
+                {
+                    <div id="@_billId" class="gs-receipt-itemized-panel">
+                        <BillSheet Receipt="bill" Title="@Title" Where="@Where" />
+                    </div>
+                }
+            }
+
+            @if (_showUploader)
+            {
+                <div class="gs-receipts-uploader">
+                    <ReceiptFilePicker FileChanged="UploadRequested"
+                                       Title="Add an original receipt"
+                                       Description="Keep the photo or PDF with this expense. Reading it is optional."
+                                       IsBusy="@IsUploading"
+                                       BusyText="Attaching receipt…" />
+                    <MudButton Variant="Variant.Text"
+                               Size="Size.Small"
+                               Class="gs-btn-quiet gs-receipts-cancel"
+                               OnClick="CloseUploader">
+                        Cancel
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <div class="gs-receipts-add">
+                    <span>@(Attachments.Count > 0 ? "Add another original file" : "Keep the original source with this expense")</span>
+                    <MudButton Variant="Variant.Text"
+                               Size="Size.Small"
+                               Class="gs-btn-quiet"
+                               StartIcon="@Icons.Material.Rounded.Add"
+                               OnClick="OpenUploader">
+                        Add receipt
+                    </MudButton>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private readonly string _headingId = $"gs-receipts-heading-{Guid.NewGuid():N}";
+    private readonly string _contentId = $"gs-receipts-content-{Guid.NewGuid():N}";
+    private readonly string _billId = $"gs-receipts-bill-{Guid.NewGuid():N}";
+
+    private bool _showContent;
+    private bool _showUploader;
+    private bool _showBill;
+    private Guid? _previewingAttachmentId;
+    private bool _parametersInitialised;
+    private int _knownAttachmentCount;
+    private Guid? _knownReceiptId;
+
+    [Parameter, EditorRequired]
+    public Guid TransactionId { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string? Where { get; set; }
+
+    [Parameter]
+    public ReceiptResponse? Receipt { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ReceiptAttachmentResponse> Attachments { get; set; } = [];
+
+    [Parameter]
+    public bool IsUploading { get; set; }
+
+    [Parameter]
+    public Guid? TranscribingAttachmentId { get; set; }
+
+    [Parameter]
+    public EventCallback<InputFileChangeEventArgs> UploadRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ReceiptAttachmentResponse> TranscribeRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ReceiptAttachmentResponse> DeleteRequested { get; set; }
+
+    private bool HasItemizedReceipt => Receipt is { Items.Count: > 0 };
+
+    private bool HasContent => Attachments.Count > 0 || HasItemizedReceipt;
+
+    private string Summary => (Attachments.Count, HasItemizedReceipt) switch
+    {
+        ( > 0, true) => $"{Attachments.Count} original {(Attachments.Count == 1 ? "file" : "files")} · itemized ready",
+        ( > 0, false) => $"{Attachments.Count} original {(Attachments.Count == 1 ? "file" : "files")} · not read yet",
+        (0, true) => "Itemized receipt ready",
+        _ => "No receipt added yet"
+    };
+
+    protected override void OnParametersSet()
+    {
+        var receiptId = Receipt?.Id;
+
+        if (!_parametersInitialised)
+        {
+            _showContent = HasContent;
+            _knownAttachmentCount = Attachments.Count;
+            _knownReceiptId = receiptId;
+            _parametersInitialised = true;
+            return;
+        }
+
+        if (Attachments.Count > _knownAttachmentCount)
+            _showUploader = false;
+
+        if (receiptId is { } savedReceiptId && savedReceiptId != _knownReceiptId)
+        {
+            _showContent = true;
+            _showBill = true;
+        }
+
+        if (!HasContent && !_showUploader)
+        {
+            _showContent = false;
+            _previewingAttachmentId = null;
+        }
+
+        _knownAttachmentCount = Attachments.Count;
+        _knownReceiptId = receiptId;
+    }
+
+    private void ToggleContent()
+    {
+        _showContent = !_showContent;
+        if (!_showContent)
+        {
+            _showUploader = false;
+            _showBill = false;
+            _previewingAttachmentId = null;
+        }
+    }
+
+    private void OpenUploader()
+    {
+        _showContent = true;
+        _showUploader = true;
+    }
+
+    private void CloseUploader() => _showUploader = false;
+
+    private void ToggleBill() => _showBill = !_showBill;
+
+    private void TogglePreview(Guid attachmentId) =>
+        _previewingAttachmentId = _previewingAttachmentId == attachmentId ? null : attachmentId;
+
+    private async Task RequestDeleteAsync(ReceiptAttachmentResponse attachment)
+    {
+        _previewingAttachmentId = null;
+        await DeleteRequested.InvokeAsync(attachment);
+    }
+
+    private string DownloadUrl(ReceiptAttachmentResponse attachment) =>
+        $"/api/transactions/{TransactionId}/receipt-attachments/{attachment.Id}";
+
+    private string InlineUrl(ReceiptAttachmentResponse attachment) =>
+        $"{DownloadUrl(attachment)}?inline=true";
+
+    private static bool IsPdf(ReceiptAttachmentResponse attachment) =>
+        string.Equals(attachment.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase);
+
+    private static string AttachmentType(ReceiptAttachmentResponse attachment) =>
+        IsPdf(attachment) ? "PDF document" : "Original photo";
+
+    private static string FormatFileSize(long length) => length < 1024 * 1024
+        ? $"{Math.Max(1, length / 1024)} KB"
+        : $"{length / 1024d / 1024d:0.0} MB";
+
+    private static string AttachmentIcon(ReceiptAttachmentResponse attachment) =>
+        IsPdf(attachment) ? Icons.Material.Rounded.PictureAsPdf : Icons.Material.Rounded.Image;
+}
