@@ -35,7 +35,7 @@
     here, beside the itemised bill it came from.
 *@
 
-<MudDialog>
+<MudDialog Class="gs-transaction-dialog">
     <TitleContent>
         @* The subject, not the screen. Until it loads there is no subject, so the heading
            says what kind of thing is coming rather than sitting empty. *@
@@ -62,7 +62,7 @@
     <DialogContent>
         @if (details is null)
         {
-            <div class="gs-empty" style="padding: 32px">
+            <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             </div>
         }
@@ -262,12 +262,11 @@
             _attachments = await ReceiptAttachments.GetAsync(TransactionId);
         }
 
-        // The title has to be told separately, and this is not belt and braces:
+        // The title has to be told separately:
         // TitleContent is hoisted into the dialog provider's own tree, so it does not
         // re-render when this component's state changes. Without it the dialog stays headed
         // "Expense" over a body full of the thing it is refusing to name. Both go together
         // here so the heading and the figures under it appear in the same frame.
-        StateHasChanged();
         MudDialog.StateHasChanged();
     }
 

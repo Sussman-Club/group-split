@@ -45,8 +45,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     public async Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null, CancellationToken ct = default)
     {
         var expense = await VisibleExpense(receipt.ExpenseId, ct);
-        var canEdit = expense.GroupId is not null && await StillInTheGroup(expense, ct);
-        var canDivide = canEdit;
+        // Personal receipts are useful as itemized records even though they never produce
+        // a group division. They remain editable by their owner, while division stays a
+        // shared-expense concern.
+        var canEdit = await StillInTheGroup(expense, ct);
+        var canDivide = expense.GroupId is not null && canEdit;
         if (canDivide)
         {
             try { await Calculate(expense, receipt, ct); }
@@ -62,10 +65,10 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     {
         ArgumentNullException.ThrowIfNull(request);
         var expense = await MineToChange(expenseId, ct);
-        if (expense.GroupId is null)
-            throw new ValidationException(ErrorCodes.SplitOnAPersonalExpense, "A personal expense has nobody to split items with.");
         var existing = await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct);
-        var members = await participants.IdsOf(expense.GroupId.Value, ct);
+        var members = expense.GroupId is { } groupId
+            ? await participants.IdsOf(groupId, ct)
+            : [expense.Payer];
         var versions = await Versions().Where(v => request.Items.Select(i => i.SplitRuleVersionId).Contains(v.Id)).ToListAsync(ct);
         // An id on an incoming line says "this is that stored line, corrected", so it has to
         // name a line of this bill and name it once. One from another bill would move a line

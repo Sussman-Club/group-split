@@ -108,6 +108,38 @@ public class ReceiptEndpointTest : IAsyncLifetime
         Assert.Equal(HttpStatusCode.UnprocessableEntity, divided.StatusCode);
     }
 
+    [Fact]
+    public async Task A_personal_bill_is_stored_and_can_be_read_without_dividing()
+    {
+        var expense = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+        {
+            Name = "Lunch",
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow
+        }, Json, Ct);
+        expense.EnsureSuccessStatusCode();
+        var expenseId = (await expense.Content.ReadFromJsonAsync<JsonElement>(Json, Ct))
+            .GetProperty("id").GetGuid();
+
+        var saved = await Client.PutAsJsonAsync($"/transactions/{expenseId}/receipt", new
+        {
+            subtotal = 10m,
+            total = 10m,
+            items = new[] { new { name = "Sandwich", totalPrice = 10m } }
+        }, Json, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var savedBody = await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.True(savedBody.GetProperty("canEdit").GetBoolean());
+        Assert.False(savedBody.GetProperty("canDivide").GetBoolean());
+
+        var read = await Client.GetAsync($"/transactions/{expenseId}/receipt", Ct);
+
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        var readBody = await read.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal("Sandwich", readBody.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
     /// <summary>
     /// A bill that does not describe its expense is refused with the receipt's own code, and
     /// carries both figures -- not the generic shares-do-not-sum refusal.

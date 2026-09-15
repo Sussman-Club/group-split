@@ -229,6 +229,39 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         Assert.Equal(row.Id, moved.BankTransactionId);
     }
 
+    [Fact]
+    public async Task Deleting_an_expense_removes_all_receipt_objects_and_metadata()
+    {
+        var expenseId = await CreateExpense();
+
+        var upload = await Client.PostAsync(
+            $"/transactions/{expenseId}/receipt-attachments", FileContent("dinner.jpg", "image/jpeg"), Ct);
+        upload.EnsureSuccessStatusCode();
+        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+
+        var secondUpload = await Client.PostAsync(
+            $"/transactions/{expenseId}/receipt-attachments", FileContent("dinner.pdf", "application/pdf"), Ct);
+        secondUpload.EnsureSuccessStatusCode();
+        var secondAttachment =
+            (await secondUpload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+
+        var deleted = await Client.DeleteAsync($"/transactions/{expenseId}", Ct);
+
+        Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+        await using (var scope = _host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Empty(await db.Set<ReceiptAttachment>()
+                .Where(candidate => candidate.Id == attachment.Id || candidate.Id == secondAttachment.Id)
+                .ToListAsync(Ct));
+        }
+
+        _storage.Verify(storage => storage.DeleteObjectAsync(
+            "receipts-test",
+            It.Is<string>(key => key.StartsWith($"{expenseId:N}/", StringComparison.Ordinal)),
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
     private async Task<Guid> CreateExpense(decimal amount = 10m)
     {
         var response = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest

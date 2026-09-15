@@ -2035,6 +2035,22 @@ html:not([data-gs-ready]) .gs-group-card {
     gap: 8px;
 }
 
+.gs-dialog-loading {
+    display: grid;
+    min-height: 220px;
+    place-items: center;
+}
+
+/*
+    Transaction dialogs fetch their content after the host is mounted. MudBlazor's
+    default scale-from-half animation makes that first mount read as a blink, so keep
+    these data-bound dialogs visually stable while the loading surface takes over.
+    Other dialogs retain their normal entrance animation.
+*/
+.mud-dialog.gs-transaction-dialog {
+    animation: none !important;
+}
+
 /*
     A dialog's title row.
 

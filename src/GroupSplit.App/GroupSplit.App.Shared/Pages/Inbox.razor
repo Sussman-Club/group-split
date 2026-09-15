@@ -655,7 +655,7 @@
 
     private async Task SaveReceiptAsync(TransactionResponse? expense, SaveReceiptRequest? receipt)
     {
-        if (expense is null || receipt is null || expense.GroupId is null)
+        if (expense is null || receipt is null)
             return;
 
         await Receipts.SaveAsync(expense.Id, receipt);

@@ -20,6 +20,7 @@ public interface IReceiptAttachmentService
     Task<ReceiptAttachmentDownload> Download(Guid expenseId, Guid attachmentId, CancellationToken ct = default);
     Task<ReceiptAttachmentDownload> DownloadBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default);
     Task Delete(Guid expenseId, Guid attachmentId, CancellationToken ct = default);
+    Task DeleteForExpense(Guid expenseId, CancellationToken ct = default);
     Task DeleteBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default);
     Task AttachToExpense(Guid bankTransactionId, Guid expenseId, CancellationToken ct = default);
 }
@@ -176,14 +177,26 @@ public sealed class ReceiptAttachmentService(
 
         // The database is authoritative for which files a caller can address. If storage
         // is temporarily unavailable, keep the expense usable and log the orphan for cleanup.
-        try
-        {
-            await storage.DeleteObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct);
-        }
-        catch (Exception error)
-        {
-            logger.LogError(error, "Could not remove deleted receipt object {ObjectKey}.", attachment.ObjectKey);
-        }
+        await DeleteObject(attachment.ObjectKey, "Could not remove deleted receipt object.", ct);
+    }
+
+    public async Task DeleteForExpense(Guid expenseId, CancellationToken ct = default)
+    {
+        await MineToChange(expenseId, ct);
+        var attachments = await db.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.ExpenseId == expenseId)
+            .ToListAsync(ct);
+
+        if (attachments.Count == 0)
+            return;
+
+        db.RemoveRange(attachments);
+        await db.SaveChangesAsync(ct);
+
+        // Removing the metadata first prevents the deleted expense from exposing stale
+        // files. Storage is cleaned up separately because it cannot share the DB transaction.
+        foreach (var attachment in attachments)
+            await DeleteObject(attachment.ObjectKey, "Could not remove receipt object for deleted expense.", ct);
     }
 
     public async Task DeleteBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default)
@@ -192,14 +205,7 @@ public sealed class ReceiptAttachmentService(
         var attachment = await FindBankAttachment(bankTransactionId, attachmentId, ct);
         db.Remove(attachment);
         await db.SaveChangesAsync(ct);
-        try
-        {
-            await storage.DeleteObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct);
-        }
-        catch (Exception error)
-        {
-            logger.LogError(error, "Could not remove deleted pending receipt object {ObjectKey}.", attachment.ObjectKey);
-        }
+        await DeleteObject(attachment.ObjectKey, "Could not remove deleted pending receipt object.", ct);
     }
 
     public async Task AttachToExpense(Guid bankTransactionId, Guid expenseId, CancellationToken ct = default)
@@ -232,6 +238,18 @@ public sealed class ReceiptAttachmentService(
         {
             throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid,
                 "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.");
+        }
+    }
+
+    private async Task DeleteObject(string objectKey, string message, CancellationToken ct)
+    {
+        try
+        {
+            await storage.DeleteObjectAsync(storageOptions.Value.BucketName, objectKey, ct);
+        }
+        catch (Exception error)
+        {
+            logger.LogError(error, "{Message} {ObjectKey}", message, objectKey);
         }
     }
 

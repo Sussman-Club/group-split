@@ -54,19 +54,48 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// A personal expense is one person's money, so there is nobody to divide its lines
-    /// between and the bill is refused before anything is stored.
+    /// A personal expense is one person's money, so its itemized receipt is stored as a
+    /// record but is never offered as a group division.
     /// </summary>
     [Fact]
-    public async Task A_personal_expense_has_nobody_to_split_a_bill_with()
+    public async Task A_personal_expense_keeps_an_itemized_receipt_without_dividing()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
             { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
 
-        var refusal = await Assert.ThrowsAsync<ValidationException>(() =>
-            Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, null)), Ct));
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, null)), Ct);
+        var response = await Receipts.ResponseFor(bill, ct: Ct);
 
-        Assert.Equal(ErrorCodes.SplitOnAPersonalExpense, refusal.Code);
+        Assert.Equal("Sandwich", Assert.Single(bill.Items).Name);
+        Assert.True(response.CanEdit);
+        Assert.False(response.CanDivide);
+
+        var updated = await Receipts.SaveForExpense(expense.Id, Bill(Item("Soup", 10m, null)), Ct);
+
+        Assert.Equal("Soup", Assert.Single(updated.Items).Name);
+    }
+
+    [Fact]
+    public async Task A_personal_receipt_cannot_use_a_group_split_rule()
+    {
+        var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Dinner" }, Ct);
+        var even = await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group.Id,
+            Name = "Together",
+            Definition = new EvenSplitRuleDto()
+        }, Ct);
+        var expense = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Lunch",
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+
+        var refusal = await Assert.ThrowsAsync<ValidationException>(() =>
+            Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, even.Current!.Id)), Ct));
+
+        Assert.Equal(ErrorCodes.ReceiptInvalid, refusal.Code);
     }
 
     /// <summary>

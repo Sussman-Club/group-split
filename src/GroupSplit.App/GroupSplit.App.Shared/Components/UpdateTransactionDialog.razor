@@ -37,13 +37,19 @@
    at the bottom. It rides the dialog rather than every DialogOptions that opens
    one, which is both fewer places to forget and the right owner: how this looks
    on a small screen is the dialog's business, not its caller's. *@
-<MudDialog Class="gs-sheet">
+<MudDialog Class="gs-sheet gs-transaction-dialog">
     <TitleContent>
         <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
     </TitleContent>
 
     <DialogContent>
-        @if (_failed)
+        @if (_initializing)
+        {
+            <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (_failed)
         {
             <div class="gs-empty" style="padding: 24px">
                 <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
@@ -51,9 +57,10 @@
                 <span>This expense and its group did not load, so there is nothing here to edit yet.</span>
             </div>
         }
-
-        <MudForm @ref="_form" Model="@_model" Class="@(_failed ? "d-none" : "")">
-            <div class="gs-stack" style="gap: 16px">
+        else
+        {
+            <MudForm @ref="_form" Model="@_model">
+                <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up: what an edit is usually about is this figure, and
                    what it does to everybody's share is directly underneath. *@
@@ -163,15 +170,16 @@
                                 UploadRequested="UploadAttachment"
                                 TranscribeRequested="TranscribeAttachmentAsync"
                                 DeleteRequested="DeleteAttachmentAsync" />
-            </div>
-        </MudForm>
+                </div>
+            </MudForm>
+        }
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@_failed"
+                   Disabled="@(_initializing || _failed)"
                    OnClick="Submit">
             Save
         </MudButton>
@@ -255,6 +263,14 @@
 
     /// <summary>Whether the read this dialog opens on failed. See the create dialog's.</summary>
     private bool _failed;
+
+    /// <summary>
+    /// Keeps the dialog on one stable loading surface until all data needed for the initial
+    /// form is ready. Rendering the empty form first made its height change as each read and
+    /// the initial split preview arrived, which looked like a blink while the dialog settled.
+    /// </summary>
+    private bool _initializing = true;
+
     /// <summary>
     /// The ask in flight, so a late answer cannot paint over a newer one.
     /// </summary>
@@ -499,11 +515,9 @@
             // cancel left MudBlazor's title and buttons on screen with nothing between
             // them, and the snackbar carrying the reason had already gone.
             _failed = true;
-            StateHasChanged();
+            _initializing = false;
             return;
         }
-
-        StateHasChanged();
 
         // Started here and awaited below: the bill and the preview need nothing from each
         // other, and one after the other is two waits where the dialog is already on screen.
@@ -520,7 +534,7 @@
         // late enables a button rather than adding one.
         _receipt = await bill;
         _attachments = await attachments;
-        StateHasChanged();
+        _initializing = false;
     }
 
     private async Task UploadAttachment(InputFileChangeEventArgs args)
@@ -824,7 +838,8 @@
         {
             _preview = null;
             _previewError = null;
-            StateHasChanged();
+            if (!_initializing)
+                StateHasChanged();
             return;
         }
 
@@ -853,7 +868,8 @@
             ? "No division to show yet."
             : null;
 
-        StateHasChanged();
+        if (!_initializing)
+            StateHasChanged();
     }
 
     private void ApplyDate() =>
