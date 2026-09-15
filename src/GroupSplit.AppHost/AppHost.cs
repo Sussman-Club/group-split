@@ -2,7 +2,11 @@ using GroupSplit.AppHost.Extensions;
 using Projects;
 using Scalar.Aspire;
 
-#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREINTERACTION001
+#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001
+
+// Named once: the API reaches the bucket through the reference below, and the deployed
+// storage container is told to create it by the same name.
+const string ReceiptsBucket = "receipts";
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -13,9 +17,13 @@ var dbServer = builder
 
 var db = dbServer.AddDatabase("db", "groupsplit");
 
-var storage = builder.AddRustFs("storage")
-    .WithDataVolume()
-    .AddBucket("receipts");
+// The server and the bucket are held separately because only the server can be prepared for
+// deployment, where the bucket has to be created by the container rather than by the
+// orchestrator. See AsDeployedRustFs.
+var storageServer = builder.AddRustFs("storage")
+    .WithDataVolume();
+
+var storage = storageServer.AddBucket(ReceiptsBucket);
 
 // Veryfi remains SaaS-managed; this external resource gives its API calls a named
 // dependency in the Aspire dashboard without routing or persisting receipt content there.
@@ -111,6 +119,13 @@ if (builder.ExecutionContext.IsRunMode)
 }
 else
 {
+    var deploymentVersion = builder.Configuration["Deployment:Version"];
+    if (string.IsNullOrWhiteSpace(deploymentVersion))
+    {
+        throw new InvalidOperationException(
+            "Deployment:Version must be set when publishing. In CI, set Deployment__Version to an immutable release identifier.");
+    }
+
     var dashboardToken = builder
         .AddParameter("dashboard-token", secret: true)
         .WithDescription("Browser token for the published Aspire dashboard on port 18888.");
@@ -166,9 +181,19 @@ else
 
     dbServer.AsDeployedPostgres();
 
+    storageServer
+        .AsDeployedRustFs(ReceiptsBucket)
+        .WithRustFsConsole();
+
     // A remote host can only pull images it can reach, so publish tags into the shared
     // registry rather than leaving them tagged on whatever machine ran the deploy.
     var registry = builder.AddContainerRegistry("registry", "ghcr.io", "sussman-club/group-split");
+
+    // A production release supplies a semantic tag. The CI workflow resolves it to the
+    // pushed registry digest before sending the Compose environment to the remote host.
+    api.WithRemoteImageTag(deploymentVersion);
+    web.WithRemoteImageTag(deploymentVersion);
+    migrations.WithRemoteImageTag(deploymentVersion);
 
     compose
         .WithContainerRegistry(registry)
