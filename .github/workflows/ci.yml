@@ -3,8 +3,14 @@ name: CI
 on:
   pull_request:
     branches: [dev, main]
-  push:
-    branches: [main]
+  # Called by deploy.yml, which waits for it: the tests gate a deployment rather than
+  # running beside one. Triggering both on the same push raced them, and the deploy
+  # generally won, so main could ship on a red build.
+  workflow_call:
+
+# CI builds untrusted pull-request code and does not need to modify the repository.
+permissions:
+  contents: read
 
 # A new push to a PR supersedes the run already in flight.
 concurrency:
@@ -45,16 +51,17 @@ jobs:
       # Full history: MinVer versions the CLI package from the nearest cli-v tag and the
       # commit height since it, and a shallow checkout has neither, so the pack step below
       # would stamp 0.0.0-alpha.0.0 on every build.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
@@ -160,11 +167,12 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-results
           path: TestResults/
           if-no-files-found: ignore
+          retention-days: 7
 
   integration:
     name: Integration tests (Aspire)
@@ -187,16 +195,26 @@ jobs:
       # Full history: MinVer versions the CLI package from the nearest cli-v tag and the
       # commit height since it, and a shallow checkout has neither, so the pack step below
       # would stamp 0.0.0-alpha.0.0 on every build.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v6
+      - name: Read the Aspire CLI version from the AppHost
+        id: aspire
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(bash .github/scripts/get-aspire-apphost-sdk-version.sh)"
+          echo "Using Aspire CLI $version from the AppHost SDK."
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
@@ -223,11 +241,12 @@ jobs:
       # and absent on a runner, and Chromium refused the endpoint with
       # ERR_CERT_AUTHORITY_INVALID before any assertion ran.
       #
-      # Pinned to the Aspire version the projects reference, so the CLI and the AppHost
-      # SDK agree. `dotnet tool install` puts it in ~/.dotnet/tools.
+      # Read from the AppHost SDK by the preceding step, so the CLI stays on the same
+      # servicing release as the evaluated deployment model. `dotnet tool install` puts
+      # it in ~/.dotnet/tools.
       - name: Install the Aspire CLI
         run: |
-          dotnet tool install -g Aspire.Cli --version 13.5.3
+          dotnet tool install -g Aspire.Cli --version "${{ steps.aspire.outputs.version }}"
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       # `aspire certs trust` trusts the certificate for OpenSSL *and* for browsers, but
@@ -277,8 +296,9 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: integration-test-results
           path: TestResults/
           if-no-files-found: ignore
+          retention-days: 7

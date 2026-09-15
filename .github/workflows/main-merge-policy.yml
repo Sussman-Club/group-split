@@ -1,0 +1,39 @@
+name: Main merge policy
+
+# Every push to main deploys production, so what is allowed into main is a production
+# question rather than a stylistic one.
+#
+# GitHub cannot express "only from dev" as a setting -- neither branch protection nor
+# rulesets can restrict which branch a pull request comes from -- so the rule is written
+# as a check here and made a required check on main. The workflow that runs for a pull
+# request is the one on the *head* branch, so this file has to be on dev for a dev -> main
+# pull request to report it.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-branch:
+    name: Source branch is dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Refuse anything but dev
+        env:
+          # Through the environment, not interpolated: a branch name is text somebody else
+          # chose, and `${{ }}` is pasted in before bash parses the line.
+          HEAD_REF: ${{ github.head_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::main only takes merges from dev, and this pull request comes from '${HEAD_REF}'. Merge into dev first, then open dev -> main."
+            exit 1
+          fi
+
+          echo "Source branch is dev."

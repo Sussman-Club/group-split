@@ -47,9 +47,26 @@ public static class DeploymentExtensions
         /// child after the first.
         /// </para>
         /// </summary>
-        public IResourceBuilder<T> WithFiles(string sourcePath, string targetPath)
+        public IResourceBuilder<T> WithFiles(
+            string sourcePath,
+            string targetPath,
+            bool escapeComposeInterpolation = false)
         {
             var source = Path.Combine(resource.ApplicationBuilder.AppHostDirectory, sourcePath);
+
+            // Compose interpolates $VAR and ${VAR} throughout the file it is given, the inlined
+            // configs included -- which is how the Keycloak realm receives its SMTP settings. A
+            // shell script needs the opposite: every dollar has to arrive as it was written, or
+            // its variables are replaced by the host's environment before sh ever sees them.
+            // $$ is how Compose is told to emit one literal dollar.
+            string Read(string path)
+            {
+                var contents = File.ReadAllText(path);
+
+                return escapeComposeInterpolation
+                    ? contents.Replace("$", "$$")
+                    : contents;
+            }
 
             if (File.Exists(source))
             {
@@ -59,7 +76,7 @@ public static class DeploymentExtensions
                         new ContainerFile
                         {
                             Name = Path.GetFileName(targetPath),
-                            Contents = File.ReadAllText(source)
+                            Contents = Read(source)
                         }
                     ]);
             }
@@ -75,7 +92,7 @@ public static class DeploymentExtensions
                         new ContainerFile
                         {
                             Name = Path.GetFileName(path),
-                            Contents = File.ReadAllText(path)
+                            Contents = Read(path)
                         }
                     ]);
             }

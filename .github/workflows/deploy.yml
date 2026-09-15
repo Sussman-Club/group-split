@@ -1,13 +1,21 @@
 name: Deploy
 
-# Deploys what lands on main, which in practice means a dev -> main merge.
-# Targeting the branch rather than the pull_request event means a merge still
-# deploys when it is pushed directly or fast-forwarded outside a PR.
+# Merging to main deploys production. The release number is claimed here rather than
+# typed by hand: there is no GitHub Release to carry it, so the job derives the next
+# app-vMAJOR.MINOR.PATCH from the tags already on the repository and writes its own.
+#
+# A push is a patch. A minor or major release has to be asked for, which is what the
+# manual run is for -- nothing in a commit says "this one is a breaking change".
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to raise
+        type: choice
+        default: patch
+        options: [patch, minor, major]
 
 # One deploy at a time: two concurrent runs would push different image tags into
 # the same Komodo stack and race each other.
@@ -19,43 +27,102 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  # Pinned to the Aspire version the AppHost SDK references, so the CLI that evaluates
-  # the model agrees with the model. ci.yml pins the same number; bump them together.
-  ASPIRE_CLI_VERSION: 13.5.3
 
 jobs:
+  # The gate. A reusable-workflow call rather than a workflow_run trigger on purpose:
+  # workflow_run would run this file from the default branch and, worse, report the run
+  # against that branch -- so the production environment's main-only policy would refuse
+  # every deployment. Called this way, the run stays on the pushed ref.
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
   build-and-deploy:
+    # Nothing is built, pushed or deployed until every CI job has passed.
+    needs: ci
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      # Puts the release into the repository's deployment history as a link, so the
+      # environment page says where the deployed thing actually is.
+      url: ${{ vars.WEB_HOSTNAME }}
     # A backstop: image builds take a couple of minutes and the Komodo poll below is
     # bounded at five, so anything near this is a hang, not a slow run.
     timeout-minutes: 30
     permissions:
-      contents: read
+      # contents: write is for the app-v tag this job claims for the release it deploys.
+      contents: write
       packages: write
 
-    env:
-      SECRETS_JSON: ${{ toJSON(secrets) }}
-      VARS_JSON: ${{ toJSON(vars) }}
-
     steps:
+      # Separate from the parameter check below so the Komodo credentials stay scoped to
+      # the two steps that actually talk to Komodo, instead of riding along with every
+      # parameter through the image build.
+      - name: Validate Komodo credentials
+        env:
+          KOMODO_URL: ${{ secrets.KOMODO_URL }}
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET; do
+            if [ -z "${!name:-}" ]; then
+              echo "${name} is not set on the production environment" >&2
+              missing=1
+            fi
+          done
+
+          [ "$missing" -eq 0 ]
+
       # Fails in seconds on a missing value rather than after the images are built.
       # The AppHost enforces the same rules once the parameters are resolved (its
       # validate-smtp and validate-google-sign-in pipeline steps); this copy is the
       # cheap one.
       - name: Validate deployment inputs
+        # Anchored so the push step reuses exactly this allowlist. Actions supports YAML
+        # anchors and aliases but not merge keys, so both uses have to be the same map --
+        # which is why the Komodo credentials above and the release version below are
+        # deliberately not part of it.
+        env: &deployment_inputs
+          WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME }}
+          DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
+          DB_SERVER_PASSWORD: ${{ secrets.DB_SERVER_PASSWORD }}
+          KEYCLOAK_PASSWORD: ${{ secrets.KEYCLOAK_PASSWORD }}
+          CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
+          SMTP_ENABLED: ${{ vars.SMTP_ENABLED }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_FROM: ${{ vars.SMTP_FROM }}
+          SMTP_USER: ${{ vars.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          GOOGLE_SIGN_IN_ENABLED: ${{ vars.GOOGLE_SIGN_IN_ENABLED }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          PLAID_ENABLED: ${{ vars.PLAID_ENABLED }}
+          PLAID_CLIENT_ID: ${{ secrets.PLAID_CLIENT_ID }}
+          PLAID_SECRET: ${{ secrets.PLAID_SECRET }}
+          PLAID_ENV: ${{ vars.PLAID_ENV }}
+          PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
+          BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
+          VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
+          VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}
+          VERYFI_USERNAME: ${{ secrets.VERYFI_USERNAME }}
+          VERYFI_API_KEY: ${{ secrets.VERYFI_API_KEY }}
+          VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES }}
         shell: bash
         run: |
           set -euo pipefail
 
           missing=0
 
-          # value NAME: the variable or secret of that name, whichever is set.
+          # value NAME: reads an explicitly allowlisted workflow input. Keeping this
+          # list here prevents a future, unrelated GitHub secret from being forwarded
+          # into the AppHost and the generated deployment environment.
           value() {
-            local v
-            v="$(jq -r --arg k "$1" '.[$k] // empty' <<<"$VARS_JSON")"
-            [ -n "$v" ] || v="$(jq -r --arg k "$1" '.[$k] // empty' <<<"$SECRETS_JSON")"
-            printf '%s' "$v"
+            printf '%s' "${!1:-}"
           }
 
           # require NAME...: every NAME must have a value.
@@ -77,11 +144,10 @@ jobs:
             require "$@"
           }
 
-          # What the workflow itself needs, and what the AppHost refuses to publish
+          # What the AppHost refuses to publish without. WEB_HOSTNAME is the stack's single
           # without. WEB_HOSTNAME is the stack's single public origin; Keycloak shares it
           # under /idp. DASHBOARD_TOKEN is what the dashboard is published behind.
-          require KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET \
-                  WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
+          require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
                   CACHE_PASSWORD
 
           # Mail and Google sign-in are each switched on by a variable, and then need
@@ -100,44 +166,93 @@ jobs:
 
           [ "$missing" -eq 0 ] || exit 1
 
-      - uses: actions/checkout@v7
+      - name: Check out the merged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history and every tag: the version below is derived from them.
+          fetch-depth: 0
+          persist-credentials: false
 
-      # Parameters reach the AppHost the way Aspire documents for CI: an environment
-      # variable per parameter named Parameters__ plus the parameter name, with the
-      # name's dashes written as underscores. GitHub names are SCREAMING_SNAKE and
-      # parameter names kebab-case, so lower-casing a GitHub name is exactly that
-      # spelling: WEB_HOSTNAME becomes Parameters__web_hostname and lands on
-      # `web-hostname`. Every secret and variable is exported, so adding a parameter to
-      # the AppHost needs only a GitHub entry of the matching name; a parameter nothing
-      # here names keeps the default the AppHost declares for it. Komodo, registry and
-      # GitHub's own entries are excluded: they configure this workflow, not the app.
-      - name: Export secrets and variables as Aspire parameters
+      # Claims the next app-v version and writes the tag, so the images, the Compose file
+      # and the deployment record all name one immutable identifier. Modelled on the CLI's
+      # release job, including reusing a tag already on HEAD: that is what makes a re-run
+      # of this workflow deploy the same version rather than burning a new number.
+      - name: Claim the release version
+        id: deployment
+        env:
+          # Through the environment, not interpolated: `${{ }}` is pasted in before bash
+          # parses the line.
+          BUMP: ${{ inputs.bump || 'patch' }}
+          # Creating the tag through the API keeps the git credential off the checkout, so
+          # nothing later in the job inherits push rights.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          for payload in "$SECRETS_JSON" "$VARS_JSON"; do
-            jq -r '
-              to_entries[]
-              | select(.key | test("^KOMODO_|^GITHUB_|^REGISTRY_") | not)
-              | "Parameters__\(.key | ascii_downcase)=\(.value)"
-            ' <<<"$payload" >> "$GITHUB_ENV"
-          done
 
-      - uses: actions/setup-dotnet@v6
+          commit="$(git rev-parse HEAD)"
+
+          # A re-run finds its own tag and deploys that version again.
+          existing="$(git tag --points-at HEAD --list 'app-v*' | head -1)"
+          if [ -n "$existing" ]; then
+            echo "HEAD is already tagged $existing; deploying that version again."
+            version="$existing"
+          else
+            latest="$(git tag --list 'app-v*' --sort=-v:refname | head -1)"
+
+            if [ -z "$latest" ]; then
+              version="app-v0.1.0"
+            else
+              IFS=. read -r major minor patch <<<"${latest#app-v}"
+
+              case "$BUMP" in
+                major) version="app-v$((major + 1)).0.0" ;;
+                minor) version="app-v${major}.$((minor + 1)).0" ;;
+                patch) version="app-v${major}.${minor}.$((patch + 1))" ;;
+                *) echo "::error::Unknown bump '$BUMP'." >&2; exit 1 ;;
+              esac
+            fi
+
+            echo "Last release: ${latest:-none}. Claiming $version ($BUMP) for $commit."
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/$version" -f "sha=$commit" > /dev/null
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+          # Also onto the job environment: the push step reuses the anchored parameter
+          # map, and an alias cannot carry a step output of its own.
+          echo "DEPLOYMENT_VERSION=$version" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_COMMIT=$commit" >> "$GITHUB_ENV"
+          echo "Deployment__Version=$version" >> "$GITHUB_ENV"
+
+      - name: Read the Aspire CLI version from the AppHost
+        id: aspire
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(bash .github/scripts/get-aspire-apphost-sdk-version.sh)"
+          echo "Using Aspire CLI $version from the AppHost SDK."
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # The NuGet global tool rather than the install script, so the version can be
-      # pinned: the script installs whatever is current, and a CLI ahead of the AppHost
-      # SDK has evaluated models differently before.
+      # The NuGet global tool rather than the install script, using the version declared
+      # by the AppHost SDK. This keeps the CLI and evaluated application model aligned
+      # when the AppHost is upgraded.
       - name: Install the Aspire CLI
+        env:
+          ASPIRE_CLI_VERSION: ${{ steps.aspire.outputs.version }}
         run: |
           dotnet tool install -g Aspire.Cli --version "$ASPIRE_CLI_VERSION"
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
@@ -149,7 +264,7 @@ jobs:
       # GITHUB_TOKEN can write packages under this repo's owner (the org) and
       # nowhere else, which is the scope wanted here: no stored secret to rotate.
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -163,16 +278,122 @@ jobs:
       - name: Restore the migrations project
         run: dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
-      # One invocation, not the Compose prepare step then a push per image: each `aspire do`
-      # runs deploy-prereq, which stamps a fresh timestamp tag, so separate calls put
-      # the images under tags the generated compose file does not reference. The AppHost
+      # One invocation, not the Compose prepare step then a push per image: the AppHost
       # declares its Compose prepare step as required by Aspire's `push` entry point
       # (see WithPrepareOnPush), so this documented command yields both the pushed images
-      # and the artifacts that reference them, in one pipeline execution sharing a single
-      # tag. Deliberately not `aspire deploy`: that would run `docker compose up` on the
-      # runner instead of the server.
+      # and the artifacts that reference the same release tag. Deliberately not `aspire
+      # deploy`: that would run `docker compose up` on the runner instead of the server.
       - name: Push images and prepare Compose artifacts
-        run: aspire do push --environment production --non-interactive
+        env: *deployment_inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The allowlist, and the only place these names are written in this step. Every
+          # AppHost parameter is the lower-cased GitHub name, so the mapping is mechanical:
+          # DASHBOARD_TOKEN becomes Parameters__dashboard_token, the spelling Aspire
+          # documents for CI (a dash in a parameter name written as an underscore).
+          #
+          # A list rather than the whole environment is what stops a future, unrelated
+          # repository secret from reaching the AppHost and the generated deployment
+          # environment.
+          parameters="
+            WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
+            SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER SMTP_PASSWORD
+            GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+            PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV PLAID_REDIRECT_URI
+            BANK_KEY_CERTIFICATE
+            VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY
+            VERYFI_LOG_RAW_RESPONSES
+          "
+
+          for name in $parameters; do
+            value="${!name:-}"
+
+            # An absent optional parameter is left to the default the AppHost declares for
+            # it; exporting an empty value would override that default with nothing.
+            if [ -n "$value" ]; then
+              export "Parameters__$(printf %s "$name" | tr "[:upper:]" "[:lower:]")=$value"
+            fi
+
+            # Do not leave the GitHub-facing name in the environment the build inherits.
+            unset "$name"
+          done
+
+          aspire do push --environment production --non-interactive
+
+          # Aspire writes release tags into the generated environment file. Resolve each
+          # pushed tag to its registry digest so the remote host pulls the exact content
+          # that CI built, rather than a tag that could later be moved.
+          output_dir="src/GroupSplit.AppHost/aspire-output"
+          env_file="$output_dir/.env.production"
+          image_variables=(API_IMAGE WEB_IMAGE MIGRATIONS_INTERNAL_IMAGE)
+          declare -A tagged_images
+          declare -A pinned_images
+
+          env_value() {
+            local key="$1"
+            local value
+            value="$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file")"
+            [ -n "$value" ] || {
+              echo "Generated environment is missing $key." >&2
+              exit 1
+            }
+            printf '%s' "$value"
+          }
+
+          replace_env_value() {
+            local key="$1"
+            local value="$2"
+            local temporary
+            temporary="$(mktemp)"
+            awk -v key="$key" -v value="$value" '
+              index($0, key "=") == 1 { print key "=" value; found=1; next }
+              { print }
+              END { if (!found) exit 1 }
+            ' "$env_file" > "$temporary"
+            mv "$temporary" "$env_file"
+          }
+
+          for image_variable in "${image_variables[@]}"; do
+            tagged_images["$image_variable"]="$(env_value "$image_variable")"
+            repository="${tagged_images[$image_variable]%:*}"
+            pinned_images["$image_variable"]="$(docker image inspect \
+              --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+              "${tagged_images[$image_variable]}" \
+              | awk -v prefix="${repository}@sha256:" 'index($0, prefix) == 1 {print; exit}' || true)"
+            [ -n "${pinned_images[$image_variable]}" ] || {
+              echo "Could not resolve a registry digest for ${tagged_images[$image_variable]}." >&2
+              exit 1
+            }
+            replace_env_value "$image_variable" "${pinned_images[$image_variable]}"
+          done
+
+          # Keep an auditable, secret-free record of exactly what this run pushed. The
+          # resolved .env.production remains on the runner only because it contains the
+          # deployment secrets.
+          {
+            echo "deployment_version=$DEPLOYMENT_VERSION"
+            echo "commit=$DEPLOYMENT_COMMIT"
+            echo "environment=production"
+            echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            for image_variable in "${image_variables[@]}"; do
+              image_name="${image_variable%_IMAGE}"
+              image_name="${image_name,,}"
+              echo "image.${image_name}.tag=${tagged_images[$image_variable]}"
+              echo "image.${image_name}.digest=${pinned_images[$image_variable]#*@}"
+              echo "image.${image_name}.reference=${pinned_images[$image_variable]}"
+            done
+          } > "$output_dir/deployment-manifest.txt"
+
+      - name: Validate generated Compose configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --file src/GroupSplit.AppHost/aspire-output/docker-compose.yaml \
+            --env-file src/GroupSplit.AppHost/aspire-output/.env.production \
+            config --quiet
 
       # The Compose file is what the host will run, kept with the run for a month so a
       # deploy can be inspected after the fact. Only the Compose file: the env file next
@@ -180,10 +401,12 @@ jobs:
       # read access to the repository.
       - name: Keep the generated Compose file
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: docker-compose
-          path: src/GroupSplit.AppHost/aspire-output/docker-compose.yaml
+          path: |
+            src/GroupSplit.AppHost/aspire-output/docker-compose.yaml
+            src/GroupSplit.AppHost/aspire-output/deployment-manifest.txt
           if-no-files-found: ignore
           retention-days: 30
 
@@ -199,8 +422,18 @@ jobs:
         run: |
           set -euo pipefail
           cd src/GroupSplit.AppHost/aspire-output
+          # The environment file and request payload contain production secrets. Remove
+          # them before action post-steps execute, even if Komodo rejects the update.
+          trap 'rm -f payload.json .env.production' EXIT
 
           auth=(-H "X-Api-Key: $KOMODO_API_KEY" -H "X-Api-Secret: $KOMODO_API_SECRET" -H 'Content-Type: application/json')
+          # Safe to retry: UpdateStack is an upsert, and GetUpdate is a read.
+          curl_args=(--fail-with-body --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 10 --max-time 60)
+
+          # DeployStack is not. A retry after a lost or slow response would start a second
+          # deploy of the same stack -- the very thing the job concurrency group exists to
+          # prevent, from inside a single run. One attempt, with room to be accepted.
+          execute_args=(--fail-with-body --silent --show-error --connect-timeout 10 --max-time 120)
 
           # jq rather than string interpolation: the YAML is full of quotes and newlines.
           jq -n --arg stack "$STACK" \
@@ -214,20 +447,64 @@ jobs:
                                 registry_provider: "ghcr.io",
                                 registry_account: "lorainemg" } }
           }' > payload.json
-          curl -sf -X POST "$KOMODO_URL/write" "${auth[@]}" --data @payload.json > /dev/null
+          curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @payload.json > /dev/null
 
           # /execute is async: 2xx means accepted, not deployed. Poll the update and
           # fail the job if the deploy itself failed.
-          update_id=$(curl -sf -X POST "$KOMODO_URL/execute" "${auth[@]}" \
+          execute_response=$(curl "${execute_args[@]}" -X POST "$KOMODO_URL/execute" "${auth[@]}" \
             -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}" \
-            | jq -r '._id."$oid"')
+          )
+          update_id=$(jq -r '._id."$oid" // empty' <<<"$execute_response")
+          if [ -z "$update_id" ]; then
+            echo "Komodo did not return an update id." >&2
+            exit 1
+          fi
 
+          status=''
+          state=''
           for _ in $(seq 1 60); do
             sleep 5
-            status=$(curl -sf -X POST "$KOMODO_URL/read" "${auth[@]}" \
+            status=$(curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
               -d "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}")
-            [ "$(jq -r .status <<<"$status")" = "Complete" ] && break
+            state="$(jq -r '.status // empty' <<<"$status")"
+            [ "$state" = "Complete" ] && break
           done
 
-          jq -e '.status == "Complete" and .success == true' <<<"$status" > /dev/null \
-            || { echo "Komodo deploy failed:"; jq . <<<"$status"; exit 1; }
+          # Still running after five minutes has not failed, and calling it a failure sends
+          # whoever reads this looking for the wrong thing: it is most likely still going on
+          # the host, with the stack mid-change.
+          if [ "$state" != "Complete" ]; then
+            echo "::error::Komodo update $update_id was still '${state:-unknown}' after five minutes. It is probably still running on the host; check the stack there before retrying, because a second deploy would race it."
+            exit 1
+          fi
+
+          jq -e '.success == true' <<<"$status" > /dev/null \
+            || { echo "::error::Komodo deploy failed for update $update_id."; jq . <<<"$status" >&2; exit 1; }
+
+          {
+            echo "### Deployment"
+            echo
+            echo "- Release: \`$DEPLOYMENT_VERSION\`"
+            echo "- Commit: \`$DEPLOYMENT_COMMIT\`"
+            echo "- Komodo update: \`$update_id\`"
+            echo "- Environment: \`production\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Komodo's completed update confirms that the stack operation finished, but it does
+      # not prove that the public proxy and identity issuer are serving the new release.
+      # These checks exercise both the application origin and the Keycloak path that the
+      # web app uses for OIDC discovery.
+      - name: Smoke-test the deployed endpoints
+        env:
+          WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME || secrets.WEB_HOSTNAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin="${WEB_HOSTNAME%/}"
+          curl_args=(--fail-with-body --silent --show-error --location --retry 10 --retry-delay 3 --retry-all-errors --connect-timeout 10 --max-time 30)
+
+          curl "${curl_args[@]}" "$origin/" > /dev/null
+          oidc_metadata=$(curl "${curl_args[@]}" "$origin/idp/realms/group-split/.well-known/openid-configuration")
+          jq -e --arg expected "$origin/idp/realms/group-split" '.issuer == $expected' <<<"$oidc_metadata" > /dev/null
+
+          echo "Public web and OIDC discovery endpoints are healthy."
