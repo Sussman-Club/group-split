@@ -1,6 +1,7 @@
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
@@ -12,12 +13,44 @@ public sealed class TransactionCommands(
     ApiErrorPresenter errors,
     ISnackbar snackbar,
     IDialogService dialogs,
+    IReceiptAttachmentCommands receiptAttachments,
+    IReceiptCommands receipts,
     DataChangeNotifier changes) : ITransactionCommands
 {
-    public Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
-        errors.TryAsync(async () =>
+    public async Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default) =>
+        await CreateExpenseAsync(request, ct) is not null;
+
+    public async Task<bool> CreateWithReceiptAsync(CreateTransactionRequest request,
+        IBrowserFile file, SaveReceiptRequest? receipt, CancellationToken ct = default)
+    {
+        var created = await CreateExpenseAsync(request, ct);
+        if (created is null)
+            return false;
+
+        var attachment = await receiptAttachments.UploadAsync(created.Id, file, ct);
+        if (attachment is null)
         {
-            var created = await transactions.CreateTransactionAsync(request, ct);
+            snackbar.Add("The expense was added, but its receipt file could not be attached.",
+                Severity.Warning);
+            return true;
+        }
+
+        if (receipt is not null && await receipts.SaveAsync(created.Id, receipt, ct) is null)
+        {
+            snackbar.Add("The expense was added, but its receipt details could not be saved.",
+                Severity.Warning);
+        }
+
+        return true;
+    }
+
+    private async Task<TransactionResponse?> CreateExpenseAsync(
+        CreateTransactionRequest request, CancellationToken ct)
+    {
+        TransactionResponse? created = null;
+        var succeeded = await errors.TryAsync(async () =>
+        {
+            created = await transactions.CreateTransactionAsync(request, ct);
 
             // Names what happened to what. "Transaction created successfully" was true of
             // every expense anybody ever recorded.
@@ -31,6 +64,9 @@ public sealed class TransactionCommands(
 
             await OfferBankRowsAsync(created, ct);
         }, "Could not save the expense.");
+
+        return succeeded ? created : null;
+    }
 
     /// <summary>
     /// Asks whether what was just recorded is a charge already waiting in the inbox, and

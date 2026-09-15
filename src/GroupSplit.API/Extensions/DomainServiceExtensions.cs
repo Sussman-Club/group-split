@@ -58,6 +58,7 @@ public static class DomainServiceExtensions
             routes.MapUserApi();
             routes.MapInvitationsApi();
             routes.MapTransaction();
+            routes.MapReceiptDraftsApi();
             routes.MapReceiptsApi();
             routes.MapReceiptAttachmentsApi();
             routes.MapCategoriesApi();

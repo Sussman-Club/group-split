@@ -3,6 +3,7 @@ using System.Text;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Veryfi;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -37,6 +38,49 @@ public class ReceiptTranscriptionServiceTest
         attachments.VerifyAll();
         Assert.Equal(attachmentId, provider.Document!.AttachmentId);
         Assert.Equal("dinner.jpg", provider.Document.FileName);
+    }
+
+    [Fact]
+    public async Task It_can_read_a_receipt_that_is_still_attached_to_a_bank_row()
+    {
+        var bankTransactionId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
+        var attachments = new Mock<IReceiptAttachmentService>(MockBehavior.Strict);
+        attachments.Setup(service => service.DownloadBank(bankTransactionId, attachmentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptAttachmentDownload([4, 5, 6], "application/pdf", "ikea.pdf"));
+        var provider = new StubProvider(new TranscribedReceipt(100m, 20m, 0m, 120m,
+            [new TranscribedReceiptItem("Shelf", 100m, 1m, 100m, 20m)]));
+
+        var response = await new ReceiptTranscriptionService(attachments.Object, provider)
+            .TranscribeBank(bankTransactionId, attachmentId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(attachmentId, response.AttachmentId);
+        Assert.Equal(120m, response.Receipt.Total);
+        Assert.Equal("ikea.pdf", provider.Document!.FileName);
+        attachments.VerifyAll();
+    }
+
+    [Fact]
+    public async Task It_can_read_a_receipt_before_an_expense_exists()
+    {
+        var provider = new StubProvider(new TranscribedReceipt(18m, 1.5m, 3m, 22.5m,
+            [new TranscribedReceiptItem("Pizza, large", 18m, 1m, 18m, 1.5m)]));
+        await using var content = new MemoryStream([1, 2, 3]);
+        var file = new FormFile(content, 0, content.Length, "receipt", "dinner.jpg")
+        {
+            ContentType = "image/jpeg"
+        };
+
+        var response = await new ReceiptTranscriptionService(
+                Mock.Of<IReceiptAttachmentService>(), provider)
+            .Transcribe(file, TestContext.Current.CancellationToken);
+
+        Assert.Equal("stub", response.Provider);
+        Assert.Equal(22.5m, response.Receipt.Total);
+        Assert.NotEqual(Guid.Empty, provider.Document!.AttachmentId);
+        Assert.Equal("dinner.jpg", provider.Document.FileName);
+        Assert.Equal("image/jpeg", provider.Document.ContentType);
+        Assert.Equal([1, 2, 3], provider.Document.Content);
     }
 
     [Fact]

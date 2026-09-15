@@ -183,23 +183,16 @@
                 @if (details.Kind == ActivityKind.Expense)
                 {
                     <div class="gs-stack" style="gap: 10px">
-                        <div class="gs-inline" style="justify-content: space-between; align-items: center; gap: 12px">
-                            <div>
-                                <h3 style="margin: 0; font-size: 1rem">Receipt files</h3>
-                                <span class="gs-muted" style="font-size: .8rem">Original photos or documents</span>
-                            </div>
-                            <InputFile OnChange="UploadAttachment"
-                                       accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
-                                       disabled="@_uploading" />
+                        <div>
+                            <h3 style="margin: 0 0 2px; font-size: 1rem">Receipt files</h3>
+                            <span class="gs-muted" style="font-size: .8rem">Original photos or documents</span>
                         </div>
 
-                        @if (_uploading)
-                        {
-                            <div class="gs-inline" role="status" style="gap: 8px">
-                                <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
-                                <span class="gs-muted">Uploading…</span>
-                            </div>
-                        }
+                        <ReceiptFilePicker FileChanged="UploadAttachment"
+                                           Title="Add a receipt file"
+                                           Description="Keep the original photo or PDF with this expense."
+                                           IsBusy="@_uploading"
+                                           BusyText="Attaching receipt…" />
 
                         @if (_attachments.Count == 0)
                         {

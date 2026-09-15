@@ -1,4 +1,5 @@
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.App.Shared.Services.Commands;
@@ -10,6 +11,9 @@ namespace GroupSplit.App.Shared.Services.Commands;
 public interface ITransactionCommands
 {
     Task<bool> CreateAsync(CreateTransactionRequest request, CancellationToken ct = default);
+
+    Task<bool> CreateWithReceiptAsync(CreateTransactionRequest request, IBrowserFile file,
+        SaveReceiptRequest? receipt, CancellationToken ct = default);
 
     Task<bool> UpdateAsync(Guid transactionId, JsonPatchDocument<UpdateTransactionRequest> patch,
         string name, CancellationToken ct = default);

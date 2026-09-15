@@ -1,10 +1,12 @@
 namespace GroupSplit.Data.Entities;
 
-/// <summary>A source image or document attached to an expense.</summary>
+/// <summary>A source image or document attached to a pending bank row or expense.</summary>
 public class ReceiptAttachment : Entity
 {
-    public Guid ExpenseId { get; set; }
-    public virtual Expense Expense { get; set; } = null!;
+    public Guid? ExpenseId { get; set; }
+    public virtual Expense? Expense { get; set; }
+    public Guid? BankTransactionId { get; set; }
+    public virtual BankTransaction? BankTransaction { get; set; }
     public Guid? ReceiptId { get; set; }
     public virtual Receipt? Receipt { get; set; }
     public required string ObjectKey { get; set; }

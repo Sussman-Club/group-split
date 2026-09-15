@@ -1,4 +1,5 @@
 using GroupSplit.API.Errors;
+using GroupSplit.API.Services;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -90,7 +91,8 @@ public sealed class InboxService(
     ICurrentUser userContext,
     AppDbContext dbContext,
     ITransactionService transactions,
-    IDuplicateMatcher matcher) : IInboxService
+    IDuplicateMatcher matcher,
+    IReceiptAttachmentService receiptAttachments) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {
@@ -197,6 +199,7 @@ public sealed class InboxService(
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
+        await receiptAttachments.AttachToExpense(row.Id, expense.Id, ct);
 
         return expense;
     }
@@ -276,6 +279,7 @@ public sealed class InboxService(
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
+        await receiptAttachments.AttachToExpense(row.Id, expense.Id, ct);
 
         return expense;
     }

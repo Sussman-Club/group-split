@@ -1,0 +1,94 @@
+@using Microsoft.AspNetCore.Components.Forms
+@namespace GroupSplit.App.Shared.Components
+
+<div class="gs-file-picker">
+    @* Keep the input mounted after selection. Blazor's IBrowserFile reads from the
+       browser input element, so removing it before the separate Read step invalidates
+       the file handle. The input is visually hidden; the label provides the UI. *@
+    <InputFile id="@_inputId"
+               OnChange="FileChanged"
+               accept="@Accept"
+               disabled="@IsBusy"
+               class="gs-file-picker-input"
+               aria-label="Receipt file" />
+
+    @if (!IsAttached)
+    {
+        <label for="@_inputId" class="gs-file-picker-dropzone">
+            <span class="gs-file-picker-mark" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+            </span>
+            <span class="gs-file-picker-copy">
+                <span class="gs-file-picker-title">@Title</span>
+                <span class="gs-file-picker-subtitle">@Description</span>
+                <span class="gs-file-picker-formats">JPG, PNG, WebP or PDF · up to 10 MB</span>
+            </span>
+            <span class="gs-file-picker-action">Browse</span>
+        </label>
+    }
+    else
+    {
+        <div class="gs-file-picker-attached">
+            <span class="gs-file-picker-mark is-success" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Rounded.Check" />
+            </span>
+            <span class="gs-file-picker-copy">
+                <span class="gs-file-picker-title">@(FileName ?? "Receipt attached")</span>
+                <span class="gs-file-picker-subtitle">@AttachedDescription</span>
+            </span>
+            @if (ReadRequested.HasDelegate)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           ButtonType="ButtonType.Button"
+                           Class="gs-btn-pill gs-file-picker-read"
+                           Disabled="@IsBusy"
+                           OnClick="RequestReadAsync">
+                    @(HasTranscript ? "Read again" : "Read receipt")
+                </MudButton>
+            }
+        </div>
+    }
+
+    @if (IsBusy)
+    {
+        <div class="gs-file-picker-status" role="status">
+            <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
+            <span>@BusyText</span>
+        </div>
+    }
+
+    @if (HasTranscript && !IsBusy)
+    {
+        <div class="gs-file-picker-transcript" role="status">
+            <MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />
+            <span>Receipt reviewed · @TranscriptItemCount item(s) ready to check.</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@Error</MudAlert>
+    }
+</div>
+
+@code {
+    private readonly string _inputId = $"receipt-picker-{Guid.NewGuid():N}";
+
+    [Parameter] public EventCallback<InputFileChangeEventArgs> FileChanged { get; set; }
+    [Parameter] public EventCallback ReadRequested { get; set; }
+    [Parameter] public string Accept { get; set; } = ".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf";
+    [Parameter] public string Title { get; set; } = "Attach the original receipt";
+    [Parameter] public string Description { get; set; } = "Keep the file now. Read it when you are ready.";
+    [Parameter] public string? FileName { get; set; }
+    [Parameter] public bool IsAttached { get; set; }
+    [Parameter] public string AttachedDescription { get; set; } = "Receipt attached";
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public string BusyText { get; set; } = "Working on receipt…";
+    [Parameter] public bool HasTranscript { get; set; }
+    [Parameter] public int TranscriptItemCount { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    private Task RequestReadAsync() => ReadRequested.InvokeAsync();
+}

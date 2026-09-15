@@ -8,7 +8,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var dbServer = builder
     .AddPostgres("db-server")
-    .WithDataVolume();
+    .WithDataVolume()
+    .WithOtlpExporter();
 
 var db = dbServer.AddDatabase("db", "groupsplit");
 
@@ -27,7 +28,8 @@ var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 // named was gone, and everybody was challenged again.
 var cache = builder.AddRedis("cache")
     .WithDataVolume()
-    .WithPersistence(TimeSpan.FromSeconds(30));
+    .WithPersistence(TimeSpan.FromSeconds(30))
+    .WithOtlpExporter();
 
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn()

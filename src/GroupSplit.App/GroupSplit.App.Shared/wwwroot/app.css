@@ -3208,6 +3208,147 @@ html:not([data-gs-ready]) .gs-group-card {
     flex-wrap: wrap;
 }
 
+/* The receipt has two deliberate states: keep the original file first, then read it.
+   The input stays in the DOM and focusable, while the label does the visual work. */
+.gs-file-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gs-file-picker-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.gs-file-picker-dropzone,
+.gs-file-picker-attached {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px dashed var(--gs-line-strong);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--gs-primary) 4%, var(--gs-surface));
+}
+
+.gs-file-picker-dropzone {
+    cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+
+.gs-file-picker-dropzone:hover {
+    border-color: var(--gs-primary);
+    background: color-mix(in srgb, var(--gs-primary) 8%, var(--gs-surface));
+    transform: translateY(-1px);
+}
+
+.gs-file-picker-input:focus-visible + .gs-file-picker-dropzone {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
+}
+
+.gs-file-picker-attached {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--gs-success) 35%, var(--gs-line));
+    background: color-mix(in srgb, var(--gs-success) 7%, var(--gs-surface));
+}
+
+.gs-file-picker-mark {
+    display: grid;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--gs-primary);
+    background: color-mix(in srgb, var(--gs-primary) 13%, transparent);
+}
+
+.gs-file-picker-mark.is-success {
+    color: var(--gs-success);
+    background: color-mix(in srgb, var(--gs-success) 14%, transparent);
+}
+
+.gs-file-picker-copy {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.gs-file-picker-title,
+.gs-file-picker-subtitle,
+.gs-file-picker-formats {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-file-picker-title {
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+.gs-file-picker-subtitle,
+.gs-file-picker-formats {
+    color: var(--gs-muted);
+    font-size: .75rem;
+}
+
+.gs-file-picker-formats {
+    margin-top: 3px;
+    font-size: .6875rem;
+    letter-spacing: .02em;
+}
+
+.gs-file-picker-action {
+    flex: 0 0 auto;
+    padding: 7px 11px;
+    border: 1px solid var(--gs-primary);
+    border-radius: 999px;
+    color: var(--gs-primary);
+    font-size: .75rem;
+    font-weight: 700;
+}
+
+.gs-file-picker-read {
+    flex: 0 0 auto;
+}
+
+.gs-file-picker-status,
+.gs-file-picker-transcript {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gs-muted);
+    font-size: .75rem;
+}
+
+.gs-file-picker-transcript {
+    color: var(--gs-success);
+}
+
+@media (max-width: 520px) {
+    .gs-file-picker-attached {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .gs-file-picker-attached .gs-file-picker-read {
+        margin-left: 50px;
+    }
+}
+
 /* Two form fields side by side, until there is not room for two. Date and time in the
    expense dialogs: at 375px each got about 140px, part of which the picker spends on its
    own calendar or clock button, so both values were clipped mid-string -- "9/9/20" and

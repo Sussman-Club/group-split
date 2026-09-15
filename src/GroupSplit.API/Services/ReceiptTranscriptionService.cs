@@ -8,6 +8,8 @@ namespace GroupSplit.API.Services;
 public interface IReceiptTranscriptionService
 {
     Task<ReceiptTranscriptionResponse> Transcribe(Guid expenseId, Guid attachmentId, CancellationToken ct = default);
+    Task<ReceiptTranscriptionResponse> TranscribeBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default);
+    Task<ReceiptDraftResponse> Transcribe(IFormFile file, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -51,14 +53,78 @@ public sealed class ReceiptTranscriptionService(
     IReceiptAttachmentService attachments,
     IReceiptTranscriptionProvider provider) : IReceiptTranscriptionService
 {
+    private const long MaximumLength = 10 * 1024 * 1024;
+    private static readonly IReadOnlyDictionary<string, string> AllowedTypes =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [".jpg"] = "image/jpeg",
+            [".jpeg"] = "image/jpeg",
+            [".png"] = "image/png",
+            [".webp"] = "image/webp",
+            [".pdf"] = "application/pdf"
+        };
+
     public async Task<ReceiptTranscriptionResponse> Transcribe(
         Guid expenseId, Guid attachmentId, CancellationToken ct = default)
     {
         var source = await attachments.Download(expenseId, attachmentId, ct);
+        return await Transcribe(source, attachmentId, ct);
+    }
+
+    public async Task<ReceiptTranscriptionResponse> TranscribeBank(
+        Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default)
+    {
+        var source = await attachments.DownloadBank(bankTransactionId, attachmentId, ct);
+        return await Transcribe(source, attachmentId, ct);
+    }
+
+    private async Task<ReceiptTranscriptionResponse> Transcribe(
+        ReceiptAttachmentDownload source, Guid attachmentId, CancellationToken ct)
+    {
         var transcription = await provider.Transcribe(new ReceiptSourceDocument(
             attachmentId, source.FileName, source.ContentType, source.Content), ct);
 
         return new ReceiptTranscriptionResponse(attachmentId, provider.Name, new SaveReceiptRequest
+        {
+            Subtotal = transcription.Subtotal,
+            Tax = transcription.Tax,
+            Tip = transcription.Tip,
+            Total = transcription.Total,
+            Items = transcription.Items.Select(item => new ReceiptItemInput
+            {
+                Name = item.Name,
+                NormalizedName = item.NormalizedName ?? item.Name.Trim().ToLowerInvariant(),
+                Description = item.Description,
+                UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity,
+                TotalPrice = item.TotalPrice,
+                TaxAmount = item.TaxAmount
+            }).ToArray()
+        });
+    }
+
+    public async Task<ReceiptDraftResponse> Transcribe(IFormFile file, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        var extension = Path.GetExtension(Path.GetFileName(file.FileName));
+        if (file.Length is <= 0 or > MaximumLength
+            || file.FileName.Length > 256
+            || !AllowedTypes.TryGetValue(extension, out var expectedType)
+            || !string.Equals(file.ContentType, expectedType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid,
+                "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.");
+        }
+
+        await using var input = file.OpenReadStream();
+        await using var buffer = new MemoryStream(checked((int)file.Length));
+        await input.CopyToAsync(buffer, ct);
+
+        var transcription = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), Path.GetFileName(file.FileName), expectedType, buffer.ToArray()), ct);
+
+        return new ReceiptDraftResponse(provider.Name, new SaveReceiptRequest
         {
             Subtotal = transcription.Subtotal,
             Tax = transcription.Tax,

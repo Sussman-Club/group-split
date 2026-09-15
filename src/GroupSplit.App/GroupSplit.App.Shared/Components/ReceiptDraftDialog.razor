@@ -33,15 +33,22 @@
             </div>
 
             <div class="gs-muted" style="font-size: .85rem">
-                Recorded expense amount: <strong>@ExpenseAmount.ToMoney()</strong>
+                @if (ExpenseAmount is { } expenseAmount)
+                {
+                    <span>Recorded expense amount: <strong>@expenseAmount.ToMoney()</strong></span>
+                }
+                else
+                {
+                    <span>This receipt will be attached to the expense after you finish the other details.</span>
+                }
             </div>
 
-            @if (_total != ExpenseAmount)
+            @if (ExpenseAmount is { } expectedAmount && _total != expectedAmount)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true">
-                    The receipt total is @(_total < ExpenseAmount ? "short" : "over") by
-                    @Math.Abs(ExpenseAmount - _total).ToMoney(). It must match the expense amount.
-                    Adjust the receipt figures, or correct the expense amount, before saving.
+                    The receipt total is @(_total < expectedAmount ? "short" : "over") by
+                    @Math.Abs(expectedAmount - _total).ToMoney(). It must match the expense amount.
+                    Adjust the receipt figures before saving.
                     Save is disabled until the totals match.
                 </MudAlert>
             }
@@ -83,7 +90,8 @@
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_saving || _total != ExpenseAmount)" OnClick="SaveAsync">
+                   Disabled="@(_saving || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
+                   OnClick="SaveAsync">
             @(_saving ? "Saving…" : "Save receipt")
         </MudButton>
     </DialogActions>
@@ -91,8 +99,8 @@
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
-    [Parameter, EditorRequired] public Guid TransactionId { get; set; }
-    [Parameter, EditorRequired] public decimal ExpenseAmount { get; set; }
+    [Parameter] public Guid? TransactionId { get; set; }
+    [Parameter] public decimal? ExpenseAmount { get; set; }
     [Parameter, EditorRequired] public ReceiptTranscriptionResponse Transcription { get; set; } = null!;
 
     private decimal _subtotal;
@@ -124,17 +132,16 @@
             return;
         }
 
-        // This bill is attached to an existing expense, so the total must agree with
-        // its recorded amount. Show the expected amount and discrepancy before making
-        // a request that the API is required to reject.
-        if (_total != ExpenseAmount)
+        // A bill attached to an existing expense must agree with its recorded amount. A
+        // draft has no expense yet, so it is allowed to become the amount the caller records.
+        if (ExpenseAmount is { } expectedAmount && _total != expectedAmount)
             return;
 
         _validationError = null;
         _saving = true;
         try
         {
-            var saved = await Receipts.SaveAsync(TransactionId, new SaveReceiptRequest
+            var request = new SaveReceiptRequest
             {
                 Subtotal = _subtotal,
                 Tax = _tax,
@@ -150,10 +157,18 @@
                     TotalPrice = item.TotalPrice,
                     TaxAmount = item.TaxAmount
                 }).ToArray()
-            });
+            };
 
-            if (saved is not null)
-                MudDialog.Close(DialogResult.Ok(saved));
+            if (TransactionId is { } transactionId)
+            {
+                var saved = await Receipts.SaveAsync(transactionId, request);
+                if (saved is not null)
+                    MudDialog.Close(DialogResult.Ok(saved));
+            }
+            else
+            {
+                MudDialog.Close(DialogResult.Ok(request));
+            }
         }
         finally
         {

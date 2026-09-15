@@ -1,9 +1,10 @@
 namespace GroupSplit.Shared;
 
-/// <summary>Metadata for a private source file attached to an expense.</summary>
+/// <summary>Metadata for a private source file attached to a pending bank row or expense.</summary>
 public sealed record ReceiptAttachmentResponse(
     Guid Id,
-    Guid ExpenseId,
+    Guid? ExpenseId,
+    Guid? BankTransactionId,
     Guid? ReceiptId,
     string FileName,
     string ContentType,
