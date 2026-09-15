@@ -59,6 +59,12 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
             options => options.UseNpgsql(connectionString));
         services.AddDomainServices();
 
+        // These tests execute inbox queries, not attachment operations. InboxService still
+        // needs the attachment service in its production graph, so provide the same inert
+        // storage dependency as the API endpoint test host.
+        services.AddSingleton<Amazon.S3.IAmazonS3>(Moq.Mock.Of<Amazon.S3.IAmazonS3>());
+        services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
+
         _services = services.BuildServiceProvider();
         _scope = _services.CreateScope();
 
