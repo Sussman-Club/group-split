@@ -235,6 +235,57 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
+    /// Explicitly choosing the bill must beat a category whose own rule divides evenly.
+    /// </summary>
+    [Fact]
+    public async Task Choosing_the_bill_for_an_edit_uses_it_instead_of_the_category_rule()
+    {
+        var (expense, other, even, _) = await Setup();
+        var evenRuleId = await DbContext.Set<SplitRuleVersion>()
+            .Where(version => version.Id == even).Select(version => version.SplitRuleId)
+            .SingleAsync(Ct);
+        var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
+        {
+            GroupId = expense.GroupId!.Value,
+            Name = "Even food",
+            DefaultSplitRuleId = evenRuleId
+        }, Ct);
+        var mine = await Rule(expense.GroupId.Value, "Mine", new SoleSplitRuleDto(Self));
+        var theirs = await Rule(expense.GroupId.Value, "Theirs", new SoleSplitRuleDto(other));
+
+        await Receipts.SaveForExpense(expense.Id,
+            Bill(Item("Mine", 30, mine.Id), Item("Theirs", 18, theirs.Id)), Ct);
+
+        var billRule = await BillRuleOf(expense.GroupId.Value);
+        var request = new UpdateTransactionRequest
+        {
+            Name = expense.Name,
+            Amount = 48m,
+            DateTime = expense.DateTime,
+            GroupId = expense.GroupId,
+            CategoryId = category.Id,
+            PaidByUserId = Self,
+            SplitRuleId = billRule.SplitRule.Id
+        };
+
+        var preview = await Transactions.PreviewUpdate(expense.Id, request, redivide: true, Ct);
+
+        Assert.Equal(30m, preview.Splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(18m, preview.Splits.Single(split => split.UserId == other).Amount);
+        Assert.Equal(billRule.SplitRule.Name, preview.RuleName);
+
+        await Transactions.Update(expense.Id, request, Ct);
+
+        var stored = await DbContext.Set<TransactionSplit>()
+            .Where(split => split.TransactionId == expense.Id).ToListAsync(Ct);
+        Assert.Equal(30m, stored.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(18m, stored.Single(split => split.UserId == other).Amount);
+        Assert.Equal(billRule.Id,
+            await DbContext.Set<Expense>().Where(candidate => candidate.Id == expense.Id)
+                .Select(candidate => candidate.SplitRuleVersionId).FirstAsync(Ct));
+    }
+
+    /// <summary>
     /// Every group is given one, so nothing has to be created before a bill can divide one.
     /// </summary>
     [Fact]

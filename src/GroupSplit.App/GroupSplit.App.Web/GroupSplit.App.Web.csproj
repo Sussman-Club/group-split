@@ -12,8 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.5.3-preview.1.26425.3" />
-    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.5.3" />
+    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.5.4-preview.1.26464.4" />
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.5.4" />
     <!-- User access token management for the OIDC handler, which ships SaveTokens and no
          way to keep what it saved current. Apache-2.0, and distinct from Duende.BFF, which
          is under Duende's own licence and would replace this app's whole BFF. -->
