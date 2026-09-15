@@ -280,7 +280,8 @@ public class PageStateRefreshTest
         var groupCommands = new GroupCommands(_groupsClient.Object, _invitationsClient.Object, presenter,
             _snackbar.Object, _changes);
         var transactionCommands = new TransactionCommands(_transactionsClient.Object, presenter,
-            _snackbar.Object, Mock.Of<IDialogService>(), _changes);
+            _snackbar.Object, Mock.Of<IDialogService>(), Mock.Of<IReceiptAttachmentCommands>(),
+            Mock.Of<IReceiptCommands>(), _changes);
 
         // No JS behind it, so the clock falls back to the runtime's own offset -- which is
         // what the "this month" assertion below compares against too.

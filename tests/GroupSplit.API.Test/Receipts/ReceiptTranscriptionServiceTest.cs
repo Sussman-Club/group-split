@@ -68,6 +68,7 @@ public class ReceiptTranscriptionServiceTest
         await using var content = new MemoryStream([1, 2, 3]);
         var file = new FormFile(content, 0, content.Length, "receipt", "dinner.jpg")
         {
+            Headers = new HeaderDictionary(),
             ContentType = "image/jpeg"
         };
 

@@ -1,7 +1,9 @@
 using GroupSplit.API.Extensions;
+using Amazon.S3;
 using GroupSplit.API.Services;
-using GroupSplit.API.Test.Base;
+using Moq;
 using Microsoft.Extensions.DependencyInjection;
+using GroupSplit.API.Test.Base;
 
 [assembly: AssemblyFixture(typeof(ApiTestFixture))]
 
@@ -45,6 +47,12 @@ public class ApiTestFixture : IAsyncLifetime
         // Register your API services
         // The production list, so a test host cannot drift from what actually runs.
         services.AddDomainServices();
+
+        // Receipt files use object storage in production. The common unit-test graph must
+        // still be constructible for tests that never touch a receipt, so give the service
+        // a harmless client by default; attachment tests replace/configure this mock.
+        services.AddSingleton(Mock.Of<IAmazonS3>());
+        services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
 
 
     }

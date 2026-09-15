@@ -27,17 +27,19 @@ public sealed class TransactionCommands(
         if (created is null)
             return false;
 
+        // Save the extracted bill first. ReceiptService also links any unassociated source
+        // files to the new receipt, so the original document and its itemized data remain
+        // one thing in the details view.
+        if (receipt is not null && await receipts.SaveAsync(created.Id, receipt, ct) is null)
+        {
+            snackbar.Add("The expense was added, but its receipt details could not be saved.",
+                Severity.Warning);
+        }
+
         var attachment = await receiptAttachments.UploadAsync(created.Id, file, ct);
         if (attachment is null)
         {
             snackbar.Add("The expense was added, but its receipt file could not be attached.",
-                Severity.Warning);
-            return true;
-        }
-
-        if (receipt is not null && await receipts.SaveAsync(created.Id, receipt, ct) is null)
-        {
-            snackbar.Add("The expense was added, but its receipt details could not be saved.",
                 Severity.Warning);
         }
 

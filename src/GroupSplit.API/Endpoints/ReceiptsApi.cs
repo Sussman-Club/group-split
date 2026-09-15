@@ -2,6 +2,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -33,7 +34,7 @@ public static class ReceiptsApi
 
             group.MapPost("/transcribe", async (
                     IFormFile file,
-                    IReceiptTranscriptionService transcription,
+                    [FromServices] IReceiptTranscriptionService transcription,
                     CancellationToken ct) =>
                 Results.Ok(await transcription.Transcribe(file, ct)))
                 .WithName("TranscribeReceiptDraft")

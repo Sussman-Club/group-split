@@ -722,8 +722,30 @@
         ApplyDate();
         var request = Request();
 
-        MudDialog.Close(_receiptFile is { } file
-            ? DialogResult.Ok(new Answer(request, file, _receipt))
+        // IBrowserFile is backed by the InputFile DOM element. The dialog is disposed as
+        // soon as this result is returned, so hand the page a buffered copy instead of a
+        // handle that would point at an element that no longer exists.
+        IBrowserFile? file = null;
+        if (_receiptFile is { } selectedFile)
+        {
+            try
+            {
+                await using var input = selectedFile.OpenReadStream(10 * 1024 * 1024);
+                await using var buffer = new MemoryStream();
+                await input.CopyToAsync(buffer);
+                file = new BufferedBrowserFile(selectedFile.Name, selectedFile.ContentType,
+                    selectedFile.LastModified, buffer.ToArray());
+            }
+            catch (Exception exception) when (exception is IOException or InvalidOperationException)
+            {
+                _receiptError = "The receipt file could not be prepared for saving. Choose it again and retry.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+        }
+
+        MudDialog.Close(file is { } bufferedFile
+            ? DialogResult.Ok(new Answer(request, bufferedFile, _receipt))
             : DialogResult.Ok(request));
     }
 

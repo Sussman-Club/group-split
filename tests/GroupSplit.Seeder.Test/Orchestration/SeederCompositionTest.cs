@@ -73,6 +73,7 @@ public class SeederCompositionTest
         Assert.NotEmpty(seeders);
         Assert.Contains(seeders, seeder => seeder is Seeders.TransactionSeeder);
         Assert.Contains(seeders, seeder => seeder is Seeders.CategorySeeder);
+        Assert.Contains(seeders, seeder => seeder is Seeders.BillSplitRuleSeeder);
         Assert.Contains(seeders, seeder => seeder is Seeders.MerchantSeeder);
         Assert.Contains(seeders, seeder => seeder is Seeders.GroupInvitationSeeder);
     }
@@ -121,6 +122,18 @@ public class SeederCompositionTest
 
         Assert.True(merchants < LayerOf<Seeders.TransactionSeeder>(layers));
         Assert.True(merchants < LayerOf<Seeders.BankConnectionSeeder>(layers));
+    }
+
+    [Fact]
+    public void The_bill_rule_is_seeded_before_categories_that_can_use_it()
+    {
+        using var host = ComposeSeederHost();
+        using var scope = host.Services.CreateScope();
+
+        var layers = scope.ServiceProvider.GetServices<ISeeder>().TopologicallySort();
+
+        Assert.True(LayerOf<Seeders.BillSplitRuleSeeder>(layers)
+                    < LayerOf<Seeders.CategorySeeder>(layers));
     }
 
     private static int LayerOf<TSeeder>(List<List<ISeeder>> layers) =>

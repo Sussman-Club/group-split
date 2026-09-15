@@ -1,8 +1,13 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
 
 namespace GroupSplit.API.Test.Endpoints;
 
@@ -153,5 +158,50 @@ public class ReceiptEndpointTest : IAsyncLifetime
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
 
         Assert.Equal("RECEIPT_NOT_FOUND", problem.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task A_receipt_file_is_transcribed_through_the_multipart_endpoint()
+    {
+        var transcription = new Mock<IReceiptTranscriptionService>(MockBehavior.Strict);
+        var draft = new ReceiptDraftResponse("stub", new SaveReceiptRequest
+        {
+            Subtotal = 18m,
+            Tax = 1.5m,
+            Tip = 3m,
+            Total = 22.5m,
+            Items = [new ReceiptItemInput
+            {
+                Name = "Pizza",
+                UnitPrice = 18m,
+                Quantity = 1m,
+                TotalPrice = 18m,
+                TaxAmount = 1.5m
+            }]
+        });
+        transcription
+            .Setup(service => service.Transcribe(It.IsAny<IFormFile>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(draft);
+
+        await using var host = await ApiEndpointHost.StartAsync(services =>
+            services.AddSingleton(transcription.Object));
+
+        using var content = new MultipartFormDataContent();
+        using var file = new ByteArrayContent([1, 2, 3]);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        content.Add(file, "file", "receipt.pdf");
+
+        var response = await host.Client.PostAsync("/receipts/transcribe", content, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ReceiptDraftResponse>(Json, Ct);
+        Assert.NotNull(body);
+        Assert.Equal("stub", body!.Provider);
+        Assert.Equal(22.5m, body.Receipt.Total);
+        Assert.Equal("Pizza", Assert.Single(body.Receipt.Items).Name);
+        transcription.Verify(service => service.Transcribe(
+            It.Is<IFormFile>(uploaded => uploaded.FileName == "receipt.pdf"
+                && uploaded.ContentType == "application/pdf"),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

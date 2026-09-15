@@ -120,7 +120,8 @@ public class TransactionDetailsDialogTest : ComponentTest
     }
 
     /// <summary>
-    /// Nearly every expense has no bill, and those get no line, no control and no explaining.
+    /// Nearly every expense has no bill. Those get no itemised-receipt control, while the
+    /// separate original-file section remains available for an attachment added later.
     /// </summary>
     [Fact]
     public async Task An_expense_with_no_bill_is_offered_nothing()
@@ -129,6 +130,7 @@ public class TransactionDetailsDialogTest : ComponentTest
 
         dialog.WaitForAssertion(() => Assert.Contains("Glovo", dialog.Markup));
         Assert.DoesNotContain("View receipt", dialog.Markup);
-        Assert.DoesNotContain("Receipt", dialog.Markup);
+        Assert.Contains("Receipt files", dialog.Markup);
+        Assert.Contains("No receipt files attached yet.", dialog.Markup);
     }
 }

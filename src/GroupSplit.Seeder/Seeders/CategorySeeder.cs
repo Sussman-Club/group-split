@@ -19,6 +19,7 @@ namespace GroupSplit.Seeder.Seeders;
 /// </remarks>
 [DependsOn(typeof(GroupSeeder))]
 [DependsOn(typeof(UserSeeder))]
+[DependsOn(typeof(BillSplitRuleSeeder))]
 public class CategorySeeder(
     AppDbContext db,
     ILogger<CategorySeeder> logger,

@@ -69,6 +69,17 @@ public abstract class ComponentTest : BunitContext
         // below, and a test that is about a bill registers its own.
         Services.AddSingleton(Mock.Of<IReceiptCommands>());
 
+        // Receipt files are optional too. Return an empty collection rather than the null
+        // default from a loose mock, because components materialize the server response
+        // directly into their state before rendering the rest of the dialog.
+        ReceiptAttachments
+            .Setup(client => client.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ReceiptAttachmentResponse>());
+        ReceiptAttachments
+            .Setup(client => client.GetForBankAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ReceiptAttachmentResponse>());
+        Services.AddSingleton(ReceiptAttachments.Object);
+
         // And the rules a bill's lines divide by, for the same reason: the split control now
         // offers "By its bill", and choosing it renders a component that reads them. A test
         // about something else must not have to know that. One that cares registers its own
@@ -112,6 +123,8 @@ public abstract class ComponentTest : BunitContext
     protected Mock<ICategoriesClient> Categories { get; } = new();
 
     protected Mock<ISplitRulesClient> SplitRules { get; } = new();
+
+    protected Mock<IReceiptAttachmentCommands> ReceiptAttachments { get; } = new();
 
     /// <summary>Set up so a test can assert what a failure did or did not put in front of anybody.</summary>
     protected Mock<ISnackbar> Snackbar { get; } = new();

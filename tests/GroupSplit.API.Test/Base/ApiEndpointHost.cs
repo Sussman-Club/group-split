@@ -1,3 +1,4 @@
+using Amazon.S3;
 using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -16,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace GroupSplit.API.Test.Base;
 
@@ -116,6 +118,12 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         builder.Services.AddDomainServices();
         builder.Services.AddApiValidation();
         builder.Services.AddApiErrorHandling();
+
+        // The real host gets this from Aspire's RustFS resource. Endpoint tests should not
+        // need a live object store just to resolve a route that happens to share the domain
+        // service graph, so default to a mock that attachment-focused tests can configure.
+        builder.Services.AddSingleton(Mock.Of<IAmazonS3>());
+        builder.Services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
 
 
         configure?.Invoke(builder.Services);
