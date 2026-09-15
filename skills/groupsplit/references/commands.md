@@ -164,6 +164,12 @@ exactly as they are.
 
 | Command | |
 | --- | --- |
+| `receipts transcribe <file>` | Read a local receipt into an editable draft. Saves nothing. Supported files are JPG, PNG, WebP and PDF up to 10 MB. |
+| `receipts attachments list <transaction-id>` | List source receipt files attached to an expense. |
+| `receipts attachments upload <transaction-id> <file>` | Attach a source receipt file to an expense. |
+| `receipts attachments download <transaction-id> <attachment-id> <destination>` | Download a source file to a new local path; refuses to overwrite an existing file. |
+| `receipts attachments transcribe <transaction-id> <attachment-id>` | Read an attached source file into an editable draft. Saves no itemised bill. |
+| `receipts attachments delete <transaction-id> <attachment-id>` | Delete an expense's source file. Confirmation required. |
 | `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
 | `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. |
 | `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. |
@@ -327,6 +333,11 @@ Imported bank rows waiting to be filed.
 | `inbox list` | List imported rows, newest first. |
 | `inbox summary` | Count the rows still waiting to be filed, and how many of those may already be recorded. |
 | `inbox matches <row-id>` | List the expenses already recorded that an imported row could be. |
+| `inbox attachments list <row-id>` | List source receipt files attached to a pending bank row. |
+| `inbox attachments upload <row-id> <file>` | Attach a source receipt file while the row is still pending. |
+| `inbox attachments download <row-id> <attachment-id> <destination>` | Download a pending source file to a new local path. |
+| `inbox attachments transcribe <row-id> <attachment-id>` | Read a pending source file into an editable draft. Saves no itemised bill or expense. |
+| `inbox attachments delete <row-id> <attachment-id>` | Delete a pending row's source file. Confirmation required. |
 | `inbox file <row-id>` | File an imported row as an expense. |
 | `inbox link <row-id> <transaction-id>` | Attach an imported row to an expense already recorded, instead of filing a second one. |
 | `inbox dismiss-match <row-id> <transaction-id>` | Say an imported row and a suggested expense are not the same money. |

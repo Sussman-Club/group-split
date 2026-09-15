@@ -19,6 +19,7 @@ public sealed class StubApi : IDisposable
     private readonly HttpListener _listener = new();
     private readonly List<Recorded> _requests = [];
     private readonly Dictionary<string, (int Status, string Body)> _routes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (int Status, byte[] Body, string ContentType)> _binaryRoutes = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _html = new(StringComparer.OrdinalIgnoreCase);
 
     public StubApi()
@@ -81,6 +82,18 @@ public sealed class StubApi : IDisposable
     {
         _routes[Key(path, method)] = (204, string.Empty);
 
+        return this;
+    }
+
+    /// <summary>Answers a download with bytes rather than JSON.</summary>
+    public StubApi ReturnsBytes(
+        string path,
+        byte[] body,
+        string contentType = "application/octet-stream",
+        int status = 200,
+        string? method = null)
+    {
+        _binaryRoutes[Key(path, method)] = (status, body, contentType);
         return this;
     }
 
@@ -154,6 +167,17 @@ public sealed class StubApi : IDisposable
             // A method-specific route wins over the path-only one, so a test can make GET
             // and DELETE on the same route answer differently without every other test
             // having to name a method it does not care about.
+            if (_binaryRoutes.TryGetValue(Key(path, context.Request.HttpMethod), out var binarySpecific)
+                || _binaryRoutes.TryGetValue(path, out binarySpecific))
+            {
+                context.Response.StatusCode = binarySpecific.Status;
+                context.Response.ContentType = binarySpecific.ContentType;
+                context.Response.ContentLength64 = binarySpecific.Body.Length;
+                await context.Response.OutputStream.WriteAsync(binarySpecific.Body);
+                context.Response.Close();
+                continue;
+            }
+
             var (status, body) =
                 _routes.TryGetValue(Key(path, context.Request.HttpMethod), out var specific) ? specific
                 : _routes.TryGetValue(path, out var route) ? route

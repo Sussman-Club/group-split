@@ -2,7 +2,8 @@
 name: groupsplit
 description: >-
   Drive the GroupSplit CLI (`groupsplit`) to read and change shared expenses: groups,
-  members, expenses, balances, settlements, split rules, categories, itemised receipts,
+  members, expenses, balances, settlements, split rules, categories, receipt files and
+  itemised receipts,
   invitations, linked bank accounts and imported bank rows.
   USE FOR: splitting an expense with a group, who owes whom, settling up with one person
   across every group at once, recording what somebody paid, a group's ledger or totals, what
@@ -18,7 +19,7 @@ description: >-
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # GroupSplit from the command line
@@ -30,6 +31,26 @@ a prompt nobody can answer.
 
 Everything below is the protocol around the CLI. The CLI's own surface comes from the
 CLI, not from here.
+
+## Receipts are two separate flows
+
+The CLI exposes both the source file and the itemised bill. Keep them separate in the same
+way the app does:
+
+- `groupsplit receipts transcribe <file>` reads a local JPG, PNG, WebP or PDF into an
+  editable draft. It saves no expense, receipt, attachment or split.
+- `groupsplit receipts attachments upload <transaction-id> <file>` attaches a source file
+  to an existing expense. `list`, `download`, `transcribe` and `delete` manage that file;
+  `transcribe` returns a draft and does not save the itemised bill.
+- `groupsplit inbox attachments upload <row-id> <file>` does the same for a bank row that
+  is still waiting in the inbox. Filing or linking the row moves its pending files to the
+  expense, but neither upload nor transcription files the row or chooses its group.
+- After reviewing a transcription, use `receipts set` to save the bill, `receipts rule` to
+  assign each line's split rule, and `receipts divide` to change the ledger. Never imply
+  that OCR has already made those decisions.
+
+`attachments delete` is destructive and uses the normal exit-4 confirmation envelope. A
+download writes to a new local path and refuses to overwrite an existing file.
 
 ## Start by reading the schema
 

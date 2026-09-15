@@ -39,6 +39,8 @@ public static class ReceiptCommands
         var receipts = new Command("receipts",
             "Itemised bills: what was on them, who had what, and dividing by it.");
 
+        receipts.Subcommands.Add(Transcribe());
+        receipts.Subcommands.Add(Attachments());
         receipts.Subcommands.Add(Show());
         receipts.Subcommands.Add(Set());
         receipts.Subcommands.Add(Rule());
@@ -47,6 +49,192 @@ public static class ReceiptCommands
         receipts.Subcommands.Add(Delete());
 
         return receipts;
+    }
+
+    private static Command Transcribe()
+    {
+        var file = new Argument<string>("file")
+        {
+            Description = "A JPG, PNG, WebP, or PDF receipt to read into an editable draft."
+        };
+
+        var command = new Command("transcribe",
+            "Read a receipt file into an editable bill. Saves nothing.") { file };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var path = context.ParseResult.GetValue(file)!;
+            await using var stream = ReceiptFiles.OpenForUpload(path);
+
+            var draft = await new Api.ReceiptsClient(context.ApiHttpClient)
+                .TranscribeReceiptDraftAsync(
+                    new FileParameter(stream, Path.GetFileName(path), ReceiptFiles.ContentTypeFor(path)), ct);
+
+            context.Output.Write(draft, RenderDraft);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command Attachments()
+    {
+        var attachments = new Command("attachments",
+            "Private receipt files attached to an expense.");
+        attachments.Aliases.Add("attachment");
+        attachments.Subcommands.Add(ListAttachments());
+        attachments.Subcommands.Add(UploadAttachment());
+        attachments.Subcommands.Add(DownloadAttachment());
+        attachments.Subcommands.Add(TranscribeAttachment());
+        attachments.Subcommands.Add(DeleteAttachment());
+        return attachments;
+    }
+
+    private static readonly Argument<Guid> AttachmentId = new("attachment-id")
+    {
+        Description = "The file's id, as shown by `groupsplit receipts attachments list`."
+    };
+
+    private static Command ListAttachments()
+    {
+        var command = new Command("list", "List the receipt files attached to an expense.")
+        {
+            TransactionId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var transactionId = context.ParseResult.GetValue(TransactionId);
+            var attachments = await new Api.ReceiptsClient(context.ApiHttpClient)
+                .GetReceiptAttachmentsAsync(transactionId, ct);
+
+            context.Output.Write(attachments, RenderAttachments);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command UploadAttachment()
+    {
+        var file = new Argument<string>("file")
+        {
+            Description = "A JPG, PNG, WebP, or PDF receipt file."
+        };
+        var command = new Command("upload", "Attach a receipt file to an expense.")
+        {
+            TransactionId, file
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var path = parse.GetValue(file)!;
+            await using var stream = ReceiptFiles.OpenForUpload(path);
+
+            var attachment = await new Api.ReceiptsClient(context.ApiHttpClient)
+                .UploadReceiptAttachmentAsync(
+                    parse.GetValue(TransactionId),
+                    new FileParameter(stream, Path.GetFileName(path), ReceiptFiles.ContentTypeFor(path)),
+                    ct);
+
+            context.Output.Write(attachment, RenderAttachment);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command DownloadAttachment()
+    {
+        var destination = new Argument<string>("destination")
+        {
+            Description = "A new local path to save the receipt file to."
+        };
+        var command = new Command("download", "Download an attached receipt file.")
+        {
+            TransactionId, AttachmentId, destination
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var transactionId = parse.GetValue(TransactionId);
+            var attachmentId = parse.GetValue(AttachmentId);
+            var path = await ReceiptFiles.DownloadAsync(
+                context.ApiHttpClient,
+                $"transactions/{transactionId}/receipt-attachments/{attachmentId}",
+                parse.GetValue(destination)!,
+                ct);
+
+            context.Output.WriteMessage(
+                $"Downloaded receipt attachment {attachmentId} to {path}.",
+                new { status = "downloaded", attachmentId, path });
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command TranscribeAttachment()
+    {
+        var command = new Command("transcribe",
+            "Read an attached receipt into an editable bill. Saves no itemised bill.")
+        {
+            TransactionId, AttachmentId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var transcription = await new Api.ReceiptsClient(context.ApiHttpClient)
+                .TranscribeReceiptAttachmentAsync(
+                    parse.GetValue(TransactionId), parse.GetValue(AttachmentId), ct);
+
+            context.Output.Write(transcription, RenderTranscription);
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command DeleteAttachment()
+    {
+        var command = new Command("delete", "Delete an attached receipt file.")
+        {
+            TransactionId, AttachmentId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var transactionId = parse.GetValue(TransactionId);
+            var attachmentId = parse.GetValue(AttachmentId);
+            var attachments = await new Api.ReceiptsClient(context.ApiHttpClient)
+                .GetReceiptAttachmentsAsync(transactionId, ct);
+            var attachment = attachments.SingleOrDefault(item => item.Id == attachmentId)
+                ?? throw CliException.Input(
+                    $"Receipt attachment {attachmentId} was not found on expense {transactionId}.",
+                    "List the expense's files with: groupsplit receipts attachments list "
+                    + transactionId);
+
+            Confirmation.Require(
+                context,
+                action: "receipts.attachments.delete",
+                summary: $"Delete receipt file '{attachment.FileName}'?",
+                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this expense."],
+                confirmCommand: $"groupsplit receipts attachments delete {transactionId} {attachmentId} --yes");
+
+            await new Api.ReceiptsClient(context.ApiHttpClient)
+                .DeleteReceiptAttachmentAsync(transactionId, attachmentId, ct);
+
+            context.Output.WriteMessage(
+                $"Deleted receipt attachment {attachmentId}.",
+                new { status = "deleted", transactionId, attachmentId });
+            return ExitCodes.Success;
+        });
+
+        return command;
     }
 
     private static Command Show()
@@ -310,6 +498,60 @@ public static class ReceiptCommands
         }
 
         return new Rows(summary, new Markup("\n"), items);
+    }
+
+    private static IRenderable RenderDraft(ReceiptDraftResponse draft)
+        => new Rows(
+            new Markup($"[bold]Provider[/] {Markup.Escape(draft.Provider)}\n"),
+            RenderReceiptSummary(draft.Receipt));
+
+    private static IRenderable RenderTranscription(ReceiptTranscriptionResponse transcription)
+        => new Rows(
+            new Markup($"[bold]Provider[/] {Markup.Escape(transcription.Provider)}\n"
+                       + $"[bold]Attachment[/] {transcription.AttachmentId}\n"),
+            RenderReceiptSummary(transcription.Receipt));
+
+    private static IRenderable RenderReceiptSummary(SaveReceiptRequest receipt)
+    {
+        var summary = Tables.KeyValue();
+        summary.AddRow("Subtotal", receipt.Subtotal.ToString());
+        summary.AddRow("Tax", receipt.Tax.ToString());
+        summary.AddRow("Tip", receipt.Tip.ToString());
+        summary.AddRow("Total", receipt.Total.ToString());
+        summary.AddRow("Items", receipt.Items.Count.ToString());
+        return summary;
+    }
+
+    private static IRenderable RenderAttachment(ReceiptAttachmentResponse attachment)
+    {
+        var table = Tables.KeyValue();
+        table.AddRow("Id", attachment.Id.ToString());
+        table.AddRow("File", Markup.Escape(attachment.FileName));
+        table.AddRow("Type", Markup.Escape(attachment.ContentType));
+        table.AddRow("Size", $"{attachment.Length:N0} bytes");
+        table.AddRow("Uploaded", attachment.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+        return table;
+    }
+
+    private static IRenderable RenderAttachments(ICollection<ReceiptAttachmentResponse> attachments)
+    {
+        if (attachments.Count == 0)
+        {
+            return new Markup(Tables.Empty("receipt attachments") + "\n");
+        }
+
+        var table = Tables.Grid("Id", "File", "Type", "Size", "Uploaded");
+        foreach (var attachment in attachments)
+        {
+            table.AddRow(
+                attachment.Id.ToString(),
+                Markup.Escape(attachment.FileName),
+                Markup.Escape(attachment.ContentType),
+                $"{attachment.Length:N0} bytes",
+                attachment.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+        }
+
+        return table;
     }
 
     private static IRenderable RenderDivision(ReceiptDivisionResponse division)

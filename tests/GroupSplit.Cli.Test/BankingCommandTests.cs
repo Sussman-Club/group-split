@@ -585,6 +585,141 @@ public sealed class BankingCommandTests : IDisposable
         Assert.Equal("BANK_TRANSACTION_ALREADY_FILED", result.Error.GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task Pending_bank_receipt_attachment_can_be_uploaded_and_listed()
+    {
+        var rowId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
+        var path = TempReceipt("pending.jpg");
+        try
+        {
+            _api.Returns($"/api/inbox/{rowId}/receipt-attachments", BankAttachment(rowId, attachmentId), method: "POST");
+            _api.Returns($"/api/inbox/{rowId}/receipt-attachments", new[] { BankAttachment(rowId, attachmentId) }, method: "GET");
+
+            var uploaded = await Cli.RunAsync(
+                "inbox", "attachments", "upload", rowId.ToString(), path);
+            var listed = await Cli.RunAsync(
+                "inbox", "attachments", "list", rowId.ToString());
+
+            Assert.Equal(ExitCodes.Success, uploaded.ExitCode);
+            Assert.Equal(ExitCodes.Success, listed.ExitCode);
+            Assert.Contains("pending.jpg", _api.Requests.Single(request => request.Method == "POST").Body);
+            Assert.Equal(attachmentId, listed.Json[0].GetProperty("id").GetGuid());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Pending_bank_receipt_attachment_transcription_is_a_separate_step()
+    {
+        var rowId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
+        _api.Returns(
+            $"/api/inbox/{rowId}/receipt-attachments/{attachmentId}/transcribe",
+            Transcription(attachmentId));
+
+        var result = await Cli.RunAsync(
+            "inbox", "attachments", "transcribe", rowId.ToString(), attachmentId.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal("POST", _api.Requests.Single().Method);
+        Assert.Contains("receipt", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Pending_bank_receipt_attachment_download_writes_the_bytes_to_a_new_file()
+    {
+        var rowId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
+        var destination = Path.Combine(Path.GetTempPath(), $"groupsplit-{Guid.NewGuid():N}.png");
+        var bytes = new byte[] { 5, 6, 7 };
+        try
+        {
+            _api.ReturnsBytes($"/api/inbox/{rowId}/receipt-attachments/{attachmentId}", bytes);
+
+            var result = await Cli.RunAsync(
+                "inbox", "attachments", "download", rowId.ToString(), attachmentId.ToString(), destination);
+
+            Assert.Equal(ExitCodes.Success, result.ExitCode);
+            Assert.Equal(bytes, File.ReadAllBytes(destination));
+            Assert.Equal("GET", _api.Requests.Single().Method);
+        }
+        finally
+        {
+            File.Delete(destination);
+        }
+    }
+
+    [Fact]
+    public async Task Deleting_a_pending_bank_attachment_is_confirmation_gated()
+    {
+        var rowId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
+        _api.Returns($"/api/inbox/{rowId}/receipt-attachments", new[] { BankAttachment(rowId, attachmentId) }, method: "GET");
+        _api.NoContent($"/api/inbox/{rowId}/receipt-attachments/{attachmentId}", method: "DELETE");
+
+        var confirmation = await Cli.RunAsync(
+            "inbox", "attachments", "delete", rowId.ToString(), attachmentId.ToString());
+        Assert.Equal(0, _api.Requests.Count(request => request.Method == "DELETE"));
+
+        var deleted = await Cli.RunAsync(
+            "inbox", "attachments", "delete", rowId.ToString(), attachmentId.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, confirmation.ExitCode);
+        Assert.Equal(ExitCodes.Success, deleted.ExitCode);
+        Assert.Contains(_api.Requests, request => request.Method == "DELETE");
+    }
+
+    private static string TempReceipt(string fileName)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"groupsplit-{Guid.NewGuid():N}-{fileName}");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        return path;
+    }
+
+    private static object BankAttachment(Guid rowId, Guid id) => new
+    {
+        id,
+        expenseId = (Guid?)null,
+        bankTransactionId = rowId,
+        receiptId = (Guid?)null,
+        fileName = "pending.pdf",
+        contentType = "application/pdf",
+        length = 3,
+        uploadedAt = DateTimeOffset.UtcNow
+    };
+
+    private static object Transcription(Guid attachmentId) => new
+    {
+        attachmentId,
+        provider = "test-provider",
+        receipt = new
+        {
+            subtotal = 10m,
+            tax = 1m,
+            tip = 0m,
+            total = 11m,
+            items = new[]
+            {
+                new
+                {
+                    id = (Guid?)null,
+                    name = "Coffee",
+                    normalizedName = "coffee",
+                    description = (string?)null,
+                    unitPrice = 10m,
+                    quantity = 1m,
+                    totalPrice = 10m,
+                    taxAmount = 1m,
+                    splitRuleVersionId = (Guid?)null
+                }
+            }
+        }
+    };
+
     private static object Connections(params object[] connections) => new
     {
         enabled = true, connections

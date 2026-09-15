@@ -37,11 +37,11 @@ has to reach for `curl` and a bearer token to do.
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `archive`, `unarchive`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
-| `receipts` | `show`, `set`, `rule`, `preview`, `divide`, `delete` |
+| `receipts` | `transcribe`, `attachments`, `show`, `set`, `rule`, `preview`, `divide`, `delete` |
 | `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
 | `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
-| `inbox` | `list`, `summary`, `matches`, `file`, `link`, `dismiss-match`, `ignore`, `restore` |
+| `inbox` | `list`, `summary`, `matches`, `file`, `link`, `attachments`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
 | `settle` | `plan`, `pay`, `history` |
 | `config` | `list`, `get`, `set`, `unset`, `profiles`, `path` |
@@ -796,6 +796,50 @@ is what stores it:
 groupsplit receipts preview 7c1e...
 groupsplit receipts divide 7c1e...
 ```
+
+### Receipt files and transcription
+
+The CLI keeps the source file and the itemised bill as two separate things. A file can be
+read into a draft without saving anything:
+
+```bash
+groupsplit receipts transcribe ./receipt.pdf
+```
+
+The response is a suggestion for an expense you are about to create. Review it, create the
+expense, then save the edited bill with `receipts set`; transcription never creates an
+expense or divides one.
+
+For an existing expense, upload the source file first and read it in a separate step:
+
+```bash
+groupsplit receipts attachments upload <transaction-id> ./receipt.pdf
+groupsplit receipts attachments list <transaction-id>
+groupsplit receipts attachments transcribe <transaction-id> <attachment-id>
+groupsplit receipts set <transaction-id> --item "..."
+groupsplit receipts attachments download <transaction-id> <attachment-id> ./copy.pdf
+groupsplit receipts attachments delete <transaction-id> <attachment-id>
+```
+
+`attachments delete` is confirmation-gated. The supported file types are JPG, PNG, WebP
+and PDF, up to 10 MB. The transcription result is still a draft: it does not save the
+itemised receipt or change the expense's shares. `receipts divide` remains the explicit
+step that changes the ledger.
+
+An imported bank row can hold the source file before it becomes an expense. Use the same
+two-step upload/transcribe flow under `inbox attachments`:
+
+```bash
+groupsplit inbox attachments upload <row-id> ./receipt.pdf
+groupsplit inbox attachments list <row-id>
+groupsplit inbox attachments transcribe <row-id> <attachment-id>
+groupsplit inbox attachments download <row-id> <attachment-id> ./copy.pdf
+groupsplit inbox attachments delete <row-id> <attachment-id>
+```
+
+When the row is filed or linked, its pending receipt files move with it to the expense.
+The row still has to be filed or linked explicitly; attaching or transcribing a file never
+chooses a group or records an expense on the user's behalf.
 
 ### How the tax and the tip are shared out
 
