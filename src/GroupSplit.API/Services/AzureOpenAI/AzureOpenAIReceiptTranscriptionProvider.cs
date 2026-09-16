@@ -67,9 +67,11 @@ internal sealed class AzureOpenAIReceiptAgentFactory(IHttpClientFactory httpClie
         return client.GetResponsesClient()
             .AsAIAgent(
                 model: connection.Model,
-                instructions: "Extract a normalized receipt from the supplied document.",
-                name: "ReceiptTranscription",
-                tools: [new HostedWebSearchTool()])
+                instructions: "Extract a normalized receipt from the supplied document. Every "
+                    + "line, every amount, and every word of a name comes from the receipt: "
+                    + "expand the merchant's abbreviations into the words they stand for, and "
+                    + "add nothing the receipt does not show.",
+                name: "ReceiptTranscription")
             .AsBuilder()
             .UseOpenTelemetry("GroupSplit.ReceiptTranscription")
             .Build(null);
@@ -87,24 +89,60 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     internal const string HttpClientName = "AzureOpenAIReceiptTranscription";
 
     private const string Prompt = """
-        Read this receipt and return the normalized receipt JSON requested by the schema. Include
-        every positive, purchasable product or merchandise line that the merchant printed. Set
-        each item's name to the human-readable merchant or product description printed on the
-        receipt. If an item's printed name is missing or is only an opaque code, use web search
-        with the merchant name and that code to identify it. Search only for that item; do not
-        send the receipt image or unrelated receipt contents to the search tool. Do not invent a
-        product name when search does not provide a strong match.
+        Read the attached receipt and return the normalized receipt JSON requested by the schema.
+        It may come from any merchant, a shop, a restaurant, a pharmacy, a fuel station, an online
+        order, and it may be a photo, a scan, or a PDF that is skewed, creased, or faded. Read
+        every page and every price column before you answer.
 
-        Capture discounts and coupons. Set discount to the total positive discount amount, and
-        set discountAmount on each item when the receipt attributes a discount to that item.
-        Do not return discount, coupon, refund, payment, or tender rows as purchasable items.
-        Return each item's totalPrice after its applicable discount, and return subtotal as the
-        sum of those net item totals after receipt-wide discounts have been allocated across the
-        items. The item totals and subtotal must represent what was actually charged.
+        Items. Include every positive, purchasable product, dish, or service line the merchant
+        printed, in printed order. Never return discount, coupon, refund, payment, tender, change,
+        loyalty, balance, subtotal, or total rows as items.
 
-        Use the printed quantity when present; otherwise use 1. Include taxes attached to each
-        line in taxAmount and receipt-level tax in tax. Use zero for an absent discount, tip, or
-        tax. Return no prose outside the JSON object.
+        Names. Receipt text is compressed to fit the paper: vowels are dropped, words run
+        together, the merchant's own brand is initialised, sizes and units are stuck onto the end,
+        and rows carry symbol prefixes or department and tax codes. Expand that text back into the
+        words it stands for, and stop there. Every word you write has to be traceable to the
+        printed line: to its letters, to a brand or department you can read elsewhere on the
+        receipt, or to a unit or count printed beside it. Do not add a brand, flavour, variety,
+        material, size, or count the line does not show, and do not name the specific product you
+        believe the line refers to. When only part of a line decodes, expand that part and keep
+        the rest as printed. When a line is a bare code with nothing to read into it, keep the
+        printed text unchanged; an unexpanded name is always better than a guessed one. Strip
+        leading and trailing symbols and department or tax codes. Write the name in the merchant's
+        own language and do not translate it. Before you answer, read each name back against its
+        printed line and delete any word that line does not support.
+
+        Quantities. Use the printed quantity when present; otherwise use 1. Goods sold by weight,
+        volume, or length keep their measured quantity, such as 0.734, with the matching per-unit
+        price.
+
+        Prices. unitPrice is the price of one unit as printed, before any discount. totalPrice is
+        what the line actually cost, after its own discount and after its share of any
+        receipt-wide discount. When only one of the two is printed, derive the other from the
+        quantity.
+
+        Discounts. Set discount to the total positive discount amount on the receipt, and set
+        discountAmount on each item the receipt attributes a discount to. Allocate a receipt-wide
+        discount across the items in proportion to their gross line totals, and put any rounding
+        remainder on the largest item so the item totals still add up.
+
+        Tax and tip. Report tax only when it is charged on top of the line prices. When the prices
+        already include it and the tax block only restates what the total already contains, set
+        tax and every taxAmount to 0. Otherwise put each line's own tax in taxAmount and the
+        receipt-level tax in tax. Put service, cover, or gratuity charges in tip. Use 0 for an
+        absent discount, tip, or tax rather than guessing.
+
+        Totals. subtotal is the sum of the item totalPrice values, and total must equal subtotal
+        plus tax plus tip. Check that total against the grand total the merchant printed. When
+        they disagree, re-read the lines you are least certain about and correct the items; if
+        they still disagree, keep the printed grand total in total. The item totals, subtotal, and
+        total must all represent money that was actually charged.
+
+        Numbers. Return plain decimals: no currency symbols, no thousands separators, and a dot
+        for the decimal point. Read the merchant's own convention before you convert, because
+        1.234,56 and 1,234.56 are both 1234.56.
+
+        Return no prose outside the JSON object.
         """;
 
     public string Name => "Azure OpenAI";
@@ -158,12 +196,14 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
                 receipt.Tax,
                 receipt.Tip,
                 receipt.Total,
-                receipt.Items.Select(item => new TranscribedReceiptItem(
-                    item.Name,
-                    item.UnitPrice,
-                    item.Quantity,
-                    item.TotalPrice,
-                    item.TaxAmount)).ToArray());
+                [
+                    .. receipt.Items.Select(item => new TranscribedReceiptItem(
+                        item.Name,
+                        item.UnitPrice,
+                        item.Quantity,
+                        item.TotalPrice,
+                        item.TaxAmount))
+                ]);
         }
         catch (BadGatewayException)
         {
@@ -188,7 +228,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
     internal static bool TryGetConnection(string connectionString, out AzureOpenAIReceiptConnection connection)
     {
-        connection = default!;
+        connection = null!;
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             return false;
