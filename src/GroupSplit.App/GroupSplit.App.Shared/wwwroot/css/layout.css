@@ -1,0 +1,615 @@
+/* --------------------------------------------------------------- shell ---- */
+
+.gs-shell {
+    display: grid;
+    grid-template-columns: var(--gs-sidebar-w) minmax(0, 1fr);
+    min-height: 100dvh;
+    transition: grid-template-columns var(--gs-base) var(--gs-ease);
+    background:
+        radial-gradient(1200px 600px at -10% -10%, var(--gs-teal-soft), transparent 60%),
+        radial-gradient(900px 500px at 110% 110%, var(--gs-clay-soft), transparent 60%),
+        var(--gs-bg);
+}
+
+.gs-shell::before {
+    /* Paper grain. Fixed so it never scrolls, and pointer-events off so it
+       can never intercept a click. */
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: var(--gs-grain);
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+    mix-blend-mode: multiply;
+}
+
+:root[data-theme="dark"] .gs-shell::before {
+    opacity: 0.35;
+    mix-blend-mode: screen;
+}
+
+.gs-shell.is-rail {
+    grid-template-columns: var(--gs-sidebar-rail-w) minmax(0, 1fr);
+}
+
+.gs-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px 12px;
+    border-right: 1px solid var(--gs-line);
+    background: color-mix(in srgb, var(--gs-surface) 80%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 2;
+    overflow: hidden;
+}
+
+.gs-main {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    z-index: 1;
+}
+
+.gs-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--gs-topbar-h);
+    padding: 0 28px;
+    background: color-mix(in srgb, var(--gs-bg) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    border-bottom: 1px solid transparent;
+    /* Clips the boot sweep below; menus and tooltips render in Mud's popover
+       provider, so nothing the bar owns needs to escape it. */
+    overflow: hidden;
+    transition: border-color var(--gs-base) var(--gs-ease), box-shadow var(--gs-base) var(--gs-ease);
+}
+
+/* The bar earns its edge only once there is content beneath it. Scroll-driven,
+   no JS; browsers without `animation-timeline` simply keep the flat bar. */
+@supports (animation-timeline: scroll()) {
+    .gs-topbar {
+        animation: gs-topbar-edge linear both;
+        animation-timeline: scroll(root);
+        animation-range: 0 80px;
+    }
+}
+
+@keyframes gs-topbar-edge {
+    to {
+        border-bottom-color: var(--gs-line);
+        box-shadow: 0 8px 24px -16px rgb(0 0 0 / 25%);
+    }
+}
+
+/* Boot indicator: a thin bar sweeping under the top bar until Blazor reports
+   in via gs.ready(). Before that the page is server-rendered HTML, and only
+   the theme switcher and collapse (handled in gs.js) respond. */
+.gs-topbar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    height: 2px;
+    width: 30%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--gs-teal), transparent);
+    animation: gs-boot 1.1s ease-in-out infinite;
+    opacity: 1;
+    transition: opacity var(--gs-base) var(--gs-ease);
+    pointer-events: none;
+}
+
+html[data-gs-ready] .gs-topbar::after {
+    animation: none;
+    opacity: 0;
+}
+
+@keyframes gs-boot {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(340%); }
+}
+
+/* Controls that need the runtime are muted until it is there. */
+html:not([data-gs-ready]) .gs-user-btn,
+html:not([data-gs-ready]) .gs-fab,
+html:not([data-gs-ready]) .gs-toolbar,
+html:not([data-gs-ready]) .gs-chip:not(.active),
+html:not([data-gs-ready]) .gs-row,
+html:not([data-gs-ready]) .gs-group-card {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.gs-topbar-title {
+    font-family: var(--gs-font-display);
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+}
+
+.gs-topbar-spacer {
+    flex: 1;
+}
+
+.gs-content {
+    flex: 1;
+    width: 100%;
+    max-width: var(--gs-content-max);
+    margin: 0 auto;
+    /* Enough room to scroll the last row clear of the FAB, no more: a page
+       that fits the viewport should not scroll into empty space. */
+    padding: 28px 28px 72px;
+}
+
+/*
+ * The entry animation sits on the page's children rather than on .gs-page, and
+ * it fills backwards rather than both. Either alone would leave a transform
+ * applied to .gs-page for good -- `both` keeps the identity matrix after the
+ * animation ends -- and an element with a transform becomes the containing
+ * block for its `position: fixed` descendants. That is what put .gs-fab in the
+ * middle of the page instead of the corner of the viewport: `bottom: 28px` was
+ * measuring from the bottom of the page box, which on a short list lands on top
+ * of the last rows.
+ *
+ * The FAB is left out of the selector for the same reason: it must not carry a
+ * transform of its own either. That does mean it has to stay a direct child of
+ * the page -- nested inside another child it would be back inside a transformed
+ * box.
+ */
+.gs-page > *:not(.gs-fab) {
+    animation: gs-page-in var(--gs-slow) var(--gs-ease) backwards;
+}
+
+@keyframes gs-page-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
+/* ---------------------------------------------------------------- brand ---- */
+
+.gs-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px;
+    text-decoration: none;
+    color: inherit;
+    border-radius: var(--gs-radius);
+    transition: background var(--gs-fast) var(--gs-ease);
+}
+
+.gs-brand:hover {
+    background: var(--gs-teal-soft);
+}
+
+.gs-brand-mark {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+}
+
+.gs-brand-mark path {
+    transform-origin: 32px 32px;
+    transition: transform var(--gs-slow) var(--gs-ease-spring);
+}
+
+.gs-brand:hover .gs-brand-mark path:nth-child(1) { transform: rotate(8deg); }
+.gs-brand:hover .gs-brand-mark path:nth-child(2) { transform: rotate(-6deg); }
+.gs-brand:hover .gs-brand-mark path:nth-child(3) { transform: rotate(4deg); }
+
+.gs-brand-name {
+    font-family: var(--gs-font-display);
+    font-weight: 800;
+    font-size: 1.125rem;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.gs-brand-name small {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--gs-font-body);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gs-muted);
+}
+
+/* ------------------------------------------------------------------ nav ---- */
+
+.gs-nav {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+    --gs-nav-item-h: 46px;
+}
+
+.gs-nav-label {
+    padding: 14px 14px 6px;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gs-muted);
+    white-space: nowrap;
+}
+
+.gs-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--gs-nav-item-h);
+    padding: 0 14px;
+    border-radius: var(--gs-radius);
+    color: var(--gs-ink-2);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+    z-index: 1;
+    transition: color var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-nav-item .mud-icon-root {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    transition: transform var(--gs-base) var(--gs-ease-spring);
+}
+
+/* The waiting count on a nav item. Absolutely positioned so it cannot change the
+   item's height: the sliding pill's slot is computed from a fixed pitch, and an item
+   that grew by a pixel would put the highlight out of step with every item below it. */
+.gs-nav-badge {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gs-primary);
+    color: var(--gs-on-primary, #fff);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+/* Collapsed to a rail, and on the mobile tab bar, there is no text to sit beside, so
+   the count rides the icon's corner instead. */
+.is-rail .gs-nav-badge,
+.gs-tabbar .gs-nav-badge {
+    top: 6px;
+    right: 6px;
+    transform: none;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 0.625rem;
+}
+
+.gs-nav-item:hover {
+    color: var(--gs-ink);
+}
+
+.gs-nav-item:hover .mud-icon-root {
+    transform: translateX(2px) scale(1.08) rotate(-4deg);
+}
+
+.gs-nav-item.active {
+    color: var(--gs-teal);
+}
+
+.gs-nav-item.active .mud-icon-root {
+    transform: none;
+}
+
+.gs-nav-item:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+/* One pill glides between items rather than each item lighting up on its own.
+   Its slot comes from the active item's index, set in NavMenu.razor. */
+.gs-nav-pill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--gs-nav-item-h);
+    top: var(--gs-pill-top, 0);
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+    box-shadow: var(--gs-shadow-sm), inset 0 0 0 1px rgb(255 255 255 / 40%);
+    transition: top var(--gs-base) var(--gs-ease-spring), opacity var(--gs-fast);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.gs-nav-pill::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--gs-teal);
+}
+
+:root[data-theme="dark"] .gs-nav-pill {
+    background: var(--gs-surface-3);
+    box-shadow: var(--gs-shadow-sm), inset 0 0 0 1px rgb(255 255 255 / 4%);
+}
+
+.gs-nav-pill.is-hidden {
+    opacity: 0;
+}
+
+.gs-nav-text {
+    opacity: 1;
+    transition: opacity var(--gs-fast) var(--gs-ease);
+}
+
+.is-rail .gs-nav-item {
+    justify-content: center;
+    padding: 0;
+}
+
+.is-rail .gs-nav-text,
+.is-rail .gs-nav-label,
+.is-rail .gs-brand-name,
+.is-rail .gs-sidebar-user-text {
+    display: none;
+}
+
+.gs-sidebar-foot {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gs-sidebar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--gs-radius);
+    background: transparent;
+    color: var(--gs-muted);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--gs-fast) var(--gs-ease), color var(--gs-fast) var(--gs-ease);
+}
+
+.gs-sidebar-toggle:hover {
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+}
+
+.gs-sidebar-toggle .mud-icon-root {
+    transition: transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.is-rail .gs-sidebar-toggle {
+    justify-content: center;
+    padding: 0;
+}
+
+.is-rail .gs-sidebar-toggle .mud-icon-root {
+    transform: rotate(180deg);
+}
+
+.is-rail .gs-sidebar-toggle span {
+    display: none;
+}
+
+/* Mobile tab bar: the same NavMenu, laid out horizontally. */
+.gs-tabbar {
+    display: none;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    height: var(--gs-tabbar-h);
+    padding: 6px;
+    border-radius: var(--gs-radius-lg);
+    background: color-mix(in srgb, var(--gs-surface) 85%, transparent);
+    border: 1px solid var(--gs-line);
+    box-shadow: var(--gs-shadow-lg);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    z-index: 20;
+}
+
+.gs-tabbar .gs-nav {
+    flex-direction: row;
+    margin: 0;
+    height: 100%;
+    gap: 0;
+    --gs-nav-item-h: 100%;
+}
+
+.gs-tabbar .gs-nav-label {
+    display: none;
+}
+
+.gs-tabbar .gs-nav-item {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    height: 100%;
+}
+
+.gs-tabbar .gs-nav-pill {
+    top: 0;
+    bottom: 0;
+    height: auto;
+    left: calc(var(--gs-pill-index, 0) * (100% / var(--gs-pill-count, 4)));
+    right: auto;
+    width: calc(100% / var(--gs-pill-count, 4));
+    transition: left var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-tabbar .gs-nav-pill::before {
+    left: 18px;
+    right: 18px;
+    top: auto;
+    bottom: 4px;
+    width: auto;
+    height: 3px;
+}
+
+/* ------------------------------------------------------ theme switcher ---- */
+
+.gs-seg {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px;
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-surface-3);
+    border: 1px solid var(--gs-line);
+    --gs-seg-n: 3;
+    --gs-seg-i: 0;
+}
+
+.gs-seg-thumb {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: calc(3px + var(--gs-seg-i) * ((100% - 6px) / var(--gs-seg-n)));
+    width: calc((100% - 6px) / var(--gs-seg-n));
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-surface-2);
+    box-shadow: var(--gs-shadow-sm);
+    transition: left var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-seg-btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    border: 0;
+    background: transparent;
+    color: var(--gs-muted);
+    border-radius: var(--gs-radius-pill);
+    cursor: pointer;
+    transition: color var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+}
+
+/* Text-labelled segments. Equal columns rather than content-width ones, because the
+   thumb's position and width are (100% - padding) / n -- it can only line up with
+   segments that are all the same size, and "Automatically" is twice "By hand". */
+.gs-seg.gs-seg-labels {
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+}
+
+.gs-seg-labels .gs-seg-btn {
+    width: auto;
+    padding: 0 14px;
+    font-family: inherit;
+    font-size: .8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/*
+    Four options do not fit across a phone. "Automatically" alone is a third of a 375px screen,
+    and equal columns -- which the thumb requires -- multiply that by four: the row overflowed
+    and clipped "By hand" to "By hanc".
+
+    Two rows of two instead, and the sliding thumb gives way to a lit segment. Its position is
+    a one-dimensional sum, `i / n` along the track, and there is no honest place for that on a
+    grid; a background on the chosen button says the same thing without lying about where it
+    is. Only where there are four -- the create dialog's three still slide.
+*/
+@media (max-width: 560px) {
+    .gs-seg.gs-seg-labels.is-wide {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        gap: 3px;
+        border-radius: var(--gs-radius);
+    }
+
+    .gs-seg-labels.is-wide .gs-seg-thumb {
+        display: none;
+    }
+
+    .gs-seg-labels.is-wide .gs-seg-btn.active {
+        background: var(--gs-surface-2);
+        box-shadow: var(--gs-shadow-sm);
+    }
+}
+
+.gs-seg-btn:disabled {
+    cursor: default;
+    opacity: .5;
+}
+
+.gs-seg-btn:disabled:hover {
+    color: var(--gs-muted);
+    transform: none;
+}
+
+.gs-seg-btn .mud-icon-root {
+    width: 18px;
+    height: 18px;
+}
+
+.gs-seg-btn:hover {
+    color: var(--gs-ink);
+    transform: scale(1.12);
+}
+
+.gs-seg-btn.active {
+    color: var(--gs-teal);
+}
+
+.gs-seg-btn:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 1px;
+}

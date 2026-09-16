@@ -1,0 +1,286 @@
+/* ----------------------------------------------------------- a bill, read -- */
+
+/*
+    The paper itself, drawn as paper.
+
+    A receipt is an object people have read thousands of, and its conventions are load-bearing:
+    the narrow column, the fixed pitch that lines the prices up, the leader dots that carry the
+    eye across, the ruled-off totals, the letter in the margin against the lines tax was not
+    charged on. Borrowing them means the shape of the thing explains itself.
+
+    This is the one place in the app that leaves the app's own voice, and it is deliberate:
+    everything around it stays quiet so that the slip reads as the document it is quoting.
+*/
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --gs-paper: #242019;
+        --gs-paper-ink: #eae3d4;
+        --gs-paper-faint: #a79d8a;
+        --gs-paper-rule: #403927;
+    }
+}
+
+/* On the app's surface, above the paper. A control printed on a receipt is a foreign object,
+   and the slip only reads as a document while nothing on it could be pressed. */
+.gs-slip-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 32rem;
+    margin: 0 auto 10px;
+}
+
+.gs-slip-tools .mud-input-control {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.gs-slip {
+    --gs-slip-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo,
+        Consolas, "Liberation Mono", monospace;
+
+    /* Wider and larger than a paper slip, on purpose. A real receipt is read at arm's
+       length in the hand; this one is read on a screen across a desk, and at a till's own
+       measure it was a small grey column floating in the middle of a dialog. The column
+       still reads as narrow -- that is what makes it a slip -- it is just legible. */
+    max-width: 32rem;
+    margin: 0 auto;
+    color: var(--gs-paper-ink);
+    font-family: var(--gs-slip-mono);
+    font-size: .9375rem;
+    line-height: 1.55;
+    filter: drop-shadow(0 2px 10px rgb(42 36 24 / 12%));
+}
+
+/* Torn top and bottom, which is what says "this is a piece of paper" before a word is read.
+   A scalloped mask rather than an image, so it follows the width and costs no request. */
+.gs-slip-edge {
+    height: 9px;
+    background: var(--gs-paper);
+    -webkit-mask-image: radial-gradient(circle at 50% 0, transparent 6px, #000 6.5px);
+    mask-image: radial-gradient(circle at 50% 0, transparent 6px, #000 6.5px);
+    -webkit-mask-size: 14px 9px;
+    mask-size: 14px 9px;
+    -webkit-mask-repeat: repeat-x;
+    mask-repeat: repeat-x;
+}
+
+.gs-slip-edge.is-bottom {
+    transform: rotate(180deg);
+}
+
+.gs-slip-body {
+    padding: 6px 22px 14px;
+    background: var(--gs-paper);
+}
+
+.gs-slip-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 0 8px;
+    text-align: center;
+}
+
+/* Caps because a till prints caps -- the subject's own vernacular, not a label style. */
+.gs-slip-merchant {
+    font-weight: 700;
+    font-size: 1.0625rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.gs-slip-where {
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+.gs-slip-rule {
+    border-top: 1px dashed var(--gs-paper-rule);
+}
+
+.gs-slip-lines {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+
+    /* Long bills scroll here rather than taking the dialog with them. The cap is in vh so a
+       short bill still prints at its own length and never leaves a box of empty paper. */
+    max-height: min(46vh, 31rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+
+/* A hairline where the list actually scrolls, so the cut edge reads as more paper rather
+   than as the end of the bill. Drawn on the scroller itself, which only shows it when the
+   content overflows. */
+    background:
+        linear-gradient(var(--gs-paper) 30%, transparent) top / 100% 12px no-repeat,
+        linear-gradient(transparent, var(--gs-paper) 70%) bottom / 100% 12px no-repeat,
+        radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 12%), transparent) top / 100% 5px no-repeat,
+        radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 12%), transparent) bottom / 100% 5px no-repeat;
+    background-attachment: local, local, scroll, scroll;
+}
+
+
+/* Four columns and a second row for the names: the item, the leader that carries the eye,
+   the margin letter, and the price. The names sit under the item, indented past the
+   quantity, the way a till prints a modifier under its line. */
+.gs-slip-line {
+    display: grid;
+    grid-template-columns: auto minmax(1ch, 1fr) 1.5ch auto;
+    align-items: baseline;
+    column-gap: 4px;
+}
+
+.gs-slip-line + .gs-slip-line {
+    margin-top: 7px;
+}
+
+.gs-slip-item {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gs-slip-qty {
+    color: var(--gs-paper-faint);
+}
+
+.gs-slip-qty::after {
+    content: "\00d7";
+}
+
+.gs-slip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* On the baseline, where a printed leader sits. The grid aligns to baseline already, and an
+   empty box takes its bottom edge as its baseline -- so the dots land under the text rather
+   than striking through it, which is what centring them did. */
+.gs-slip-leader {
+    border-bottom: 1px dotted var(--gs-paper-rule);
+}
+
+.gs-slip-mark {
+    color: var(--gs-paper-faint);
+    text-align: center;
+}
+
+.gs-slip-price {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* "3 @ 5.99", under the name, the way a till prints a repeated line rather than printing it
+   again. Indented to sit under the item and not under the column of prices. */
+.gs-slip-count {
+    grid-column: 1 / -1;
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+.gs-slip-none {
+    margin: 0;
+    padding: 14px 0;
+    color: var(--gs-paper-faint);
+    text-align: center;
+}
+
+.gs-slip-who {
+    grid-column: 1 / -1;
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+/* The one line worth marking, and marked in the paper's own terms: a pencil note, not a
+   coloured banner. A banner would fight the document it is sitting inside. */
+.gs-slip-line.is-unclaimed .gs-slip-who {
+    color: var(--gs-clay-deep);
+    font-style: italic;
+}
+
+:root[data-theme="dark"] .gs-slip-line.is-unclaimed .gs-slip-who {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-slip-line.is-unclaimed .gs-slip-who {
+        color: var(--gs-clay);
+    }
+}
+
+.gs-slip-totals {
+    margin: 0;
+    padding-top: 8px;
+}
+
+.gs-slip-totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gs-slip-totals dt,
+.gs-slip-totals dd {
+    margin: 0;
+}
+
+.gs-slip-totals dd {
+    font-variant-numeric: tabular-nums;
+}
+
+/*
+    The one line standing for the rest of a split charge. Italic rather than faded: it is the
+    only row on the slip that is not a line off the paper, and it has to read as an aside
+    without becoming unreadable -- the fade it replaces came out at 2.5:1 against the paper,
+    which is under AA for text this size, and it was also the only thing marking the rows it
+    applied to.
+*/
+.gs-slip-line.is-elsewhere .gs-slip-name,
+.gs-slip-line.is-elsewhere .gs-slip-price {
+    font-style: italic;
+}
+
+/* Double-ruled, which is how a slip says "this is the figure that was charged". */
+.gs-slip-totals > div.is-total {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 3px double var(--gs-paper-rule);
+    font-weight: 700;
+}
+
+/*
+    Under the charged total and set apart from it, because it is not a figure the till
+    printed -- it is this expense's share of one that was. A single rule rather than the
+    total's double one, which stays the mark of "what the card paid".
+*/
+.gs-slip-totals > div.is-part {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--gs-paper-rule);
+    font-weight: 700;
+}
+
+.gs-slip-foot {
+    margin: 10px 0 0;
+    color: var(--gs-paper-faint);
+    font-size: .8125rem;
+}
+
+.gs-slip-foot.is-unclaimed {
+    color: var(--gs-clay-deep);
+}
+
+:root[data-theme="dark"] .gs-slip-foot.is-unclaimed {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-slip-foot.is-unclaimed {
+        color: var(--gs-clay);
+    }
+}

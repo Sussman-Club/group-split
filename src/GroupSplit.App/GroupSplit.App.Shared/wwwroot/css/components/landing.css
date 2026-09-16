@@ -1,0 +1,191 @@
+/* ------------------------------------------------------------- landing ----- */
+
+.gs-landing {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 40px;
+    align-items: center;
+    min-height: 60vh;
+}
+
+.gs-landing h1 {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 800;
+    line-height: 1.02;
+    margin: 12px 0 16px;
+}
+
+.gs-landing h1 em {
+    font-style: normal;
+    color: var(--gs-teal);
+    position: relative;
+}
+
+.gs-landing h1 em::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0.05em;
+    height: 0.18em;
+    background: var(--gs-clay-soft);
+    z-index: -1;
+    border-radius: 4px;
+    transform-origin: left;
+    animation: gs-grow 800ms var(--gs-ease) both;
+    animation-delay: 500ms;
+}
+
+.gs-landing p.lead {
+    font-size: 1.125rem;
+    color: var(--gs-muted);
+    max-width: 46ch;
+    margin: 0 0 28px;
+}
+
+.gs-landing-art {
+    position: relative;
+    display: grid;
+    gap: 12px;
+}
+
+.gs-landing-art .gs-card {
+    animation: gs-float 6s ease-in-out infinite;
+}
+
+.gs-landing-art .gs-card:nth-child(2) {
+    animation-delay: -2s;
+    margin-left: 32px;
+}
+
+.gs-landing-art .gs-card:nth-child(3) {
+    animation-delay: -4s;
+    margin-left: 12px;
+}
+
+@keyframes gs-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.gs-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 48px;
+}
+
+.gs-feature {
+    padding: 22px;
+}
+
+.gs-feature .gs-row-icon {
+    margin-bottom: 14px;
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+}
+
+.gs-feature h3 {
+    margin: 0 0 6px;
+    font-size: 1.0625rem;
+}
+
+.gs-feature p {
+    margin: 0;
+    color: var(--gs-muted);
+    font-size: 0.875rem;
+}
+
+/* ---------------------------------------------------------- group cards ---- */
+
+.gs-group-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.gs-group-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.gs-group-card .name {
+    font-family: var(--gs-font-display);
+    font-weight: 700;
+    font-size: 1.0625rem;
+    letter-spacing: -0.01em;
+}
+
+.gs-group-card .go {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--gs-teal);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-group-card:hover .go {
+    opacity: 1;
+    transform: none;
+}
+
+/* ----------------------------------------------------------- key/value ------ */
+
+.gs-kv {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+
+.gs-kv-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--gs-line);
+}
+
+.gs-kv-row:last-child {
+    border-bottom: 0;
+}
+
+.gs-kv-row dt {
+    color: var(--gs-muted);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.gs-kv-row dd {
+    margin: 0;
+    font-weight: 700;
+    font-size: 0.875rem;
+    text-align: right;
+}
+
+/* A value that ends in a tag -- "Paid by Omar / invited" -- for the same reason as
+   .gs-split-who above: the gap has to come from the box, because the markup's own
+   whitespace does not survive. Still right-aligned, which a single child renders
+   identically to the block it was. */
+.gs-kv-row dd.gs-kv-tagged {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.gs-danger-zone {
+    border-color: color-mix(in srgb, var(--gs-danger) 35%, var(--gs-line));
+    background: linear-gradient(180deg, var(--gs-danger-soft), transparent 40%), var(--gs-surface);
+}

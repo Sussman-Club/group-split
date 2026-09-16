@@ -1,0 +1,230 @@
+/* -------------------------------------------------------------- buttons ---- */
+
+.mud-button-root {
+    border-radius: var(--gs-radius-sm) !important;
+    transition:
+        transform var(--gs-base) var(--gs-ease-spring),
+        box-shadow var(--gs-base) var(--gs-ease),
+        background-color var(--gs-fast) var(--gs-ease),
+        border-color var(--gs-fast) var(--gs-ease) !important;
+}
+
+.mud-button-filled {
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--gs-shadow-sm) !important;
+}
+
+.mud-button-filled:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--gs-shadow-md) !important;
+}
+
+.mud-button-filled:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* A light sweep across filled buttons on hover. */
+.mud-button-filled::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 28%) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0s;
+    pointer-events: none;
+}
+
+.mud-button-filled:hover::after {
+    transform: translateX(120%);
+    transition: transform 650ms var(--gs-ease);
+}
+
+.mud-button-outlined:hover,
+.mud-button-text:hover {
+    transform: translateY(-1px);
+}
+
+.mud-icon-button {
+    transition: transform var(--gs-base) var(--gs-ease-spring), background-color var(--gs-fast) !important;
+}
+
+.mud-icon-button:hover {
+    transform: scale(1.1);
+}
+
+.gs-btn-pill {
+    border-radius: var(--gs-radius-pill) !important;
+    padding-inline: 18px !important;
+}
+
+/*
+    The secondary button the system did not have.
+
+    .gs-btn-glass was doing this job at seven call sites, but every one of its rules is
+    scoped to .gs-hero -- it is white-on-teal glass for the balance cards. At the two sites
+    outside a hero (the group toolbar's "Settle up", the home card's "Review") it therefore
+    styled nothing at all, and a Mud text button with no chrome reads as a link rather than
+    a control. This is the ordinary-surface version: a pill that pairs with the filled one
+    beside it and still gives it the emphasis.
+*/
+.gs-btn-quiet {
+    border-radius: var(--gs-radius-pill) !important;
+    padding-inline: 16px !important;
+    background: var(--gs-surface-2) !important;
+    border: 1px solid var(--gs-line-strong) !important;
+    color: var(--gs-ink-2) !important;
+    transition: background var(--gs-fast) var(--gs-ease),
+                border-color var(--gs-fast) var(--gs-ease),
+                color var(--gs-fast) var(--gs-ease),
+                transform var(--gs-base) var(--gs-ease-spring) !important;
+}
+
+.gs-btn-quiet:hover {
+    background: var(--gs-surface-3) !important;
+    color: var(--gs-ink) !important;
+}
+
+/*
+    And the destructive one. Quiet by default -- it is never the thing somebody came to do
+    -- but it carries the border every other control has, so it reads as a button, and it
+    commits to red only when reached for.
+*/
+.gs-btn-danger {
+    border-radius: var(--gs-radius-pill) !important;
+    padding-inline: 16px !important;
+    background: transparent !important;
+    border: 1px solid color-mix(in srgb, var(--gs-danger) 32%, transparent) !important;
+    color: var(--gs-danger) !important;
+    transition: background var(--gs-fast) var(--gs-ease),
+                border-color var(--gs-fast) var(--gs-ease) !important;
+}
+
+.gs-btn-danger:hover {
+    background: var(--gs-danger-soft) !important;
+    border-color: color-mix(in srgb, var(--gs-danger) 55%, transparent) !important;
+}
+
+/*
+    A row of actions under a card's content, and -- where one of them is destructive -- the
+    hairline that keeps it out of the group.
+
+    The join-link card had three buttons in one wrapping flex row: a filled pill, a bare
+    text button and a bare red one. At 375px the red one wrapped alone onto a second line,
+    which made an irreversible action look like an afterthought rather than a deliberately
+    separated one. Two zones, so it is separated on purpose at every width.
+*/
+.gs-btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 12px;
+}
+
+.gs-btn-row.is-destructive {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gs-line);
+}
+
+/* Action toolbar on group header. */
+.gs-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-surface);
+    border: 1px solid var(--gs-line);
+    box-shadow: var(--gs-shadow-sm);
+}
+
+.gs-toolbar .mud-icon-button {
+    width: 36px;
+    height: 36px;
+}
+
+.gs-toolbar .sep {
+    width: 1px;
+    height: 20px;
+    background: var(--gs-line);
+    margin: 0 2px;
+}
+
+/* ------------------------------------------------------------------ FAB --- */
+
+.gs-fab {
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    height: 56px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-ink);
+    color: var(--gs-bg);
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    box-shadow: var(--gs-shadow-lg);
+    transition:
+        transform var(--gs-base) var(--gs-ease-spring),
+        box-shadow var(--gs-base) var(--gs-ease),
+        gap var(--gs-base) var(--gs-ease);
+    animation: gs-fab-in var(--gs-slow) var(--gs-ease-spring) both;
+    animation-delay: 200ms;
+}
+
+.gs-fab .mud-icon-root {
+    width: 24px;
+    height: 24px;
+    transition: transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-fab span {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: max-width var(--gs-base) var(--gs-ease), opacity var(--gs-fast) var(--gs-ease), padding var(--gs-base);
+}
+
+.gs-fab:hover,
+.gs-fab:focus-visible,
+.gs-fab.is-extended {
+    gap: 8px;
+}
+
+.gs-fab:hover span,
+.gs-fab:focus-visible span,
+.gs-fab.is-extended span {
+    max-width: 200px;
+    opacity: 1;
+    padding-right: 4px;
+}
+
+.gs-fab:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--gs-shadow-lg), 0 0 0 6px var(--gs-teal-soft);
+}
+
+.gs-fab:hover .mud-icon-root {
+    transform: rotate(90deg);
+}
+
+.gs-fab:active {
+    transform: translateY(0) scale(0.97);
+}
+
+@keyframes gs-fab-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.8);
+    }
+}

@@ -1,0 +1,224 @@
+/* ------------------------------------------------------------- selecting -- */
+
+/*
+    A queue you can act on several rows of at once. The bar floats over the list rather
+    than sitting in it: what is selected is a state of the page, not a row of it, and a
+    bar in the flow would push the queue down every time somebody ticked something.
+*/
+
+/*
+    The list's header. Same horizontal padding and negative margin as .gs-row, so the box
+    in it lands in the same column as the boxes below and the ticks read as one edge --
+    which is the whole reason it is a header and not a control floating over the list.
+*/
+.gs-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 0 12px 10px;
+    margin: 0 -12px 2px;
+    border-bottom: 1px solid var(--gs-line);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--gs-muted);
+}
+
+.gs-list-head-select {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Matches .gs-row-check's own offset, which is what puts the two in one column. */
+.gs-list-head .gs-row-check {
+    margin-left: -8px;
+}
+
+.gs-list-head .note {
+    font-weight: 500;
+    color: var(--gs-muted);
+    opacity: 0.85;
+}
+
+.gs-row .gs-row-check {
+    flex: 0 0 auto;
+    margin-left: -8px;
+}
+
+/*
+    A row that can be ticked has four children -- the box, the mark, the text, the actions
+    -- against .gs-row's three columns. Without the extra column the box takes the first,
+    everything shifts one along, and the actions fall onto an implicit second row on the
+    wrong side of the card.
+*/
+.gs-row.is-selectable {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+
+/* A ticked row, so the selection is legible against the rest of the queue without
+   hunting for ticks. */
+.gs-row.is-selected {
+    background: var(--gs-teal-soft);
+}
+
+.gs-row.is-selected:hover {
+    background: var(--gs-teal-soft);
+}
+
+.gs-selection-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 1200;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 8px 8px 8px 18px;
+
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-teal-deep);
+    color: var(--gs-on-accent);
+    box-shadow: var(--gs-shadow-lg);
+    animation: gs-selection-in var(--gs-base) var(--gs-ease-spring) both;
+}
+
+.gs-selection-bar .count {
+    font-weight: 700;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+/* The buttons sit on the teal, so they take their colour from it rather than from the
+   page's palette -- Mud's own text colour on this ground is unreadable. */
+.gs-selection-bar .mud-button-root,
+.gs-selection-bar .mud-icon-button {
+    color: var(--gs-on-accent);
+    border: 1px solid rgb(255 255 255 / 35%);
+}
+
+.gs-selection-bar .mud-button-root:hover,
+.gs-selection-bar .mud-icon-button:hover {
+    background: rgb(255 255 255 / 14%);
+}
+
+@keyframes gs-selection-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 12px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gs-selection-bar {
+        animation: none;
+    }
+}
+
+@media (max-width: 820px) {
+    /* Clear of the tab bar, which is the one thing on a phone that must never be covered. */
+    .gs-selection-bar {
+        bottom: calc(var(--gs-tabbar-h) + 16px);
+    }
+}
+
+@media (max-width: 640px) {
+    .gs-selection-bar {
+        left: 16px;
+        right: 16px;
+        transform: none;
+        max-width: none;
+        justify-content: space-between;
+        padding-left: 14px;
+        animation: none;
+    }
+
+    .gs-selection-bar .mud-button-root {
+        min-height: 40px;
+    }
+}
+
+/* ------------------------------------------------------------ the picker -- */
+
+/*
+    The calendar a custom range opens, brought onto the app's own surface.
+
+    Mud draws it on its own paper with its own radius and shadow, which on a cream page is
+    a white card with a different corner from every other card around it, and on a dark one
+    is a lighter grey than the surface behind it. The toolbar is off (see the note in
+    DateRangeFilter), so what is left is the two months and the days.
+*/
+
+.mud-picker-paper,
+.mud-picker-container {
+    background: var(--gs-surface);
+    color: var(--gs-ink);
+    border-radius: var(--gs-radius-lg);
+}
+
+.mud-picker-paper {
+    border: 1px solid var(--gs-line);
+    box-shadow: var(--gs-shadow-lg);
+    overflow: hidden;
+}
+
+.mud-picker-calendar-header-day {
+    color: var(--gs-muted);
+    font-weight: 700;
+}
+
+.mud-picker-calendar-header-transition,
+.mud-picker-calendar-header-switch {
+    color: var(--gs-ink);
+}
+
+/* Today, and the day under the cursor: an outline and a wash rather than a filled
+   circle, so the two read differently from a day that has actually been chosen. */
+.mud-picker-calendar-day.mud-current:not(.mud-selected) {
+    border-color: var(--gs-teal);
+    color: var(--gs-teal-deep);
+}
+
+.mud-picker-calendar-day:hover:not(.mud-selected) {
+    background: var(--gs-teal-soft);
+}
+
+/* The chosen days and the span between them. */
+.mud-picker-calendar-day.mud-selected,
+.mud-picker-calendar-day.mud-range-start-selected,
+.mud-picker-calendar-day.mud-range-end-selected {
+    background: var(--gs-teal) !important;
+    color: var(--gs-on-accent) !important;
+}
+
+.mud-picker-calendar-day.mud-range-between {
+    background: var(--gs-teal-soft) !important;
+    color: var(--gs-teal-deep) !important;
+}
+
+/*
+    A row's duplicate suggestions. Two grades and two voices: a confident match arrives as a
+    warning, a possible one as a plain note on the same surface -- see Inbox.razor. What is
+    shared is the shape, because both list every candidate rather than only the best-ranked
+    one, and a list of one should not read differently from a list of three.
+*/
+.gs-match-lead {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.gs-match-line + .gs-match-line {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}

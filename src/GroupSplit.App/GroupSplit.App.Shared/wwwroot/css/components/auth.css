@@ -1,0 +1,105 @@
+/* --------------------------------------------------------- auth pages ------ */
+
+.gs-auth-backdrop {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(900px 500px at 12% 18%, var(--gs-teal-soft), transparent 55%),
+        radial-gradient(800px 500px at 88% 82%, var(--gs-clay-soft), transparent 55%),
+        var(--gs-bg);
+}
+
+.gs-auth-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-xl);
+    background: var(--gs-surface);
+    box-shadow: var(--gs-shadow-lg);
+    animation: gs-dialog-in var(--gs-slow) var(--gs-ease-spring) both;
+}
+
+.gs-auth-card::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--gs-teal), var(--gs-clay));
+}
+
+.gs-auth-mark {
+    width: 64px;
+    height: 64px;
+}
+
+.gs-auth-mark path {
+    transform-origin: 32px 32px;
+    animation: gs-mark-in 900ms var(--gs-ease-spring) both;
+}
+
+.gs-auth-mark path:nth-child(2) { animation-delay: 90ms; }
+.gs-auth-mark path:nth-child(3) { animation-delay: 180ms; }
+
+/*
+    The two pages somebody reaches by following a link -- a group's join link, and a
+    personal invitation. They borrow .gs-auth-card above rather than having a surface of
+    their own, because they are the same kind of screen: outside the nav, before signing in,
+    and one button away from the hand-off that card was written for.
+
+    What they do not borrow is .gs-auth-backdrop. That claims the viewport and paints its
+    own gradient, which is right for a page whose layout is FullScreenLayout and wrong for
+    these, which render inside the app's own.
+*/
+.gs-link-landing {
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+}
+
+.gs-link-landing .gs-auth-card {
+    width: 100%;
+    max-width: 26rem;
+    padding: 40px 32px 32px;
+}
+
+.gs-link-landing-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    text-align: center;
+}
+
+.gs-link-landing-body h1 {
+    margin: 8px 0 6px;
+    font-size: 1.75rem;
+    font-weight: 800;
+}
+
+.gs-link-landing-body p {
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+/* Both actions on one line, and full width between them, so neither reads as the aside. */
+.gs-link-landing-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+@media (min-width: 480px) {
+    .gs-link-landing {
+        padding: 64px 16px;
+    }
+}
+
+@keyframes gs-mark-in {
+    from {
+        opacity: 0;
+        transform: rotate(-40deg) scale(0.6);
+    }
+}
