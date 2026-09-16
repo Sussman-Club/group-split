@@ -50,6 +50,8 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Equal("receipt-deployment", root.GetProperty("model").GetString());
         var prompt = root.GetProperty("input")[0].GetProperty("content")[0].GetProperty("text").GetString();
         Assert.Contains("discount", prompt, StringComparison.OrdinalIgnoreCase);
+        var tool = Assert.Single(root.GetProperty("tools").EnumerateArray());
+        Assert.Equal("web_search", tool.GetProperty("type").GetString());
         var image = root.GetProperty("input")[0].GetProperty("content")[1];
         Assert.Equal("input_image", image.GetProperty("type").GetString());
         Assert.Equal("data:image/jpeg;base64,AQID", image.GetProperty("image_url").GetString());

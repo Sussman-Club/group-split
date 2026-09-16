@@ -68,7 +68,8 @@ internal sealed class AzureOpenAIReceiptAgentFactory(IHttpClientFactory httpClie
             .AsAIAgent(
                 model: connection.Model,
                 instructions: "Extract a normalized receipt from the supplied document.",
-                name: "ReceiptTranscription")
+                name: "ReceiptTranscription",
+                tools: [new HostedWebSearchTool()])
             .AsBuilder()
             .UseOpenTelemetry("GroupSplit.ReceiptTranscription")
             .Build(null);
@@ -87,9 +88,12 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
     private const string Prompt = """
         Read this receipt and return the normalized receipt JSON requested by the schema. Include
-        every positive, purchasable product or merchandise line that the merchant printed. The
-        Set each item's name to the human-readable merchant or product description printed on the
-        receipt. Do not invent a product name that is not supported by the receipt.
+        every positive, purchasable product or merchandise line that the merchant printed. Set
+        each item's name to the human-readable merchant or product description printed on the
+        receipt. If an item's printed name is missing or is only an opaque code, use web search
+        with the merchant name and that code to identify it. Search only for that item; do not
+        send the receipt image or unrelated receipt contents to the search tool. Do not invent a
+        product name when search does not provide a strong match.
 
         Capture discounts and coupons. Set discount to the total positive discount amount, and
         set discountAmount on each item when the receipt attributes a discount to that item.
