@@ -41,7 +41,7 @@ public sealed record AzureOpenAIReceiptConnection(string Endpoint, string ApiKey
 
 public interface IAzureOpenAIReceiptAgentFactory
 {
-    ChatClientAgent Create(AzureOpenAIReceiptConnection connection, TimeSpan timeout);
+    AIAgent Create(AzureOpenAIReceiptConnection connection, TimeSpan timeout);
 }
 
 /// <summary>Builds a Microsoft Agent Framework agent backed by Azure OpenAI Responses.</summary>
@@ -49,7 +49,7 @@ internal sealed class AzureOpenAIReceiptAgentFactory(IHttpClientFactory httpClie
     : IAzureOpenAIReceiptAgentFactory
 {
 #pragma warning disable OPENAI001 // Azure OpenAI Responses support is currently marked experimental by the OpenAI SDK.
-    public ChatClientAgent Create(AzureOpenAIReceiptConnection connection, TimeSpan timeout)
+    public AIAgent Create(AzureOpenAIReceiptConnection connection, TimeSpan timeout)
     {
         var clientOptions = new OpenAIClientOptions
         {
@@ -64,10 +64,14 @@ internal sealed class AzureOpenAIReceiptAgentFactory(IHttpClientFactory httpClie
             new ApiKeyCredential(connection.ApiKey), "api-key");
         var client = new OpenAIClient(auth, clientOptions);
 
-        return client.GetResponsesClient().AsAIAgent(
-            model: connection.Model,
-            instructions: "Extract a normalized receipt from the supplied document.",
-            name: "ReceiptTranscription");
+        return client.GetResponsesClient()
+            .AsAIAgent(
+                model: connection.Model,
+                instructions: "Extract a normalized receipt from the supplied document.",
+                name: "ReceiptTranscription")
+            .AsBuilder()
+            .UseOpenTelemetry("GroupSplit.ReceiptTranscription")
+            .Build(null);
     }
 #pragma warning restore OPENAI001
 }
