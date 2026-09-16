@@ -313,6 +313,7 @@
             {
                 receipt = saved;
                 _attachments = await ReceiptAttachments.GetAsync(TransactionId);
+                await RefreshDetailsAsync();
             }
         }
         finally
@@ -336,7 +337,26 @@
 
         var result = await dialog.Result;
         if (result is { Canceled: false, Data: ReceiptResponse saved })
+        {
             receipt = saved;
+            await RefreshDetailsAsync();
+        }
+    }
+
+    /// <summary>
+    /// Receipt edits can also update the stored ledger shares. Refresh the read-only figures
+    /// in this dialog so the amount somebody owes changes in the same interaction.
+    /// </summary>
+    private async Task RefreshDetailsAsync()
+    {
+        TransactionDetailsResponse? refreshed = null;
+        if (await Errors.TryAsync(async () =>
+                refreshed = await TransactionsClient.GetTransactionAsync(TransactionId),
+            "Could not refresh the expense after saving the receipt.")
+            && refreshed is not null)
+        {
+            details = refreshed;
+        }
     }
 
     private async Task DeleteAttachmentAsync(ReceiptAttachmentResponse attachment)

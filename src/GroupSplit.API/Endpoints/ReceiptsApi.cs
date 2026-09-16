@@ -19,7 +19,9 @@ namespace GroupSplit.API.Endpoints;
 /// Storing a bill and dividing by it are separate calls on purpose. A receipt is transcribed
 /// in one go and then claimed line by line by however many people are at dinner; dividing as
 /// a side effect of saving would mean refusing every bill that is not fully claimed the
-/// moment it is typed.
+/// moment it is typed. Once a complete receipt has already been used to produce an
+/// itemized ledger, a valid correction updates those dependent shares in the same save so
+/// the paper and the ledger cannot drift apart.
 /// </para>
 /// </remarks>
 public static class ReceiptsApi

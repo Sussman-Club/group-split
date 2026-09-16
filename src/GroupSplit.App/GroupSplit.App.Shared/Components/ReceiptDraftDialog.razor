@@ -154,7 +154,7 @@
         _items = source.Items;
     }
 
-    private void AddItem() => _items.Add(new EditableLine());
+    private void AddItem() => _items = [.. _items, new EditableLine()];
 
     private void RemoveItem(EditableLine item) => _items = _items.Where(candidate => candidate != item).ToList();
 
@@ -202,7 +202,7 @@
             if (TransactionId is { } transactionId)
             {
                 var saved = IsTextOnlyEdit()
-                    ? await PatchLineTextAsync(transactionId)
+                    ? await SaveTextOnlyEditAsync(transactionId, request)
                     : await Receipts.SaveAsync(transactionId, request);
                 if (saved is not null)
                     MudDialog.Close(DialogResult.Ok(saved));
@@ -236,34 +236,51 @@
     }
 
     /// <summary>
-    /// Sends only the changed text for an existing line. Financial edits and collection
-    /// changes continue through the whole-receipt save so their figures are checked together.
+    /// Sends only the changed text for one existing line. Multiple text changes use the
+    /// whole-receipt endpoint in one request, so a failed save cannot leave earlier lines
+    /// committed while later ones are still pending.
     /// </summary>
-    private async Task<ReceiptResponse?> PatchLineTextAsync(Guid transactionId)
+    private async Task<ReceiptResponse?> SaveTextOnlyEditAsync(Guid transactionId,
+        SaveReceiptRequest request)
+    {
+        var changed = ChangedTextItems();
+        if (changed.Count == 0)
+            return Receipt;
+
+        if (changed.Count > 1)
+            return await Receipts.SaveAsync(transactionId, request);
+
+        return await PatchLineTextAsync(transactionId, changed[0]);
+    }
+
+    private IReadOnlyList<EditableLine> ChangedTextItems()
     {
         var original = Receipt!;
-        ReceiptResponse? saved = original;
-        foreach (var item in _items)
+
+        return _items.Where(item =>
         {
             var source = original.Items.Single(candidate => candidate.Id == item.Id);
-            var patch = new JsonPatchDocument<ReceiptItemPatch>();
             var name = item.Name.Trim();
-            if (!string.Equals(name, source.Name, StringComparison.Ordinal))
-                patch.Replace(line => line.Name, name);
-
             var description = string.IsNullOrWhiteSpace(item.Description) ? null : item.Description.Trim();
-            if (!string.Equals(description, source.Description, StringComparison.Ordinal))
-                patch.Replace(line => line.Description, description);
+            return !string.Equals(name, source.Name, StringComparison.Ordinal)
+                || !string.Equals(description, source.Description, StringComparison.Ordinal);
+        }).ToList();
+    }
 
-            if (patch.Operations.Count == 0)
-                continue;
+    private async Task<ReceiptResponse?> PatchLineTextAsync(Guid transactionId, EditableLine item)
+    {
+        var original = Receipt!;
+        var source = original.Items.Single(candidate => candidate.Id == item.Id);
+        var patch = new JsonPatchDocument<ReceiptItemPatch>();
+        var name = item.Name.Trim();
+        if (!string.Equals(name, source.Name, StringComparison.Ordinal))
+            patch.Replace(line => line.Name, name);
 
-            saved = await Receipts.PatchItemAsync(transactionId, item.Id!.Value, patch);
-            if (saved is null)
-                return null;
-        }
+        var description = string.IsNullOrWhiteSpace(item.Description) ? null : item.Description.Trim();
+        if (!string.Equals(description, source.Description, StringComparison.Ordinal))
+            patch.Replace(line => line.Description, description);
 
-        return saved;
+        return await Receipts.PatchItemAsync(transactionId, item.Id!.Value, patch);
     }
 
     private void Cancel() => MudDialog.Cancel();

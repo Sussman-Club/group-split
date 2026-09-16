@@ -292,6 +292,38 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
+    /// Once an itemized receipt has produced the ledger shares, correcting its figures must
+    /// update those shares in the same save. Otherwise the bill and balances disagree until
+    /// somebody happens to press Divide again.
+    /// </summary>
+    [Fact]
+    public async Task Editing_a_receipt_that_divided_the_expense_updates_stored_shares()
+    {
+        var (expense, group, even) = await AnExpense();
+        var other = await DbContext.Set<GroupMembership>()
+            .Where(membership => membership.GroupId == group && membership.UserId != Self)
+            .Select(membership => membership.UserId)
+            .SingleAsync(Ct);
+        var sole = (await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group,
+            Name = "Other only",
+            Definition = new SoleSplitRuleDto(other)
+        }, Ct)).Current!.Id;
+
+        await Receipts.SaveForExpense(expense.Id, Bill(
+            Item("Shared", 24m, even), Item("Other", 24m, sole)), Ct);
+        await Receipts.Divide(expense.Id, Ct);
+
+        await Receipts.SaveForExpense(expense.Id, Bill(
+            Item("Shared", 30m, even), Item("Other", 18m, sole)), Ct);
+
+        var details = await Transactions.GetDetails(expense.Id, Ct);
+        Assert.Equal(15m, details!.Splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(33m, details.Splits.Single(split => split.UserId == other).Amount);
+    }
+
+    /// <summary>
     /// A bill under a category that divides some other way is still divisible by its lines,
     /// and the shares it produces are written as amounts somebody chose -- the expense's own
     /// rule is not itemized, and dividing by that rule again would undo them.

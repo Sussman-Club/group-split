@@ -69,6 +69,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         ArgumentNullException.ThrowIfNull(request);
         var expense = await MineToChange(expenseId, ct);
         var existing = await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct);
+        // A receipt can be edited before anybody divides by it. Once it is the source of
+        // the stored ledger shares, though, keeping the paper and the money in separate
+        // saves would leave balances describing the old bill. Capture that state before the
+        // draft is applied; a hand-stated division must remain hand-stated.
+        var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
         var members = expense.GroupId is { } groupId
             ? await participants.IdsOf(groupId, ct)
             : [expense.Payer];
@@ -111,6 +116,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 .WithExtension("amount", expense.Amount)
                 .WithExtension("difference", expense.Amount - draft.Total);
 
+        // Keep an incomplete receipt editable without making the receipt endpoint refuse it
+        // merely because the expense was already divided. The existing ledger remains the
+        // last valid answer until every line has a rule and the next edit can recalculate it.
+        var canRedivide = redivide && CanDivide(draft, expense, members);
+
         if (existing is null)
         {
             draft.Expense = expense;
@@ -149,6 +159,12 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             attachment.ReceiptId = receiptId;
         }
 
+        if (canRedivide)
+        {
+            expense.Receipt = existing ?? draft;
+            await splitter.WriteSplitsAsync(expense, ct);
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return await ForExpense(expenseId, ct);
     }
@@ -157,6 +173,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     {
         var expense = await MineToChange(expenseId, ct);
         var receipt = await ForExpense(expenseId, ct);
+        var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
         var item = receipt.Items.FirstOrDefault(i => i.Id == itemId)
             ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
         SplitRuleVersion? version = null;
@@ -168,6 +185,13 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         }
         item.SplitRuleVersionId = version?.Id;
         item.SplitRuleVersion = version;
+
+        if (redivide && CanDivide(receipt, expense, await Members(expense, ct)))
+        {
+            expense.Receipt = receipt;
+            await splitter.WriteSplitsAsync(expense, ct);
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return receipt;
     }
@@ -303,6 +327,42 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
 
     private async Task<IReadOnlyCollection<Guid>> Members(Expense expense, CancellationToken ct) =>
         expense.GroupId is { } groupId ? await participants.IdsOf(groupId, ct) : [expense.Payer];
+
+    /// <summary>
+    /// Whether the current receipt is the rule-produced source of the expense's stored
+    /// shares. A receipt on an expense with hand-stated shares is intentionally not allowed
+    /// to take over the ledger just because somebody corrected its wording.
+    /// </summary>
+    private async Task<bool> ReceiptCurrentlyDrivesLedger(Expense expense, CancellationToken ct)
+    {
+        return await splitter.DividesByItsBill(expense, ct)
+            && await splitter.DivisionCameFromItsRule(expense, ct);
+    }
+
+    /// <summary>
+    /// Checks a draft without changing the tracked expense. An incomplete bill stays a
+    /// useful draft; a complete bill is safe to use for the atomic split rewrite below.
+    /// </summary>
+    private bool CanDivide(Receipt receipt, Expense expense, IReadOnlyCollection<Guid> members)
+    {
+        try
+        {
+            ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
+            return true;
+        }
+        catch (ValidationException)
+        {
+            return false;
+        }
+        catch (UnprocessableException)
+        {
+            return false;
+        }
+        catch (ConflictException)
+        {
+            return false;
+        }
+    }
 
     private IQueryable<SplitRuleVersion> Versions() => dbContext.Set<SplitRuleVersion>()
         .Include(v => (v as WeightedSplitRuleVersion)!.Participants).Include(v => v.SplitRule).ThenInclude(r => r.Group);

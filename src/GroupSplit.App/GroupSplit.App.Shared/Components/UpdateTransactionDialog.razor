@@ -223,11 +223,19 @@
     {
         _receipt = bill;
 
-        if (_model.SplitRuleId == _billRuleId)
+        if (UsesReceiptForDivision(bill))
             await RefreshPreviewAsync();
         else
             StateHasChanged();
     }
+
+    /// <summary>
+    /// Whether the preview follows the receipt. Category-driven itemized expenses have no
+    /// explicit SplitRuleId, so checking only the group's rule id misses exactly those bills.
+    /// </summary>
+    private bool UsesReceiptForDivision(ReceiptResponse? bill = null) =>
+        (_model.SplitRuleId is { } ruleId && ruleId == _billRuleId)
+        || (_model.SplitRuleId is null && (bill ?? _receipt)?.DividesItsExpense == true);
 
     private MudForm _form = null!;
 
@@ -574,7 +582,10 @@
                 "Review receipt", new DialogParameters<ReceiptDraftDialog>
                 {
                     { x => x.TransactionId, Original.Id },
-                    { x => x.ExpenseAmount, _model.Amount },
+                    // The receipt endpoint compares against the persisted expense. The
+                    // amount field may still be dirty in this parent dialog, so passing the
+                    // unsaved value could disable an otherwise valid receipt edit.
+                    { x => x.ExpenseAmount, Original.Amount },
                     { x => x.Transcription, transcription }
                 }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
             var result = await dialog.Result;
@@ -583,7 +594,7 @@
                 _receipt = saved;
                 _attachments = await ReceiptAttachments.GetAsync(Original.Id);
 
-                if (_model.SplitRuleId == _billRuleId)
+                if (UsesReceiptForDivision(saved))
                     await RefreshPreviewAsync();
             }
         }
@@ -602,7 +613,9 @@
             "Edit itemized receipt", new DialogParameters<ReceiptDraftDialog>
             {
                 { x => x.TransactionId, Original.Id },
-                { x => x.ExpenseAmount, _model.Amount },
+                // Receipt edits are saved against the persisted transaction amount. A dirty
+                // amount in this parent dialog has not reached the API yet.
+                { x => x.ExpenseAmount, Original.Amount },
                 { x => x.Receipt, bill }
             }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
 
@@ -610,7 +623,7 @@
         if (result is { Canceled: false, Data: ReceiptResponse saved })
         {
             _receipt = saved;
-            if (_model.SplitRuleId == _billRuleId)
+            if (UsesReceiptForDivision(saved))
                 await RefreshPreviewAsync();
             else
                 StateHasChanged();
