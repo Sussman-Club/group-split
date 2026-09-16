@@ -32,13 +32,13 @@
             }
 
             <div class="gs-grid-2">
-                <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Immediate="true" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_tax" Label="Tax" Immediate="true" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_tip" Label="Tip" Immediate="true" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_total" Label="Total paid" Immediate="true" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
             </div>
 
@@ -86,13 +86,13 @@
                                   HelperText="The wording copied from the original receipt"
                                   Variant="Variant.Outlined" Lines="2" />
                     <div class="gs-grid-2">
-                        <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Immediate="true" Variant="Variant.Outlined"
                                          Format="N3" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Immediate="true" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Immediate="true" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Immediate="true" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
                     </div>
                 </div>
