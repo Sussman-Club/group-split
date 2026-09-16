@@ -66,7 +66,8 @@ public static class Extensions
                     metrics.AddAspNetCoreInstrumentation()
                         .AddMeter("Npgsql")
                         .AddHttpClientInstrumentation()
-                        .AddRuntimeInstrumentation();
+                        .AddRuntimeInstrumentation()
+                        .AddAWSInstrumentation();
                 })
                 .WithTracing(tracing =>
                 {
@@ -80,7 +81,8 @@ public static class Extensions
                         // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                         //.AddGrpcClientInstrumentation()
                         .AddHttpClientInstrumentation()
-                        .AddEntityFrameworkCoreInstrumentation();
+                        .AddEntityFrameworkCoreInstrumentation()
+                        .AddAWSInstrumentation();
                 });
 
             builder.AddOpenTelemetryExporters();
