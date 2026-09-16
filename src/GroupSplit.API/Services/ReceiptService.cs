@@ -6,6 +6,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
@@ -14,6 +15,8 @@ public interface IReceiptService
 {
     Task<Receipt> ForExpense(Guid expenseId, CancellationToken ct = default);
     Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request, CancellationToken ct = default);
+    Task<Receipt> PatchItem(Guid expenseId, Guid itemId, JsonPatchDocument<ReceiptItemPatch> patch,
+        CancellationToken ct = default);
     Task<Receipt> SetRule(Guid expenseId, Guid itemId, SetReceiptItemRuleRequest request, CancellationToken ct = default);
     Task<ReceiptDivisionResponse> Preview(Guid expenseId, CancellationToken ct = default);
     Task<Expense> Divide(Guid expenseId, CancellationToken ct = default);
@@ -84,6 +87,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         for (var position = 0; position < request.Items.Count; position++)
         {
             var input = request.Items[position];
+            var savedDescription = existing?.Items.FirstOrDefault(item => item.Id == input.Id)?.Description;
             var version = input.SplitRuleVersionId is { } versionId
                 ? versions.FirstOrDefault(v => v.Id == versionId)
                     ?? throw new ValidationException(ErrorCodes.ReceiptInvalid, "The item's split rule version was not found.")
@@ -93,13 +97,19 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 Name = input.Name?.Trim() ?? "",
                 NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
                     ?? input.Name?.Trim().ToLowerInvariant() ?? "",
-                Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
+                Description = input.Description is null
+                    ? savedDescription
+                    : string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
                 UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
                 TaxAmount = input.TaxAmount, SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
         }
         ReceiptSplitCalculator.RefuseIfFiguresDisagree(draft);
         if (draft.Total != expense.Amount)
-            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp, "The bill total must equal the expense amount.");
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The bill total must equal the expense amount.")
+                .WithExtension("total", draft.Total)
+                .WithExtension("amount", expense.Amount)
+                .WithExtension("difference", expense.Amount - draft.Total);
 
         if (existing is null)
         {
@@ -162,6 +172,80 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         return receipt;
     }
 
+    /// <summary>
+    /// Applies a correction to one saved line, then validates the complete bill before it is
+    /// written. The line id is the address, so the caller does not have to round-trip every
+    /// other line -- including the original receipt wording -- just to fix one name.
+    /// </summary>
+    public async Task<Receipt> PatchItem(Guid expenseId, Guid itemId,
+        JsonPatchDocument<ReceiptItemPatch> patch, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(patch);
+        await MineToChange(expenseId, ct);
+        var receipt = await ForExpense(expenseId, ct);
+        var stored = receipt.Items.FirstOrDefault(item => item.Id == itemId)
+            ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
+
+        var model = new ReceiptItemPatch
+        {
+            Name = stored.Name,
+            Description = stored.Description,
+            UnitPrice = stored.UnitPrice,
+            Quantity = stored.Quantity,
+            TotalPrice = stored.TotalPrice,
+            TaxAmount = stored.TaxAmount,
+            SplitRuleVersionId = stored.SplitRuleVersionId
+        };
+        patch.ApplyTo(model);
+
+        var validation = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+                model, new System.ComponentModel.DataAnnotations.ValidationContext(model), validation,
+                validateAllProperties: true))
+        {
+            throw new ValidationException(ErrorCodes.ReceiptInvalid,
+                string.Join(" ", validation.Select(result => result.ErrorMessage ?? "The item is invalid.")));
+        }
+
+        var request = new SaveReceiptRequest
+        {
+            Subtotal = receipt.Subtotal,
+            Tax = receipt.Tax,
+            Tip = receipt.Tip,
+            Total = receipt.Total,
+            Items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id)
+                .Select(item => item.Id == itemId
+                    ? new ReceiptItemInput
+                    {
+                        Id = item.Id,
+                        Name = model.Name,
+                        // Null here means the JSON Patch explicitly cleared the field. The
+                        // whole-save convention uses null for "preserve", so translate it
+                        // to an empty string before handing it to that merge.
+                        Description = model.Description ?? string.Empty,
+                        UnitPrice = model.UnitPrice,
+                        Quantity = model.Quantity,
+                        TotalPrice = model.TotalPrice,
+                        TaxAmount = model.TaxAmount,
+                        SplitRuleVersionId = model.SplitRuleVersionId
+                    }
+                    : new ReceiptItemInput
+                    {
+                        Id = item.Id,
+                        Name = item.Name,
+                        NormalizedName = item.NormalizedName,
+                        Description = item.Description,
+                        UnitPrice = item.UnitPrice,
+                        Quantity = item.Quantity,
+                        TotalPrice = item.TotalPrice,
+                        TaxAmount = item.TaxAmount,
+                        SplitRuleVersionId = item.SplitRuleVersionId
+                    }).ToList()
+        };
+
+        return await SaveForExpense(expenseId, request, ct);
+    }
+
     public async Task<ReceiptDivisionResponse> Preview(Guid expenseId, CancellationToken ct = default)
     {
         var expense = await VisibleExpense(expenseId, ct);
@@ -171,7 +255,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     private async Task<ReceiptDivisionResponse> Calculate(Expense expense, Receipt receipt, CancellationToken ct)
     {
         if (expense.Amount != receipt.Total)
-            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp, "The bill total must equal the expense amount.");
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The bill total must equal the expense amount.")
+                .WithExtension("total", receipt.Total)
+                .WithExtension("amount", expense.Amount)
+                .WithExtension("difference", expense.Amount - receipt.Total);
         var members = await Members(expense, ct);
         var shares = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
         var subtotals = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers, true)

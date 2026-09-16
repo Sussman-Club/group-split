@@ -3,6 +3,7 @@ using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -61,6 +62,7 @@ public static class ReceiptsApi
 
             group.MapGetReceipt();
             group.MapSaveReceipt();
+            group.MapPatchReceiptItem();
             group.MapDeleteReceipt();
             group.MapSetRule();
             group.MapPreviewDivision();
@@ -129,6 +131,30 @@ public static class ReceiptsApi
                 .WithName("DeleteReceipt")
                 .Produces(StatusCodes.Status204NoContent)
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Corrects one saved line without requiring the caller to send the whole bill back.
+        /// </summary>
+        private RouteHandlerBuilder MapPatchReceiptItem()
+        {
+            return group.MapPatch("/items/{itemId:guid}", async (
+                    Guid id,
+                    Guid itemId,
+                    JsonPatchDocument<ReceiptItemPatch> patch,
+                    IReceiptService receipts,
+                    CancellationToken ct) =>
+                {
+                    var receipt = await receipts.PatchItem(id, itemId, patch, ct);
+
+                    return Results.Ok(await receipts.ResponseFor(receipt, id, ct));
+                })
+                .WithName("PatchReceiptItem")
+                .Accepts<JsonPatchDocument<ReceiptItemPatch>>("application/json-patch+json")
+                .Produces<ReceiptResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
         /// <summary>

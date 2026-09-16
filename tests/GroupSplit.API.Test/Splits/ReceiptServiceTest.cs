@@ -6,6 +6,7 @@ using GroupSplit.Shared;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.API.Test.Splits;
 
@@ -246,6 +247,48 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var responseItem = Assert.Single(response.Items);
         Assert.Equal("pizza large", responseItem.NormalizedName);
         Assert.Equal("PZA LG", responseItem.Description);
+    }
+
+    [Fact]
+    public async Task Patching_one_item_preserves_omitted_fields_and_the_other_lines()
+    {
+        var (expense, _, even) = await AnExpense();
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 48m,
+            Total = 48m,
+            Items =
+            [
+                new ReceiptItemInput
+                {
+                    Name = "Water",
+                    Description = "KIRKLAND WATER 40 PK",
+                    UnitPrice = 18m,
+                    TotalPrice = 18m,
+                    SplitRuleVersionId = even
+                },
+                new ReceiptItemInput
+                {
+                    Name = "Pizza",
+                    Description = "LARGE CHEESE",
+                    UnitPrice = 30m,
+                    TotalPrice = 30m,
+                    SplitRuleVersionId = even
+                }
+            ]
+        }, Ct);
+        var item = bill.Items.First(item => item.Name == "Water");
+        var patch = new JsonPatchDocument<ReceiptItemPatch>();
+        patch.Replace(line => line.Name, "Bottled water");
+
+        var updated = await Receipts.PatchItem(expense.Id, item.Id, patch, Ct);
+
+        var water = updated.Items.Single(line => line.Id == item.Id);
+        var pizza = updated.Items.Single(line => line.Name == "Pizza");
+        Assert.Equal("Bottled water", water.Name);
+        Assert.Equal("KIRKLAND WATER 40 PK", water.Description);
+        Assert.Equal(even, water.SplitRuleVersionId);
+        Assert.Equal("LARGE CHEESE", pizza.Description);
     }
 
     /// <summary>

@@ -74,6 +74,11 @@
                         <span class="gs-slip-name">@row.Name</span>
                     </span>
 
+                    @if (!string.IsNullOrWhiteSpace(row.Description))
+                    {
+                        <span class="gs-slip-description">@row.Description</span>
+                    }
+
                     <span class="gs-slip-leader" aria-hidden="true"></span>
 
                     @* The letter in the margin, which is how a real bill says the tax at the
@@ -233,13 +238,15 @@
 
         return string.IsNullOrEmpty(wanted)
             ? Receipt.Items
-            : Receipt.Items.Where(line => line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
+            : Receipt.Items.Where(line =>
+                line.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)
+                || line.Description?.Contains(wanted, StringComparison.OrdinalIgnoreCase) == true);
     }
 
     /// <summary>One printed row: a line, or the identical lines it stands for.</summary>
     private sealed record Row(
         string Key, string Name, decimal Count, decimal Each, decimal Total, decimal Tax,
-        bool Ruleless, string? Rule);
+        bool Ruleless, string? Rule, string? Description);
 
     /// <summary>
     /// What to print: the bill, narrowed to what is being looked for, with identical lines
@@ -258,7 +265,8 @@
                 Name: line.Name.Trim().ToLowerInvariant(),
                 line.UnitPrice,
                 line.TaxAmount,
-                line.SplitRuleVersionId))
+                line.SplitRuleVersionId,
+                line.Description))
             .Select(same => new Row(
                 same.First().Id.ToString(),
                 same.First().Name,
@@ -267,7 +275,8 @@
                 same.Sum(line => line.TotalPrice),
                 same.Sum(line => line.TaxAmount),
                 same.First().SplitRuleVersionId is null,
-                same.First().SplitRuleName))
+                same.First().SplitRuleName,
+                same.First().Description))
     ];
 
     /// <summary>

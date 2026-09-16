@@ -148,6 +148,16 @@
                         <span class="gs-tag clay gs-receipt-rule-warning">@bill.MissingRuleItemCount without a rule</span>
                     }
 
+                    @if (bill.CanEdit && EditRequested.HasDelegate)
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Class="gs-btn-quiet"
+                                   OnClick="@(() => EditRequested.InvokeAsync(bill))">
+                            Edit itemized receipt
+                        </MudButton>
+                    }
+
                     <MudButton Variant="Variant.Text"
                                Size="Size.Small"
                                Class="gs-btn-quiet"
@@ -241,6 +251,9 @@
 
     [Parameter]
     public EventCallback<ReceiptAttachmentResponse> DeleteRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ReceiptResponse> EditRequested { get; set; }
 
     private bool HasItemizedReceipt => Receipt is { Items.Count: > 0 };
 

@@ -103,4 +103,19 @@ public class ReceiptSectionTest : ComponentTest
         Assert.Equal(attachment, removed);
         Assert.Contains("dinner.pdf", page.Markup);
     }
+
+    [Fact]
+    public void An_editable_itemized_receipt_forwards_the_edit_action()
+    {
+        var bill = Bill(_expense) with { CanEdit = true };
+        ReceiptResponse? edited = null;
+        var page = Render<ReceiptSection>(p => p
+            .Add(c => c.TransactionId, _expense)
+            .Add(c => c.Receipt, bill)
+            .Add(c => c.EditRequested, value => edited = value));
+
+        page.FindAll("button").Single(button => button.TextContent.Contains("Edit itemized receipt")).Click();
+
+        Assert.Same(bill, edited);
+    }
 }

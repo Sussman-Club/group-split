@@ -189,9 +189,10 @@
                                     Attachments="@_attachments"
                                     IsUploading="@_uploading"
                                     TranscribingAttachmentId="@_transcribingAttachmentId"
-                                    UploadRequested="UploadAttachment"
-                                    TranscribeRequested="TranscribeAttachmentAsync"
-                                    DeleteRequested="DeleteAttachmentAsync" />
+                                     UploadRequested="UploadAttachment"
+                                     TranscribeRequested="TranscribeAttachmentAsync"
+                                     DeleteRequested="DeleteAttachmentAsync"
+                                     EditRequested="EditReceiptAsync" />
                 }
             </div>
         }
@@ -318,6 +319,24 @@
         {
             _transcribingAttachmentId = null;
         }
+    }
+
+    private async Task EditReceiptAsync(ReceiptResponse bill)
+    {
+        if (!bill.CanEdit || details is not { } expenseDetails)
+            return;
+
+        var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(
+            "Edit itemized receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { x => x.TransactionId, TransactionId },
+                { x => x.ExpenseAmount, expenseDetails.Amount },
+                { x => x.Receipt, bill }
+            }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ReceiptResponse saved })
+            receipt = saved;
     }
 
     private async Task DeleteAttachmentAsync(ReceiptAttachmentResponse attachment)

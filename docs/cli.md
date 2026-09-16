@@ -739,8 +739,10 @@ groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
   --item "Wine=18.00@5c0ffee0-...-777788889999"
 ```
 
-A line reads `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>]`. After the `@`
-comes **one** split rule version id, and a plate the table shared is a line naming a rule
+A line reads `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`. The number
+before `x` is the **total printed for the whole line**, not the unit price. For example,
+`Beers=27.00x3` means three beers whose line total is 27.00 (9.00 each). After the `@` comes
+**one** split rule version id, and a plate the table shared is a line naming a rule
 that divides between them -- the bottle above points at a rule naming Ana and Omar. Nothing
 about a line says "these two people" directly: the rule says it, the line points at the rule,
 and the rule is the thing the group can edit and reuse.
@@ -760,8 +762,9 @@ and neither can a rule belonging to another group. Both are refused with `RECEIP
 ### Correcting a bill
 
 `receipts set` saves the bill **whole**, so a line the command does not mention is a line that
-has gone -- and its rule goes with it. To fix one price without losing which rule each line
-divides by, name the stored lines by their ids, which `receipts show` prints:
+has gone -- and its rule goes with it. For an existing line named by id, omitted source text is
+preserved by the API. To fix one total without losing which rule or raw receipt description
+each stored line carries, name the stored lines by their ids, which `receipts show` prints:
 
 ```bash
 groupsplit receipts show 7c1e...
