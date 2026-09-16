@@ -25,7 +25,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
                   "role": "assistant",
                   "status": "completed",
                   "content": [
-                    { "type": "output_text", "text": "{\"subtotal\":18.00,\"tax\":1.80,\"tip\":0,\"total\":19.80,\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1,\"totalPrice\":18.00,\"taxAmount\":1.80}]}" }
+                    { "type": "output_text", "text": "{\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60,\"discount\":2.00,\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1,\"totalPrice\":16.00,\"discountAmount\":2.00,\"taxAmount\":1.60}]}" }
                   ]
                 }
               ]
@@ -40,14 +40,16 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Equal(HttpMethod.Post, server.Method);
         Assert.Equal("https://resource.openai.azure.com/openai/v1/responses", server.RequestUri!.ToString());
         Assert.Equal("test-api-key", server.ApiKey);
-        Assert.Equal(19.80m, receipt.Total);
+        Assert.Equal(17.60m, receipt.Total);
         var item = Assert.Single(receipt.Items);
         Assert.Equal("Pizza", item.Name);
-        Assert.Equal(1.80m, item.TaxAmount);
+        Assert.Equal(1.60m, item.TaxAmount);
 
         using var request = JsonDocument.Parse(server.Body);
         var root = request.RootElement;
         Assert.Equal("receipt-deployment", root.GetProperty("model").GetString());
+        var prompt = root.GetProperty("input")[0].GetProperty("content")[0].GetProperty("text").GetString();
+        Assert.Contains("discount", prompt, StringComparison.OrdinalIgnoreCase);
         var image = root.GetProperty("input")[0].GetProperty("content")[1];
         Assert.Equal("input_image", image.GetProperty("type").GetString());
         Assert.Equal("data:image/jpeg;base64,AQID", image.GetProperty("image_url").GetString());

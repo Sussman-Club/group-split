@@ -87,10 +87,20 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
     private const string Prompt = """
         Read this receipt and return the normalized receipt JSON requested by the schema. Include
-        only positive, named purchasable line items. Use the printed quantity when present;
-        otherwise use 1. Include taxes attached to each line in taxAmount and receipt-level tax
-        in tax. Do not include payment rows, discounts, refunds, or other non-purchased rows.
-        Use zero for an absent tip or tax. Return no prose outside the JSON object.
+        every positive, purchasable product or merchandise line that the merchant printed. The
+        Set each item's name to the human-readable merchant or product description printed on the
+        receipt. Do not invent a product name that is not supported by the receipt.
+
+        Capture discounts and coupons. Set discount to the total positive discount amount, and
+        set discountAmount on each item when the receipt attributes a discount to that item.
+        Do not return discount, coupon, refund, payment, or tender rows as purchasable items.
+        Return each item's totalPrice after its applicable discount, and return subtotal as the
+        sum of those net item totals after receipt-wide discounts have been allocated across the
+        items. The item totals and subtotal must represent what was actually charged.
+
+        Use the printed quantity when present; otherwise use 1. Include taxes attached to each
+        line in taxAmount and receipt-level tax in tax. Use zero for an absent discount, tip, or
+        tax. Return no prose outside the JSON object.
         """;
 
     public string Name => "Azure OpenAI";
@@ -136,8 +146,8 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             var receipt = response.Result;
 
             logger.LogInformation(
-                "Azure OpenAI mapped {MappedItemCount} receipt line item(s) for attachment {AttachmentId}.",
-                receipt.Items.Count, document.AttachmentId);
+                "Azure OpenAI mapped {MappedItemCount} receipt line item(s) and {DiscountAmount} in discounts for attachment {AttachmentId}.",
+                receipt.Items.Count, receipt.Discount, document.AttachmentId);
 
             return new TranscribedReceipt(
                 receipt.Subtotal,
@@ -216,6 +226,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         [JsonPropertyName("tax")] public decimal Tax { get; init; }
         [JsonPropertyName("tip")] public decimal Tip { get; init; }
         [JsonPropertyName("total")] public decimal Total { get; init; }
+        [JsonPropertyName("discount")] public decimal Discount { get; init; }
         [JsonPropertyName("items")] public IReadOnlyList<AzureReceiptItem> Items { get; init; } = [];
     }
 
@@ -225,6 +236,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; init; }
         [JsonPropertyName("quantity")] public decimal Quantity { get; init; }
         [JsonPropertyName("totalPrice")] public decimal TotalPrice { get; init; }
+        [JsonPropertyName("discountAmount")] public decimal DiscountAmount { get; init; }
         [JsonPropertyName("taxAmount")] public decimal TaxAmount { get; init; }
     }
 }
