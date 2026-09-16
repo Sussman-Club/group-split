@@ -17,7 +17,7 @@
  * instead, and only those are re-declared under `:root.pf-v5-theme-dark`
  * (0,2,0). Globals we never touch keep flipping on their own.
  *
- * The tokens are the ones GroupSplit.App.Shared/wwwroot/app.css declares, under
+ * The tokens are the ones GroupSplit.App.Shared/wwwroot/css/tokens.css declares, under
  * the same names and with the same values, so the console, the login pages and
  * the app read as one product; ThemeService.cs restates them again for
  * MudBlazor. Change a colour in one and change it in all three.

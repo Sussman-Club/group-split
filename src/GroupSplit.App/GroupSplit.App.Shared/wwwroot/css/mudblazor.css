@@ -1,0 +1,245 @@
+/* --------------------------------------------------------------- inputs ---- */
+
+.mud-input-control .mud-input.mud-input-outlined .mud-input-outlined-border {
+    border-radius: var(--gs-radius-sm);
+    transition: border-color var(--gs-fast) var(--gs-ease);
+}
+
+.mud-input.mud-input-outlined:hover .mud-input-outlined-border {
+    border-color: var(--gs-line-strong);
+}
+
+/* Search field. */
+.gs-search .mud-input {
+    background: var(--gs-surface);
+    border-radius: var(--gs-radius-pill) !important;
+}
+
+.gs-search .mud-input-outlined-border {
+    border-radius: var(--gs-radius-pill) !important;
+}
+
+/* ------------------------------------------------------------ data grid ---- */
+
+.gs-grid.mud-table {
+    background: transparent;
+    box-shadow: none;
+    border-radius: var(--gs-radius-lg);
+    overflow: hidden;
+}
+
+.gs-grid .mud-table-container {
+    border-radius: var(--gs-radius-lg);
+    border: 1px solid var(--gs-line);
+    background: var(--gs-surface);
+}
+
+/* Specificity matches Mud's own `.mud-table .mud-table-head .mud-table-cell`. */
+.gs-grid.mud-table .mud-table-head .mud-table-cell,
+.gs-grid.mud-table .mud-table-head .mud-table-cell .column-header {
+    background: var(--gs-surface-3);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--gs-muted);
+    border-bottom: 1px solid var(--gs-line);
+}
+
+.gs-grid.mud-table .mud-table-cell {
+    border-bottom: 1px solid var(--gs-line);
+    padding: 14px 16px;
+}
+
+.gs-grid .gs-grid-amount {
+    font-size: 1.0625rem;
+}
+
+.gs-grid .gs-right,
+.gs-grid .gs-right .column-header {
+    text-align: right;
+    justify-content: flex-end;
+}
+
+.gs-grid.mud-table .mud-table-head .sort-direction-icon {
+    color: var(--gs-teal);
+}
+
+.gs-grid .mud-table-row {
+    transition: background var(--gs-fast) var(--gs-ease);
+}
+
+.gs-grid .mud-table-row:last-child .mud-table-cell {
+    border-bottom: 0;
+}
+
+/*
+    Always there, under a column headed "Actions".
+
+    They used to fade in on hover. A column announces itself in the header and then holds
+    nothing down every row, so the actions read as absent rather than as waiting: somebody
+    looking for how to open an expense found an empty column and concluded there was no
+    way. Hover is a poor place to keep the only route to a screen, and it is no place at
+    all for a reader on a keyboard scanning before they tab, or on a touch screen, where
+    the `hover: none` branch below was already conceding the point.
+
+    Quiet rather than hidden: they sit back at 70% and come to full strength on the row
+    under the pointer or holding focus, so a row still lights up without the column
+    emptying itself.
+*/
+.gs-grid .gs-row-actions {
+    opacity: 0.7;
+    transition: opacity var(--gs-fast) var(--gs-ease);
+}
+
+.gs-grid .mud-table-row:hover .gs-row-actions,
+.gs-grid .mud-table-row:focus-within .gs-row-actions {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .gs-grid .gs-row-actions {
+        opacity: 1;
+    }
+}
+
+.gs-grid .mud-table-pagination {
+    border-top: 0;
+}
+
+/*
+    A phone gets one card per entry.
+
+    Below Mud's own xs breakpoint the grid stops being a table and gives every cell a
+    line of its own with the column's name beside it. What it does not do is say where
+    one entry ends: the lines are ruled evenly all the way down, so "Actions" sat
+    between two dates looking like a band of its own rather than the end of the entry
+    above it. Two of our desktop rules made it worse -- the border under every cell drew
+    that even rule, and the 14px of cell padding reinflated the columns marked
+    HideSmall, which is where the empty bands above the amount and the actions came
+    from.
+
+    So the row becomes the card. The container stops drawing one box around all of them,
+    the lines inside a card share it without rules between them, and the gap between
+    cards is what separates one expense from the next.
+
+    600px rather than the 640px the rest of the phone layout uses: this has to switch on
+    the same pixel Mud's stacked layout does, and Breakpoint.Xs is 600.
+*/
+@media (max-width: 600px) {
+    .gs-grid .mud-table-container {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        overflow: visible;
+    }
+
+    /* A table row cannot take a radius, a margin or a gap; a block one can. */
+    .gs-grid.mud-table .mud-table-root,
+    .gs-grid.mud-table .mud-table-body {
+        display: block;
+        border-top: 0;
+    }
+
+    .gs-grid.mud-table .mud-table-body .mud-table-row {
+        display: block;
+        margin-bottom: 10px;
+        padding: 6px 0;
+        border: 1px solid var(--gs-line);
+        border-radius: var(--gs-radius);
+        background: var(--gs-surface);
+        overflow: hidden;
+    }
+
+    .gs-grid.mud-table .mud-table-body .mud-table-row:last-child {
+        margin-bottom: 0;
+    }
+
+    /* No rules inside a card -- its own edge is the separator now. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell {
+        border-bottom: 0;
+        padding: 7px 14px;
+    }
+
+    /* A column that is right-aligned as a column is a line like any other once it is
+       one: the name on the left, the figure on the right, in step with the lines above
+       and below it rather than shoved against them. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell.gs-right {
+        justify-content: space-between;
+    }
+
+    /* An expense somebody else recorded has no actions on it, and a cell with nothing
+       in it still prints its label -- a card that ended on the word ACTIONS and then
+       stopped. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell:empty {
+        display: none;
+    }
+
+    /* The column's name is a label, and it was rendering at the weight of the figure
+       beside it. Same treatment as the header it stands in for. */
+    .gs-grid.mud-table .mud-table-cell::before {
+        font-size: 0.6875rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--gs-muted);
+    }
+
+    /* HideSmall takes a column out of the phone layout entirely. Mud collapses the cell
+       and zeroes its padding; ours was putting the padding back, and a collapsed cell
+       with padding is an empty band. */
+    .gs-grid.mud-table .mud-table-body .mud-table-row .mud-table-cell-hide {
+        padding: 0;
+    }
+}
+
+/* ------------------------------------------------------------- snackbar ---- */
+
+.mud-snackbar {
+    border-radius: var(--gs-radius) !important;
+    box-shadow: var(--gs-shadow-lg) !important;
+}
+
+/* ----------------------------------------------------------------- menus --- */
+
+.mud-popover {
+    border-radius: var(--gs-radius) !important;
+    border: 1px solid var(--gs-line);
+    box-shadow: var(--gs-shadow-lg) !important;
+}
+
+.mud-list-item {
+    border-radius: var(--gs-radius-sm);
+    margin: 2px 6px;
+}
+
+/*
+    One scrollbar in a dropdown, not two.
+
+    MudBlazor caps the popover at 300px and lets it scroll, and caps the list inside it at
+    300px and lets that scroll too. A list a little too tall for the box -- which the 2px
+    margins above make of six short rows -- then has a scrollbar inside a scrollbar, and a
+    wheel over it moves whichever one the pointer happens to be on.
+
+    The box keeps the cap, since it is the thing with the border and the corners; the list
+    inside it grows and lets the box do the scrolling.
+
+    Through .mud-paper, which the popover also carries, because MudBlazor's own rule is
+    `.mud-popover .mud-list { max-height: inherit }` -- the same specificity as the obvious
+    way of writing this, and later in the cascade, so the obvious way lost silently.
+*/
+.mud-popover.mud-paper > .mud-list {
+    max-height: none;
+    overflow-y: visible;
+}
+
+/* ------------------------------------------------------------- tooltips ---- */
+
+.mud-tooltip {
+    border-radius: var(--gs-radius-sm) !important;
+    font-family: var(--gs-font-body);
+    font-weight: 600;
+    font-size: 0.75rem;
+    background: var(--gs-ink) !important;
+    color: var(--gs-bg) !important;
+}

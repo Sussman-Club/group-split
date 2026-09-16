@@ -1,0 +1,279 @@
+/* -------------------------------------------------------- transaction rows */
+
+.gs-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 12px;
+    margin: 0 -12px;
+    border-radius: var(--gs-radius);
+    cursor: pointer;
+    color: inherit;
+    text-decoration: none;
+    transition: background var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-row + .gs-row {
+    border-top: 1px solid var(--gs-line);
+    border-radius: 0 0 var(--gs-radius) var(--gs-radius);
+}
+
+.gs-row:hover {
+    background: var(--gs-surface-2);
+    transform: translateX(4px);
+    border-top-color: transparent;
+}
+
+.gs-row:hover + .gs-row {
+    border-top-color: transparent;
+}
+
+.gs-row .title {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.gs-row .title span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-row .meta {
+    color: var(--gs-muted);
+    font-size: 0.8125rem;
+    margin-top: 2px;
+}
+
+.gs-row .gs-money {
+    font-size: 1.0625rem;
+    text-align: right;
+}
+
+.gs-row .when {
+    display: block;
+    color: var(--gs-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: right;
+}
+
+/*
+    A row that carries an action needs somewhere to put it. .gs-row is three columns --
+    icon, text, figure -- so a fourth child lands on an implicit second row and the button
+    appears under the entry it belongs to instead of beside it.
+*/
+.gs-row.gs-row-has-actions {
+    grid-template-columns: auto 1fr auto auto;
+}
+
+/*
+    Revealed on hover, as the grid's row actions are. The equivalent rules there are scoped
+    to .gs-grid and so never reached a .gs-list row.
+*/
+.gs-list .gs-row-actions {
+    opacity: 0;
+    transform: translateX(6px);
+    transition: opacity var(--gs-fast) var(--gs-ease), transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-list .gs-row:hover .gs-row-actions,
+.gs-list .gs-row:focus-within .gs-row-actions {
+    opacity: 1;
+    transform: none;
+}
+
+/* Nothing hovers on a touch screen, so there the action is simply there. */
+@media (hover: none) {
+    .gs-list .gs-row-actions {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.gs-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.gs-tag.clay {
+    background: var(--gs-clay-soft);
+    color: var(--gs-clay);
+}
+
+.gs-tag.neutral {
+    background: var(--gs-surface-3);
+    color: var(--gs-muted);
+}
+
+.gs-row-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--gs-surface-3);
+    color: var(--gs-ink-2);
+    flex: 0 0 auto;
+    transition: transform var(--gs-base) var(--gs-ease-spring), background var(--gs-fast);
+}
+
+/*
+    A settlement. Circle, and clay.
+
+    The shape is load-bearing and it used to be wrong. MerchantMark's rule is that a square
+    is a place and a circle is a person, and a settlement is money moving between two
+    people -- so the one mark in that column wearing a square was the one with no shop
+    behind it at all. Beside a list of expenses it also read as *more* important, being the
+    only 40px mark next to 28px avatars.
+
+    Clay separates it from the teal a person's own tile gets, because the row is not
+    spending: it is money going back. Only on the handshake -- the square .gs-row-icon is
+    still right for the prompts and the landing page's feature tiles, which are neither
+    people nor places.
+*/
+.gs-row-icon.transfer {
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--gs-clay) 18%, var(--gs-surface-3));
+    color: var(--gs-clay-deep);
+}
+
+:root[data-theme="dark"] .gs-row-icon.transfer { color: var(--gs-clay); }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-row-icon.transfer { color: var(--gs-clay); }
+}
+
+.gs-row:hover .gs-row-icon {
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+    transform: rotate(-6deg) scale(1.06);
+}
+
+/* A panel whose data is on its way. Dimmed rather than blanked, so the
+   layout holds still; the figures underneath are the previous group's and
+   must not be read, hence no pointer events either. */
+.gs-loading {
+    opacity: 0.45;
+    pointer-events: none;
+    filter: saturate(0.6);
+    transition: opacity var(--gs-base) var(--gs-ease), filter var(--gs-base) var(--gs-ease);
+}
+
+/* Empty state. */
+/* Announced, not drawn. The placeholder rows below are aria-hidden, so without this a
+   screen reader is told the region is busy and never told what about. */
+.gs-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/*
+    Rows that have not arrived. A real .gs-row spaces itself from the next one with its own
+    12px of padding and .gs-list adds no gap of its own -- so a column of plain blocks
+    touched, and read as one grey slab rather than as rows. The gap here stands in for that
+    padding, and the bar is the height of a row's contents rather than of the whole row.
+
+    Swept rather than pulsed: a sweep reads as progress, a pulse reads as something wrong.
+    The global prefers-reduced-motion rule stops it for anybody who has asked.
+*/
+/* The rows a list stands in for while it is being read. Named for what it is rather
+   than for the wait: "gs-waiting" is the home page's card of things waiting on you, and
+   sharing the name cost that card its padding. */
+.gs-placeholder {
+    gap: 20px;
+    padding: 6px 0;
+}
+
+/* 48 and a 20px gap is a 68px pitch, against the 69px of the rows that replace these.
+   It was 32, which stood 52px per row in for 69 and let the card grow by a third of its
+   height the moment the real ones landed -- the settling this component exists to stop. */
+.gs-placeholder-row {
+    height: 48px;
+    border-radius: var(--gs-radius);
+    background: linear-gradient(
+        90deg,
+        var(--gs-surface-2) 0%,
+        var(--gs-surface-3) 50%,
+        var(--gs-surface-2) 100%);
+    background-size: 200% 100%;
+    animation: gs-sweep 1.4s var(--gs-ease) infinite;
+}
+
+@keyframes gs-sweep {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+
+.gs-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: 40px 20px;
+    color: var(--gs-muted);
+}
+
+.gs-empty .mud-icon-root {
+    width: 44px;
+    height: 44px;
+    color: var(--gs-line-strong);
+}
+
+.gs-empty h3 {
+    margin: 6px 0 0;
+    font-size: 1.0625rem;
+    color: var(--gs-ink);
+}
+
+/* Staggered entrance for lists. Set --i per item. */
+.gs-reveal {
+    animation: gs-rise var(--gs-slow) var(--gs-ease) both;
+    animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes gs-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+/* Reveal-on-scroll for below-the-fold sections. Only where the browser
+   supports scroll-driven animations; elsewhere the content is simply there. */
+@supports (animation-timeline: view()) {
+    .gs-scroll-reveal {
+        animation: gs-rise var(--gs-slow) var(--gs-ease) both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 35%;
+    }
+}

@@ -1,0 +1,27 @@
+/* ---- the way in, from an expense ---- */
+
+.gs-receipt-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+:root[data-theme="dark"] .gs-divide-progress .mud-icon-root {
+    color: var(--gs-teal-bright);
+}
+
+:root[data-theme="dark"] .gs-divide-progress.is-wanting .mud-icon-root {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-divide-progress .mud-icon-root {
+        color: var(--gs-teal-bright);
+    }
+
+    :root:not([data-theme="light"]) .gs-divide-progress.is-wanting .mud-icon-root {
+        color: var(--gs-clay);
+    }
+}

@@ -1,0 +1,53 @@
+/* ---------------------------------------------------------- dialog steps ---- */
+
+/* Where you are in a two-step dialog. Small, and above the fields rather than beside
+   them, because it is orientation and not a control: the way forward is the button. */
+.gs-steps {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 20px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--gs-ink-soft);
+}
+
+.gs-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.gs-step .dot {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--gs-line-strong);
+    font-size: 0.75rem;
+    color: var(--gs-ink-soft);
+}
+
+.gs-step.is-current {
+    color: var(--gs-teal-deep);
+}
+
+.gs-step.is-current .dot {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal-deep);
+}
+
+.gs-step.is-done .dot {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal);
+    color: var(--gs-bg);
+}
+
+.gs-step-line {
+    flex: 1;
+    height: 1px;
+    background: var(--gs-line);
+}

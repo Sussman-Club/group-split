@@ -1,0 +1,69 @@
+/* ------------------------------------------------------------------ base -- */
+
+html {
+    background: var(--gs-bg);
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--gs-font-body);
+    color: var(--gs-ink);
+    background: var(--gs-bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+}
+
+::selection {
+    background: var(--gs-teal-glow);
+    color: var(--gs-ink);
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gs-line-strong) transparent;
+}
+
+h1, h2, h3, .gs-display {
+    font-family: var(--gs-font-display);
+    letter-spacing: -0.02em;
+}
+
+/* The router moves focus to the heading after navigation for screen readers;
+   sighted users do not need a ring drawn around it. */
+h1:focus {
+    outline: none;
+}
+
+/* Money never jitters: every figure in the product gets tabular digits. */
+.gs-money,
+.gs-num {
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.gs-money {
+    font-family: var(--gs-font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.gs-pos { color: var(--gs-teal); }
+.gs-neg { color: var(--gs-clay); }
+.gs-muted { color: var(--gs-muted); }
+
+.gs-eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gs-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

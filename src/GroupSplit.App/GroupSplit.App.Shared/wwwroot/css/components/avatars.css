@@ -1,0 +1,186 @@
+/* -------------------------------------------------------------- avatars ---- */
+
+.gs-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-family: var(--gs-font-display);
+    font-weight: 700;
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    color: var(--gs-on-accent);
+    background: linear-gradient(135deg, var(--gs-teal-bright), var(--gs-teal-deep));
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 25%);
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.gs-avatar.sm { width: 28px; height: 28px; font-size: 0.6875rem; }
+.gs-avatar.lg { width: 56px; height: 56px; font-size: 1.25rem; }
+.gs-avatar.xl { width: 84px; height: 84px; font-size: 1.75rem; }
+
+.gs-avatar.clay { background: linear-gradient(135deg, var(--gs-clay), var(--gs-clay-deep)); }
+.gs-avatar.ink { background: linear-gradient(135deg, var(--gs-ink-2), var(--gs-ink)); color: var(--gs-bg); }
+
+.gs-avatar-ring {
+    position: relative;
+    display: inline-flex;
+    padding: 4px;
+    border-radius: 50%;
+    background: conic-gradient(from 210deg, var(--gs-teal), var(--gs-clay), var(--gs-teal));
+    animation: gs-spin 14s linear infinite;
+}
+
+.gs-avatar-ring > .gs-avatar {
+    animation: gs-spin 14s linear infinite reverse;
+    box-shadow: 0 0 0 4px var(--gs-surface);
+}
+
+@keyframes gs-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Overlapping member avatars. */
+.gs-avatar-stack {
+    display: inline-flex;
+    align-items: center;
+}
+
+.gs-avatar-stack .gs-avatar {
+    margin-left: -7px;
+    box-shadow: 0 0 0 2px var(--gs-surface);
+    transition: transform var(--gs-base) var(--gs-ease-spring);
+}
+
+.gs-avatar-stack .gs-avatar:first-child {
+    margin-left: 0;
+}
+
+.gs-avatar-stack:hover .gs-avatar {
+    transform: translateX(calc(var(--i, 0) * 4px));
+}
+
+/*
+    Who paid, with where badged onto it. One 40px slot in the row's first column has to
+    carry both facts, and the payer is the one the page is about -- so the logo rides the
+    corner rather than taking the square.
+
+    Rounded square and not a circle, which is the whole of what makes the pair legible: a
+    circle in that corner is the slot and the shape every app uses for a presence dot, so
+    a round logo there reads as a status rather than as a place -- and the round mask cuts
+    the corners off a mark that was drawn as a tile. Square is a thing, circle is a person.
+    The ring is the surface colour so the tile sits in a gap cut out of the row.
+*/
+.gs-mark {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+/*
+    The place, as the tile a row leads with. 40px, which is what every mark in that
+    column is: the settlement's .gs-row-icon and the inbox's logo were already 40 and
+    the expense mark was 28, so the column had two left edges and two right edges.
+*/
+.gs-mark-place {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--gs-surface-3);
+}
+
+/*
+    The payer, on its corner. A circle, because it is a person -- and a circle in that
+    corner reads as a presence dot, which is what it now actually is.
+
+    20px is half the tile. The logo used to be the thing down here, at 17px on the grid
+    rows, and a pictogram that small is a smudge; initials are not, which is the whole
+    reason the two swapped places.
+*/
+.gs-mark-who {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gs-teal-bright), var(--gs-teal-deep));
+    /* The ring is the surface, so the badge reads as sitting on top of the tile rather
+       than being part of it. The inset keeps the avatars' own edge highlight. */
+    box-shadow: 0 0 0 2px var(--gs-surface), inset 0 0 0 1px rgb(255 255 255 / 25%);
+    color: var(--gs-on-accent);
+    font-family: var(--gs-font-display);
+    font-weight: 700;
+    font-size: 0.5rem;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+/* The same three tones the avatars use, so one person is one colour everywhere. */
+.gs-mark-who.clay { background: linear-gradient(135deg, var(--gs-clay), var(--gs-clay-deep)); }
+.gs-mark-who.ink { background: linear-gradient(135deg, var(--gs-ink-2), var(--gs-ink)); color: var(--gs-bg); }
+
+/* Beside a line of text rather than on an avatar: the detail view, where there is room
+   to say where the money went in words and the logo is only the picture of it. */
+.gs-mark-inline {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--gs-surface-3);
+}
+
+/* The initials that stand in for a place with no logo: a tile, because it is a place. */
+.gs-avatar.tile {
+    border-radius: 12px;
+}
+
+.gs-avatar.sm.tile {
+    border-radius: 9px;
+}
+
+/*
+    The size a mark in a list's first column is. Not part of the sm/lg/xl ladder, which is
+    about how prominent a person is; this is about lining up with the other things that can
+    lead a row, all of which are 40px.
+*/
+.gs-avatar.mark {
+    width: 40px;
+    height: 40px;
+    font-size: 0.875rem;
+}
+
+.gs-user-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 4px 4px 12px;
+    border-radius: var(--gs-radius-pill);
+    border: 1px solid transparent;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background var(--gs-fast) var(--gs-ease), border-color var(--gs-fast) var(--gs-ease);
+}
+
+.gs-user-btn:hover {
+    background: var(--gs-surface-2);
+    border-color: var(--gs-line);
+}
+
+.gs-user-btn .name {
+    font-weight: 700;
+    font-size: 0.875rem;
+}
