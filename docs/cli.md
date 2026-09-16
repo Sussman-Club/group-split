@@ -739,8 +739,10 @@ groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
   --item "Wine=18.00@5c0ffee0-...-777788889999"
 ```
 
-A line reads `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>]`. After the `@`
-comes **one** split rule version id, and a plate the table shared is a line naming a rule
+A line reads `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`. The number
+before `x` is the **total printed for the whole line**, not the unit price. For example,
+`Beers=27.00x3` means three beers whose line total is 27.00 (9.00 each). After the `@` comes
+**one** split rule version id, and a plate the table shared is a line naming a rule
 that divides between them -- the bottle above points at a rule naming Ana and Omar. Nothing
 about a line says "these two people" directly: the rule says it, the line points at the rule,
 and the rule is the thing the group can edit and reuse.
@@ -760,8 +762,9 @@ and neither can a rule belonging to another group. Both are refused with `RECEIP
 ### Correcting a bill
 
 `receipts set` saves the bill **whole**, so a line the command does not mention is a line that
-has gone -- and its rule goes with it. To fix one price without losing which rule each line
-divides by, name the stored lines by their ids, which `receipts show` prints:
+has gone -- and its rule goes with it. For an existing line named by id, omitted source text is
+preserved by the API. To fix one total without losing which rule or raw receipt description
+each stored line carries, name the stored lines by their ids, which `receipts show` prints:
 
 ```bash
 groupsplit receipts show 7c1e...
@@ -789,8 +792,11 @@ ones you are deliberately marking. The amounts have to come to `--tax`, which th
 checks. Either side of the `@` reads the same: `Bread=4.00/tax0.92@<version>` and
 `Bread=4.00@<version>/tax0.92` are one line.
 
-Nothing has touched the ledger yet -- `preview` says what the division would be, and `divide`
-is what stores it:
+For a new bill, or one on an expense whose stored shares were not produced by the bill,
+`preview` says what the division would be and `divide` is what stores it. If the bill already
+drives the expense's stored ledger, a valid `set` or `rule` correction automatically
+recalculates those shares. If a correction makes the bill incomplete, the bill remains
+editable and the last valid shares remain in place until the bill is valid again:
 
 ```bash
 groupsplit receipts preview 7c1e...
@@ -823,8 +829,10 @@ groupsplit receipts attachments delete <transaction-id> <attachment-id>
 
 `attachments delete` is confirmation-gated. The supported file types are JPG, PNG, WebP
 and PDF, up to 10 MB. The transcription result is still a draft: it does not save the
-itemised receipt or change the expense's shares. `receipts divide` remains the explicit
-step that changes the ledger.
+itemised receipt or change the expense's shares. For a bill that is already the source of
+the stored ledger, a subsequent valid `receipts set` or `receipts rule` correction keeps
+the shares synchronized; otherwise `receipts divide` remains the explicit step that changes
+the ledger.
 
 An imported bank row can hold the source file before it becomes an expense. Use the same
 two-step upload/transcribe flow under `inbox attachments`:

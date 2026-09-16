@@ -122,11 +122,25 @@ public static class ReceiptSplitCalculator
                 i.Quantity <= 0 || decimal.Round(i.Quantity, 3) != i.Quantity))
             throw new ValidationException(ErrorCodes.ReceiptInvalid,
                 "Use nonnegative amounts with at most two decimal places and positive quantities with at most three.");
-        if (receipt.Subtotal + receipt.Tax + receipt.Tip != receipt.Total ||
-            receipt.Items.Sum(i => i.TotalPrice) != receipt.Subtotal ||
-            receipt.Items.Sum(i => i.TaxAmount) != receipt.Tax)
+        var itemTotal = receipt.Items.Sum(i => i.TotalPrice);
+        var itemTax = receipt.Items.Sum(i => i.TaxAmount);
+        if (receipt.Subtotal + receipt.Tax + receipt.Tip != receipt.Total)
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
-                "The items, their tax, and the tip must add up to the bill total.");
+                    "The subtotal, tax, and tip do not add up to the bill total.")
+                .WithExtension("subtotal", receipt.Subtotal)
+                .WithExtension("tax", receipt.Tax)
+                .WithExtension("tip", receipt.Tip)
+                .WithExtension("total", receipt.Total);
+        if (itemTotal != receipt.Subtotal)
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The line totals do not add up to the bill subtotal.")
+                .WithExtension("itemTotal", itemTotal)
+                .WithExtension("subtotal", receipt.Subtotal);
+        if (itemTax != receipt.Tax)
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The line tax does not add up to the bill tax.")
+                .WithExtension("itemTax", itemTax)
+                .WithExtension("tax", receipt.Tax);
     }
 
     private static bool InvalidMoney(decimal value) => value < 0 || decimal.Round(value, 2) != value;

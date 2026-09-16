@@ -6,9 +6,11 @@ namespace GroupSplit.App.Web.Test.Components;
 
 public class BillSheetTest : ComponentTest
 {
-    private static ReceiptItemResponse Line(string name, decimal price, string? rule, decimal tax = 0) =>
-        new(Guid.NewGuid(), name, price, 1, price, tax, rule is null ? null : Guid.NewGuid(), rule,
-            rule is null ? null : new EvenSplitRuleDto());
+    private static ReceiptItemResponse Line(string name, decimal price, string? rule, decimal tax = 0,
+        string? description = null) =>
+        new ReceiptItemResponse(Guid.NewGuid(), name, price, 1, price, tax,
+            rule is null ? null : Guid.NewGuid(), rule,
+            rule is null ? null : new EvenSplitRuleDto()) with { Description = description };
 
     private static ReceiptResponse Bill(params ReceiptItemResponse[] items) =>
         new(Guid.NewGuid(), Guid.NewGuid(), items.Sum(i => i.TotalPrice), items.Sum(i => i.TaxAmount), 0,
@@ -144,5 +146,18 @@ public class BillSheetTest : ComponentTest
 
         page.WaitForAssertion(() => Assert.Contains("Showing 1 of 12", page.Markup));
         Assert.Contains("41.00", page.Markup);
+    }
+
+    [Fact]
+    public void Source_receipt_text_is_visible_and_searchable()
+    {
+        var lines = Enumerable.Range(1, 11).Select(n => Line($"Item {n}", 1, "Together"))
+            .Append(Line("Water", 7.98m, "Together", description: "KIRKLAND SIGNATURE WATER 40 PK"))
+            .ToArray();
+        var page = Render<BillSheet>(p => p.Add(c => c.Receipt, Bill(lines)));
+
+        Assert.Contains("KIRKLAND SIGNATURE WATER 40 PK", page.Markup);
+        page.Find("input").Input("KIRKLAND");
+        page.WaitForAssertion(() => Assert.Contains("Water", page.Markup));
     }
 }

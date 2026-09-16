@@ -6,6 +6,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
@@ -14,6 +15,8 @@ public interface IReceiptService
 {
     Task<Receipt> ForExpense(Guid expenseId, CancellationToken ct = default);
     Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request, CancellationToken ct = default);
+    Task<Receipt> PatchItem(Guid expenseId, Guid itemId, JsonPatchDocument<ReceiptItemPatch> patch,
+        CancellationToken ct = default);
     Task<Receipt> SetRule(Guid expenseId, Guid itemId, SetReceiptItemRuleRequest request, CancellationToken ct = default);
     Task<ReceiptDivisionResponse> Preview(Guid expenseId, CancellationToken ct = default);
     Task<Expense> Divide(Guid expenseId, CancellationToken ct = default);
@@ -66,6 +69,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         ArgumentNullException.ThrowIfNull(request);
         var expense = await MineToChange(expenseId, ct);
         var existing = await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct);
+        // A receipt can be edited before anybody divides by it. Once it is the source of
+        // the stored ledger shares, though, keeping the paper and the money in separate
+        // saves would leave balances describing the old bill. Capture that state before the
+        // draft is applied; a hand-stated division must remain hand-stated.
+        var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
         var members = expense.GroupId is { } groupId
             ? await participants.IdsOf(groupId, ct)
             : [expense.Payer];
@@ -84,6 +92,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         for (var position = 0; position < request.Items.Count; position++)
         {
             var input = request.Items[position];
+            var savedDescription = existing?.Items.FirstOrDefault(item => item.Id == input.Id)?.Description;
             var version = input.SplitRuleVersionId is { } versionId
                 ? versions.FirstOrDefault(v => v.Id == versionId)
                     ?? throw new ValidationException(ErrorCodes.ReceiptInvalid, "The item's split rule version was not found.")
@@ -93,13 +102,24 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                 Name = input.Name?.Trim() ?? "",
                 NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
                     ?? input.Name?.Trim().ToLowerInvariant() ?? "",
-                Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
+                Description = input.Description is null
+                    ? savedDescription
+                    : string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
                 UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
                 TaxAmount = input.TaxAmount, SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
         }
         ReceiptSplitCalculator.RefuseIfFiguresDisagree(draft);
         if (draft.Total != expense.Amount)
-            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp, "The bill total must equal the expense amount.");
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The bill total must equal the expense amount.")
+                .WithExtension("total", draft.Total)
+                .WithExtension("amount", expense.Amount)
+                .WithExtension("difference", expense.Amount - draft.Total);
+
+        // Keep an incomplete receipt editable without making the receipt endpoint refuse it
+        // merely because the expense was already divided. The existing ledger remains the
+        // last valid answer until every line has a rule and the next edit can recalculate it.
+        var canRedivide = redivide && CanDivide(draft, expense, members);
 
         if (existing is null)
         {
@@ -139,6 +159,12 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             attachment.ReceiptId = receiptId;
         }
 
+        if (canRedivide)
+        {
+            expense.Receipt = existing ?? draft;
+            await splitter.WriteSplitsAsync(expense, ct);
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return await ForExpense(expenseId, ct);
     }
@@ -147,6 +173,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     {
         var expense = await MineToChange(expenseId, ct);
         var receipt = await ForExpense(expenseId, ct);
+        var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
         var item = receipt.Items.FirstOrDefault(i => i.Id == itemId)
             ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
         SplitRuleVersion? version = null;
@@ -158,8 +185,89 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         }
         item.SplitRuleVersionId = version?.Id;
         item.SplitRuleVersion = version;
+
+        if (redivide && CanDivide(receipt, expense, await Members(expense, ct)))
+        {
+            expense.Receipt = receipt;
+            await splitter.WriteSplitsAsync(expense, ct);
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return receipt;
+    }
+
+    /// <summary>
+    /// Applies a correction to one saved line, then validates the complete bill before it is
+    /// written. The line id is the address, so the caller does not have to round-trip every
+    /// other line -- including the original receipt wording -- just to fix one name.
+    /// </summary>
+    public async Task<Receipt> PatchItem(Guid expenseId, Guid itemId,
+        JsonPatchDocument<ReceiptItemPatch> patch, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(patch);
+        await MineToChange(expenseId, ct);
+        var receipt = await ForExpense(expenseId, ct);
+        var stored = receipt.Items.FirstOrDefault(item => item.Id == itemId)
+            ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
+
+        var model = new ReceiptItemPatch
+        {
+            Name = stored.Name,
+            Description = stored.Description,
+            UnitPrice = stored.UnitPrice,
+            Quantity = stored.Quantity,
+            TotalPrice = stored.TotalPrice,
+            TaxAmount = stored.TaxAmount,
+            SplitRuleVersionId = stored.SplitRuleVersionId
+        };
+        patch.ApplyTo(model);
+
+        var validation = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+                model, new System.ComponentModel.DataAnnotations.ValidationContext(model), validation,
+                validateAllProperties: true))
+        {
+            throw new ValidationException(ErrorCodes.ReceiptInvalid,
+                string.Join(" ", validation.Select(result => result.ErrorMessage ?? "The item is invalid.")));
+        }
+
+        var request = new SaveReceiptRequest
+        {
+            Subtotal = receipt.Subtotal,
+            Tax = receipt.Tax,
+            Tip = receipt.Tip,
+            Total = receipt.Total,
+            Items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id)
+                .Select(item => item.Id == itemId
+                    ? new ReceiptItemInput
+                    {
+                        Id = item.Id,
+                        Name = model.Name,
+                        // Null here means the JSON Patch explicitly cleared the field. The
+                        // whole-save convention uses null for "preserve", so translate it
+                        // to an empty string before handing it to that merge.
+                        Description = model.Description ?? string.Empty,
+                        UnitPrice = model.UnitPrice,
+                        Quantity = model.Quantity,
+                        TotalPrice = model.TotalPrice,
+                        TaxAmount = model.TaxAmount,
+                        SplitRuleVersionId = model.SplitRuleVersionId
+                    }
+                    : new ReceiptItemInput
+                    {
+                        Id = item.Id,
+                        Name = item.Name,
+                        NormalizedName = item.NormalizedName,
+                        Description = item.Description,
+                        UnitPrice = item.UnitPrice,
+                        Quantity = item.Quantity,
+                        TotalPrice = item.TotalPrice,
+                        TaxAmount = item.TaxAmount,
+                        SplitRuleVersionId = item.SplitRuleVersionId
+                    }).ToList()
+        };
+
+        return await SaveForExpense(expenseId, request, ct);
     }
 
     public async Task<ReceiptDivisionResponse> Preview(Guid expenseId, CancellationToken ct = default)
@@ -171,7 +279,11 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     private async Task<ReceiptDivisionResponse> Calculate(Expense expense, Receipt receipt, CancellationToken ct)
     {
         if (expense.Amount != receipt.Total)
-            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp, "The bill total must equal the expense amount.");
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The bill total must equal the expense amount.")
+                .WithExtension("total", receipt.Total)
+                .WithExtension("amount", expense.Amount)
+                .WithExtension("difference", expense.Amount - receipt.Total);
         var members = await Members(expense, ct);
         var shares = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
         var subtotals = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers, true)
@@ -215,6 +327,42 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
 
     private async Task<IReadOnlyCollection<Guid>> Members(Expense expense, CancellationToken ct) =>
         expense.GroupId is { } groupId ? await participants.IdsOf(groupId, ct) : [expense.Payer];
+
+    /// <summary>
+    /// Whether the current receipt is the rule-produced source of the expense's stored
+    /// shares. A receipt on an expense with hand-stated shares is intentionally not allowed
+    /// to take over the ledger just because somebody corrected its wording.
+    /// </summary>
+    private async Task<bool> ReceiptCurrentlyDrivesLedger(Expense expense, CancellationToken ct)
+    {
+        return await splitter.DividesByItsBill(expense, ct)
+            && await splitter.DivisionCameFromItsRule(expense, ct);
+    }
+
+    /// <summary>
+    /// Checks a draft without changing the tracked expense. An incomplete bill stays a
+    /// useful draft; a complete bill is safe to use for the atomic split rewrite below.
+    /// </summary>
+    private bool CanDivide(Receipt receipt, Expense expense, IReadOnlyCollection<Guid> members)
+    {
+        try
+        {
+            ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
+            return true;
+        }
+        catch (ValidationException)
+        {
+            return false;
+        }
+        catch (UnprocessableException)
+        {
+            return false;
+        }
+        catch (ConflictException)
+        {
+            return false;
+        }
+    }
 
     private IQueryable<SplitRuleVersion> Versions() => dbContext.Set<SplitRuleVersion>()
         .Include(v => (v as WeightedSplitRuleVersion)!.Participants).Include(v => v.SplitRule).ThenInclude(r => r.Group);

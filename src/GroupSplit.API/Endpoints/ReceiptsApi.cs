@@ -3,6 +3,7 @@ using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -18,7 +19,9 @@ namespace GroupSplit.API.Endpoints;
 /// Storing a bill and dividing by it are separate calls on purpose. A receipt is transcribed
 /// in one go and then claimed line by line by however many people are at dinner; dividing as
 /// a side effect of saving would mean refusing every bill that is not fully claimed the
-/// moment it is typed.
+/// moment it is typed. Once a complete receipt has already been used to produce an
+/// itemized ledger, a valid correction updates those dependent shares in the same save so
+/// the paper and the ledger cannot drift apart.
 /// </para>
 /// </remarks>
 public static class ReceiptsApi
@@ -61,6 +64,7 @@ public static class ReceiptsApi
 
             group.MapGetReceipt();
             group.MapSaveReceipt();
+            group.MapPatchReceiptItem();
             group.MapDeleteReceipt();
             group.MapSetRule();
             group.MapPreviewDivision();
@@ -129,6 +133,30 @@ public static class ReceiptsApi
                 .WithName("DeleteReceipt")
                 .Produces(StatusCodes.Status204NoContent)
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Corrects one saved line without requiring the caller to send the whole bill back.
+        /// </summary>
+        private RouteHandlerBuilder MapPatchReceiptItem()
+        {
+            return group.MapPatch("/items/{itemId:guid}", async (
+                    Guid id,
+                    Guid itemId,
+                    JsonPatchDocument<ReceiptItemPatch> patch,
+                    IReceiptService receipts,
+                    CancellationToken ct) =>
+                {
+                    var receipt = await receipts.PatchItem(id, itemId, patch, ct);
+
+                    return Results.Ok(await receipts.ResponseFor(receipt, id, ct));
+                })
+                .WithName("PatchReceiptItem")
+                .Accepts<JsonPatchDocument<ReceiptItemPatch>>("application/json-patch+json")
+                .Produces<ReceiptResponse>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
         /// <summary>
