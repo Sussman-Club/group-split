@@ -158,9 +158,13 @@ divides by. There is no separate notion of claiming a line: "Ana had the steak" 
 naming Ana, and the line points at it. `split-rules list --group <id>` prints the rules with
 their current version ids.
 
-Transcribing a bill and dividing by it are separate commands. **Nothing touches the ledger
-until `receipts divide`** -- `set`, `rule` and `preview` all leave the expense's shares
-exactly as they are.
+Transcribing a bill and dividing by it are separate commands. For a new bill, or one on an
+expense whose stored shares were not produced by the bill, `set` and `rule` save the bill
+without changing the shares; `preview` always stores nothing, and `divide` is the explicit
+operation that stores the bill's division. If the bill already drives the expense's stored
+ledger, a valid `set` or `rule` correction automatically recalculates those shares. If a
+correction makes the bill incomplete, the bill remains editable and the last valid shares
+remain in place until the bill is valid again.
 
 | Command | |
 | --- | --- |
@@ -177,8 +181,8 @@ exactly as they are.
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
 | `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. |
 
-A line is `[<id>#]<name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>]`, and after the `@`
-comes exactly one split rule version id:
+A line is `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`, and after
+the `@` comes exactly one split rule version id:
 
 ```bash
 groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
@@ -186,6 +190,9 @@ groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
   --item "Wine=18.00@<ana-and-omar-version>" \
   --item "Beers=9.00x3@<omar-twice-as-much-version>"
 ```
+
+The number before `x` is the total printed for the whole line, not a unit price. For
+example, `Beers=27.00x3` means three beers with a line total of 27.00, or 9.00 each.
 
 A plate the table shared is a line naming a rule that divides between them, and a bottle Omar
 had twice as much of is a shares rule weighted that way -- the weighting lives in the rule,

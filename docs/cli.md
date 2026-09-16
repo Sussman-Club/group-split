@@ -792,8 +792,11 @@ ones you are deliberately marking. The amounts have to come to `--tax`, which th
 checks. Either side of the `@` reads the same: `Bread=4.00/tax0.92@<version>` and
 `Bread=4.00@<version>/tax0.92` are one line.
 
-Nothing has touched the ledger yet -- `preview` says what the division would be, and `divide`
-is what stores it:
+For a new bill, or one on an expense whose stored shares were not produced by the bill,
+`preview` says what the division would be and `divide` is what stores it. If the bill already
+drives the expense's stored ledger, a valid `set` or `rule` correction automatically
+recalculates those shares. If a correction makes the bill incomplete, the bill remains
+editable and the last valid shares remain in place until the bill is valid again:
 
 ```bash
 groupsplit receipts preview 7c1e...
@@ -826,8 +829,10 @@ groupsplit receipts attachments delete <transaction-id> <attachment-id>
 
 `attachments delete` is confirmation-gated. The supported file types are JPG, PNG, WebP
 and PDF, up to 10 MB. The transcription result is still a draft: it does not save the
-itemised receipt or change the expense's shares. `receipts divide` remains the explicit
-step that changes the ledger.
+itemised receipt or change the expense's shares. For a bill that is already the source of
+the stored ledger, a subsequent valid `receipts set` or `receipts rule` correction keeps
+the shares synchronized; otherwise `receipts divide` remains the explicit step that changes
+the ledger.
 
 An imported bank row can hold the source file before it becomes an expense. Use the same
 two-step upload/transcribe flow under `inbox attachments`:
