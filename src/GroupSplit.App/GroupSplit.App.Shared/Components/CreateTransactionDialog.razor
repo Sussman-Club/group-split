@@ -401,10 +401,14 @@
     /// The rules a group holds one of per member, out of everything it has: the ones it was
     /// given, each putting the whole amount on somebody. The others are divisions the group
     /// wrote, reached through a category rather than picked per expense -- including one it
-    /// wrote in this same shape, which it may restate or delete tomorrow.
+    /// wrote in this same shape, which it may restate or delete tomorrow. A provisioned rule
+    /// is offered only while its member is still in the group; old rules remain useful for
+    /// historical expenses but are not valid choices for new ones.
     /// </summary>
-    internal static IReadOnlyList<SplitRuleResponse> MemberRulesOf(IReadOnlyList<SplitRuleResponse>? rules) =>
-        [.. (rules ?? []).Where(rule => rule.BuiltIn && rule.AllForUserId is not null)];
+    internal static IReadOnlyList<SplitRuleResponse> MemberRulesOf(
+        IReadOnlyList<SplitRuleResponse>? rules, IReadOnlyCollection<UserInfo> members) =>
+        [.. (rules ?? []).VisibleToMembers(members.Select(member => member.Id)).Where(rule => rule.BuiltIn &&
+            rule.AllForUserId is { } userId && members.Any(member => member.Id == userId))];
 
     /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
     private static string Divides(CategoryResponse category) =>
@@ -557,7 +561,7 @@
 
         await Task.WhenAll(categories, members, rules);
 
-        _memberRules = MemberRulesOf(await rules);
+        _memberRules = MemberRulesOf(await rules, _members);
 
         // Whoever is recording it paid for it, until they say otherwise. The API already
         // assumed as much for an absent payer, so this was only ever missing from the

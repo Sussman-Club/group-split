@@ -182,4 +182,44 @@ public class BillDivisionTest : ComponentTest
         Assert.Contains(_versionId, offered);
         Assert.DoesNotContain(billVersion, offered);
     }
+
+    /// <summary>
+    /// A receipt line is another expense split picker. It must not resurrect the built-in
+    /// rule belonging to somebody who has left merely because the rule is still historical.
+    /// </summary>
+    [Fact]
+    public void A_departed_members_built_in_rule_is_not_offered_for_a_line()
+    {
+        var departed = Guid.NewGuid();
+        var departedRule = Guid.NewGuid();
+        var departedVersion = Guid.NewGuid();
+
+        _rules
+            .Setup(r => r.ForGroupAsync(_group, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new SplitRuleResponse(_ruleId, _group, "Everyone evenly"),
+                new SplitRuleResponse(departedRule, _group, "All for departed", BuiltIn: true,
+                    AllForUserId: departed)
+            ]);
+
+        _rules
+            .Setup(r => r.GetAsync(departedRule, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleDetailsResponse
+            {
+                Id = departedRule, GroupId = _group, Name = "All for departed",
+                VersionId = departedVersion, Definition = new SoleSplitRuleDto(departed)
+            });
+
+        var page = Open(Bill(Line("Bacalhau", 22, null, null)));
+
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindComponents<MudSelectItem<Guid?>>()));
+
+        var offered = page.FindComponents<MudSelectItem<Guid?>>()
+            .Select(item => item.Instance.Value)
+            .ToList();
+
+        Assert.Contains(_versionId, offered);
+        Assert.DoesNotContain(departedVersion, offered);
+    }
 }

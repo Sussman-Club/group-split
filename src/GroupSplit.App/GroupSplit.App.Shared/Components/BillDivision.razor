@@ -194,6 +194,12 @@
     [Parameter] public Guid? GroupId { get; set; }
 
     /// <summary>
+    /// The group's current members, so built-in rules for departed members are not offered
+    /// as choices for a line in a new or edited expense.
+    /// </summary>
+    [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
+
+    /// <summary>
     /// What the expense says was spent, which the bill has to agree with.
     /// </summary>
     /// <remarks>
@@ -276,7 +282,9 @@
             var listed = await Rules.ForGroupAsync(groupId);
             if (listed is null) return;
 
-            var details = await Task.WhenAll(listed.Select(rule => Rules.GetAsync(rule.Id)));
+            var details = await Task.WhenAll(
+                listed.VisibleToMembers(Members.Select(member => member.Id))
+                    .Select(rule => Rules.GetAsync(rule.Id)));
             if (details.Any(detail => detail is null)) return;
 
             _rules.Clear();

@@ -273,6 +273,33 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// A provisioned rule for somebody who has left is historical data, not a choice for a
+    /// new expense.
+    /// </summary>
+    [Fact]
+    public async Task It_does_not_offer_all_for_a_member_who_left()
+    {
+        var departed = Guid.NewGuid();
+
+        _splitRules
+            .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new SplitRuleResponse(
+                Guid.NewGuid(), GroupId, "All for departed", BuiltIn: true, AllForUserId: departed)]);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = await OpenAsync(GroupId);
+        var editor = provider.FindComponent<SplitEditor>();
+
+        Assert.Empty(editor.Instance.MemberRules);
+        Assert.True(provider.FindAll(".gs-seg-btn")
+            .Single(button => button.TextContent.Trim() == "All for one")
+            .HasAttribute("disabled"));
+    }
+
+    /// <summary>
     /// The dialog opens with the same three answers it will still have once everything it
     /// asked for has arrived.
     /// </summary>

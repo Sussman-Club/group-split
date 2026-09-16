@@ -672,7 +672,7 @@
 
             var listed = await rules;
 
-            _memberRules = CreateTransactionDialog.MemberRulesOf(listed);
+            _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
             // Off the same listing as the member rules, and for the same reason: the split
             // control offers "By its bill" and has to name the rule that means, without
             // reading the definition of every rule the group holds.
