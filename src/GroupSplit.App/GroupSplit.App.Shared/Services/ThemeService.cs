@@ -5,7 +5,7 @@ namespace GroupSplit.App.Shared.Services;
 
 /// <summary>
 /// The MudBlazor side of the Group Split design system. The CSS tokens in
-/// wwwroot/app.css restate the same palette for the custom chrome; keep the
+/// wwwroot/css/tokens.css restate the same palette for the custom chrome; keep the
 /// two in step when changing a colour here.
 /// </summary>
 public static class ThemeService

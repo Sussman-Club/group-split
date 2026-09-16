@@ -1,0 +1,28 @@
+/* ---- a bill inside a dialog ---- */
+
+/* The paper takes the width it is given rather than the dialog's own, which on a phone is
+   the difference between a slip and a slip with a horizontal scrollbar under it. */
+.gs-itemized-slip {
+    width: 100%;
+    min-width: 0;
+}
+
+.gs-itemized-dialog .mud-dialog-content {
+    min-width: 0;
+}
+
+@media (max-width: 480px) {
+    .gs-itemized-slip .gs-slip-body {
+        padding-inline: 14px;
+    }
+}
+
+/* Off the paper, on the app's surface: it is a note about the document, not part of it. */
+.gs-slip-aside {
+    max-width: 32rem;
+    margin: 14px auto 0;
+    color: var(--gs-muted);
+    font-size: .8125rem;
+    line-height: 1.5;
+    text-align: center;
+}

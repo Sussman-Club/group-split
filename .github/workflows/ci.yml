@@ -90,6 +90,9 @@ jobs:
           dotnet build tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
+      - name: Check CSS bundle
+        run: python3 tests/check-css.py src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/app.css
+
       # The CLI ships as a .NET tool, and packaging breaks in ways a plain build does
       # not catch -- a missing ToolCommandName, a dependency that will not travel in the
       # package. Nothing is published; this only has to prove `dotnet pack` still works.

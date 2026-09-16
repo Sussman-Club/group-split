@@ -1,0 +1,339 @@
+/* --------------------------------------------------------------- on a phone -- */
+
+/*
+    A list row is a three-column grid: icon, text, figure. On a phone the third column
+    holds an amount *and* up to two buttons, and a nowrap cluster of those against a
+    280px viewport leaves the title two characters wide -- which is what the inbox
+    looked like: every row shrunk to nothing but its avatar and its buttons.
+
+    Below 640px the figure and the actions move to a line of their own, right-aligned
+    under the text they belong to. The text then gets the full width, which is the part
+    somebody is reading.
+*/
+@media (max-width: 640px) {
+    .gs-row,
+    .gs-row.gs-row-has-actions {
+        grid-template-columns: auto minmax(0, 1fr);
+        row-gap: 10px;
+        padding: 12px 10px;
+        margin: 0 -10px;
+    }
+
+    .gs-row.is-selectable {
+        grid-template-columns: auto auto minmax(0, 1fr);
+    }
+
+    .gs-row:not(.is-selectable) > :nth-child(n + 3),
+    .gs-row.is-selectable > :nth-child(n + 4) {
+        grid-column: 2 / -1;
+        justify-self: stretch;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /*
+        Unless that third child *is* the action.
+
+        The rule above assumes the action line is a wrapper holding a figure and some
+        buttons, which it is in the inbox and the grids. Where a row carries one bare
+        button instead -- "Settle up", "Review", "Accept" -- the rule made the button
+        itself the stretched flex container, so it spanned the full width and then pushed
+        its own label to the far right edge. A filled one read as a full-width primary
+        action shouting louder than the figure above it; a text one just had its label
+        floating out at the margin.
+
+        The button keeps its own width and sits at the end of the line, which is where the
+        wrapper would have put it.
+    */
+    .gs-row:not(.is-selectable) > .mud-button-root:nth-child(n + 3),
+    .gs-row.is-selectable > .mud-button-root:nth-child(n + 4) {
+        justify-self: end;
+        display: inline-flex;
+        justify-content: center;
+        flex-wrap: nowrap;
+    }
+
+    /*
+        And a row whose action is one icon keeps it on the line.
+
+        44px fits beside the text at 375px, and giving it a line of its own costs a whole
+        row per entry -- four members came out as eight rows, each with an orphaned red
+        icon floating under an email address. A class rather than a selector inferring it
+        from the markup, because "is this action icon-sized" is a fact about the row that
+        only the row knows: here the third child is a tooltip wrapper, not the button.
+    */
+    .gs-row.gs-row-tight-action,
+    .gs-row.gs-row-tight-action.gs-row-has-actions {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .gs-row.gs-row-tight-action > :nth-child(3) {
+        grid-column: 3;
+        justify-self: end;
+        align-self: center;
+        display: inline-flex;
+        justify-content: flex-end;
+    }
+
+    /* The amount and the relative date sit one above the other in the wide layout;
+       side by side is the right shape once they share a line with the buttons. */
+    .gs-row .when {
+        display: inline;
+        margin-left: 8px;
+    }
+
+    /* Two lines rather than an ellipsis two words in: on a phone the bank's own
+       description is most of what identifies a row. */
+    .gs-row .title {
+        flex-wrap: wrap;
+    }
+
+    .gs-row .title span:not(.gs-tag) {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* A tag is two words at most and it is the row's status. Letting it shrink beside a
+       long merchant name is how "Pending" became "PEN…". */
+    .gs-row .title .gs-tag {
+        flex: 0 0 auto;
+    }
+
+    /*
+        Tighter. The desktop rhythm -- a 24px page head over an 18px stack, each control
+        with its own margin -- puts three bands of empty cream between the tab chips and
+        the first row on a phone, where the whole screen is nine rows tall. The spacing
+        that reads as calm on a wide screen reads as a loading state on a narrow one.
+    */
+    .gs-page-head {
+        margin-bottom: 14px;
+        gap: 10px;
+    }
+
+    /* 56px is a desktop mark. Beside a heading that has clamped down to 1.75rem it is
+       larger than the name it belongs to, and it is the reason the line did not fit. */
+    .gs-identity {
+        gap: 12px;
+    }
+
+    .gs-identity .gs-avatar.lg {
+        width: 40px;
+        height: 40px;
+        font-size: 0.9375rem;
+    }
+
+    /* Edge to edge, so the actions read as this page's toolbar rather than a pill floating
+       under the title. Five controls spread across the width are also five bigger touch
+       targets. */
+    .gs-toolbar {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .gs-stack {
+        gap: 12px;
+    }
+
+    .gs-range {
+        margin-bottom: 0;
+    }
+
+    .gs-card-pad {
+        padding: 14px;
+    }
+
+    /*
+        The expense dialogs, as a sheet.
+
+        On a phone they were a card floating in the middle of the screen with the save
+        button under four people's shares, so recording an expense ended in a scroll to
+        find the only thing you came to press. A sheet instead: the whole screen, the
+        fields scrolling, and the actions held at the bottom where a thumb already is.
+    */
+    /* Out-specifies MudBlazor's own `.mud-dialog-container > .mud-dialog`, which insets
+       a dialog by 32px a side whatever the screen -- on a phone that is a card with a
+       hairline of page showing around it rather than a sheet. */
+    .mud-dialog-container > .mud-dialog.gs-sheet {
+        max-width: 100%;
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        margin: 0;
+        /* !important to match the one on .mud-dialog above, which is how this file
+           already had to talk to MudBlazor's own radius. A sheet that covers the screen
+           and keeps 24px corners shows four little wedges of backdrop. */
+        border-radius: 0 !important;
+        border: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .gs-sheet .mud-dialog-content {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Held at the bottom, and the primary takes the width that is left: the thing
+       somebody means to press is the biggest thing on the row, and Cancel is a place a
+       thumb reaches by accident. */
+    .gs-sheet .mud-dialog-actions {
+        position: sticky;
+        bottom: 0;
+        gap: 10px;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        background: var(--gs-surface);
+        border-top: 1px solid var(--gs-line);
+    }
+
+    .gs-sheet .mud-dialog-actions .mud-button-root {
+        height: 48px;
+        flex: 0 0 auto;
+    }
+
+    .gs-sheet .mud-dialog-actions .mud-button-root:not(:only-child):last-child {
+        flex: 1 1 auto;
+    }
+
+    /* Forty is the touch floor, and a row of chips is the one control here that is all
+       target and no label. */
+    .gs-expense-chip {
+        height: 40px;
+        padding: 0 13px;
+    }
+
+    .gs-chip-row {
+        gap: 7px;
+    }
+
+    /* Hover-revealed actions never reveal on a touch screen, so they are always on --
+       the wide layout hides them until hover, which on a phone means never. */
+    .gs-row .gs-row-actions {
+        opacity: 1;
+    }
+
+    /*
+        Thumbs, not cursors. A 32px pill is comfortable under a mouse and is under the
+        44px a finger needs, and an inbox is the one screen in the app that is nothing but
+        a queue of taps -- twenty-three rows, one decision each.
+
+        The primary action takes the width left over on its line, so the thing somebody
+        means to press is the biggest thing there and the two-character menu beside it is
+        a square they have to aim at on purpose.
+    */
+    .gs-row .mud-button-root,
+    .gs-row .mud-button,
+    .gs-row .gs-row-actions button {
+        min-height: 44px;
+    }
+
+    /* The menu and the icon actions are squares, and a 30px square at the edge of the
+       screen is the hardest thing on the page to hit with a thumb. */
+    .gs-row .mud-icon-button,
+    .gs-row .mud-menu .mud-button-root,
+    .gs-grid .mud-icon-button {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* A grid falls back to a card per row, one line per cell, each line labelled. The
+       actions line is the only one whose content is not text, so it gets the label's
+       baseline rather than floating free of it. */
+    .gs-grid .mud-table-cell {
+        align-items: center;
+    }
+
+    .gs-row > :nth-child(n + 3) > .gs-inline,
+    .gs-row.is-selectable > :nth-child(n + 4) > .gs-inline {
+        flex: 1 1 auto;
+    }
+
+    /*
+        The primary action takes whatever the amount and the menu leave, so the thing
+        somebody means to press is the widest thing on its line.
+
+        Only in the queue. Everywhere else a row is a record with a way in -- "Open",
+        "Review", "Settle up" -- and stretching those turned a summary strip into a stack
+        of full-width buttons, each shouting as loudly as the figure above it.
+    */
+    .gs-queue .gs-row > :nth-child(n + 3) .mud-button-root:not(.mud-icon-button),
+    .gs-queue .gs-row.is-selectable > :nth-child(n + 4) .mud-button-root:not(.mud-icon-button) {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    /* The duplicate warning is the highest-value thing the inbox says and the easiest to
+       lose. Its sentence takes the full width and its two answers keep their own size
+       underneath -- both fit on one line at 375px, and two full-width buttons would read
+       as heavier than the decision is. */
+    .mud-alert .gs-inline > span {
+        flex: 1 1 100%;
+    }
+
+    /*
+        The two filter pills share a line and the search takes its own.
+    */
+    .gs-range,
+    .gs-chip-menu {
+        flex: 1 1 140px;
+        min-width: 0;
+    }
+
+    .gs-chip-menu {
+        justify-content: space-between;
+    }
+
+    .gs-chip-menu .label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .gs-search,
+    .gs-range-picker {
+        max-width: none;
+        width: 100%;
+        flex: 1 1 100%;
+    }
+
+    /*
+        The chips that act as tabs scroll sideways instead of wrapping. "Paid by you /
+        Your share / Everything you are in" does not fit across 375px, and wrapped it put
+        one chip alone on a second line under a gap -- which reads as two groups of
+        controls rather than one choice of three.
+    */
+    .gs-chipbar {
+        /* A whole line of its own. It shares .gs-range with the span filter, which is
+           told to share a line above -- and a scroller squeezed to a 140px basis clips
+           its own chips mid-word, which is what "Expen" was. */
+        flex: 1 1 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .gs-chipbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /*
+        A card's title and whatever sits beside it wrap rather than stack. Stacking put a
+        two-character count on a line of its own under the heading; wrapping keeps a short
+        tag beside the title and moves a long caption down, which is the difference that
+        actually matters.
+    */
+    .gs-card-title {
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
+
+    .gs-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
