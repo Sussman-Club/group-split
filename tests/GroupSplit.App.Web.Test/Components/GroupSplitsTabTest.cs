@@ -139,6 +139,147 @@ public class GroupSplitsTabTest : ComponentTest
     }
 
     /// <summary>
+    /// Built-in rules are provisioned for a person, so the rule belonging to somebody who
+    /// left is historical data and must not remain a selectable division on this tab.
+    /// </summary>
+    [Fact]
+    public async Task An_all_for_rule_for_a_departed_member_is_not_shown()
+    {
+        var current = Guid.NewGuid();
+        var departed = Guid.NewGuid();
+        var currentRule = Guid.NewGuid();
+        var departedRule = Guid.NewGuid();
+
+        SplitRules
+            .Setup(client => client.GetSplitRulesAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new SplitRuleResponse(currentRule, Flat, "All for current", BuiltIn: true,
+                    AllForUserId: current),
+                new SplitRuleResponse(departedRule, Flat, "All for departed", BuiltIn: true,
+                    AllForUserId: departed)
+            ]);
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleAsync(currentRule, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ARule(currentRule, "All for current", new SoleSplitRuleDto(current)));
+
+        Categories
+            .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(Groceries, Flat, "Groceries", departedRule,
+                "All for departed")]);
+
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new UserInfo(current, "Current", "Member", null)]);
+
+        var tab = await RenderTabAsync();
+
+        Assert.Contains("All for Current Member", tab.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("All for departed", tab.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("divides by a split rule that is no longer available", tab.Markup,
+            StringComparison.Ordinal);
+        SplitRules.Verify(client => client.GetSplitRuleAsync(departedRule, It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A roster failure must not turn historical all-for rules back into choices. The tab can
+    /// still safely show group-authored divisions, whose availability does not depend on
+    /// identifying one current member.
+    /// </summary>
+    [Fact]
+    public async Task A_membership_failure_keeps_historical_all_for_rules_hidden()
+    {
+        var departed = Guid.NewGuid();
+        var authored = Guid.NewGuid();
+        var departedRule = Guid.NewGuid();
+
+        SplitRules
+            .Setup(client => client.GetSplitRulesAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new SplitRuleResponse(authored, Flat, "Household shares"),
+                new SplitRuleResponse(departedRule, Flat, "All for departed", BuiltIn: true,
+                    AllForUserId: departed)
+            ]);
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleAsync(authored, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ARule(authored, "Household shares", new EvenSplitRuleDto()));
+
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the network went away"));
+
+        var tab = await RenderTabAsync();
+
+        Assert.Contains("Household shares", tab.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("All for departed", tab.Markup, StringComparison.OrdinalIgnoreCase);
+        SplitRules.Verify(client => client.GetSplitRuleAsync(departedRule, It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A refresh raised while an earlier roster read is in flight must win, even if the
+    /// earlier request finishes last. Otherwise an old member list can bring a departed
+    /// person's built-in rule back into view after the current one filtered it out.
+    /// </summary>
+    [Fact]
+    public async Task A_late_roster_response_cannot_overwrite_a_newer_filtered_rule_list()
+    {
+        var formerMember = Guid.NewGuid();
+        var currentMember = Guid.NewGuid();
+        var formerRule = Guid.NewGuid();
+        var currentRule = Guid.NewGuid();
+        var firstRoster = new TaskCompletionSource<ICollection<UserInfo>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondRoster = new TaskCompletionSource<ICollection<UserInfo>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var membershipReads = 0;
+        var ruleReads = 0;
+
+        _groups
+            .Setup(client => client.GetGroupMembersAsync(Flat, It.IsAny<CancellationToken>()))
+            .Returns(() => Interlocked.Increment(ref membershipReads) == 1
+                ? firstRoster.Task
+                : secondRoster.Task);
+
+        SplitRules
+            .Setup(client => client.GetSplitRulesAsync(Flat, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Interlocked.Increment(ref ruleReads) == 1
+                ? [new SplitRuleResponse(formerRule, Flat, "All for former", BuiltIn: true,
+                    AllForUserId: formerMember)]
+                : [new SplitRuleResponse(currentRule, Flat, "All for current", BuiltIn: true,
+                    AllForUserId: currentMember)]);
+
+        SplitRules
+            .Setup(client => client.GetSplitRuleAsync(currentRule, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ARule(currentRule, "All for current", new SoleSplitRuleDto(currentMember)));
+
+        var tab = Render<GroupSplitsTab>(parameters => parameters
+            .Add(component => component.GroupId, Flat)
+            .Add(component => component.GroupName, "The flat"));
+
+        tab.WaitForAssertion(() => Assert.Equal(1, Volatile.Read(ref membershipReads)));
+
+        var refresh = Changes.NotifyTransactionsChangedAsync();
+        tab.WaitForAssertion(() => Assert.Equal(2, Volatile.Read(ref membershipReads)));
+
+        secondRoster.SetResult([new UserInfo(currentMember, "Current", "Member", null)]);
+        await refresh;
+
+        tab.WaitForAssertion(() => Assert.Contains("All for Current Member", tab.Markup,
+            StringComparison.Ordinal));
+
+        firstRoster.SetResult([new UserInfo(formerMember, "Former", "Member", null)]);
+        await tab.InvokeAsync(() => Task.CompletedTask);
+
+        Assert.Contains("All for Current Member", tab.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("All for former", tab.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// The write the old dialog could not make: pointing a category at a rule that already
     /// exists, rather than minting a twin of it under the category's own name.
     /// </summary>
