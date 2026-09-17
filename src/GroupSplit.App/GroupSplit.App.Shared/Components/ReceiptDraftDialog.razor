@@ -1,6 +1,7 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Commands
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @using System.ComponentModel.DataAnnotations
 @namespace GroupSplit.App.Shared.Components
 @inject IReceiptCommands Receipts
@@ -209,7 +210,9 @@
 
             if (TransactionId is { } transactionId)
             {
-                var saved = await Receipts.SaveAsync(transactionId, request);
+                var saved = IsTextOnlyEdit()
+                    ? await SaveTextOnlyEditAsync(transactionId, request)
+                    : await Receipts.SaveAsync(transactionId, request);
                 if (saved is not null)
                     MudDialog.Close(DialogResult.Ok(saved));
             }
@@ -222,6 +225,70 @@
         {
             _saving = false;
         }
+    }
+
+    private bool IsTextOnlyEdit()
+    {
+        if (Receipt is not { } original || TransactionId is null
+            || _subtotal != original.Subtotal || _tax != original.Tax
+            || _tip != original.Tip || _total != original.Total
+            || _items.Count != original.Items.Count)
+            return false;
+
+        return _items.All(item => item.Id is { } id
+            && original.Items.FirstOrDefault(candidate => candidate.Id == id) is { } source
+            && item.UnitPrice == source.UnitPrice
+            && item.Quantity == source.Quantity
+            && item.TotalPrice == source.TotalPrice
+            && item.TaxAmount == source.TaxAmount
+            && item.SplitRuleVersionId == source.SplitRuleVersionId);
+    }
+
+    /// <summary>
+    /// Patches the changed text on one existing line. When more than one line changed, the
+    /// whole-receipt save keeps that multi-line edit atomic.
+    /// </summary>
+    private async Task<ReceiptResponse?> SaveTextOnlyEditAsync(
+        Guid transactionId,
+        SaveReceiptRequest request)
+    {
+        var changed = ChangedTextItems();
+        if (changed.Count == 0)
+            return Receipt;
+
+        if (changed.Count > 1)
+            return await Receipts.SaveAsync(transactionId, request);
+
+        return await PatchLineTextAsync(transactionId, changed[0]);
+    }
+
+    private IReadOnlyList<EditableLine> ChangedTextItems()
+    {
+        var original = Receipt!;
+
+        return _items.Where(item =>
+        {
+            var source = original.Items.Single(candidate => candidate.Id == item.Id);
+            var name = item.Name.Trim();
+            var description = string.IsNullOrWhiteSpace(item.Description) ? null : item.Description.Trim();
+            return !string.Equals(name, source.Name, StringComparison.Ordinal)
+                || !string.Equals(description, source.Description, StringComparison.Ordinal);
+        }).ToList();
+    }
+
+    private async Task<ReceiptResponse?> PatchLineTextAsync(Guid transactionId, EditableLine item)
+    {
+        var source = Receipt!.Items.Single(candidate => candidate.Id == item.Id);
+        var patch = new JsonPatchDocument<ReceiptItemPatch>();
+        var name = item.Name.Trim();
+        if (!string.Equals(name, source.Name, StringComparison.Ordinal))
+            patch.Replace(line => line.Name, name);
+
+        var description = string.IsNullOrWhiteSpace(item.Description) ? null : item.Description.Trim();
+        if (!string.Equals(description, source.Description, StringComparison.Ordinal))
+            patch.Replace(line => line.Description, description);
+
+        return await Receipts.PatchItemAsync(transactionId, item.Id!.Value, patch);
     }
 
     private void Cancel() => MudDialog.Cancel();
