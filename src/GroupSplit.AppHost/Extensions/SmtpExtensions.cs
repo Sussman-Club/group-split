@@ -22,26 +22,15 @@ public static class SmtpExtensions
 
     private const string PasswordParameterName = "smtp-password";
 
-    // Submission with STARTTLS. Port 25 is blocked outbound by most hosts, and 465 wants
-    // implicit TLS, which is the realm's `ssl` flag rather than its `starttls` one.
-    private const string DefaultPort = "587";
-
-    // Keycloak validates the sender address while importing the realm and refuses to
-    // start on one it cannot parse -- an empty string included. So the unconfigured case
-    // still needs a syntactically valid address, and .invalid is reserved by RFC 2606
-    // precisely so that it can never resolve. With no host to connect to, nothing sends.
-    private const string UnroutableSender = "no-reply@group-split.invalid";
-
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
         /// Points the realm's SMTP server at a relay described by deployment parameters.
         /// <para>
         /// <c>smtp-enabled</c> is the switch; host, port, sender, user and password describe
-        /// the relay. All are optional, so a deployment that never mentions mail resolves to
-        /// a disabled relay rather than a prompt, and every placeholder in realms.json still
-        /// has a defined value. That last part is not cosmetic: Compose turns an undefined
-        /// name into a blank string, and Keycloak refuses to start on a blank sender.
+        /// the relay. All values must be supplied by AppHost configuration, user secrets, or
+        /// deployment environment variables. The validation step still checks that an enabled
+        /// relay has complete credentials before any image is built.
         /// </para>
         /// <para>
         /// Provider-agnostic on purpose, so changing relay is a variable change rather than
@@ -55,28 +44,28 @@ public static class SmtpExtensions
         {
             var builder = keycloak.ApplicationBuilder;
 
-            var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
+            var enabled = builder.AddParameter(EnabledParameterName)
                 .WithDescription(
                     "Whether Keycloak sends mail (true/false). "
                     + "Needs smtp-host, smtp-from, smtp-user and smtp-password when true.");
 
-            var host = builder.AddOptionalParameter(HostParameterName, string.Empty)
+            var host = builder.AddParameter(HostParameterName)
                 .WithDescription("Relay hostname, e.g. smtp.resend.com.");
 
-            var port = builder.AddOptionalParameter(PortParameterName, DefaultPort)
+            var port = builder.AddParameter(PortParameterName)
                 .WithDescription(
                     "Relay port. 587 is submission over STARTTLS; 465 wants implicit TLS, "
                     + "which is the realm's ssl flag rather than its starttls one.");
 
-            var from = builder.AddOptionalParameter(FromParameterName, UnroutableSender)
+            var from = builder.AddParameter(FromParameterName)
                 .WithDescription(
                     "Sender address, on a domain the relay has verified. "
                     + "Keycloak refuses to start on one it cannot parse.");
 
-            var user = builder.AddOptionalParameter(UserParameterName, string.Empty)
+            var user = builder.AddParameter(UserParameterName)
                 .WithDescription("Relay username.");
 
-            var password = builder.AddOptionalParameter(PasswordParameterName, string.Empty, secret: true)
+            var password = builder.AddParameter(PasswordParameterName, secret: true)
                 .WithDescription("Relay password or API key.");
 
             builder.Pipeline.AddStep(

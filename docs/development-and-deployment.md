@@ -33,7 +33,8 @@ each mode carries that shape as a pair of extension methods next to the code tha
 | Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithPrepareOnPush`, which makes `aspire do push` also write the Compose artifacts |
 
 Only run mode adds the MAUI head, the seeder and its dashboard command, Scalar, and Mailpit
-itself; only publish mode declares the deployment parameters below. `PublishAs*` calls,
+itself; publish mode adds the deployment-only parameters below, while the shared integration
+parameters are declared in both modes. `PublishAs*` calls,
 which Aspire ignores in run mode, stay on the shared chain where they read as part of the
 resource's definition.
 
@@ -63,14 +64,12 @@ The allowlist is deliberate: it is what stops a future, unrelated repository sec
 being forwarded into the AppHost and written into the generated deployment environment.
 
 The workflow reads each entry from exactly one place -- a variable or a secret, whichever
-the table below names -- so the column is load-bearing. An entry stored as the other kind
-is read as empty: required ones fail the pre-flight check, and optional ones quietly fall
-back to their default.
+the table below names -- so the column is load-bearing. Every entry is required now; an
+entry stored as the other kind, or left empty, fails the pre-flight check.
 
 The cost is that **adding a parameter takes two edits, not one** -- a GitHub entry of the
 matching name, and the same name added to the deploy workflow's allowlist. A GitHub entry
-the workflow does not name is simply never seen by the AppHost, and the parameter falls
-back to whatever default it declares.
+the workflow does not name is simply never seen by the AppHost and fails deployment.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
@@ -79,44 +78,36 @@ back to whatever default it declares.
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
 | `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. |
-| `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
-| `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
-| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
-| `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
-| `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
-| `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
-| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
-| `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
-| `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no, empty keeps the popup flow | Where an OAuth bank returns to. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
-| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
-| `receipt-transcription-provider` | variable `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. With an empty value, configured Veryfi remains preferred, then configured Azure OpenAI. |
-| `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
-| `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when receipt transcription is enabled | Veryfi API credentials. |
-| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response, which is how a provider misreading is told apart from a mapping mistake. Leave it off outside an investigation: a receipt body is somebody's shopping, and the log is a wider audience than the expense the file was attached to. |
-| `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
-| `azure-openai-endpoint`, `azure-openai-model` | variables `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL (`https://<resource>.openai.azure.com/openai/v1/`) and the deployment/model name. The AppHost puts them in the standard `ConnectionStrings__azure-openai-receipt-transcription` model reference as `Endpoint` and `ModelName`; the API does not read separate Azure OpenAI environment variables. |
-| `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. The AppHost passes it as the `Key` property of that same model-reference connection string. |
-| `azure-openai-timeout-seconds` | variable `AZURE_OPENAI_TIMEOUT_SECONDS` | no, defaults to `120` | HTTP timeout for one Azure OpenAI transcription request. |
-| `azure-openai-log-raw-responses` | variable `AZURE_OPENAI_LOG_RAW_RESPONSES` | no, defaults to `false` | Enables safe response diagnostics. The Azure provider never writes receipt response content or API keys to logs; it records only response size and a SHA-256 hash. |
+| `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | yes | Whether the login page offers Google. Set `true` or `false`. |
+| `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | The OAuth client. They must be valid when Google is enabled. |
+| `smtp-enabled` | variable `SMTP_ENABLED` | yes | Whether Keycloak sends mail. Set `true` or `false`. See [Email](../README.md#email). |
+| `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | yes | The relay. These values must be supplied even when mail is disabled, and must be valid when it is enabled. |
+| `smtp-port` | variable `SMTP_PORT` | yes | Relay port, normally `587` for submission over STARTTLS. |
+| `plaid-enabled` | variable `PLAID_ENABLED` | yes | Whether people can link a bank. Set `true` or `false`. |
+| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | yes | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. They must be valid when bank sync is enabled. |
+| `plaid-env` | variable `PLAID_ENV` | yes | Which Plaid environment to talk to: `Sandbox` or `Production`. |
+| `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no | Optional. Where an OAuth bank returns to; empty keeps Plaid's popup flow. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
+| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | no | Optional. PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Empty leaves the development ring unwrapped. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
+| `receipt-transcription-provider` | variable `RECEIPT_TRANSCRIPTION_PROVIDER` | yes | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
+| `veryfi-enabled` | variable `VERYFI_ENABLED` | yes | Whether receipt attachments can be transcribed through Veryfi. Set `true` or `false`. |
+| `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | yes | Veryfi API credentials. They must be valid when Veryfi is enabled. |
+| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | yes | Logs Veryfi's whole response, which is how a provider misreading a receipt is told apart from a mapping mistake. Set `true` only for an investigation. |
+| `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | yes | Whether Azure OpenAI receipt transcription is enabled. Set `true` or `false`. |
+| `azure-openai-endpoint`, `azure-openai-model` | variables `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | yes | The v1 base URL (`https://<resource>.openai.azure.com/openai/v1/`) and the deployment/model name. They must be valid when Azure OpenAI is enabled. The AppHost puts them in the `receipt-transcription` model reference as `Endpoint` and `Model`; the API does not read separate Azure OpenAI environment variables. |
+| `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | yes | Azure OpenAI API key. The AppHost passes it as the `Key` property of the `receipt-transcription` model reference. |
 
-The optional ones are declared with
-[`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
-which supplies the default when configuration has no value: an environment variable from
-the workflow wins over it, and a deployment that never mentions mail or Google gets both
-switched off rather than a prompt. (Aspire reads an empty value in `appsettings.json` as a
-missing parameter, which is why the defaults are in code rather than there.) The two
-switches exist so that the AppHost never has to read a parameter's value while it builds
-the model; the rules that span several values run as the `validate-smtp` and
-`validate-google-sign-in` and `validate-plaid` pipeline steps, after Aspire's `process-parameters` step has
-resolved the values and before `build-prereq`, which every image build waits on, so a bad
-deployment fails before an image is built.
+Every required value above is declared with Aspire's regular `AddParameter`. The two optional
+values use an empty default, which the API treats as absent. The switches still control whether an integration is active, while the validation
+steps check cross-field rules after Aspire's `process-parameters` step has resolved all
+values and before `build-prereq`, which every image build waits on. A missing value fails
+the deployment before an image is built.
 
 `KOMODO_*` and `REGISTRY_*` configure the workflow itself and are not exported as
 parameters.
 
-Run mode uses the same defaults. The passwords are generated and kept in the AppHost's
-user secrets, Mailpit replaces the relay, and Google is the one thing a developer may
-want to switch on locally:
+Run mode uses AppHost parameters from user secrets or environment variables. The passwords
+are generated and kept in the AppHost's user secrets, Mailpit replaces the relay, and a
+developer can enable Google locally by setting its required values:
 
 ```bash
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-sign-in-enabled true
@@ -132,9 +123,9 @@ dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:plaid-client
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:plaid-secret <sandbox secret>
 ```
 
-Receipt transcription is off by default. To use Azure OpenAI locally, store the Aspire
-parameters in the AppHost user-secrets store. The provider selector is needed when Azure
-OpenAI and legacy Veryfi credentials could both be present:
+To use Azure OpenAI locally, store the required Aspire parameters in the AppHost user-secrets
+store. The provider selector is explicit so Azure OpenAI and legacy Veryfi configuration
+cannot be selected accidentally:
 
 ```bash
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:receipt-transcription-provider AzureOpenAI
@@ -144,14 +135,15 @@ dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-api-key <api-key>
 ```
 
-The AppHost maps the provider switch, enablement, timeout, and diagnostic setting to API
-configuration. It models the account and receipt deployment with Aspire's
-`AddOpenAI("azure-openai")` and `AddModel("azure-openai-receipt-transcription", ...)` and gives
-the API that model reference. Aspire then injects the default
-`ConnectionStrings__azure-openai-receipt-transcription` value containing `Endpoint`, `Key`, and
-`ModelName`; the API deliberately does not receive those values as separate environment variables.
+The AppHost maps the provider switch and enablement to API configuration. It models the account
+and receipt deployment with Aspire's `AddOpenAI("azure-openai")` and `WithModel("receipt-transcription", ...)`
+and gives the API that model reference. Aspire then injects
+`ConnectionStrings__receipt-transcription` containing `Endpoint`, `Key`, and `Model`; the API
+deliberately does not receive those values as separate environment variables. The API's
+`AddReceiptTranscription` binds the selector options through the .NET options pattern and resolves
+the selected provider from DI when the request scope is created.
 The deployment workflow uses the corresponding `AZURE_OPENAI_*` production variables/secrets shown
-in the table above; add them to the `production` environment, and leave the switch false or unset
+in the table above; add them to the `production` environment, and set the switch to `false`
 when the feature is not used.
 
 Whether bank sync is on is not a switch inside the API. The Plaid connector is registered
@@ -217,19 +209,18 @@ That last line is the value of `BANK_KEY_CERTIFICATE`. Keep the `.pfx` somewhere
 delete it from the machine you made it on; losing it loses the stored tokens and nothing
 else, and the way back is that everybody links their bank again.
 
-Every check in front of that certificate asks whether it is *there* — the workflow's
-`require`, the AppHost's `validate-plaid`, and `KeyRingExtensions.Load`, which goes as far
-as valid base64, a readable PKCS#12 and a private key. None of them can tell whether it is
-the *same* one the ring was wrapped with, so the API checks that itself at startup: it
+The check in front of that certificate, `KeyRingExtensions.Load`, goes as far as valid
+base64, a readable PKCS#12 and a private key. It cannot tell whether it is the *same* one
+the ring was wrapped with, so the API checks that itself at startup: it
 unprotects one stored token and refuses to start if it cannot. Deploying a different but
 well-formed certificate would otherwise pass every check, mint a fresh key, and leave every
 stored token unreadable — and an item whose token is gone can be neither synced, nor
 repaired in update mode, nor removed at the provider, because all three need the token.
 
 Locally there is usually no certificate and the ring is stored unwrapped, which is the
-ordinary development posture. A deployment is different: the publish refuses to build when
-bank sync is on and the certificate is missing, because a deployment without one looks
-exactly like a deployment with one until somebody reads the database.
+ordinary development posture. A deployment should provide one for protection at rest, but
+it remains optional so the AppHost does not block when bank sync or certificate wrapping is
+not being used.
 
 Webhooks need an address the provider can reach: a deployment is served on one, and locally a
 dev tunnel supplies one. With no address at all nothing breaks -- none is sent, a sync runs

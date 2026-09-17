@@ -128,8 +128,8 @@ public class PlaidConnectorTest
     /// A deployment with no redirect configured must send none, not an empty one.
     /// </summary>
     /// <remarks>
-    /// Every optional parameter in the AppHost resolves to an empty string when nobody
-    /// sets it, so "no redirect" reaches the connector as <c>""</c> rather than as null.
+    /// Configuration can represent an absent redirect URI with an empty string, so "no
+    /// redirect" reaches the connector as <c>""</c> rather than as null.
     /// Plaid refuses <c>redirect_uri: ""</c> with INVALID_FIELD -- so sending it turns a
     /// deployment that simply does not use OAuth redirects into one where nobody can link
     /// a bank at all, which is exactly what it did.

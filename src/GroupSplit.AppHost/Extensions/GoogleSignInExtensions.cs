@@ -20,8 +20,8 @@ public static class GoogleSignInExtensions
         /// Wires Google as an identity provider for the imported realm, behind a switch.
         /// <para>
         /// Three parameters: whether the provider is on, and the OAuth client ID and secret
-        /// it needs when it is. All are optional, so a deployment that never mentions Google
-        /// gets a disabled provider rather than a prompt. Keycloak substitutes them into the
+        /// it needs when it is. All must be supplied by AppHost configuration, user secrets,
+        /// or deployment environment variables. Keycloak substitutes them into the
         /// <c>${...}</c> placeholders in realms.json at import time, so no credential is
         /// committed.
         /// </para>
@@ -36,15 +36,15 @@ public static class GoogleSignInExtensions
         {
             var builder = keycloak.ApplicationBuilder;
 
-            var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
+            var enabled = builder.AddParameter(EnabledParameterName)
                 .WithDescription(
                     "Whether Google is offered on the login page (true/false). "
                     + "Needs google-client-id and google-client-secret when true.");
 
-            var clientId = builder.AddOptionalParameter(ClientIdParameterName, string.Empty)
+            var clientId = builder.AddParameter(ClientIdParameterName)
                 .WithDescription("OAuth client ID from the Google Cloud console.");
 
-            var clientSecret = builder.AddOptionalParameter(ClientSecretParameterName, string.Empty, secret: true)
+            var clientSecret = builder.AddParameter(ClientSecretParameterName, secret: true)
                 .WithDescription("OAuth client secret from the Google Cloud console.");
 
             builder.Pipeline.AddStep(

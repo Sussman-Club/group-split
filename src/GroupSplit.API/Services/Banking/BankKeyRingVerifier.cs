@@ -12,9 +12,8 @@ namespace GroupSplit.API.Services.Banking;
 /// Two things that are really one: whether the ring is wrapped, and whether it still opens.
 /// <para>
 /// Every check standing between a deployment and its stored tokens asks whether the
-/// certificate is <em>there</em> -- the workflow's own <c>require</c>, the AppHost's
-/// <c>validate-plaid</c>, and <c>KeyRingExtensions.Load</c>, which goes as far as valid
-/// base64, a readable PKCS#12 and a private key. Not one of them asks whether it is the
+/// certificate is <em>there</em> -- <c>KeyRingExtensions.Load</c> goes as far as valid
+/// base64, a readable PKCS#12 and a private key. None of that asks whether it is the
 /// <em>same</em> certificate the ring was wrapped with. Hand the deployment a different but
 /// perfectly well-formed one and all three pass, Data Protection cannot unwrap the key that
 /// is there, mints a fresh one, and every stored token becomes ciphertext nothing can open.

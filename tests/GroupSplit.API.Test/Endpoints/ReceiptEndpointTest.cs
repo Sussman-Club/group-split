@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Http;

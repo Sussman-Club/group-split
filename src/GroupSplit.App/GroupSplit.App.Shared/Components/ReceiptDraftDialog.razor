@@ -1,29 +1,20 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Commands
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@using System.ComponentModel.DataAnnotations
 @namespace GroupSplit.App.Shared.Components
 @inject IReceiptCommands Receipts
 
 <MudDialog Class="gs-sheet">
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">
-            @(IsEditing ? "Edit itemized receipt" : "Review receipt")
-        </MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Review receipt</MudText>
     </TitleContent>
 
     <DialogContent>
         <div class="gs-stack" style="gap: 16px">
             <MudAlert Severity="Severity.Info" Dense="true">
-                @if (IsEditing)
-                {
-                    <text>Correct the itemized receipt and its source text. Changes are saved to this expense.</text>
-                }
-                else
-                {
-                    <text>Read the extracted values before saving. OCR can misread a price or miss a line;
-                        you will choose who had each item after this step.</text>
-                }
+                Read the extracted values before saving. OCR can misread a price or miss a line;
+                you will choose who had each item after this step.
             </MudAlert>
 
             @if (!string.IsNullOrWhiteSpace(_validationError))
@@ -32,13 +23,13 @@
             }
 
             <div class="gs-grid-2">
-                <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Immediate="true" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_tax" Label="Tax" Immediate="true" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_tip" Label="Tip" Immediate="true" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_total" Label="Total paid" Immediate="true" Variant="Variant.Outlined"
+                <MudNumericField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
             </div>
 
@@ -75,24 +66,25 @@
             @for (var index = 0; index < _items.Count; index++)
             {
                 var item = _items[index];
+                var itemNameError = GetItemNameError(item);
                 <div class="gs-stack" @key="item.Key" style="gap: 8px; padding: 12px; border: 1px solid var(--gs-line); border-radius: 8px">
                     <div class="gs-inline" style="justify-content: space-between; gap: 8px">
                         <MudTextField @bind-Value="item.Name" Label="Item" Variant="Variant.Outlined" Immediate="true"
+                                      MaxLength="ReceiptItemInput.NameLength" Counter="ReceiptItemInput.NameLength"
+                                      Validation="@(new Func<string, IEnumerable<string>>(ValidateItemName))"
+                                      Error="@(itemNameError is not null)" ErrorText="@itemNameError"
                                       style="flex: 1" />
                         <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline" Color="Color.Default"
                                        aria-label="Remove item" OnClick="@(() => RemoveItem(item))" />
                     </div>
-                    <MudTextField @bind-Value="item.Description" Label="Receipt text (optional)" Immediate="true"
-                                  HelperText="The wording copied from the original receipt"
-                                  Variant="Variant.Outlined" Lines="2" />
                     <div class="gs-grid-2">
-                        <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Immediate="true" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
                                          Format="N3" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Immediate="true" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Immediate="true" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Immediate="true" Variant="Variant.Outlined"
+                        <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
                     </div>
                 </div>
@@ -103,7 +95,7 @@
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_saving || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
+                   Disabled="@(_saving || HasInvalidItemName || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
                    OnClick="SaveAsync">
             @(_saving ? "Saving…" : "Save receipt")
         </MudButton>
@@ -114,11 +106,7 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid? TransactionId { get; set; }
     [Parameter] public decimal? ExpenseAmount { get; set; }
-    /// <summary>The newly transcribed bill, when this dialog is reviewing OCR output.</summary>
-    [Parameter] public ReceiptTranscriptionResponse? Transcription { get; set; }
-
-    /// <summary>The already saved bill, when this dialog is correcting an itemized receipt.</summary>
-    [Parameter] public ReceiptResponse? Receipt { get; set; }
+    [Parameter, EditorRequired] public ReceiptTranscriptionResponse Transcription { get; set; } = null!;
 
     private decimal _subtotal;
     private decimal _tax;
@@ -127,42 +115,33 @@
     private List<EditableLine> _items = [];
     private bool _saving;
     private string? _validationError;
-    private string? _loadedSource;
 
-    private bool IsEditing => Receipt is not null;
+    private bool HasInvalidItemName => _items.Any(item => ValidateItemName(item.Name).Any());
 
     protected override void OnParametersSet()
     {
-        var source = Receipt is { } saved
-            ? (Key: $"receipt:{saved.Id}", Subtotal: saved.Subtotal, Tax: saved.Tax,
-                Tip: saved.Tip, Total: saved.Total,
-                Items: saved.Items.Select(item => new EditableLine(item)).ToList())
-            : Transcription is { } draft
-                ? (Key: $"transcription:{draft.AttachmentId}", Subtotal: draft.Receipt.Subtotal,
-                    Tax: draft.Receipt.Tax, Tip: draft.Receipt.Tip, Total: draft.Receipt.Total,
-                    Items: draft.Receipt.Items.Select(item => new EditableLine(item)).ToList())
-                : throw new InvalidOperationException("A receipt draft or saved receipt is required.");
-
-        if (_loadedSource == source.Key)
-            return;
-
-        _loadedSource = source.Key;
-        _subtotal = source.Subtotal;
-        _tax = source.Tax;
-        _tip = source.Tip;
-        _total = source.Total;
-        _items = source.Items;
+        _subtotal = Transcription.Receipt.Subtotal;
+        _tax = Transcription.Receipt.Tax;
+        _tip = Transcription.Receipt.Tip;
+        _total = Transcription.Receipt.Total;
+        _items = Transcription.Receipt.Items.Select(item => new EditableLine(item)).ToList();
     }
 
-    private void AddItem() => _items = [.. _items, new EditableLine()];
+    private void AddItem() => _items.Add(new EditableLine());
 
     private void RemoveItem(EditableLine item) => _items = _items.Where(candidate => candidate != item).ToList();
 
     private async Task SaveAsync()
     {
-        if (_items.Count == 0 || _items.Any(item => string.IsNullOrWhiteSpace(item.Name)))
+        if (_items.Count == 0)
         {
             _validationError = "Add at least one named item before saving.";
+            return;
+        }
+
+        if (HasInvalidItemName)
+        {
+            _validationError = "Correct the highlighted item names before saving.";
             return;
         }
 
@@ -183,27 +162,19 @@
                 Total = _total,
                 Items = _items.Select(item => new ReceiptItemInput
                 {
-                    Id = item.Id,
                     Name = item.Name.Trim(),
                     NormalizedName = item.NormalizedName,
-                    // An existing line's empty string is an explicit clear; null is the
-                    // whole-save convention for leaving source text unchanged.
-                    Description = item.Id is not null || !string.IsNullOrWhiteSpace(item.Description)
-                        ? item.Description.Trim()
-                        : null,
+                    Description = item.Description,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
                     TotalPrice = item.TotalPrice,
-                    TaxAmount = item.TaxAmount,
-                    SplitRuleVersionId = item.SplitRuleVersionId
+                    TaxAmount = item.TaxAmount
                 }).ToArray()
             };
 
             if (TransactionId is { } transactionId)
             {
-                var saved = IsTextOnlyEdit()
-                    ? await SaveTextOnlyEditAsync(transactionId, request)
-                    : await Receipts.SaveAsync(transactionId, request);
+                var saved = await Receipts.SaveAsync(transactionId, request);
                 if (saved is not null)
                     MudDialog.Close(DialogResult.Ok(saved));
             }
@@ -218,72 +189,25 @@
         }
     }
 
-    private bool IsTextOnlyEdit()
-    {
-        if (Receipt is not { } original || TransactionId is null
-            || _subtotal != original.Subtotal || _tax != original.Tax
-            || _tip != original.Tip || _total != original.Total
-            || _items.Count != original.Items.Count)
-            return false;
-
-        return _items.All(item => item.Id is { } id
-            && original.Items.FirstOrDefault(candidate => candidate.Id == id) is { } source
-            && item.UnitPrice == source.UnitPrice
-            && item.Quantity == source.Quantity
-            && item.TotalPrice == source.TotalPrice
-            && item.TaxAmount == source.TaxAmount
-            && item.SplitRuleVersionId == source.SplitRuleVersionId);
-    }
-
-    /// <summary>
-    /// Sends only the changed text for one existing line. Multiple text changes use the
-    /// whole-receipt endpoint in one request, so a failed save cannot leave earlier lines
-    /// committed while later ones are still pending.
-    /// </summary>
-    private async Task<ReceiptResponse?> SaveTextOnlyEditAsync(Guid transactionId,
-        SaveReceiptRequest request)
-    {
-        var changed = ChangedTextItems();
-        if (changed.Count == 0)
-            return Receipt;
-
-        if (changed.Count > 1)
-            return await Receipts.SaveAsync(transactionId, request);
-
-        return await PatchLineTextAsync(transactionId, changed[0]);
-    }
-
-    private IReadOnlyList<EditableLine> ChangedTextItems()
-    {
-        var original = Receipt!;
-
-        return _items.Where(item =>
-        {
-            var source = original.Items.Single(candidate => candidate.Id == item.Id);
-            var name = item.Name.Trim();
-            var description = string.IsNullOrWhiteSpace(item.Description) ? null : item.Description.Trim();
-            return !string.Equals(name, source.Name, StringComparison.Ordinal)
-                || !string.Equals(description, source.Description, StringComparison.Ordinal);
-        }).ToList();
-    }
-
-    private async Task<ReceiptResponse?> PatchLineTextAsync(Guid transactionId, EditableLine item)
-    {
-        var original = Receipt!;
-        var source = original.Items.Single(candidate => candidate.Id == item.Id);
-        var patch = new JsonPatchDocument<ReceiptItemPatch>();
-        var name = item.Name.Trim();
-        if (!string.Equals(name, source.Name, StringComparison.Ordinal))
-            patch.Replace(line => line.Name, name);
-
-        var description = string.IsNullOrWhiteSpace(item.Description) ? null : item.Description.Trim();
-        if (!string.Equals(description, source.Description, StringComparison.Ordinal))
-            patch.Replace(line => line.Description, description);
-
-        return await Receipts.PatchItemAsync(transactionId, item.Id!.Value, patch);
-    }
-
     private void Cancel() => MudDialog.Cancel();
+
+    private static string? GetItemNameError(EditableLine item) =>
+        ValidateItemName(item.Name).FirstOrDefault();
+
+    private static IEnumerable<string> ValidateItemName(string name)
+    {
+        var item = new ReceiptItemInput { Name = name };
+        var validationResults = new List<ValidationResult>();
+
+        Validator.TryValidateProperty(
+            item.Name,
+            new ValidationContext(item) { MemberName = nameof(ReceiptItemInput.Name) },
+            validationResults);
+
+        return validationResults
+            .Select(result => result.ErrorMessage)
+            .OfType<string>();
+    }
 
     private sealed class EditableLine
     {
@@ -293,34 +217,16 @@
 
         public EditableLine(ReceiptItemInput item)
         {
-            Id = item.Id;
             Name = item.Name;
             NormalizedName = item.NormalizedName ?? NormalizeName(item.Name);
-            Description = item.Description ?? string.Empty;
+            Description = item.Description;
             UnitPrice = item.UnitPrice;
             Quantity = item.Quantity;
             TotalPrice = item.TotalPrice;
             TaxAmount = item.TaxAmount;
-            SplitRuleVersionId = item.SplitRuleVersionId;
-        }
-
-        public EditableLine(ReceiptItemResponse item)
-        {
-            Id = item.Id;
-            Name = item.Name;
-            NormalizedName = string.IsNullOrWhiteSpace(item.NormalizedName)
-                ? NormalizeName(item.Name)
-                : item.NormalizedName;
-            Description = item.Description ?? string.Empty;
-            UnitPrice = item.UnitPrice;
-            Quantity = item.Quantity;
-            TotalPrice = item.TotalPrice;
-            TaxAmount = item.TaxAmount;
-            SplitRuleVersionId = item.SplitRuleVersionId;
         }
 
         public Guid Key { get; } = Guid.NewGuid();
-        public Guid? Id { get; }
         private string _name = string.Empty;
         public string Name
         {
@@ -332,12 +238,11 @@
             }
         }
         public string NormalizedName { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Quantity { get; set; } = 1m;
         public decimal TotalPrice { get; set; }
         public decimal TaxAmount { get; set; }
-        public Guid? SplitRuleVersionId { get; set; }
 
         private static string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;
     }

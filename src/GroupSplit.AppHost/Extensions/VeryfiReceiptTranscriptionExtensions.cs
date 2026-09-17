@@ -14,19 +14,19 @@ public static class VeryfiReceiptTranscriptionExtensions
 
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
     {
-        /// <summary>Passes optional Veryfi credentials to the API that reads receipt attachments.</summary>
+        /// <summary>Passes Veryfi credentials to the API that reads receipt attachments.</summary>
         public IResourceBuilder<T> WithVeryfiReceiptTranscription()
         {
             var builder = resource.ApplicationBuilder;
-            var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
+            var enabled = builder.AddParameter(EnabledParameterName)
                 .WithDescription("Whether receipt transcription through Veryfi is enabled (true/false).");
-            var clientId = builder.AddOptionalParameter(ClientIdParameterName, string.Empty, secret: true)
+            var clientId = builder.AddParameter(ClientIdParameterName, secret: true)
                 .WithDescription("Veryfi client ID.");
-            var username = builder.AddOptionalParameter(UsernameParameterName, string.Empty, secret: true)
+            var username = builder.AddParameter(UsernameParameterName, secret: true)
                 .WithDescription("Veryfi API username.");
-            var apiKey = builder.AddOptionalParameter(ApiKeyParameterName, string.Empty, secret: true)
+            var apiKey = builder.AddParameter(ApiKeyParameterName, secret: true)
                 .WithDescription("Veryfi API key.");
-            var logRawResponses = builder.AddOptionalParameter(LogRawResponsesParameterName, "false")
+            var logRawResponses = builder.AddParameter(LogRawResponsesParameterName)
                 .WithDescription("Whether to log Veryfi's whole response, for diagnosing a misread receipt (true/false).");
 
             builder.Pipeline.AddStep(

@@ -10,7 +10,7 @@ public static class OpenAIExtensions
 {
     extension(IDistributedApplicationBuilder builder)
     {
-        public IResourceBuilder<OpenAIResource> AddMyOpenAI([ResourceName] string name)
+        public IResourceBuilder<OpenAIResource> AddOpenAI([ResourceName] string name)
         {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentException.ThrowIfNullOrEmpty(name);
@@ -101,6 +101,40 @@ public static class OpenAIExtensions
 
     extension(IResourceBuilder<OpenAIResource> builder)
     {
+        /// <summary>
+        /// Adds a model resource whose deployment name remains a deferred Aspire reference.
+        /// This keeps the model usable with <c>WithReference</c> without resolving a parameter
+        /// while the AppHost is being evaluated.
+        /// </summary>
+        public IResourceBuilder<IResourceWithConnectionString> WithModel(
+            [ResourceName] string name,
+            IResourceBuilder<ParameterResource> modelParameter)
+        {
+            ArgumentNullException.ThrowIfNull(builder);
+            ArgumentException.ThrowIfNullOrEmpty(name);
+            ArgumentNullException.ThrowIfNull(modelParameter);
+
+            var model = new ParameterizedOpenAIModelResource(
+                name,
+                builder.Resource,
+                modelParameter.Resource);
+
+            modelParameter.WithParentRelationship(model);
+
+            var modelBuilder = builder.ApplicationBuilder
+                .AddResource(model)
+                .WithIconName("BrainCircuit");
+
+            modelBuilder.WithParentRelationship(builder.Resource);
+
+            return modelBuilder;
+        }
+
+        public IResourceBuilder<OpenAIResource> WithEndpoint(IResourceBuilder<ParameterResource> keyParameter)
+        {
+            return builder.WithEndpoint(ReferenceExpression.Create($"{keyParameter}"));
+        }
+
         public IResourceBuilder<OpenAIResource> WithEndpoint(ReferenceExpression keyParameter)
         {
             return builder
@@ -127,6 +161,36 @@ public static class OpenAIExtensions
     private sealed class OpenAIEndpointReferenceAnnotation : IResourceAnnotation
     {
         public required ReferenceExpression ReferenceExpression { get; init; }
+    }
+
+    // Aspire's OpenAIModelResource stores Model as a string and seals its connection-string
+    // expression. Deriving from it would require a fake model value and would still lose the
+    // deferred parameter, so this resource mirrors its connection-string contract instead.
+    private sealed class ParameterizedOpenAIModelResource(
+        string name,
+        OpenAIResource parent,
+        ParameterResource modelParameter)
+        : Resource(name), IResourceWithConnectionString, IResourceWithParent<OpenAIResource>
+    {
+        public OpenAIResource Parent { get; } = parent;
+
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"{Parent};Model={modelParameter}");
+
+        public string ConnectionStringEnvironmentVariable => $"ConnectionStrings__{Name}";
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties() =>
+            ((IResourceWithConnectionString)Parent).GetConnectionProperties()
+                .Append(new KeyValuePair<string, ReferenceExpression>(
+                    "Model", ReferenceExpression.Create($"{modelParameter}")));
+
+        public async ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken)
+        {
+            return await ConnectionStringExpression.GetValueAsync(cancellationToken)
+                       .ConfigureAwait(false)
+                   ?? throw new InvalidOperationException(
+                       $"OpenAI model connection string '{Name}' could not be resolved.");
+        }
     }
 
     private sealed class OpenAIHealthCheck : IHealthCheck

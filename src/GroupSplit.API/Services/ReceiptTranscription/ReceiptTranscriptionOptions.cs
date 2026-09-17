@@ -1,4 +1,4 @@
-namespace GroupSplit.API.Services;
+namespace GroupSplit.API.Services.ReceiptTranscription;
 
 /// <summary>
 /// Selects the receipt transcription provider. An empty value preserves the legacy behavior:
