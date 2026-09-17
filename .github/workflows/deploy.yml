@@ -94,7 +94,9 @@ jobs:
           CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
           SMTP_ENABLED: ${{ vars.SMTP_ENABLED }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
-          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          # Resend supports 587 for STARTTLS, which is the mode configured in realms.json.
+          # A production override remains possible through the environment variable.
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
           SMTP_FROM: ${{ vars.SMTP_FROM }}
           SMTP_USER: ${{ vars.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
@@ -107,15 +109,18 @@ jobs:
           PLAID_ENV: ${{ vars.PLAID_ENV }}
           PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
-          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ vars.RECEIPT_TRANSCRIPTION_PROVIDER }}
+          # These currently live in the production environment's secret store. Read them
+          # from the same scope they are configured in; an unset secret otherwise becomes
+          # an empty string and makes the AppHost see a missing deployment parameter.
+          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ secrets.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
           VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}
           VERYFI_USERNAME: ${{ secrets.VERYFI_USERNAME }}
           VERYFI_API_KEY: ${{ secrets.VERYFI_API_KEY }}
-          VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES }}
+          VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES || 'false' }}
           AZURE_OPENAI_ENABLED: ${{ vars.AZURE_OPENAI_ENABLED }}
-          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
-          AZURE_OPENAI_MODEL: ${{ vars.AZURE_OPENAI_MODEL }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_MODEL: ${{ secrets.AZURE_OPENAI_MODEL }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         shell: bash
         run: |
