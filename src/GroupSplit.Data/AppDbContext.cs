@@ -289,7 +289,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne(participant => participant.User)
                 .WithMany()
                 .HasForeignKey(participant => participant.UserId)
-                .IsRequired();
+                .IsRequired()
+                // Rule versions are immutable history. A stand-in is removed only after
+                // every current reference has moved, but old versions must keep their
+                // principal row so they continue to say who held the weight then.
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(participant => new { participant.SplitRuleVersionId, participant.UserId }).IsUnique();
         });

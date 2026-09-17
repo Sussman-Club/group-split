@@ -262,10 +262,7 @@ public sealed class InvitationService(
         // until somebody claims it, and this is that moment; leaving it would leave a row
         // named after a person who is now in the group under their own account, turning up in
         // nothing and explaining nothing.
-        var emptied = await context.Set<User>().FirstOrDefaultAsync(row => row.Id == standIn, ct);
-
-        if (emptied is not null)
-            context.Remove(emptied);
+        await DiscardStandInIfUnused(standIn, ct);
 
         await context.SaveChangesAsync(ct);
 
@@ -330,25 +327,20 @@ public sealed class InvitationService(
 
         context.Remove(invitation);
 
-        // The stand-in goes too, but only once its position has actually moved. That
-        // condition is not tidiness: TransactionSplit.UserId and Transaction.UserId are
-        // required, so their foreign keys cascade, and deleting a stand-in that still holds
-        // shares would take those rows with it -- silently. The splits left on those
-        // expenses would stop summing to the amount and the group's balances would stop
-        // summing to zero, which is the one thing this whole design exists to prevent, and
-        // nothing would raise a word about it.
+        // The stand-in goes too, but only once its position has actually moved and no
+        // historical split-rule version still names it. The first condition is not tidiness:
+        // TransactionSplit.UserId and Transaction.UserId are required, so their foreign keys
+        // cascade, and deleting a stand-in that still holds shares would take those rows with
+        // it -- silently. The second protects the immutable rule history: the newly opened
+        // version may omit the stand-in while the superseded version must retain it.
         //
         // So a hand-over having run is the precondition. It moves everything a stand-in can
         // hold, because a stand-in can only ever be named inside its own group: every path
         // that writes a payer or a share checks it against that group's participants, and
-        // there is nobody who could name one on a personal expense.
+        // there is nobody who could name one on a personal expense. The helper below then
+        // decides whether deleting the now-empty account is safe for rule history as well.
         if (absorber is not null)
-        {
-            var emptied = await context.Set<User>().FirstOrDefaultAsync(row => row.Id == standIn, ct);
-
-            if (emptied is not null)
-                context.Remove(emptied);
-        }
+            await DiscardStandInIfUnused(standIn, ct);
 
         await context.SaveChangesAsync(ct);
 
@@ -368,6 +360,29 @@ public sealed class InvitationService(
             // does not read as though money had changed hands.
             moved.MovedAnything ? absorber?.Id : null,
             moved.MovedAnything ? Describe(absorber) : null);
+    }
+
+    /// <summary>
+    /// Deletes a stand-in after its invitation is answered, unless rule history still needs
+    /// it as the principal for a superseded weighted version.
+    /// </summary>
+    /// <remarks>
+    /// A hand-over opens a new version without the stand-in, but it deliberately leaves the
+    /// closed version unchanged. Deleting the account in that case would let the required
+    /// foreign key cascade through the old participant rows and erase the rule's history.
+    /// The same protection is needed for claiming as for declining or withdrawing.
+    /// </remarks>
+    private async Task DiscardStandInIfUnused(Guid standIn, CancellationToken ct)
+    {
+        if (await context.Set<SplitRuleParticipant>()
+                .AnyAsync(participant => participant.UserId == standIn, ct))
+            return;
+
+        var emptied = await context.Set<User>()
+            .FirstOrDefaultAsync(row => row.Id == standIn, ct);
+
+        if (emptied is not null)
+            context.Remove(emptied);
     }
 
     /// <summary>

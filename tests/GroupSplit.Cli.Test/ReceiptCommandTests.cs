@@ -28,6 +28,34 @@ public sealed class ReceiptCommandTests : IDisposable
         Assert.Equal(Version, body.GetProperty("items")[0].GetProperty("splitRuleVersionId").GetGuid());
         Assert.Equal(6m, body.GetProperty("items")[0].GetProperty("taxAmount").GetDecimal());
     }
+
+    [Fact]
+    public async Task Set_sends_the_stored_line_id_when_correcting_a_line()
+    {
+        var itemId = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{Expense}/receipt", Bill(new
+        {
+            id = itemId,
+            name = "Kirkland Signature Water 40 Pack",
+            normalizedName = "kirkland signature water 40 pack",
+            description = "KIRKLAND SIGNATURE WATER 40 PK",
+            unitPrice = 3.99m,
+            quantity = 2m,
+            totalPrice = 7.98m,
+            taxAmount = 0m,
+            splitRuleVersionId = (Guid?)null,
+            splitRuleName = (string?)null,
+            splitRule = (object?)null
+        }));
+
+        var result = await Cli.RunAsync("receipts", "set", Expense.ToString(),
+            "--item", $"{itemId}#Kirkland Signature Water=7.98x2");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        var sent = _api.Requests.Single(request => request.Method == "PUT").Json;
+        Assert.Equal(itemId, sent.GetProperty("items")[0].GetProperty("id").GetGuid());
+        Assert.Single(_api.Requests);
+    }
     [Fact]
     public async Task Rule_command_updates_one_item()
     {
@@ -43,7 +71,8 @@ public sealed class ReceiptCommandTests : IDisposable
         var id = Guid.NewGuid();
         var item = ReceiptItems.Parse("--item", [$"{id}#Food=20x2/tax1@{Version}"]).Single();
         Assert.Equal(id, item.Id); Assert.Equal(Version, item.SplitRuleVersionId);
-        Assert.Equal(2, item.Quantity); Assert.Equal(20m, item.TotalPrice); Assert.Equal(1m, item.TaxAmount);
+        Assert.Equal(2, item.Quantity); Assert.Equal(20m, item.TotalPrice); Assert.Equal(10m, item.UnitPrice);
+        Assert.Equal(1m, item.TaxAmount);
     }
     [Theory]
     [InlineData("Food=10@not-a-version")]
@@ -214,7 +243,7 @@ public sealed class ReceiptCommandTests : IDisposable
         }
     };
 
-    private static object Bill() => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
+    private static object Bill(params object[] items) => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
         tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true,
-        items = Array.Empty<object>() };
+        canEdit = true, items };
 }

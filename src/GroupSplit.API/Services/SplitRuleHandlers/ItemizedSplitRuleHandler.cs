@@ -31,7 +31,10 @@ public sealed class ItemizedSplitRuleHandler(ISplitRuleHandler handlers) :
         // shares of a total nobody paid.
         if (receipt.Total != transaction.Amount)
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
-                "The bill total must equal the expense amount.");
+                    "The bill total must equal the expense amount.")
+                .WithExtension("total", receipt.Total)
+                .WithExtension("amount", transaction.Amount)
+                .WithExtension("difference", transaction.Amount - receipt.Total);
         return ReceiptSplitCalculator.Divide(receipt, transaction.Payer, transaction.GroupId, members, handlers);
     }
     public string? Invalid(ItemizedSplitRuleVersion rule) => null;

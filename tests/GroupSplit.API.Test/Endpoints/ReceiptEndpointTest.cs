@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.ReceiptTranscription;
@@ -162,6 +163,68 @@ public class ReceiptEndpointTest : IAsyncLifetime
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
 
         Assert.Equal("RECEIPT_DOES_NOT_ADD_UP", problem.GetProperty("code").GetString());
+        Assert.Equal(40m, problem.GetProperty("total").GetDecimal());
+        Assert.Equal(30m, problem.GetProperty("amount").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Patching_one_line_changes_only_that_line_and_keeps_other_receipt_text()
+    {
+        var expense = await AGroupExpense();
+        var saved = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new
+        {
+            subtotal = 30m,
+            total = 30m,
+            items = new[]
+            {
+                new { name = "Water", description = "KIRKLAND WATER 40 PK", totalPrice = 10m },
+                new { name = "Pizza", description = "LARGE CHEESE", totalPrice = 20m }
+            }
+        }, Json, Ct);
+        saved.EnsureSuccessStatusCode();
+        var savedBody = await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        var itemId = savedBody.GetProperty("items")[0].GetProperty("id").GetGuid();
+        var otherItemId = savedBody.GetProperty("items")[1].GetProperty("id").GetGuid();
+
+        var corrected = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new
+        {
+            subtotal = 30m,
+            total = 30m,
+            items = new[]
+            {
+                new { id = itemId, name = "Bottled water", totalPrice = 10m },
+                new { id = otherItemId, name = "Pizza", totalPrice = 20m }
+            }
+        }, Json, Ct);
+        corrected.EnsureSuccessStatusCode();
+        var correctedBody = await corrected.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        var correctedItems = correctedBody.GetProperty("items");
+        Assert.Equal("KIRKLAND WATER 40 PK", correctedItems[0].GetProperty("description").GetString());
+        Assert.Equal("LARGE CHEESE", correctedItems[1].GetProperty("description").GetString());
+
+        using var patch = new StringContent(
+            "[{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"Bottled water\"}]",
+            Encoding.UTF8, "application/json-patch+json");
+        var response = await Client.PatchAsync(
+            $"/transactions/{expense}/receipt/items/{itemId}", patch, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        var items = body.GetProperty("items");
+        Assert.Equal("Bottled water", items[0].GetProperty("name").GetString());
+        Assert.Equal("KIRKLAND WATER 40 PK", items[0].GetProperty("description").GetString());
+        Assert.Equal("LARGE CHEESE", items[1].GetProperty("description").GetString());
+
+        using var clearDescription = new StringContent(
+            "[{\"op\":\"replace\",\"path\":\"/description\",\"value\":null}]",
+            Encoding.UTF8, "application/json-patch+json");
+        var cleared = await Client.PatchAsync(
+            $"/transactions/{expense}/receipt/items/{itemId}", clearDescription, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        var clearedBody = await cleared.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal(JsonValueKind.Null,
+            clearedBody.GetProperty("items")[0].GetProperty("description").ValueKind);
     }
 
     /// <summary>

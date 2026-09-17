@@ -3,7 +3,7 @@ using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Infrastructure;
 
-/// <summary>Reads [item-id#]name=price[xqty][/taxamount][@rule-version-id].</summary>
+/// <summary>Reads [item-id#]name=line-total[xqty][/taxamount][@rule-version-id].</summary>
 public static class ReceiptItems
 {
     private const string Sample = "Wine=18.00";
@@ -23,7 +23,7 @@ public static class ReceiptItems
         var separator = value.IndexOf('=');
 
         if (separator <= 0)
-            throw Invalid(option, value, "it needs the form <name>=<price>");
+            throw Invalid(option, value, "it needs the form <name>=<line-total>");
 
         var name = value[..separator].Trim();
 
@@ -119,7 +119,10 @@ public static class ReceiptItems
             rest = rest[..times].Trim();
         }
 
-        var totalPrice = Number(option, value, rest, "a price");
+        // The number before x is the amount printed for the whole line. A quantity only
+        // supplies the unit price the API exposes alongside it; it does not multiply the
+        // number here. This is important for a discounted or otherwise adjusted line.
+        var totalPrice = Number(option, value, rest, "a line total");
 
         return new ReceiptItemInput
         {
@@ -144,7 +147,7 @@ public static class ReceiptItems
     private static CliException Invalid(string option, string value, string why)
         => CliException.Input(
             $"Could not read {option} '{value}': {why}.",
-            $"Use {option} <name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>], "
+            $"Use {option} <name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>], "
             + $"e.g. {option} {Sample} or "
             + $"{option} Wine=18.00@3f25c1a8-1111-2222-3333-444455556666");
 }

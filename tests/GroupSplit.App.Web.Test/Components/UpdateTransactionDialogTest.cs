@@ -393,6 +393,37 @@ public class UpdateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// Editing an expense must use the same current-member rule list as adding one. A
+    /// departed member's built-in rule may still explain the stored expense, but it is not
+    /// a valid choice for a new division made from this editor.
+    /// </summary>
+    [Fact]
+    public async Task An_edit_does_not_offer_an_all_for_rule_for_a_departed_member()
+    {
+        var transactionId = Guid.NewGuid();
+        var departed = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId));
+
+        _splitRules
+            .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new SplitRuleResponse(
+                Guid.NewGuid(), GroupId, "All for departed", BuiltIn: true,
+                AllForUserId: departed)]);
+
+        var (provider, _) = await OpenAsync(Row(transactionId));
+
+        provider.WaitForAssertion(() =>
+        {
+            var editor = provider.FindComponent<SplitEditor>();
+            Assert.Empty(editor.Instance.MemberRules);
+            Assert.DoesNotContain("All for departed", provider.Markup, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
     /// The split control opens on the shares the expense actually has when no rule put them
     /// there.
     /// </summary>

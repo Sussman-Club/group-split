@@ -567,6 +567,97 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(TestUser().Id, named[0].UserId);
     }
 
+    /// <summary>
+    /// Withdrawing opens a current version without the invitee, but the versions that were
+    /// already closed still explain the divisions they were used for.
+    /// </summary>
+    /// <remarks>
+    /// The stand-in can be deleted when it holds no historical rule rows. Once a weighted
+    /// rule has been edited, though, those rows are the reason it cannot be deleted: the
+    /// required foreign key would otherwise cascade through every superseded version and
+    /// make the rule history contradict what it said when those expenses were recorded.
+    /// </remarks>
+    [Fact]
+    public async Task Withdrawing_preserves_superseded_rule_versions_that_named_them()
+    {
+        var group = await AGroup();
+        var invitation = await Invite(group.Id, "Carlos");
+
+        var rule = await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group.Id,
+            Name = "Trip shares",
+            Definition = new SharesSplitRuleDto
+            {
+                Shares = new Dictionary<Guid, int>
+                {
+                    [TestUser().Id] = 1,
+                    [invitation.ParticipantUserId] = 1
+                }
+            }
+        }, Ct);
+
+        await Rules.Update(rule.Id, new UpdateSplitRuleRequest
+        {
+            Name = "Trip shares",
+            Definition = new SharesSplitRuleDto
+            {
+                Shares = new Dictionary<Guid, int>
+                {
+                    [TestUser().Id] = 2,
+                    [invitation.ParticipantUserId] = 1
+                }
+            }
+        }, Ct);
+
+        await Rules.Update(rule.Id, new UpdateSplitRuleRequest
+        {
+            Name = "Trip shares",
+            Definition = new SharesSplitRuleDto
+            {
+                Shares = new Dictionary<Guid, int>
+                {
+                    [TestUser().Id] = 3,
+                    [invitation.ParticipantUserId] = 1
+                }
+            }
+        }, Ct);
+
+        await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+
+        var versions = await DbContext.Set<SplitRuleParticipant>()
+            .AsNoTracking()
+            .Where(participant => participant.SplitRuleVersion.SplitRuleId == rule.Id)
+            .Select(participant => new
+            {
+                participant.UserId,
+                participant.Weight,
+                participant.SplitRuleVersion.SupersededAt
+            })
+            .ToListAsync(Ct);
+
+        var historical = versions.Where(participant => participant.SupersededAt is not null).ToList();
+        Assert.Equal(6, historical.Count);
+        Assert.Equal(3, historical.Count(participant =>
+            participant.UserId == invitation.ParticipantUserId && participant.Weight == 1));
+        Assert.Contains(historical, participant => participant.UserId == TestUser().Id &&
+                                                   participant.Weight == 1);
+        Assert.Contains(historical, participant => participant.UserId == TestUser().Id &&
+                                                   participant.Weight == 2);
+        Assert.Contains(historical, participant => participant.UserId == TestUser().Id &&
+                                                   participant.Weight == 3);
+
+        var current = versions.Where(participant => participant.SupersededAt is null).ToList();
+        var only = Assert.Single(current);
+        Assert.Equal(TestUser().Id, only.UserId);
+        Assert.Equal(3, only.Weight);
+
+        // The old rows still need a principal to name in rule history.
+        Assert.NotNull(await DbContext.Set<Data.Entities.User>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == invitation.ParticipantUserId, Ct));
+    }
+
     [Fact]
     public async Task Declining_moves_the_money_the_same_way_and_says_who_has_it_now()
     {

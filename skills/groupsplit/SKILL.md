@@ -1,25 +1,20 @@
 ---
 name: groupsplit
 description: >-
-  Drive the GroupSplit CLI (`groupsplit`) to read and change shared expenses: groups,
-  members, expenses, balances, settlements, split rules, categories, receipt files and
-  itemised receipts,
+  Drive the GroupSplit CLI (`groupsplit`) for shared expenses: groups, members, expenses,
+  balances, settlements, split rules, categories, receipt files, itemised receipts,
   invitations, linked bank accounts and imported bank rows.
-  USE FOR: splitting an expense with a group, who owes whom, settling up with one person
-  across every group at once, recording what somebody paid, a group's ledger or totals, what
-  you have paid and what it cost you month by month, splitting a restaurant bill by its
-  items so everybody pays for what they ordered, inviting or removing members, join
-  links, filing an imported bank row; or whenever a `groupsplit` binary or a
-  `~/.config/groupsplit/config.json` is present.
+  USE FOR: splitting expenses, reading balances or ledgers, recording expenses or
+  settlements, itemising receipts, managing members or invitations, or filing imported bank
+  rows; or whenever a `groupsplit` binary or `~/.config/groupsplit/config.json` is present.
   DO NOT USE FOR: working on the GroupSplit codebase itself -- builds, tests, Aspire, EF
-  migrations -- which is ordinary repository work; or other expense trackers.
-  COVERS: the JSON contract, the exit-code table, the exit-4 confirmation protocol that
-  gates every destructive change, and token auth with no browser.
-  ROUTES TO: groupsplit-inbox, for turning imported bank rows into expenses.
+  migrations -- or other expense trackers.
+  COVERS: the JSON contract, exit codes, the exit-4 confirmation gate, and token auth without
+  a browser. ROUTES TO: groupsplit-inbox for turning imported bank rows into expenses.
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # GroupSplit from the command line
@@ -45,9 +40,12 @@ way the app does:
 - `groupsplit inbox attachments upload <row-id> <file>` does the same for a bank row that
   is still waiting in the inbox. Filing or linking the row moves its pending files to the
   expense, but neither upload nor transcription files the row or chooses its group.
-- After reviewing a transcription, use `receipts set` to save the bill, `receipts rule` to
-  assign each line's split rule, and `receipts divide` to change the ledger. Never imply
-  that OCR has already made those decisions.
+- After reviewing a transcription, use `receipts set` to save the bill and `receipts rule` to
+  assign each line's split rule. `receipts divide` explicitly stores the division when the
+  bill is not already the source of the expense's shares. If an itemised receipt already
+  drives the stored ledger, a valid `set` or `rule` correction keeps those shares in sync;
+  an incomplete correction remains editable and leaves the last valid shares in place.
+  Never imply that OCR has already made those decisions.
 
 `attachments delete` is destructive and uses the normal exit-4 confirmation envelope. A
 download writes to a new local path and refuses to overwrite an existing file.

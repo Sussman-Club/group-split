@@ -349,7 +349,7 @@
             _members = [.. await members];
         }, "Could not load the group.");
 
-        _memberRules = CreateTransactionDialog.MemberRulesOf(await rules);
+        _memberRules = CreateTransactionDialog.MemberRulesOf(await rules, _members);
 
         // The bank's own category, matched against what this group already uses. Only a
         // suggestion, and only when a name happens to line up: whatever is selected when

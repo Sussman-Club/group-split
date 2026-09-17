@@ -263,7 +263,8 @@ public static class ReceiptCommands
     {
         var items = new Option<string[]>("--item")
         {
-            Description = "A line on the bill, as <name>=<price>[x<qty>][/tax<amount>][@<rule-version-id>], "
+            Description = "A line on the bill, as <name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]. "
+                          + "The number before x is the total printed for the whole line, not the unit price; "
                           + "repeatable. /notax says the bill's tax was not charged on it. "
                           + "Rules are optional while editing and can be set later with "
                           + "`groupsplit receipts rule`.",
@@ -304,6 +305,7 @@ public static class ReceiptCommands
             }
 
             var lines = ReceiptItems.Parse("--item", given);
+            var client = new Api.ReceiptsClient(context.ApiHttpClient);
 
             // Both default rather than being required, because on an ordinary bill they are
             // the lines added up and then the tax and tip added on -- and making somebody
@@ -322,8 +324,6 @@ public static class ReceiptCommands
                         ?? subtotalValue + parse.GetValue(tax) + parse.GetValue(tip),
                 Items = lines
             };
-
-            var client = new Api.ReceiptsClient(context.ApiHttpClient);
 
             var receipt = await client.SaveReceiptAsync(id, request, ct);
 
@@ -479,7 +479,7 @@ public static class ReceiptCommands
         // caller can act on are the two stated here.
         summary.AddRow("Can divide", receipt.CanDivide ? "yes" : "no -- check item rules and totals");
 
-        var items = Tables.Grid("#", "Line", "Name", "Qty", "Price", "Tax", "Split rule");
+        var items = Tables.Grid("#", "Line", "Name", "Qty", "Unit price", "Line total", "Tax", "Split rule");
 
         var position = 1;
 
@@ -490,6 +490,7 @@ public static class ReceiptCommands
                 item.Id.ToString(),
                 Markup.Escape(item.Name),
                 item.Quantity.ToString(),
+                item.UnitPrice.ToString(),
                 item.TotalPrice.ToString(),
                 // Only worth marking where it is not the ordinary answer. A column of
                 // "taxed" down every restaurant bill says nothing.
@@ -568,7 +569,7 @@ public static class ReceiptCommands
 
         return new Rows(
             table,
-            new Markup($"\n[grey]Each line is divided by its own rule -- its price, the tax "
+            new Markup($"\n[grey]Each line is divided by its own rule -- its line total, the tax "
                        + $"charged on it, and its share of the tip. Total {division.Total}.[/]\n"));
     }
 }

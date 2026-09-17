@@ -183,6 +183,17 @@
     font-size: .8125rem;
 }
 
+/* The stored wording from the source receipt sits below the display name. It is evidence
+   about what was printed, not another amount or split instruction, so it stays quiet and
+   occupies the same full-width secondary row as the quantity note. */
+.gs-slip-description {
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
+    color: var(--gs-paper-faint);
+    font-size: .75rem;
+    font-style: italic;
+}
+
 .gs-slip-none {
     margin: 0;
     padding: 14px 0;

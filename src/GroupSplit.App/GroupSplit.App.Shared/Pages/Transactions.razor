@@ -261,15 +261,11 @@
                 @* Titled so the stacked layout a phone falls back to says which row these
                    belong to -- see the note on the ledger's. *@
                 @*
-                    Open, edit, delete -- on every row, not only the ones you paid for.
-
-                    They were gated on whether the caller was the payer, which is stricter
-                    than the API: a transaction is reachable by anybody in its group, and
-                    both write endpoints go through the same membership scope the reads do.
-                    So a shared expense somebody else entered with the wrong amount could be
-                    seen by four people and corrected by one, and the group's own ledger --
-                    which never gated these -- offered the buttons the You page withheld for
-                    the same row.
+                    Details stay available for every row, while edit and delete only appear
+                    for expenses in a group the caller still belongs to. The server keeps
+                    leaver-owned expenses readable as personal history but refuses writes
+                    against their former group, so showing those two controls only teaches
+                    the person about the refusal after they click.
                 *@
                 <TemplateColumn Title="Actions" Sortable="false"
                                 HeaderStyle="width: 132px" CellStyle="padding: 8px">
@@ -286,19 +282,22 @@
                                                aria-label="@($"View {context.Item.Name}")"
                                                OnClick="@(async () => await ViewAsync(context.Item))" />
                             </MudTooltip>
-                            <MudTooltip Text="Edit">
-                                <MudIconButton Icon="@Icons.Material.Rounded.Edit"
-                                               Size="Size.Small"
-                                               aria-label="@($"Edit {context.Item.Name}")"
-                                               OnClick="@(async () => await EditAsync(context.Item))" />
-                            </MudTooltip>
-                            <MudTooltip Text="Delete">
-                                <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
-                                               Size="Size.Small"
-                                               Color="Color.Error"
-                                               aria-label="@($"Delete {context.Item.Name}")"
-                                               OnClick="@(async () => await DeleteAsync(context.Item))" />
-                            </MudTooltip>
+                            @if (CanChange(context.Item))
+                            {
+                                <MudTooltip Text="Edit">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Edit"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"Edit {context.Item.Name}")"
+                                                   OnClick="@(async () => await EditAsync(context.Item))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Delete">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   aria-label="@($"Delete {context.Item.Name}")"
+                                                   OnClick="@(async () => await DeleteAsync(context.Item))" />
+                                </MudTooltip>
+                            }
                         </div>
                     </CellTemplate>
                 </TemplateColumn>
@@ -438,6 +437,15 @@
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
     private Guid? Me => UserInfo?.Id;
+
+    /// <summary>
+    /// Whether this expense still belongs to a group the caller is in. Historical expenses
+    /// remain readable after leaving, but the API refuses edits and deletes in that group.
+    /// Keep the details action for that history and remove only the two controls that cannot
+    /// succeed.
+    /// </summary>
+    private bool CanChange(TransactionResponse row) =>
+        row.GroupId is null || GroupsService.Groups.Any(group => group.Id == row.GroupId);
 
     // ---------------------------------------------------------------- wording --
 
