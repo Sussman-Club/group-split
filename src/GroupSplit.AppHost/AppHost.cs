@@ -1,6 +1,7 @@
 using GroupSplit.AppHost.Extensions;
 using Projects;
 using Scalar.Aspire;
+using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
 #pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001
 
@@ -27,22 +28,20 @@ var storage = storageServer.AddBucket(ReceiptsBucket);
 
 var azureOpenAiParameters = builder.AddAzureOpenAIReceiptTranscriptionParameters();
 
-// AddOpenAI models endpoint, API key, and deployment as one resource graph. WithReference below
-// passes its standard Endpoint, Key, and ModelName connection-string properties into the API.
-// The AppHost resolves local parameter values for the model definition; these fallbacks are never
-// used by the API because Azure OpenAI stays disabled until all three parameters are supplied.
-var azureOpenAiEndpoint = builder.Configuration["Parameters:azure-openai-endpoint"]
-    ?? "https://openai.azure.com/openai/v1/";
-var azureOpenAiModelName = builder.Configuration["Parameters:azure-openai-model"]
-    ?? "receipt-transcription";
-var azureOpenAi = builder.AddOpenAI("azure-openai")
+var azureOpenAi = OpenAIExtensions.AddOpenAI(builder, "azure-openai")
     .WithApiKey(azureOpenAiParameters.ApiKey)
-    .WithEndpoint(azureOpenAiEndpoint);
-var azureOpenAiReceiptModel = azureOpenAi.AddModel("azure-openai-receipt-transcription", azureOpenAiModelName);
+    .WithEndpoint(azureOpenAiParameters.Endpoint);
+
+var azureOpenAiReceiptModel = azureOpenAi.WithModel(
+    "receipt-transcription", azureOpenAiParameters.Model);
 
 // Veryfi remains SaaS-managed; this external resource gives its API calls a named dependency in
 // the Aspire dashboard without routing or persisting receipt content there.
 var veryfi = builder.AddExternalService("veryfi", new Uri("https://api.veryfi.com"));
+
+// Plaid is SaaS-managed too. The API client selects Sandbox or Production from Plaid__Environment;
+// this external resource is the local dashboard dependency and uses Plaid's Sandbox endpoint.
+var plaid = builder.AddExternalService("plaid", new Uri("https://sandbox.plaid.com"));
 
 var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
@@ -76,6 +75,7 @@ var api = builder.AddProject<GroupSplit_API>("api")
     .WithReference(keycloak)
     .WithReference(storage)
     .WithReference(veryfi)
+    .WithReference(plaid)
     .WithReference(azureOpenAiReceiptModel)
     .WaitFor(storage)
     .WaitFor(keycloak)

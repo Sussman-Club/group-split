@@ -18,12 +18,14 @@ public record SaveReceiptRequest
 
 public record ReceiptItemInput
 {
+    public const int NameLength = 128;
+
     /// <summary>
     /// Which stored line this is, for a bill being corrected. Null is a new line, which is
     /// every line of a bill being written down for the first time.
     /// </summary>
     public Guid? Id { get; init; }
-    [Required, StringLength(128)] public string Name { get; init; } = null!;
+    [Required, StringLength(NameLength)] public string Name { get; init; } = null!;
     [StringLength(128)] public string? NormalizedName { get; init; }
     [StringLength(1000)] public string? Description { get; init; }
     [MaxDecimalPlaces(2)] public decimal UnitPrice { get; init; }

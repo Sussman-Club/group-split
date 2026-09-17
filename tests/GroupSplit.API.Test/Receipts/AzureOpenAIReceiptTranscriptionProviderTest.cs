@@ -1,103 +1,46 @@
-using System.Net;
-using System.Text;
-using System.Text.Json;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
-using GroupSplit.API.Services.AzureOpenAI;
+using GroupSplit.API.Services.ReceiptTranscription;
+using GroupSplit.API.Services.ReceiptTranscription.AzureOpenAI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace GroupSplit.API.Test.Receipts;
 
 public sealed class AzureOpenAIReceiptTranscriptionProviderTest
 {
     [Fact]
-    public async Task Posts_an_image_with_the_api_key_and_maps_structured_output()
+    public async Task Sends_the_receipt_to_the_keyed_chat_client_and_maps_structured_output()
     {
-        var server = new AzureOpenAIServer("""
-            {
-              "output": [
-                {
-                  "type": "message",
-                  "role": "assistant",
-                  "status": "completed",
-                  "content": [
-                    { "type": "output_text", "text": "{\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60,\"discount\":2.00,\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1,\"totalPrice\":16.00,\"discountAmount\":2.00,\"taxAmount\":1.60}]}" }
-                  ]
-                }
-              ]
-            }
-            """);
-        var provider = CreateProvider(server);
+        var client = new StubChatClient(
+            "{\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60,\"discount\":2.00," +
+            "\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1," +
+            "\"totalPrice\":16.00,\"discountAmount\":2.00,\"taxAmount\":1.60}]}");
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(
+            client,
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
 
         var receipt = await provider.Transcribe(
             new ReceiptSourceDocument(Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1, 2, 3]),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpMethod.Post, server.Method);
-        Assert.Equal("https://resource.openai.azure.com/openai/v1/responses", server.RequestUri!.ToString());
-        Assert.Equal("test-api-key", server.ApiKey);
         Assert.Equal(17.60m, receipt.Total);
         var item = Assert.Single(receipt.Items);
         Assert.Equal("Pizza", item.Name);
         Assert.Equal(1.60m, item.TaxAmount);
-
-        using var request = JsonDocument.Parse(server.Body);
-        var root = request.RootElement;
-        Assert.Equal("receipt-deployment", root.GetProperty("model").GetString());
-        var prompt = root.GetProperty("input")[0].GetProperty("content")[0].GetProperty("text").GetString();
-        Assert.Contains("discount", prompt, StringComparison.OrdinalIgnoreCase);
-        var tool = Assert.Single(root.GetProperty("tools").EnumerateArray());
-        Assert.Equal("web_search", tool.GetProperty("type").GetString());
-        var image = root.GetProperty("input")[0].GetProperty("content")[1];
-        Assert.Equal("input_image", image.GetProperty("type").GetString());
-        Assert.Equal("data:image/jpeg;base64,AQID", image.GetProperty("image_url").GetString());
-
-        var format = root.GetProperty("text").GetProperty("format");
-        Assert.Equal("json_schema", format.GetProperty("type").GetString());
-        Assert.True(format.TryGetProperty("strict", out var strict), server.Body);
-        Assert.True(strict.GetBoolean());
-        Assert.Equal("AzureReceipt", format.GetProperty("name").GetString());
+        Assert.Contains("discount", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dinner.jpg", client.AttachmentDescription);
     }
 
     [Fact]
-    public async Task Sends_a_pdf_as_an_input_file_and_reads_nested_output_text()
+    public async Task Converts_chat_client_failures_to_a_retryable_bad_gateway()
     {
-        var server = new AzureOpenAIServer("""
-            {
-              "output": [
-                {
-                  "type": "message",
-                  "role": "assistant",
-                  "status": "completed",
-                  "content": [
-                    { "type": "output_text", "text": "{\"subtotal\":100,\"tax\":20,\"tip\":0,\"total\":120,\"items\":[{\"name\":\"Shelf\",\"unitPrice\":100,\"quantity\":1,\"totalPrice\":100,\"taxAmount\":20}]}" }
-                  ]
-                }
-              ]
-            }
-            """);
-        var provider = CreateProvider(server);
-
-        var receipt = await provider.Transcribe(
-            new ReceiptSourceDocument(Guid.NewGuid(), "ikea.pdf", "application/pdf", [4, 5]),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(120m, receipt.Total);
-        using var request = JsonDocument.Parse(server.Body);
-        var file = request.RootElement.GetProperty("input")[0].GetProperty("content")[1];
-        Assert.Equal("input_file", file.GetProperty("type").GetString());
-        Assert.Equal("data:application/pdf;base64,BAU=", file.GetProperty("file_data").GetString());
-        Assert.Equal("ikea.pdf", file.GetProperty("filename").GetString());
-    }
-
-    [Fact]
-    public async Task Converts_provider_failures_to_a_retryable_bad_gateway()
-    {
-        var provider = CreateProvider(new AzureOpenAIServer("{}", HttpStatusCode.ServiceUnavailable));
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(
+            new StubChatClient(new HttpRequestException("Azure is unavailable")),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
 
         var error = await Assert.ThrowsAsync<BadGatewayException>(() => provider.Transcribe(
             new ReceiptSourceDocument(Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1]),
@@ -107,7 +50,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     }
 
     [Fact]
-    public void Leaves_transcription_unavailable_when_azure_openai_is_disabled_or_unconfigured()
+    public void Leaves_transcription_unavailable_when_azure_openai_is_disabled()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -126,19 +69,20 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     }
 
     [Fact]
-    public void Resolves_the_selected_provider_from_its_string_key()
+    public void Resolves_the_selected_provider_from_the_same_keyed_chat_client_used_in_production()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ReceiptTranscription:Provider"] = "AzureOpenAI",
-                ["AzureOpenAI:Enabled"] = "true",
-                ["ConnectionStrings:azure-openai-receipt-transcription"] =
-                    "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=test-api-key;Model=receipt-deployment"
+                ["AzureOpenAI:Enabled"] = "true"
             })
             .Build();
         var services = new ServiceCollection();
         services.AddReceiptTranscription(configuration);
+        services.AddKeyedSingleton<IChatClient>(
+            "receipt-transcription",
+            new StubChatClient("{\"items\":[]}"));
 
         using var serviceProvider = services.BuildServiceProvider();
         var selected = serviceProvider.GetRequiredService<IReceiptTranscriptionProvider>();
@@ -148,48 +92,51 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Same(selected, keyed);
     }
 
-    private static AzureOpenAIReceiptTranscriptionProvider CreateProvider(AzureOpenAIServer server)
+    private sealed class StubChatClient : IChatClient
     {
-        var client = new HttpClient(server)
+        private readonly string? response;
+        private readonly Exception? failure;
+
+        public StubChatClient(string response) => this.response = response;
+
+        public StubChatClient(Exception failure) => this.failure = failure;
+
+        public string Prompt { get; private set; } = string.Empty;
+
+        public string AttachmentDescription { get; private set; } = string.Empty;
+
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
         {
-            BaseAddress = new Uri("https://resource.openai.azure.com/openai/v1/")
-        };
-        return new AzureOpenAIReceiptTranscriptionProvider(
-            new AzureOpenAIReceiptAgentFactory(new StubHttpClientFactory(client)),
-            Options.Create(new AzureOpenAIReceiptTranscriptionOptions
-            {
-                Enabled = true,
-                ConnectionString = "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=test-api-key;Model=receipt-deployment"
-            }),
-            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
-    }
+            var message = messages.Single();
+            Prompt = string.Join("\n", message.Contents.OfType<TextContent>().Select(content => content.Text));
+            AttachmentDescription = string.Join(
+                "\n",
+                message.Contents.OfType<DataContent>().Select(content => content.Name ?? string.Empty));
 
-    private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => client;
-    }
+            if (failure is not null)
+                throw failure;
 
-    private sealed class AzureOpenAIServer(string response, HttpStatusCode status = HttpStatusCode.OK)
-        : HttpMessageHandler
-    {
-        public HttpMethod? Method { get; private set; }
-        public Uri? RequestUri { get; private set; }
-        public string ApiKey { get; private set; } = string.Empty;
-        public string Body { get; private set; } = string.Empty;
+            var assistant = new ChatMessage(ChatRole.Assistant, response!);
+            return Task.FromResult(new ChatResponse(assistant));
+        }
 
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken)
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
-            Method = request.Method;
-            RequestUri = request.RequestUri;
-            ApiKey = request.Headers.GetValues("api-key").Single();
-            Body = request.Content is null
-                ? string.Empty
-                : await request.Content.ReadAsStringAsync(cancellationToken);
-            return new HttpResponseMessage(status)
-            {
-                Content = new StringContent(response, Encoding.UTF8, "application/json")
-            };
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
         }
     }
 }

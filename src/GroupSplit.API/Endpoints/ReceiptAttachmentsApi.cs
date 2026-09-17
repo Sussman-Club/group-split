@@ -1,6 +1,7 @@
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;

@@ -48,8 +48,8 @@ public sealed class BankingOptions
     /// <remarks>
     /// The one thing standing between a database dump and the bank access tokens in it,
     /// which is why it is a deployment secret and must never be stored beside the database.
-    /// Absent is the ordinary case in development and a mistake in a deployment, so the
-    /// publish refuses it when bank sync is on.
+    /// Absent is the ordinary case in development. Deployments should normally set it, but
+    /// the application can run without one and logs that the ring is unwrapped.
     /// <para>
     /// Losing it loses the stored tokens and nothing else; everybody links their bank again.
     /// Rotating it is <c>UnprotectKeysWithAnyCertificate</c> with both, which is not wired

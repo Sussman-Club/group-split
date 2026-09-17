@@ -1,93 +1,18 @@
-using System.Data.Common;
-using System.Security.Cryptography;
-using System.Text;
+using System.ClientModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GroupSplit.API.Errors;
 using GroupSplit.Shared.Errors;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
-using OpenAI;
-using OpenAI.Responses;
 using Polly.Timeout;
-using System.ClientModel;
-using System.ClientModel.Primitives;
 
-namespace GroupSplit.API.Services.AzureOpenAI;
+namespace GroupSplit.API.Services.ReceiptTranscription.AzureOpenAI;
 
-/// <summary>Azure OpenAI receipt transcription settings supplied by the AppHost.</summary>
-public sealed class AzureOpenAIReceiptTranscriptionOptions
-{
-    public const string SectionName = "AzureOpenAI";
-    public const string ConnectionStringName = "azure-openai-receipt-transcription";
-
-    public bool Enabled { get; set; }
-    /// <summary>
-    /// The Aspire model-reference connection string. It contains Endpoint, Key, and ModelName.
-    /// It is populated from ConnectionStrings__azure-openai-receipt-transcription.
-    /// </summary>
-    public string ConnectionString { get; set; } = string.Empty;
-    public int TimeoutSeconds { get; set; } = 120;
-
-    /// <summary>
-    /// Enables safe response diagnostics. The response body is never written to logs because it
-    /// contains receipt content; only its size and a non-reversible hash are logged.
-    /// </summary>
-    public bool LogRawResponses { get; set; }
-}
-
-public sealed record AzureOpenAIReceiptConnection(string Endpoint, string ApiKey, string Model);
-
-public interface IAzureOpenAIReceiptAgentFactory
-{
-    AIAgent Create(AzureOpenAIReceiptConnection connection, TimeSpan timeout);
-}
-
-/// <summary>Builds a Microsoft Agent Framework agent backed by Azure OpenAI Responses.</summary>
-internal sealed class AzureOpenAIReceiptAgentFactory(IHttpClientFactory httpClients)
-    : IAzureOpenAIReceiptAgentFactory
-{
-#pragma warning disable OPENAI001 // Azure OpenAI Responses support is currently marked experimental by the OpenAI SDK.
-    public AIAgent Create(AzureOpenAIReceiptConnection connection, TimeSpan timeout)
-    {
-        var clientOptions = new OpenAIClientOptions
-        {
-            Endpoint = new Uri(connection.Endpoint, UriKind.Absolute),
-            NetworkTimeout = timeout,
-            RetryPolicy = new ClientRetryPolicy(0),
-            Transport = new HttpClientPipelineTransport(httpClients.CreateClient(
-                AzureOpenAIReceiptTranscriptionProvider.HttpClientName))
-        };
-
-        var auth = ApiKeyAuthenticationPolicy.CreateHeaderApiKeyPolicy(
-            new ApiKeyCredential(connection.ApiKey), "api-key");
-        var client = new OpenAIClient(auth, clientOptions);
-
-        return client.GetResponsesClient()
-            .AsAIAgent(
-                model: connection.Model,
-                instructions: "Extract a normalized receipt from the supplied document. Every "
-                    + "line, every amount, and every word of a name comes from the receipt: "
-                    + "expand the merchant's abbreviations into the words they stand for, and "
-                    + "add nothing the receipt does not show.",
-                name: "ReceiptTranscription")
-            .AsBuilder()
-            .UseOpenTelemetry("GroupSplit.ReceiptTranscription")
-            .Build(null);
-    }
-#pragma warning restore OPENAI001
-}
-
-/// <summary>Reads receipt documents through Azure OpenAI using Microsoft Agent Framework.</summary>
+/// <summary>Reads receipt documents through Azure OpenAI using Microsoft.Extensions.AI.</summary>
 public sealed class AzureOpenAIReceiptTranscriptionProvider(
-    IAzureOpenAIReceiptAgentFactory agentFactory,
-    IOptions<AzureOpenAIReceiptTranscriptionOptions> options,
+    [FromKeyedServices("receipt-transcription")] IChatClient chatClient,
     ILogger<AzureOpenAIReceiptTranscriptionProvider> logger) : IReceiptTranscriptionProvider
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    internal const string HttpClientName = "AzureOpenAIReceiptTranscription";
-
     private const string Prompt = """
         Read the attached receipt and return the normalized receipt JSON requested by the schema.
         It may come from any merchant, a shop, a restaurant, a pharmacy, a fuel station, an online
@@ -150,14 +75,6 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     public async Task<TranscribedReceipt> Transcribe(
         ReceiptSourceDocument document, CancellationToken ct = default)
     {
-        var settings = options.Value;
-        if (!TryGetConnection(settings.ConnectionString, out var connection))
-        {
-            throw new BadGatewayException(
-                ErrorCodes.ReceiptTranscriptionProviderUnavailable,
-                "The receipt transcription service is not configured.");
-        }
-
         var message = new ChatMessage(ChatRole.User, new List<AIContent>
         {
             new TextContent(Prompt),
@@ -166,24 +83,15 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
         try
         {
-            var response = await agentFactory.Create(
-                    connection, TimeSpan.FromSeconds(settings.TimeoutSeconds))
-                .RunAsync<AzureReceipt>(
-                message,
-                serializerOptions: Json,
-                options: new ChatClientAgentRunOptions(new ChatOptions
-                {
-                    Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low },
-                    AdditionalProperties = new AdditionalPropertiesDictionary { ["strict"] = true }
-                }),
-                cancellationToken: ct);
-            if (settings.LogRawResponses)
-            {
-                var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(response.Text)));
-                logger.LogInformation(
-                    "Azure OpenAI response diagnostics for receipt attachment {AttachmentId}: {PayloadLength} bytes, SHA-256 {PayloadHash}.",
-                    document.AttachmentId, response.Text.Length, hash);
-            }
+            var response = await chatClient
+                .GetResponseAsync<AzureReceipt>(
+                    message,
+                    options: new ChatOptions
+                    {
+                        Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low },
+                        AdditionalProperties = new AdditionalPropertiesDictionary { ["strict"] = true },
+                    },
+                    cancellationToken: ct);
 
             var receipt = response.Result;
 
@@ -223,44 +131,6 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
                 ErrorCodes.ReceiptTranscriptionProviderUnavailable,
                 "The receipt transcription service could not be reached. Please try again shortly.",
                 error);
-        }
-    }
-
-    internal static bool TryGetConnection(string connectionString, out AzureOpenAIReceiptConnection connection)
-    {
-        connection = null!;
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            return false;
-        }
-
-        try
-        {
-            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-            var endpoint = builder.TryGetValue("Endpoint", out var endpointValue) ? endpointValue?.ToString() : null;
-            var apiKey = builder.TryGetValue("Key", out var keyValue) ? keyValue?.ToString() : null;
-            // Aspire's OpenAI model reference uses Model in the injected connection string.
-            // Accept ModelName as well for older/manual connection strings.
-            var model = builder.TryGetValue("Model", out var modelValue)
-                ? modelValue?.ToString()
-                : builder.TryGetValue("ModelName", out var modelNameValue)
-                    ? modelNameValue?.ToString()
-                    : null;
-            if (string.IsNullOrWhiteSpace(endpoint)
-                || !Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri)
-                || (endpointUri.Scheme != Uri.UriSchemeHttps && endpointUri.Scheme != Uri.UriSchemeHttp)
-                || string.IsNullOrWhiteSpace(apiKey)
-                || string.IsNullOrWhiteSpace(model))
-            {
-                return false;
-            }
-
-            connection = new AzureOpenAIReceiptConnection(endpoint, apiKey, model);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
         }
     }
 

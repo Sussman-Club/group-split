@@ -76,9 +76,9 @@ public sealed class PlaidConnector(
     /// An address, or null when there is not one.
     /// </summary>
     /// <remarks>
-    /// Blank is how "not configured" arrives. Every optional parameter in the AppHost
-    /// resolves to an empty string when nobody sets it, and the rest of this application
-    /// already reads blank as absent -- an empty client id is what switches bank sync off.
+    /// Blank is how "not configured" can still be represented for values such as the
+    /// redirect URI. The rest of this application reads blank as absent -- an empty client
+    /// id is what switches bank sync off.
     /// Plaid draws no such distinction: it refuses <c>redirect_uri: ""</c> with
     /// INVALID_FIELD, the same as it refuses an address nobody registered. Passing one
     /// through would turn "this deployment has no redirect" into every link failing.
