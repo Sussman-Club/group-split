@@ -20,6 +20,47 @@
     flex-wrap: wrap;
 }
 
+.gs-match-choice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--gs-line);
+    border-radius: 12px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gs-match-choice:hover,
+.gs-match-choice:focus-visible,
+.gs-match-choice.is-selected {
+    border-color: var(--gs-primary);
+    background: color-mix(in srgb, var(--gs-primary) 9%, var(--gs-surface));
+}
+
+.gs-match-choice-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+}
+
+.gs-match-choice-copy .meta {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-match-choice-copy .gs-tag {
+    margin-top: 2px;
+}
+
 /* The receipt has two deliberate states: keep the original file first, then read it.
    The input stays in the DOM and focusable, while the label does the visual work. */
 .gs-file-picker {
@@ -57,13 +98,36 @@
     transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
 }
 
+.gs-file-picker-main-action {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.gs-file-picker-camera-action {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 10px;
+    border: 1px solid var(--gs-primary);
+    border-radius: 999px;
+    color: var(--gs-primary);
+    font-size: .75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .gs-file-picker-dropzone:hover {
     border-color: var(--gs-primary);
     background: color-mix(in srgb, var(--gs-primary) 8%, var(--gs-surface));
     transform: translateY(-1px);
 }
 
-.gs-file-picker-input:focus-visible + .gs-file-picker-dropzone {
+.gs-file-picker-input:focus-visible ~ .gs-file-picker-dropzone {
     outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
     outline-offset: 3px;
 }
@@ -151,6 +215,10 @@
 }
 
 @media (max-width: 520px) {
+    .gs-file-picker-camera-action {
+        display: inline-flex;
+    }
+
     .gs-file-picker-attached {
         align-items: flex-start;
         flex-wrap: wrap;

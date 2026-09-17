@@ -31,6 +31,7 @@ public static class GroupApi
             group.MapGetGroupTransactionsSummary();
             group.MapGetActivity();
             group.MapGetMembers();
+            group.MapGetPastMembers();
             group.MapLeave();
             group.MapRemoveMember();
             group.MapGetInvitations();
@@ -200,6 +201,32 @@ public static class GroupApi
                     return Results.Ok(userResponse);
                 })
                 .WithName("GetGroupMembers")
+                .Produces<UserInfo[]>();
+        }
+
+        /// <summary>
+        /// People who have left but remain in the group's historical payments or shares.
+        /// </summary>
+        /// <remarks>
+        /// This is intentionally separate from the participant endpoint. Past members can
+        /// explain an old entry, but cannot be selected for a new expense, split rule, or
+        /// settlement.
+        /// </remarks>
+        private RouteHandlerBuilder MapGetPastMembers()
+        {
+            return group.MapGet("{id:guid}/past-members", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    var pastMembers = await groupService.GetGroupPastMembers(id, ct);
+                    var userResponse = await pastMembers
+                        .Select(user => new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
+                            false, true))
+                        .ToListAsync(ct);
+                    return Results.Ok(userResponse);
+                })
+                .WithName("GetGroupPastMembers")
                 .Produces<UserInfo[]>();
         }
 

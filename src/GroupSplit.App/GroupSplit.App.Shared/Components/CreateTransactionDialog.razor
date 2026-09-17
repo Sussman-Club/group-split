@@ -312,9 +312,12 @@
         {
             var draft = await Receipts.TranscribeAsync(file);
             if (draft is null)
+            {
+                _receiptError = "We couldn’t read that receipt. Try again, or add the expense without scanning.";
                 return;
+            }
 
-            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Review receipt",
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Check receipt",
                 new DialogParameters<ReceiptDraftDialog>
                 {
                     { dialog => dialog.Transcription,

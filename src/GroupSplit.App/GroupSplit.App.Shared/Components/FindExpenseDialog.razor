@@ -1,0 +1,121 @@
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.Components.Web
+@namespace GroupSplit.App.Shared.Components
+@inject ITransactionsClient TransactionsClient
+@inject ApiErrorPresenter Errors
+@inject LocalClock Clock
+
+<MudDialog Class="gs-sheet">
+    <TitleContent>
+        <div class="gs-dialog-head">
+            <div style="min-width: 0">
+                <div class="gs-eyebrow">Search your history</div>
+                <h2 class="gs-dialog-title">Find another expense</h2>
+            </div>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="gs-stack" style="gap: 12px">
+            <MudTextField @bind-Value="_search"
+                          Label="Search expenses"
+                          Placeholder="Name, note or group"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@Icons.Material.Rounded.Search"
+                          OnKeyDown="OnKeyDown" />
+
+            <div class="gs-inline" style="justify-content: space-between">
+                <MudText Typo="Typo.caption" Class="gs-muted">
+                    @(_search.Length == 0 ? "Recent expenses" : "Matching expenses")
+                </MudText>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                           Disabled="@_busy" OnClick="SearchAsync">Search</MudButton>
+            </div>
+
+            @if (_busy)
+            {
+                <div class="gs-empty" style="padding: 24px">
+                    <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
+                    <span>Searching expenses…</span>
+                </div>
+            }
+            else if (_expenses.Count == 0)
+            {
+                <div class="gs-empty" style="padding: 28px 16px">
+                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+                    <span>No expenses found. Try another search, or choose “None of these — it is new.”</span>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var expense in _expenses)
+                    {
+                        <button type="button" class="gs-match-choice" @onclick="@(() => Choose(expense))">
+                            <Avatar Name="@expense.Name" />
+                            <span class="gs-match-choice-copy">
+                                <span class="title">@expense.Name</span>
+                                <span class="meta">@(expense.GroupName ?? "Personal") · @Clock.Local(expense.DateTime).ToString("d") · @expense.PaidByUserName paid</span>
+                            </span>
+                            <Money Value="@expense.Amount" Currency="@Row.Currency" />
+                            <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Close">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
+
+    private string _search = string.Empty;
+    private IReadOnlyList<TransactionResponse> _expenses = [];
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => SearchAsync();
+
+    private async Task SearchAsync()
+    {
+        _busy = true;
+
+        try
+        {
+            await Errors.TryAsync(async () =>
+            {
+                var page = await TransactionsClient.GetTransactionsAsync(
+                    search: string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                    sortBy: "date",
+                    sortDescending: true,
+                    page: 1,
+                    pageSize: 20);
+                _expenses = page.Items;
+            }, "Could not search expenses.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter")
+            await SearchAsync();
+    }
+
+    private void Choose(TransactionResponse expense) =>
+        MudDialog.Close(DialogResult.Ok(expense));
+
+    private void Close() => MudDialog.Cancel();
+}

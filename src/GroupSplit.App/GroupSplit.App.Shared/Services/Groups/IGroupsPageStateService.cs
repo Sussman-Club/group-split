@@ -57,6 +57,9 @@ public interface IGroupsPageStateService
     Task<bool> CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default);
     IAsyncEnumerable<UserInfo> GetGroupMembersAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>People who left but remain in the selected group's history.</summary>
+    Task<IReadOnlyList<UserInfo>> GetGroupPastMembersAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Who the selected group has asked to join and is still waiting on.</summary>
     Task<IReadOnlyList<GroupInvitationResponse>> GetGroupInvitationsAsync(CancellationToken cancellationToken = default);
 

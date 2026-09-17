@@ -50,14 +50,23 @@
 @code {
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
-    private string Title => ("/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/')) switch
+    private string Title
     {
-        "/" => "Home",
-        "/groups" => "Groups",
-        "/transactions" => "You",
-        "/account" => "Account",
-        _ => "Group Split"
-    };
+        get
+        {
+            var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/');
+
+            return path switch
+            {
+                "/" => "Home",
+                "/groups" => "Groups",
+                "/account" => "Account",
+                "/inbox" => "Activity",
+                _ when path.StartsWith("/transactions", StringComparison.OrdinalIgnoreCase) => "Activity",
+                _ => "Group Split"
+            };
+        }
+    }
 
     protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
 

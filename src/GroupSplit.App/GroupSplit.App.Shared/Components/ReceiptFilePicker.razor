@@ -11,20 +11,33 @@
                disabled="@IsBusy"
                class="gs-file-picker-input"
                aria-label="Receipt file" />
+    <InputFile id="@_cameraId"
+               OnChange="FileChanged"
+               accept="image/*"
+               capture="environment"
+               disabled="@IsBusy"
+               class="gs-file-picker-input"
+               aria-label="Scan receipt with camera" />
 
     @if (!IsAttached)
     {
-        <label for="@_inputId" class="gs-file-picker-dropzone">
-            <span class="gs-file-picker-mark" aria-hidden="true">
-                <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
-            </span>
-            <span class="gs-file-picker-copy">
-                <span class="gs-file-picker-title">@Title</span>
-                <span class="gs-file-picker-subtitle">@Description</span>
-                <span class="gs-file-picker-formats">JPG, PNG, WebP or PDF · up to 10 MB</span>
-            </span>
-            <span class="gs-file-picker-action">Browse</span>
-        </label>
+        <div class="gs-file-picker-dropzone">
+            <label for="@_inputId" class="gs-file-picker-main-action">
+                <span class="gs-file-picker-mark" aria-hidden="true">
+                    <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+                </span>
+                <span class="gs-file-picker-copy">
+                    <span class="gs-file-picker-title">@Title</span>
+                    <span class="gs-file-picker-subtitle">@Description</span>
+                    <span class="gs-file-picker-formats">JPG, PNG, WebP or PDF · up to 10 MB</span>
+                </span>
+                <span class="gs-file-picker-action">Browse</span>
+            </label>
+            <label for="@_cameraId" class="gs-file-picker-camera-action">
+                <MudIcon Icon="@Icons.Material.Rounded.PhotoCamera" Size="Size.Small" />
+                <span>Scan receipt</span>
+            </label>
+        </div>
     }
     else
     {
@@ -63,7 +76,7 @@
     {
         <div class="gs-file-picker-transcript" role="status">
             <MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />
-            <span>Receipt reviewed · @TranscriptItemCount item(s) ready to check.</span>
+            <span>Receipt checked · @TranscriptItemCount item(s) ready to use.</span>
         </div>
     }
 
@@ -75,6 +88,7 @@
 
 @code {
     private readonly string _inputId = $"receipt-picker-{Guid.NewGuid():N}";
+    private readonly string _cameraId = $"receipt-camera-{Guid.NewGuid():N}";
 
     [Parameter] public EventCallback<InputFileChangeEventArgs> FileChanged { get; set; }
     [Parameter] public EventCallback ReadRequested { get; set; }

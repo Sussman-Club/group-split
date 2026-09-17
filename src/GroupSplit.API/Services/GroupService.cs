@@ -64,6 +64,15 @@ public interface IGroupService
     /// </remarks>
     Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// People who are no longer members but still appear in the group's recorded history.
+    /// </summary>
+    /// <remarks>
+    /// Membership rows are removed when somebody leaves. The ledger is the durable history,
+    /// so this is a read-only context list and never a participant list for new money.
+    /// </remarks>
+    Task<IQueryable<User>> GetGroupPastMembers(Guid groupId, CancellationToken cancellationToken = default);
+
 
 
     /// <summary>
@@ -282,6 +291,31 @@ public class GroupService(
 
         return from user in participants.Of(groupId)
                where mine.Any(candidate => candidate.Id == groupId)
+               select user;
+    }
+
+    public async Task<IQueryable<User>> GetGroupPastMembers(Guid groupId,
+        CancellationToken cancellationToken = default)
+    {
+        // Scope through the caller's active membership first. A past member can be shown
+        // only from a group the caller can still read, just like the ordinary roster.
+        var mine = await GetGroupById(groupId, cancellationToken);
+
+        return from user in context.Set<User>()
+               where mine.Any(candidate => candidate.Id == groupId) &&
+                     !user.Groups.Any(candidate => candidate.Id == groupId) &&
+                     !context.Set<GroupInvitation>().Any(invitation =>
+                         invitation.GroupId == groupId && invitation.ParticipantUserId == user.Id) &&
+                     (context.Set<Transaction>().Any(transaction =>
+                          transaction.GroupId == groupId && transaction.UserId == user.Id) ||
+                      context.Set<TransactionSplit>().Any(split =>
+                          split.Transaction.GroupId == groupId && split.UserId == user.Id) ||
+                      context.Set<SplitRuleParticipant>().Any(participant =>
+                          participant.SplitRuleVersion.SplitRule.Group.Id == groupId &&
+                          participant.UserId == user.Id) ||
+                      context.Set<SoleSplitRuleVersion>().Any(version =>
+                          version.SplitRule.Group.Id == groupId && version.UserId == user.Id))
+               orderby user.FirstName, user.LastName, user.Email
                select user;
     }
 

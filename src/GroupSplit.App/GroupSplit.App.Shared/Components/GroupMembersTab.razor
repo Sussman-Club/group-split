@@ -23,7 +23,8 @@
 *@
 
 <div class="gs-two-col">
-    <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
+    <div class="gs-stack">
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
         <div class="gs-card-title">
             <h2>Members</h2>
             <span class="gs-tag neutral">@_joined.Count</span>
@@ -71,6 +72,32 @@
             <MudButton Variant="Variant.Text" Class="gs-btn-danger"
                        StartIcon="@Icons.Material.Rounded.Logout" OnClick="@LeaveAsync">Leave group</MudButton>
         </div>
+        </div>
+
+        @if (_past.Count > 0)
+        {
+            <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+                <div class="gs-card-title">
+                    <h2>Past members</h2>
+                    <span class="gs-tag neutral">@_past.Count</span>
+                </div>
+                <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
+                    They are kept here so older activity still makes sense. They are not part of new expenses or rules.
+                </MudText>
+                <div class="gs-list">
+                    @foreach (var person in _past)
+                    {
+                        <div class="gs-row" style="cursor: default">
+                            <Avatar Name="@person.FullName" />
+                            <div style="min-width: 0">
+                                <div class="title">@person.FullName</div>
+                                <div class="meta">Past member · history stays in the group</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     </div>
 
     @* The two ways in, stacked beside the members: the link somebody pastes into the
@@ -172,6 +199,8 @@
     /// </summary>
     private List<UserInfo> _joined = [];
 
+    private IReadOnlyList<UserInfo> _past = [];
+
     private IReadOnlyList<GroupInvitationResponse> _pending = [];
 
     /// <summary>The group the lists were last read for, so they are not read again for it.</summary>
@@ -210,12 +239,14 @@
 
         var members = await GroupsService.GetGroupMembersAsync().ToListAsync();
         var pending = await GroupsService.GetGroupInvitationsAsync();
+        var past = await GroupsService.GetGroupPastMembersAsync();
 
         if (version != _version)
             return;
 
         _members = members;
         _joined = [.. members.Where(member => !member.IsPendingInvitee)];
+        _past = [.. past.Where(member => member.IsPastMember)];
         _pending = pending;
 
         await InvokeAsync(StateHasChanged);
