@@ -89,9 +89,15 @@ back to whatever default it declares.
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no, empty keeps the popup flow | Where an OAuth bank returns to. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled | PKCS#12 certificate, base64 encoded, that the bank access-token key ring is encrypted with. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
+| `receipt-transcription-provider` | variable `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. With an empty value, configured Veryfi remains preferred, then configured Azure OpenAI. |
 | `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
 | `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when receipt transcription is enabled | Veryfi API credentials. |
 | `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response, which is how a provider misreading is told apart from a mapping mistake. Leave it off outside an investigation: a receipt body is somebody's shopping, and the log is a wider audience than the expense the file was attached to. |
+| `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
+| `azure-openai-endpoint`, `azure-openai-model` | variables `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL (`https://<resource>.openai.azure.com/openai/v1/`) and the deployment/model name. The AppHost puts them in the standard `ConnectionStrings__azure-openai-receipt-transcription` model reference as `Endpoint` and `ModelName`; the API does not read separate Azure OpenAI environment variables. |
+| `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. The AppHost passes it as the `Key` property of that same model-reference connection string. |
+| `azure-openai-timeout-seconds` | variable `AZURE_OPENAI_TIMEOUT_SECONDS` | no, defaults to `120` | HTTP timeout for one Azure OpenAI transcription request. |
+| `azure-openai-log-raw-responses` | variable `AZURE_OPENAI_LOG_RAW_RESPONSES` | no, defaults to `false` | Enables safe response diagnostics. The Azure provider never writes receipt response content or API keys to logs; it records only response size and a SHA-256 hash. |
 
 The optional ones are declared with
 [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
@@ -125,6 +131,28 @@ Bank sync is the other. Plaid's sandbox needs no approval and opens any institut
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:plaid-client-id <id>
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:plaid-secret <sandbox secret>
 ```
+
+Receipt transcription is off by default. To use Azure OpenAI locally, store the Aspire
+parameters in the AppHost user-secrets store. The provider selector is needed when Azure
+OpenAI and legacy Veryfi credentials could both be present:
+
+```bash
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:receipt-transcription-provider AzureOpenAI
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-enabled true
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-endpoint https://<resource>.openai.azure.com/openai/v1/
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-model <deployment-name>
+dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-api-key <api-key>
+```
+
+The AppHost maps the provider switch, enablement, timeout, and diagnostic setting to API
+configuration. It models the account and receipt deployment with Aspire's
+`AddOpenAI("azure-openai")` and `AddModel("azure-openai-receipt-transcription", ...)` and gives
+the API that model reference. Aspire then injects the default
+`ConnectionStrings__azure-openai-receipt-transcription` value containing `Endpoint`, `Key`, and
+`ModelName`; the API deliberately does not receive those values as separate environment variables.
+The deployment workflow uses the corresponding `AZURE_OPENAI_*` production variables/secrets shown
+in the table above; add them to the `production` environment, and leave the switch false or unset
+when the feature is not used.
 
 Whether bank sync is on is not a switch inside the API. The Plaid connector is registered
 when credentials are present, and bank sync is available exactly when a connector answers,

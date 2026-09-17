@@ -107,11 +107,18 @@ jobs:
           PLAID_ENV: ${{ vars.PLAID_ENV }}
           PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
+          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ vars.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
           VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}
           VERYFI_USERNAME: ${{ secrets.VERYFI_USERNAME }}
           VERYFI_API_KEY: ${{ secrets.VERYFI_API_KEY }}
           VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES }}
+          AZURE_OPENAI_ENABLED: ${{ vars.AZURE_OPENAI_ENABLED }}
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_MODEL: ${{ vars.AZURE_OPENAI_MODEL }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_TIMEOUT_SECONDS: ${{ vars.AZURE_OPENAI_TIMEOUT_SECONDS }}
+          AZURE_OPENAI_LOG_RAW_RESPONSES: ${{ vars.AZURE_OPENAI_LOG_RAW_RESPONSES }}
         shell: bash
         run: |
           set -euo pipefail
@@ -163,6 +170,27 @@ jobs:
           # as off, so an incomplete setting costs a feature rather than the deployment.
           require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET BANK_KEY_CERTIFICATE \
             || echo "::notice::PLAID_ENABLED is not true. Nobody can link a bank."
+
+          # Azure OpenAI is optional. If selected explicitly, fail closed rather than
+          # publishing an app whose configured provider can never answer a request.
+          provider="$(value RECEIPT_TRANSCRIPTION_PROVIDER)"
+          case "$provider" in
+            AzureOpenAI)
+              require AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY
+              if [ "$(value AZURE_OPENAI_ENABLED)" != "true" ]; then
+                echo "RECEIPT_TRANSCRIPTION_PROVIDER is AzureOpenAI but AZURE_OPENAI_ENABLED is not true" >&2
+                missing=1
+              fi
+              ;;
+            Veryfi|'') ;;
+            *)
+              echo "RECEIPT_TRANSCRIPTION_PROVIDER must be Veryfi or AzureOpenAI, not '$provider'" >&2
+              missing=1
+              ;;
+          esac
+
+          require_when AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY \
+            || echo "::notice::AZURE_OPENAI_ENABLED is not true. Azure OpenAI receipt transcription is off."
 
           [ "$missing" -eq 0 ] || exit 1
 
@@ -303,8 +331,11 @@ jobs:
             GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
             PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV PLAID_REDIRECT_URI
             BANK_KEY_CERTIFICATE
+            RECEIPT_TRANSCRIPTION_PROVIDER
             VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY
             VERYFI_LOG_RAW_RESPONSES
+            AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY
+            AZURE_OPENAI_TIMEOUT_SECONDS AZURE_OPENAI_LOG_RAW_RESPONSES
           "
 
           for name in $parameters; do

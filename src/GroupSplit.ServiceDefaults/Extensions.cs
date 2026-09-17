@@ -72,6 +72,7 @@ public static class Extensions
                 .WithTracing(tracing =>
                 {
                     tracing.AddSource(builder.Environment.ApplicationName)
+                        .AddSource("GroupSplit.ReceiptTranscription")
                         .AddAspNetCoreInstrumentation(options =>
                             // Exclude health check requests from tracing
                             options.Filter = context =>
