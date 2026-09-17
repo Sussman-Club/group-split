@@ -2,7 +2,9 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -20,8 +22,10 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </remarks>
 public class TransactionDetailsDialogTest : ComponentTest
 {
+    private static readonly Guid Me = Guid.NewGuid();
     private readonly Mock<ITransactionsClient> _transactions = new();
     private readonly Mock<IReceiptCommands> _bills = new();
+    private readonly Mock<IUserLogin> _login = new();
     private readonly Guid _expense = Guid.NewGuid();
 
     public TransactionDetailsDialogTest()
@@ -42,6 +46,9 @@ public class TransactionDetailsDialogTest : ComponentTest
 
         Services.AddSingleton(_transactions.Object);
         Services.AddSingleton(_bills.Object);
+        _login.SetupGet(login => login.User)
+            .Returns(new UserInfo(Me, "Ana", "Benitez", "ana@example.com"));
+        Services.AddSingleton(_login.Object);
     }
 
     private static ReceiptResponse Bill() =>
@@ -133,5 +140,61 @@ public class TransactionDetailsDialogTest : ComponentTest
         Assert.Contains("No receipt added yet", dialog.Markup);
         Assert.Contains("Add receipt", dialog.Markup);
         Assert.DoesNotContain("Add an original receipt", dialog.Markup);
+    }
+
+    [Fact]
+    public async Task Saving_an_itemized_receipt_refreshes_the_parent_shares()
+    {
+        var initial = new TransactionDetailsResponse
+        {
+            Id = _expense,
+            Name = "Dinner",
+            Amount = 37.15m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = Me,
+            PaidByUserName = "Ana Benitez",
+            Splits = [new TransactionSplitResponse(Me, "Ana Benitez", 20m)]
+        };
+        var refreshed = new TransactionDetailsResponse
+        {
+            Id = _expense,
+            Name = "Dinner",
+            Amount = 37.15m,
+            DateTime = initial.DateTime,
+            PaidByUserId = Me,
+            PaidByUserName = "Ana Benitez",
+            Splits = [new TransactionSplitResponse(Me, "Ana Benitez", 18m)]
+        };
+        var reads = 0;
+        _transactions
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<CancellationToken>()))
+            .Returns((Guid _, CancellationToken _) => Task.FromResult(reads++ == 0 ? initial : refreshed));
+
+        var bill = Bill() with { CanEdit = true };
+        _bills.Setup(commands => commands.GetAsync(_expense, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bill);
+        _bills.Setup(commands => commands.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bill);
+
+        var dialog = await Open(bill);
+
+        dialog.FindAll("button")
+            .Single(button => button.TextContent.Contains("Edit itemized receipt"))
+            .Click();
+        dialog.WaitForAssertion(() => Assert.Contains("Save receipt", dialog.Markup));
+
+        var names = dialog.FindComponents<MudTextField<string>>()
+            .Where(field => field.Instance.Label == "Item")
+            .ToList();
+        await dialog.InvokeAsync(() => names[0].Instance.ValueChanged.InvokeAsync("Burrito corrected"));
+        await dialog.InvokeAsync(() => names[1].Instance.ValueChanged.InvokeAsync("Poke corrected"));
+        await dialog.FindAll("button")
+            .Single(button => button.TextContent.Contains("Save receipt", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+
+        dialog.WaitForAssertion(() => Assert.Contains("$18.00", dialog.Markup));
+        _transactions.Verify(client => client.GetTransactionAsync(_expense,
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 }

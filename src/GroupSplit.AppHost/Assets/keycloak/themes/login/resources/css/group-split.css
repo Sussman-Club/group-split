@@ -7,7 +7,7 @@
  * depend on small, which matters because the markup belongs to Keycloak and
  * changes between releases.
  *
- * The tokens are the ones GroupSplit.App.Shared/wwwroot/app.css declares, under
+ * The tokens are the ones GroupSplit.App.Shared/wwwroot/css/tokens.css declares, under
  * the same names and with the same values, so the hosted pages and the app read
  * as one product; ThemeService.cs restates them again for MudBlazor. Change a
  * colour in one and change it in all three. Only the subset the login pages can

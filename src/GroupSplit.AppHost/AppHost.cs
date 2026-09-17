@@ -1,6 +1,7 @@
 using GroupSplit.AppHost.Extensions;
 using Projects;
 using Scalar.Aspire;
+using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
 #pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001
 
@@ -25,9 +26,22 @@ var storageServer = builder.AddRustFs("storage")
 
 var storage = storageServer.AddBucket(ReceiptsBucket);
 
-// Veryfi remains SaaS-managed; this external resource gives its API calls a named
-// dependency in the Aspire dashboard without routing or persisting receipt content there.
+var azureOpenAiParameters = builder.AddAzureOpenAIReceiptTranscriptionParameters();
+
+var azureOpenAi = OpenAIExtensions.AddOpenAI(builder, "azure-openai")
+    .WithApiKey(azureOpenAiParameters.ApiKey)
+    .WithEndpoint(azureOpenAiParameters.Endpoint);
+
+var azureOpenAiReceiptModel = azureOpenAi.WithModel(
+    "receipt-transcription", azureOpenAiParameters.Model);
+
+// Veryfi remains SaaS-managed; this external resource gives its API calls a named dependency in
+// the Aspire dashboard without routing or persisting receipt content there.
 var veryfi = builder.AddExternalService("veryfi", new Uri("https://api.veryfi.com"));
+
+// Plaid is SaaS-managed too. The API client selects Sandbox or Production from Plaid__Environment;
+// this external resource is the local dashboard dependency and uses Plaid's Sandbox endpoint.
+var plaid = builder.AddExternalService("plaid", new Uri("https://sandbox.plaid.com"));
 
 var keycloakDb = dbServer.AddDatabase("keycloak-db", "keycloak");
 
@@ -61,6 +75,8 @@ var api = builder.AddProject<GroupSplit_API>("api")
     .WithReference(keycloak)
     .WithReference(storage)
     .WithReference(veryfi)
+    .WithReference(plaid)
+    .WithReference(azureOpenAiReceiptModel)
     .WaitFor(storage)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)
@@ -68,7 +84,8 @@ var api = builder.AddProject<GroupSplit_API>("api")
     // In both modes: locally the credentials come from user secrets and default to nothing,
     // which leaves the API running with bank sync reported as off.
     .WithPlaid()
-    .WithVeryfiReceiptTranscription();
+    .WithVeryfiReceiptTranscription()
+    .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters);
 
 var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)

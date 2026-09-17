@@ -1,0 +1,107 @@
+/* =============================================================================
+   Group Split design system
+   -----------------------------------------------------------------------------
+   CSS-first. The MudBlazor palette in Services/ThemeService.cs restates these
+   colours for Mud's own components; everything custom reads the tokens below.
+   Dark mode is a `data-theme="dark"` attribute on <html>, stamped by gs.js
+   before Blazor boots and kept in step by AppThemeProvider afterwards.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- tokens -- */
+
+:root {
+    --gs-teal: #22817a;
+    --gs-teal-deep: #1a655f;
+    --gs-teal-bright: #3aa79e;
+    --gs-teal-soft: rgb(34 129 122 / 10%);
+    --gs-teal-glow: rgb(34 129 122 / 22%);
+    --gs-clay: #cb6e3a;
+    --gs-clay-deep: #a8562a;
+    --gs-clay-soft: rgb(203 110 58 / 12%);
+    --gs-clay-glow: rgb(203 110 58 / 22%);
+
+    --gs-bg: #f5f0e6;
+    --gs-surface: #fbf8f1;
+    --gs-surface-2: #fffdf8;
+    --gs-surface-3: #efe8dc;
+    --gs-ink: #23211d;
+    --gs-ink-2: #4a453d;
+    --gs-muted: #6b6459;
+    --gs-line: #e3d9cc;
+    --gs-line-strong: #cfc3b3;
+    --gs-on-accent: #ffffff;
+    --gs-danger: #b3402f;
+    --gs-danger-soft: rgb(179 64 47 / 10%);
+
+    --gs-radius-xl: 24px;
+    --gs-radius-lg: 20px;
+    --gs-radius: 14px;
+    --gs-radius-sm: 10px;
+    --gs-radius-pill: 999px;
+
+    --gs-shadow-sm: 0 1px 2px rgb(42 36 24 / 5%), 0 2px 8px -2px rgb(42 36 24 / 8%);
+    --gs-shadow-md: 0 2px 4px rgb(42 36 24 / 5%), 0 14px 32px -14px rgb(42 36 24 / 22%);
+    --gs-shadow-lg: 0 4px 8px rgb(42 36 24 / 6%), 0 28px 56px -20px rgb(42 36 24 / 30%);
+    --gs-shadow-teal: 0 10px 30px -10px rgb(34 129 122 / 45%);
+
+    --gs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --gs-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --gs-fast: 160ms;
+    --gs-base: 260ms;
+    --gs-slow: 520ms;
+
+    --gs-font-display: "Bricolage Grotesque", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --gs-font-body: "Manrope", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+    --gs-sidebar-w: 256px;
+    --gs-sidebar-rail-w: 76px;
+    --gs-topbar-h: 64px;
+    --gs-tabbar-h: 64px;
+    --gs-content-max: 1180px;
+
+    --gs-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+    --gs-paper: #fdfbf4;
+    --gs-paper-ink: #2a2620;
+    --gs-paper-faint: #786f60;
+    --gs-paper-rule: #d8d0be;
+
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    --gs-teal: #3aa79e;
+    --gs-teal-deep: #22817a;
+    --gs-teal-bright: #5fc4bb;
+    --gs-teal-soft: rgb(58 167 158 / 14%);
+    --gs-teal-glow: rgb(58 167 158 / 26%);
+    --gs-clay: #e08a5a;
+    --gs-clay-deep: #cb6e3a;
+    --gs-clay-soft: rgb(224 138 90 / 14%);
+    --gs-clay-glow: rgb(224 138 90 / 26%);
+
+    --gs-bg: #151412;
+    --gs-surface: #1f1d19;
+    --gs-surface-2: #26231f;
+    --gs-surface-3: #2d2a25;
+    --gs-ink: #f3ede2;
+    --gs-ink-2: #cfc7b9;
+    --gs-muted: #a89f92;
+    --gs-line: #312d27;
+    --gs-line-strong: #4a4438;
+    --gs-on-accent: #0f1a19;
+    --gs-danger: #e06a57;
+    --gs-danger-soft: rgb(224 106 87 / 14%);
+
+    --gs-shadow-sm: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 8px -2px rgb(0 0 0 / 40%);
+    --gs-shadow-md: 0 2px 4px rgb(0 0 0 / 30%), 0 14px 32px -14px rgb(0 0 0 / 60%);
+    --gs-shadow-lg: 0 4px 8px rgb(0 0 0 / 35%), 0 28px 56px -20px rgb(0 0 0 / 70%);
+    --gs-shadow-teal: 0 10px 30px -10px rgb(58 167 158 / 40%);
+
+    --gs-paper: #242019;
+    --gs-paper-ink: #eae3d4;
+    --gs-paper-faint: #a79d8a;
+    --gs-paper-rule: #403927;
+
+    color-scheme: dark;
+}

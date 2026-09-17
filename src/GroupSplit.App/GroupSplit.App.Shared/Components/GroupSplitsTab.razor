@@ -307,6 +307,13 @@
     private Dictionary<Guid, string>? _names;
 
     /// <summary>
+    /// Built-in all-for rules that belong to former members. Categories can still carry one
+    /// as an old default, so their response must not reintroduce its name after the rule
+    /// list correctly hid it.
+    /// </summary>
+    private HashSet<Guid> _unavailableRuleIds = [];
+
+    /// <summary>
     /// Loads, and then keeps up by listening rather than by asking after each dialog.
     /// </summary>
     /// <remarks>
@@ -374,9 +381,13 @@
         _stale = categories is null || rules is null;
 
         if (categories is not null) _categories = [.. categories.OrderBy(row => row.Name)];
-        if (rules is not null) _rules = [.. rules.OrderBy(row => row.Name)];
 
-        await Errors.CaptureAsync(async () =>
+        // Membership is needed for both the names in a description and the distinction
+        // between a current built-in rule and the historical rule of somebody who left.
+        // Keep the result local until this load is still current: an older request can
+        // otherwise return late and replace a newer roster and rule list.
+        Dictionary<Guid, string>? names = null;
+        var membershipError = await Errors.CaptureAsync(async () =>
         {
             var members = await GroupsClient.GetGroupMembersAsync(GroupId);
 
@@ -384,10 +395,40 @@
             // a screen that forgets the mark offers them as a member. DistinctBy so a
             // duplicate id cannot throw ArgumentException out of a quiet block and take the
             // group page down with it.
-            _names = members
+            names = members
                 .DistinctBy(member => member.Id)
                 .ToDictionary(member => member.Id, member => member.Label());
         });
+
+        if (load != _loads)
+            return;
+
+        _names = names;
+        _stale |= membershipError is not null;
+
+        _unavailableRuleIds =
+        [
+            .. (rules ?? [])
+                .Where(rule => rule.BuiltIn && rule.AllForUserId is { } userId &&
+                               (_names is null || !_names.ContainsKey(userId)))
+                .Select(rule => rule.Id)
+        ];
+
+        if (rules is not null)
+        {
+            // The server keeps departed-member rules for old expenses and their histories.
+            // This tab is for divisions the group can use now, so only the built-in rule
+            // whose member is still in the roster belongs in the list (and in category
+            // editors opened from here).
+            var visible = _names is null
+                // The roster is the authority for provisioned rules. If it is unavailable,
+                // retain divisions the group authored but never offer an all-for rule whose
+                // member cannot be proved current.
+                ? rules.Where(rule => !rule.BuiltIn || rule.AllForUserId is null)
+                : rules.VisibleToMembers(_names.Keys);
+
+            _rules = [.. visible.OrderBy(row => row.Name)];
+        }
 
         if (load != _loads)
             return;
@@ -455,6 +496,9 @@
     {
         if (category.DefaultSplitRuleId is not { } ruleId)
             return "no rule · evenly between whoever is in the group";
+
+        if (_unavailableRuleIds.Contains(ruleId))
+            return "divides by a split rule that is no longer available";
 
         var named = _rules.FirstOrDefault(rule => rule.Id == ruleId)?.Name
                     ?? category.DefaultSplitRuleName;

@@ -1,0 +1,186 @@
+/* ------------------------------------------------------------- settling -- */
+
+/* One line per person, not per group -- the whole point of the Settle screen.
+   Same three-column shape as a balance row, plus the action that records it. */
+
+.gs-settle-list,
+.gs-plan-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-settle-row,
+.gs-plan-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    margin: 0 -12px;
+    border-radius: var(--gs-radius);
+    transition: background var(--gs-fast) var(--gs-ease);
+}
+
+.gs-settle-row + .gs-settle-row,
+.gs-plan-row + .gs-plan-row {
+    border-top: 1px solid var(--gs-line);
+    border-radius: 0 0 var(--gs-radius) var(--gs-radius);
+}
+
+.gs-settle-row:hover,
+.gs-plan-row:hover {
+    background: var(--gs-surface-2);
+    border-top-color: transparent;
+}
+
+.gs-settle-row .who,
+.gs-plan-row .who {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-settle-row .who small,
+.gs-plan-row .who small {
+    font-weight: 500;
+    color: var(--gs-muted);
+}
+
+.gs-settle-row .meta,
+.gs-plan-row .meta {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-settle-row .gs-money,
+.gs-plan-row .gs-money {
+    font-size: 1.0625rem;
+}
+
+/* A line of the plan the reader is on neither end of. Present because a plan
+   that hides a step does not add up, and quiet because it is not theirs. */
+.gs-plan-row.is-theirs {
+    opacity: 0.62;
+}
+
+/* Where a cross-group figure comes from, inside the settle dialog. Shown only
+   when the debt spans more than one group -- for a single group it would be
+   the total printed beside itself. */
+.gs-settle-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-3);
+}
+
+.gs-settle-breakdown-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.875rem;
+    color: var(--gs-ink-2);
+}
+
+/* The home page's one strip of things needing a decision. Tinted so it reads as
+   a queue rather than as another card of figures. */
+.gs-waiting {
+    border-color: var(--gs-teal);
+    background:
+        linear-gradient(180deg, var(--gs-teal-soft), transparent 120px),
+        var(--gs-surface);
+}
+
+/* The settle badge counts people to square up with, which is a standing state
+   rather than something arriving -- so it is outlined where the inbox badge,
+   which counts a queue, is filled. */
+.gs-nav-badge.is-quiet {
+    background: transparent;
+    color: var(--gs-teal);
+    box-shadow: inset 0 0 0 1.5px var(--gs-teal);
+}
+
+/* --------------------------------------------------------------- ledger -- */
+
+/* Your share is the quieter of the two figures on a group's ledger, where the
+   amount is the headline; on the You page under "your share" the two swap, and
+   the classes are applied the other way round. */
+.gs-grid .gs-grid-share {
+    font-size: 0.9375rem;
+    color: var(--gs-muted);
+}
+
+.gs-grid .gs-grid-balance {
+    font-size: 0.9375rem;
+}
+
+/* --------------------------------------------------------- stacked chip -- */
+
+/* A chip with a second line under its label. The three view chips on the You page
+   differed only in wording that did not distinguish them -- "Your share" beside
+   "Everything you are in" -- so each one now states what it counts. */
+
+.gs-range .gs-chip-stacked {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    height: auto;
+    min-height: 34px;
+    padding: 6px 14px;
+    text-align: left;
+    line-height: 1.25;
+}
+
+.gs-chip-stacked .gs-chip-label {
+    font-weight: 700;
+}
+
+/* Quieter than the label and quieter still when the chip is off, so a row of three
+   reads as three labels first and three explanations second. */
+.gs-chip-stacked .gs-chip-detail {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    opacity: 0.72;
+}
+
+.gs-chip-stacked.active .gs-chip-detail {
+    opacity: 0.85;
+}
+
+/* On a narrow screen three stacked chips will not sit on one line, and a chip whose
+   second line has wrapped is unreadable. The detail is dropped rather than wrapped:
+   the label still says which view is on, and the heading under it repeats the
+   sentence in full. */
+@media (max-width: 560px) {
+    .gs-chip-stacked .gs-chip-detail {
+        display: none;
+    }
+
+    .gs-range .gs-chip-stacked {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+/* Under 640px the four-column settle rows would put the amount and the button
+   on top of each other. The action drops to its own line instead. */
+@media (max-width: 640px) {
+    .gs-settle-row,
+    .gs-plan-row {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .gs-settle-row > :last-child,
+    .gs-plan-row > :last-child {
+        grid-column: 2 / -1;
+        justify-self: start;
+    }
+}

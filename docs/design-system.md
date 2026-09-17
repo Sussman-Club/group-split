@@ -17,7 +17,7 @@ a shadow means editing every file in the table below that carries it.
 
 | File | Covers | Form |
 | --- | --- | --- |
-| [`GroupSplit.App.Shared/wwwroot/app.css`](../src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/app.css) | The app's own chrome, and the source of truth for the token names and values | `--gs-*` custom properties on `:root` and `:root[data-theme="dark"]` |
+| [`GroupSplit.App.Shared/wwwroot/css/tokens.css`](../src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/css/tokens.css) | The app's source of truth for the token names and values | `--gs-*` custom properties on `:root` and `:root[data-theme="dark"]` |
 | [`GroupSplit.App.Shared/Services/ThemeService.cs`](../src/GroupSplit.App/GroupSplit.App.Shared/Services/ThemeService.cs) | Everything MudBlazor draws in the app | `PaletteLight` / `PaletteDark` / `Typography`, restating the same values |
 | [`Assets/keycloak/themes/login/resources/css/group-split.css`](../src/GroupSplit.AppHost/Assets/keycloak/themes/login/resources/css/group-split.css) | Sign-in, password reset, email verification, identity-provider linking | The same `--gs-*` tokens, then PatternFly 5 globals mapped onto them |
 | [`Assets/keycloak/themes/account/resources/css/group-split.css`](../src/GroupSplit.AppHost/Assets/keycloak/themes/account/resources/css/group-split.css) | The account console | As above |
@@ -43,7 +43,8 @@ to move away from the background rather than toward it.
 
 ## The one exception: data marks
 
-`--gs-mark-paid` and `--gs-mark-share` are defined on `.gs-chart` in `app.css` and nowhere
+`--gs-mark-paid` and `--gs-mark-share` are defined on `.gs-chart` in
+`wwwroot/css/components/dashboard.css` and nowhere
 else, and that is deliberate rather than an oversight. They are the only tokens the rule
 above does not apply to, because Keycloak draws no charts and a mail has none: there is no
 second copy for them to drift from.

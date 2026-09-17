@@ -2,7 +2,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 
-namespace GroupSplit.API.Services;
+namespace GroupSplit.API.Services.ReceiptTranscription;
 
 /// <summary>The provider-neutral part of reading a receipt attachment into an editable bill.</summary>
 public interface IReceiptTranscriptionService

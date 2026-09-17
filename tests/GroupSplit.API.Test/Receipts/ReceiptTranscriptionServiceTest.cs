@@ -2,11 +2,13 @@ using System.Net;
 using System.Text;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
-using GroupSplit.API.Services.Veryfi;
+using GroupSplit.API.Services.ReceiptTranscription;
+using GroupSplit.API.Services.ReceiptTranscription.Veryfi;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using VeryfiReceiptTranscriptionProvider = GroupSplit.API.Services.ReceiptTranscription.Veryfi.VeryfiReceiptTranscriptionProvider;
 
 namespace GroupSplit.API.Test.Receipts;
 

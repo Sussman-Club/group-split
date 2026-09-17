@@ -6,6 +6,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;

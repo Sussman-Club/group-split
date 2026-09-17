@@ -107,11 +107,16 @@ jobs:
           PLAID_ENV: ${{ vars.PLAID_ENV }}
           PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
+          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ vars.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
           VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}
           VERYFI_USERNAME: ${{ secrets.VERYFI_USERNAME }}
           VERYFI_API_KEY: ${{ secrets.VERYFI_API_KEY }}
           VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES }}
+          AZURE_OPENAI_ENABLED: ${{ vars.AZURE_OPENAI_ENABLED }}
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_MODEL: ${{ vars.AZURE_OPENAI_MODEL }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
@@ -135,34 +140,34 @@ jobs:
             done
           }
 
-          # require_when FLAG NAME...: when FLAG is true, every NAME must have a value.
-          # Returns 1 when FLAG is not true, so a caller can attach a notice.
-          require_when() {
-            local flag="$1"
-            shift
-            [ "$(value "$flag")" = "true" ] || return 1
-            require "$@"
-          }
-
-          # What the AppHost refuses to publish without. WEB_HOSTNAME is the stack's single
-          # without. WEB_HOSTNAME is the stack's single public origin; Keycloak shares it
-          # under /idp. DASHBOARD_TOKEN is what the dashboard is published behind.
+          # Every non-optional AppHost parameter is required now, including values belonging
+          # to disabled integrations. The redirect URI and bank key certificate intentionally
+          # default to empty because the application supports both values being absent.
           require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
-                  CACHE_PASSWORD
+                  CACHE_PASSWORD SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER \
+                  SMTP_PASSWORD GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+                  PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV \
+                  RECEIPT_TRANSCRIPTION_PROVIDER VERYFI_ENABLED \
+                  VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY VERYFI_LOG_RAW_RESPONSES \
+                  AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL \
+                  AZURE_OPENAI_API_KEY
 
-          # Mail and Google sign-in are each switched on by a variable, and then need
-          # their credentials. A relay that is on but incomplete is worse than none: the
-          # realm would advertise password reset while every send failed.
-          require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
-            || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
-
-          require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
-            || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
-
-          # Bank sync is the same shape. The API starts either way and reports bank sync
-          # as off, so an incomplete setting costs a feature rather than the deployment.
-          require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET BANK_KEY_CERTIFICATE \
-            || echo "::notice::PLAID_ENABLED is not true. Nobody can link a bank."
+          # Cross-field validation still fails closed: a provider selected explicitly must
+          # also be enabled, and an enabled provider must have its complete credentials.
+          provider="$(value RECEIPT_TRANSCRIPTION_PROVIDER)"
+          case "$provider" in
+            AzureOpenAI)
+              if [ "$(value AZURE_OPENAI_ENABLED)" != "true" ]; then
+                echo "RECEIPT_TRANSCRIPTION_PROVIDER is AzureOpenAI but AZURE_OPENAI_ENABLED is not true" >&2
+                missing=1
+              fi
+              ;;
+            Veryfi) ;;
+            *)
+              echo "RECEIPT_TRANSCRIPTION_PROVIDER must be Veryfi or AzureOpenAI, not '$provider'" >&2
+              missing=1
+              ;;
+          esac
 
           [ "$missing" -eq 0 ] || exit 1
 
@@ -303,18 +308,16 @@ jobs:
             GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
             PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV PLAID_REDIRECT_URI
             BANK_KEY_CERTIFICATE
+            RECEIPT_TRANSCRIPTION_PROVIDER
             VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY
             VERYFI_LOG_RAW_RESPONSES
+            AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY
           "
 
           for name in $parameters; do
             value="${!name:-}"
 
-            # An absent optional parameter is left to the default the AppHost declares for
-            # it; exporting an empty value would override that default with nothing.
-            if [ -n "$value" ]; then
-              export "Parameters__$(printf %s "$name" | tr "[:upper:]" "[:lower:]")=$value"
-            fi
+            export "Parameters__$(printf %s "$name" | tr "[:upper:]" "[:lower:]")=$value"
 
             # Do not leave the GitHub-facing name in the environment the build inherits.
             unset "$name"

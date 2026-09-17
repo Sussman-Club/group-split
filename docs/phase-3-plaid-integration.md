@@ -157,13 +157,12 @@ enqueues a sync; `ERROR` with `ITEM_LOGIN_REQUIRED` marks the connection
 `LoginRequired`; `LOGIN_REPAIRED` marks it `Active` again; `USER_PERMISSION_REVOKED`
 marks it `Revoked`. Everything else is acknowledged and logged at debug.
 
-**Sandbox locally, a switch in production.** `plaid-enabled` defaults to `false`, and
-when `true` requires `plaid-client-id` and `plaid-secret`; `plaid-env` defaults to
-`sandbox`. Same shape as `smtp-enabled` and `google-sign-in-enabled`, same
-`validate-plaid` pipeline step, same `require_when` line in the deploy workflow. With
-the switch off the API still starts: `GET /bank-connections` answers an empty list with
-`enabled: false` in the envelope and the client hides the Link button. Locally the
-credentials come from user secrets, and Link runs against the sandbox where
+**Sandbox locally, a switch in production.** The deployment configuration explicitly
+supplies `plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, and the redirect
+URI. When the switch is `true`, the credentials must be valid; when it is `false`, the
+API still starts and `GET /bank-connections` answers an empty list with `enabled: false`
+in the envelope, so the client hides the Link button. Locally the credentials come from
+user secrets, and Link runs against the sandbox where
 `user_good` / `pass_good` opens any bank.
 
 ## The schema

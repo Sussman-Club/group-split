@@ -1,0 +1,50 @@
+/* ------------------------------------------------------ a chip that chooses -- */
+
+/*
+    A filter whose choices are inside it rather than beside it. The date span was five
+    chips and a picker; on a page that also filters by ledger and by text, that row read
+    as five decisions to make rather than one.
+
+    A real <select> inside the pill, rather than a popover of our own: on a phone the OS
+    draws the list, the keyboard and the screen reader work with nothing written for
+    them, and the value stays in the DOM. The pill is the chrome; the select is the
+    control, stretched over the whole of it so the whole pill is the hit target.
+*/
+
+.gs-chip-menu {
+    padding-right: 8px;
+    gap: 6px;
+    max-width: 260px;
+}
+
+.gs-chip-menu .label {
+    white-space: nowrap;
+}
+
+/* Mud renders the activator inside a wrapper of its own; without this the pill sits in a
+   block that breaks the filter row's alignment. */
+.gs-range .mud-menu,
+.gs-chip-menu-host {
+    display: inline-flex;
+}
+
+/* The menu itself, so the list follows the app rather than Mud's own surface. */
+.gs-menu .mud-list-item {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gs-ink-2);
+}
+
+.gs-menu-item.is-on {
+    color: var(--gs-teal-deep);
+}
+
+.gs-menu-item.is-on::after {
+    content: ' ·';
+}
+
+/* Only shown while a custom range is being chosen or is in force -- see the note in
+   DateRangeFilter.razor. */
+.gs-range-picker {
+    max-width: 240px;
+}

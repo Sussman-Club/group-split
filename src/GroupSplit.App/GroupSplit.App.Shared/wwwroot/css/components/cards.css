@@ -1,0 +1,100 @@
+/* ---------------------------------------------------------------- cards ---- */
+
+.gs-card {
+    position: relative;
+    background: var(--gs-surface);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-lg);
+    box-shadow: var(--gs-shadow-sm);
+    transition:
+        transform var(--gs-base) var(--gs-ease),
+        box-shadow var(--gs-base) var(--gs-ease),
+        border-color var(--gs-base) var(--gs-ease);
+}
+
+:root[data-theme="dark"] .gs-card {
+    box-shadow: var(--gs-shadow-sm), inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
+.gs-card-pad {
+    padding: 24px;
+}
+
+.gs-card-hover:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--gs-teal) 45%, var(--gs-line));
+    box-shadow: var(--gs-shadow-md);
+}
+
+.gs-card-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.gs-card-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.gs-card-title h2,
+.gs-card-title h3 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+/* Section headings with an eyebrow above. */
+.gs-page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+}
+
+.gs-page-head h1 {
+    margin: 4px 0 0;
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.gs-page-head p {
+    margin: 6px 0 0;
+    color: var(--gs-muted);
+    max-width: 52ch;
+}
+
+/*
+    A group's identity: back, its mark, its name. One line, and it has to stay one line.
+
+    It was a plain .gs-inline, which wraps -- and what wrapped on a narrow screen was the
+    text block, because its min-content width is the longest word in the heading plus the
+    member line. That left a 56px avatar on a row of its own next to the back arrow with
+    two thirds of the width empty, and pushed the tabs a whole band further down a screen
+    that is nine rows tall.
+*/
+.gs-inline.gs-identity {
+    flex-wrap: nowrap;
+    gap: 16px;
+    min-width: 0;
+}
+
+/* The one thing allowed to shrink. Without it the block claims its min-content width and
+   nowrap turns a wrap into an overflow, which is the worse of the two failures. */
+.gs-identity-who {
+    min-width: 0;
+}
+
+/* A long group name breaks rather than running off the edge -- "Weekend in Lisbon" at
+   2.25rem is wider than a phone. */
+.gs-identity-who h1 {
+    overflow-wrap: anywhere;
+}

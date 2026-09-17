@@ -1,6 +1,7 @@
 using GroupSplit.Shared;
 using GroupSplit.App.Shared.Services.Errors;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 namespace GroupSplit.App.Shared.Services.Commands;
 
 public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter errors, DataChangeNotifier changes) : IReceiptCommands
@@ -42,6 +43,18 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
             result = await receipts.SaveReceiptAsync(transactionId, request, ct);
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not save the receipt.");
+        return result;
+    }
+
+    public async Task<ReceiptResponse?> PatchItemAsync(Guid transactionId, Guid itemId,
+        JsonPatchDocument<ReceiptItemPatch> patch, CancellationToken ct = default)
+    {
+        ReceiptResponse? result = null;
+        await errors.TryAsync(async () =>
+        {
+            result = await receipts.PatchReceiptItemAsync(transactionId, itemId, patch, ct);
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not save the receipt item.");
         return result;
     }
     public async Task<ReceiptResponse?> SetRuleAsync(Guid transactionId, Guid itemId, Guid? versionId)

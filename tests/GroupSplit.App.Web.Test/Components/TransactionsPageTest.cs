@@ -680,7 +680,7 @@ public class TransactionsPageTest : ComponentTest
     // ---- the actions on a row -----------------------------------------------------------
 
     /// <summary>A share row, so the grid has something to hang actions off.</summary>
-    private static ExpenseShareResponse Row(string name, Guid payer, bool paidByYou) => new()
+    private static ExpenseShareResponse Row(string name, Guid payer, bool paidByYou, Guid? groupId = null) => new()
     {
         Id = Guid.NewGuid(),
         Name = name,
@@ -689,7 +689,7 @@ public class TransactionsPageTest : ComponentTest
         PaidByYou = paidByYou,
         PaidByUserId = payer,
         PaidByUserName = paidByYou ? "Anabel Benitez" : "Daniel Rivero",
-        GroupId = GroupId,
+        GroupId = groupId ?? GroupId,
         GroupName = "Weekend in Lisbon",
         DateTime = DateTimeOffset.UtcNow
     };
@@ -724,6 +724,32 @@ public class TransactionsPageTest : ComponentTest
         Assert.Equal(2, Actions(page, "Delete ").Count);
         Assert.Contains(Actions(page, "Edit "),
             button => button.GetAttribute("aria-label") == "Edit Big shop");
+    }
+
+    /// <summary>
+    /// An expense paid before leaving stays in the personal listing, but its write controls
+    /// are not offered after the group is gone from the current roster.
+    /// </summary>
+    [Fact]
+    public void Expenses_in_a_group_left_are_read_only_but_still_have_details()
+    {
+        var departedGroup = Guid.NewGuid();
+        _rows =
+        [
+            Row("Current expense", Guid.NewGuid(), paidByYou: true),
+            Row("Old expense", Guid.NewGuid(), paidByYou: true, groupId: departedGroup)
+        ];
+
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.Equal(2, Actions(page, "View ").Count));
+
+        Assert.Single(Actions(page, "Edit "));
+        Assert.Single(Actions(page, "Delete "));
+        Assert.DoesNotContain(Actions(page, "Edit "),
+            button => button.GetAttribute("aria-label") == "Edit Old expense");
+        Assert.DoesNotContain(Actions(page, "Delete "),
+            button => button.GetAttribute("aria-label") == "Delete Old expense");
     }
 
     /// <summary>

@@ -1,0 +1,58 @@
+/* ------------------------------------------------------- the splits tab ---- */
+
+/*
+    Two lists side by side on a desktop and stacked on a phone: a group's categories, and
+    the divisions they point at. Not a 50/50 grid at every width -- a rule row carries a
+    sentence and a row of tags, and at tablet widths both columns end up wrapping every
+    line.
+*/
+.gs-splits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px;
+    align-items: start;
+}
+
+/*
+    A rule is three lines, not one: what it is called, what it does, and which categories
+    divide by it. So it is a block rather than a .gs-row, whose grid puts everything on one
+    line and clips what does not fit.
+*/
+.gs-rule {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 0;
+}
+
+.gs-rule + .gs-rule {
+    border-top: 1px solid var(--gs-line);
+}
+
+.gs-rule-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.gs-rule .title {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.gs-rule .title span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-rule .meta {
+    color: var(--gs-muted);
+    font-size: 0.8125rem;
+}

@@ -33,6 +33,22 @@ public sealed record SplitRuleWeight(Guid UserId, string Name, string Held, deci
 /// </remarks>
 public static class SplitRuleExtensions
 {
+    /// <summary>
+    /// Rules a group may offer today. Built-in "all for" rules are provisioned for one
+    /// member, so one whose member has left is historical data rather than a choice for a
+    /// new expense. User-authored rules stay visible because they describe a division the
+    /// group still owns, even when that division mentions somebody who has since left.
+    /// </summary>
+    public static IEnumerable<SplitRuleResponse> VisibleToMembers(
+        this IEnumerable<SplitRuleResponse> rules, IEnumerable<Guid> memberIds)
+    {
+        var current = memberIds.ToHashSet();
+
+        return rules.Where(rule => !rule.BuiltIn
+                                   || rule.AllForUserId is not { } userId
+                                   || current.Contains(userId));
+    }
+
     extension(SplitRuleDto? definition)
     {
         /// <summary>What this division does, as a phrase to put on a row.</summary>

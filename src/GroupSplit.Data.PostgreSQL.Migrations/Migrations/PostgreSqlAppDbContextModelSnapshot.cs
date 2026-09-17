@@ -1214,7 +1214,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("SplitRuleVersion");
