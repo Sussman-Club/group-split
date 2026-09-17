@@ -7,14 +7,23 @@
 
 <MudDialog Class="gs-sheet">
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">Review receipt</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">
+            @(IsEditing ? "Edit itemized receipt" : "Review receipt")
+        </MudText>
     </TitleContent>
 
     <DialogContent>
         <div class="gs-stack" style="gap: 16px">
             <MudAlert Severity="Severity.Info" Dense="true">
-                Read the extracted values before saving. OCR can misread a price or miss a line;
-                you will choose who had each item after this step.
+                @if (IsEditing)
+                {
+                    <text>Correct the itemized receipt. Changes are saved to this expense.</text>
+                }
+                else
+                {
+                    <text>Read the extracted values before saving. OCR can misread a price or miss a line;
+                        you will choose who had each item after this step.</text>
+                }
             </MudAlert>
 
             @if (!string.IsNullOrWhiteSpace(_validationError))
@@ -106,7 +115,11 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid? TransactionId { get; set; }
     [Parameter] public decimal? ExpenseAmount { get; set; }
-    [Parameter, EditorRequired] public ReceiptTranscriptionResponse Transcription { get; set; } = null!;
+    /// <summary>The newly transcribed bill, when this dialog is reviewing OCR output.</summary>
+    [Parameter] public ReceiptTranscriptionResponse? Transcription { get; set; }
+
+    /// <summary>The already saved bill, when this dialog is correcting an itemized receipt.</summary>
+    [Parameter] public ReceiptResponse? Receipt { get; set; }
 
     private decimal _subtotal;
     private decimal _tax;
@@ -115,16 +128,32 @@
     private List<EditableLine> _items = [];
     private bool _saving;
     private string? _validationError;
+    private string? _loadedSource;
 
     private bool HasInvalidItemName => _items.Any(item => ValidateItemName(item.Name).Any());
+    private bool IsEditing => Receipt is not null;
 
     protected override void OnParametersSet()
     {
-        _subtotal = Transcription.Receipt.Subtotal;
-        _tax = Transcription.Receipt.Tax;
-        _tip = Transcription.Receipt.Tip;
-        _total = Transcription.Receipt.Total;
-        _items = Transcription.Receipt.Items.Select(item => new EditableLine(item)).ToList();
+        var source = Receipt is { } saved
+            ? (Key: $"receipt:{saved.Id}", Subtotal: saved.Subtotal, Tax: saved.Tax,
+                Tip: saved.Tip, Total: saved.Total,
+                Items: saved.Items.Select(item => new EditableLine(item)).ToList())
+            : Transcription is { } draft
+                ? (Key: $"transcription:{draft.AttachmentId}", Subtotal: draft.Receipt.Subtotal,
+                    Tax: draft.Receipt.Tax, Tip: draft.Receipt.Tip, Total: draft.Receipt.Total,
+                    Items: draft.Receipt.Items.Select(item => new EditableLine(item)).ToList())
+                : throw new InvalidOperationException("A receipt draft or saved receipt is required.");
+
+        if (_loadedSource == source.Key)
+            return;
+
+        _loadedSource = source.Key;
+        _subtotal = source.Subtotal;
+        _tax = source.Tax;
+        _tip = source.Tip;
+        _total = source.Total;
+        _items = source.Items;
     }
 
     private void AddItem() => _items.Add(new EditableLine());
@@ -162,13 +191,19 @@
                 Total = _total,
                 Items = _items.Select(item => new ReceiptItemInput
                 {
+                    Id = item.Id,
                     Name = item.Name.Trim(),
                     NormalizedName = item.NormalizedName,
-                    Description = item.Description,
+                    // An existing line's empty string is an explicit clear; null means a new
+                    // line has no source text to preserve.
+                    Description = item.Id is not null || !string.IsNullOrWhiteSpace(item.Description)
+                        ? item.Description.Trim()
+                        : null,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
                     TotalPrice = item.TotalPrice,
-                    TaxAmount = item.TaxAmount
+                    TaxAmount = item.TaxAmount,
+                    SplitRuleVersionId = item.SplitRuleVersionId
                 }).ToArray()
             };
 
@@ -217,16 +252,34 @@
 
         public EditableLine(ReceiptItemInput item)
         {
+            Id = item.Id;
             Name = item.Name;
             NormalizedName = item.NormalizedName ?? NormalizeName(item.Name);
-            Description = item.Description;
+            Description = item.Description ?? string.Empty;
             UnitPrice = item.UnitPrice;
             Quantity = item.Quantity;
             TotalPrice = item.TotalPrice;
             TaxAmount = item.TaxAmount;
+            SplitRuleVersionId = item.SplitRuleVersionId;
+        }
+
+        public EditableLine(ReceiptItemResponse item)
+        {
+            Id = item.Id;
+            Name = item.Name;
+            NormalizedName = string.IsNullOrWhiteSpace(item.NormalizedName)
+                ? NormalizeName(item.Name)
+                : item.NormalizedName;
+            Description = item.Description ?? string.Empty;
+            UnitPrice = item.UnitPrice;
+            Quantity = item.Quantity;
+            TotalPrice = item.TotalPrice;
+            TaxAmount = item.TaxAmount;
+            SplitRuleVersionId = item.SplitRuleVersionId;
         }
 
         public Guid Key { get; } = Guid.NewGuid();
+        public Guid? Id { get; }
         private string _name = string.Empty;
         public string Name
         {
@@ -238,11 +291,12 @@
             }
         }
         public string NormalizedName { get; set; } = string.Empty;
-        public string? Description { get; set; }
+        public string Description { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public decimal Quantity { get; set; } = 1m;
         public decimal TotalPrice { get; set; }
         public decimal TaxAmount { get; set; }
+        public Guid? SplitRuleVersionId { get; set; }
 
         private static string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;
     }
