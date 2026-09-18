@@ -82,7 +82,7 @@
                form stays out of the way until the person explicitly says none of these is
                right, which makes attaching a bank row feel like one decision rather than
                a warning buried in a long create form. *@
-            @if (HasMatches && !_newExpenseChosen)
+            @if ((HasMatches || _searchedExpense is not null) && !_newExpenseChosen)
             {
                 <div class="gs-card gs-card-pad" style="padding: 14px 12px">
                     <div class="gs-eyebrow">Closest matches</div>
@@ -91,10 +91,31 @@
                     </MudText>
 
                     <div class="gs-list">
+                        @if (_searchedExpense is { } searchedExpense)
+                        {
+                            <button type="button"
+                                    class="gs-match-choice @(_selectedExpenseId is null && CanAttach(searchedExpense) ? "is-selected" : null)"
+                                    role="radio"
+                                    aria-checked="@(_selectedExpenseId is null && CanAttach(searchedExpense) ? "true" : "false")"
+                                    disabled="@(!CanAttach(searchedExpense))"
+                                    @onclick="@(() => SelectSearchedExpense(searchedExpense))">
+                                <Avatar Name="@searchedExpense.Name" />
+                                <span class="gs-match-choice-copy">
+                                    <span class="title">@searchedExpense.Name</span>
+                                    <span class="meta">@(searchedExpense.GroupName ?? "Personal") · @Clock.Local(searchedExpense.DateTime).ToString("d") · @searchedExpense.PaidByUserName paid</span>
+                                    <span class="gs-tag neutral">@(CanAttach(searchedExpense) ? "Selected from search" : WhyNotAttachable(searchedExpense))</span>
+                                </span>
+                                <Money Value="@searchedExpense.Amount" Currency="@searchedExpense.Currency" />
+                                <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Primary" />
+                            </button>
+                        }
+
                         @foreach (var candidate in Row.PossibleDuplicates)
                         {
                             <button type="button"
                                     class="gs-match-choice @(_selectedExpenseId == candidate.TransactionId ? "is-selected" : null)"
+                                    role="radio"
+                                    aria-checked="@(_selectedExpenseId == candidate.TransactionId ? "true" : "false")"
                                     @onclick="@(() => SelectMatch(candidate))">
                                 <Avatar Name="@candidate.Name" />
                                 <span class="gs-match-choice-copy">
@@ -111,19 +132,30 @@
 
                     <div class="gs-inline" style="border-top: 1px solid var(--gs-line); margin-top: 12px; padding-top: 12px; gap: 6px">
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Search" OnClick="FindAnotherAsync">
+                                   StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">
                             Find another expense
                         </MudButton>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Add" OnClick="UseNewExpense">
+                                   StartIcon="@Icons.Material.Rounded.Add" Disabled="@ReceiptBusy" OnClick="UseNewExpense">
                             None of these — it is new
                         </MudButton>
                     </div>
                 </div>
             }
 
-            @if (!HasMatches || _newExpenseChosen)
+            @if ((!HasMatches && _searchedExpense is null) || _newExpenseChosen)
             {
+            @if (!HasMatches && !_newExpenseChosen)
+            {
+                <div class="gs-inline" style="justify-content: space-between; align-items: center">
+                    <span class="gs-muted">Already recorded this expense?</span>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">
+                        Search existing
+                    </MudButton>
+                </div>
+            }
+
             @* Worded as the create dialog words them. They were "Name" and "Description",
                which is what the fields are called in the request rather than what they are
                asking for, and the same two boxes on the other screen ask better. *@
@@ -188,19 +220,19 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@ReceiptBusy" OnClick="Cancel">Cancel</MudButton>
 
         @if (SelectedExpenseId is { } transactionId && !_newExpenseChosen)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       OnClick="AttachSelected">Attach to @SelectedExpenseName</MudButton>
+                       Disabled="@(!SelectedExpenseCanAttach || ReceiptBusy)" OnClick="AttachSelected">Attach to @SelectedExpenseName</MudButton>
         }
         else
         {
             @* Gated on having answered, not on the answer: null is "Personal", which is a
                destination like any other, so it cannot also stand for "not yet said". *@
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!_chosen)" OnClick="Submit">Add expense</MudButton>
+                       Disabled="@(!_chosen || ReceiptBusy)" OnClick="Submit">Add expense</MudButton>
         }
     </DialogActions>
 </MudDialog>
@@ -493,6 +525,11 @@
 
     private Guid? SelectedExpenseId => _selectedExpenseId ?? _searchedExpense?.Id;
 
+    private bool ReceiptBusy => _attachingReceipt || _readingReceipt;
+
+    private bool SelectedExpenseCanAttach =>
+        _searchedExpense is null || CanAttach(_searchedExpense);
+
     private string SelectedExpenseName =>
         Row.PossibleDuplicates.FirstOrDefault(match => match.TransactionId == _selectedExpenseId)?.Name
         ?? _searchedExpense?.Name
@@ -517,8 +554,34 @@
         _newExpenseChosen = false;
     }
 
-    private void UseNewExpense()
+    private void SelectSearchedExpense(TransactionResponse expense)
     {
+        if (!CanAttach(expense))
+            return;
+
+        _selectedExpenseId = null;
+        _searchedExpense = expense;
+        _newExpenseChosen = false;
+    }
+
+    private async Task UseNewExpense()
+    {
+        if (ReceiptBusy)
+            return;
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { dialog => dialog.ContentText,
+                "None of the suggested expenses is this payment. Continue by recording a new expense?" },
+            { dialog => dialog.ButtonText, "Record new expense" }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
+        var reference = await DialogService.ShowAsync<ConfirmationDialog>(
+            "Record a new expense", parameters, options);
+        var result = await reference.Result;
+        if (result is null || result.Canceled)
+            return;
+
         _selectedExpenseId = null;
         _searchedExpense = null;
         _newExpenseChosen = true;
@@ -548,7 +611,7 @@
     /// </summary>
     private void AttachSelected()
     {
-        if (SelectedExpenseId is not { } transactionId)
+        if (SelectedExpenseId is not { } transactionId || !SelectedExpenseCanAttach || ReceiptBusy)
             return;
 
         MudDialog.Close(DialogResult.Ok(new Answer(null, SelectedExpenseWhere, transactionId,
@@ -557,6 +620,9 @@
 
     private async Task AttachReceiptAsync(InputFileChangeEventArgs args)
     {
+        if (ReceiptBusy)
+            return;
+
         _attachingReceipt = true;
         _receiptError = null;
         try
@@ -579,7 +645,7 @@
 
     private async Task ReadReceiptAsync()
     {
-        if (_receiptAttachment is not { } attachment)
+        if (ReceiptBusy || _receiptAttachment is not { } attachment)
             return;
 
         _readingReceipt = true;
@@ -597,6 +663,7 @@
                 new DialogParameters<ReceiptDraftDialog>
                 {
                     { dialog => dialog.ExpenseAmount, Row.Amount },
+                    { dialog => dialog.Currency, Row.Currency },
                     { dialog => dialog.Transcription, transcription }
                 }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
             var receipt = await reference.GetReturnValueAsync<SaveReceiptRequest>();
@@ -621,7 +688,7 @@
 
     private void Submit()
     {
-        if (!_chosen)
+        if (!_chosen || ReceiptBusy)
             return;
 
         var request = new FileBankTransactionRequest
@@ -640,4 +707,11 @@
 
         MudDialog.Close(DialogResult.Ok(new Answer(request, Destination, null, _receiptAttachment, _receipt)));
     }
+
+    private bool CanAttach(TransactionResponse expense) =>
+        !expense.HasBankTransaction
+        && string.Equals(expense.Currency, Row.Currency, StringComparison.OrdinalIgnoreCase);
+
+    private static string WhyNotAttachable(TransactionResponse expense) =>
+        expense.HasBankTransaction ? "Already linked to a bank transaction" : "Different currency";
 }

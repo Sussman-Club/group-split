@@ -22,6 +22,9 @@ public static class SmtpExtensions
 
     private const string PasswordParameterName = "smtp-password";
 
+    private const string DefaultPort = "587";
+    private const string UnroutableSender = "no-reply@group-split.invalid";
+
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
@@ -44,28 +47,28 @@ public static class SmtpExtensions
         {
             var builder = keycloak.ApplicationBuilder;
 
-            var enabled = builder.AddParameter(EnabledParameterName)
+            var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
                 .WithDescription(
                     "Whether Keycloak sends mail (true/false). "
                     + "Needs smtp-host, smtp-from, smtp-user and smtp-password when true.");
 
-            var host = builder.AddParameter(HostParameterName)
+            var host = builder.AddOptionalParameter(HostParameterName, string.Empty)
                 .WithDescription("Relay hostname, e.g. smtp.resend.com.");
 
-            var port = builder.AddParameter(PortParameterName)
+            var port = builder.AddOptionalParameter(PortParameterName, DefaultPort)
                 .WithDescription(
                     "Relay port. 587 is submission over STARTTLS; 465 wants implicit TLS, "
                     + "which is the realm's ssl flag rather than its starttls one.");
 
-            var from = builder.AddParameter(FromParameterName)
+            var from = builder.AddOptionalParameter(FromParameterName, UnroutableSender)
                 .WithDescription(
                     "Sender address, on a domain the relay has verified. "
                     + "Keycloak refuses to start on one it cannot parse.");
 
-            var user = builder.AddParameter(UserParameterName)
+            var user = builder.AddOptionalParameter(UserParameterName, string.Empty)
                 .WithDescription("Relay username.");
 
-            var password = builder.AddParameter(PasswordParameterName, secret: true)
+            var password = builder.AddOptionalParameter(PasswordParameterName, string.Empty, secret: true)
                 .WithDescription("Relay password or API key.");
 
             builder.Pipeline.AddStep(

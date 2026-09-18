@@ -64,13 +64,24 @@
    to a separate top-level Inbox. *@
 @if (Inbox.NewCount > 0)
 {
-    <div class="gs-inline" style="justify-content: flex-end; margin-bottom: 14px">
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                   Class="gs-btn-pill" StartIcon="@Icons.Material.Rounded.Inbox"
-                   Href="/transactions/not-filed"
-                   aria-label="@NotFiledLabel">
-            Not filed (@Inbox.NewCount)
-        </MudButton>
+    <div class="gs-card gs-card-pad" style="padding: 14px 16px; margin-bottom: 14px">
+        <div class="gs-inline" style="justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+            <div style="min-width: 220px; flex: 1 1 360px">
+                <div class="gs-inline" style="gap: 8px; margin-bottom: 4px">
+                    <MudIcon Icon="@Icons.Material.Rounded.Inbox" Color="Color.Primary" Size="Size.Small" aria-hidden="true" />
+                    <span style="font-weight: 700">Bank transactions to review</span>
+                </div>
+                <div class="gs-muted" style="font-size: .8125rem">
+                    Imported bank payments waiting for you to match to an expense or record as new.
+                </div>
+            </div>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       Class="gs-btn-pill" StartIcon="@Icons.Material.Rounded.Inbox"
+                       Href="/transactions/not-filed"
+                       aria-label="@NotFiledLabel">
+                Review bank transactions (@Inbox.NewCount)
+            </MudButton>
+        </div>
     </div>
 }
 
@@ -346,7 +357,7 @@
 <ExtendedFab Label="Add expense" OnClick="@AddTransactionAsync" />
 
 @code {
-    private string NotFiledLabel => $"Review {Inbox.NewCount} bank transactions not filed";
+    private string NotFiledLabel => $"Review {Inbox.NewCount} bank transaction{(Inbox.NewCount == 1 ? "" : "s")} waiting to be filed";
 
     /// <summary>Which of the three questions the page is answering.</summary>
     public enum ExpenseView

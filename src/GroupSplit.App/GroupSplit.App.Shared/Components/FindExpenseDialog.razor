@@ -51,16 +51,23 @@
             }
             else
             {
-                <div class="gs-list">
+                <div class="gs-list" role="radiogroup" aria-label="Expenses that can be attached">
                     @foreach (var expense in _expenses)
                     {
-                        <button type="button" class="gs-match-choice" @onclick="@(() => Choose(expense))">
+                        var attachable = CanAttach(expense);
+                        <button type="button" class="gs-match-choice @(attachable ? null : "is-disabled")"
+                                role="radio" aria-checked="false" disabled="@(!attachable)"
+                                @onclick="@(() => Choose(expense))">
                             <Avatar Name="@expense.Name" />
                             <span class="gs-match-choice-copy">
                                 <span class="title">@expense.Name</span>
                                 <span class="meta">@(expense.GroupName ?? "Personal") · @Clock.Local(expense.DateTime).ToString("d") · @expense.PaidByUserName paid</span>
+                                @if (!attachable)
+                                {
+                                    <span class="gs-tag neutral">@WhyNotAttachable(expense)</span>
+                                }
                             </span>
-                            <Money Value="@expense.Amount" Currency="@Row.Currency" />
+                            <Money Value="@expense.Amount" Currency="@expense.Currency" />
                             <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
                         </button>
                     }
@@ -88,6 +95,7 @@
     private async Task SearchAsync()
     {
         _busy = true;
+        _expenses = [];
 
         try
         {
@@ -114,8 +122,18 @@
             await SearchAsync();
     }
 
-    private void Choose(TransactionResponse expense) =>
-        MudDialog.Close(DialogResult.Ok(expense));
+    private void Choose(TransactionResponse expense)
+    {
+        if (CanAttach(expense))
+            MudDialog.Close(DialogResult.Ok(expense));
+    }
+
+    private bool CanAttach(TransactionResponse expense) =>
+        !expense.HasBankTransaction
+        && string.Equals(expense.Currency, Row.Currency, StringComparison.OrdinalIgnoreCase);
+
+    private static string WhyNotAttachable(TransactionResponse expense) =>
+        expense.HasBankTransaction ? "Already linked to a bank transaction" : "Different currency";
 
     private void Close() => MudDialog.Cancel();
 }

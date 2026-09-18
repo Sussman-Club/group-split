@@ -152,12 +152,10 @@
     </DialogContent>
 
     <DialogActions>
-        @* Cancel is always the first thing here and is never disabled: the way out of a
-           dialog must not depend on anything inside it being in a good state. *@
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   OnClick="@Submit">
+                   Disabled="@_readingReceipt" OnClick="@Submit">
             Add expense
         </MudButton>
     </DialogActions>
@@ -185,6 +183,9 @@
     /// list it has to fetch is the app asking the API for something it is already holding.
     /// </remarks>
     [Parameter] public string? SelectedGroupName { get; set; }
+
+    /// <summary>The currency of a fixed group, when the caller already has it.</summary>
+    [Parameter] public string? SelectedGroupCurrency { get; set; }
 
     /// <summary>
     /// The group actually chosen, which starts as <see cref="SelectedGroupId"/> and then
@@ -301,7 +302,7 @@
 
     private async Task ReadReceiptAsync()
     {
-        if (_receiptFile is not { } file)
+        if (_readingReceipt || _receiptFile is not { } file)
             return;
 
         _readingReceipt = true;
@@ -320,6 +321,7 @@
             var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Check receipt",
                 new DialogParameters<ReceiptDraftDialog>
                 {
+                    { dialog => dialog.Currency, ReceiptCurrency },
                     { dialog => dialog.Transcription,
                         new ReceiptTranscriptionResponse(Guid.Empty, draft.Provider, draft.Receipt) }
                 },
@@ -395,6 +397,10 @@
     /// stated in the heading and not offered as a choice.
     /// </summary>
     private bool GroupFixed => SelectedGroupId is not null;
+
+    private string ReceiptCurrency => GroupFixed
+        ? SelectedGroupCurrency ?? "USD"
+        : _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
 
 
 
@@ -715,6 +721,9 @@
     /// </summary>
     private async Task Submit()
     {
+        if (_readingReceipt)
+            return;
+
         await _form.ValidateAsync();
 
         if (!_form.IsValid)

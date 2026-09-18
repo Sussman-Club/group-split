@@ -19,7 +19,7 @@
             {
                 @* Absolutely positioned, so it cannot change the item's height and put the
                    sliding pill out of step with the items it slides between. *@
-                <span class="gs-nav-badge" aria-label="@Inbox.NewCount waiting">@Badge(Inbox.NewCount)</span>
+                <span class="gs-nav-badge" aria-label="@InboxBadgeLabel" title="@InboxBadgeLabel">@Badge(Inbox.NewCount)</span>
             }
         </NavLink>
     }
@@ -54,6 +54,8 @@
 
     /// <summary>Two digits at most, so a long number cannot stretch the item.</summary>
     private static string Badge(int count) => count > 99 ? "99+" : count.ToString();
+
+    private string InboxBadgeLabel => $"{Inbox.NewCount} bank transaction{(Inbox.NewCount == 1 ? "" : "s")} waiting to be filed";
 
     protected override void OnInitialized()
     {

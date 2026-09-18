@@ -586,6 +586,7 @@
                     // amount field may still be dirty in this parent dialog, so passing the
                     // unsaved value could disable an otherwise valid receipt edit.
                     { x => x.ExpenseAmount, Original.Amount },
+                    { x => x.Currency, Original.Currency },
                     { x => x.Transcription, transcription }
                 }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
             var result = await dialog.Result;
@@ -616,6 +617,7 @@
                 // Receipt edits are saved against the persisted transaction amount. A dirty
                 // amount in this parent dialog has not reached the API yet.
                 { x => x.ExpenseAmount, Original.Amount },
+                { x => x.Currency, Original.Currency },
                 { x => x.Receipt, bill }
             }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
 

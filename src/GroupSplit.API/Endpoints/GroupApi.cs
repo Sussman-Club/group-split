@@ -61,7 +61,10 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     var createdGroup = await groupService.CreateGroup(request, ct);
-                    var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1);
+                    var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1)
+                    {
+                        Currency = createdGroup.Currency
+                    };
                     return Results.Ok(groupInfo);
                 })
                 .WithName("CreateGroup")
@@ -596,7 +599,10 @@ public static class GroupApi
                     on new { GroupId = @group.Id, UserId = userId }
                     equals new { membership.GroupId, membership.UserId }
                 select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
-                    membership.ArchivedAt != null);
+                    membership.ArchivedAt != null)
+                {
+                    Currency = @group.Currency
+                };
         }
     }
 

@@ -7,7 +7,11 @@ public record TransactionResponse
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public decimal Amount { get; set; }
+    public string Currency { get; set; } = "USD";
     public DateTimeOffset DateTime { get; set; }
+
+    /// <summary>True when this expense is already linked to an imported bank row.</summary>
+    public bool HasBankTransaction { get; set; }
 
     /// <summary>
     /// The group it was recorded in, or null when it is the caller's own. Null is not a

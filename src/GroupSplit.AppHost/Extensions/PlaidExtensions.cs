@@ -49,18 +49,18 @@ public static class PlaidExtensions
         {
             var builder = resource.ApplicationBuilder;
 
-            var enabled = builder.AddParameter(EnabledParameterName)
+            var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
                 .WithDescription(
                     "Whether people can link a bank through Plaid (true/false). "
                     + "Needs plaid-client-id and plaid-secret when true.");
 
-            var clientId = builder.AddParameter(ClientIdParameterName)
+            var clientId = builder.AddOptionalParameter(ClientIdParameterName, string.Empty)
                 .WithDescription("Plaid client_id, from the Plaid dashboard. The same across environments.");
 
-            var secret = builder.AddParameter(SecretParameterName, secret: true)
+            var secret = builder.AddOptionalParameter(SecretParameterName, string.Empty, secret: true)
                 .WithDescription("Plaid secret for the environment named by plaid-env. One per environment.");
 
-            var environment = builder.AddParameter(EnvironmentParameterName)
+            var environment = builder.AddOptionalParameter(EnvironmentParameterName, "Sandbox")
                 .WithDescription("Which Plaid environment to talk to: Sandbox or Production.");
 
             // Plaid Link normally runs OAuth in a popup and never leaves the page. Set this

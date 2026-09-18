@@ -306,6 +306,7 @@
             {
                 { x => x.TransactionId, TransactionId },
                 { x => x.ExpenseAmount, expenseDetails.Amount },
+                { x => x.Currency, expenseDetails.Currency },
                 { x => x.Transcription, transcription }
             }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
             var result = await dialog.Result;
@@ -332,6 +333,7 @@
             {
                 { x => x.TransactionId, TransactionId },
                 { x => x.ExpenseAmount, expenseDetails.Amount },
+                { x => x.Currency, expenseDetails.Currency },
                 { x => x.Receipt, bill }
             }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
 

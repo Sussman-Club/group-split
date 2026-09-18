@@ -23,15 +23,15 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
     public static Parameters AddAzureOpenAIReceiptTranscriptionParameters(
         this IDistributedApplicationBuilder builder)
     {
-        var provider = builder.AddParameter(ProviderParameterName)
+        var provider = builder.AddOptionalParameter(ProviderParameterName, string.Empty)
             .WithDescription("Receipt provider: Veryfi or AzureOpenAI.");
-        var enabled = builder.AddParameter(EnabledParameterName)
+        var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
             .WithDescription("Whether receipt transcription through Azure OpenAI is enabled (true/false).");
-        var endpoint = builder.AddParameter(EndpointParameterName)
+        var endpoint = builder.AddOptionalParameter(EndpointParameterName, string.Empty)
             .WithDescription("Azure OpenAI v1 base URL, for example https://resource.openai.azure.com/openai/v1/.");
-        var model = builder.AddParameter(ModelParameterName)
+        var model = builder.AddOptionalParameter(ModelParameterName, string.Empty)
             .WithDescription("Azure OpenAI deployment/model name.");
-        var apiKey = builder.AddParameter(ApiKeyParameterName, secret: true)
+        var apiKey = builder.AddOptionalParameter(ApiKeyParameterName, string.Empty, secret: true)
             .WithDescription("Azure OpenAI API key.");
 
         builder.Pipeline.AddStep(
