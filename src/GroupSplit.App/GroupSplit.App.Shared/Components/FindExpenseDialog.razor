@@ -95,7 +95,7 @@
             {
                 var page = await TransactionsClient.GetTransactionsAsync(
                     search: string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
-                    sortBy: "date",
+                    sortBy: "dateTime",
                     sortDescending: true,
                     page: 1,
                     pageSize: 20);
