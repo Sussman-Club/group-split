@@ -109,15 +109,15 @@ jobs:
           PLAID_ENV: ${{ vars.PLAID_ENV }}
           PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
-          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ vars.RECEIPT_TRANSCRIPTION_PROVIDER }}
+          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ secrets.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
           VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}
           VERYFI_USERNAME: ${{ secrets.VERYFI_USERNAME }}
           VERYFI_API_KEY: ${{ secrets.VERYFI_API_KEY }}
           VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES || 'false' }}
           AZURE_OPENAI_ENABLED: ${{ vars.AZURE_OPENAI_ENABLED }}
-          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
-          AZURE_OPENAI_MODEL: ${{ vars.AZURE_OPENAI_MODEL }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_MODEL: ${{ secrets.AZURE_OPENAI_MODEL }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         shell: bash
         run: |
