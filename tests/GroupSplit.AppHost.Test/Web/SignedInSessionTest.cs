@@ -106,7 +106,7 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
-        await NavLink("You").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
+        await NavLink("Activity").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
         // The grid's own empty state, which it renders only once the API has answered it.
         // Exact, or it also matches the page's h1 and the top bar's h2. The unfiltered

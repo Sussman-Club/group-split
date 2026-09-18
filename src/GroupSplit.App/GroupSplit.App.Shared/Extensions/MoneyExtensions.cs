@@ -4,11 +4,9 @@ namespace GroupSplit.App.Shared.Extensions;
 
 public static class MoneyExtensions
 {
-    // Amounts carry no currency of their own, so "C" would follow whichever
-    // culture happens to render: the server's during prerender, then the
-    // browser's language once the WebAssembly runtime takes over. A British
-    // browser would flip every figure from $ to £ on hydration. Pinned until
-    // the data model carries a currency.
+    // The fallback is pinned because some legacy summaries still carry only an amount:
+    // "C" would otherwise follow whichever culture renders them, changing between server
+    // prerender and browser hydration.
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-US");
 
     /// <summary>

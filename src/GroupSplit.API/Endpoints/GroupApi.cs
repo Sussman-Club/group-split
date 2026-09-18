@@ -31,6 +31,7 @@ public static class GroupApi
             group.MapGetGroupTransactionsSummary();
             group.MapGetActivity();
             group.MapGetMembers();
+            group.MapGetPastMembers();
             group.MapLeave();
             group.MapRemoveMember();
             group.MapGetInvitations();
@@ -60,7 +61,10 @@ public static class GroupApi
                     CancellationToken ct) =>
                 {
                     var createdGroup = await groupService.CreateGroup(request, ct);
-                    var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1);
+                    var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1)
+                    {
+                        Currency = createdGroup.Currency
+                    };
                     return Results.Ok(groupInfo);
                 })
                 .WithName("CreateGroup")
@@ -200,6 +204,32 @@ public static class GroupApi
                     return Results.Ok(userResponse);
                 })
                 .WithName("GetGroupMembers")
+                .Produces<UserInfo[]>();
+        }
+
+        /// <summary>
+        /// People who have left but remain in the group's historical payments or shares.
+        /// </summary>
+        /// <remarks>
+        /// This is intentionally separate from the participant endpoint. Past members can
+        /// explain an old entry, but cannot be selected for a new expense, split rule, or
+        /// settlement.
+        /// </remarks>
+        private RouteHandlerBuilder MapGetPastMembers()
+        {
+            return group.MapGet("{id:guid}/past-members", async (
+                    Guid id,
+                    IGroupService groupService,
+                    CancellationToken ct) =>
+                {
+                    var pastMembers = await groupService.GetGroupPastMembers(id, ct);
+                    var userResponse = await pastMembers
+                        .Select(user => new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
+                            false, true))
+                        .ToListAsync(ct);
+                    return Results.Ok(userResponse);
+                })
+                .WithName("GetGroupPastMembers")
                 .Produces<UserInfo[]>();
         }
 
@@ -569,7 +599,10 @@ public static class GroupApi
                     on new { GroupId = @group.Id, UserId = userId }
                     equals new { membership.GroupId, membership.UserId }
                 select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
-                    membership.ArchivedAt != null);
+                    membership.ArchivedAt != null)
+                {
+                    Currency = @group.Currency
+                };
         }
     }
 

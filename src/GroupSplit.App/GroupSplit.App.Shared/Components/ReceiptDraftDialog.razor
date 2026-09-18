@@ -9,7 +9,7 @@
 <MudDialog Class="gs-sheet">
     <TitleContent>
         <MudText Typo="Typo.h5" Class="font-weight-bold">
-            @(IsEditing ? "Edit itemized receipt" : "Review receipt")
+            @DialogTitle
         </MudText>
     </TitleContent>
 
@@ -20,10 +20,14 @@
                 {
                     <text>Correct the itemized receipt. Changes are saved to this expense.</text>
                 }
+                else if (IsDraftReview)
+                {
+                    <text>Check the extracted values before adding the expense. OCR can misread a price or miss a line;
+                        after this, choose the group and how the expense is split.</text>
+                }
                 else
                 {
-                    <text>Read the extracted values before saving. OCR can misread a price or miss a line;
-                        you will choose who had each item after this step.</text>
+                    <text>Check the extracted values before saving them to this expense. OCR can misread a price or miss a line.</text>
                 }
             </MudAlert>
 
@@ -34,23 +38,23 @@
 
             <div class="gs-grid-2">
                 <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                 <MudNumericField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                 <MudNumericField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                 <MudNumericField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
             </div>
 
             <div class="gs-muted" style="font-size: .85rem">
                 @if (ExpenseAmount is { } expenseAmount)
                 {
-                    <span>Recorded expense amount: <strong>@expenseAmount.ToMoney()</strong></span>
+                    <span>Recorded expense amount: <strong>@expenseAmount.ToMoney(Currency)</strong></span>
                 }
                 else
                 {
-                    <span>This receipt will be attached to the expense after you finish the other details.</span>
+                    <span>This receipt will fill the expense details in the previous sheet.</span>
                 }
             </div>
 
@@ -58,16 +62,21 @@
             {
                 <MudAlert Severity="Severity.Warning" Dense="true">
                     The receipt total is @(_total < expectedAmount ? "short" : "over") by
-                    @Math.Abs(expectedAmount - _total).ToMoney(). It must match the expense amount.
-                    Adjust the receipt figures before saving.
-                    Save is disabled until the totals match.
+                    @Math.Abs(expectedAmount - _total).ToMoney(Currency). It must match the expense amount.
+                    Adjust the receipt figures before @PrimaryActionHint.
+                    @PrimaryActionText is disabled until the totals match.
                 </MudAlert>
+            }
+
+            @if (FigureError is { } figureError)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">@figureError</MudAlert>
             }
 
             <div class="gs-inline" style="justify-content: space-between; align-items: center">
                 <div>
                     <h3 style="margin: 0; font-size: 1rem">Items</h3>
-                    <span class="gs-muted" style="font-size: .8rem">Edit anything the receipt reader got wrong.</span>
+                    <span class="gs-muted" style="font-size: .8rem">Correct anything the receipt reader got wrong.</span>
                 </div>
                 <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
                            OnClick="AddItem">Add item</MudButton>
@@ -91,11 +100,11 @@
                         <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
                                          Format="N3" HideSpinButtons="true" />
                         <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
-                                         Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                         Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                         <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
-                                         Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                         Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                         <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
-                                         Adornment="Adornment.Start" AdornmentText="$" Format="N2" HideSpinButtons="true" />
+                                         Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                     </div>
                 </div>
             }
@@ -103,11 +112,11 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@_saving" OnClick="Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_saving || HasInvalidItemName || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
+                   Disabled="@(_saving || HasInvalidItemName || FigureError is not null || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
                    OnClick="SaveAsync">
-            @(_saving ? "Saving…" : "Save receipt")
+            @(_saving ? "Saving…" : PrimaryActionText)
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -116,6 +125,7 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid? TransactionId { get; set; }
     [Parameter] public decimal? ExpenseAmount { get; set; }
+    [Parameter] public string Currency { get; set; } = "USD";
     /// <summary>The newly transcribed bill, when this dialog is reviewing OCR output.</summary>
     [Parameter] public ReceiptTranscriptionResponse? Transcription { get; set; }
 
@@ -132,7 +142,24 @@
     private string? _loadedSource;
 
     private bool HasInvalidItemName => _items.Any(item => ValidateItemName(item.Name).Any());
+    private string? FigureError
+    {
+        get
+        {
+            if (_subtotal + _tax + _tip != _total)
+                return "Subtotal, tax, and tip must add up to the total.";
+            if (_items.Sum(item => item.TotalPrice) != _subtotal)
+                return "Line totals must add up to the subtotal.";
+            if (_items.Sum(item => item.TaxAmount) != _tax)
+                return "Line tax must add up to the receipt tax.";
+            return null;
+        }
+    }
     private bool IsEditing => Receipt is not null;
+    private bool IsDraftReview => TransactionId is null;
+    private string DialogTitle => IsEditing ? "Edit itemized receipt" : IsDraftReview ? "Check receipt" : "Review receipt";
+    private string PrimaryActionText => IsDraftReview ? "Use this receipt" : "Save receipt";
+    private string PrimaryActionHint => IsDraftReview ? "using this receipt" : "saving";
 
     protected override void OnParametersSet()
     {
@@ -172,6 +199,12 @@
         if (HasInvalidItemName)
         {
             _validationError = "Correct the highlighted item names before saving.";
+            return;
+        }
+
+        if (FigureError is { } figureError)
+        {
+            _validationError = figureError;
             return;
         }
 

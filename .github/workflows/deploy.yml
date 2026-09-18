@@ -109,18 +109,15 @@ jobs:
           PLAID_ENV: ${{ vars.PLAID_ENV }}
           PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
-          # These currently live in the production environment's secret store. Read them
-          # from the same scope they are configured in; an unset secret otherwise becomes
-          # an empty string and makes the AppHost see a missing deployment parameter.
-          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ secrets.RECEIPT_TRANSCRIPTION_PROVIDER }}
+          RECEIPT_TRANSCRIPTION_PROVIDER: ${{ vars.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
           VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}
           VERYFI_USERNAME: ${{ secrets.VERYFI_USERNAME }}
           VERYFI_API_KEY: ${{ secrets.VERYFI_API_KEY }}
           VERYFI_LOG_RAW_RESPONSES: ${{ vars.VERYFI_LOG_RAW_RESPONSES || 'false' }}
           AZURE_OPENAI_ENABLED: ${{ vars.AZURE_OPENAI_ENABLED }}
-          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-          AZURE_OPENAI_MODEL: ${{ secrets.AZURE_OPENAI_MODEL }}
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_MODEL: ${{ vars.AZURE_OPENAI_MODEL }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         shell: bash
         run: |
@@ -145,29 +142,35 @@ jobs:
             done
           }
 
-          # Every non-optional AppHost parameter is required now, including values belonging
-          # to disabled integrations. The redirect URI and bank key certificate intentionally
-          # default to empty because the application supports both values being absent.
+          # require_when FLAG NAME...: when FLAG is true, every NAME must have a value.
+          require_when() {
+            local flag="$1"
+            shift
+            [ "$(value "$flag")" = "true" ] || return 1
+            require "$@"
+          }
+
           require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
-                  CACHE_PASSWORD SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER \
-                  SMTP_PASSWORD GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
-                  PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV \
-                  RECEIPT_TRANSCRIPTION_PROVIDER VERYFI_ENABLED \
-                  VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY VERYFI_LOG_RAW_RESPONSES \
-                  AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL \
-                  AZURE_OPENAI_API_KEY
+                  CACHE_PASSWORD
+
+          require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
+            || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
+          require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+            || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
+          require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET \
+            || echo "::notice::PLAID_ENABLED is not true. Nobody can link a bank."
+          require_when VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY \
+            || echo "::notice::VERYFI_ENABLED is not true. Receipt transcription through Veryfi is off."
 
           # Cross-field validation still fails closed: a provider selected explicitly must
           # also be enabled, and an enabled provider must have its complete credentials.
           provider="$(value RECEIPT_TRANSCRIPTION_PROVIDER)"
           case "$provider" in
             AzureOpenAI)
-              if [ "$(value AZURE_OPENAI_ENABLED)" != "true" ]; then
-                echo "RECEIPT_TRANSCRIPTION_PROVIDER is AzureOpenAI but AZURE_OPENAI_ENABLED is not true" >&2
-                missing=1
-              fi
+              require_when AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY \
+                || echo "::notice::AZURE_OPENAI_ENABLED is not true. Azure OpenAI receipt transcription is off."
               ;;
-            Veryfi) ;;
+            Veryfi|'') ;;
             *)
               echo "RECEIPT_TRANSCRIPTION_PROVIDER must be Veryfi or AzureOpenAI, not '$provider'" >&2
               missing=1
@@ -322,7 +325,9 @@ jobs:
           for name in $parameters; do
             value="${!name:-}"
 
-            export "Parameters__$(printf %s "$name" | tr "[:upper:]" "[:lower:]")=$value"
+            if [ -n "$value" ]; then
+              export "Parameters__$(printf %s "$name" | tr "[:upper:]" "[:lower:]")=$value"
+            fi
 
             # Do not leave the GitHub-facing name in the environment the build inherits.
             unset "$name"

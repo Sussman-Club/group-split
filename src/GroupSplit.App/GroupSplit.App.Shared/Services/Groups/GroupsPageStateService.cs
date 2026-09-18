@@ -343,6 +343,24 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _groupsClient.GetGroupMembersAsAsyncEnumerable(SelectedGroup.Id, cancellationToken);
     }
 
+    public Task<IReadOnlyList<UserInfo>> GetGroupPastMembersAsync(
+        CancellationToken cancellationToken = default) =>
+        SelectedGroup is null
+            ? Task.FromResult<IReadOnlyList<UserInfo>>([])
+            : ReadPastMembersAsync(SelectedGroup.Id, cancellationToken);
+
+    private async Task<IReadOnlyList<UserInfo>> ReadPastMembersAsync(Guid groupId,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<UserInfo> pastMembers = [];
+
+        await _errors.TryAsync(async () =>
+                pastMembers = [.. await _groupsClient.GetGroupPastMembersAsync(groupId, cancellationToken)],
+            "Could not load past members.");
+
+        return pastMembers;
+    }
+
     public Task<bool> InviteToGroupAsync(InviteToGroupRequest request, CancellationToken cancellationToken = default)
     {
         var group = Selected();

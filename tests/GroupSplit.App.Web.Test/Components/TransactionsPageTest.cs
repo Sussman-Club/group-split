@@ -3,6 +3,7 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Pages;
+using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
@@ -36,6 +37,7 @@ public class TransactionsPageTest : ComponentTest
     private static readonly Guid GroupId = Guid.NewGuid();
 
     private readonly Mock<ITransactionsClient> _client = new();
+    private readonly Mock<IInboxStateService> _inbox = new();
     private readonly Mock<IGroupsPageStateService> _groups = new();
     private readonly Mock<IDialogService> _dialogs = new();
 
@@ -139,8 +141,12 @@ public class TransactionsPageTest : ComponentTest
 
         _groups.SetupGet(state => state.Groups).Returns([new GroupResponse(GroupId, "Weekend in Lisbon", 3)]);
         _groups.SetupGet(state => state.IsReadyTask).Returns(Task.CompletedTask);
+        _inbox.SetupGet(state => state.NewCount).Returns(0);
+        _inbox.Setup(state => state.EnsureLoadedAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Services.AddSingleton(_client.Object);
+        Services.AddSingleton(_inbox.Object);
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_dialogs.Object);
         Services.AddSingleton(Mock.Of<ITransactionsPageStateService>());
@@ -361,6 +367,22 @@ public class TransactionsPageTest : ComponentTest
 
         Assert.Equal("All groups", ledger);
         Assert.DoesNotContain(ledger, chips);
+    }
+
+    [Fact]
+    public async Task The_owe_view_cannot_be_combined_with_personal_only()
+    {
+        var page = RenderView();
+
+        await PickLedgerAsync(page, "personal");
+        await page.FindAll(".gs-chipbar .gs-chip")
+            .Single(chip => chip.TextContent.Contains("You owe"))
+            .ClickAsync(new());
+
+        var ledger = page.Find("[aria-label^='Which ledger'] .label").TextContent.Trim();
+
+        Assert.Equal("All groups", ledger);
+        Assert.Null(_asks.Last().Personal);
     }
 
     /// <summary>

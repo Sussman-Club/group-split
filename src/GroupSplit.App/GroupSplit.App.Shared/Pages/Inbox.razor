@@ -1,8 +1,10 @@
 @page "/inbox"
+@page "/transactions/not-filed"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Banking
 @using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @inject IInboxStateService State
 @inject IBankCommands Bank
@@ -10,6 +12,7 @@
 @inject IDialogService DialogService
 @inject LocalClock Clock
 @inject ISnackbar Snackbar
+@inject ApiErrorPresenter Errors
 @implements IDisposable
 
 @*
@@ -18,12 +21,12 @@
     paid and how much, and everything else is secondary.
 *@
 
-<PageTitle>Inbox - Group Split</PageTitle>
+<PageTitle>Activity - Not filed - Group Split</PageTitle>
 
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">Bank</div>
-        <h1>Inbox</h1>
+        <div class="gs-eyebrow">Activity</div>
+        <h1>Not filed</h1>
         @if (Headline is { Length: > 0 } headline)
         {
             <p>@headline</p>
@@ -95,8 +98,10 @@
                     <label class="gs-list-head-select">
                         <MudCheckBox T="bool"
                                      Value="@AllSelected"
-                                     ValueChanged="@((bool on) => SelectAll(on))"
-                                     Indeterminate="@(_selected.Count > 0 && !AllSelected)"
+                                     ValueChanged="@SelectAll"
+                                     UncheckedIcon="@(_selected.Count > 0 && !AllSelected
+                                         ? Icons.Material.Filled.IndeterminateCheckBox
+                                         : Icons.Material.Filled.CheckBoxOutlineBlank)"
                                      Color="Color.Primary"
                                      Dense="true"
                                      Class="gs-row-check"
@@ -615,7 +620,8 @@
         // Not "Add to a group" any more: a group is one of the answers and Personal is the
         // other, and a title that names one of them is a title that is wrong half the time.
         var reference = await DialogService.ShowAsync<FileBankTransactionDialog>(
-            "Record this payment", parameters, options);
+            row.PossibleDuplicates.Count > 0 ? "Which expense is this?" : "Record this payment",
+            parameters, options);
         var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
 
         if (answer is null)
@@ -658,7 +664,9 @@
         if (expense is null || receipt is null)
             return;
 
-        await Receipts.SaveAsync(expense.Id, receipt);
+        await Errors.TryAsync(
+            () => Receipts.SaveAsync(expense.Id, receipt),
+            "Could not save the receipt.");
     }
 
     private async Task IgnoreAsync(BankTransactionResponse row)
