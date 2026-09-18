@@ -484,7 +484,9 @@ public static class TransactionApi
                 {
                     Id = transaction.Id,
                     Amount = transaction.Amount,
+                    Currency = transaction.Currency,
                     DateTime = transaction.DateTime,
+                    HasBankTransaction = transaction.BankTransactionId != null,
                     Name = transaction.Name,
                     Description = transaction.Description,
                     GroupId = transaction.GroupId,

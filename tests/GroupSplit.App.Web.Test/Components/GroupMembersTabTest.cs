@@ -23,6 +23,8 @@ public class GroupMembersTabTest : ComponentTest
     private static readonly GroupResponse Group = new(Guid.NewGuid(), "Weekend in Lisbon", 2);
     private static readonly UserInfo Me = new(Guid.NewGuid(), "Anabel", "Benítez", "anabel@test.com");
     private static readonly UserInfo Omar = new(Guid.NewGuid(), "Omar", "Sussman", "omar@test.com");
+    private static readonly UserInfo FormerOmar = new(Guid.NewGuid(), "Former", "Omar", null,
+        IsPastMember: true);
 
     /// <summary>
     /// Somebody the group has named and is waiting on. The members listing carries them,
@@ -53,6 +55,10 @@ public class GroupMembersTabTest : ComponentTest
             ]);
 
         _state
+            .Setup(state => state.GetGroupPastMembersAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([FormerOmar]);
+
+        _state
             .Setup(state => state.GetGroupJoinLinkAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((GroupJoinLinkResponse?)null);
 
@@ -75,6 +81,8 @@ public class GroupMembersTabTest : ComponentTest
         Assert.Contains("Omar Sussman", tab.Markup);
         Assert.Contains("Daniel", tab.Markup);
         Assert.Contains("1 waiting", tab.Markup);
+        Assert.Contains("Past members", tab.Markup);
+        Assert.Contains("Former Omar", tab.Markup);
     }
 
     /// <summary>

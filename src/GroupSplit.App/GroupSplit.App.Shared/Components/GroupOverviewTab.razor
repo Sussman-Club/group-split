@@ -120,10 +120,10 @@
 
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
             <div class="gs-card-title">
-                <h2>Recent entries</h2>
+                <h2>Recent activity</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                           Href="@($"/groups/{GroupId}/ledger")"
-                           EndIcon="@Icons.Material.Rounded.ArrowForward">Full ledger</MudButton>
+                           Href="@($"/groups/{GroupId}/activity")"
+                           EndIcon="@Icons.Material.Rounded.ArrowForward">All activity</MudButton>
             </div>
             <GroupEntryList Entries="Recent" />
             @if (_recent is { } ledger && ledger.TotalCount > ledger.Items.Count)
@@ -138,8 +138,10 @@
     <div class="gs-stack">
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
             <div class="gs-card-title">
-                <h2>Members</h2>
-                <span class="gs-tag neutral">net balances</span>
+                <h2>People</h2>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                           Href="@($"/groups/{GroupId}/people")"
+                           EndIcon="@Icons.Material.Rounded.ArrowForward">View people</MudButton>
             </div>
             @if (Balance is { } b && b.NetBalances.Any())
             {

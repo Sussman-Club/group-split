@@ -9,7 +9,6 @@
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject IDialogService DialogService
 @inject IGroupsPageStateService GroupsService
-@inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject LocalClock Clock
@@ -54,32 +53,22 @@
         </div>
 
         <div class="gs-toolbar" role="toolbar" aria-label="Group actions">
-            @* The rules icon that used to be here opened a dialog called "Manage Rules"
-               which managed categories. Both are a tab now: they are two lists that point
-               at each other, which a dialog the width of a phone could not show. *@
-            <MudTooltip Text="Rename group">
-                <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@RenameAsync" aria-label="Rename group" />
-            </MudTooltip>
-            <MudTooltip Text="@(group.IsArchive ? "Unarchive group" : "Archive group")">
-                <MudIconButton Icon="@(group.IsArchive ? Icons.Material.Rounded.Unarchive : Icons.Material.Rounded.Archive)"
-                               OnClick="@ToggleArchiveAsync"
-                               aria-label="@(group.IsArchive ? "Unarchive group" : "Archive group")" />
-            </MudTooltip>
-            <span class="sep"></span>
-            @* Settling is a destination now rather than an icon-row action, and the plan
-               card on the overview does the same job in place. What is left here is the
-               link to it, so somebody standing in a group can still get there. *@
-            @* Not gs-btn-glass: that class only styles anything inside .gs-hero, and this
-               toolbar is not one -- so the only button in it rendered without chrome. *@
-            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
-                       StartIcon="@Icons.Material.Rounded.Handshake"
-                       Href="/settle">
-                Settle up
-            </MudButton>
-            <MudTooltip Text="Invite someone">
-                <MudIconButton Icon="@Icons.Material.Rounded.PersonAdd" Color="Color.Primary"
-                               OnClick="@InviteAsync" aria-label="Invite someone" />
-            </MudTooltip>
+            @* Settlement and invitations belong to the sections that explain them: the
+               balance plan and People. The header keeps only actions about the group
+               itself, behind one labelled menu so it does not compete with Add expense. *@
+            <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
+                     Size="Size.Small"
+                     Dense="true"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight"
+                     aria-label="Group actions">
+                <MudMenuItem Icon="@Icons.Material.Rounded.Edit"
+                             Label="Rename group"
+                             OnClick="@RenameAsync" />
+                <MudMenuItem Icon="@(group.IsArchive ? Icons.Material.Rounded.Unarchive : Icons.Material.Rounded.Archive)"
+                             Label="@(group.IsArchive ? "Unarchive group" : "Archive group")"
+                             OnClick="@ToggleArchiveAsync" />
+            </MudMenu>
         </div>
     </div>
 
@@ -93,15 +82,15 @@
     <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
         @switch (Current)
         {
-            case "ledger":
+            case "activity":
                 <GroupLedgerTab GroupId="@group.Id" Kind="@LedgerKind" KindChanged="OnLedgerKindChanged" />
                 break;
 
-            case "members":
+            case "people":
                 <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
                 break;
 
-            case "splits":
+            case "rules":
                 <GroupSplitsTab GroupId="@group.Id" GroupName="@group.Name" />
                 break;
 
@@ -114,7 +103,10 @@
         }
     </div>
 
-    <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@AddExpenseAsync" />
+    @if (!group.IsArchive)
+    {
+        <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@AddExpenseAsync" />
+    }
 }
 else if (NotFound)
 {
@@ -141,15 +133,14 @@ else if (NotFound)
     [Parameter, SupplyParameterFromQuery(Name = "kind")]
     public string? KindParameter { get; set; }
 
-    // Three tabs where there were four. Expenses and Activity were the same list with
-    // different filters, and are one Ledger with the filter in the URL; the two old paths
-    // still resolve to it, since they are links people have.
+    // Four group questions, named for the decision somebody is about to make. The old
+    // paths still resolve below, so renaming a section does not break a saved link.
     private static readonly (string Key, string Label)[] Sections =
     [
-        ("overview", "Overview"),
-        ("ledger", "Ledger"),
-        ("members", "Members"),
-        ("splits", "Splits")
+        ("balances", "Balances"),
+        ("activity", "Activity"),
+        ("people", "People"),
+        ("rules", "Rules")
     ];
 
     /// <summary>
@@ -162,18 +153,17 @@ else if (NotFound)
         GroupsService.IsReadyTask.IsCompleted && GroupsService.Groups.All(candidate => candidate.Id != GroupId);
 
     /// <summary>
-    /// Which section the URL asks for. The two retired tabs land on the ledger they became,
-    /// with Expenses keeping its meaning as a filter -- a bookmark to a group's expenses is
-    /// still a bookmark to a group's expenses.
+    /// Which section the URL asks for. The retired names remain aliases: a bookmark to a
+    /// group's expenses, members, categories or overview still lands in the same place.
     /// </summary>
     private string Current => Tab?.ToLowerInvariant() switch
     {
-        "ledger" or "expenses" or "activity" => "ledger",
-        "members" => "members",
+        "activity" or "ledger" or "expenses" => "activity",
+        "people" or "members" => "people",
         // "rules" too: what this tab holds used to be a dialog reached from an icon called
         // Split rules, and that is still what somebody types.
-        "splits" or "rules" or "categories" => "splits",
-        _ => "overview"
+        "rules" or "splits" or "categories" => "rules",
+        _ => "balances"
     };
 
     private ActivityKind? LedgerKind =>
@@ -199,10 +189,12 @@ else if (NotFound)
             _ => ""
         };
 
-        Nav.NavigateTo($"/groups/{GroupId}/ledger{query}", replace: true);
+        Nav.NavigateTo($"/groups/{GroupId}/activity{query}", replace: true);
     }
 
-    private string Href(string key) => key == "overview" ? $"/groups/{GroupId}" : $"/groups/{GroupId}/{key}";
+    private string Href(string key) => key == "balances"
+        ? $"/groups/{GroupId}"
+        : $"/groups/{GroupId}/{key}";
 
     private GroupResponse? Group => GroupsService.SelectedGroup?.Id == GroupId ? GroupsService.SelectedGroup : null;
 
@@ -299,22 +291,6 @@ else if (NotFound)
             await GroupsService.UpdateGroupAsync(patch, CancellationToken);
     }
 
-    private async Task InviteAsync()
-    {
-        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
-
-        var members = await GroupsService.GetGroupMembersAsync(CancellationToken).ToArrayAsync(CancellationToken);
-
-        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, members } };
-
-        var dialog = await DialogService.ShowAsync<AddGroupMemberDialog>("Invite people", parameters, options);
-
-        var request = await dialog.GetReturnValueAsync<InviteToGroupRequest>();
-
-        if (request is not null)
-            await GroupsService.InviteToGroupAsync(request, CancellationToken);
-    }
-
     /// <summary>
     /// One tap, no confirmation: archiving hides the group from this person's own list and
     /// nothing else, and the same button puts it back.
@@ -356,7 +332,8 @@ else if (NotFound)
         var parameters = new DialogParameters<CreateTransactionDialog>
         {
             { x => x.SelectedGroupId, GroupId },
-            { x => x.SelectedGroupName, Group?.Name }
+            { x => x.SelectedGroupName, Group?.Name },
+            { x => x.SelectedGroupCurrency, Group?.Currency }
         };
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);

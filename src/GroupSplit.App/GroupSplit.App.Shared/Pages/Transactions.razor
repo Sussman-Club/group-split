@@ -1,6 +1,7 @@
 @page "/transactions"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Services.Banking
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
@@ -9,6 +10,7 @@
 @inject ITransactionsClient TransactionsClient
 @inject ITransactionsPageStateService TransactionsService
 @inject IGroupsPageStateService GroupsService
+@inject IInboxStateService Inbox
 @inject ApiErrorPresenter Errors
 @inject IDialogService DialogService
 @inject NavigationManager Nav
@@ -56,6 +58,32 @@
         <p>@ViewBlurb</p>
     </div>
 </div>
+
+@* Bank rows are part of Activity's work queue. Keep the existing expense listing intact,
+   but make the next decision visible from the same destination instead of sending people
+   to a separate top-level Inbox. *@
+@if (Inbox.NewCount > 0)
+{
+    <div class="gs-card gs-card-pad" style="padding: 14px 16px; margin-bottom: 14px">
+        <div class="gs-inline" style="justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+            <div style="min-width: 220px; flex: 1 1 360px">
+                <div class="gs-inline" style="gap: 8px; margin-bottom: 4px">
+                    <MudIcon Icon="@Icons.Material.Rounded.Inbox" Color="Color.Primary" Size="Size.Small" aria-hidden="true" />
+                    <span style="font-weight: 700">Bank transactions to review</span>
+                </div>
+                <div class="gs-muted" style="font-size: .8125rem">
+                    Imported bank payments waiting for you to match to an expense or record as new.
+                </div>
+            </div>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       Class="gs-btn-pill" StartIcon="@Icons.Material.Rounded.Inbox"
+                       Href="/transactions/not-filed"
+                       aria-label="@NotFiledLabel">
+                Review bank transactions (@Inbox.NewCount)
+            </MudButton>
+        </div>
+    </div>
+}
 
 <div class="gs-stack">
     @*
@@ -124,9 +152,12 @@
                 </MudMenuItem>
                 @* Personal is the absence of a group, which is why it is an entry here
                    rather than one of the groups below it. *@
-                <MudMenuItem OnClick="@(() => SetWhereAsync(PersonalOnly))">
-                    <span class="gs-menu-item @(_where == PersonalOnly ? "is-on" : "")">Personal only</span>
-                </MudMenuItem>
+                @if (_view is not ExpenseView.YourShare)
+                {
+                    <MudMenuItem OnClick="@(() => SetWhereAsync(PersonalOnly))">
+                        <span class="gs-menu-item @(_where == PersonalOnly ? "is-on" : "")">Personal only</span>
+                    </MudMenuItem>
+                }
                 @if (GroupsService.Groups.Count > 0)
                 {
                     <MudDivider />
@@ -326,6 +357,8 @@
 <ExtendedFab Label="Add expense" OnClick="@AddTransactionAsync" />
 
 @code {
+    private string NotFiledLabel => $"Review {Inbox.NewCount} bank transaction{(Inbox.NewCount == 1 ? "" : "s")} waiting to be filed";
+
     /// <summary>Which of the three questions the page is answering.</summary>
     public enum ExpenseView
     {
@@ -731,6 +764,11 @@
 
         _view = view;
 
+        // A personal expense has no other party to owe you. Keep the ledger selector and
+        // the view answering a question that can actually have rows together.
+        if (_view is ExpenseView.YourShare && _where == PersonalOnly)
+            _where = AllLedgers;
+
         // In the URL, so a view is a place. Replacing rather than pushing keeps the back
         // button leaving the page instead of stepping back through three chips.
         Nav.NavigateTo($"/transactions{QueryFor(view)}", replace: true);
@@ -776,6 +814,9 @@
 
     private async Task SetWhereAsync(string where)
     {
+        if (_view is ExpenseView.YourShare && where == PersonalOnly)
+            return;
+
         if (_where == where) return;
 
         _where = where;
@@ -901,6 +942,7 @@
 
         TransactionsService.OnTransactionsChanged += ReRender;
         GroupsService.OnGroupsChanged += ReRender;
+        Inbox.OnChanged += ReRender;
 
         // A group renamed changes the tag on every one of its rows, so that is a change to
         // this listing as much as an expense is.
@@ -919,7 +961,8 @@
     /// <c>?view=share</c> asked the server the default view's question and then rendered the
     /// answer under the share view's headings.
     /// </remarks>
-    private void ResolveView() =>
+    private void ResolveView()
+    {
         _view = ViewParameter?.ToLowerInvariant() switch
         {
             "share" or "yourshare" => ExpenseView.YourShare,
@@ -929,6 +972,10 @@
             _ => ExpenseView.Everything
         };
 
+        if (_view is ExpenseView.YourShare && _where == PersonalOnly)
+            _where = AllLedgers;
+    }
+
     protected override void OnParametersSet() => ResolveView();
 
     protected override async Task OnInitializedAsync()
@@ -936,7 +983,7 @@
         // The group filter lists the caller's groups, so the page waits for them before
         // reading anything -- a select with no options and a chip that says "all groups"
         // are the same picture for a moment otherwise.
-        await GroupsService.IsReadyTask;
+        await Task.WhenAll(GroupsService.IsReadyTask, Inbox.EnsureLoadedAsync());
 
         await ReadFiguresAsync();
     }
@@ -945,6 +992,7 @@
     {
         TransactionsService.OnTransactionsChanged -= ReRender;
         GroupsService.OnGroupsChanged -= ReRender;
+        Inbox.OnChanged -= ReRender;
 
         Changes.TransactionsChanged -= OnDataChangedAsync;
         Changes.GroupsChanged -= OnDataChangedAsync;

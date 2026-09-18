@@ -535,6 +535,7 @@ public class TransactionService(
             Name = transaction.Name,
             Description = transaction.Description,
             Amount = transaction.Amount,
+            Currency = transaction.Currency,
             DateTime = transaction.DateTime,
             GroupId = transaction.GroupId,
             GroupName = transaction.Group?.Name,

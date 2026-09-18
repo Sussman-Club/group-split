@@ -64,12 +64,12 @@ The allowlist is deliberate: it is what stops a future, unrelated repository sec
 being forwarded into the AppHost and written into the generated deployment environment.
 
 The workflow reads each entry from exactly one place -- a variable or a secret, whichever
-the table below names -- so the column is load-bearing. Every entry is required now; an
-entry stored as the other kind, or left empty, fails the pre-flight check.
+the table below names -- so the column is load-bearing. Optional entries fall back to the
+defaults declared by the AppHost when they are absent.
 
 The cost is that **adding a parameter takes two edits, not one** -- a GitHub entry of the
 matching name, and the same name added to the deploy workflow's allowlist. A GitHub entry
-the workflow does not name is simply never seen by the AppHost and fails deployment.
+the workflow does not name is simply never seen by the AppHost and falls back to its default.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
@@ -78,36 +78,36 @@ the workflow does not name is simply never seen by the AppHost and fails deploym
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
 | `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. |
-| `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | yes | Whether the login page offers Google. Set `true` or `false`. |
-| `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | The OAuth client. They must be valid when Google is enabled. |
-| `smtp-enabled` | variable `SMTP_ENABLED` | yes | Whether Keycloak sends mail. Set `true` or `false`. See [Email](../README.md#email). |
-| `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | yes | The relay. These values must be supplied even when mail is disabled, and must be valid when it is enabled. |
-| `smtp-port` | variable `SMTP_PORT` | yes | Relay port, normally `587` for submission over STARTTLS. |
-| `plaid-enabled` | variable `PLAID_ENABLED` | yes | Whether people can link a bank. Set `true` or `false`. |
-| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | yes | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. They must be valid when bank sync is enabled. |
-| `plaid-env` | variable `PLAID_ENV` | yes | Which Plaid environment to talk to: `Sandbox` or `Production`. |
+| `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
+| `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
+| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
+| `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
+| `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
+| `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
+| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
+| `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no | Optional. Where an OAuth bank returns to; empty keeps Plaid's popup flow. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | no | Optional. PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Empty leaves the development ring unwrapped. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
-| `receipt-transcription-provider` | variable `RECEIPT_TRANSCRIPTION_PROVIDER` | yes | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
-| `veryfi-enabled` | variable `VERYFI_ENABLED` | yes | Whether receipt attachments can be transcribed through Veryfi. Set `true` or `false`. |
-| `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | yes | Veryfi API credentials. They must be valid when Veryfi is enabled. |
-| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | yes | Logs Veryfi's whole response, which is how a provider misreading a receipt is told apart from a mapping mistake. Set `true` only for an investigation. |
-| `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | yes | Whether Azure OpenAI receipt transcription is enabled. Set `true` or `false`. |
-| `azure-openai-endpoint`, `azure-openai-model` | variables `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | yes | The v1 base URL (`https://<resource>.openai.azure.com/openai/v1/`) and the deployment/model name. They must be valid when Azure OpenAI is enabled. The AppHost puts them in the `receipt-transcription` model reference as `Endpoint` and `Model`; the API does not read separate Azure OpenAI environment variables. |
-| `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | yes | Azure OpenAI API key. The AppHost passes it as the `Key` property of the `receipt-transcription` model reference. |
+| `receipt-transcription-provider` | variable `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
+| `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
+| `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when Veryfi is enabled | Veryfi API credentials. Missing while enabled fails the publish. |
+| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response for an investigation. Leave it off outside debugging. |
+| `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
+| `azure-openai-endpoint`, `azure-openai-model` | variables `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL and deployment/model name. The AppHost puts them in the `receipt-transcription` model reference. |
+| `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. |
 
-Every required value above is declared with Aspire's regular `AddParameter`. The two optional
-values use an empty default, which the API treats as absent. The switches still control whether an integration is active, while the validation
-steps check cross-field rules after Aspire's `process-parameters` step has resolved all
-values and before `build-prereq`, which every image build waits on. A missing value fails
-the deployment before an image is built.
+Optional values are declared with [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
+which supplies the default when configuration has no value. The switches still control
+whether an integration is active, while validation steps check cross-field rules after
+Aspire's `process-parameters` step has resolved the values and before `build-prereq`, which
+every image build waits on.
 
 `KOMODO_*` and `REGISTRY_*` configure the workflow itself and are not exported as
 parameters.
 
 Run mode uses AppHost parameters from user secrets or environment variables. The passwords
 are generated and kept in the AppHost's user secrets, Mailpit replaces the relay, and a
-developer can enable Google locally by setting its required values:
+developer can enable Google locally by setting its values:
 
 ```bash
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:google-sign-in-enabled true

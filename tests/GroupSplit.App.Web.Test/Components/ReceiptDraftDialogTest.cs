@@ -32,6 +32,17 @@ public class ReceiptDraftDialogTest : ComponentTest
             Description = description
         };
 
+    private static SaveReceiptRequest Draft() => new()
+    {
+        Subtotal = 30m,
+        Total = 30m,
+        Items =
+        [
+            new ReceiptItemInput { Name = "Water", Description = "WATER 40 PK", UnitPrice = 10m, TotalPrice = 10m },
+            new ReceiptItemInput { Name = "Pizza", Description = "LARGE CHEESE", UnitPrice = 20m, TotalPrice = 20m }
+        ]
+    };
+
     private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference Reference)> OpenAsync(
         ReceiptResponse bill)
     {
@@ -49,6 +60,34 @@ public class ReceiptDraftDialogTest : ComponentTest
                 }));
 
         return (provider, reference!);
+    }
+
+    [Fact]
+    public async Task A_new_scan_returns_to_the_expense_sheet_instead_of_saving_a_receipt()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>().ShowAsync<ReceiptDraftDialog>(
+                "Check receipt",
+                new DialogParameters<ReceiptDraftDialog>
+                {
+                    { dialog => dialog.Transcription,
+                        new ReceiptTranscriptionResponse(Guid.NewGuid(), "test", Draft()) }
+                }));
+
+        Assert.Contains("Check receipt", provider.Markup, StringComparison.Ordinal);
+        var useReceipt = provider.FindAll("button")
+            .Single(button => button.TextContent.Contains("Use this receipt", StringComparison.Ordinal));
+
+        await useReceipt.ClickAsync(new MouseEventArgs());
+
+        var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();
+        Assert.NotNull(result);
+        Assert.Equal(30m, result!.Total);
+        _receipts.Verify(receipts => receipts.SaveAsync(It.IsAny<Guid>(), It.IsAny<SaveReceiptRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

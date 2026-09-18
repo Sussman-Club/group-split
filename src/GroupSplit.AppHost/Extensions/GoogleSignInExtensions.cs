@@ -36,15 +36,15 @@ public static class GoogleSignInExtensions
         {
             var builder = keycloak.ApplicationBuilder;
 
-            var enabled = builder.AddParameter(EnabledParameterName)
+            var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
                 .WithDescription(
                     "Whether Google is offered on the login page (true/false). "
                     + "Needs google-client-id and google-client-secret when true.");
 
-            var clientId = builder.AddParameter(ClientIdParameterName)
+            var clientId = builder.AddOptionalParameter(ClientIdParameterName, string.Empty)
                 .WithDescription("OAuth client ID from the Google Cloud console.");
 
-            var clientSecret = builder.AddParameter(ClientSecretParameterName, secret: true)
+            var clientSecret = builder.AddOptionalParameter(ClientSecretParameterName, string.Empty, secret: true)
                 .WithDescription("OAuth client secret from the Google Cloud console.");
 
             builder.Pipeline.AddStep(
