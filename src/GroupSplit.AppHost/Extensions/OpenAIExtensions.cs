@@ -66,22 +66,13 @@ public static class OpenAIExtensions
                 })
                 .OnInitializeResource(async (r, evt, ct) =>
                 {
-                    if (r.TryGetLastAnnotation<OpenAIEndpointReferenceAnnotation>(out var endpointAnnotation) && endpointAnnotation.ReferenceExpression is not null)
-                    {
-                        var endpointValue = await endpointAnnotation.ReferenceExpression.GetValueAsync(ct)
-                            .ConfigureAwait(false);
-                        
-                        if (endpointValue is not null)
-                            builder.CreateResourceBuilder(r).WithEndpoint(endpointValue);
-                    }
-                    
                     // Connection string resolution is dependent on parameters being resolved
                     // We use this to wait for the parameters to be resolved before we can compute the connection string.
                     var cs = await r.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
-                        // Publish the update with the connection string value and the state as running.
-                        // This will allow health checks to start running.
-                        await evt.Notifications.PublishUpdateAsync(r, s => s with
+                    // Publish the update with the connection string value and the state as running.
+                    // This will allow health checks to start running.
+                    await evt.Notifications.PublishUpdateAsync(r, s => s with
                     {
                         State = KnownResourceStates.Running,
                         Properties =
@@ -102,9 +93,7 @@ public static class OpenAIExtensions
     extension(IResourceBuilder<OpenAIResource> builder)
     {
         /// <summary>
-        /// Adds a model resource whose deployment name remains a deferred Aspire reference.
-        /// This keeps the model usable with <c>WithReference</c> without resolving a parameter
-        /// while the AppHost is being evaluated.
+        /// Adds a model resource whose deployment name remains an Aspire parameter reference.
         /// </summary>
         public IResourceBuilder<IResourceWithConnectionString> WithModel(
             [ResourceName] string name,
@@ -114,32 +103,70 @@ public static class OpenAIExtensions
             ArgumentException.ThrowIfNullOrEmpty(name);
             ArgumentNullException.ThrowIfNull(modelParameter);
 
+            if (!builder.Resource.TryGetLastAnnotation<OpenAIEndpointReferenceAnnotation>(
+                    out var endpointAnnotation))
+            {
+                throw new InvalidOperationException(
+                    $"OpenAI resource '{builder.Resource.Name}' must configure an endpoint parameter before adding a model.");
+            }
+
             var model = new ParameterizedOpenAIModelResource(
                 name,
                 builder.Resource,
+                endpointAnnotation.ReferenceExpression,
                 modelParameter.Resource);
 
             modelParameter.WithParentRelationship(model);
 
             var modelBuilder = builder.ApplicationBuilder
                 .AddResource(model)
-                .WithIconName("BrainCircuit");
+                .WithIconName("BrainCircuit")
+                .WithInitialState(new()
+                {
+                    ResourceType = "OpenAI Model",
+                    CreationTimeStamp = DateTime.UtcNow,
+                    State = KnownResourceStates.Waiting,
+                    Properties =
+                    [
+                        new(CustomResourceKnownProperties.Source, "OpenAI Models")
+                    ]
+                })
+                .OnInitializeResource(async (r, evt, ct) =>
+                {
+                    var cs = await r.ConnectionStringExpression.GetValueAsync(ct)
+                        .ConfigureAwait(false);
 
-            modelBuilder.WithParentRelationship(builder.Resource);
+                    await evt.Notifications.PublishUpdateAsync(r, s => s with
+                    {
+                        State = KnownResourceStates.Running,
+                        Properties =
+                        [
+                            .. s.Properties,
+                            new(CustomResourceKnownProperties.ConnectionString, cs) { IsSensitive = true }
+                        ]
+                    }).ConfigureAwait(false);
+
+                    await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(r, evt.Services), ct)
+                        .ConfigureAwait(false);
+                });
 
             return modelBuilder;
         }
 
-        public IResourceBuilder<OpenAIResource> WithEndpoint(IResourceBuilder<ParameterResource> keyParameter)
+        /// <summary>
+        /// Stores the endpoint as a deferred Aspire parameter reference.
+        /// </summary>
+        public IResourceBuilder<OpenAIResource> WithEndpoint(
+            IResourceBuilder<ParameterResource> endpointParameter)
         {
-            return builder.WithEndpoint(ReferenceExpression.Create($"{keyParameter}"));
-        }
+            ArgumentNullException.ThrowIfNull(endpointParameter);
 
-        public IResourceBuilder<OpenAIResource> WithEndpoint(ReferenceExpression keyParameter)
-        {
-            return builder
-                .WithAnnotation(new OpenAIEndpointReferenceAnnotation { ReferenceExpression = keyParameter },
-                    ResourceAnnotationMutationBehavior.Replace);
+            return builder.WithAnnotation(
+                new OpenAIEndpointReferenceAnnotation
+                {
+                    ReferenceExpression = ReferenceExpression.Create($"{endpointParameter}")
+                },
+                ResourceAnnotationMutationBehavior.Replace);
         }
     }
 
@@ -163,26 +190,30 @@ public static class OpenAIExtensions
         public required ReferenceExpression ReferenceExpression { get; init; }
     }
 
-    // Aspire's OpenAIModelResource stores Model as a string and seals its connection-string
-    // expression. Deriving from it would require a fake model value and would still lose the
-    // deferred parameter, so this resource mirrors its connection-string contract instead.
+    // Aspire's OpenAIModelResource stores Model as a string. This resource mirrors its
+    // connection-string contract while preserving both the endpoint and model parameters.
     private sealed class ParameterizedOpenAIModelResource(
         string name,
         OpenAIResource parent,
+        ReferenceExpression endpointReference,
         ParameterResource modelParameter)
         : Resource(name), IResourceWithConnectionString, IResourceWithParent<OpenAIResource>
     {
         public OpenAIResource Parent { get; } = parent;
 
         public ReferenceExpression ConnectionStringExpression =>
-            ReferenceExpression.Create($"{Parent};Model={modelParameter}");
+            ReferenceExpression.Create(
+                $"Endpoint={endpointReference};Key={Parent.Key};Model={modelParameter}");
 
         public string ConnectionStringEnvironmentVariable => $"ConnectionStrings__{Name}";
 
         public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties() =>
-            ((IResourceWithConnectionString)Parent).GetConnectionProperties()
-                .Append(new KeyValuePair<string, ReferenceExpression>(
-                    "Model", ReferenceExpression.Create($"{modelParameter}")));
+        [
+            new("Endpoint", endpointReference),
+            new("Uri", endpointReference),
+            new("Key", ReferenceExpression.Create($"{Parent.Key}")),
+            new("ModelName", ReferenceExpression.Create($"{modelParameter}"))
+        ];
 
         public async ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken)
         {
@@ -225,8 +256,16 @@ public static class OpenAIExtensions
         public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            var endpoint = _resource.Endpoint;
+
+            if (_resource.TryGetLastAnnotation<OpenAIEndpointReferenceAnnotation>(out var endpointAnnotation))
+            {
+                endpoint = await endpointAnnotation.ReferenceExpression.GetValueAsync(cancellationToken)
+                    .ConfigureAwait(false) ?? endpoint;
+            }
+
             // Case 1: Default endpoint - check StatusPage
-            if (Uri.TryCreate(_resource.Endpoint, UriKind.Absolute, out var endpointUri) &&
+            if (Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) &&
                 Uri.Compare(endpointUri, s_defaultEndpointUri, UriComponents.SchemeAndServer, UriFormat.Unescaped,
                     StringComparison.OrdinalIgnoreCase) == 0)
             {
