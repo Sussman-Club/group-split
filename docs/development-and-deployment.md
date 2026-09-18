@@ -88,12 +88,12 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no | Optional. Where an OAuth bank returns to; empty keeps Plaid's popup flow. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | no | Optional. PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Empty leaves the development ring unwrapped. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
-| `receipt-transcription-provider` | variable `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
+| `receipt-transcription-provider` | secret `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
 | `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
 | `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when Veryfi is enabled | Veryfi API credentials. Missing while enabled fails the publish. |
 | `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response for an investigation. Leave it off outside debugging. |
 | `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
-| `azure-openai-endpoint`, `azure-openai-model` | variables `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL and deployment/model name. The AppHost puts them in the `receipt-transcription` model reference. |
+| `azure-openai-endpoint`, `azure-openai-model` | secrets `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL and deployment/model name. The AppHost puts them in the `receipt-transcription` model reference. |
 | `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. |
 
 Optional values are declared with [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
