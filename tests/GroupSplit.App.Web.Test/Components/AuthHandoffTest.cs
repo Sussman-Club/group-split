@@ -99,6 +99,23 @@ public class AuthHandoffTest : ComponentTest
         _auth.Verify(service => service.Login(null, false, It.IsAny<CancellationToken>()));
     }
 
+    [Fact]
+    public void A_session_expiry_message_is_shown_before_trying_the_original_page_again()
+    {
+        Services.GetRequiredService<NavigationManager>()
+            .NavigateTo(
+                "http://localhost/login?error=Your%20session%20has%20expired.%20Please%20sign%20in%20again.&returnUrl=%2Fgroups");
+
+        var page = Render();
+
+        Assert.Contains("Your session has expired. Please sign in again.", page.Markup,
+            StringComparison.Ordinal);
+
+        page.Find("button").Click();
+
+        _auth.Verify(service => service.Login("/groups", false, It.IsAny<CancellationToken>()));
+    }
+
     private IRenderedComponent<AuthHandoff> Render() =>
         Render<AuthHandoff>(parameters => parameters
             .Add(handoff => handoff.Title, "Welcome back")

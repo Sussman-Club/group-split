@@ -34,9 +34,18 @@ internal class AuthDelegatingHandler(
             // No sign-out here: mid-render the response has started, and signing out
             // writes a Set-Cookie, which then throws "Headers are read-only". Logged so a
             // 401 from here is distinguishable from one the API sent.
-            logger.LogWarning(
-                "No access token for {Method} {Uri}: {Error} ({Description}).",
-                request.Method, request.RequestUri, failure.Error, failure.ErrorDescription);
+            if (string.Equals(failure.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogWarning(
+                    "Session token was refused for {Method} {Uri}: {Error} ({Description}).",
+                    request.Method, request.RequestUri, failure.Error, failure.ErrorDescription);
+            }
+            else
+            {
+                logger.LogError(
+                    "Access token acquisition failed for {Method} {Uri}: {Error} ({Description}).",
+                    request.Method, request.RequestUri, failure.Error, failure.ErrorDescription);
+            }
 
             return Unauthorized(request);
         }

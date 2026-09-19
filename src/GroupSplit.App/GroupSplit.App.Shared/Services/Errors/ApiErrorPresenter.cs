@@ -86,7 +86,13 @@ public sealed class ApiErrorPresenter(IAuthService auth, NavigationManager nav, 
     {
         try
         {
-            await auth.Login("/" + nav.ToBaseRelativePath(nav.Uri));
+            var returnUrl = "/" + nav.ToBaseRelativePath(nav.Uri);
+            var signIn = "/login?error="
+                + Uri.EscapeDataString(ErrorMessages.SessionExpired)
+                + "&returnUrl="
+                + Uri.EscapeDataString(returnUrl);
+
+            await auth.Login(signIn);
         }
         catch (Exception)
         {
