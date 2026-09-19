@@ -191,20 +191,20 @@
                                to go and look at, and the dialog is mostly the division. *@
                             @if (context.Item.Kind is not ActivityKind.Transfer)
                             {
-                                <MudTooltip Text="View details">
+                                <MudTooltip Text="View details" ShowOnFocus="false">
                                     <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
                                                    Size="Size.Small"
                                                    aria-label="@($"View {Headline(context.Item)}")"
                                                    OnClick="@(async () => await ViewAsync(context.Item))" />
                                 </MudTooltip>
                             }
-                            <MudTooltip Text="Edit">
+                            <MudTooltip Text="Edit" ShowOnFocus="false">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Edit"
                                                Size="Size.Small"
                                                aria-label="@($"Edit {Headline(context.Item)}")"
                                                OnClick="@(async () => await EditAsync(context.Item))" />
                             </MudTooltip>
-                            <MudTooltip Text="Delete">
+                            <MudTooltip Text="Delete" ShowOnFocus="false">
                                 <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
                                                Size="Size.Small"
                                                Color="Color.Error"

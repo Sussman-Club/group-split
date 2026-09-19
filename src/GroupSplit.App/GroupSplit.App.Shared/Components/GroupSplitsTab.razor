@@ -123,7 +123,7 @@
                                    using: the API refuses to delete one with anything filed
                                    under it, so for most categories older than a week this
                                    is the only door that opens. *@
-                                <MudTooltip Text="@(category.IsArchive
+                                <MudTooltip ShowOnFocus="false" Text="@(category.IsArchive
                                                       ? "Offer this category again"
                                                       : "Stop offering this category")">
                                     <MudIconButton Size="Size.Small"
@@ -219,7 +219,7 @@
                                            the API refuses to delete a rule in use, and an
                                            action that can only fail is worse than none.
                                            Re-point the categories and it comes back. *@
-                                        <MudTooltip Text="@(_stale
+                                        <MudTooltip ShowOnFocus="false" Text="@(_stale
                                                               ? "Held back until the categories can be read again"
                                                               : used.Count > 0
                                                                   ? "In use by a category"
