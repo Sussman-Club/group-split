@@ -155,4 +155,19 @@ public class MerchantMarkTest : ComponentTest
 
         Assert.Empty(mark.FindAll("img"));
     }
+
+    [Fact]
+    public void A_logo_that_fails_to_load_uses_the_payer_avatar_fallback()
+    {
+        var mark = Render<MerchantMark>(parameters => parameters
+            .Add(component => component.PaidByUserName, "Omar Silva")
+            .Add(component => component.MerchantName, "Lidl")
+            .Add(component => component.MerchantLogoUrl, "https://logos/lidl.png"));
+
+        mark.Find("img.gs-mark-place").TriggerEvent("onerror", new EventArgs());
+
+        Assert.Empty(mark.FindAll("img"));
+        Assert.Equal("OS", mark.Find(".gs-avatar").TextContent.Trim());
+        Assert.Empty(mark.FindAll(".gs-mark-who"));
+    }
 }
