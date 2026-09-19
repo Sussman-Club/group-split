@@ -141,6 +141,33 @@
     background: var(--gs-surface-3);
 }
 
+.gs-mark-inline-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    flex: 0 0 auto;
+    color: var(--gs-on-accent);
+    font-family: var(--gs-font-display);
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    background: linear-gradient(135deg, var(--gs-teal-bright), var(--gs-teal-deep));
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.gs-mark-inline-fallback.clay {
+    background: linear-gradient(135deg, var(--gs-clay), var(--gs-clay-deep));
+}
+
+.gs-mark-inline-fallback.ink {
+    background: linear-gradient(135deg, var(--gs-ink-2), var(--gs-ink));
+    color: var(--gs-bg);
+}
+
 /* The initials that stand in for a place with no logo: a tile, because it is a place. */
 .gs-avatar.tile {
     border-radius: 12px;
