@@ -52,7 +52,7 @@
                     </div>
                     @if (person.Id != UserInfo?.Id)
                     {
-                        <MudTooltip Text="Remove from the group">
+                        <MudTooltip Text="Remove from the group" ShowOnFocus="false">
                             <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
                                            Size="Size.Small"
                                            Color="Color.Error"
@@ -157,7 +157,7 @@
                                a bearer credential on their position in the ledger, and a URL
                                on screen is a URL in a screenshot. *@
                             <div class="gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                                <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")">
+                                <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")" ShowOnFocus="false">
                                     <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.ContentCopy)"
                                                    Size="Size.Small"
                                                    Color="@(_copied == pending.Id ? Color.Success : Color.Default)"
@@ -169,7 +169,7 @@
                                    stops being part of the group. It was a plain grey close
                                    cross, which reads as "dismiss this row" -- and what it
                                    actually does is move somebody's money. *@
-                                <MudTooltip Text="Withdraw the invitation">
+                                <MudTooltip Text="Withdraw the invitation" ShowOnFocus="false">
                                     <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
                                                    Size="Size.Small"
                                                    Color="Color.Error"
