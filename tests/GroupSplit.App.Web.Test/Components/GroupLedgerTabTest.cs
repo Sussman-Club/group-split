@@ -314,6 +314,51 @@ public class GroupLedgerTabTest : ComponentTest
     }
 
     [Fact]
+    public void A_failed_summary_read_is_retried_on_a_later_render()
+    {
+        var attempts = 0;
+        _answer = _ => ++attempts == 1
+            ? throw new HttpRequestException("the server could not be reached")
+            : Task.FromResult(new TransactionSummaryResponse(6, 41.50m));
+
+        var tab = Render();
+
+        Assert.Single(_asks);
+        Assert.Equal(("0", "$0.00"), Cards(tab));
+
+        tab.Render(parameters => parameters.Add(component => component.GroupId, Group));
+
+        Assert.Equal(2, _asks.Count);
+        Assert.Equal(("6", "$41.50"), Cards(tab));
+    }
+
+    [Fact]
+    public async Task An_older_same_range_answer_does_not_replace_one_started_by_a_write()
+    {
+        var oldAnswer = new TaskCompletionSource<TransactionSummaryResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
+        _answer = _ => ++attempts == 1
+            ? oldAnswer.Task
+            : Task.FromResult(new TransactionSummaryResponse(6, 41.50m));
+
+        var tab = Render();
+
+        Assert.Single(_asks);
+
+        await Changes.NotifyTransactionsChangedAsync();
+
+        Assert.Equal(2, _asks.Count);
+        Assert.Equal(("6", "$41.50"), Cards(tab));
+
+        oldAnswer.SetResult(new TransactionSummaryResponse(5, 29m));
+        for (var turn = 0; turn < 5; turn++)
+            await tab.InvokeAsync(() => { });
+
+        Assert.Equal(("6", "$41.50"), Cards(tab));
+    }
+
+    [Fact]
     public async Task Searching_narrows_the_cards_as_well_as_the_list()
     {
         _answer = ask => Task.FromResult(ask.Search is null
