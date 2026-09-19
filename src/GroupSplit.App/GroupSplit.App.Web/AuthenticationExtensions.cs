@@ -6,6 +6,7 @@ using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 // RemoveAllResilienceHandlers is still experimental, and taken anyway: what it turns off
@@ -77,6 +78,15 @@ public static class AuthenticationExtensions
             // host; this is TryAdd, so it only supplies one when nothing else has.
             builder.Services.AddDistributedMemoryCache();
             builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
+
+            // Duende emits every failed refresh response at Error, including the expected
+            // invalid_grant returned when Keycloak retires a refresh token. The API handler
+            // below has the structured failure and re-logs it at the right level, so suppress
+            // the library's duplicate event rather than letting a routine session end look
+            // like an application fault.
+            builder.Logging.AddFilter(
+                "Duende.AccessTokenManagement.OpenIdConnect.Internal.OpenIdConnectUserTokenEndpoint",
+                level => level < LogLevel.Error);
 
             builder.AddRefreshedAccessTokens();
             builder.Services
