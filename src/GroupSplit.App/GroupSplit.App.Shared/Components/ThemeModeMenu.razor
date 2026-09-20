@@ -7,7 +7,7 @@
     <span class="gs-seg-thumb" aria-hidden="true"></span>
     @foreach (var mode in Modes)
     {
-        <MudTooltip Text="@Label(mode)" Delay="400">
+        <MudTooltip Text="@Label(mode)" Delay="400" ShowOnFocus="false">
             <button type="button"
                     class="gs-seg-btn @(mode == Preference.Mode ? "active" : "")"
                     role="radio"

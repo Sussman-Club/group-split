@@ -737,4 +737,15 @@ public class GroupLedgerTabTest : ComponentTest
 
         Assert.Equal(expense.Id, viewed);
     }
+
+    [Fact]
+    public void Ledger_action_tooltips_do_not_remain_open_after_focus()
+    {
+        _entries = [Expense(Guid.NewGuid())];
+
+        var tab = Render();
+
+        Assert.Equal(3, tab.FindComponents<MudTooltip>().Count);
+        Assert.All(tab.FindComponents<MudTooltip>(), tooltip => Assert.False(tooltip.Instance.ShowOnFocus));
+    }
 }

@@ -307,7 +307,7 @@
                                their own controls -- so without this the one screen about a
                                single expense was reachable from the home page's lists and
                                from nowhere on the page devoted to expenses. *@
-                            <MudTooltip Text="View details">
+                            <MudTooltip Text="View details" ShowOnFocus="false">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
                                                Size="Size.Small"
                                                aria-label="@($"View {context.Item.Name}")"
@@ -315,13 +315,13 @@
                             </MudTooltip>
                             @if (CanChange(context.Item))
                             {
-                                <MudTooltip Text="Edit">
+                                <MudTooltip Text="Edit" ShowOnFocus="false">
                                     <MudIconButton Icon="@Icons.Material.Rounded.Edit"
                                                    Size="Size.Small"
                                                    aria-label="@($"Edit {context.Item.Name}")"
                                                    OnClick="@(async () => await EditAsync(context.Item))" />
                                 </MudTooltip>
-                                <MudTooltip Text="Delete">
+                                <MudTooltip Text="Delete" ShowOnFocus="false">
                                     <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
                                                    Size="Size.Small"
                                                    Color="Color.Error"
