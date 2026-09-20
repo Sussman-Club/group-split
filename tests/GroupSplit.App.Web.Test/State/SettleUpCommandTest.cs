@@ -42,7 +42,7 @@ public class SettleUpCommandTest
             .Returns((Snackbar?)null);
 
         var errors = new ApiErrorPresenter(
-            Mock.Of<IAuthService>(), new TestNavigationManager(), _snackbar.Object);
+            new TestNavigationManager(), _snackbar.Object);
 
         _commands = new GroupCommands(_groups.Object, Mock.Of<IInvitationsClient>(), errors,
             _snackbar.Object, _changes);

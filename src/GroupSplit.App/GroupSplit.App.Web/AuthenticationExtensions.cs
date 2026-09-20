@@ -6,6 +6,7 @@ using GroupSplit.App.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 // RemoveAllResilienceHandlers is still experimental, and taken anyway: what it turns off
@@ -52,6 +53,20 @@ public static class AuthenticationExtensions
     /// </remarks>
     internal const string RememberMeItem = "group-split:remember-me";
 
+    /// <summary>
+    /// The Duende logger whose Error-level output this app replaces with its own, as a
+    /// category name.
+    /// </summary>
+    /// <remarks>
+    /// A string rather than <c>typeof(...).FullName</c> because the type is internal to the
+    /// package, which also means the package may rename it without saying so -- and a filter
+    /// that no longer matches fails by quietly restoring the logs it was meant to suppress.
+    /// <c>TokenManagementWiringTest</c> asserts the type is still there under this name, so
+    /// an upgrade that moves it fails a test instead.
+    /// </remarks>
+    internal const string TokenEndpointLogCategory =
+        "Duende.AccessTokenManagement.OpenIdConnect.Internal.OpenIdConnectUserTokenEndpoint";
+
     extension(WebApplicationBuilder builder)
     {
         public IHostApplicationBuilder AddGroupSplitAuthentication()
@@ -77,6 +92,24 @@ public static class AuthenticationExtensions
             // host; this is TryAdd, so it only supplies one when nothing else has.
             builder.Services.AddDistributedMemoryCache();
             builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
+
+            // Duende emits every failed refresh response at Error, including the expected
+            // invalid_grant returned when Keycloak retires a refresh token. AuthDelegatingHandler
+            // has the same failure in hand -- FailedResult carries the Error and ErrorDescription
+            // the library's own message is built from, so nothing is lost -- and re-logs it at
+            // the level the failure deserves, so suppress the duplicate rather than letting a
+            // routine session end look like an application fault.
+            //
+            // A filter is per-category, not per-message: this silences everything that type
+            // logs at Error or above. The only other thing it logs there is a failed
+            // refresh-token revocation, which this app never asks for -- sign-out clears the
+            // tokens through IUserTokenStore (see OnSigningOut) instead of revoking them.
+            //
+            // It also reaches every provider except one that filters itself: a rule naming a
+            // provider outranks one naming a category, however specific the category. The
+            // only such rule in this app is the Windows event log's, added by the default
+            // host on Windows and absent from the Linux containers this deploys to.
+            builder.Logging.AddFilter(TokenEndpointLogCategory, level => level < LogLevel.Error);
 
             builder.AddRefreshedAccessTokens();
             builder.Services

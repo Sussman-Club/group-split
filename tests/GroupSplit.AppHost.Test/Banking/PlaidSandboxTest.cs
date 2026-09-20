@@ -154,7 +154,8 @@ public class PlaidSandboxTest(AppHostFixture appHost)
             // Issue 233, against real data. Forgetting an account and its rows leaves the
             // connection in exactly the state it is in when somebody shares an account
             // through update mode: the bank has it and this does not.
-            var (forgotten, dropped) = await ForgetBusiestAccountAsync(services, connectionId, ct);
+            var (forgotten, dropped, forgottenTransactionIds) =
+                await ForgetBusiestAccountAsync(services, connectionId, ct);
 
             Assert.True(dropped > 0, "The busiest account had no rows, so nothing would name it.");
 
@@ -171,11 +172,26 @@ public class PlaidSandboxTest(AppHostFixture appHost)
 
                 Assert.True(back is not null, "The account was not picked up from Plaid mid-sync.");
 
-                var recovered = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+                var recoveredTransactionIds = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
                     .Set<BankTransaction>()
-                    .CountAsync(row => row.LinkedAccountId == back!.Id, ct);
+                    .Where(row => row.LinkedAccountId == back!.Id)
+                    .Select(row => row.ProviderTransactionId)
+                    .ToListAsync(ct);
 
-                Assert.Equal(dropped, recovered);
+                // Clearing the cursor asks Plaid for the account's full history. The
+                // sandbox has older rows than the subset we deliberately dropped, so
+                // equality with `dropped` describes the deletion rather than recovery.
+                Assert.True(
+                    recoveredTransactionIds.Count >= dropped,
+                    $"Plaid recovered {recoveredTransactionIds.Count} rows after {dropped} were forgotten.");
+
+                // The rows that were forgotten really did come back, and a larger count
+                // is history, not duplicate insertion.
+                Assert.All(forgottenTransactionIds,
+                    id => Assert.Contains(id, recoveredTransactionIds));
+                Assert.Equal(
+                    recoveredTransactionIds.Count,
+                    recoveredTransactionIds.Distinct(StringComparer.Ordinal).Count());
 
                 // Nothing is missing, so nothing is asked of the person.
                 Assert.False(connection.AccountsNotShared);
@@ -334,9 +350,10 @@ public class PlaidSandboxTest(AppHostFixture appHost)
 
     /// <summary>
     /// Drops the account holding the most rows, along with those rows, and rewinds the
-    /// cursor so the next run walks the same pages again.
+    /// cursor so the next run requests the provider's full history again.
     /// </summary>
-    private static async Task<(string ProviderAccountId, int Rows)> ForgetBusiestAccountAsync(
+    private static async Task<(string ProviderAccountId, int Rows, IReadOnlyList<string> ProviderTransactionIds)>
+        ForgetBusiestAccountAsync(
         IServiceProvider services, Guid connectionId, CancellationToken ct)
     {
         await using var scope = services.CreateAsyncScope();
@@ -346,23 +363,31 @@ public class PlaidSandboxTest(AppHostFixture appHost)
             .Include(candidate => candidate.Accounts)
             .SingleAsync(candidate => candidate.Id == connectionId, ct);
 
-        var counts = await dbContext.Set<BankTransaction>()
+        var rows = await dbContext.Set<BankTransaction>()
+            .Where(row => connection.Accounts.Select(account => account.Id).Contains(row.LinkedAccountId))
+            .ToListAsync(ct);
+
+        var counts = rows
             .GroupBy(row => row.LinkedAccountId)
             .Select(group => new { AccountId = group.Key, Rows = group.Count() })
-            .ToListAsync(ct);
+            .ToList();
 
         var busiest = counts.OrderByDescending(entry => entry.Rows).First();
         var account = connection.Accounts.Single(candidate => candidate.Id == busiest.AccountId);
 
-        dbContext.RemoveRange(dbContext.Set<BankTransaction>()
-            .Where(row => row.LinkedAccountId == account.Id));
+        var forgottenTransactionIds = rows
+            .Where(row => row.LinkedAccountId == account.Id)
+            .Select(row => row.ProviderTransactionId)
+            .ToArray();
+
+        dbContext.RemoveRange(rows.Where(row => row.LinkedAccountId == account.Id));
 
         dbContext.Remove(account);
         connection.Cursor = null;
 
         await dbContext.SaveChangesAsync(ct);
 
-        return (account.ProviderAccountId, busiest.Rows);
+        return (account.ProviderAccountId, busiest.Rows, forgottenTransactionIds);
     }
 
     private static Task<BankConnection> ConnectionAsync(AsyncServiceScope scope, Guid connectionId,

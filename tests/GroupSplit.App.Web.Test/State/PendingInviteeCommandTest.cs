@@ -47,7 +47,7 @@ public class PendingInviteeCommandTest
             .Returns((Snackbar?)null);
 
         var errors = new ApiErrorPresenter(
-            Mock.Of<IAuthService>(), new TestNavigationManager(), _snackbar.Object);
+            new TestNavigationManager(), _snackbar.Object);
 
         _commands = new GroupCommands(_groups.Object, _invitations.Object, errors, _snackbar.Object, _changes);
     }

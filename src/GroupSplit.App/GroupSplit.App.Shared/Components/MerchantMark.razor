@@ -31,21 +31,21 @@
 @if (string.IsNullOrWhiteSpace(PaidByUserName))
 {
     @* The inbox: nobody has paid yet, because filing it is the decision nobody has made. *@
-    @if (Logo is { } only)
+    @if (UsableLogo is { } only)
     {
         <img class="gs-mark-place" src="@only" alt="" width="40" height="40"
-             title="@MerchantName" loading="lazy" />
+             title="@MerchantName" loading="lazy" @onerror="HandleLogoError" />
     }
     else
     {
         <Avatar Name="@MerchantName" Class="mark tile" />
     }
 }
-else if (Logo is { } place)
+else if (UsableLogo is { } place)
 {
     <span class="gs-mark">
         <img class="gs-mark-place" src="@place" alt="" width="40" height="40"
-             title="@MerchantName" loading="lazy" />
+             title="@MerchantName" loading="lazy" @onerror="HandleLogoError" />
         @* Not an Avatar: it is a fifth of the size, so it carries initials and a tone and
            none of the rest. The tone comes off the same hash, so one person is the same
            colour here as in the tile they get on the row below. *@
@@ -77,4 +77,16 @@ else
     /// resolves to this page.
     /// </summary>
     private string? Logo => string.IsNullOrWhiteSpace(MerchantLogoUrl) ? null : MerchantLogoUrl;
+
+    private string? _failedLogo;
+
+    private string? UsableLogo => Logo is { } logo && logo != _failedLogo ? logo : null;
+
+    private void HandleLogoError() => _failedLogo = Logo;
+
+    protected override void OnParametersSet()
+    {
+        if (_failedLogo is not null && _failedLogo != Logo)
+            _failedLogo = null;
+    }
 }

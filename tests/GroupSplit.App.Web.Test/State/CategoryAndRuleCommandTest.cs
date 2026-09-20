@@ -64,7 +64,7 @@ public class CategoryAndRuleCommandTest
         };
 
         var errors = new ApiErrorPresenter(
-            Mock.Of<IAuthService>(), new TestNavigationManager(), _snackbar.Object);
+            new TestNavigationManager(), _snackbar.Object);
 
         _categoryCommands = new CategoryCommands(_categories.Object, errors, _snackbar.Object, _changes);
         _ruleCommands = new SplitRuleCommands(_rules.Object, errors, _snackbar.Object, _changes);

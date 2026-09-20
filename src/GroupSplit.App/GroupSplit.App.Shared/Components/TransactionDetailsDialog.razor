@@ -116,10 +116,18 @@
                         <div class="gs-kv-row">
                             <dt>Where</dt>
                             <dd class="gs-inline" style="gap: 8px; justify-content: flex-end">
-                                @if (!string.IsNullOrWhiteSpace(details.MerchantLogoUrl))
+                                @if (HasUsableMerchantLogo)
                                 {
                                     <img class="gs-mark-inline" src="@details.MerchantLogoUrl"
-                                         alt="" width="20" height="20" loading="lazy" />
+                                         alt="" width="20" height="20" loading="lazy"
+                                         @onerror="HandleMerchantLogoError" />
+                                }
+                                else
+                                {
+                                    <span class="gs-mark-inline-fallback @details.MerchantName.AvatarTone()"
+                                          title="@details.MerchantName" aria-hidden="true">
+                                        @details.MerchantName.Initials()
+                                    </span>
                                 }
                                 <span>@details.MerchantName</span>
                             </dd>
@@ -212,6 +220,13 @@
     private IReadOnlyList<ReceiptAttachmentResponse> _attachments = [];
     private bool _uploading;
     private Guid? _transcribingAttachmentId;
+    private string? _failedMerchantLogoUrl;
+
+    private bool HasUsableMerchantLogo => details?.MerchantLogoUrl is { } logo
+        && !string.IsNullOrWhiteSpace(logo)
+        && logo != _failedMerchantLogoUrl;
+
+    private void HandleMerchantLogoError() => _failedMerchantLogoUrl = details?.MerchantLogoUrl;
 
     /// <summary>
     /// Who is reading, so the dialog can say "You" and single their share out.
@@ -254,6 +269,8 @@
             MudDialog.Cancel();
             return;
         }
+
+        _failedMerchantLogoUrl = null;
 
         // Null for most expenses, which have no bill, and null for a failure just the same:
         // there is nothing to report either way and the strip simply does not appear.
@@ -358,6 +375,7 @@
             && refreshed is not null)
         {
             details = refreshed;
+            _failedMerchantLogoUrl = null;
         }
     }
 

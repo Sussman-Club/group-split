@@ -15,6 +15,10 @@
     --gs-teal-bright: #3aa79e;
     --gs-teal-soft: rgb(34 129 122 / 10%);
     --gs-teal-glow: rgb(34 129 122 / 22%);
+    --gs-primary: var(--gs-teal);
+    --gs-on-primary: var(--gs-on-accent);
+    --gs-success: #3f8f5f;
+    --gs-ink-soft: var(--gs-muted);
     --gs-clay: #cb6e3a;
     --gs-clay-deep: #a8562a;
     --gs-clay-soft: rgb(203 110 58 / 12%);
@@ -75,6 +79,10 @@
     --gs-teal-bright: #5fc4bb;
     --gs-teal-soft: rgb(58 167 158 / 14%);
     --gs-teal-glow: rgb(58 167 158 / 26%);
+    --gs-primary: var(--gs-teal);
+    --gs-on-primary: var(--gs-on-accent);
+    --gs-success: #5fb37f;
+    --gs-ink-soft: var(--gs-muted);
     --gs-clay: #e08a5a;
     --gs-clay-deep: #cb6e3a;
     --gs-clay-soft: rgb(224 138 90 / 14%);
