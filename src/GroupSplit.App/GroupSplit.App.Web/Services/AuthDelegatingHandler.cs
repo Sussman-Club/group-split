@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using Duende.AccessTokenManagement.OpenIdConnect;
+using Duende.IdentityModel;
 
 namespace GroupSplit.App.Web.Services;
 
@@ -19,15 +20,6 @@ internal class AuthDelegatingHandler(
     IUserTokenManager tokenManager,
     ILogger<AuthDelegatingHandler> logger) : DelegatingHandler
 {
-    /// <summary>
-    /// What an authorization server answers when the refresh token it was handed is not one
-    /// it will honour: RFC 6749 section 5.2. Against a realm that rotates refresh tokens
-    /// one-time-use it is the ordinary end of a session -- idle timeout reached, max
-    /// lifespan reached, or the token already exchanged -- and not a fault. Every other
-    /// error from the exchange is.
-    /// </summary>
-    private const string RefusedGrant = "invalid_grant";
-
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -43,7 +35,14 @@ internal class AuthDelegatingHandler(
             // No sign-out here: mid-render the response has started, and signing out
             // writes a Set-Cookie, which then throws "Headers are read-only". Logged so a
             // 401 from here is distinguishable from one the API sent.
-            if (string.Equals(failure.Error, RefusedGrant, StringComparison.OrdinalIgnoreCase))
+            //
+            // invalid_grant is what an authorization server answers when the refresh token
+            // it was handed is not one it will honour (RFC 6749 section 5.2). Against a realm
+            // that rotates them one-time-use that is the ordinary end of a session -- idle
+            // timeout reached, max lifespan reached, or the token already exchanged -- and not
+            // a fault. Every other error from the exchange is.
+            if (string.Equals(failure.Error, OidcConstants.TokenErrors.InvalidGrant,
+                    StringComparison.OrdinalIgnoreCase))
             {
                 logger.LogWarning(
                     "Session token was refused for {Method} {Uri}: {Error} ({Description}).",
