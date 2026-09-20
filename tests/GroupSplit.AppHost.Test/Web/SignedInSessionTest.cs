@@ -138,14 +138,18 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         await SignInAsync();
         await Expect(Groups).ToBeVisibleAsync(Visible);
 
-        await SignOutAsync();
+        // Use the same browser context so the ticket and Keycloak cookies are shared, but a
+        // fresh page so the signed-in Blazor circuit cannot race the server-side OIDC
+        // redirect after the cookie is revoked.
+        await using var logoutPage = await Context.NewPageAsync();
+        await SignOutAsync(logoutPage);
 
-        await Page.GotoAsync(
+        await logoutPage.GotoAsync(
             Url("auth/login?returnUrl=/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
 
         // A realm session that survived the sign-out would send the browser straight back
         // to /groups instead of asking again.
-        await Expect(Page.Locator("#password")).ToBeVisibleAsync(Visible);
+        await Expect(logoutPage.Locator("#password")).ToBeVisibleAsync(Visible);
     }
 
     /// <summary>
@@ -175,19 +179,29 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// started it is superseded on the way -- which arrives here as ERR_ABORTED even though
     /// every hop was followed.
     /// </summary>
-    private async Task SignOutAsync()
+    private async Task SignOutAsync(IPage page)
     {
         try
         {
-            await Page.GotoAsync(
+            await page.GotoAsync(
                 Url("auth/logout"), new PageGotoOptions { Timeout = OperationTimeoutMs });
         }
         catch (PlaywrightException exception) when (exception.Message.Contains("ERR_ABORTED"))
         {
-            // Followed anyway; the assertion after this is what says whether it worked.
+            // The navigation is still in flight. Wait below for its final redirect rather
+            // than starting the next navigation while Keycloak is still ending the session.
         }
 
-        await Page.WaitForLoadStateAsync(
+        // Page.GotoAsync can report ERR_ABORTED when the redirect chain replaces the
+        // document that started it. NetworkIdle alone is not a completion signal here: it
+        // can be true on the old document while the authority redirect is still pending.
+        // The endpoint always sends the browser back to the app root after both the local
+        // cookie and the authority session have been signed out.
+        await Expect(page).ToHaveURLAsync(
+            new Regex($"^{Regex.Escape(Url("/"))}$"),
+            new PageAssertionsToHaveURLOptions { Timeout = OperationTimeoutMs });
+
+        await page.WaitForLoadStateAsync(
             LoadState.NetworkIdle, new PageWaitForLoadStateOptions { Timeout = OperationTimeoutMs });
     }
 
