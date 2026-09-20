@@ -1,6 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.Services.Errors;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -81,23 +82,44 @@ public class AuthHandoffTest : ComponentTest
     }
 
     /// <summary>
-    /// The error is what the identity provider sent back. The button stays the way to try
-    /// again -- there is nowhere else to go from here.
+    /// The whole point of coming here rather than straight to the challenge: the person is
+    /// told what happened, and the page they were on is still waiting for them afterwards.
+    /// The button stays the way to go on -- there is nowhere else to go from here.
     /// </summary>
     [Fact]
-    public void A_failed_attempt_can_be_tried_again()
+    public void A_session_expiry_is_explained_before_the_original_page_is_tried_again()
     {
-        Services.GetRequiredService<NavigationManager>()
-            .NavigateTo("http://localhost/login?error=Something%20went%20wrong");
+        GoTo(AuthRoutes.Handoff(HandoffReason.SessionExpired, "/groups"));
 
         var page = Render();
 
-        Assert.Contains("Something went wrong", page.Markup, StringComparison.Ordinal);
+        Assert.Contains(ErrorMessages.SessionExpired, page.Markup, StringComparison.Ordinal);
 
         page.Find("button").Click();
 
-        _auth.Verify(service => service.Login(null, false, It.IsAny<CancellationToken>()));
+        _auth.Verify(service => service.Login("/groups", false, It.IsAny<CancellationToken>()));
     }
+
+    /// <summary>
+    /// The URL says which of our sentences applies, never what the sentence is. A page that
+    /// rendered the query string would let anyone put their own words -- "your account is
+    /// locked, call this number" -- in a red box on the app's real sign-in page.
+    /// </summary>
+    [Theory]
+    [InlineData("Your account is locked. Call +34 600 000 000.")]
+    [InlineData("session-expired-in-some-later-version")]
+    public void Nothing_but_this_apps_own_wording_reaches_the_page(string reason)
+    {
+        GoTo($"/login?reason={Uri.EscapeDataString(reason)}");
+
+        var page = Render();
+
+        Assert.DoesNotContain(reason, page.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain(ErrorMessages.SessionExpired, page.Markup, StringComparison.Ordinal);
+    }
+
+    private void GoTo(string url) =>
+        Services.GetRequiredService<NavigationManager>().NavigateTo(url);
 
     private IRenderedComponent<AuthHandoff> Render() =>
         Render<AuthHandoff>(parameters => parameters

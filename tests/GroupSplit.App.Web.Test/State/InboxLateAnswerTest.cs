@@ -57,7 +57,7 @@ public class InboxLateAnswerTest
             .Setup(client => client.GetBankConnectionsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BankConnectionsResponse(true, []));
 
-        var presenter = new ApiErrorPresenter(Mock.Of<IAuthService>(), new Mock<NavigationManager>().Object,
+        var presenter = new ApiErrorPresenter(new Mock<NavigationManager>().Object,
             Mock.Of<ISnackbar>());
 
         _state = new InboxStateService(_inbox.Object, _connections.Object, new LoadGuard(presenter),
