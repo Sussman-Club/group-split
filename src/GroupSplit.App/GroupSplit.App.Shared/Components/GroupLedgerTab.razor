@@ -277,6 +277,8 @@
     private TransactionSummaryResponse? _spending;
     private ExpenseShareSummaryResponse? _shares;
     private SummaryKey? _asked;
+    private SummaryKey? _inFlight;
+    private long _summaryVersion;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
@@ -467,27 +469,39 @@
     {
         var key = CurrentKey;
 
-        if (key == _asked)
+        if (key == _asked || key == _inFlight)
             return;
 
-        _asked = key;
+        var version = ++_summaryVersion;
+        _inFlight = key;
 
-        var bounds = key.Range.Bounds(Clock.Offset, Clock.Today);
+        try
+        {
+            var bounds = key.Range.Bounds(Clock.Offset, Clock.Today);
 
-        var spending = await ReadAsync(() => GroupsClient.GetGroupTransactionsSummaryAsync(
-            key.Group, from: bounds.From, to: bounds.To, search: key.Search));
+            var spending = await ReadAsync(() => GroupsClient.GetGroupTransactionsSummaryAsync(
+                key.Group, from: bounds.From, to: bounds.To, search: key.Search));
 
-        // The caller's own share of the same set, read through the shares summary narrowed
-        // to this group. It is the one figure on the screen that is about the reader rather
-        // than about the group.
-        var shares = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
-            from: bounds.From, to: bounds.To, groupId: key.Group, search: key.Search));
+            // The caller's own share of the same set, read through the shares summary narrowed
+            // to this group. It is the one figure on the screen that is about the reader rather
+            // than about the group.
+            var shares = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
+                from: bounds.From, to: bounds.To, groupId: key.Group, search: key.Search));
 
-        if (key != _asked)
-            return;
+            // A failed read must not count as an answer, and an answer from an older request
+            // must not overwrite the figures after a write invalidated the same question.
+            if (version != _summaryVersion || key != CurrentKey || spending is null || shares is null)
+                return;
 
-        _spending = spending;
-        _shares = shares;
+            _spending = spending;
+            _shares = shares;
+            _asked = key;
+        }
+        finally
+        {
+            if (version == _summaryVersion)
+                _inFlight = null;
+        }
     }
 
     /// <summary>
@@ -621,6 +635,8 @@
     private async Task OnDataChangedAsync()
     {
         _asked = null;
+        _inFlight = null;
+        ++_summaryVersion;
 
         await ReadSummaryAsync();
         await ReloadAsync();
