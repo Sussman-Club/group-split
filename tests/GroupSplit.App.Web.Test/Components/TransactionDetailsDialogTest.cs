@@ -143,6 +143,33 @@ public class TransactionDetailsDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task A_broken_merchant_logo_in_details_uses_merchant_initials()
+    {
+        _transactions
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = _expense,
+                Name = "Glovo",
+                MerchantName = "Glovo",
+                MerchantLogoUrl = "https://logos/glovo.png",
+                Amount = 37.15m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserName = "Loraine Monteagudo",
+                PaidByUserId = Guid.NewGuid(),
+                Splits = []
+            });
+
+        var dialog = await Open(bill: null);
+        dialog.WaitForAssertion(() => Assert.NotEmpty(dialog.FindAll("img.gs-mark-inline")));
+
+        dialog.Find("img.gs-mark-inline").TriggerEvent("onerror", new EventArgs());
+
+        Assert.Empty(dialog.FindAll("img.gs-mark-inline"));
+        Assert.Equal("G", dialog.Find(".gs-mark-inline-fallback").TextContent.Trim());
+    }
+
+    [Fact]
     public async Task Saving_an_itemized_receipt_refreshes_the_parent_shares()
     {
         var initial = new TransactionDetailsResponse
