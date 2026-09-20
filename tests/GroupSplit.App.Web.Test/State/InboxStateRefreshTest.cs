@@ -139,7 +139,7 @@ public class InboxStateRefreshTest
             .Setup(client => client.GetBankConnectionsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new BankConnectionsResponse(true, []));
 
-        var presenter = new ApiErrorPresenter(Mock.Of<IAuthService>(), new Mock<NavigationManager>().Object,
+        var presenter = new ApiErrorPresenter(new Mock<NavigationManager>().Object,
             _snackbar.Object);
 
         _commands = new BankCommands(_connectionsClient.Object, _inboxClient.Object, presenter,

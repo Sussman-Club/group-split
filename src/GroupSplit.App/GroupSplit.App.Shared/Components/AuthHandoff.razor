@@ -26,18 +26,20 @@
                 <p class="gs-muted" style="margin: 0; font-size: .9375rem">@Subtitle</p>
             </div>
 
-            @if (Error is not null)
-            {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense Class="w-100">
-                    @Error
-                </MudAlert>
-            }
-            else if (_redirecting)
+            @* The spinner wins once they have clicked: by then the message has been read
+               and what they need is the sign that something is happening. *@
+            @if (_redirecting)
             {
                 <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
                     <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
                     <span>Taking you to the secure sign-in page…</span>
                 </div>
+            }
+            else if (Error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense Class="w-100">
+                    @Error
+                </MudAlert>
             }
 
             <RememberMeChoice @bind-Value="_remember" Disabled="_redirecting" />
@@ -74,7 +76,10 @@
 
     protected override void OnInitialized()
     {
-        Error = ReadQueryValue("error");
+        // A code, resolved here. The query string is whatever the address bar says, and
+        // rendering its text verbatim would let anybody put their own sentence in a red
+        // box on the app's own sign-in page. See HandoffReason.
+        Error = HandoffReason.Message(ReadQueryValue("reason"));
     }
 
     private async Task GoAsync()

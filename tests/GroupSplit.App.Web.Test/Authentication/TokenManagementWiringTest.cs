@@ -1,3 +1,4 @@
+using System.Reflection;
 using Duende.AccessTokenManagement.OpenIdConnect;
 using GroupSplit.App.Web.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -6,6 +7,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace GroupSplit.App.Web.Test.Authentication;
 
@@ -114,6 +117,79 @@ public class TokenManagementWiringTest
         Assert.NotNull(
             ActivatorUtilities.GetServiceOrCreateInstance<GroupSplit.App.Web.Services.AuthDelegatingHandler>(
                 handlerChainScope.ServiceProvider));
+    }
+
+    /// <summary>
+    /// The refresh log the app replaces with its own. Duende records every refused refresh
+    /// at Error, <c>invalid_grant</c> from a realm retiring a token included, which is an
+    /// ordinary end of session rather than a fault -- so the category is filtered and
+    /// AuthDelegatingHandler re-logs the same failure at the level it deserves.
+    /// </summary>
+    /// <remarks>
+    /// Asserted against a provider of this test's own rather than the app's own factory,
+    /// because a filter rule naming a provider outranks one naming a category however
+    /// specific the category is -- and on Windows <c>AddEventLog</c> registers exactly such
+    /// a rule. What is being pinned is the rule a provider without one of its own gets,
+    /// which is every provider a deployment has.
+    /// </remarks>
+    [Fact]
+    public void The_librarys_own_refresh_error_is_not_logged_twice()
+    {
+        using var services = Build();
+        using var factory = new LoggerFactory(
+            [new AlwaysOnLoggerProvider()],
+            services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value);
+
+        var logger = factory.CreateLogger(AuthenticationExtensions.TokenEndpointLogCategory);
+
+        Assert.False(logger.IsEnabled(LogLevel.Error), "the app re-logs this itself");
+
+        // Guards the assertion above against passing because nothing is enabled at all.
+        Assert.True(logger.IsEnabled(LogLevel.Warning));
+    }
+
+    /// <summary>
+    /// What the filter above is aimed at. The category is a logger's type name, the type is
+    /// internal to the package, and a filter that stops matching fails silently -- by
+    /// restoring the Error logs it was put there to suppress. So the name is asserted here,
+    /// and an upgrade that renames or moves the type fails a test instead.
+    /// </summary>
+    [Fact]
+    public void The_filtered_category_is_still_a_type_that_logs_under_that_name()
+    {
+        var endpoint = typeof(IUserTokenStore).Assembly
+            .GetType(AuthenticationExtensions.TokenEndpointLogCategory, throwOnError: false);
+
+        Assert.NotNull(endpoint);
+
+        // A category is the full name of the type its ILogger<T> was resolved for, so the
+        // filter only means anything while this type takes one of itself.
+        Assert.Contains(
+            endpoint.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .SelectMany(constructor => constructor.GetParameters()),
+            parameter => parameter.ParameterType == typeof(ILogger<>).MakeGenericType(endpoint));
+    }
+
+    /// <summary>
+    /// Holds nothing back of its own, so what a filter lets through is the only thing the
+    /// assertions above can be reading.
+    /// </summary>
+    private sealed class AlwaysOnLoggerProvider : ILoggerProvider, ILogger
+    {
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     /// <summary>

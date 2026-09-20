@@ -270,7 +270,7 @@ public class PageStateRefreshTest
                 return _groups[index];
             });
 
-        var presenter = new ApiErrorPresenter(Mock.Of<IAuthService>(), new Mock<NavigationManager>().Object,
+        var presenter = new ApiErrorPresenter(new Mock<NavigationManager>().Object,
             _snackbar.Object);
         var guard = new LoadGuard(presenter);
 

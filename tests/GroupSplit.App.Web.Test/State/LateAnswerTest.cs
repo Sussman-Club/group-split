@@ -73,7 +73,7 @@ public class LateAnswerTest
                 return new TransactionSummaryResponse(Count(from), Total(from));
             });
 
-        var presenter = new ApiErrorPresenter(Mock.Of<IAuthService>(), new TestNavigationManager(),
+        var presenter = new ApiErrorPresenter(new TestNavigationManager(),
             Mock.Of<ISnackbar>());
 
         _page = new TransactionsPageStateService(_client.Object, new TransactionsTracker(),

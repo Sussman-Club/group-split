@@ -11,7 +11,7 @@ namespace GroupSplit.App.Shared.Services.Errors;
 /// trace id. A domain refusal shows the message its code maps to. Anything that is not an
 /// API failure at all is rethrown, because that is a bug and the error boundary is for bugs.
 /// </summary>
-public sealed class ApiErrorPresenter(IAuthService auth, NavigationManager nav, ISnackbar snackbar)
+public sealed class ApiErrorPresenter(NavigationManager nav, ISnackbar snackbar)
 {
     /// <summary>
     /// Runs the call and reads a failure without showing it, for a caller that wants to
@@ -54,17 +54,17 @@ public sealed class ApiErrorPresenter(IAuthService auth, NavigationManager nav, 
         return false;
     }
 
-    public async Task ShowAsync(ApiError error, string? context = null)
+    public Task ShowAsync(ApiError error, string? context = null)
     {
         switch (error.Kind)
         {
             case ApiErrorKind.Unauthenticated:
-                await SignInAgainAsync();
-                return;
+                SignInAgain();
+                return Task.CompletedTask;
 
             case ApiErrorKind.Unknown when error.Message.Length == 0:
                 // A cancellation. Nothing to say.
-                return;
+                return Task.CompletedTask;
 
             default:
                 // Leads with what did not happen, then why; and stays until dismissed,
@@ -73,7 +73,7 @@ public sealed class ApiErrorPresenter(IAuthService auth, NavigationManager nav, 
                 snackbar.Add(
                     string.IsNullOrEmpty(context) ? error.Message : $"{context} {error.Message}",
                     Severity.Error);
-                return;
+                return Task.CompletedTask;
         }
     }
 
@@ -82,17 +82,19 @@ public sealed class ApiErrorPresenter(IAuthService auth, NavigationManager nav, 
     /// server restarted and dropped its ticket store). Nothing here can recover that;
     /// sign-in can, and it brings the person back to where they were.
     /// </summary>
-    private async Task SignInAgainAsync()
+    /// <remarks>
+    /// To the hand-off page, not straight to the challenge: this is the one moment the
+    /// person is owed an explanation, and a challenge gives them none -- it signs them back
+    /// in first and leaves the message to be read by somebody who no longer needs it. See
+    /// <see cref="AuthRoutes.Handoff"/>.
+    /// </remarks>
+    private void SignInAgain()
     {
         try
         {
-            var returnUrl = "/" + nav.ToBaseRelativePath(nav.Uri);
-            var signIn = "/login?error="
-                + Uri.EscapeDataString(ErrorMessages.SessionExpired)
-                + "&returnUrl="
-                + Uri.EscapeDataString(returnUrl);
-
-            await auth.Login(signIn);
+            nav.NavigateTo(AuthRoutes.Handoff(
+                HandoffReason.SessionExpired,
+                "/" + nav.ToBaseRelativePath(nav.Uri)));
         }
         catch (Exception)
         {

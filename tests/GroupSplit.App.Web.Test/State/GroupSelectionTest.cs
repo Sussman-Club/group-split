@@ -72,7 +72,7 @@ public class GroupSelectionTest
             .Setup(c => c.GetCurrentUserPositionAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new UserPositionResponse(0m, 0m, 0m, []));
 
-        var presenter = new ApiErrorPresenter(Mock.Of<IAuthService>(), new Mock<NavigationManager>().Object,
+        var presenter = new ApiErrorPresenter(new Mock<NavigationManager>().Object,
             Mock.Of<ISnackbar>());
 
         _guard = new LoadGuard(presenter);
@@ -80,7 +80,7 @@ public class GroupSelectionTest
 
     private GroupsPageStateService Build(GroupsTracker? tracker = null) =>
         new(tracker ?? new GroupsTracker(), _groupsClient.Object, _usersClient.Object, _guard,
-            new ApiErrorPresenter(Mock.Of<IAuthService>(), new Mock<NavigationManager>().Object,
+            new ApiErrorPresenter(new Mock<NavigationManager>().Object,
                 Mock.Of<ISnackbar>()),
             _changes, Mock.Of<IGroupCommands>(), Mock.Of<ITransactionCommands>());
 
