@@ -258,6 +258,27 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal("Trip to Lisbon", operations[0].GetProperty("value").GetString());
     }
 
+    /// <summary>
+    /// The group's fallback is a patch of one field, and not one that carries the name
+    /// alongside it: the two things a group holds are set by two commands.
+    /// </summary>
+    [Fact]
+    public async Task Groups_set_default_split_sends_one_replace_on_the_rule()
+    {
+        var id = Guid.NewGuid();
+        var rule = Guid.NewGuid();
+        _api.Returns($"/api/groups/{id}", Group("Trip to Lisbon"));
+
+        var result = await Cli.RunAsync("groups", "set-default-split", id.ToString(), rule.ToString());
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var operations = _api.Requests.Single(r => r.Method == "PATCH").Json;
+        Assert.Single(operations.EnumerateArray());
+        Assert.Equal("/defaultSplitRuleId", operations[0].GetProperty("path").GetString(), ignoreCase: true);
+        Assert.Equal(rule, operations[0].GetProperty("value").GetGuid());
+    }
+
     [Fact]
     public async Task Groups_settle_sends_the_amount_and_the_direction_it_was_given()
     {

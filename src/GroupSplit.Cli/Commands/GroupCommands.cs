@@ -23,6 +23,7 @@ public static class GroupCommands
         groups.Subcommands.Add(Show());
         groups.Subcommands.Add(Create());
         groups.Subcommands.Add(Rename());
+        groups.Subcommands.Add(SetDefaultSplit());
         groups.Subcommands.Add(Members());
         groups.Subcommands.Add(RemoveMember());
         groups.Subcommands.Add(Balances());
@@ -124,6 +125,52 @@ public static class GroupCommands
         {
             var patch = new JsonPatchDocument<CreateGroupRequest>();
             patch.Replace(request => request.Name, context.ParseResult.GetValue(name)!);
+
+            var group = await context.Groups.UpdateGroupAsync(
+                context.ParseResult.GetValue(GroupId), patch, ct);
+
+            context.Output.Write(group, Render);
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// What an expense in this group divides by when it names no category, and its category
+    /// names no rule.
+    /// </summary>
+    /// <remarks>
+    /// A command of its own rather than a flag on <c>rename</c>, for the reason rename is a
+    /// command rather than a patch document to hand-write: it is the second thing a group
+    /// holds that anybody changes, and naming it separately keeps either from being sent by
+    /// accident alongside the other.
+    /// <para>
+    /// Every group is given an "Even" rule and starts pointed at it, so this always replaces
+    /// a default rather than setting a first one. The one rule it cannot be given is the
+    /// group's "divide it by the bill": that rule reads the lines of a receipt, and an
+    /// expense with no receipt has nothing for it to read, so the API refuses it with
+    /// SPLIT_RULE_INVALID rather than leaving the group unable to record an ordinary expense.
+    /// </para>
+    /// </remarks>
+    private static Command SetDefaultSplit()
+    {
+        var ruleId = new Argument<Guid>("rule-id")
+        {
+            Description = "The rule's id, as shown by `groupsplit split-rules list --group <group-id>`."
+        };
+
+        var command = new Command("set-default-split",
+            "Choose what an uncategorized expense in this group divides by.")
+        {
+            GroupId, ruleId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var patch = new JsonPatchDocument<CreateGroupRequest>();
+            patch.Replace(request => request.DefaultSplitRuleId, context.ParseResult.GetValue(ruleId));
 
             var group = await context.Groups.UpdateGroupAsync(
                 context.ParseResult.GetValue(GroupId), patch, ct);
@@ -956,6 +1003,14 @@ public static class GroupCommands
         table.AddRow("Name", Markup.Escape(group.Name));
         table.AddRow("Members", group.MemberCount.ToString());
         table.AddRow("State", group.IsArchive ? "archived" : "active");
+
+        // Named and identified: the name is what somebody reads, and the id is what they
+        // pass back to `set-default-split` or compare against `split-rules list`. A group
+        // from before the built-in rules has neither, and says so rather than printing a
+        // blank row.
+        table.AddRow("Default split", group.DefaultSplitRuleId is { } ruleId
+            ? $"{Markup.Escape(group.DefaultSplitRuleName ?? "unnamed")} ({ruleId})"
+            : "[grey]none — divides evenly[/]");
 
         return table;
     }
