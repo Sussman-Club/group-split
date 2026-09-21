@@ -3,6 +3,7 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -13,8 +14,8 @@ using MudBlazor;
 namespace GroupSplit.App.Web.Test.Components;
 
 /// <summary>
-/// The group's Splits tab: its categories, the divisions they point at, and the writes
-/// somebody can make from it.
+/// The group's Settings tab: its categories, the divisions they point at, and the writes
+/// somebody can make from it. The details card at its top has a test of its own.
 /// </summary>
 /// <remarks>
 /// It replaces a dialog called "Manage Rules" that managed categories. One row per category,
@@ -24,7 +25,7 @@ namespace GroupSplit.App.Web.Test.Components;
 /// rename was worse than a gap. It wrote the category's new name into the rule, which in a
 /// group where two categories shared one would have renamed the division under both.
 /// </remarks>
-public class GroupSplitsTabTest : ComponentTest
+public class GroupSettingsTabTest : ComponentTest
 {
     private static readonly Guid Flat = Guid.NewGuid();
 
@@ -37,7 +38,13 @@ public class GroupSplitsTabTest : ComponentTest
 
     private readonly Mock<IGroupsClient> _groups = new();
 
-    public GroupSplitsTabTest()
+    /// <summary>
+    /// The details card at the top of the tab writes through the page state, and injects
+    /// it. Nothing here presses anything on that card; it only has to resolve.
+    /// </summary>
+    private readonly Mock<IGroupsPageStateService> _state = new();
+
+    public GroupSettingsTabTest()
     {
         Categories
             .Setup(client => client.GetCategoriesAsync(Flat, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
@@ -75,6 +82,7 @@ public class GroupSplitsTabTest : ComponentTest
             .ReturnsAsync([new UserInfo(Guid.NewGuid(), "Ana", "Benitez", null)]);
 
         Services.AddSingleton(_groups.Object);
+        Services.AddSingleton(_state.Object);
 
         // The real commands over the mocked clients: what reaches the API, and what is said
         // about it, is the thing under test.
@@ -257,9 +265,8 @@ public class GroupSplitsTabTest : ComponentTest
             .Setup(client => client.GetSplitRuleAsync(currentRule, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ARule(currentRule, "All for current", new SoleSplitRuleDto(currentMember)));
 
-        var tab = Render<GroupSplitsTab>(parameters => parameters
-            .Add(component => component.GroupId, Flat)
-            .Add(component => component.GroupName, "The flat"));
+        var tab = Render<GroupSettingsTab>(parameters => parameters
+            .Add(component => component.Group, new GroupResponse(Flat, "The flat", 1)));
 
         tab.WaitForAssertion(() => Assert.Equal(1, Volatile.Read(ref membershipReads)));
 
@@ -515,7 +522,7 @@ public class GroupSplitsTabTest : ComponentTest
         await editing;
     }
 
-    private static IElement Rule(IRenderedComponent<GroupSplitsTab> tab, string name) =>
+    private static IElement Rule(IRenderedComponent<GroupSettingsTab> tab, string name) =>
         tab.FindAll(".gs-rule").Single(rule => rule.QuerySelector(".title")!.TextContent.Trim() == name);
 
     /// <summary>
@@ -626,18 +633,18 @@ public class GroupSplitsTabTest : ComponentTest
     /// and the rule it divides by usually carry the same name and these sat a row apart
     /// announcing the same thing.
     /// </summary>
-    private static IElement Delete(IRenderedComponent<GroupSplitsTab> tab, string rule) =>
+    private static IElement Delete(IRenderedComponent<GroupSettingsTab> tab, string rule) =>
         tab.FindAll("button").First(button =>
             button.GetAttribute("aria-label") == $"Delete the {rule} rule");
 
-    private static IElement Edit(IRenderedComponent<GroupSplitsTab> tab, string category) =>
+    private static IElement Edit(IRenderedComponent<GroupSettingsTab> tab, string category) =>
         tab.FindAll("button").First(button =>
             button.GetAttribute("aria-label") == $"Edit {category}");
 
     private static IElement Button(IRenderedComponent<MudDialogProvider> provider, string text) =>
         provider.FindAll("button").Last(button => button.TextContent.Trim() == text);
 
-    private async Task<IRenderedComponent<GroupSplitsTab>> RenderTabAsync()
+    private async Task<IRenderedComponent<GroupSettingsTab>> RenderTabAsync()
     {
         var (tab, _) = await RenderWithDialogsAsync();
         return tab;
@@ -647,14 +654,13 @@ public class GroupSplitsTabTest : ComponentTest
     /// The tab, and the provider the dialogs it opens render into. Two roots in one context,
     /// which is how a component that opens dialogs is driven: they share the dialog service.
     /// </summary>
-    private async Task<(IRenderedComponent<GroupSplitsTab> Tab, IRenderedComponent<MudDialogProvider> Dialogs)>
+    private async Task<(IRenderedComponent<GroupSettingsTab> Tab, IRenderedComponent<MudDialogProvider> Dialogs)>
         RenderWithDialogsAsync()
     {
         var provider = Render<MudDialogProvider>();
 
-        var tab = Render<GroupSplitsTab>(parameters => parameters
-            .Add(component => component.GroupId, Flat)
-            .Add(component => component.GroupName, "The flat"));
+        var tab = Render<GroupSettingsTab>(parameters => parameters
+            .Add(component => component.Group, new GroupResponse(Flat, "The flat", 1)));
 
         // The rules' definitions are read one call per rule, after the lists are on screen.
         await tab.InvokeAsync(() => Task.CompletedTask);

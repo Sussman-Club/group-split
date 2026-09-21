@@ -193,6 +193,15 @@ public class RuleHistoryDialogTest : ComponentTest
             notice.QuerySelector("strong")!.TextContent.Trim());
     }
 
+    [Fact]
+    public async Task A_built_in_rule_history_has_no_edit_or_restore_actions()
+    {
+        var dialog = await OpenAsync(builtIn: true);
+
+        Assert.DoesNotContain("Edit the split", dialog.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Divide this way again", dialog.Markup, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Going back to a division the group has used before is an ordinary edit, deliberately:
     /// it opens a new version rather than reopening the old one, so nothing already recorded
@@ -345,13 +354,14 @@ public class RuleHistoryDialogTest : ComponentTest
             StringComparison.Ordinal);
     }
 
-    private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync()
+    private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync(bool builtIn = false)
     {
         var provider = Render<MudDialogProvider>();
 
         var parameters = new DialogParameters<RuleHistoryDialog>
         {
-            { dialog => dialog.SplitRuleId, Household }
+            { dialog => dialog.SplitRuleId, Household },
+            { dialog => dialog.BuiltIn, builtIn }
         };
 
         await provider.InvokeAsync(async () =>

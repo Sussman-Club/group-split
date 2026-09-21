@@ -33,14 +33,24 @@ public sealed class GroupCommands(
         return done ? created : null;
     }
 
+    /// <summary>
+    /// Writes the group's settings. Said back as a rename when the name is in the patch,
+    /// because that is what somebody notices; a patch that only moves the default split
+    /// used to be announced as "renamed to" the name it already had.
+    /// </summary>
     public Task<bool> RenameAsync(Guid groupId, JsonPatchDocument<CreateGroupRequest> patch,
-        CancellationToken ct = default) =>
-        errors.TryAsync(async () =>
+        CancellationToken ct = default)
+    {
+        var renames = patch.Operations.Any(operation =>
+            operation.path.TrimStart('/').Equals(nameof(CreateGroupRequest.Name), StringComparison.OrdinalIgnoreCase));
+
+        return errors.TryAsync(async () =>
         {
             var group = await groups.UpdateGroupAsync(groupId, patch, ct);
-            snackbar.Add($"Group renamed to {group.Name}.", Severity.Success);
+            snackbar.Add(renames ? $"Group renamed to {group.Name}." : $"{group.Name} updated.", Severity.Success);
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not rename the group.");
+        }, "Could not update the group.");
+    }
 
     public Task<bool> InviteAsync(Guid groupId, string groupName, InviteToGroupRequest request,
         CancellationToken ct = default) =>

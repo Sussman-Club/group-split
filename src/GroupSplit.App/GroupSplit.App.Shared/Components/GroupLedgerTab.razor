@@ -96,6 +96,8 @@
                      Hover="true"
                      Bordered="false"
                      Elevation="0"
+                     RowClick="@OnRowClickAsync"
+                     RowClassFunc="@RowClass"
                      Class="gs-grid">
             <Columns>
                 <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
@@ -122,7 +124,24 @@
                                               MerchantLogoUrl="@context.Item.MerchantLogoUrl" />
                             }
                             <div style="min-width: 0">
-                                <div style="font-weight: 700; font-size: .9375rem">@Headline(context.Item)</div>
+                                @* A button, not a div, on the rows that open. The row itself
+                                   opens on a click, and a click is the one thing a keyboard
+                                   cannot make here: a grid row carries no tabindex, so
+                                   RowClick never hears Enter and the details dialog would be
+                                   reachable by pointer alone. The name is what somebody
+                                   would press anyway. *@
+                                @if (Opens(context.Item))
+                                {
+                                    <button type="button" class="gs-row-open"
+                                            @onclick="@(() => ViewAsync(context.Item))"
+                                            @onclick:stopPropagation="true">
+                                        @Headline(context.Item)
+                                    </button>
+                                }
+                                else
+                                {
+                                    <div style="font-weight: 700; font-size: .9375rem">@Headline(context.Item)</div>
+                                }
                                 <div class="gs-muted" style="font-size: .75rem">@Detail(context.Item)</div>
                             </div>
                         </div>
@@ -176,28 +195,22 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                @* Opening, editing and deleting live on the row. *@
+                @* Editing and deleting live on the row; opening is the row itself. *@
                 @* Titled, and not only for the header. On a phone the grid gives every cell
                    its own line with its label beside it, and a column with no title put two
                    unattached icons in a band of their own -- which row they belonged to was
                    anybody's guess. *@
                 <TemplateColumn Title="Actions" Sortable="false"
-                                HeaderStyle="width: 132px" CellStyle="padding: 8px">
+                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                            @* Expenses only, which is the same line the home page's lists
-                               take: a settlement is who paid whom and how much, and all
-                               three of those are already on the row. There is no division
-                               to go and look at, and the dialog is mostly the division. *@
-                            @if (context.Item.Kind is not ActivityKind.Transfer)
-                            {
-                                <MudTooltip Text="View details" ShowOnFocus="false">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
-                                                   Size="Size.Small"
-                                                   aria-label="@($"View {Headline(context.Item)}")"
-                                                   OnClick="@(async () => await ViewAsync(context.Item))" />
-                                </MudTooltip>
-                            }
+                            @* stopPropagation here and not on the container, because the row
+                               underneath opens the entry: without it Edit opened the details
+                               behind the editor, and with it on the container the whole
+                               column -- the blank half of it included -- swallowed the click
+                               that opens the row. *@
+                            <span class="gs-inline" style="gap: 2px; flex-wrap: nowrap"
+                                  @onclick:stopPropagation="true">
                             <MudTooltip Text="Edit" ShowOnFocus="false">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Edit"
                                                Size="Size.Small"
@@ -211,6 +224,7 @@
                                                aria-label="@($"Delete {Headline(context.Item)}")"
                                                OnClick="@(async () => await DeleteAsync(context.Item))" />
                             </MudTooltip>
+                            </span>
                         </div>
                     </CellTemplate>
                 </TemplateColumn>
@@ -505,7 +519,28 @@
     }
 
     /// <summary>
-    /// The one expense, and how it was divided. Expenses only -- see the note on the eye.
+    /// Whether clicking a row opens anything: expenses do, settlements do not.
+    /// </summary>
+    /// <remarks>
+    /// The same line the home page's lists take. A settlement is who paid whom and how
+    /// much, and all three of those are already on the row: there is no division to go and
+    /// look at, and the dialog is mostly the division.
+    /// </remarks>
+    private static bool Opens(GroupLedgerEntryResponse entry) => entry.Kind is not ActivityKind.Transfer;
+
+    /// <summary>The pointer says which rows open, so the cursor is not a lie over a settlement.</summary>
+    private static string RowClass(GroupLedgerEntryResponse entry, int _) => Opens(entry) ? "is-openable" : "";
+
+    /// <summary>
+    /// The row is the way in. It used to be an eye in the actions column beside Edit and
+    /// Delete, which made opening an entry look like one more thing to do to it rather
+    /// than the thing the row is for.
+    /// </summary>
+    private Task OnRowClickAsync(DataGridRowClickEventArgs<GroupLedgerEntryResponse> args) =>
+        Opens(args.Item) ? ViewAsync(args.Item) : Task.CompletedTask;
+
+    /// <summary>
+    /// The one expense, and how it was divided.
     /// </summary>
     /// <remarks>
     /// Read-only, so nothing is announced when it closes and the grid is left alone. The

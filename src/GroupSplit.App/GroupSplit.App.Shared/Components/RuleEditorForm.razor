@@ -32,16 +32,8 @@
             Required="true"
             RequiredError="Choose how this divides."
             Disabled="@KindFixed"
-            HelperText="@(KindFixed ? "A rule keeps the shape it was written with." : null)"
+            HelperText="@(KindFixed ? "A rule keeps the shape it was written with." : "Even and one-person splits are already built into every group.")"
         >
-            <MudSelectItem T="RuleType?" Value="RuleType.AllOnOnePerson">
-                All on one person
-            </MudSelectItem>
-
-            <MudSelectItem T="RuleType?" Value="RuleType.Even">
-                Evenly, between everyone in the group
-            </MudSelectItem>
-
             <MudSelectItem T="RuleType?" Value="RuleType.Percent">
                 Percent split
             </MudSelectItem>
@@ -49,6 +41,23 @@
             <MudSelectItem T="RuleType?" Value="RuleType.Shares">
                 Shares split
             </MudSelectItem>
+
+            @* A legacy user-authored rule can still be read and keeps its shape when it is
+               edited. The two kinds are absent while creating: the group already provides
+               them, so making another would only add an indistinguishable duplicate. *@
+            @if (Existing && _ruleType is RuleType.AllOnOnePerson)
+            {
+                <MudSelectItem T="RuleType?" Value="RuleType.AllOnOnePerson" Disabled="true">
+                    All on one person
+                </MudSelectItem>
+            }
+
+            @if (Existing && _ruleType is RuleType.Even)
+            {
+                <MudSelectItem T="RuleType?" Value="RuleType.Even" Disabled="true">
+                    Evenly, between everyone in the group
+                </MudSelectItem>
+            }
 
             @* No "by the bill" here. Every group is given exactly one of those and the
                API refuses a second: the rule holds no settings, so a second would divide

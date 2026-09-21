@@ -73,6 +73,42 @@
     border-bottom: 0;
 }
 
+/* A row that opens something says so under the pointer. Not every row does -- a
+   settlement in the ledger has nothing to open -- so it is a class rather than the grid. */
+.gs-grid .mud-table-row.is-openable {
+    cursor: pointer;
+}
+
+/*
+    The entry's name, as a control. The row opens on a click and a grid row cannot be
+    tabbed to, so this is what a keyboard reaches: it has to read as the heading it
+    replaced and behave as the button it is.
+*/
+.gs-grid .gs-row-open {
+    display: block;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gs-grid .gs-row-open:hover {
+    text-decoration: underline;
+}
+
+.gs-grid .gs-row-open:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+    border-radius: var(--gs-radius-sm);
+}
+
 /*
     Always there, under a column headed "Actions".
 

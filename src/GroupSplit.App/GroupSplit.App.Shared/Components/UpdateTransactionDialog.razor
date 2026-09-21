@@ -146,6 +146,7 @@
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
                                      MemberRules="@_memberRules"
+                                     EvenRuleId="@_evenRuleId"
                                      SplitRuleId="@_model.SplitRuleId"
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                      ShowByBill="true"
@@ -257,6 +258,7 @@
 
     /// <inheritdoc cref="CreateTransactionDialog.MemberRulesOf"/>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
+    private Guid? _evenRuleId;
 
     private DateTime? _selectedDate;
     private TimeSpan? _selectedTime;
@@ -355,7 +357,7 @@
         : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
 
     private string CategoryName =>
-        _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "category";
+        _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "uncategorized";
 
     private string PayerName =>
         _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
@@ -675,6 +677,7 @@
             var listed = await rules;
 
             _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
+            _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
             // Off the same listing as the member rules, and for the same reason: the split
             // control offers "By its bill" and has to name the rule that means, without
             // reading the definition of every rule the group holds.
@@ -685,6 +688,7 @@
             _categories = [];
             _members = [];
             _memberRules = [];
+            _evenRuleId = null;
             _billRuleId = null;
         }
     }

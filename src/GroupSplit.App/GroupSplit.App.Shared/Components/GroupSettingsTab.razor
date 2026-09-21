@@ -13,18 +13,26 @@
 @implements IDisposable
 
 @*
-    How a group divides what it spends: the labels, and the divisions they point at.
+    Everything about the group that is not a balance, an expense or a person: what it is
+    called, what an expense divides by when nothing else says, and the labels and divisions
+    that decide it.
 
-    Two lists, because they are two things. This replaces a dialog called "Manage Rules"
-    that managed categories -- one row per category, with the division behind it edited in
-    the same form and written under the category's own name. A rule never appeared, so the
-    thing the model is built for could not be asked for: Groceries and Utilities dividing by
-    one "Household 3-way", changed in one place. Worse, renaming a category renamed the rule
-    behind it, which in a group where two categories shared one would have renamed the
-    division under both.
+    The details card at the top was a dialog, reached from an Edit button on a card that
+    only described it. The two lists under it are two things, and they replace a dialog
+    called "Manage Rules" that managed categories -- one row per category, with the division
+    behind it edited in the same form and written under the category's own name. A rule
+    never appeared, so the thing the model is built for could not be asked for: Groceries
+    and Utilities dividing by one "Household 3-way", changed in one place. Worse, renaming a
+    category renamed the rule behind it, which in a group where two categories shared one
+    would have renamed the division under both.
 *@
 
 <div class="gs-stack" style="gap: 24px">
+
+    @* Handed the rules this screen has already read, so the default is chosen from the
+       same list the card beside it manages -- and a rule saved below is offered above
+       without a second read. *@
+    <GroupDetailsCard Group="@Group" Rules="@_rules" Names="@_names" Loaded="@_loaded" />
 
     <div class="gs-page-head" style="margin-bottom: 0">
         <div>
@@ -193,12 +201,19 @@
                                            and no reason given reads as a bug. *@
                                         <span class="gs-tag neutral">Built in</span>
                                     }
+                                    @if (rule.Id == Group.DefaultSplitRuleId)
+                                    {
+                                        @* The fact the card above states as a setting, said
+                                           again on the row it names, so the list answers
+                                           "which one is the default" without scrolling up. *@
+                                        <span class="gs-tag">Default</span>
+                                    }
                                 </span>
 
                                 <span class="gs-inline" style="gap: 2px">
                                     <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small"
                                                    aria-label="@($"History of the {NameOf(rule)} rule")"
-                                                   OnClick="@(() => ShowHistoryAsync(rule.Id))"/>
+                                                   OnClick="@(() => ShowHistoryAsync(rule))"/>
                                     @* Neither is offered on a rule the group was given
                                        rather than wrote. It says one thing -- all of it is
                                        for one member -- and goes on saying it, which is what
@@ -268,9 +283,9 @@
 </div>
 
 @code {
-    [Parameter] public Guid GroupId { get; set; }
+    [Parameter, EditorRequired] public GroupResponse Group { get; set; } = null!;
 
-    [Parameter] public string GroupName { get; set; } = "";
+    private Guid GroupId => Group.Id;
 
     private IReadOnlyList<CategoryResponse> _categories = [];
     private IReadOnlyList<SplitRuleResponse> _rules = [];
@@ -511,21 +526,7 @@
             : "divides by a rule that is not in this list";
     }
 
-    /// <summary>
-    /// What to call a rule: the member it was provisioned for, where there is one, and
-    /// otherwise the name the group gave it.
-    /// </summary>
-    /// <remarks>
-    /// A provisioned rule's name is written once, out of whatever profile the member had the
-    /// day they joined, and nothing renames it afterwards -- so somebody who filled theirs in
-    /// since would go on being listed by the address they were invited at. The member is on
-    /// the row as an id and the names are already here.
-    /// </remarks>
-    private string NameOf(SplitRuleResponse rule) =>
-        rule.BuiltIn && rule.AllForUserId is { } userId &&
-        _names?.GetValueOrDefault(userId) is { Length: > 0 } named
-            ? $"All for {named}"
-            : rule.Name;
+    private string NameOf(SplitRuleResponse rule) => rule.DisplayName(_names);
 
     private static string Initials(string name) => name.Initials();
 
@@ -657,9 +658,13 @@
         await Rules.DeleteAsync(rule.Id, rule.Name);
     }
 
-    private async Task ShowHistoryAsync(Guid ruleId)
+    private async Task ShowHistoryAsync(SplitRuleResponse rule)
     {
-        var parameters = new DialogParameters<RuleHistoryDialog> { { dialog => dialog.SplitRuleId, ruleId } };
+        var parameters = new DialogParameters<RuleHistoryDialog>
+        {
+            { dialog => dialog.SplitRuleId, rule.Id },
+            { dialog => dialog.BuiltIn, rule.BuiltIn }
+        };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 

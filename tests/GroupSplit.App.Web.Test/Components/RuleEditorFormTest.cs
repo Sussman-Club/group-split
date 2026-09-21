@@ -341,80 +341,26 @@ public class RuleEditorFormTest : ComponentTest
         Assert.Equal(100m, split.Values.Sum());
     }
 
-    // ---- all on one person -------------------------------------------------------------
+    // ---- built-in kinds ----------------------------------------------------------------
 
     /// <summary>
-    /// Two kinds on the wire and one entry in the type list, because the difference between
-    /// them is not a difference in the shape of the division: both put the whole amount on
-    /// one person, and what the form asks next is which person.
-    /// </summary>
-    private static async Task ChooseAsync(IRenderedComponent<RuleEditorForm> form, RuleType type)
-    {
-        var select = form.FindComponent<MudSelect<RuleType?>>();
-
-        await form.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(type));
-    }
-
-    private static async Task ChoosePersonAsync(IRenderedComponent<RuleEditorForm> form, Guid? userId)
-    {
-        var select = form.FindComponents<MudSelect<Guid?>>().Last();
-
-        await form.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(userId));
-    }
-
-    /// <summary>
-    /// "Whoever paid" is the answer that needs nothing else chosen to be a complete rule,
-    /// which is what the type has to mean before anybody touches the second control.
+    /// The selector is only for group-authored divisions. Every group already has even and
+    /// one-person rules, so offering either here would create a second built-in behavior
+    /// under a user-chosen name.
     /// </summary>
     [Fact]
-    public async Task All_on_one_person_starts_as_all_on_whoever_paid()
+    public void A_new_rule_only_offers_custom_divisions()
     {
         var form = RenderEmptyPercentages();
+        var options = form.FindComponents<MudSelectItem<RuleType?>>()
+            .Select(option => option.Instance.Value)
+            .ToArray();
 
-        await ChooseAsync(form, RuleType.AllOnOnePerson);
-
-        Assert.IsType<SoleSplitRuleDto>(form.Instance.Model.Version);
-    }
-
-    [Fact]
-    public async Task Naming_a_member_makes_it_all_on_them()
-    {
-        var form = RenderEmptyPercentages();
-
-        await ChooseAsync(form, RuleType.AllOnOnePerson);
-        await ChoosePersonAsync(form, Bob.Id);
-
-        Assert.Equal(Bob.Id, Assert.IsType<SoleSplitRuleDto>(form.Instance.Model.Version).UserId);
-    }
-
-    /// <summary>
-    /// And back, in one pick: the person list is one control with "whoever paid" at the top
-    /// of it, not a separate rule type somebody has to find again.
-    /// </summary>
-    [Fact]
-    public async Task Choosing_whoever_paid_again_gives_up_the_name()
-    {
-        var form = RenderEmptyPercentages();
-
-        await ChooseAsync(form, RuleType.AllOnOnePerson);
-        await ChoosePersonAsync(form, Bob.Id);
-        await ChoosePersonAsync(form, null);
-
-        Assert.IsType<SoleSplitRuleDto>(form.Instance.Model.Version);
-    }
-
-    /// <summary>
-    /// A rule that already names somebody opens on them rather than on "whoever paid",
-    /// which would be the form quietly proposing a different division on the way in.
-    /// </summary>
-    [Fact]
-    public async Task A_rule_that_names_somebody_opens_on_them()
-    {
-        var form = Render(new SoleSplitRuleDto(Carol.Id));
-
-        var chosen = form.FindComponents<MudSelect<Guid?>>().Last();
-
-        Assert.Equal(Carol.Id, chosen.Instance.Value);
+        Assert.Contains((RuleType?)RuleType.Percent, options);
+        Assert.Contains((RuleType?)RuleType.Shares, options);
+        Assert.DoesNotContain((RuleType?)RuleType.AllOnOnePerson, options);
+        Assert.DoesNotContain((RuleType?)RuleType.Even, options);
+        Assert.Contains("already built into every group", form.Markup, StringComparison.Ordinal);
     }
 
     // ---- the shape is settled once the rule exists ---------------------------------------

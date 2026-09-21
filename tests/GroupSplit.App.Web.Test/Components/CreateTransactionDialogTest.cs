@@ -256,7 +256,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("The gym"));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "All for one")
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "One pays")
             .ClickAsync(new MouseEventArgs());
 
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
@@ -295,7 +295,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         Assert.Empty(editor.Instance.MemberRules);
         Assert.True(provider.FindAll(".gs-seg-btn")
-            .Single(button => button.TextContent.Trim() == "All for one")
+            .Single(button => button.TextContent.Trim() == "One pays")
             .HasAttribute("disabled"));
     }
 
@@ -316,7 +316,7 @@ public class CreateTransactionDialogTest : ComponentTest
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task The_three_ways_to_divide_are_there_before_the_rules_are()
+    public async Task The_four_ways_to_divide_are_there_before_the_rules_are()
     {
         _splitRules
             .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
@@ -339,14 +339,16 @@ public class CreateTransactionDialogTest : ComponentTest
 
         var segments = provider.FindAll(".gs-seg-btn");
 
-        Assert.Equal(3, segments.Count);
+        Assert.Equal(4, segments.Count);
 
-        // And the control is told to lay out three, which is what actually decides the
+        // And the control is told to lay out four, which is what actually decides the
         // widths: a count that moved would move every option with it.
-        Assert.Contains("--gs-seg-n: 3", provider.Find(".gs-seg").GetAttribute("style"));
+        Assert.Contains("--gs-seg-n: 4", provider.Find(".gs-seg").GetAttribute("style"));
 
         // The middle one says not yet rather than offering a rule it cannot name.
-        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "All for one")
+        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "One pays")
+            .HasAttribute("disabled"));
+        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "Evenly")
             .HasAttribute("disabled"));
     }
 

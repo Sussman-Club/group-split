@@ -5,7 +5,7 @@
 @*
     How one expense is divided, for the two dialogs that write one.
 
-    Three ways to answer, and one list of people whichever it is. That second part is the
+    Five ways to answer, and one list of people whichever it is. That second part is the
     whole shape of this component and it was not always true: the editable fields lived here
     and a read-only "Everyone's share" list lived in the dialog underneath, so the moment
     somebody split by hand every member appeared twice -- once as a field they were typing
@@ -17,7 +17,7 @@
     control nobody can read -- "Split it myself" beside a toggle tells you neither what is
     true now nor what clicking will do. Named options, one of them lit, says both.
 
-    All for one is the middle answer and belongs with the automatic one rather than with
+    One person paying is an automatic answer and belongs with the default rather than with
     the hand-typed one, whatever it looks like: it names a rule -- the one every group holds
     per member -- and the API divides by it. That is the difference from typing the whole
     amount against one person, and it is the difference that matters afterwards. Correcting
@@ -30,8 +30,8 @@
     makes every balance in the group wrong. The remaining line is what stands between
     somebody typing three numbers and meeting that refusal at the Save button.
 
-    The other two state no amounts, and the dialog decides what that means -- which differs
-    between the two of them, and is why the answer travels as null rather than as a
+    The other three state no amounts, and the dialog decides what that means -- which differs
+    between them, and is why the answer travels as null rather than as a
     division. Creating, there is nothing to keep and the API divides by the category's rule,
     or by the rule the middle option names. Editing, the shares the expense already has are
     kept unless somebody actually moved off By hand, which the edit dialog sends as an ask to
@@ -45,8 +45,9 @@
 
         @* The app's own segmented control, not MudBlazor's toggle group: the theme
            switcher established this shape and a second, differently-drawn two-option
-           selector in the same product reads as a component from somewhere else. The
-           filled thumb says which side is chosen, so no tick is needed beside it. *@
+           selector in the same product reads as a component from somewhere else. Short,
+           outcome-focused labels make the five choices scannable; the sentence below tells
+           the fuller story of the selected choice. *@
         <div class="gs-seg gs-seg-labels @(Options > 3 ? "is-wide" : "")"
              role="radiogroup"
              aria-label="How to divide it"
@@ -57,9 +58,22 @@
                     class="gs-seg-btn @(Chosen is Mode.Automatic ? "active" : "")"
                     role="radio"
                     aria-checked="@(Chosen is Mode.Automatic ? "true" : "false")"
+                    aria-label="Default: use the category or group default"
+                    title="Use the category or group default"
                     disabled="@(!Members.Any())"
                     @onclick="@(() => OnModeChanged(Mode.Automatic))">
-                Automatically
+                Default
+            </button>
+
+            <button type="button"
+                    class="gs-seg-btn @(Chosen is Mode.Even ? "active" : "")"
+                    role="radio"
+                    aria-checked="@(Chosen is Mode.Even ? "true" : "false")"
+                    aria-label="Evenly: divide the total evenly"
+                    title="Divide the total evenly"
+                    disabled="@(!Members.Any() || EvenRuleId is null)"
+                    @onclick="@(() => OnModeChanged(Mode.Even))">
+                Evenly
             </button>
 
             @* Always drawn, and disabled until the group's rules are in hand -- which is a
@@ -72,9 +86,11 @@
                     class="gs-seg-btn @(Chosen is Mode.AllForOne ? "active" : "")"
                     role="radio"
                     aria-checked="@(Chosen is Mode.AllForOne ? "true" : "false")"
+                    aria-label="One pays: choose one person to cover the full expense"
+                    title="Choose one person to cover the full expense"
                     disabled="@(!Members.Any() || MemberRules.Count == 0)"
                     @onclick="@(() => OnModeChanged(Mode.AllForOne))">
-                All for one
+                One pays
             </button>
 
             @* Only where an expense can have a bill at all, which is a fact the dialog knows
@@ -88,9 +104,11 @@
                         class="gs-seg-btn @(Chosen is Mode.ByBill ? "active" : "")"
                         role="radio"
                         aria-checked="@(Chosen is Mode.ByBill ? "true" : "false")"
+                        aria-label="Receipt: split from receipt items"
+                        title="Split from receipt items"
                         disabled="@(!Members.Any() || Bill is null || BillRuleId is null)"
                         @onclick="@(() => OnModeChanged(Mode.ByBill))">
-                    By its bill
+                    Receipt
                 </button>
             }
 
@@ -98,12 +116,19 @@
                     class="gs-seg-btn @(Chosen is Mode.ByHand ? "active" : "")"
                     role="radio"
                     aria-checked="@(Chosen is Mode.ByHand ? "true" : "false")"
+                    aria-label="Custom: enter each person's amount"
+                    title="Enter each person's amount"
                     disabled="@(!Members.Any())"
                     @onclick="@(() => OnModeChanged(Mode.ByHand))">
-                By hand
+                Custom
             </button>
         </div>
     </MudStack>
+
+    <div class="gs-split-mode-hint" aria-live="polite">
+        <MudIcon Icon="@ModeIcon" Size="Size.Small" aria-hidden="true" />
+        <span>@ModeHint</span>
+    </div>
 
     @if (!Members.Any())
     {
@@ -117,7 +142,7 @@
            what this chooses is a rule, so the API divides by it and answers with the
            figures, exactly as it does for the category's own rule. *@
         <MudSelect T="Guid?"
-                   Label="Who owes it?"
+                   Label="Who should cover it?"
                    Value="@AllFor"
                    ValueChanged="@OnAllForChanged"
                    Variant="Variant.Outlined"
@@ -310,6 +335,9 @@
     /// </remarks>
     [Parameter] public IReadOnlyList<SplitRuleResponse> MemberRules { get; set; } = [];
 
+    /// <summary>The group's built-in Even rule, for an explicit per-expense override.</summary>
+    [Parameter] public Guid? EvenRuleId { get; set; }
+
     /// <summary>
     /// Whether "By its bill" is one of the options at all.
     /// </summary>
@@ -440,6 +468,7 @@
     private enum Mode
     {
         Automatic,
+        Even,
         AllForOne,
         ByBill,
         ByHand
@@ -470,8 +499,14 @@
     private Mode Chosen =>
         _shares is not null ? Mode.ByHand
         : SplitRuleId is not null && SplitRuleId == BillRuleId ? Mode.ByBill
+        : SplitRuleId is not null && SplitRuleId == EvenRuleId ? Mode.Even
         : SplitRuleId is null && Bill is { DividesItsExpense: true } ? Mode.ByBill
-        : SplitRuleId is not null ? Mode.AllForOne
+        // Named, and one of the rules the group holds per member. Any non-null rule used to
+        // read as this one, which lit "One pays" -- over an empty person picker -- for the
+        // moment before the group's rules arrived, on every expense dividing evenly by the
+        // built-in Even rule. A rule this control cannot account for is left to the option
+        // that means "whatever the expense is filed under says".
+        : SplitRuleId is { } named && MemberRules.Any(rule => rule.Id == named) ? Mode.AllForOne
         : Mode.Automatic;
 
     /// <summary>
@@ -484,13 +519,33 @@
     /// button is drawn disabled rather than added late once the bill arrives.
     /// </remarks>
     private IReadOnlyList<Mode> Drawn => ShowByBill
-        ? [Mode.Automatic, Mode.AllForOne, Mode.ByBill, Mode.ByHand]
-        : [Mode.Automatic, Mode.AllForOne, Mode.ByHand];
+        ? [Mode.Automatic, Mode.Even, Mode.AllForOne, Mode.ByBill, Mode.ByHand]
+        : [Mode.Automatic, Mode.Even, Mode.AllForOne, Mode.ByHand];
 
     private int Options => Drawn.Count;
 
     /// <summary>Which slot the lit one is in.</summary>
     private int Position => Math.Max(0, Drawn.ToList().IndexOf(Chosen));
+
+    private string ModeIcon => Chosen switch
+    {
+        Mode.Automatic => Icons.Material.Filled.AutoAwesome,
+        Mode.Even => Icons.Material.Filled.Group,
+        Mode.AllForOne => Icons.Material.Filled.Person,
+        Mode.ByBill => Icons.Material.Filled.ReceiptLong,
+        Mode.ByHand => Icons.Material.Filled.Edit,
+        _ => Icons.Material.Filled.AutoAwesome
+    };
+
+    private string ModeHint => Chosen switch
+    {
+        Mode.Automatic => "Use the category's split, or the group default when it is uncategorized.",
+        Mode.Even => "Divide the total evenly across everyone in the group.",
+        Mode.AllForOne => "Choose one person to cover the whole expense.",
+        Mode.ByBill => "Assign receipt items, then split from those assignments.",
+        Mode.ByHand => "Enter the exact amount each person owes.",
+        _ => string.Empty
+    };
 
     private decimal Remaining => Amount - (_shares?.Sum(split => split.Amount) ?? 0m);
 
@@ -531,6 +586,7 @@
 
         var rule = mode switch
         {
+            Mode.Even => EvenRuleId,
             Mode.AllForOne => Suggested(),
             // One rule, not a suggestion: the group holds exactly one of these.
             Mode.ByBill => BillRuleId,
