@@ -63,7 +63,9 @@ public static class GroupApi
                     var createdGroup = await groupService.CreateGroup(request, ct);
                     var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1)
                     {
-                        Currency = createdGroup.Currency
+                        Currency = createdGroup.Currency,
+                        DefaultSplitRuleId = createdGroup.DefaultSplitRuleId,
+                        DefaultSplitRuleName = createdGroup.DefaultSplitRule?.Name
                     };
                     return Results.Ok(groupInfo);
                 })
@@ -601,7 +603,9 @@ public static class GroupApi
                 select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
                     membership.ArchivedAt != null)
                 {
-                    Currency = @group.Currency
+                    Currency = @group.Currency,
+                    DefaultSplitRuleId = @group.DefaultSplitRuleId,
+                    DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name
                 };
         }
     }

@@ -28,6 +28,12 @@ public class Group : Entity
     /// <summary>What it files its spending under.</summary>
     public virtual ICollection<Category> Categories { get; } = [];
 
+    /// <summary>The rule used when a new expense names neither a category nor a rule.</summary>
+    public virtual SplitRule? DefaultSplitRule { get; set; }
+
+    /// <summary>The id of <see cref="DefaultSplitRule"/>, exposed for group settings writes.</summary>
+    public Guid? DefaultSplitRuleId { get; set; }
+
     /// <summary>Who has been asked to join and has not answered yet.</summary>
     public virtual ICollection<GroupInvitation> Invitations { get; } = [];
 

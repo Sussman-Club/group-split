@@ -402,7 +402,12 @@ public class NamedSplitRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var stored = await DbContext.Set<Data.Entities.Transaction>()
             .FirstAsync(transaction => transaction.Id == expense.Id, Ct);
 
-        Assert.Null(stored.SplitRuleVersionId);
+        // Moving an uncategorized expense adopts the destination group's explicit default.
+        var destinationRuleId = await DbContext.Set<SplitRuleVersion>()
+            .Where(version => version.Id == stored.SplitRuleVersionId)
+            .Select(version => version.SplitRule.Id)
+            .SingleAsync(Ct);
+        Assert.Equal(elsewhere.DefaultSplitRuleId, destinationRuleId);
 
         // And the destination divides it, which for a group of one is all of it on them.
         Assert.Equal(60.00m, Owed(await SplitsOf(expense.Id), self));

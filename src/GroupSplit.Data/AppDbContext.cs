@@ -176,6 +176,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .HasDefaultValue(Currencies.Default);
 
+            entity.HasOne(group => group.DefaultSplitRule)
+                .WithMany()
+                .HasForeignKey(group => group.DefaultSplitRuleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasIndex(group => group.Name);
         });
 

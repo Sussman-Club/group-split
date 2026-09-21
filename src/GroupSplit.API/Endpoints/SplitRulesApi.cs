@@ -186,6 +186,9 @@ public static class SplitRulesApi
                 // the group holds to find which one it is.
                 rule.Versions
                     .Where(version => version.SupersededAt == null)
-                    .Any(version => version is ItemizedSplitRuleVersion));
+                    .Any(version => version is ItemizedSplitRuleVersion),
+                rule.BuiltIn && rule.Versions
+                    .Where(version => version.SupersededAt == null)
+                    .Any(version => version is EvenSplitRuleVersion));
     }
 }
