@@ -253,12 +253,17 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasDefaultValue("USD")
                         .IsFixedLength();
 
+                    b.Property<Guid?>("DefaultSplitRuleId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultSplitRuleId");
 
                     b.HasIndex("Name");
 
@@ -1041,6 +1046,16 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("DefaultSplitRule");
 
                     b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.SplitRule", "DefaultSplitRule")
+                        .WithMany()
+                        .HasForeignKey("DefaultSplitRuleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DefaultSplitRule");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.GroupInvitation", b =>

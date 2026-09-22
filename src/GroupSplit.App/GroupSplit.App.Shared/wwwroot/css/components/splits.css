@@ -1,3 +1,98 @@
+/* ---------------------------------------------------- group details card ---- */
+
+/*
+    Two settings with different weight. The name is plain identity and gets a field. The
+    default split is the consequential one -- it decides how money divides when nothing else
+    says -- so it sits in its own box and explains itself before offering a choice, without
+    reading as an alert.
+*/
+.gs-group-setting-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gs-group-setting-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.gs-group-setting-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.gs-group-setting-description {
+    display: block;
+    margin-top: 2px;
+    color: var(--gs-muted);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.gs-group-default-split {
+    padding: 16px;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+}
+
+.gs-group-setting-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal-deep);
+}
+
+.gs-group-setting-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    color: var(--gs-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.gs-group-setting-note .mud-icon-root {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    color: var(--gs-teal);
+}
+
+/* Save and Discard together on the left; archiving apart on the right, because it is not
+   part of the form and pressing it does not need anything typed first. */
+.gs-group-setting-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.gs-group-setting-archive {
+    margin-left: auto;
+}
+
+:root[data-theme="dark"] .gs-group-setting-icon {
+    color: var(--gs-teal-bright);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-group-setting-icon {
+        color: var(--gs-teal-bright);
+    }
+}
+
 /* ------------------------------------------------------- the splits tab ---- */
 
 /*

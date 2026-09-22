@@ -26,7 +26,7 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SplitRuleResponse(
     Guid Id, Guid GroupId, string Name, bool BuiltIn = false, Guid? AllForUserId = null,
-    bool DividesByBill = false);
+    bool DividesByBill = false, bool DividesEvenly = false);
 
 /// <summary>A split rule with the division it stands for now.</summary>
 /// <param name="VersionId">

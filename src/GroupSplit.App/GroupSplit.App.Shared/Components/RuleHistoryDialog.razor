@@ -27,7 +27,7 @@
                 <h2 class="gs-dialog-title">@(_history?.Name ?? "Split rule")</h2>
             </div>
 
-            @if (_history is not null)
+            @if (_history is not null && !BuiltIn)
             {
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Edit"
@@ -164,7 +164,7 @@
                                     </div>
                                 }
 
-                                @if (!current)
+                                @if (!current && !BuiltIn)
                                 {
                                     var departed = Departed(version);
 
@@ -209,6 +209,9 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public Guid SplitRuleId { get; set; }
+
+    /// <summary>Provisioned rules can be inspected, but their division is not user-editable.</summary>
+    [Parameter] public bool BuiltIn { get; set; }
 
     private SplitRuleHistoryResponse? _history;
 
@@ -402,7 +405,7 @@
     /// </remarks>
     private async Task RestoreAsync(SplitRuleVersionResponse version)
     {
-        if (_history is not { } history || _saving || Departed(version)) return;
+        if (_history is not { } history || BuiltIn || _saving || Departed(version)) return;
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
@@ -442,7 +445,7 @@
 
     private async Task EditAsync()
     {
-        if (_history is not { } history) return;
+        if (_history is not { } history || BuiltIn) return;
 
         var parameters = new DialogParameters<EditRuleDialog>
         {

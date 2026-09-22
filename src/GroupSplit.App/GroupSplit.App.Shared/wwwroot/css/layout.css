@@ -556,6 +556,21 @@ html:not([data-gs-ready]) .gs-group-card {
     white-space: nowrap;
 }
 
+.gs-split-mode-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 20px;
+    padding: 0 2px;
+    color: var(--gs-muted);
+    font-size: .8125rem;
+    line-height: 1.35;
+}
+
+.gs-split-mode-hint .mud-icon-root {
+    color: var(--gs-teal);
+}
+
 /*
     Four options do not fit across a phone. "Automatically" alone is a third of a 375px screen,
     and equal columns -- which the thumb requires -- multiply that by four: the row overflowed

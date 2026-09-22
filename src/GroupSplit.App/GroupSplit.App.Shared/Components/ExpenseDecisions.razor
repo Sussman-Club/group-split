@@ -108,6 +108,9 @@
                            Value="@CategoryId"
                            ValueChanged="@OnCategoryPickedAsync"
                            ToStringFunc="@CategoryText">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">
+                        No category <span class="gs-muted">· uncategorized</span>
+                    </MudSelectItem>
                     @foreach (var category in Categories)
                     {
                         <MudSelectItem T="Guid?" Value="@((Guid?)category.Id)">
@@ -288,7 +291,7 @@
         id is null ? "" : Members.FirstOrDefault(member => member.Id == id).Label();
 
     private string CategoryName =>
-        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? "category";
+        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? "uncategorized";
 
     private string PayerName =>
         Members.FirstOrDefault(member => member.Id == PayerId).Label();

@@ -48,3 +48,18 @@
     outline: 2px solid var(--gs-teal);
     outline-offset: -2px;
 }
+
+/* The settings cog: pushed to the far end of the row, and sized so the glyph sits on the
+   same baseline band as the words beside it. */
+.gs-tab-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    padding: 8px 10px;
+}
+
+.gs-tab-icon .mud-icon-root {
+    width: 22px;
+    height: 22px;
+}

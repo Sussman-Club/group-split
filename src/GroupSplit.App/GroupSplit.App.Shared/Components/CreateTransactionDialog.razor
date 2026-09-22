@@ -134,6 +134,7 @@
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
                                      MemberRules="@_memberRules"
+                                     EvenRuleId="@_evenRuleId"
                                      SplitRuleId="@_model.SplitRuleId"
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                      Preview="@_preview"
@@ -221,6 +222,7 @@
     /// dialog does not have.
     /// </summary>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
+    private Guid? _evenRuleId;
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
@@ -447,7 +449,7 @@
     }
 
     private string CategoryName =>
-        _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name ?? "category";
+        _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name ?? "uncategorized";
 
     private string PayerName =>
         _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
@@ -544,6 +546,7 @@
             _categories = [];
             _members = [];
             _memberRules = [];
+            _evenRuleId = null;
             return;
         }
 
@@ -570,7 +573,9 @@
 
         await Task.WhenAll(categories, members, rules);
 
-        _memberRules = MemberRulesOf(await rules, _members);
+        var listed = await rules;
+        _memberRules = MemberRulesOf(listed, _members);
+        _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
 
         // Whoever is recording it paid for it, until they say otherwise. The API already
         // assumed as much for an absent payer, so this was only ever missing from the

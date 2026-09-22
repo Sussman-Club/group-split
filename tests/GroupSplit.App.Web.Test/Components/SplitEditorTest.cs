@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Components.Web;
 namespace GroupSplit.App.Web.Test.Components;
 
 /// <summary>
-/// The split step: which of the two ways to divide is chosen, and who is listed.
+/// The split step: which way to divide is chosen, and who is listed.
 /// </summary>
 /// <remarks>
 /// Both halves of this were reported as confusing and both are about the same thing -- how
@@ -46,15 +46,19 @@ public class SplitEditorTest : ComponentTest
             .Add(editor => editor.ValueChanged, splits => onChanged?.Invoke(splits)));
 
     /// <summary>
-    /// Both ways are named and one of them is lit, rather than one label that flips.
+    /// Each choice names its outcome, and the selected choice explains what will happen.
     /// </summary>
     [Fact]
-    public void The_two_ways_to_divide_are_both_named()
+    public void The_ways_to_divide_are_named_and_the_selected_one_is_explained()
     {
         var editor = Render(preview: Divided("Rent"));
 
-        Assert.Contains("Automatically", editor.Markup, StringComparison.Ordinal);
-        Assert.Contains("By hand", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Default", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Evenly", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("One pays", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Custom", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Use the category's split, or the group default when it is uncategorized.",
+            editor.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -145,6 +149,8 @@ public class SplitEditorTest : ComponentTest
 
         Assert.NotNull(handed);
         Assert.Equal(100m, handed!.Sum(split => split.Amount));
+        Assert.Contains("Enter the exact amount each person owes.", editor.Markup,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -203,8 +209,8 @@ public class SplitEditorTest : ComponentTest
     {
         var editor = Render(preview: Divided(null));
 
-        Assert.DoesNotContain("By its bill", editor.Markup, StringComparison.Ordinal);
-        Assert.Equal(3, editor.FindAll(".gs-seg-btn").Count);
+        Assert.DoesNotContain("Receipt", editor.Markup, StringComparison.Ordinal);
+        Assert.Equal(4, editor.FindAll(".gs-seg-btn").Count);
     }
 
     /// <summary>
@@ -222,9 +228,9 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.Preview, Divided(null)));
 
         var bill = editor.FindAll(".gs-seg-btn")
-            .First(element => element.TextContent.Contains("By its bill", StringComparison.Ordinal));
+            .First(element => element.TextContent.Contains("Receipt", StringComparison.Ordinal));
 
-        Assert.Equal(4, editor.FindAll(".gs-seg-btn").Count);
+        Assert.Equal(5, editor.FindAll(".gs-seg-btn").Count);
         Assert.True(bill.HasAttribute("disabled"));
     }
 
@@ -252,7 +258,7 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.Preview, Divided(null))
             .Add(e => e.SplitRuleIdChanged, id => named = id));
 
-        await Choose(editor, "By its bill");
+        await Choose(editor, "Receipt");
 
         Assert.Equal(rule, named);
     }
@@ -280,7 +286,7 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.Preview, Divided("Divide by the bill")));
 
         var bill = editor.FindAll(".gs-seg-btn")
-            .First(element => element.TextContent.Contains("By its bill", StringComparison.Ordinal));
+            .First(element => element.TextContent.Contains("Receipt", StringComparison.Ordinal));
 
         Assert.Contains("active", bill.ClassName ?? string.Empty, StringComparison.Ordinal);
     }
@@ -303,13 +309,62 @@ public class SplitEditorTest : ComponentTest
         var chosen = editor.FindAll(".gs-seg-btn")
             .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
 
-        Assert.Contains("Automatically", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Default", chosen.TextContent, StringComparison.Ordinal);
     }
 
-    private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "By hand");
+    /// <summary>
+    /// A rule this control cannot account for leaves "Default" lit, not "One pays".
+    /// </summary>
+    /// <remarks>
+    /// The group's rules arrive after the editor first renders, so for a moment an expense
+    /// dividing by the built-in Even rule held an id that matched neither the bill rule nor
+    /// the even one nor any member's. Every non-null rule used to read as "one person is
+    /// covering this", which lit that option over an empty person picker and then jumped to
+    /// "Evenly" when the listing landed.
+    /// </remarks>
+    [Fact]
+    public void A_rule_that_is_not_a_members_does_not_light_one_pays()
+    {
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.PayerId, Ana)
+            // Named, and nothing else is in hand yet: no member rules, no even rule.
+            .Add(e => e.SplitRuleId, Guid.NewGuid())
+            .Add(e => e.Preview, Divided("Rent")));
+
+        var chosen = editor.FindAll(".gs-seg-btn")
+            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+
+        Assert.Contains("Default", chosen.TextContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("Who should cover it?", editor.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>And the member's own rule still does.</summary>
+    [Fact]
+    public void A_members_rule_still_lights_one_pays()
+    {
+        var rule = new SplitRuleResponse(Guid.NewGuid(), Guid.NewGuid(), "All for Ana",
+            BuiltIn: true, AllForUserId: Ana);
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.PayerId, Ana)
+            .Add(e => e.MemberRules, new[] { rule })
+            .Add(e => e.SplitRuleId, rule.Id)
+            .Add(e => e.Preview, Divided("Rent")));
+
+        var chosen = editor.FindAll(".gs-seg-btn")
+            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+
+        Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
+    }
+
+    private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");
 
     private static Task Automatically(IRenderedComponent<SplitEditor> editor) =>
-        Choose(editor, "Automatically");
+        Choose(editor, "Default");
 
     /// <summary>
     /// Clicks one of the two options, found by the text somebody would read.

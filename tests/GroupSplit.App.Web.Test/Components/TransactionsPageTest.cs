@@ -8,6 +8,7 @@ using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -764,7 +765,11 @@ public class TransactionsPageTest : ComponentTest
 
         var page = RenderView();
 
-        page.WaitForAssertion(() => Assert.Equal(2, Actions(page, "View ").Count));
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr.mud-table-row").Count));
+
+        // Both rows still open: the details are read, and reading is not what the group
+        // left behind refuses.
+        Assert.All(page.FindAll("tbody tr.mud-table-row"), row => Assert.Contains("is-openable", row.ClassName));
 
         Assert.Single(Actions(page, "Edit "));
         Assert.Single(Actions(page, "Delete "));
@@ -775,14 +780,14 @@ public class TransactionsPageTest : ComponentTest
     }
 
     /// <summary>
-    /// Every row opens its own details, and the eye is the way in.
+    /// Every row opens its own details when clicked.
     /// </summary>
     /// <remarks>
-    /// There was none. The dialog is reachable from the home page's two lists and was
-    /// reachable from nowhere on the page devoted to expenses: the grid's rows are not
-    /// links and their cells carry their own controls, so clicking one does nothing. The
-    /// screen showing how a single expense was divided could not be opened from the screen
-    /// listing the expenses.
+    /// There was no way in at all, and then there was an eye in the actions column, which
+    /// made opening an expense look like one more thing to do to it beside Edit and
+    /// Delete. The row is the way in now, as it is in the home page's lists -- and for a
+    /// row the caller can no longer change, whose actions column is empty, it is the only
+    /// control on the row.
     /// </remarks>
     [Fact]
     public async Task Every_row_opens_its_own_details()
@@ -792,12 +797,70 @@ public class TransactionsPageTest : ComponentTest
 
         var page = RenderView();
 
-        page.WaitForAssertion(() => Assert.Equal(2, Actions(page, "View ").Count));
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr.mud-table-row").Count));
 
-        await Actions(page, "View ")
-            .First(button => button.GetAttribute("aria-label") == "View Big shop")
+        // No eye any more.
+        Assert.Empty(Actions(page, "View "));
+
+        var rows = page.FindAll("tbody tr.mud-table-row");
+        Assert.All(rows, row => Assert.Contains("is-openable", row.ClassName));
+
+        await rows.First(row => row.TextContent.Contains("Big shop")).ClickAsync(new());
+
+        Assert.Equal(wanted.Id, _viewed);
+    }
+
+    /// <summary>
+    /// The expense's name is a button, so the details are reachable without a pointer.
+    /// </summary>
+    /// <remarks>
+    /// A grid row carries no tabindex and RowClick never hears Enter, so the row being the
+    /// only way in left the details reachable by mouse alone.
+    /// </remarks>
+    [Fact]
+    public async Task The_expenses_name_opens_its_details_from_the_keyboard()
+    {
+        var wanted = Row("Big shop", Guid.NewGuid(), paidByYou: false);
+        _rows = [Row("Rent", Guid.NewGuid(), paidByYou: true), wanted];
+
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("button.gs-row-open").Count));
+
+        await page.FindAll("button.gs-row-open")
+            .First(button => button.TextContent.Contains("Big shop", StringComparison.Ordinal))
             .ClickAsync(new());
 
         Assert.Equal(wanted.Id, _viewed);
+    }
+
+    /// <summary>
+    /// Edit sits on a row that opens when clicked, so its click must not fall through to
+    /// the row: pressing Edit used to open the details behind the editor.
+    /// </summary>
+    [Fact]
+    public async Task Pressing_edit_does_not_also_open_the_details()
+    {
+        _rows = [Row("Big shop", Guid.NewGuid(), paidByYou: true)];
+
+        // Edit opens its own dialog, which is not what this is about; it only has to
+        // resolve to something the tab can await and read a "nothing changed" out of.
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<UpdateTransactionDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(() =>
+            {
+                var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
+                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                return reference;
+            });
+
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.Single(Actions(page, "Edit ")));
+
+        await Actions(page, "Edit ")[0].ClickAsync(new());
+
+        Assert.Null(_viewed);
     }
 }

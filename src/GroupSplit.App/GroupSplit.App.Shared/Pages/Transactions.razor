@@ -222,6 +222,8 @@
                      Hover="true"
                      Bordered="false"
                      Elevation="0"
+                     RowClick="@(args => ViewAsync(args.Item))"
+                     RowClass="is-openable"
                      Class="gs-grid">
             <Columns>
                 <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
@@ -238,7 +240,15 @@
                                           MerchantName="@context.Item.MerchantName"
                                           MerchantLogoUrl="@context.Item.MerchantLogoUrl" />
                             <div style="min-width: 0">
-                                <div style="font-weight: 700; font-size: .9375rem">@context.Item.Name</div>
+                                @* A button, not a div. The row opens on a click, and a click
+                                   is the one thing a keyboard cannot make here: a grid row
+                                   carries no tabindex, so RowClick never hears Enter and the
+                                   details dialog would be reachable by pointer alone. *@
+                                <button type="button" class="gs-row-open"
+                                        @onclick="@(() => ViewAsync(context.Item))"
+                                        @onclick:stopPropagation="true">
+                                    @context.Item.Name
+                                </button>
                                 <div class="gs-muted" style="font-size: .75rem">@PaidBy(context.Item)</div>
                             </div>
                         </div>
@@ -292,27 +302,24 @@
                 @* Titled so the stacked layout a phone falls back to says which row these
                    belong to -- see the note on the ledger's. *@
                 @*
-                    Details stay available for every row, while edit and delete only appear
-                    for expenses in a group the caller still belongs to. The server keeps
-                    leaver-owned expenses readable as personal history but refuses writes
-                    against their former group, so showing those two controls only teaches
-                    the person about the refusal after they click.
+                    Every row opens its details when clicked, while edit and delete only
+                    appear for expenses in a group the caller still belongs to. The server
+                    keeps leaver-owned expenses readable as personal history but refuses
+                    writes against their former group, so showing those two controls only
+                    teaches the person about the refusal after they click.
                 *@
                 <TemplateColumn Title="Actions" Sortable="false"
-                                HeaderStyle="width: 132px" CellStyle="padding: 8px">
+                                HeaderStyle="width: 96px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                            @* The way into the details from this grid. Clicking the row
-                               does nothing here -- the row is not a link and its cells hold
-                               their own controls -- so without this the one screen about a
-                               single expense was reachable from the home page's lists and
-                               from nowhere on the page devoted to expenses. *@
-                            <MudTooltip Text="View details" ShowOnFocus="false">
-                                <MudIconButton Icon="@Icons.Material.Rounded.Visibility"
-                                               Size="Size.Small"
-                                               aria-label="@($"View {context.Item.Name}")"
-                                               OnClick="@(async () => await ViewAsync(context.Item))" />
-                            </MudTooltip>
+                            @* stopPropagation here and not on the container, because the row
+                               underneath opens the expense: without it Edit opened the
+                               details behind the editor, and with it on the container the
+                               whole column swallowed the click that opens the row -- on an
+                               expense from a group the caller has left, where nothing is
+                               drawn in it at all. *@
+                            <span class="gs-inline" style="gap: 2px; flex-wrap: nowrap"
+                                  @onclick:stopPropagation="true">
                             @if (CanChange(context.Item))
                             {
                                 <MudTooltip Text="Edit" ShowOnFocus="false">
@@ -329,6 +336,7 @@
                                                    OnClick="@(async () => await DeleteAsync(context.Item))" />
                                 </MudTooltip>
                             }
+                            </span>
                         </div>
                     </CellTemplate>
                 </TemplateColumn>
@@ -836,12 +844,17 @@
     // ---------------------------------------------------------------- writing --
 
     /// <summary>
-    /// The one expense, and how it was divided.
+    /// The one expense, and how it was divided. Reached by clicking its row.
     /// </summary>
     /// <remarks>
     /// Read-only, so nothing is announced when it closes and the grid is left alone. The
     /// dialog reads the expense itself rather than being handed this row: a listing row
     /// carries no splits, and the split is most of what somebody opens this for.
+    /// <para>
+    /// It was an eye in the actions column, which was the only way in and made opening an
+    /// expense look like one more thing to do to it. The row is the way in now, as it is
+    /// in the home page's lists.
+    /// </para>
     /// </remarks>
     private async Task ViewAsync(TransactionResponse row)
     {

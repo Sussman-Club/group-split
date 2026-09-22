@@ -192,7 +192,8 @@ public class GroupService(
     IGroupParticipants participants,
     ISplitRuleRevisions revisions,
     IMemberSplitRules memberRules,
-    IBillSplitRule billRule) : IGroupService
+    IBillSplitRule billRule,
+    IEvenSplitRule evenRule) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -230,6 +231,9 @@ public class GroupService(
         // to differ by.
         await billRule.EnsureFor(group, cancellationToken);
 
+        group.DefaultSplitRule = await evenRule.EnsureFor(group, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+
         return group;
     }
 
@@ -261,7 +265,8 @@ public class GroupService(
         return await (from t in await GetGroupById(id, ct)
                       select new CreateGroupRequest
                       {
-                          Name = t.Name
+                          Name = t.Name,
+                          DefaultSplitRuleId = t.DefaultSplitRuleId
                       }).FirstOrDefaultAsync(ct);
     }
 
@@ -277,6 +282,44 @@ public class GroupService(
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         existingGroup.Name = request.Name;
+
+        // The property was added to the existing update contract, so callers from before the
+        // change omit it.  Omission must preserve the group's default; the UI always names a
+        // new one and never offers an unset state.
+        if (request.DefaultSplitRuleId is { } ruleId)
+        {
+            // Projected rather than loaded: the question is one fact about the rule's
+            // current version, and a rule edited a dozen times carries a dozen versions
+            // nothing here reads.
+            var rule = await context.Set<SplitRule>()
+                           .Where(candidate => candidate.Id == ruleId && candidate.Group.Id == existingGroup.Id)
+                           .Select(candidate => new
+                           {
+                               candidate.Name,
+                               DividesByBill = candidate.Versions.Any(version =>
+                                   version.SupersededAt == null && version is ItemizedSplitRuleVersion)
+                           })
+                           .FirstOrDefaultAsync(cancellationToken)
+                       ?? throw new NotFoundException(ErrorCodes.SplitRuleNotFound,
+                           "Split rule was not found in this group.");
+
+            // Every rule in the group except one can serve as the fallback. "Divide it by
+            // the bill" divides nothing itself -- it defers to the rule on each line of a
+            // receipt -- so a group holding it as its default could not record an expense
+            // with no receipt at all: every one of them would be refused for want of a bill
+            // it was never going to have. The picker leaves it out for this reason, and a
+            // caller reaching past the picker gets told rather than obeyed.
+            if (rule.DividesByBill)
+            {
+                throw new ValidationException(ErrorCodes.SplitRuleInvalid,
+                        $"\"{rule.Name}\" divides an expense by its own bill, so it cannot be "
+                        + "the group's default: an expense with no receipt has nothing for it to "
+                        + "read. Choose a rule that divides between people.")
+                    .WithExtension("splitRuleId", ruleId);
+            }
+
+            existingGroup.DefaultSplitRuleId = ruleId;
+        }
 
         await context.SaveChangesAsync(cancellationToken);
 
