@@ -54,45 +54,50 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         // a rule's division, but it means there cannot be a direct unique index on
         // (group, member) without copying that fact onto SplitRule.  Concurrent calls for
         // the same member therefore propose the same available name; one writes it and the
-        // other re-reads it.  A concurrent join by a different identically named member can
-        // hit the same index too, in which case the retry chooses the next free suffix.
-        while (true)
+        // other re-reads it.  That is the one conflict this find-or-create owns. A name
+        // collision for a different member remains an ordinary join failure, rather than
+        // an unbounded retry loop that assumes other writers will eventually stop.
+        var existing = await ExistingFor(group.Id, user.Id, ct);
+
+        if (existing is not null)
+            return existing;
+
+        var version = new SoleSplitRuleVersion { UserId = user.Id };
+
+        var rule = new SplitRule
         {
-            var existing = await ExistingFor(group.Id, user.Id, ct);
+            Group = group,
+            BuiltIn = true,
+            Name = await FreeName(group.Id, user, ct),
+            Versions = { version }
+        };
 
-            if (existing is not null)
-                return existing;
+        context.Add(rule);
 
-            var version = new SoleSplitRuleVersion { UserId = user.Id };
+        try
+        {
+            await context.SaveChangesAsync(ct);
+            return rule;
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+                   {
+                       SqlState: PostgresErrorCodes.UniqueViolation,
+                       ConstraintName: "IX_SplitRule_GroupId_Name"
+                   })
+        {
+            // Unlike user provisioning, this context can be carrying a freshly joined
+            // member or group that must remain tracked. Drop only the failed insert graph,
+            // then recover the rule the concurrent call just wrote for this member.
+            context.Entry(version).State = EntityState.Detached;
+            context.Entry(rule).State = EntityState.Detached;
 
-            var rule = new SplitRule
-            {
-                Group = group,
-                BuiltIn = true,
-                Name = await FreeName(group.Id, user, ct),
-                Versions = { version }
-            };
+            var concurrent = await ExistingFor(group.Id, user.Id, ct);
 
-            context.Add(rule);
+            if (concurrent is not null)
+                return concurrent;
 
-            try
-            {
-                await context.SaveChangesAsync(ct);
-                return rule;
-            }
-            catch (DbUpdateException exception)
-                when (exception.InnerException is PostgresException
-                       {
-                           SqlState: PostgresErrorCodes.UniqueViolation,
-                           ConstraintName: "IX_SplitRule_GroupId_Name"
-                       })
-            {
-                // Unlike user provisioning, this context can be carrying a freshly joined
-                // member or group that must remain tracked.  Drop only the failed insert
-                // graph before querying or trying the next available name.
-                context.Entry(version).State = EntityState.Detached;
-                context.Entry(rule).State = EntityState.Detached;
-            }
+            throw;
         }
     }
 
