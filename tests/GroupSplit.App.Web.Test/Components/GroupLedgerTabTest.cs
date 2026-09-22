@@ -740,18 +740,18 @@ public class GroupLedgerTabTest : ComponentTest
     // ---- opening one entry --------------------------------------------------------------
 
     /// <summary>
-    /// An expense opens onto its details; a settlement has none to open.
+    /// Clicking an expense's row opens its details; clicking a settlement's opens nothing.
     /// </summary>
     /// <remarks>
-    /// The eye is the only way in from this grid -- the rows are not links and their cells
-    /// hold their own controls. It is withheld from settlements on the same grounds the
-    /// home page's lists withhold it: a settlement is who paid whom and how much, all
-    /// three of which are already on the row, and the dialog is mostly the division of an
-    /// expense between people. A button that opens a screen with nothing new on it is
-    /// worse than no button.
+    /// The row is the way in. It used to be an eye in the actions column, beside Edit and
+    /// Delete, which made opening an entry look like one more thing to do to it. A
+    /// settlement's row is inert on the same grounds the home page's lists leave it so: a
+    /// settlement is who paid whom and how much, all three of which are already on the row,
+    /// and the dialog is mostly the division of an expense between people. The cursor says
+    /// which rows open, so nobody clicks a settlement to find out.
     /// </remarks>
     [Fact]
-    public async Task An_expense_opens_its_details_and_a_settlement_has_none()
+    public async Task An_expense_row_opens_its_details_and_a_settlement_row_does_not()
     {
         var expense = Expense(Guid.NewGuid());
         _entries = [expense, Transfer(Guid.NewGuid())];
@@ -771,16 +771,117 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        // Two rows, two edit buttons, and one eye between them.
         tab.WaitForAssertion(() => Assert.Equal(2, Buttons(tab, "Edit ").Count));
 
-        var eyes = Buttons(tab, "View ");
+        // No eye any more, on either row.
+        Assert.Empty(Buttons(tab, "View "));
 
-        Assert.Single(eyes);
+        Assert.Equal(2, tab.FindAll("tbody tr.mud-table-row").Count);
 
-        await eyes[0].ClickAsync(new());
+        Assert.Contains("is-openable", ExpenseRow(tab).ClassName);
+        Assert.DoesNotContain("is-openable", SettlementRow(tab).ClassName ?? "");
+
+        // Found again before each click: the grid re-renders on a row click, and a row
+        // found before it points at handlers that are gone.
+        await SettlementRow(tab).ClickAsync(new());
+        Assert.Null(viewed);
+
+        await ExpenseRow(tab).ClickAsync(new());
+        Assert.Equal(expense.Id, viewed);
+    }
+
+    /// <summary>
+    /// The entry's name is a button, so the details are reachable without a pointer.
+    /// </summary>
+    /// <remarks>
+    /// A grid row carries no tabindex and RowClick never hears Enter, so removing the eye
+    /// left the one screen about a single expense reachable by mouse alone. The name is what
+    /// somebody would press anyway. A settlement's name is not a button, for the reason its
+    /// row does not open.
+    /// </remarks>
+    [Fact]
+    public async Task The_entrys_name_opens_its_details_from_the_keyboard()
+    {
+        var expense = Expense(Guid.NewGuid());
+        _entries = [expense, Transfer(Guid.NewGuid())];
+
+        Guid? viewed = null;
+        var opened = 0;
+
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<TransactionDetailsDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<TransactionDetailsDialog>>(),
+                It.IsAny<DialogOptions>()))
+            .ReturnsAsync((string _, DialogParameters<TransactionDetailsDialog> parameters, DialogOptions _) =>
+            {
+                viewed = parameters.Get<Guid>(nameof(TransactionDetailsDialog.TransactionId));
+                opened++;
+
+                return new DialogReference(Guid.NewGuid(), _dialogs.Object);
+            });
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll("button.gs-row-open")));
+
+        var name = tab.Find("button.gs-row-open");
+        Assert.Equal("Dinner", name.TextContent.Trim());
+
+        await name.ClickAsync(new());
 
         Assert.Equal(expense.Id, viewed);
+
+        // Once, not twice: the click stops at the button rather than reaching the row
+        // underneath, which opens the same dialog.
+        Assert.Equal(1, opened);
+    }
+
+    private static IElement ExpenseRow(IRenderedComponent<GroupLedgerTab> tab) =>
+        tab.FindAll("tbody tr.mud-table-row").First(row => row.TextContent.Contains("Dinner"));
+
+    private static IElement SettlementRow(IRenderedComponent<GroupLedgerTab> tab) =>
+        tab.FindAll("tbody tr.mud-table-row").First(row => !row.TextContent.Contains("Dinner"));
+
+    /// <summary>
+    /// Edit sits on a row that opens when clicked, so its click must not fall through to
+    /// the row: pressing Edit used to open the details behind the editor.
+    /// </summary>
+    [Fact]
+    public async Task Pressing_edit_does_not_also_open_the_details()
+    {
+        _entries = [Expense(Guid.NewGuid())];
+
+        var opened = 0;
+
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<TransactionDetailsDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<TransactionDetailsDialog>>(),
+                It.IsAny<DialogOptions>()))
+            .ReturnsAsync(() =>
+            {
+                opened++;
+                return new DialogReference(Guid.NewGuid(), _dialogs.Object);
+            });
+
+        // Edit opens its own dialog, which is not what this is about; it only has to
+        // resolve to something the tab can await and read a "nothing changed" out of.
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<UpdateTransactionDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(() =>
+            {
+                var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
+                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                return reference;
+            });
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Single(Buttons(tab, "Edit ")));
+
+        await Buttons(tab, "Edit ")[0].ClickAsync(new());
+
+        Assert.Equal(0, opened);
     }
 
     [Fact]
@@ -790,7 +891,7 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        Assert.Equal(3, tab.FindComponents<MudTooltip>().Count);
+        Assert.Equal(2, tab.FindComponents<MudTooltip>().Count);
         Assert.All(tab.FindComponents<MudTooltip>(), tooltip => Assert.False(tooltip.Instance.ShowOnFocus));
     }
 }

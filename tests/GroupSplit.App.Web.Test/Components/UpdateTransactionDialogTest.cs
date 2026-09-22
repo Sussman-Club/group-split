@@ -561,7 +561,49 @@ public class UpdateTransactionDialogTest : ComponentTest
 
             // ...and the answer for one that names none, which is an answer and not a gap.
             Assert.Contains("even split", popovers.Markup, StringComparison.Ordinal);
+            Assert.Contains("No category", popovers.Markup, StringComparison.Ordinal);
         });
+    }
+
+    /// <summary>
+    /// Clearing a category is an edit in its own right: it writes a null category id and
+    /// asks the API to reapply the group's default, rather than silently retaining the
+    /// category's former rule.
+    /// </summary>
+    [Fact]
+    public async Task Clearing_the_category_files_the_expense_as_uncategorized()
+    {
+        var transactionId = Guid.NewGuid();
+
+        WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null));
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId));
+
+        _commands
+            .Setup(c => c.PreviewUpdateAsync(transactionId, It.IsAny<UpdateTransactionRequest>(),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitPreviewResponse(
+                [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)], "Even"));
+
+        var (provider, dialogRef) = await OpenAsync(Row(transactionId));
+
+        await OpenChipAsync(provider, "category");
+        var select = provider.FindComponents<MudSelect<Guid?>>()
+            .Single(component => component.Instance.Label == "Category");
+
+        await provider.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync((Guid?)null));
+
+        await ToSplitStepAsync(provider);
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        Assert.NotNull(patch);
+        Assert.Null(Assert.Single(patch!.Operations, op => Touches(op, "categoryId")).value);
+        Assert.Null(Assert.Single(patch.Operations, op => Touches(op, "splits")).value);
     }
 
     /// <summary>

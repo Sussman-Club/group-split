@@ -6,7 +6,6 @@
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject IDialogService DialogService
 @inject IGroupsPageStateService GroupsService
 @inject ApiErrorPresenter Errors
@@ -52,24 +51,6 @@
             </div>
         </div>
 
-        <div class="gs-toolbar" role="toolbar" aria-label="Group actions">
-            @* Settlement and invitations belong to the sections that explain them: the
-               balance plan and People. The header keeps only actions about the group
-               itself, behind one labelled menu so it does not compete with Add expense. *@
-            <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
-                     Size="Size.Small"
-                     Dense="true"
-                     AnchorOrigin="Origin.BottomRight"
-                     TransformOrigin="Origin.TopRight"
-                     aria-label="Group actions">
-                <MudMenuItem Icon="@Icons.Material.Rounded.Edit"
-                             Label="Rename group"
-                             OnClick="@RenameAsync" />
-                <MudMenuItem Icon="@(group.IsArchive ? Icons.Material.Rounded.Unarchive : Icons.Material.Rounded.Archive)"
-                             Label="@(group.IsArchive ? "Unarchive group" : "Archive group")"
-                             OnClick="@ToggleArchiveAsync" />
-            </MudMenu>
-        </div>
     </div>
 
     <nav class="gs-tabs" aria-label="Group sections">
@@ -77,6 +58,17 @@
         {
             <a class="gs-tab @(Current == key ? "is-current" : "")" href="@Href(key)" aria-current="@(Current == key ? "page" : null)">@label</a>
         }
+
+        @* A cog at the far end rather than a fifth word: settings is not one of the
+           questions somebody asks about a group day to day, and every app puts it here. *@
+        <MudTooltip Text="Settings" ShowOnFocus="false">
+            <a class="gs-tab gs-tab-icon @(Current == "settings" ? "is-current" : "")"
+               href="@Href("settings")"
+               aria-label="Settings"
+               aria-current="@(Current == "settings" ? "page" : null)">
+                <MudIcon Icon="@Icons.Material.Rounded.Settings" />
+            </a>
+        </MudTooltip>
     </nav>
 
     <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
@@ -90,8 +82,8 @@
                 <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
                 break;
 
-            case "rules":
-                <GroupSplitsTab GroupId="@group.Id" GroupName="@group.Name" />
+            case "settings":
+                <GroupSettingsTab Group="@group" />
                 break;
 
             default:
@@ -133,14 +125,14 @@ else if (NotFound)
     [Parameter, SupplyParameterFromQuery(Name = "kind")]
     public string? KindParameter { get; set; }
 
-    // Four group questions, named for the decision somebody is about to make. The old
-    // paths still resolve below, so renaming a section does not break a saved link.
+    // The group questions, named for the decision somebody is about to make. Settings is
+    // not among them -- it is the cog after them. The old paths still resolve below, so
+    // renaming a section does not break a saved link.
     private static readonly (string Key, string Label)[] Sections =
     [
         ("balances", "Balances"),
         ("activity", "Activity"),
-        ("people", "People"),
-        ("rules", "Rules")
+        ("people", "People")
     ];
 
     /// <summary>
@@ -160,9 +152,10 @@ else if (NotFound)
     {
         "activity" or "ledger" or "expenses" => "activity",
         "people" or "members" => "people",
-        // "rules" too: what this tab holds used to be a dialog reached from an icon called
-        // Split rules, and that is still what somebody types.
-        "rules" or "splits" or "categories" => "rules",
+        // The older URLs remain useful links. Rules and categories are part of the group's
+        // Settings now, under the group's own name and default, rather than a peer of its
+        // day-to-day views.
+        "rules" or "splits" or "categories" or "settings" => "settings",
         _ => "balances"
     };
 
@@ -274,35 +267,6 @@ else if (NotFound)
 
         if (GroupsService.SelectedGroup?.Id == GroupId)
             await GroupsService.EnsureSelectedLoadedAsync();
-    }
-
-    private async Task RenameAsync()
-    {
-        if (Group is not { } group) return;
-
-        var parameters = new DialogParameters { { "Group", group } };
-
-        var dialog = await DialogService.ShowAsync<UpdateGroupDialog>("Edit Group", parameters,
-            new DialogOptions { FullWidth = true, CloseButton = true });
-
-        var patch = await dialog.GetReturnValueAsync<JsonPatchDocument<CreateGroupRequest>>();
-
-        if (patch is not null)
-            await GroupsService.UpdateGroupAsync(patch, CancellationToken);
-    }
-
-    /// <summary>
-    /// One tap, no confirmation: archiving hides the group from this person's own list and
-    /// nothing else, and the same button puts it back.
-    /// </summary>
-    private async Task ToggleArchiveAsync()
-    {
-        if (Group is not { } group) return;
-
-        if (group.IsArchive)
-            await GroupsService.UnarchiveGroupAsync(CancellationToken);
-        else
-            await GroupsService.ArchiveGroupAsync(CancellationToken);
     }
 
     private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)

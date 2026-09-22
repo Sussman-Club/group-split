@@ -319,11 +319,13 @@ public class SplitRuleService(
         RefuseIfProvisioned(rule, "deleted");
 
         var stillDefault = await dbContext.Set<Category>()
-            .AnyAsync(category => category.DefaultSplitRuleId == id, ct);
+            .AnyAsync(category => category.DefaultSplitRuleId == id, ct)
+            || await dbContext.Set<Group>()
+                .AnyAsync(group => group.DefaultSplitRuleId == id, ct);
 
         if (stillDefault)
             throw new ConflictException(ErrorCodes.SplitRuleInUse,
-                "This rule is still the default for a category.");
+                "This rule is still a default split.");
 
         var everUsed = await dbContext.Set<Transaction>()
             .AnyAsync(transaction => transaction.SplitRuleVersion!.SplitRuleId == id, ct);

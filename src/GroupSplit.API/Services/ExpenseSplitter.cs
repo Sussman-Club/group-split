@@ -165,8 +165,9 @@ public class ExpenseSplitter(
         expense.SplitRuleVersion = version;
         expense.SplitRuleVersionId = version?.Id;
 
-        // No category, or a category that names no rule: evenly between the members. That
-        // is the whole of what a group with no rules used to be unable to do.
+        // Nothing names a rule at all: a personal expense, or a group carrying no default.
+        // Evenly between the members, which is what every uncategorized expense did before
+        // the group had a rule it could name for one.
         if (version is null)
             return SplitCalculator.DivideEvenly(expense.Amount, payerId, members);
 
@@ -460,10 +461,10 @@ public class ExpenseSplitter(
     }
 
     /// <summary>
-    /// The version to divide by: the one that names a person outright, or the one this
-    /// expense was already written under when that is still a version of the rule its
-    /// category names, and otherwise whatever that rule says now. Null when there is no
-    /// category or it names no rule.
+    /// The version to divide by: the one that names a person outright, the one this expense
+    /// was already written under, or -- for an expense that has never been divided by a
+    /// rule -- whatever the group says an uncategorized expense divides by. Null only where
+    /// nothing names a rule at all, which is a personal expense or a group with no default.
     /// </summary>
     /// <remarks>
     /// The whole of "divide it again by the rule it had at the time". An expense whose
@@ -476,6 +477,13 @@ public class ExpenseSplitter(
     /// the new category's rule as it stands, exactly as a fresh expense there would be. The
     /// test is which rule the version belongs to and not whether it is the current one,
     /// which is what keeps an edit from silently re-billing under a newer version.
+    /// </para>
+    /// <para>
+    /// The group's default is the answer for an expense that has never been divided by a
+    /// rule, and not a standing instruction that overrules one. An expense already holding a
+    /// version keeps it when nothing it is filed under names another, so moving the group's
+    /// default does not re-bill last year's dinners the next time somebody corrects one of
+    /// their amounts -- which is the same reasoning as the paragraph above, one level up.
     /// </para>
     /// </remarks>
     private async Task<SplitRuleVersion?> VersionFor(Expense expense, CancellationToken ct)
@@ -492,26 +500,28 @@ public class ExpenseSplitter(
         if (held is SoleSplitRuleVersion)
             return held;
 
-        var ruleId = await CategoryRule(expense, ct);
+        if (await CategoryRule(expense, ct) is { } filedUnder)
+        {
+            // The one it already holds, when that is still a version of this category's rule.
+            if (held is not null && held.SplitRuleId == filedUnder)
+                return held;
 
-        if (ruleId is null)
-            return null;
+            return await CurrentVersionOf(filedUnder, ct);
+        }
 
-        // The one it already holds, when that is still a version of this category's rule.
-        if (held is not null && held.SplitRuleId == ruleId)
+        // Filed under nothing, or under a category that names no rule.
+        if (held is not null && !await ACategorysRule(expense, held.SplitRuleId, ct))
             return held;
 
-        return await Versions()
-            .FirstOrDefaultAsync(version =>
-                version.SplitRuleId == ruleId && version.SupersededAt == null, ct);
+        return await GroupDefault(expense, ct) is { } fallback
+            ? await CurrentVersionOf(fallback, ct)
+            : null;
     }
 
-    /// <summary>The rule the expense's category defaults to, when it has either.</summary>
+    /// <summary>The rule the expense's category names, when it has either.</summary>
     private async Task<Guid?> CategoryRule(Expense expense, CancellationToken ct)
     {
-        var categoryId = expense.Category?.Id ?? expense.CategoryId;
-
-        if (categoryId is null)
+        if ((expense.Category?.Id ?? expense.CategoryId) is not { } categoryId)
             return null;
 
         return await dbContext.Set<Category>()
@@ -519,6 +529,41 @@ public class ExpenseSplitter(
             .Select(category => category.DefaultSplitRuleId)
             .FirstOrDefaultAsync(ct);
     }
+
+    /// <summary>What the group divides an expense by when nothing else says.</summary>
+    private async Task<Guid?> GroupDefault(Expense expense, CancellationToken ct)
+    {
+        if ((expense.Group?.Id ?? expense.GroupId) is not { } groupId)
+            return null;
+
+        return await dbContext.Set<Group>()
+            .Where(group => group.Id == groupId)
+            .Select(group => group.DefaultSplitRuleId)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// Whether a rule is one some category in the group files under.
+    /// </summary>
+    /// <remarks>
+    /// Asked of an expense that names no rule of its own, to tell a division it brought with
+    /// it from a category from one it was given as the group's fallback. Clearing a
+    /// category has to give the first up -- the rule behind it described a filing this
+    /// expense no longer has -- while the second is the expense's own division and is kept.
+    /// </remarks>
+    private async Task<bool> ACategorysRule(Expense expense, Guid ruleId, CancellationToken ct)
+    {
+        if ((expense.Group?.Id ?? expense.GroupId) is not { } groupId)
+            return false;
+
+        return await dbContext.Set<Category>()
+            .AnyAsync(category => category.Group.Id == groupId && category.DefaultSplitRuleId == ruleId, ct);
+    }
+
+    /// <summary>What a rule says at this moment.</summary>
+    private Task<SplitRuleVersion?> CurrentVersionOf(Guid ruleId, CancellationToken ct) =>
+        Versions().FirstOrDefaultAsync(version =>
+            version.SplitRuleId == ruleId && version.SupersededAt == null, ct);
 
     /// <summary>
     /// Versions loaded the way a division needs them: the participants it weighs by, and

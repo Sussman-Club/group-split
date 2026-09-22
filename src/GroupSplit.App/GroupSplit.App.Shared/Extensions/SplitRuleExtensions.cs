@@ -49,6 +49,22 @@ public static class SplitRuleExtensions
                                    || current.Contains(userId));
     }
 
+    /// <summary>
+    /// What to call a rule: the member it was provisioned for, where there is one, and
+    /// otherwise the name the group gave it.
+    /// </summary>
+    /// <remarks>
+    /// A provisioned rule's name is written once, out of whatever profile the member had the
+    /// day they joined, and nothing renames it afterwards -- so somebody who filled theirs in
+    /// since would go on being listed by the address they were invited at. The member is on
+    /// the row as an id, and a caller with the group's names to hand gets them used.
+    /// </remarks>
+    public static string DisplayName(this SplitRuleResponse rule, IReadOnlyDictionary<Guid, string>? names) =>
+        rule.BuiltIn && rule.AllForUserId is { } userId &&
+        names?.GetValueOrDefault(userId) is { Length: > 0 } named
+            ? $"All for {named}"
+            : rule.Name;
+
     extension(SplitRuleDto? definition)
     {
         /// <summary>What this division does, as a phrase to put on a row.</summary>

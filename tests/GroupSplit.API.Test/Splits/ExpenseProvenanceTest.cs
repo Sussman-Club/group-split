@@ -187,7 +187,7 @@ public class ExpenseProvenanceTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         var theirRule = await Rules.Create(new CreateSplitRuleRequest
         {
             GroupId = elsewhere.Id,
-            Name = "Even",
+            Name = "Their even split",
             Definition = new EvenSplitRuleDto()
         }, Ct);
 

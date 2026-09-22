@@ -1,0 +1,209 @@
+@using GroupSplit.App.Shared.Services.Groups
+@using GroupSplit.Shared
+@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@namespace GroupSplit.App.Shared.Components
+@inject IGroupsPageStateService GroupsService
+
+@*
+    The group's own settings -- its name, and what an expense divides by when nothing else
+    says -- on the Settings page itself rather than behind an Edit button.
+
+    This was a dialog. It opened from a card that only described what the dialog would let
+    you change, so the page said "name and default split" and then made you press something
+    to see either. The two fields sit here now, above the rules the default chooses from,
+    and Save is the only thing left to press.
+*@
+
+<section class="gs-card gs-card-pad" aria-labelledby="group-details-heading">
+    <div class="gs-card-title">
+        <div>
+            <div class="gs-eyebrow">Group settings</div>
+            <h2 id="group-details-heading">Group details</h2>
+        </div>
+        @if (Group.IsArchive)
+        {
+            <span class="gs-tag neutral">Archived</span>
+        }
+    </div>
+
+    <MudForm @ref="_form" Model="@_edit">
+        <div class="gs-stack" style="gap: 20px">
+            <div class="gs-group-setting-section" aria-labelledby="group-name-heading">
+                <div class="gs-group-setting-heading">
+                    <div>
+                        <h3 id="group-name-heading" class="gs-group-setting-title">Name</h3>
+                        <span class="gs-group-setting-description">
+                            The name your members see throughout the app.
+                        </span>
+                    </div>
+                </div>
+
+                <MudTextField @bind-Value="_edit.Name"
+                              For="@(() => _edit.Name)"
+                              Label="Group name"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true" />
+            </div>
+
+            <div class="gs-group-setting-section gs-group-default-split" aria-labelledby="default-split-heading">
+                <div class="gs-group-setting-heading">
+                    <span class="gs-group-setting-icon" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" />
+                    </span>
+                    <div>
+                        <h3 id="default-split-heading" class="gs-group-setting-title">Default split</h3>
+                        <span class="gs-group-setting-description">
+                            Used when an expense has no category.
+                        </span>
+                    </div>
+                </div>
+
+                @* Not the by-the-bill rule: it defers to a receipt, and a default has to
+                   divide an expense that was typed in with nothing attached. *@
+                @* ToStringFunc, because a select names its value from the option that
+                   carries it -- and the options are the rules, which arrive after this
+                   first renders. Left to itself it printed the id it was handed, so
+                   opening Settings flashed a GUID where the rule's name belongs. *@
+                <MudSelect T="Guid?"
+                           @bind-Value="_edit.DefaultSplitRuleId"
+                           ToStringFunc="@NameOf"
+                           Label="How should it be divided?"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Disabled="@(!Loaded || Offered.Count == 0)">
+                    @foreach (var rule in Offered)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)rule.Id)">@NameOf(rule.Id)</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <div class="gs-group-setting-note">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" aria-hidden="true" />
+                    <span>Categories with their own split keep using it.</span>
+                </div>
+            </div>
+        </div>
+    </MudForm>
+
+    <div class="gs-group-setting-actions">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                   Disabled="@(!Dirty || _saving)"
+                   OnClick="@SaveAsync">
+            Save changes
+        </MudButton>
+
+        @if (Dirty && !_saving)
+        {
+            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Discard">
+                Discard
+            </MudButton>
+        }
+
+        @* One tap, no confirmation: archiving hides the group from this person's own list
+           and nothing else, and the same button puts it back. *@
+        <MudButton Variant="Variant.Text" Size="Size.Small"
+                   Color="@(Group.IsArchive ? Color.Primary : Color.Error)"
+                   Class="gs-btn-quiet gs-group-setting-archive"
+                   StartIcon="@(Group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
+                   OnClick="@ToggleArchiveAsync">
+            @(Group.IsArchive ? "Restore group" : "Archive group")
+        </MudButton>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public GroupResponse Group { get; set; } = null!;
+
+    /// <summary>
+    /// The divisions the group can use today, as the settings page has already read them
+    /// -- filtered to the members still here, and kept up as rules are made and deleted
+    /// in the card below this one.
+    /// </summary>
+    [Parameter] public IReadOnlyList<SplitRuleResponse> Rules { get; set; } = [];
+
+    /// <summary>Who the group's people are, so a built-in rule is offered by name.</summary>
+    [Parameter] public IReadOnlyDictionary<Guid, string>? Names { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="Rules"/> has been read. An empty list before then is not "no
+    /// rules", and the select stays disabled rather than offering nothing.
+    /// </summary>
+    [Parameter] public bool Loaded { get; set; }
+
+    private MudForm _form = null!;
+    private bool _saving;
+
+    private CreateGroupRequest _edit = new();
+    private CreateGroupRequest _original = new();
+
+    private IReadOnlyList<SplitRuleResponse> Offered => [.. Rules.Where(rule => !rule.DividesByBill)];
+
+    /// <summary>
+    /// What to call a rule id, for the select to show before -- and after -- its options
+    /// exist.
+    /// </summary>
+    /// <remarks>
+    /// The group's own response names its default, which is what makes the first frame
+    /// right rather than merely blank: the rules are still being read then, and the one
+    /// name needed is already in hand. Once they land the list answers, which is what keeps
+    /// the label honest after somebody picks a different rule.
+    /// </remarks>
+    private string NameOf(Guid? id) =>
+        id is not { } ruleId
+            ? ""
+            : Rules.FirstOrDefault(rule => rule.Id == ruleId)?.DisplayName(Names)
+              ?? (ruleId == Group.DefaultSplitRuleId ? Group.DefaultSplitRuleName : null)
+              ?? "";
+
+    private bool Dirty =>
+        _edit.Name != _original.Name || _edit.DefaultSplitRuleId != _original.DefaultSplitRuleId;
+
+    /// <summary>
+    /// Follows the group, not the keystrokes. The page re-renders whenever the groups
+    /// reload, and each time the form is reset only if what the server says has moved --
+    /// so a save lands here as the new starting point, and an unrelated reload does not
+    /// wipe a name somebody is halfway through typing.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (Group.Name == _original.Name && Group.DefaultSplitRuleId == _original.DefaultSplitRuleId)
+            return;
+
+        _original = new CreateGroupRequest { Name = Group.Name, DefaultSplitRuleId = Group.DefaultSplitRuleId };
+        _edit = _original with { };
+    }
+
+    private void Discard() => _edit = _original with { };
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+
+        if (!_form.IsValid || !Dirty)
+            return;
+
+        var patch = new JsonPatchDocument<CreateGroupRequest>();
+
+        if (_original.Name != _edit.Name)
+            patch.Replace(request => request.Name, _edit.Name);
+
+        if (_original.DefaultSplitRuleId != _edit.DefaultSplitRuleId)
+            patch.Replace(request => request.DefaultSplitRuleId, _edit.DefaultSplitRuleId);
+
+        _saving = true;
+
+        try
+        {
+            if (await GroupsService.UpdateGroupAsync(patch))
+                _original = _edit with { };
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task ToggleArchiveAsync() =>
+        Group.IsArchive ? GroupsService.UnarchiveGroupAsync() : GroupsService.ArchiveGroupAsync();
+}

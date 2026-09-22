@@ -1015,6 +1015,36 @@ what divided it was not" -- and re-running the same command is the fix. It is sa
 command reads the expense first and sends only what still differs, so the half that landed
 produces no operation the second time.
 
+## What an uncategorized expense divides by
+
+Every group is given an "Even" rule and starts pointed at it, so an expense filed under no
+category -- or under one naming no rule -- divides evenly and records the version that did
+it. `groups show` says which rule that is, and the group can be pointed at another:
+
+```bash
+groupsplit groups show <group-id>                          # "Default split" names it, with its id
+groupsplit split-rules list --group <group-id>
+groupsplit groups set-default-split <group-id> <rule-id>
+```
+
+The one rule it will not take is the group's own "divide it by the bill": that rule reads the
+lines of a receipt, so a group defaulting to it could record no expense without one. Naming
+it is refused with `SPLIT_RULE_INVALID` rather than obeyed.
+
+Moving the default changes what the **next** uncategorized expense divides by, and nothing
+already recorded. An expense that already holds a rule version keeps it, so correcting the
+amount of one a year later divides it by what divided it at the time -- the same promise an
+expense under a category has. An expense recorded before the group had a default at all
+holds no version, and the first edit to it will adopt whatever the default is then; if that
+matters for a back catalogue, move the default before editing rather than after.
+
+A single expense can still say otherwise, whatever the group's default:
+
+```bash
+groupsplit tx update <id> --split-rule <rule-id>           # this one divides by that rule
+groupsplit tx update <id> --no-category                    # back to the group's default
+```
+
 ## An expense that is one person's
 
 Every group holds one rule per member that puts the whole amount on them, provisioned rather

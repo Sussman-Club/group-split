@@ -57,6 +57,7 @@ Groups you belong to, their members and their balances.
 | `groups show <group-id>` | Show one group. |
 | `groups create <name>` | Create a group. |
 | `groups rename <group-id> <name>` | Rename a group. |
+| `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
 | `groups members <group-id>` | List a group's members, and the people it has invited and is waiting on. The `Status` column, and `isPendingInvitee` in JSON, say which. |
 | `groups remove-member <group-id> <user-id>` | Remove a member from a group. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
