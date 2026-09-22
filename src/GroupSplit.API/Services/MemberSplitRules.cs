@@ -1,6 +1,7 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GroupSplit.API.Services;
 
@@ -48,37 +49,74 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(user);
 
-        // Asked of the versions, because that is where "who it is for" is written down: a
-        // provisioned rule of this group whose open version names this person.
-        //
-        // As a predicate on the rules rather than a read of the versions themselves, because
-        // the answer is a rule with its versions loaded -- and an Include cannot follow a
-        // Select that changed what the query is about.
-        var existing = await context.Set<SplitRule>()
-            .Include(rule => rule.Versions)
-            .FirstOrDefaultAsync(rule =>
-                rule.BuiltIn &&
-                rule.Group.Id == group.Id &&
-                rule.Versions.Any(version =>
-                    version.SupersededAt == null &&
-                    (version as SoleSplitRuleVersion)!.UserId == user.Id), ct);
+        // The name index is also the small, provider-enforced critical section for this
+        // find-or-create.  Keeping the member id on the sole-version is the right shape for
+        // a rule's division, but it means there cannot be a direct unique index on
+        // (group, member) without copying that fact onto SplitRule.  Concurrent calls for
+        // the same member therefore propose the same available name; one writes it and the
+        // other re-reads it.  That is the one conflict this find-or-create owns. A name
+        // collision for a different member remains an ordinary join failure, rather than
+        // an unbounded retry loop that assumes other writers will eventually stop.
+        var existing = await ExistingFor(group.Id, user.Id, ct);
 
         if (existing is not null)
             return existing;
+
+        var version = new SoleSplitRuleVersion { UserId = user.Id };
 
         var rule = new SplitRule
         {
             Group = group,
             BuiltIn = true,
             Name = await FreeName(group.Id, user, ct),
-            Versions = { new SoleSplitRuleVersion { UserId = user.Id } }
+            Versions = { version }
         };
 
         context.Add(rule);
-        await context.SaveChangesAsync(ct);
 
-        return rule;
+        try
+        {
+            await context.SaveChangesAsync(ct);
+            return rule;
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+                   {
+                       SqlState: PostgresErrorCodes.UniqueViolation,
+                       ConstraintName: "IX_SplitRule_GroupId_Name"
+                   })
+        {
+            // Unlike user provisioning, this context can be carrying a freshly joined
+            // member or group that must remain tracked. Drop only the failed insert graph,
+            // then recover the rule the concurrent call just wrote for this member.
+            context.Entry(version).State = EntityState.Detached;
+            context.Entry(rule).State = EntityState.Detached;
+
+            var concurrent = await ExistingFor(group.Id, user.Id, ct);
+
+            if (concurrent is not null)
+                return concurrent;
+
+            throw;
+        }
     }
+
+    /// <summary>The provisioned rule this group already holds for this member, if any.</summary>
+    private Task<SplitRule?> ExistingFor(Guid groupId, Guid userId, CancellationToken ct) =>
+        // Asked of the versions, because that is where "who it is for" is written down: a
+        // provisioned rule of this group whose open version names this person.
+        //
+        // As a predicate on the rules rather than a read of the versions themselves, because
+        // the answer is a rule with its versions loaded -- and an Include cannot follow a
+        // Select that changed what the query is about.
+        context.Set<SplitRule>()
+            .Include(rule => rule.Versions)
+            .FirstOrDefaultAsync(rule =>
+                rule.BuiltIn &&
+                rule.Group.Id == groupId &&
+                rule.Versions.Any(version =>
+                    version.SupersededAt == null &&
+                    (version as SoleSplitRuleVersion)!.UserId == userId), ct);
 
     /// <summary>
     /// "All for Ana", or the next thing to it that the group has not already used.
