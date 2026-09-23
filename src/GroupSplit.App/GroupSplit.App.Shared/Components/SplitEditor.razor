@@ -141,6 +141,14 @@
         @* One control, and then the same read-only list every automatic division shows:
            what this chooses is a rule, so the API divides by it and answers with the
            figures, exactly as it does for the category's own rule. *@
+        @if (Members.Any(member => member.IsPendingInvitee))
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">
+                People marked “invited” can receive a share under <strong>Custom</strong>.
+                Their <strong>One pays</strong> option is available after they join.
+            </MudAlert>
+        }
+
         <MudSelect T="Guid?"
                    Label="Who should cover it?"
                    Value="@AllFor"

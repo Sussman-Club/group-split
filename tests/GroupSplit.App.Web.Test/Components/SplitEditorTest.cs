@@ -61,6 +61,30 @@ public class SplitEditorTest : ComponentTest
             editor.Markup, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void One_pays_explains_how_to_split_for_a_pending_invitee()
+    {
+        var pending = new UserInfo(Guid.NewGuid(), "Luz", "Garcia", "luz@example.com",
+            IsPendingInvitee: true);
+        var groupId = Guid.NewGuid();
+        var ruleId = Guid.NewGuid();
+        var rule = new SplitRuleResponse(ruleId, groupId, "All for Ana", BuiltIn: true,
+            AllForUserId: Ana);
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(component => component.Members, [Members[0], pending])
+            .Add(component => component.Amount, 100m)
+            .Add(component => component.PayerId, Ana)
+            .Add(component => component.MemberRules, [rule])
+            .Add(component => component.SplitRuleId, ruleId)
+            .Add(component => component.Preview, Divided("All for Ana")));
+
+        Assert.Contains("People marked “invited” can receive a share under <strong>Custom</strong>.",
+            editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Their <strong>One pays</strong> option is available after they join.",
+            editor.Markup, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Automatically: the API's answer, once per person, with a line saying what decided it.
     /// </summary>
