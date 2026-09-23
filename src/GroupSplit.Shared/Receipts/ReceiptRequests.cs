@@ -14,6 +14,19 @@ public record SaveReceiptRequest
     [MaxDecimalPlaces(2)] public decimal Tip { get; init; }
     [MaxDecimalPlaces(2)] public decimal Total { get; init; }
     [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
+    [StringLength(128)] public string? MerchantName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
+    public string? SourceValues { get; init; }
+    public IReadOnlyList<ReceiptAdjustmentInput> Adjustments { get; init; } = [];
+}
+
+public record ReceiptAdjustmentInput
+{
+    public Guid? Id { get; init; }
+    public ReceiptAdjustmentKind Kind { get; init; } = ReceiptAdjustmentKind.FixedAmount;
+    [Range(0.0001, 1000000000), MaxDecimalPlaces(4)] public decimal Amount { get; init; }
+    [StringLength(256)] public string? Description { get; init; }
+    [StringLength(128)] public string? CouponCode { get; init; }
 }
 
 public record ReceiptItemInput
@@ -36,6 +49,8 @@ public record ReceiptItemInput
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
     [MaxDecimalPlaces(2)] public decimal TotalPrice { get; init; }
     [MaxDecimalPlaces(2)] public decimal TaxAmount { get; init; }
+    [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; init; }
+    public bool? IsTaxable { get; init; }
     /// <summary>The exact saved version to use. Null leaves this line unfinished.</summary>
     public Guid? SplitRuleVersionId { get; init; }
 }
@@ -52,6 +67,8 @@ public sealed class ReceiptItemPatch
     [MaxDecimalPlaces(3)] public decimal Quantity { get; set; } = 1;
     [MaxDecimalPlaces(2)] public decimal TotalPrice { get; set; }
     [MaxDecimalPlaces(2)] public decimal TaxAmount { get; set; }
+    [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; set; }
+    public bool? IsTaxable { get; set; }
     public Guid? SplitRuleVersionId { get; set; }
 }
 

@@ -17,7 +17,14 @@ public sealed record ReceiptResponse(
     IReadOnlyList<ReceiptItemResponse> Items)
 {
     public bool CanEdit { get; init; }
+    public string? MerchantName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
+    public string? SourceValues { get; init; }
+    public IReadOnlyList<ReceiptAdjustmentResponse> Adjustments { get; init; } = [];
 }
+
+public sealed record ReceiptAdjustmentResponse(
+    Guid Id, ReceiptAdjustmentKind Kind, decimal Amount, string? Description, string? CouponCode);
 
 /// <summary>
 /// One line, carrying its rule three ways: the version id to send back, the rule's name to
@@ -29,6 +36,8 @@ public sealed record ReceiptItemResponse(
 {
     public string NormalizedName { get; init; } = string.Empty;
     public string? Description { get; init; }
+    public decimal? TaxRate { get; init; }
+    public bool? IsTaxable { get; init; }
 }
 
 public sealed record ReceiptDivisionResponse(

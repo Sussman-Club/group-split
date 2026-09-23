@@ -38,12 +38,16 @@
     <div class="gs-slip-body">
         @* Caps because a till prints caps -- the merchant line off the top of the paper,
            not the app's eyebrow label in another guise. *@
-        @if (!string.IsNullOrWhiteSpace(Title))
+        @if (!string.IsNullOrWhiteSpace(Receipt.MerchantName) || !string.IsNullOrWhiteSpace(Title))
         {
             <header class="gs-slip-head">
-                <h3 class="gs-slip-merchant">@Title</h3>
+                <h3 class="gs-slip-merchant">@(Receipt.MerchantName ?? Title)</h3>
 
-                @if (!string.IsNullOrWhiteSpace(Where))
+                @if (Receipt.PurchaseDate is { } purchaseDate)
+                {
+                    <p class="gs-slip-where">@purchaseDate.ToString("d")</p>
+                }
+                else if (!string.IsNullOrWhiteSpace(Where))
                 {
                     <p class="gs-slip-where">@Where</p>
                 }
@@ -93,7 +97,7 @@
                        line saying the same thing again. Tax is per line now, so a bill
                        charging two rates has to say which line carried which; the figure at
                        the foot cannot. *@
-                    @if (row.Count != 1 || row.Tax != 0)
+                    @if (row.Count != 1 || row.Tax != 0 || row.TaxRate is not null)
                     {
                         <span class="gs-slip-count">
                             @if (row.Count != 1)
@@ -107,6 +111,10 @@
                             @if (row.Tax != 0)
                             {
                                 @($"tax {row.Tax.ToMoney()}")
+                            }
+                            @if (row.TaxRate is { } rate)
+                            {
+                                <text> @($"({rate:0.####}% rate)")</text>
                             }
                         </span>
                     }
@@ -133,6 +141,14 @@
                 <dt>Items</dt>
                 <dd>@Receipt.Subtotal.ToMoney()</dd>
             </div>
+
+            @foreach (var adjustment in Receipt.Adjustments)
+            {
+                <div>
+                    <dt>@(string.IsNullOrWhiteSpace(adjustment.Description) ? "Discount / coupon" : adjustment.Description)</dt>
+                    <dd>−@AdjustmentAmount(adjustment).ToMoney()</dd>
+                </div>
+            }
 
             @* Tax and tip only where there are any: a supermarket receipt has neither, and
                two rows of 0.00 say nothing. *@
@@ -246,7 +262,7 @@
     /// <summary>One printed row: a line, or the identical lines it stands for.</summary>
     private sealed record Row(
         string Key, string Name, decimal Count, decimal Each, decimal Total, decimal Tax,
-        bool Ruleless, string? Rule, string? Description);
+        decimal? TaxRate, bool? IsTaxable, bool Ruleless, string? Rule, string? Description);
 
     /// <summary>
     /// What to print: the bill, narrowed to what is being looked for, with identical lines
@@ -265,6 +281,8 @@
                 Name: line.Name.Trim().ToLowerInvariant(),
                 line.UnitPrice,
                 line.TaxAmount,
+                line.TaxRate,
+                line.IsTaxable,
                 line.SplitRuleVersionId,
                 line.Description))
             .Select(same => new Row(
@@ -274,6 +292,8 @@
                 same.First().UnitPrice,
                 same.Sum(line => line.TotalPrice),
                 same.Sum(line => line.TaxAmount),
+                same.First().TaxRate,
+                same.First().IsTaxable,
                 same.First().SplitRuleVersionId is null,
                 same.First().SplitRuleName,
                 same.First().Description))
@@ -301,4 +321,9 @@
         quantity == decimal.Truncate(quantity)
             ? decimal.Truncate(quantity).ToString()
             : quantity.ToString("0.###");
+
+    private decimal AdjustmentAmount(ReceiptAdjustmentResponse adjustment) =>
+        adjustment.Kind == ReceiptAdjustmentKind.Percentage
+            ? decimal.Round(Receipt.Subtotal * adjustment.Amount / 100m, 2, MidpointRounding.AwayFromZero)
+            : adjustment.Amount;
 }

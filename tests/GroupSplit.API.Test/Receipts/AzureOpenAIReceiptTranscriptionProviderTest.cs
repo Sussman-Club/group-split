@@ -16,9 +16,11 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     public async Task Sends_the_receipt_to_the_keyed_chat_client_and_maps_structured_output()
     {
         var client = new StubChatClient(
-            "{\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60,\"discount\":2.00," +
+            "{\"merchantName\":\"Corner Pizza\",\"purchaseDate\":\"2026-09-23\",\"rawText\":\"PZA LG\"," +
+            "\"subtotal\":18.00,\"tax\":1.60,\"tip\":0,\"total\":17.60," +
+            "\"adjustments\":[{\"kind\":\"FixedAmount\",\"amount\":2.00,\"description\":\"Coupon\",\"couponCode\":\"SAVE2\"}]," +
             "\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1," +
-            "\"totalPrice\":16.00,\"discountAmount\":2.00,\"taxAmount\":1.60}]}");
+            "\"totalPrice\":18.00,\"taxAmount\":1.60,\"taxRate\":10,\"isTaxable\":true}]}");
         var provider = new AzureOpenAIReceiptTranscriptionProvider(
             client,
             NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
@@ -30,7 +32,14 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Equal(17.60m, receipt.Total);
         var item = Assert.Single(receipt.Items);
         Assert.Equal("Pizza", item.Name);
+        Assert.Equal(18m, item.TotalPrice);
         Assert.Equal(1.60m, item.TaxAmount);
+        Assert.Equal(10m, item.TaxRate);
+        Assert.True(item.IsTaxable);
+        Assert.Equal("Corner Pizza", receipt.MerchantName);
+        Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
+        Assert.Contains("PZA LG", receipt.SourceValues);
+        Assert.Equal(2m, Assert.Single(receipt.Adjustments).Amount);
         Assert.Contains("discount", client.Prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dinner.jpg", client.AttachmentDescription);
     }

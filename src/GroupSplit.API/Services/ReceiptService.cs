@@ -85,10 +85,17 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         var ids = request.Items.Where(i => i.Id is not null).Select(i => i.Id!.Value).ToList();
         if (ids.Count != ids.Distinct().Count() || ids.Any(id => existing?.Items.All(i => i.Id != id) != false))
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "An item id is repeated or does not belong to this bill.");
+        var adjustmentIds = request.Adjustments.Where(adjustment => adjustment.Id is not null)
+            .Select(adjustment => adjustment.Id!.Value).ToList();
+        if (adjustmentIds.Count != adjustmentIds.Distinct().Count()
+            || adjustmentIds.Any(id => existing?.Adjustments.All(adjustment => adjustment.Id != id) != false))
+            throw new ValidationException(ErrorCodes.ReceiptInvalid,
+                "An adjustment id is repeated or does not belong to this bill.");
 
         // Validate a detached draft first: a refused request never mutates the tracked bill.
         var draft = new Receipt { ExpenseId = expenseId, Subtotal = request.Subtotal,
-            Tax = request.Tax, Tip = request.Tip, Total = request.Total };
+            MerchantName = Clean(request.MerchantName, 128), PurchaseDate = request.PurchaseDate,
+            SourceValues = request.SourceValues ?? existing?.SourceValues, Tax = request.Tax, Tip = request.Tip, Total = request.Total };
         for (var position = 0; position < request.Items.Count; position++)
         {
             var input = request.Items[position];
@@ -106,8 +113,18 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                     ? savedDescription
                     : string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
                 UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
-                TaxAmount = input.TaxAmount, SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
+                TaxAmount = input.TaxAmount, TaxRate = input.TaxRate, IsTaxable = input.IsTaxable,
+                SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
         }
+        foreach (var (input, position) in request.Adjustments.Select((input, position) => (input, position)))
+        {
+            draft.Adjustments.Add(new ReceiptAdjustment
+            {
+                Id = existing is null ? Guid.NewGuid() : input.Id ?? Guid.NewGuid(), Position = position, Kind = input.Kind, Amount = input.Amount,
+                Description = Clean(input.Description, 256), CouponCode = Clean(input.CouponCode, 128)
+            });
+        }
+        ReceiptSplitCalculator.CalculateLineTaxes(draft);
         ReceiptSplitCalculator.RefuseIfFiguresDisagree(draft);
         if (draft.Total != expense.Amount)
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
@@ -131,8 +148,9 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             // Updated in place rather than replaced, so a line keeps its id: the ids are how
             // the next correction names these lines, and dropping and re-adding the bill
             // would silently clear every line's rule on the way through.
-            existing.Subtotal = draft.Subtotal; existing.Tax = draft.Tax;
-            existing.Tip = draft.Tip; existing.Total = draft.Total;
+            existing.Subtotal = draft.Subtotal; existing.MerchantName = draft.MerchantName;
+            existing.PurchaseDate = draft.PurchaseDate; existing.SourceValues = draft.SourceValues;
+            existing.Tax = draft.Tax; existing.Tip = draft.Tip; existing.Total = draft.Total;
             foreach (var removed in existing.Items.Where(i => draft.Items.All(d => d.Id != i.Id)).ToList())
             { dbContext.Remove(removed); existing.Items.Remove(removed); }
             foreach (var line in draft.Items)
@@ -145,8 +163,22 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                     stored.Position = line.Position; stored.Name = line.Name; stored.NormalizedName = line.NormalizedName;
                     stored.Description = line.Description;
                     stored.UnitPrice = line.UnitPrice; stored.Quantity = line.Quantity; stored.TotalPrice = line.TotalPrice;
-                    stored.TaxAmount = line.TaxAmount; stored.SplitRuleVersionId = line.SplitRuleVersionId;
+                    stored.TaxAmount = line.TaxAmount; stored.TaxRate = line.TaxRate; stored.IsTaxable = line.IsTaxable;
+                    stored.SplitRuleVersionId = line.SplitRuleVersionId;
                     stored.SplitRuleVersion = line.SplitRuleVersion;
+                }
+            }
+            foreach (var removed in existing.Adjustments.Where(i => draft.Adjustments.All(d => d.Id != i.Id)).ToList())
+            { dbContext.Remove(removed); existing.Adjustments.Remove(removed); }
+            foreach (var adjustment in draft.Adjustments)
+            {
+                var stored = existing.Adjustments.FirstOrDefault(item => item.Id == adjustment.Id);
+                if (stored is null)
+                { adjustment.ReceiptId = existing.Id; existing.Adjustments.Add(adjustment); dbContext.Entry(adjustment).State = EntityState.Added; }
+                else
+                {
+                    stored.Position = adjustment.Position; stored.Kind = adjustment.Kind; stored.Amount = adjustment.Amount;
+                    stored.Description = adjustment.Description; stored.CouponCode = adjustment.CouponCode;
                 }
             }
         }
@@ -218,6 +250,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             Quantity = stored.Quantity,
             TotalPrice = stored.TotalPrice,
             TaxAmount = stored.TaxAmount,
+            TaxRate = stored.TaxRate,
+            IsTaxable = stored.IsTaxable,
             SplitRuleVersionId = stored.SplitRuleVersionId
         };
         patch.ApplyTo(model);
@@ -237,6 +271,14 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             Tax = receipt.Tax,
             Tip = receipt.Tip,
             Total = receipt.Total,
+            MerchantName = receipt.MerchantName,
+            PurchaseDate = receipt.PurchaseDate,
+            SourceValues = receipt.SourceValues,
+            Adjustments = receipt.Adjustments.OrderBy(adjustment => adjustment.Position).Select(adjustment => new ReceiptAdjustmentInput
+            {
+                Id = adjustment.Id, Kind = adjustment.Kind, Amount = adjustment.Amount,
+                Description = adjustment.Description, CouponCode = adjustment.CouponCode
+            }).ToList(),
             Items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id)
                 .Select(item => item.Id == itemId
                     ? new ReceiptItemInput
@@ -251,6 +293,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                         Quantity = model.Quantity,
                         TotalPrice = model.TotalPrice,
                         TaxAmount = model.TaxAmount,
+                        TaxRate = model.TaxRate,
+                        IsTaxable = model.IsTaxable,
                         SplitRuleVersionId = model.SplitRuleVersionId
                     }
                     : new ReceiptItemInput
@@ -263,6 +307,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
                         Quantity = item.Quantity,
                         TotalPrice = item.TotalPrice,
                         TaxAmount = item.TaxAmount,
+                        TaxRate = item.TaxRate,
+                        IsTaxable = item.IsTaxable,
                         SplitRuleVersionId = item.SplitRuleVersionId
                     }).ToList()
         };
@@ -369,7 +415,14 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
 
     private IQueryable<Receipt> Loaded() => dbContext.Set<Receipt>()
         .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion).ThenInclude(v => (v as WeightedSplitRuleVersion)!.Participants)
-        .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion).ThenInclude(v => v!.SplitRule).ThenInclude(r => r.Group);
+        .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion).ThenInclude(v => v!.SplitRule).ThenInclude(r => r.Group)
+        .Include(r => r.Adjustments);
+
+    private static string? Clean(string? value, int maximumLength)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed.Length <= maximumLength ? trimmed : trimmed[..maximumLength];
+    }
 
     private async Task<Expense> VisibleExpense(Guid expenseId, CancellationToken ct)
     {

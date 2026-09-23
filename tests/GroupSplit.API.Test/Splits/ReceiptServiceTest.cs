@@ -77,6 +77,94 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task A_receipt_persists_source_metadata_and_explicit_adjustments_without_rewriting_items()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Shopping", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
+
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            MerchantName = "Corner Store",
+            PurchaseDate = new DateOnly(2026, 9, 23),
+            SourceValues = "CORNER STORE\nSubtotal 12.00\nCoupon 2.00",
+            Subtotal = 12m,
+            Tax = 0m,
+            Tip = 0m,
+            Total = 10m,
+            Items = [new ReceiptItemInput
+            {
+                Name = "Coffee", UnitPrice = 12m, Quantity = 1m, TotalPrice = 12m,
+                TaxAmount = 0m, IsTaxable = false
+            }],
+            Adjustments = [new ReceiptAdjustmentInput
+            {
+                Kind = ReceiptAdjustmentKind.FixedAmount, Amount = 2m,
+                Description = "Loyalty coupon", CouponCode = "SAVE2"
+            }]
+        }, Ct);
+
+        var response = await Receipts.ResponseFor(bill, ct: Ct);
+
+        Assert.Equal("Corner Store", response.MerchantName);
+        Assert.Equal(new DateOnly(2026, 9, 23), response.PurchaseDate);
+        Assert.Equal("CORNER STORE\nSubtotal 12.00\nCoupon 2.00", response.SourceValues);
+        Assert.Equal(12m, Assert.Single(response.Items).TotalPrice);
+        var adjustment = Assert.Single(response.Adjustments);
+        Assert.Equal(2m, adjustment.Amount);
+        Assert.Equal("SAVE2", adjustment.CouponCode);
+
+        // Older whole-receipt clients do not know about OCR evidence. An omitted source
+        // field on their next save must not erase what the reviewer can inspect.
+        var updated = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 12m, Total = 10m,
+            Items = [new ReceiptItemInput { Id = response.Items[0].Id, Name = "Coffee",
+                UnitPrice = 12m, TotalPrice = 12m, IsTaxable = false }],
+            Adjustments = [new ReceiptAdjustmentInput { Id = adjustment.Id,
+                Kind = ReceiptAdjustmentKind.FixedAmount, Amount = 2m }]
+        }, Ct);
+        Assert.Equal(response.SourceValues, updated.SourceValues);
+    }
+
+    [Fact]
+    public async Task Two_small_coupons_never_make_a_line_negative()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Shopping", Amount = .01m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = .03m, Total = .01m,
+            Items = [Item("A", .01m, null), Item("B", .01m, null), Item("C", .01m, null)],
+            Adjustments = [
+                new ReceiptAdjustmentInput { Amount = .01m },
+                new ReceiptAdjustmentInput { Amount = .01m }]
+        }, Ct);
+
+        Assert.Equal(.01m, bill.Total);
+        Assert.Equal(.03m, bill.Items.Sum(item => item.TotalPrice));
+    }
+
+    [Fact]
+    public async Task Tax_rates_use_the_discounted_base_and_leave_exempt_items_untaxed()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Shopping", Amount = 16.50m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 20m, Tax = 1.50m, Total = 16.50m,
+            Items = [
+                new ReceiptItemInput { Name = "Taxed", UnitPrice = 10m, TotalPrice = 10m,
+                    TaxRate = 20m, IsTaxable = true },
+                new ReceiptItemInput { Name = "Exempt", UnitPrice = 10m, TotalPrice = 10m,
+                    TaxRate = 0m, IsTaxable = false }],
+            Adjustments = [new ReceiptAdjustmentInput { Amount = 5m }]
+        }, Ct);
+
+        Assert.Equal(1.50m, bill.Items.Single(item => item.Name == "Taxed").TaxAmount);
+        Assert.Equal(0m, bill.Items.Single(item => item.Name == "Exempt").TaxAmount);
+    }
+
+    [Fact]
     public async Task A_personal_receipt_cannot_use_a_group_split_rule()
     {
         var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Dinner" }, Ct);

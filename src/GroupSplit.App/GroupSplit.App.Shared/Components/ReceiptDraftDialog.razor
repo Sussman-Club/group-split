@@ -37,7 +37,9 @@
             }
 
             <div class="gs-grid-2">
-                <MudNumericField @bind-Value="_subtotal" Label="Subtotal" Variant="Variant.Outlined"
+                <MudTextField @bind-Value="_merchantName" Label="Merchant" Variant="Variant.Outlined" />
+                <MudDatePicker @bind-Date="_purchaseDate" Label="Purchase date" Variant="Variant.Outlined" />
+                <MudNumericField @bind-Value="_subtotal" Label="Items subtotal" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                 <MudNumericField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
@@ -46,6 +48,41 @@
                 <MudNumericField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
                                  Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_sourceValues))
+            {
+                <details class="gs-muted" style="font-size: .8rem">
+                    <summary>View extracted source values</summary>
+                    <pre style="white-space: pre-wrap; overflow-wrap: anywhere">@_sourceValues</pre>
+                </details>
+            }
+
+            <div class="gs-inline" style="justify-content: space-between; align-items: center">
+                <div>
+                    <h3 style="margin: 0; font-size: 1rem">Discounts and coupons</h3>
+                    <span class="gs-muted" style="font-size: .8rem">Kept separate from item prices.</span>
+                </div>
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
+                           OnClick="AddAdjustment">Add adjustment</MudButton>
+            </div>
+
+            @foreach (var adjustment in _adjustments)
+            {
+                <div class="gs-grid-2" @key="adjustment.Key" style="padding: 8px; border: 1px solid var(--gs-line); border-radius: 8px">
+                    <MudSelect @bind-Value="adjustment.Kind" Label="Type" Variant="Variant.Outlined">
+                        <MudSelectItem Value="ReceiptAdjustmentKind.FixedAmount">Amount</MudSelectItem>
+                        <MudSelectItem Value="ReceiptAdjustmentKind.Percentage">Percent</MudSelectItem>
+                    </MudSelect>
+                    <MudNumericField @bind-Value="adjustment.Amount" Label="@(adjustment.Kind == ReceiptAdjustmentKind.Percentage ? "Percent" : "Amount")" Variant="Variant.Outlined"
+                                     Adornment="@(adjustment.Kind == ReceiptAdjustmentKind.Percentage ? Adornment.End : Adornment.Start)"
+                                     AdornmentText="@(adjustment.Kind == ReceiptAdjustmentKind.Percentage ? "%" : Currency)" Format="N2" HideSpinButtons="true" />
+                    <MudTextField @bind-Value="adjustment.Description" Label="Description" Variant="Variant.Outlined" />
+                    <div class="gs-inline">
+                        <MudTextField @bind-Value="adjustment.CouponCode" Label="Coupon code" Variant="Variant.Outlined" style="flex: 1" />
+                        <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline" aria-label="Remove adjustment" OnClick="@(() => RemoveAdjustment(adjustment))" />
+                    </div>
+                </div>
+            }
 
             <div class="gs-muted" style="font-size: .85rem">
                 @if (ExpenseAmount is { } expenseAmount)
@@ -105,6 +142,13 @@
                                          Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                         <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
+                        <MudNumericField @bind-Value="item.TaxRate" Label="Tax rate" Variant="Variant.Outlined"
+                                         Adornment="Adornment.End" AdornmentText="%" Format="N4" HideSpinButtons="true" />
+                        <MudSelect T="bool?" @bind-Value="item.IsTaxable" Label="Tax status" Variant="Variant.Outlined">
+                            <MudSelectItem T="bool?" Value="@((bool?)null)">Not identified</MudSelectItem>
+                            <MudSelectItem T="bool?" Value="@((bool?)true)">Taxable</MudSelectItem>
+                            <MudSelectItem T="bool?" Value="@((bool?)false)">Tax-exempt</MudSelectItem>
+                        </MudSelect>
                     </div>
                 </div>
             }
@@ -136,7 +180,11 @@
     private decimal _tax;
     private decimal _tip;
     private decimal _total;
+    private string? _merchantName;
+    private DateTime? _purchaseDate;
+    private string? _sourceValues;
     private List<EditableLine> _items = [];
+    private List<EditableAdjustment> _adjustments = [];
     private bool _saving;
     private string? _validationError;
     private string? _loadedSource;
@@ -146,11 +194,21 @@
     {
         get
         {
-            if (_subtotal + _tax + _tip != _total)
-                return "Subtotal, tax, and tip must add up to the total.";
+            if (_adjustments.Any(adjustment => adjustment.Amount <= 0 || adjustment.Kind == ReceiptAdjustmentKind.Percentage && adjustment.Amount > 100))
+                return "Each adjustment must be positive, and a percentage cannot exceed 100%.";
+            if (_items.Any(item => item.IsTaxable == false && item.TaxRate is > 0))
+                return "A tax-exempt item cannot have a positive tax rate.";
+            var adjustmentTotal = _adjustments.Sum(adjustment => adjustment.Kind == ReceiptAdjustmentKind.Percentage
+                ? decimal.Round(_subtotal * adjustment.Amount / 100m, 2, MidpointRounding.AwayFromZero)
+                : adjustment.Amount);
+            if (adjustmentTotal > _subtotal)
+                return "Discounts and coupons cannot exceed the subtotal.";
+            if (_subtotal - adjustmentTotal + _tax + _tip != _total)
+                return "Subtotal, adjustments, tax, and tip must add up to the total.";
             if (_items.Sum(item => item.TotalPrice) != _subtotal)
                 return "Line totals must add up to the subtotal.";
-            if (_items.Sum(item => item.TaxAmount) != _tax)
+            if (_items.All(item => item.TaxRate is null && item.IsTaxable is null)
+                && _items.Sum(item => item.TaxAmount) != _tax)
                 return "Line tax must add up to the receipt tax.";
             return null;
         }
@@ -166,11 +224,17 @@
         var source = Receipt is { } saved
             ? (Key: $"receipt:{saved.Id}", Subtotal: saved.Subtotal, Tax: saved.Tax,
                 Tip: saved.Tip, Total: saved.Total,
-                Items: saved.Items.Select(item => new EditableLine(item)).ToList())
+                MerchantName: saved.MerchantName, PurchaseDate: saved.PurchaseDate,
+                SourceValues: saved.SourceValues,
+                Items: saved.Items.Select(item => new EditableLine(item)).ToList(),
+                Adjustments: saved.Adjustments.Select(adjustment => new EditableAdjustment(adjustment)).ToList())
             : Transcription is { } draft
                 ? (Key: $"transcription:{draft.AttachmentId}", Subtotal: draft.Receipt.Subtotal,
                     Tax: draft.Receipt.Tax, Tip: draft.Receipt.Tip, Total: draft.Receipt.Total,
-                    Items: draft.Receipt.Items.Select(item => new EditableLine(item)).ToList())
+                    MerchantName: draft.Receipt.MerchantName, PurchaseDate: draft.Receipt.PurchaseDate,
+                    SourceValues: draft.Receipt.SourceValues,
+                    Items: draft.Receipt.Items.Select(item => new EditableLine(item)).ToList(),
+                    Adjustments: draft.Receipt.Adjustments.Select(adjustment => new EditableAdjustment(adjustment)).ToList())
                 : throw new InvalidOperationException("A receipt draft or saved receipt is required.");
 
         if (_loadedSource == source.Key)
@@ -181,12 +245,18 @@
         _tax = source.Tax;
         _tip = source.Tip;
         _total = source.Total;
+        _merchantName = source.MerchantName;
+        _purchaseDate = source.PurchaseDate?.ToDateTime(TimeOnly.MinValue);
+        _sourceValues = source.SourceValues;
         _items = source.Items;
+        _adjustments = source.Adjustments;
     }
 
     private void AddItem() => _items.Add(new EditableLine());
 
     private void RemoveItem(EditableLine item) => _items = _items.Where(candidate => candidate != item).ToList();
+    private void AddAdjustment() => _adjustments.Add(new EditableAdjustment());
+    private void RemoveAdjustment(EditableAdjustment adjustment) => _adjustments = _adjustments.Where(candidate => candidate != adjustment).ToList();
 
     private async Task SaveAsync()
     {
@@ -223,6 +293,14 @@
                 Tax = _tax,
                 Tip = _tip,
                 Total = _total,
+                MerchantName = _merchantName,
+                PurchaseDate = _purchaseDate is { } date ? DateOnly.FromDateTime(date) : null,
+                SourceValues = _sourceValues,
+                Adjustments = _adjustments.Select(adjustment => new ReceiptAdjustmentInput
+                {
+                    Id = adjustment.Id, Kind = adjustment.Kind, Amount = adjustment.Amount,
+                    Description = adjustment.Description, CouponCode = adjustment.CouponCode
+                }).ToArray(),
                 Items = _items.Select(item => new ReceiptItemInput
                 {
                     Id = item.Id,
@@ -237,6 +315,8 @@
                     UnitPrice = item.UnitPrice,
                     TotalPrice = item.TotalPrice,
                     TaxAmount = item.TaxAmount,
+                    TaxRate = item.TaxRate,
+                    IsTaxable = item.IsTaxable,
                     SplitRuleVersionId = item.SplitRuleVersionId
                 }).ToArray()
             };
@@ -265,7 +345,18 @@
         if (Receipt is not { } original || TransactionId is null
             || _subtotal != original.Subtotal || _tax != original.Tax
             || _tip != original.Tip || _total != original.Total
-            || _items.Count != original.Items.Count)
+            || _items.Count != original.Items.Count
+            || !string.Equals(_merchantName?.Trim(), original.MerchantName, StringComparison.Ordinal)
+            || (_purchaseDate is { } date ? DateOnly.FromDateTime(date) : null) != original.PurchaseDate
+            || _adjustments.Count != original.Adjustments.Count
+            || _adjustments.Where((adjustment, index) =>
+            {
+                var source = original.Adjustments[index];
+                return adjustment.Id != source.Id || adjustment.Kind != source.Kind
+                    || adjustment.Amount != source.Amount
+                    || !string.Equals(adjustment.Description.Trim(), source.Description ?? string.Empty, StringComparison.Ordinal)
+                    || !string.Equals(adjustment.CouponCode.Trim(), source.CouponCode ?? string.Empty, StringComparison.Ordinal);
+            }).Any())
             return false;
 
         return _items.All(item => item.Id is { } id
@@ -274,6 +365,8 @@
             && item.Quantity == source.Quantity
             && item.TotalPrice == source.TotalPrice
             && item.TaxAmount == source.TaxAmount
+            && item.TaxRate == source.TaxRate
+            && item.IsTaxable == source.IsTaxable
             && item.SplitRuleVersionId == source.SplitRuleVersionId);
     }
 
@@ -360,6 +453,8 @@
             Quantity = item.Quantity;
             TotalPrice = item.TotalPrice;
             TaxAmount = item.TaxAmount;
+            TaxRate = item.TaxRate;
+            IsTaxable = item.IsTaxable;
             SplitRuleVersionId = item.SplitRuleVersionId;
         }
 
@@ -375,6 +470,8 @@
             Quantity = item.Quantity;
             TotalPrice = item.TotalPrice;
             TaxAmount = item.TaxAmount;
+            TaxRate = item.TaxRate;
+            IsTaxable = item.IsTaxable;
             SplitRuleVersionId = item.SplitRuleVersionId;
         }
 
@@ -396,8 +493,31 @@
         public decimal Quantity { get; set; } = 1m;
         public decimal TotalPrice { get; set; }
         public decimal TaxAmount { get; set; }
+        public decimal? TaxRate { get; set; }
+        public bool? IsTaxable { get; set; }
         public Guid? SplitRuleVersionId { get; set; }
 
         private static string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;
+    }
+
+    private sealed class EditableAdjustment
+    {
+        public EditableAdjustment() { }
+        public EditableAdjustment(ReceiptAdjustmentInput adjustment)
+        {
+            Id = adjustment.Id; Kind = adjustment.Kind; Amount = adjustment.Amount;
+            Description = adjustment.Description ?? string.Empty; CouponCode = adjustment.CouponCode ?? string.Empty;
+        }
+        public EditableAdjustment(ReceiptAdjustmentResponse adjustment)
+        {
+            Id = adjustment.Id; Kind = adjustment.Kind; Amount = adjustment.Amount;
+            Description = adjustment.Description ?? string.Empty; CouponCode = adjustment.CouponCode ?? string.Empty;
+        }
+        public Guid Key { get; } = Guid.NewGuid();
+        public Guid? Id { get; }
+        public ReceiptAdjustmentKind Kind { get; set; } = ReceiptAdjustmentKind.FixedAmount;
+        public decimal Amount { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string CouponCode { get; set; } = string.Empty;
     }
 }

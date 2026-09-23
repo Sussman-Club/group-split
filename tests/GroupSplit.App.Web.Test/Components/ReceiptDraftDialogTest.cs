@@ -178,4 +178,34 @@ public class ReceiptDraftDialogTest : ComponentTest
             It.IsAny<SaveReceiptRequest>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.True(reference.Result.IsCompleted);
     }
+
+    [Fact]
+    public async Task Editing_a_coupon_and_one_item_name_saves_both_changes()
+    {
+        var adjustment = new ReceiptAdjustmentResponse(Guid.NewGuid(), ReceiptAdjustmentKind.FixedAmount,
+            2m, "Old coupon", "SAVE2");
+        var bill = Bill() with { Total = 28m, Adjustments = [adjustment] };
+        _receipts.Setup(receipts => receipts.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bill);
+
+        var (provider, _) = await OpenAsync(bill);
+        var coupon = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "Description");
+        var name = provider.FindComponents<MudTextField<string>>()
+            .First(field => field.Instance.Label == "Item");
+        await provider.InvokeAsync(() => coupon.Instance.ValueChanged.InvokeAsync("New coupon"));
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Bottled water"));
+        await provider.FindAll("button")
+            .Single(button => button.TextContent.Contains("Save receipt", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+
+        _receipts.Verify(receipts => receipts.SaveAsync(_expense, It.Is<SaveReceiptRequest>(request =>
+                request.Items[0].Name == "Bottled water"
+                && request.Adjustments[0].Description == "New coupon"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _receipts.Verify(receipts => receipts.PatchItemAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+            It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

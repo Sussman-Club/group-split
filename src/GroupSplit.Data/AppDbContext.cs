@@ -1,4 +1,5 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -621,6 +622,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<Receipt>(entity =>
         {
             entity.Property(r => r.Subtotal).HasPrecision(18, 2);
+            entity.Property(r => r.MerchantName).HasMaxLength(128);
+            entity.Property(r => r.SourceValues);
             entity.Property(r => r.Tax).HasPrecision(18, 2);
             entity.Property(r => r.Tip).HasPrecision(18, 2);
             entity.Property(r => r.Total).HasPrecision(18, 2);
@@ -656,10 +659,22 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(i => i.Quantity).HasPrecision(18, 3);
             entity.Property(i => i.TotalPrice).HasPrecision(18, 2);
             entity.Property(i => i.TaxAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+            entity.Property(i => i.TaxRate).HasPrecision(9, 4);
             entity.HasOne(i => i.Receipt).WithMany(r => r.Items)
                 .HasForeignKey(i => i.ReceiptId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(i => i.SplitRuleVersion).WithMany()
                 .HasForeignKey(i => i.SplitRuleVersionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ReceiptAdjustment>(entity =>
+        {
+            entity.Property(adjustment => adjustment.Kind).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(adjustment => adjustment.Amount).HasPrecision(18, 4);
+            entity.Property(adjustment => adjustment.Description).HasMaxLength(256);
+            entity.Property(adjustment => adjustment.CouponCode).HasMaxLength(128);
+            entity.HasOne(adjustment => adjustment.Receipt).WithMany(receipt => receipt.Adjustments)
+                .HasForeignKey(adjustment => adjustment.ReceiptId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(adjustment => new { adjustment.ReceiptId, adjustment.Position });
         });
 
         modelBuilder.Entity<UserIdentity>(entity =>

@@ -523,6 +523,16 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid>("ExpenseId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("MerchantName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateOnly?>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SourceValues")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -545,6 +555,42 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsUnique();
 
                     b.ToTable("Receipt");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("CouponCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceiptId", "Position");
+
+                    b.ToTable("ReceiptAdjustment");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>
@@ -610,6 +656,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<bool?>("IsTaxable")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -638,6 +687,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasDefaultValue(0m);
+
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("numeric(9,4)");
 
                     b.Property<decimal>("TotalPrice")
                         .HasPrecision(18, 2)
@@ -1165,6 +1218,17 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Expense");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAdjustment", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Receipt", "Receipt")
+                        .WithMany("Adjustments")
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Receipt");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
@@ -1423,6 +1487,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
                 {
+                    b.Navigation("Adjustments");
+
                     b.Navigation("Attachments");
 
                     b.Navigation("Items");

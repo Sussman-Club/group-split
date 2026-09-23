@@ -24,6 +24,16 @@ public static class ReceiptExtensions
             i.SplitRuleVersion is { } version ? handlers.ToDto(version) : null)
         {
             NormalizedName = i.NormalizedName,
-            Description = i.Description
-        }).ToList());
+            Description = i.Description,
+            TaxRate = i.TaxRate,
+            IsTaxable = i.IsTaxable
+        }).ToList())
+    {
+        MerchantName = receipt.MerchantName,
+        PurchaseDate = receipt.PurchaseDate,
+        SourceValues = receipt.SourceValues,
+        Adjustments = receipt.Adjustments.OrderBy(adjustment => adjustment.Position)
+            .Select(adjustment => new ReceiptAdjustmentResponse(
+                adjustment.Id, adjustment.Kind, adjustment.Amount, adjustment.Description, adjustment.CouponCode)).ToList()
+    };
 }

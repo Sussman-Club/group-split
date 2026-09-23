@@ -24,6 +24,10 @@ public class ReceiptItem : Entity
     /// restaurant bill under VAT charges none on top of its prices.
     /// </summary>
     public decimal TaxAmount { get; set; }
+    /// <summary>Percent tax rate printed for this line; null when the paper did not say.</summary>
+    public decimal? TaxRate { get; set; }
+    /// <summary>Whether the line was marked taxable. Null means the source was inconclusive.</summary>
+    public bool? IsTaxable { get; set; }
     /// <summary>Null while editing; required before division. Never follows later rule edits.</summary>
     public Guid? SplitRuleVersionId { get; set; }
     public virtual SplitRuleVersion? SplitRuleVersion { get; set; }

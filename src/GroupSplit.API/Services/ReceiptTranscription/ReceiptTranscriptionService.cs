@@ -36,7 +36,17 @@ public sealed record TranscribedReceipt(
     decimal Tax,
     decimal Tip,
     decimal Total,
-    IReadOnlyList<TranscribedReceiptItem> Items);
+    IReadOnlyList<TranscribedReceiptItem> Items)
+{
+    public string? MerchantName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
+    /// <summary>The provider's source fields, serialized only for receipt review.</summary>
+    public string? SourceValues { get; init; }
+    public IReadOnlyList<TranscribedReceiptAdjustment> Adjustments { get; init; } = [];
+}
+
+public sealed record TranscribedReceiptAdjustment(
+    ReceiptAdjustmentKind Kind, decimal Amount, string? Description, string? CouponCode);
 
 public sealed record TranscribedReceiptItem(
     string Name,
@@ -47,6 +57,8 @@ public sealed record TranscribedReceiptItem(
 {
     public string? NormalizedName { get; init; }
     public string? Description { get; init; }
+    public decimal? TaxRate { get; init; }
+    public bool? IsTaxable { get; init; }
 }
 
 public sealed class ReceiptTranscriptionService(
@@ -84,23 +96,7 @@ public sealed class ReceiptTranscriptionService(
         var transcription = await provider.Transcribe(new ReceiptSourceDocument(
             attachmentId, source.FileName, source.ContentType, source.Content), ct);
 
-        return new ReceiptTranscriptionResponse(attachmentId, provider.Name, new SaveReceiptRequest
-        {
-            Subtotal = transcription.Subtotal,
-            Tax = transcription.Tax,
-            Tip = transcription.Tip,
-            Total = transcription.Total,
-            Items = transcription.Items.Select(item => new ReceiptItemInput
-            {
-                Name = item.Name,
-                NormalizedName = item.NormalizedName ?? item.Name.Trim().ToLowerInvariant(),
-                Description = item.Description,
-                UnitPrice = item.UnitPrice,
-                Quantity = item.Quantity,
-                TotalPrice = item.TotalPrice,
-                TaxAmount = item.TaxAmount
-            }).ToArray()
-        });
+        return new ReceiptTranscriptionResponse(attachmentId, provider.Name, ToRequest(transcription));
     }
 
     public async Task<ReceiptDraftResponse> Transcribe(IFormFile file, CancellationToken ct = default)
@@ -124,24 +120,38 @@ public sealed class ReceiptTranscriptionService(
         var transcription = await provider.Transcribe(new ReceiptSourceDocument(
             Guid.NewGuid(), Path.GetFileName(file.FileName), expectedType, buffer.ToArray()), ct);
 
-        return new ReceiptDraftResponse(provider.Name, new SaveReceiptRequest
-        {
-            Subtotal = transcription.Subtotal,
-            Tax = transcription.Tax,
-            Tip = transcription.Tip,
-            Total = transcription.Total,
-            Items = transcription.Items.Select(item => new ReceiptItemInput
-            {
-                Name = item.Name,
-                NormalizedName = item.NormalizedName ?? item.Name.Trim().ToLowerInvariant(),
-                Description = item.Description,
-                UnitPrice = item.UnitPrice,
-                Quantity = item.Quantity,
-                TotalPrice = item.TotalPrice,
-                TaxAmount = item.TaxAmount
-            }).ToArray()
-        });
+        return new ReceiptDraftResponse(provider.Name, ToRequest(transcription));
     }
+
+    private static SaveReceiptRequest ToRequest(TranscribedReceipt transcription) => new()
+    {
+        Subtotal = transcription.Subtotal,
+        Tax = transcription.Tax,
+        Tip = transcription.Tip,
+        Total = transcription.Total,
+        MerchantName = transcription.MerchantName,
+        PurchaseDate = transcription.PurchaseDate,
+        SourceValues = transcription.SourceValues,
+        Adjustments = transcription.Adjustments.Select(adjustment => new ReceiptAdjustmentInput
+        {
+            Kind = adjustment.Kind,
+            Amount = adjustment.Amount,
+            Description = adjustment.Description,
+            CouponCode = adjustment.CouponCode
+        }).ToArray(),
+        Items = transcription.Items.Select(item => new ReceiptItemInput
+        {
+            Name = item.Name,
+            NormalizedName = item.NormalizedName ?? item.Name.Trim().ToLowerInvariant(),
+            Description = item.Description,
+            UnitPrice = item.UnitPrice,
+            Quantity = item.Quantity,
+            TotalPrice = item.TotalPrice,
+            TaxAmount = item.TaxAmount,
+            TaxRate = item.TaxRate,
+            IsTaxable = item.IsTaxable
+        }).ToArray()
+    };
 }
 
 /// <summary>Lets the API start without OCR credentials while making the missing setup explicit.</summary>

@@ -29,6 +29,27 @@ public class BillSheetTest : ComponentTest
         Assert.Contains("30.00", page.Markup);
     }
 
+    [Fact]
+    public void Prints_extracted_merchant_date_coupon_and_tax_rate()
+    {
+        var item = Line("Coffee", 12m, null, tax: .90m) with { TaxRate = 10m, IsTaxable = true };
+        var receipt = Bill(item) with
+        {
+            MerchantName = "Corner Store",
+            PurchaseDate = new DateOnly(2026, 9, 23),
+            Total = 10.90m,
+            Adjustments = [new ReceiptAdjustmentResponse(Guid.NewGuid(), ReceiptAdjustmentKind.FixedAmount,
+                2m, "Loyalty coupon", "SAVE2")]
+        };
+
+        var page = Render<BillSheet>(p => p.Add(c => c.Receipt, receipt));
+
+        Assert.Contains("Corner Store", page.Markup);
+        Assert.Contains("Loyalty coupon", page.Markup);
+        Assert.Contains("10% rate", page.Markup);
+        Assert.Contains("2.00", page.Markup);
+    }
+
     /// <summary>
     /// A bill nothing divides by is a receipt, not a job left undone: every line on one names
     /// no rule and none of them is missing anything.

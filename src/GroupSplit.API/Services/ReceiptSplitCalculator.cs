@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services.SplitRuleHandlers;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 
 namespace GroupSplit.API.Services;
@@ -16,11 +17,25 @@ namespace GroupSplit.API.Services;
 /// </remarks>
 public static class ReceiptSplitCalculator
 {
+    /// <summary>Writes the tax implied by the receipt's rates and taxable flags. Existing
+    /// receipts with no tax metadata retain their manually reviewed line tax values.</summary>
+    public static void CalculateLineTaxes(Receipt receipt)
+    {
+        var items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id).ToList();
+        if (items.All(item => item.TaxRate is null && item.IsTaxable is null))
+            return;
+        var taxes = CalculateTaxes(receipt, items, AllocateAdjustments(receipt, items));
+        foreach (var item in items)
+            item.TaxAmount = taxes[item.Id];
+    }
+
     public static IReadOnlyList<SplitAmount> Divide(Receipt receipt, Guid payer, Guid? groupId,
         IReadOnlyCollection<Guid> members, ISplitRuleHandler handlers, bool subtotalOnly = false)
     {
         RefuseIfFiguresDisagree(receipt);
         var items = receipt.Items.OrderBy(i => i.Position).ThenBy(i => i.Id).ToList();
+        var discounts = AllocateAdjustments(receipt, items);
+        var taxes = CalculateTaxes(receipt, items, discounts);
         var missing = items.Where(i => i.SplitRuleVersion is null).ToList();
         if (missing.Count > 0)
             throw new UnprocessableException(ErrorCodes.ReceiptItemsMissingRule,
@@ -54,7 +69,7 @@ public static class ReceiptSplitCalculator
             ValidateRule(version, groupId, members, handlers);
             // Subtotals only, for the reading that shows what somebody's food came to beside
             // what they owe: the same division of the same lines, with the extras left off.
-            var amount = item.TotalPrice + (subtotalOnly ? 0 : item.TaxAmount + tips[item.Id]);
+            var amount = item.TotalPrice - discounts[item.Id] + (subtotalOnly ? 0 : taxes[item.Id] + tips[item.Id]);
             var shares = handlers.Divide(version, new SplitRuleContext(amount, payer, groupId), members);
             // A handler that lost a cent, or paid somebody who is not in the group, is a
             // defect rather than a bad bill -- but it is caught here all the same, because
@@ -119,15 +134,29 @@ public static class ReceiptSplitCalculator
         if (new[] { receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total }.Any(InvalidMoney) ||
             receipt.Items.Any(i => string.IsNullOrWhiteSpace(i.Name) || i.Name.Length > 128 ||
                 InvalidMoney(i.UnitPrice) || InvalidMoney(i.TotalPrice) || InvalidMoney(i.TaxAmount) ||
-                i.Quantity <= 0 || decimal.Round(i.Quantity, 3) != i.Quantity))
+                i.TaxRate is < 0 or > 100 || i.TaxRate is { } rate && decimal.Round(rate, 4) != rate ||
+                i.IsTaxable == false && i.TaxRate is > 0 ||
+                i.Quantity <= 0 || decimal.Round(i.Quantity, 3) != i.Quantity) ||
+            receipt.Adjustments.Any(adjustment => adjustment.Amount <= 0 || decimal.Round(adjustment.Amount, 4) != adjustment.Amount ||
+                !Enum.IsDefined(adjustment.Kind) ||
+                adjustment.Kind == ReceiptAdjustmentKind.FixedAmount && decimal.Round(adjustment.Amount, 2) != adjustment.Amount ||
+                adjustment.Kind == ReceiptAdjustmentKind.Percentage && adjustment.Amount > 100))
             throw new ValidationException(ErrorCodes.ReceiptInvalid,
                 "Use nonnegative amounts with at most two decimal places and positive quantities with at most three.");
         var itemTotal = receipt.Items.Sum(i => i.TotalPrice);
-        var itemTax = receipt.Items.Sum(i => i.TaxAmount);
-        if (receipt.Subtotal + receipt.Tax + receipt.Tip != receipt.Total)
+        var discount = AdjustmentTotal(receipt);
+        if (discount > receipt.Subtotal)
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
-                    "The subtotal, tax, and tip do not add up to the bill total.")
+                "Discounts and coupons cannot exceed the receipt subtotal.")
                 .WithExtension("subtotal", receipt.Subtotal)
+                .WithExtension("adjustments", discount);
+        var taxItems = receipt.Items.OrderBy(i => i.Position).ThenBy(i => i.Id).ToList();
+        var itemTax = CalculateTaxes(receipt, taxItems, AllocateAdjustments(receipt, taxItems));
+        if (receipt.Subtotal - discount + receipt.Tax + receipt.Tip != receipt.Total)
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "The subtotal, adjustments, tax, and tip do not add up to the bill total.")
+                .WithExtension("subtotal", receipt.Subtotal)
+                .WithExtension("adjustments", discount)
                 .WithExtension("tax", receipt.Tax)
                 .WithExtension("tip", receipt.Tip)
                 .WithExtension("total", receipt.Total);
@@ -136,12 +165,82 @@ public static class ReceiptSplitCalculator
                     "The line totals do not add up to the bill subtotal.")
                 .WithExtension("itemTotal", itemTotal)
                 .WithExtension("subtotal", receipt.Subtotal);
-        if (itemTax != receipt.Tax)
+        if (itemTax.Values.Sum() != receipt.Tax)
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
                     "The line tax does not add up to the bill tax.")
-                .WithExtension("itemTax", itemTax)
+                .WithExtension("itemTax", itemTax.Values.Sum())
                 .WithExtension("tax", receipt.Tax);
+
+        if (receipt.Items.Any(item => itemTax[item.Id] != item.TaxAmount))
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                "The calculated line tax does not match the receipt tax.");
     }
+
+    /// <summary>Returns each line's share of explicit coupons, without rewriting the amount
+    /// printed on the line. This is also the taxable base for rate-based taxes.</summary>
+    private static IReadOnlyDictionary<Guid, decimal> AllocateAdjustments(Receipt receipt, IReadOnlyList<ReceiptItem> items)
+    {
+        var allocations = items.ToDictionary(item => item.Id, _ => 0m);
+        foreach (var adjustment in receipt.Adjustments.OrderBy(adjustment => adjustment.Position).ThenBy(adjustment => adjustment.Id))
+        {
+            var amount = adjustment.Kind == ReceiptAdjustmentKind.Percentage
+                ? RoundMoney(receipt.Subtotal * adjustment.Amount / 100m)
+                : adjustment.Amount;
+            // Use the remaining price as the weight for each successive coupon. Allocating
+            // every coupon against the original prices can over-discount a cent-sized line.
+            foreach (var (item, share) in Allocate(amount, items.Select(item => item.TotalPrice - allocations[item.Id]).ToArray()).Select((share, index) => (items[index], share)))
+                allocations[item.Id] += share;
+        }
+        return allocations;
+    }
+
+    private static decimal AdjustmentTotal(Receipt receipt) => receipt.Adjustments.Sum(adjustment =>
+        adjustment.Kind == ReceiptAdjustmentKind.Percentage
+            ? RoundMoney(receipt.Subtotal * adjustment.Amount / 100m)
+            : adjustment.Amount);
+
+    /// <summary>Calculates rates from the discounted taxable base. If a rate is not printed,
+    /// the receipt-level tax is allocated only among lines not explicitly tax-exempt.</summary>
+    private static IReadOnlyDictionary<Guid, decimal> CalculateTaxes(Receipt receipt, IReadOnlyList<ReceiptItem> items,
+        IReadOnlyDictionary<Guid, decimal> discounts)
+    {
+        if (items.All(item => item.TaxRate is null && item.IsTaxable is null))
+            return items.ToDictionary(item => item.Id, item => item.TaxAmount);
+
+        var taxes = items.ToDictionary(item => item.Id, item => item.TaxRate is { } rate
+            ? RoundMoney((item.TotalPrice - discounts[item.Id]) * rate / 100m)
+            : 0m);
+        var remaining = receipt.Tax - taxes.Values.Sum();
+        if (remaining < 0)
+            return taxes;
+
+        var fallback = items.Where(item => item.TaxRate is null && item.IsTaxable != false).ToList();
+        if (remaining > 0 && fallback.Count == 0)
+            return taxes;
+
+        foreach (var (item, share) in Allocate(remaining, fallback.Select(item => item.TotalPrice - discounts[item.Id]).ToArray())
+                     .Select((share, index) => (fallback[index], share)))
+            taxes[item.Id] += share;
+        return taxes;
+    }
+
+    private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights)
+    {
+        if (weights.Count == 0) return [];
+        var safeWeights = weights.Select(weight => Math.Max(0m, weight)).ToArray();
+        var total = safeWeights.Sum();
+        if (total == 0) return new decimal[weights.Count];
+        var cents = RoundMoney(Math.Max(0m, amount)) * 100m;
+        var exact = safeWeights.Select(weight => cents * weight / total).ToArray();
+        var result = exact.Select(decimal.Floor).ToArray();
+        foreach (var index in Enumerable.Range(0, weights.Count)
+                     .OrderByDescending(index => exact[index] - result[index]).ThenBy(index => index)
+                     .Take((int)(cents - result.Sum())))
+            result[index]++;
+        return result.Select(value => value / 100m).ToArray();
+    }
+
+    private static decimal RoundMoney(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
 
     private static bool InvalidMoney(decimal value) => value < 0 || decimal.Round(value, 2) != value;
 }
