@@ -135,6 +135,14 @@
                 else
                 {
                     <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                        @if (SplitRuleNeedsManualOverride)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                                This expense uses the built-in rule for a member who has left the group.
+                                To change it, choose <strong>By hand</strong>; the current shares will be filled in for you.
+                            </MudAlert>
+                        }
+
                         @* The bill is one of the answers in here, not a card above it: an
                            expense divides by its receipt the same way it divides by any other
                            rule, and this is the one place the screen asks how it divides. *@
@@ -255,6 +263,15 @@
     private ICollection<GroupResponse> _groups = [];
     private ICollection<CategoryInfo> _categories = [];
     private IReadOnlyList<UserInfo> _members = [];
+
+    /// <summary>
+    /// Built-in rules for members who have left, which are hidden from new choices but may
+    /// still be named by the expense currently being edited.
+    /// </summary>
+    private HashSet<Guid> _departedMemberRuleIds = [];
+
+    private bool SplitRuleNeedsManualOverride =>
+        _model.SplitRuleId is { } ruleId && _departedMemberRuleIds.Contains(ruleId);
 
     /// <inheritdoc cref="CreateTransactionDialog.MemberRulesOf"/>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
@@ -677,6 +694,12 @@
             var listed = await rules;
 
             _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
+            var currentMemberIds = _members.Select(member => member.Id).ToHashSet();
+            _departedMemberRuleIds = (listed ?? [])
+                .Where(rule => rule.BuiltIn && rule.AllForUserId is { } userId &&
+                               !currentMemberIds.Contains(userId))
+                .Select(rule => rule.Id)
+                .ToHashSet();
             _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
             // Off the same listing as the member rules, and for the same reason: the split
             // control offers "By its bill" and has to name the rule that means, without
@@ -688,6 +711,7 @@
             _categories = [];
             _members = [];
             _memberRules = [];
+            _departedMemberRuleIds = [];
             _evenRuleId = null;
             _billRuleId = null;
         }
