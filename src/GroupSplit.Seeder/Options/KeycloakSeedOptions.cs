@@ -9,9 +9,6 @@ public sealed class KeycloakSeedOptions
 {
     public const string SectionName = "Keycloak";
 
-    /// <summary>The realm the demo accounts belong to.</summary>
-    public string Realm { get; init; } = "group-split";
-
     /// <summary>The realm the admin account itself lives in, and the client it signs in with.</summary>
     public string AdminRealm { get; init; } = "master";
 

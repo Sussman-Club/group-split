@@ -226,11 +226,22 @@ even when mail is disabled.
 
 ### Applying this to a realm that already exists
 
-`realms.json` is the source of truth, but `start --import-realm` only ever creates a realm
-that is not there yet -- it skips one the database already holds. A realm created before
-these settings existed therefore will not pick them up. Either reset the Keycloak database
-so the realm is imported afresh, or set the values once by hand under Realm settings ->
-Email in the admin console, which also has a "Test connection" button worth using.
+The `realm-settings` worker starts after Keycloak is ready, in development and in a
+deployment. It reads `realms.json`, compares the managed realm-level settings, and updates
+only the values that differ. That includes the realm's display and theme, registration and
+login switches, password and brute-force policy, token lifetimes, and SSO timeouts. A
+second run with no changes makes no API update. If Keycloak never becomes ready, the worker
+fails and the deployment does not silently skip reconciliation.
+
+The worker deliberately does not manage SMTP settings, clients, protocol mappers,
+authentication flows, identity providers, roles, or users. Those remain governed by realm
+import and their existing seeders. This boundary is explicit in
+[`KeycloakRealmDefinition`](src/GroupSplit.Seeder/Keycloak/KeycloakRealmDefinition.cs).
+
+To restore the complete local realm to its checked-in first-boot definition, use **Reset
+local Keycloak realm** on the `realm-settings` resource in the Aspire dashboard. It deletes
+the realm and its users, restarts Keycloak, and lets `--import-realm` recreate clients,
+flows, and the rest from `realms.json`. This command is available only in local run mode.
 
 ## Bank sync
 

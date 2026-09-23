@@ -21,13 +21,18 @@ public static class KeycloakSeedingExtensions
             builder.Services.AddServiceDiscovery();
 
             builder.Services
-                .AddHttpClient<IKeycloakAdminClient, KeycloakAdminClient>(client =>
+                .AddHttpClient<KeycloakAdminClient>(client =>
                 {
                     // A trailing slash, so the relative paths the client builds append rather
                     // than replace the last segment.
                     client.BaseAddress = new Uri(KeycloakEndpoint + "/");
                 })
                 .AddServiceDiscovery();
+
+            builder.Services.AddTransient<IKeycloakAdminClient>(
+                services => services.GetRequiredService<KeycloakAdminClient>());
+            builder.Services.AddTransient<IKeycloakRealmAdminClient>(
+                services => services.GetRequiredService<KeycloakAdminClient>());
 
             return builder;
         }

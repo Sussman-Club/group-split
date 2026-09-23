@@ -28,11 +28,12 @@ each mode carries that shape as a pair of extension methods next to the code tha
 | Resource | Run mode | Publish mode |
 | --- | --- | --- |
 | Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
+| Realm settings | `realm-settings` waits for healthy Keycloak, then reconciles the managed settings from the realm export; the API waits for the worker to finish | The same worker runs as a one-shot Compose service and waits for Keycloak's healthcheck; the API starts only after it exits successfully |
 | Postgres | `WithPostgresMcp` on each database (Aspire's own) | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
 | API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
 | Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithPrepareOnPush`, which makes `aspire do push` also write the Compose artifacts |
 
-Only run mode adds the MAUI head, the seeder and its dashboard command, Scalar, and Mailpit
+Only run mode adds the MAUI head, demo seeder, local realm-reset command, Scalar, and Mailpit
 itself; publish mode adds the deployment-only parameters below, while the shared integration
 parameters are declared in both modes. `PublishAs*` calls,
 which Aspire ignores in run mode, stay on the shared chain where they read as part of the
@@ -391,10 +392,12 @@ on the same thirty days, because the realm has no way to tell the two apart any 
 grants nothing -- both cookies that could reach it are gone with the browser -- but it is
 rows in the session table for longer than they are worth.
 
-Realm changes reach a running Keycloak only on a fresh import. Development keeps a data
-volume and deployment keeps a database, so both skip the import once the realm exists: after
-changing `realms.json`, either drop the volume locally, or apply the same values through the
-admin console on the deployed realm. Turning `rememberMe` off is not retroactive either:
+Realm import only creates a realm that does not exist yet. The `realm-settings` worker
+reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
+in both run and publish modes. It leaves SMTP configuration, clients, protocol mappers,
+authentication flows, identity providers, roles, and users alone. Use the local **Reset
+Keycloak realm** command to delete the realm and restart Keycloak when a complete re-import
+is needed. Turning `rememberMe` off is not retroactive either:
 sessions created while it was on keep their extended lifetime until they expire
 ([CVE-2025-11429](https://advisories.gitlab.com/pkg/maven/org.keycloak/keycloak-services/CVE-2025-11429/)),
 so on a realm that had it on, existing sessions have to be ended rather than waited out.

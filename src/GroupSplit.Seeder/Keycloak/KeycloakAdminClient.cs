@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using GroupSplit.Seeder.Options;
 using Microsoft.Extensions.Options;
@@ -10,7 +11,7 @@ namespace GroupSplit.Seeder.Keycloak;
 
 /// <summary>
 /// The slice of Keycloak's Admin REST API the seeder needs: sign in as the bootstrap admin,
-/// look a user up, create one, delete one.
+/// look a user up, create one, delete one, and reconcile realm-level settings.
 /// </summary>
 /// <remarks>
 /// Hand-rolled rather than taken from a package: four calls against a documented, stable API
@@ -20,7 +21,7 @@ namespace GroupSplit.Seeder.Keycloak;
 public sealed class KeycloakAdminClient(
     HttpClient http,
     IOptions<KeycloakSeedOptions> options,
-    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient
+    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient, IKeycloakRealmAdminClient
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -38,7 +39,37 @@ public sealed class KeycloakAdminClient(
     /// <summary>The realm's default role, read once. It cannot change under a seeding run.</summary>
     private KeycloakRole? _defaultRole;
 
-    public string Realm => _options.Realm;
+    public string Realm => KeycloakRealmDefinition.RealmName;
+
+    public async Task<JsonObject> GetRealmAsync(CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the realm {Realm}", ct);
+
+        return await response.Content.ReadFromJsonAsync<JsonObject>(Json, ct)
+            ?? throw new InvalidOperationException($"Keycloak returned no representation for realm {Realm}.");
+    }
+
+    public async Task UpdateRealmAsync(JsonObject realm, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Put, $"admin/realms/{Realm}", ct);
+        request.Content = JsonContent.Create(realm, options: Json);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"update the settings on realm {Realm}", ct);
+    }
+
+    public async Task DeleteRealmAsync(CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Delete, $"admin/realms/{Realm}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        if (response.StatusCode == HttpStatusCode.NotFound) return;
+
+        await ThrowOnFailure(response, $"delete realm {Realm}", ct);
+    }
 
     /// <summary>
     /// Signs in as the bootstrap admin, confirming the credentials work before any user is

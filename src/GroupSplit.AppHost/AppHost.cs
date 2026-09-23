@@ -59,6 +59,14 @@ var keycloak = builder.AddKeycloak("keycloak")
     .WaitFor(keycloakDb)
     .WithOtlpExporter();
 
+// Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
+// a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
+var realmSettings = builder.AddProject<GroupSplit_Seeder>("realm-settings")
+    .WithEnvironment("Seeder__Mode", "realm-settings")
+    .WithReference(keycloak)
+    .WithKeycloakAdminAccess(keycloak)
+    .WaitFor(keycloak);
+
 var migrations = db
     .AddEFMigrations("migrations",
         "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
@@ -85,7 +93,9 @@ var api = builder.AddProject<GroupSplit_API>("api")
     // which leaves the API running with bank sync reported as off.
     .WithPlaid()
     .WithVeryfiReceiptTranscription()
-    .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters);
+    .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters)
+    // Do not serve traffic until the realm settings have been reconciled successfully.
+    .WaitForCompletion(realmSettings);
 
 var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)
@@ -107,6 +117,15 @@ if (builder.ExecutionContext.IsRunMode)
     var mailpit = builder.AddMailPit("mailpit");
 
     keycloak.AsDevelopmentKeycloak(mailpit);
+
+    var realmReset = builder.AddProject<GroupSplit_Seeder>("realm-reset")
+        .WithExplicitStart()
+        .WithEnvironment("Seeder__Mode", "reset-realm")
+        .WithReference(keycloak)
+        .WithKeycloakAdminAccess(keycloak)
+        .WaitFor(keycloak);
+
+    realmSettings.WithLocalRealmResetCommand(keycloak, realmReset);
 
     builder
         .AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj")
@@ -175,6 +194,10 @@ else
     keycloak
         .AsDeployedKeycloak(hostname)
         .WithSmtp();
+
+    realmSettings
+        .WithRemoteImageTag(deploymentVersion)
+        .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
     web
         .WithKeycloakAuthority(authority)
