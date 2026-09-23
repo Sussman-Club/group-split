@@ -446,7 +446,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         {
             Assert.Contains("This expense uses the built-in rule for a member who has left the group.",
                 provider.Markup, StringComparison.Ordinal);
-            Assert.Contains("choose <strong>By hand</strong>", provider.Markup, StringComparison.Ordinal);
+            Assert.Contains("choose <strong>Custom</strong>", provider.Markup, StringComparison.Ordinal);
             Assert.Contains("the current shares will be filled in for you.", provider.Markup,
                 StringComparison.Ordinal);
         });
