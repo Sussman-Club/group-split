@@ -14,10 +14,7 @@
     <ItemGroup>
         <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
         <ProjectReference Include="..\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
+        <ProjectReference Include="..\GroupSplit.Keycloak\GroupSplit.Keycloak.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-        <EmbeddedResource Include="..\GroupSplit.AppHost\Assets\keycloak\realms.json"
-                          LogicalName="GroupSplit.Seeder.Assets.keycloak.realms.json" />
-    </ItemGroup>
 </Project>

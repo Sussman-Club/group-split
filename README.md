@@ -236,7 +236,7 @@ fails and the deployment does not silently skip reconciliation.
 The worker deliberately does not manage SMTP settings, clients, protocol mappers,
 authentication flows, identity providers, roles, or users. Those remain governed by realm
 import and their existing seeders. This boundary is explicit in
-[`KeycloakRealmDefinition`](src/GroupSplit.Seeder/Keycloak/KeycloakRealmDefinition.cs).
+[`KeycloakRealmDefinition`](src/GroupSplit.Keycloak/KeycloakRealmDefinition.cs).
 
 To restore the complete local realm to its checked-in first-boot definition, use **Reset
 local Keycloak realm** on the `realm-settings` resource in the Aspire dashboard. It deletes

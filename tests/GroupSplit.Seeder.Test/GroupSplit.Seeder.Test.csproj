@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GroupSplit.Seeder\GroupSplit.Seeder.csproj" />
+    <ProjectReference Include="..\..\src\GroupSplit.RealmWorker\GroupSplit.RealmWorker.csproj" />
   </ItemGroup>
 
 </Project>

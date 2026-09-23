@@ -1,3 +1,5 @@
+using GroupSplit.Keycloak;
+
 namespace GroupSplit.Seeder.Options;
 
 /// <summary>
@@ -5,19 +7,8 @@ namespace GroupSplit.Seeder.Options;
 /// admin credentials from the Keycloak resource's own parameters, so nothing is committed;
 /// absent credentials mean the Keycloak half of the seeding is simply skipped.
 /// </summary>
-public sealed class KeycloakSeedOptions
+public sealed class KeycloakSeedOptions : KeycloakAdminOptions
 {
-    public const string SectionName = "Keycloak";
-
-    /// <summary>The realm the admin account itself lives in, and the client it signs in with.</summary>
-    public string AdminRealm { get; init; } = "master";
-
-    public string AdminClientId { get; init; } = "admin-cli";
-
-    public string? AdminUser { get; init; }
-
-    public string? AdminPassword { get; init; }
-
     /// <summary>
     /// The password every seeded account gets, unless its seed entry names its own. It has
     /// to satisfy the realm's password policy (eight characters, and neither the username
@@ -38,7 +29,4 @@ public sealed class KeycloakSeedOptions
     /// </summary>
     public bool ReplaceConflictingUsers { get; init; } = true;
 
-    /// <summary>Whether there is anything to sign in with. Nothing is seeded when there is not.</summary>
-    public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(AdminUser) && !string.IsNullOrWhiteSpace(AdminPassword);
 }

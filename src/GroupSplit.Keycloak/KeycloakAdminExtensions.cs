@@ -1,8 +1,9 @@
-using GroupSplit.Seeder.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
-public static class KeycloakSeedingExtensions
+public static class KeycloakAdminExtensions
 {
     /// <summary>
     /// The name the AppHost's <c>WithReference(keycloak)</c> publishes the endpoint under.
@@ -15,8 +16,8 @@ public static class KeycloakSeedingExtensions
     {
         public IHostApplicationBuilder AddKeycloakAdminClient()
         {
-            builder.Services.Configure<KeycloakSeedOptions>(
-                builder.Configuration.GetSection(KeycloakSeedOptions.SectionName));
+            builder.Services.Configure<KeycloakAdminOptions>(
+                builder.Configuration.GetSection(KeycloakAdminOptions.SectionName));
 
             builder.Services.AddServiceDiscovery();
 

@@ -25,18 +25,6 @@ public static class Extensions
 
     extension(SeederRunnerBuilder builder)
     {
-        public SeederRunnerBuilder AddKeycloakRealmSettingsSeeder()
-        {
-            builder.AddSeeder<KeycloakRealmSettingsSeeder>();
-            return builder;
-        }
-
-        public SeederRunnerBuilder AddKeycloakRealmResetSeeder()
-        {
-            builder.AddSeeder<KeycloakRealmResetSeeder>();
-            return builder;
-        }
-
         public SeederRunnerBuilder AddSeeders()
         {
             // Data sources

@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
 /// <summary>The realm-level operations used by the settings reconciler and local reset.</summary>
 public interface IKeycloakRealmAdminClient

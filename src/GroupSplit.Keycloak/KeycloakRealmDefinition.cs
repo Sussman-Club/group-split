@@ -1,15 +1,15 @@
 using System.Text.Json.Nodes;
 
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
 /// <summary>
 /// Reads the same realm export Keycloak imports on first boot. The allowlist defines the
 /// realm-level properties the application owns; clients, flows, identity providers, users,
 /// and environment-substituted SMTP settings are intentionally outside reconciliation.
 /// </summary>
-internal static class KeycloakRealmDefinition
+public static class KeycloakRealmDefinition
 {
-    private const string ResourceName = "GroupSplit.Seeder.Assets.keycloak.realms.json";
+    private const string ResourceName = "GroupSplit.Keycloak.Assets.realms.json";
 
     public static string RealmName => Load()["realm"]!.GetValue<string>();
 

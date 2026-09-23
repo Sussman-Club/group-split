@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
 /// <summary>
 /// The subset of Keycloak's user representation the seeder writes.

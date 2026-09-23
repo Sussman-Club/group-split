@@ -61,8 +61,8 @@ var keycloak = builder.AddKeycloak("keycloak")
 
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
-var realmSettings = builder.AddProject<GroupSplit_Seeder>("realm-settings")
-    .WithEnvironment("Seeder__Mode", "realm-settings")
+var realmSettings = builder.AddProject<GroupSplit_RealmWorker>("realm-settings")
+    .WithEnvironment("Realm__Operation", "reconcile")
     .WithReference(keycloak)
     .WithKeycloakAdminAccess(keycloak)
     .WaitFor(keycloak);
@@ -118,9 +118,9 @@ if (builder.ExecutionContext.IsRunMode)
 
     keycloak.AsDevelopmentKeycloak(mailpit);
 
-    var realmReset = builder.AddProject<GroupSplit_Seeder>("realm-reset")
+    var realmReset = builder.AddProject<GroupSplit_RealmWorker>("realm-reset")
         .WithExplicitStart()
-        .WithEnvironment("Seeder__Mode", "reset-realm")
+        .WithEnvironment("Realm__Operation", "reset")
         .WithReference(keycloak)
         .WithKeycloakAdminAccess(keycloak)
         .WaitFor(keycloak);

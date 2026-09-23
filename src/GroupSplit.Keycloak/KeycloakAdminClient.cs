@@ -4,23 +4,23 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using GroupSplit.Seeder.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
 /// <summary>
-/// The slice of Keycloak's Admin REST API the seeder needs: sign in as the bootstrap admin,
+/// The slice of Keycloak's Admin REST API the app needs: sign in as the bootstrap admin,
 /// look a user up, create one, delete one, and reconcile realm-level settings.
 /// </summary>
 /// <remarks>
 /// Hand-rolled rather than taken from a package: four calls against a documented, stable API
-/// is less to own than a dependency, and the seeder is the only caller. The base address is
+/// is less to own than a dependency. The base address is
 /// the Keycloak resource, resolved by service discovery from the AppHost's reference.
 /// </remarks>
 public sealed class KeycloakAdminClient(
     HttpClient http,
-    IOptions<KeycloakSeedOptions> options,
+    IOptions<KeycloakAdminOptions> options,
     ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient, IKeycloakRealmAdminClient
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -31,7 +31,7 @@ public sealed class KeycloakAdminClient(
     /// </summary>
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromSeconds(30);
 
-    private readonly KeycloakSeedOptions _options = options.Value;
+    private readonly KeycloakAdminOptions _options = options.Value;
 
     private string? _token;
     private DateTimeOffset _tokenObtainedAt;
@@ -252,7 +252,7 @@ public sealed class KeycloakAdminClient(
         if (!_options.IsConfigured)
         {
             throw new InvalidOperationException(
-                "Keycloak admin credentials are not configured; nothing can be seeded into the realm.");
+                "Keycloak admin credentials are not configured.");
         }
 
         using var response = await http.PostAsync(

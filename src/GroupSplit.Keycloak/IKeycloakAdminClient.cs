@@ -1,4 +1,4 @@
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
 /// <summary>
 /// The slice of Keycloak's Admin REST API the seeder needs. An interface so the seeder's

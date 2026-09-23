@@ -1,15 +1,14 @@
 using System.Text.Json.Nodes;
-using GroupSplit.Seeder.Abstractions;
-using GroupSplit.Seeder.Keycloak;
+using GroupSplit.Keycloak;
 
-namespace GroupSplit.Seeder.Seeders;
+namespace GroupSplit.RealmWorker;
 
 /// <summary>Brings the allowlisted realm settings back to the checked-in realm export.</summary>
-public sealed class KeycloakRealmSettingsSeeder(
+public sealed class RealmSettingsReconciler(
     IKeycloakRealmAdminClient keycloak,
-    ILogger<KeycloakRealmSettingsSeeder> logger) : ISeeder
+    ILogger logger)
 {
-    public async Task SeedAsync(CancellationToken ct = default)
+    public async Task ReconcileAsync(CancellationToken ct = default)
     {
         var desired = KeycloakRealmDefinition.Load();
         var current = await keycloak.GetRealmAsync(ct);
@@ -38,19 +37,5 @@ public sealed class KeycloakRealmSettingsSeeder(
         logger.LogInformation(
             "Updated {Count} settings on Keycloak realm {Realm}: {Settings}.",
             changed.Count, keycloak.Realm, string.Join(", ", changed));
-    }
-}
-
-/// <summary>Deletes the local realm so Keycloak reimports its complete checked-in definition at restart.</summary>
-public sealed class KeycloakRealmResetSeeder(
-    IKeycloakRealmAdminClient keycloak,
-    ILogger<KeycloakRealmResetSeeder> logger) : ISeeder
-{
-    public async Task SeedAsync(CancellationToken ct = default)
-    {
-        await keycloak.DeleteRealmAsync(ct);
-        logger.LogWarning(
-            "Deleted Keycloak realm {Realm}. Restart Keycloak to import its repository definition.",
-            keycloak.Realm);
     }
 }
