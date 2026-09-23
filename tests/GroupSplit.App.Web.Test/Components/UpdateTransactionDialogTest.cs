@@ -423,6 +423,35 @@ public class UpdateTransactionDialogTest : ComponentTest
         });
     }
 
+    [Fact]
+    public async Task An_edit_explains_how_to_repair_an_expense_using_a_departed_members_rule()
+    {
+        var transactionId = Guid.NewGuid();
+        var departed = Guid.NewGuid();
+        var departedRule = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId) with { SplitRuleId = departedRule });
+
+        _splitRules
+            .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new SplitRuleResponse(
+                departedRule, GroupId, "All for departed", BuiltIn: true,
+                AllForUserId: departed)]);
+
+        var (provider, _) = await OpenAsync(Row(transactionId));
+
+        provider.WaitForAssertion(() =>
+        {
+            Assert.Contains("This expense uses the built-in rule for a member who has left the group.",
+                provider.Markup, StringComparison.Ordinal);
+            Assert.Contains("choose <strong>By hand</strong>", provider.Markup, StringComparison.Ordinal);
+            Assert.Contains("the current shares will be filled in for you.", provider.Markup,
+                StringComparison.Ordinal);
+        });
+    }
+
     /// <summary>
     /// The split control opens on the shares the expense actually has when no rule put them
     /// there.
