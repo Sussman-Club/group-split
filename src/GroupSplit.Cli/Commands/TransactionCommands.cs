@@ -279,6 +279,12 @@ public static class TransactionCommands
                           + "`groupsplit split-rules list --group <group-id>`. A group holds one per "
                           + "member that puts the whole amount on them."
         };
+        var splits = new Option<string[]>("--split")
+        {
+            Description = "Exact shares as <user-id>=<amount>, repeatable. "
+                          + "Omit to divide it the way the category says.",
+            AllowMultipleArgumentsPerToken = true
+        };
         var preview = new Option<bool>("--preview")
         {
             Description = "Show the split the server would apply without creating anything."
@@ -286,12 +292,21 @@ public static class TransactionCommands
 
         var command = new Command("create", "Record an expense.")
         {
-            name, amount, group, date, description, category, merchant, paidBy, splitRule, preview
+            name, amount, group, date, description, category, merchant, paidBy, splitRule, splits, preview
         };
 
         command.SetHandler(async (context, ct) =>
         {
             var parse = context.ParseResult;
+            var given = parse.GetValue(splits) ?? [];
+
+            if (parse.GetResult(splitRule) is not null && given.Length > 0)
+            {
+                throw CliException.Input(
+                    "--split-rule and --split contradict each other.",
+                    "--split-rule has the server divide it; --split states the shares yourself. "
+                    + "The API refuses both in one request.");
+            }
 
             var request = new CreateTransactionRequest
             {
@@ -303,7 +318,10 @@ public static class TransactionCommands
                 MerchantId = parse.GetValue(merchant),
                 PaidByUserId = parse.GetValue(paidBy),
                 SplitRuleId = parse.GetValue(splitRule),
-                Description = parse.GetValue(description)
+                Description = parse.GetValue(description),
+                // Null, not empty: an empty list is "divide it between nobody", which the
+                // API refuses, while null is "divide it the way the category says".
+                Splits = given.Length == 0 ? null : Pairs.Splits("--split", given)
             };
 
             if (parse.GetValue(preview))

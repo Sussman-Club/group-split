@@ -4,6 +4,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.API.Services.ReceiptTranscription.Veryfi;
+using GroupSplit.Shared;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -63,6 +64,36 @@ public class ReceiptTranscriptionServiceTest
     }
 
     [Fact]
+    public async Task It_keeps_receipt_metadata_signed_lines_and_tax_context_in_the_editable_draft()
+    {
+        var attachmentId = Guid.NewGuid();
+        var attachments = new Mock<IReceiptAttachmentService>(MockBehavior.Strict);
+        attachments.Setup(service => service.Download(Guid.Empty, attachmentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptAttachmentDownload([1], "image/jpeg", "store.jpg"));
+        var provider = new StubProvider(new TranscribedReceipt(17.50m, 1.35m, 0m, 18.85m,
+            [new TranscribedReceiptItem("Coffee", 20m, 1m, 20m, 1.35m)
+            {
+                TaxRate = 6.75m, IsTaxable = true
+            }, new TranscribedReceiptItem("Loyalty coupon SAVE250", -2.50m, 1m, -2.50m, 0m)])
+        {
+            MerchantName = "Corner Store", PurchaseDate = new DateOnly(2026, 9, 23),
+            SourceValues = "CORNER STORE\nCOFFEE"
+        });
+
+        var response = await new ReceiptTranscriptionService(attachments.Object, provider)
+            .Transcribe(Guid.Empty, attachmentId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Corner Store", response.Receipt.MerchantName);
+        Assert.Equal(new DateOnly(2026, 9, 23), response.Receipt.PurchaseDate);
+        Assert.Equal("CORNER STORE\nCOFFEE", response.Receipt.SourceValues);
+        Assert.Equal(2, response.Receipt.Items.Count);
+        var item = response.Receipt.Items[0];
+        Assert.Equal(6.75m, item.TaxRate);
+        Assert.Equal(true, item.IsTaxable);
+        Assert.Equal(-2.50m, response.Receipt.Items[1].TotalPrice);
+    }
+
+    [Fact]
     public async Task It_can_read_a_receipt_before_an_expense_exists()
     {
         var provider = new StubProvider(new TranscribedReceipt(18m, 1.5m, 3m, 22.5m,
@@ -92,13 +123,16 @@ public class ReceiptTranscriptionServiceTest
         var server = new VeryfiServer("""
             {
               "subtotal": 22.99,
-              "tax": 1.50,
+              "vendor": { "name": "Corner Pizza", "raw_name": "CORNER PZA" },
+              "date": "2026-09-23",
+              "ocr_text": "CORNER PZA",
+              "tax": 1.40,
               "tip": 3.00,
-              "total": 27.49,
+              "total": 27.39,
               "line_items": [
-                { "description": "PZA LG", "normalized_description": "large pizza", "product_info": { "expanded_description": "Pizza, large" }, "price": 9.00, "quantity": 2, "total": 18.00, "tax": 1.50 },
-                { "description": "Bread", "price": null, "quantity": 1, "total": 4.99, "tax": 0.00 },
-                { "description": "Coupon", "price": null, "quantity": 1, "total": -1.00, "tax": 0.00 },
+                { "description": "PZA LG", "normalized_description": "large pizza", "product_info": { "expanded_description": "Pizza, large" }, "price": 9.00, "quantity": 2, "total": 18.00, "tax": 1.50, "tax_rate": 8.33 },
+                { "description": "Bread", "text": "Bread 4.99 N", "price": null, "quantity": 1, "total": 4.99, "tax": 0.00, "tax_rate": 0 },
+                { "description": "Coupon", "price": null, "quantity": 1, "total": -1.00, "tax": -0.10 },
                 { "description": "Free sample", "price": null, "quantity": 1, "total": 0.00, "tax": 0.00 }
               ]
             }
@@ -116,19 +150,29 @@ public class ReceiptTranscriptionServiceTest
         var receipt = await provider.Transcribe(new ReceiptSourceDocument(
             attachmentId, "dinner.jpg", "image/jpeg", [1, 2, 3]), TestContext.Current.CancellationToken);
 
-        Assert.Equal(27.49m, receipt.Total);
-        Assert.Equal(2, receipt.Items.Count);
+        Assert.Equal(27.39m, receipt.Total);
+        Assert.Equal(4, receipt.Items.Count);
+        Assert.Equal(21.99m, receipt.Subtotal);
         var line = receipt.Items[0];
         Assert.Equal("Pizza, large", line.Name);
         Assert.Equal("large pizza", line.NormalizedName);
         Assert.Equal("PZA LG", line.Description);
+        Assert.Equal("Corner Pizza", receipt.MerchantName);
+        Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
+        Assert.Contains("CORNER PZA", receipt.SourceValues);
         Assert.Equal(9m, line.UnitPrice);
         Assert.Equal(2m, line.Quantity);
         Assert.Equal(18m, line.TotalPrice);
+        Assert.Equal(8.33m, line.TaxRate);
+        Assert.True(line.IsTaxable);
         Assert.Equal(1.5m, line.TaxAmount);
         var nullPriceLine = receipt.Items[1];
         Assert.Equal("Bread", nullPriceLine.Name);
         Assert.Equal(4.99m, nullPriceLine.UnitPrice);
+        Assert.False(nullPriceLine.IsTaxable);
+        Assert.Equal(-1m, receipt.Items[2].TotalPrice);
+        Assert.Equal(-.10m, receipt.Items[2].TaxAmount);
+        Assert.Equal(0m, receipt.Items[3].TotalPrice);
         Assert.Equal("/api/v8/partner/documents", server.Request!.RequestUri!.AbsolutePath);
         Assert.Equal("client-id", server.Request.Headers.GetValues("Client-Id").Single());
         Assert.Equal("apikey username:api-key", server.Request.Headers.Authorization!.ToString());
@@ -141,6 +185,50 @@ public class ReceiptTranscriptionServiceTest
         Assert.Contains("soft", server.Body);
         Assert.Contains("auto_delete", server.Body);
         Assert.Contains("true", server.Body);
+    }
+
+    /// <summary>
+    /// Veryfi sends the date with a time of day, and the rest of its body carries signed image
+    /// links and card details that every member of the group would otherwise be shown.
+    /// </summary>
+    [Fact]
+    public async Task Veryfi_keeps_the_printed_day_and_only_the_evidence_a_reviewer_needs()
+    {
+        var server = new VeryfiServer("""
+            {
+              "date": "2026-09-23 18:42:00",
+              "vendor": { "name": "Corner Pizza", "address": "1 Main St", "phone_number": "555-0100" },
+              "img_url": "https://veryfi.test/signed/receipt.jpg?token=secret",
+              "payment": { "card_number": "5430", "type": "visa" },
+              "ocr_text": "CORNER PZA",
+              "subtotal": 10.00,
+              "tax": 0.00,
+              "total": 10.00,
+              "line_items": [
+                { "description": "Pizza", "price": 10.00, "quantity": 1, "total": 10.00 },
+                { "description": "Nothing off", "type": "discount", "total": 0.00 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
+        Assert.Equal("Pizza", Assert.Single(receipt.Items).Name);
+        Assert.Contains("CORNER PZA", receipt.SourceValues);
+        Assert.Contains("Corner Pizza", receipt.SourceValues);
+        Assert.DoesNotContain("token=secret", receipt.SourceValues);
+        Assert.DoesNotContain("5430", receipt.SourceValues);
+        Assert.DoesNotContain("555-0100", receipt.SourceValues);
     }
 
     [Fact]
@@ -165,7 +253,7 @@ public class ReceiptTranscriptionServiceTest
     }
 
     [Fact]
-    public async Task Veryfi_provider_drops_zero_and_negative_rows_and_reconciles_subtotal_and_tax()
+    public async Task Veryfi_provider_preserves_printed_lines_even_when_the_totals_disagree()
     {
         var server = new VeryfiServer("""
             {
@@ -193,10 +281,12 @@ public class ReceiptTranscriptionServiceTest
         var receipt = await provider.Transcribe(new ReceiptSourceDocument(
             Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1, 2, 3]), TestContext.Current.CancellationToken);
 
-        Assert.Equal(20m, receipt.Items.Sum(item => item.TotalPrice));
+        Assert.Equal(19m, receipt.Items.Sum(item => item.TotalPrice));
+        Assert.Equal(19m, receipt.Subtotal);
+        Assert.Contains("\"subtotal\":20.00", receipt.SourceValues);
         Assert.Equal(2m, receipt.Items.Sum(item => item.TaxAmount));
-        Assert.Equal(2, receipt.Items.Count);
-        Assert.All(receipt.Items, item =>
+        Assert.Equal(4, receipt.Items.Count);
+        Assert.All(receipt.Items.Take(2), item =>
         {
             Assert.True(item.TotalPrice > 0m);
             Assert.True(item.UnitPrice > 0m);
@@ -205,11 +295,13 @@ public class ReceiptTranscriptionServiceTest
         });
         Assert.Equal("Meal", receipt.Items[0].Name);
         Assert.Equal(2m, receipt.Items[0].Quantity);
-        Assert.Equal(15.66m, receipt.Items[0].TotalPrice);
+        Assert.Equal(18.01m, receipt.Items[0].TotalPrice);
         Assert.Equal(1.57m, receipt.Items[0].TaxAmount);
         Assert.Equal("Side", receipt.Items[1].Name);
-        Assert.Equal(4.34m, receipt.Items[1].TotalPrice);
+        Assert.Equal(4.99m, receipt.Items[1].TotalPrice);
         Assert.Equal(0.43m, receipt.Items[1].TaxAmount);
+        Assert.Equal(-4m, receipt.Items[2].TotalPrice);
+        Assert.Equal(0m, receipt.Items[3].TotalPrice);
     }
 
     /// <summary>
@@ -218,7 +310,7 @@ public class ReceiptTranscriptionServiceTest
     /// every price on it, so the coupon goes on the one line and the rest stand as printed.
     /// </summary>
     [Fact]
-    public async Task A_coupon_that_names_its_line_comes_off_that_line_and_leaves_the_rest_as_printed()
+    public async Task A_coupon_that_names_its_line_is_a_signed_item_in_printed_order()
     {
         var server = new VeryfiServer("""
             {
@@ -248,7 +340,7 @@ public class ReceiptTranscriptionServiceTest
         var receipt = await provider.Transcribe(new ReceiptSourceDocument(
             Guid.NewGuid(), "costco.pdf", "application/pdf", [1, 2, 3]), TestContext.Current.CancellationToken);
 
-        Assert.Equal(4, receipt.Items.Count);
+        Assert.Equal(6, receipt.Items.Count);
         Assert.Equal(99.62m, receipt.Items.Sum(item => item.TotalPrice));
 
         // Undiscounted lines keep the figures the till printed, to the cent.
@@ -261,16 +353,17 @@ public class ReceiptTranscriptionServiceTest
         Assert.Equal(3.99m, water.UnitPrice);
         Assert.Equal(2m, water.Quantity);
 
-        // Discounted lines lose exactly their own coupon, and the unit price follows the line
-        // down: two pairs of trousers at 14.99 less 4.00 are 12.99 each, not 14.99.
+        // Coupon rows stay explicit, leaving every original purchase figure auditable.
         var trousers = receipt.Items[2];
-        Assert.Equal(25.98m, trousers.TotalPrice);
-        Assert.Equal(12.99m, trousers.UnitPrice);
+        Assert.Equal(29.98m, trousers.TotalPrice);
+        Assert.Equal(14.99m, trousers.UnitPrice);
         Assert.Equal(2m, trousers.Quantity);
         Assert.Equal(1.95m, trousers.TaxAmount);
-        var pads = receipt.Items[3];
-        Assert.Equal(13.99m, pads.TotalPrice);
-        Assert.Equal(13.99m, pads.UnitPrice);
+        Assert.Equal(-4m, receipt.Items[3].TotalPrice);
+        var pads = receipt.Items[4];
+        Assert.Equal(17.99m, pads.TotalPrice);
+        Assert.Equal(17.99m, pads.UnitPrice);
+        Assert.Equal(-4m, receipt.Items[5].TotalPrice);
 
         // The one taxable line keeps all the tax; it is not smeared over the bill.
         Assert.Equal(1.95m, receipt.Tax);
@@ -329,7 +422,7 @@ public class ReceiptTranscriptionServiceTest
     /// total must not become something the group is asked to divide up and pay for.
     /// </summary>
     [Fact]
-    public async Task A_discount_row_is_never_an_item_even_when_its_total_reads_positive()
+    public async Task A_discount_row_with_a_positive_provider_total_is_a_negative_item()
     {
         var server = new VeryfiServer("""
             {
@@ -356,12 +449,13 @@ public class ReceiptTranscriptionServiceTest
         var receipt = await provider.Transcribe(new ReceiptSourceDocument(
             Guid.NewGuid(), "shop.jpg", "image/jpeg", [1, 2, 3]), TestContext.Current.CancellationToken);
 
-        var cheese = Assert.Single(receipt.Items);
+        Assert.Equal(2, receipt.Items.Count);
+        var cheese = receipt.Items[0];
         Assert.Equal("Cheese", cheese.Name);
-        // The coupon names no line, so it cannot be placed on one: the subtotal is spread
-        // instead, and the bill still adds up to what was paid.
-        Assert.Equal(9m, cheese.TotalPrice);
-        Assert.Equal(9m, receipt.Items.Sum(item => item.TotalPrice));
+        Assert.Equal(10m, cheese.TotalPrice);
+        Assert.Equal("Member saving", receipt.Items[1].Name);
+        Assert.Equal(-1m, receipt.Items[1].TotalPrice);
+        Assert.Equal(9m, receipt.Subtotal);
     }
 
     /// <summary>
@@ -402,11 +496,11 @@ public class ReceiptTranscriptionServiceTest
         var receipt = await provider.Transcribe(new ReceiptSourceDocument(
             Guid.NewGuid(), "costco.pdf", "application/pdf", [1, 2, 3]), TestContext.Current.CancellationToken);
 
-        // The 27.28 row is a coupon, not a purchase: nothing bought is named on it, and it
-        // takes 2.70 off. It must not arrive as a thing the group is asked to pay for.
-        Assert.Equal(4, receipt.Items.Count);
+        // The 27.28 row is a coupon, not a purchase: keep it as a -2.70 line.
+        Assert.Equal(6, receipt.Items.Count);
         Assert.DoesNotContain(receipt.Items, item => item.TotalPrice == 27.28m);
         Assert.Equal(47.74m, receipt.Items.Sum(item => item.TotalPrice));
+        Assert.Equal(-6.70m, receipt.Items.Where(item => item.TotalPrice < 0).Sum(item => item.TotalPrice));
 
         // A quantity belonging to another line does not turn one block of mozzarella into
         // 1.952 of them. The printed total stands, as one of what it is.
@@ -415,10 +509,12 @@ public class ReceiptTranscriptionServiceTest
         Assert.Equal(7.79m, mozzarella.UnitPrice);
         Assert.Equal(7.79m, mozzarella.TotalPrice);
 
-        // Both coupons land on the lines they name, and everything else stands as printed.
+        // Coupon rows stay in printed order, and every purchase row remains as printed.
         Assert.Equal(7.98m, receipt.Items[1].TotalPrice);
-        Assert.Equal(5.99m, receipt.Items[2].TotalPrice);
-        Assert.Equal(25.98m, receipt.Items[3].TotalPrice);
+        Assert.Equal(8.69m, receipt.Items[2].TotalPrice);
+        Assert.Equal(-2.70m, receipt.Items[3].TotalPrice);
+        Assert.Equal(29.98m, receipt.Items[4].TotalPrice);
+        Assert.Equal(-4m, receipt.Items[5].TotalPrice);
     }
 
     /// <summary>

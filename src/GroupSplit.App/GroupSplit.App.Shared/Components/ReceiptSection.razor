@@ -140,6 +140,10 @@
                             @(bill.DividesItsExpense && bill.MissingRuleItemCount > 0
                                 ? $"{bill.MissingRuleItemCount} {(bill.MissingRuleItemCount == 1 ? "line" : "lines")} still need a split rule"
                                 : "Ready to use for splitting")
+                            @if (!string.IsNullOrWhiteSpace(bill.MerchantName) || bill.PurchaseDate is not null)
+                            {
+                                <text> · @string.Join(" · ", new[] { bill.MerchantName, bill.PurchaseDate?.ToString("d") }.Where(value => !string.IsNullOrWhiteSpace(value)))</text>
+                            }
                         </span>
                     </div>
 
