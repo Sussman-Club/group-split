@@ -666,17 +666,6 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(i => i.SplitRuleVersionId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<ReceiptAdjustment>(entity =>
-        {
-            entity.Property(adjustment => adjustment.Kind).HasConversion<string>().HasMaxLength(16).IsRequired();
-            entity.Property(adjustment => adjustment.Amount).HasPrecision(18, 4);
-            entity.Property(adjustment => adjustment.Description).HasMaxLength(256);
-            entity.Property(adjustment => adjustment.CouponCode).HasMaxLength(128);
-            entity.HasOne(adjustment => adjustment.Receipt).WithMany(receipt => receipt.Adjustments)
-                .HasForeignKey(adjustment => adjustment.ReceiptId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(adjustment => new { adjustment.ReceiptId, adjustment.Position });
-        });
-
         modelBuilder.Entity<UserIdentity>(entity =>
         {
             entity.Property(userIndentity => userIndentity.IdentityId)

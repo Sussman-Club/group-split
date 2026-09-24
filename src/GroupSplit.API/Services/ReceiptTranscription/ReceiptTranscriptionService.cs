@@ -42,11 +42,7 @@ public sealed record TranscribedReceipt(
     public DateOnly? PurchaseDate { get; init; }
     /// <summary>The provider's source fields, serialized only for receipt review.</summary>
     public string? SourceValues { get; init; }
-    public IReadOnlyList<TranscribedReceiptAdjustment> Adjustments { get; init; } = [];
 }
-
-public sealed record TranscribedReceiptAdjustment(
-    ReceiptAdjustmentKind Kind, decimal Amount, string? Description, string? CouponCode);
 
 public sealed record TranscribedReceiptItem(
     string Name,
@@ -132,13 +128,6 @@ public sealed class ReceiptTranscriptionService(
         MerchantName = transcription.MerchantName,
         PurchaseDate = transcription.PurchaseDate,
         SourceValues = transcription.SourceValues,
-        Adjustments = transcription.Adjustments.Select(adjustment => new ReceiptAdjustmentInput
-        {
-            Kind = adjustment.Kind,
-            Amount = adjustment.Amount,
-            Description = adjustment.Description,
-            CouponCode = adjustment.CouponCode
-        }).ToArray(),
         Items = transcription.Items.Select(item => new ReceiptItemInput
         {
             Name = item.Name,

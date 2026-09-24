@@ -20,11 +20,7 @@ public sealed record ReceiptResponse(
     public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
     public string? SourceValues { get; init; }
-    public IReadOnlyList<ReceiptAdjustmentResponse> Adjustments { get; init; } = [];
 }
-
-public sealed record ReceiptAdjustmentResponse(
-    Guid Id, ReceiptAdjustmentKind Kind, decimal Amount, string? Description, string? CouponCode);
 
 /// <summary>
 /// One line, carrying its rule three ways: the version id to send back, the rule's name to

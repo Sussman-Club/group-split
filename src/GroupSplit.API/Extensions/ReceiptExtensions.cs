@@ -31,9 +31,6 @@ public static class ReceiptExtensions
     {
         MerchantName = receipt.MerchantName,
         PurchaseDate = receipt.PurchaseDate,
-        SourceValues = receipt.SourceValues,
-        Adjustments = receipt.Adjustments.OrderBy(adjustment => adjustment.Position)
-            .Select(adjustment => new ReceiptAdjustmentResponse(
-                adjustment.Id, adjustment.Kind, adjustment.Amount, adjustment.Description, adjustment.CouponCode)).ToList()
+        SourceValues = receipt.SourceValues
     };
 }

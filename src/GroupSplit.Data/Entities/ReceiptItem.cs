@@ -17,7 +17,8 @@ public class ReceiptItem : Entity
     public string? Description { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Quantity { get; set; } = 1;
-    // Kept as printed: discounts and till rounding need not equal quantity * unit price.
+    // Signed and kept as printed: coupons are negative, free items are zero, and till
+    // rounding need not equal quantity * unit price.
     public required decimal TotalPrice { get; set; }
     /// <summary>
     /// The tax charged on this line, which is zero unless the bill said otherwise: a

@@ -88,7 +88,7 @@
                     @* The letter in the margin, which is how a real bill says the tax at the
                        bottom was not charged on this line. Only where the bill charges tax
                        at all: a column of markers on a receipt with no tax explains nothing. *@
-                    <span class="gs-slip-mark">@(row.Tax == 0 && Receipt.Tax != 0 ? "N" : "")</span>
+                    <span class="gs-slip-mark">@(row.Total > 0 && row.Tax == 0 && Receipt.Tax != 0 ? "N" : "")</span>
 
                     <span class="gs-slip-price">@row.Total.ToMoney()</span>
 
@@ -142,14 +142,6 @@
                 <dd>@Receipt.Subtotal.ToMoney()</dd>
             </div>
 
-            @foreach (var adjustment in Receipt.Adjustments)
-            {
-                <div>
-                    <dt>@(string.IsNullOrWhiteSpace(adjustment.Description) ? "Discount / coupon" : adjustment.Description)</dt>
-                    <dd>−@AdjustmentAmount(adjustment).ToMoney()</dd>
-                </div>
-            }
-
             @* Tax and tip only where there are any: a supermarket receipt has neither, and
                two rows of 0.00 say nothing. *@
             @if (Receipt.Tax != 0)
@@ -186,7 +178,7 @@
         @* The legend describes a mark, so it is gated on a mark being on screen rather than
            on one being somewhere on the paper: after a filter that leaves none, it explains
            nothing. *@
-        @if (Receipt.Tax != 0 && Narrowed().Any(line => line.TaxAmount == 0))
+        @if (Receipt.Tax != 0 && Narrowed().Any(line => line.TotalPrice > 0 && line.TaxAmount == 0))
         {
             <p class="gs-slip-foot">N — no tax charged on this line</p>
         }
@@ -322,8 +314,4 @@
             ? decimal.Truncate(quantity).ToString()
             : quantity.ToString("0.###");
 
-    private decimal AdjustmentAmount(ReceiptAdjustmentResponse adjustment) =>
-        adjustment.Kind == ReceiptAdjustmentKind.Percentage
-            ? decimal.Round(Receipt.Subtotal * adjustment.Amount / 100m, 2, MidpointRounding.AwayFromZero)
-            : adjustment.Amount;
 }

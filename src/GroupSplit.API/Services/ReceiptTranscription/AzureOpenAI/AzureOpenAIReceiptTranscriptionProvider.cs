@@ -20,9 +20,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         order, and it may be a photo, a scan, or a PDF that is skewed, creased, or faded. Read
         every page and every price column before you answer.
 
-        Items. Include every positive, purchasable product, dish, or service line the merchant
-        printed, in printed order. Never return discount, coupon, refund, payment, tender, change,
-        loyalty, balance, subtotal, or total rows as items.
+        Items. Include every product, dish, service, coupon, discount, and free-item line
+        the merchant printed, in printed order. Coupons and discounts are ordinary items
+        with negative prices; free items have zero prices. Never return payment, tender,
+        change, loyalty balance, subtotal, or total rows as items.
 
         Names. Receipt text is compressed to fit the paper: vowels are dropped, words run
         together, the merchant's own brand is initialised, sizes and units are stuck onto the end,
@@ -42,29 +43,29 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         volume, or length keep their measured quantity, such as 0.734, with the matching per-unit
         price.
 
-        Prices. unitPrice is the price of one unit as printed, before any discount. totalPrice is
-        the printed pre-adjustment line total. When only one of the two is printed, derive the
-        other from the quantity. Never force a line price to match a receipt-level figure.
+        Prices. unitPrice is the signed price of one unit as printed. totalPrice is the signed
+        printed line total. When only one of the two is printed, derive the other from the
+        quantity. Never force a line price to match a receipt-level figure.
 
         Merchant and date. Extract merchantName and purchaseDate when printed. Keep merchantName
         exactly as printed if you cannot normalize it confidently. purchaseDate is ISO-8601
         yyyy-MM-dd only when the day is unambiguous; otherwise null. Put useful source wording in
         rawText so a person can review the reading.
 
-        Discounts. Return every coupon or discount as an adjustment. Its amount is always
-        positive, kind is FixedAmount or Percentage, and preserve its description and coupon code.
-        Do not subtract an adjustment from an item total: item totalPrice remains the printed,
-        pre-adjustment line total. A percentage adjustment uses its printed percent.
+        Discounts. Return every coupon or discount as its own negative-priced item. Preserve
+        the printed wording as its name or raw text. For a percentage coupon, use the monetary
+        saving printed on the receipt; if only the percent is printed, derive its monetary
+        value from the stated eligible base and leave the source wording in rawText.
 
         Tax and tip. Report tax only when it is charged on top of the line prices. When the prices
         already include it and the tax block only restates what the total already contains, set
         tax and every taxAmount to 0. Capture taxRate for a line whenever the receipt shows it,
         and isTaxable when a tax flag is legible. Otherwise leave both null. taxAmount must be the
-        result of taxRate on the discounted taxable line whenever a rate is present. Put service,
+        result of taxRate on the signed taxable line whenever a rate is present. Put service,
         cover, or gratuity charges in tip. Use 0 for an absent tip or tax rather than guessing.
 
-        Totals. subtotal is the sum of the pre-adjustment item totalPrice values, and total must
-        equal subtotal minus all adjustments plus tax plus tip. Check that total against the grand total the merchant printed. When
+        Totals. subtotal is the sum of all signed item totalPrice values, and total must
+        equal subtotal plus tax plus tip. Check that total against the grand total the merchant printed. When
         they disagree, re-read the lines you are least certain about and correct the items; if
         they still disagree, keep the printed grand total in total. The item totals, subtotal, and
         total must all represent money that was actually charged.
@@ -102,8 +103,8 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             var receipt = response.Result;
 
             logger.LogInformation(
-                "Azure OpenAI mapped {MappedItemCount} receipt line item(s) and {AdjustmentCount} adjustments for attachment {AttachmentId}.",
-                receipt.Items.Count, receipt.Adjustments.Count, document.AttachmentId);
+                "Azure OpenAI mapped {MappedItemCount} receipt line item(s) for attachment {AttachmentId}.",
+                receipt.Items.Count, document.AttachmentId);
 
             return new TranscribedReceipt(
                 receipt.Subtotal,
@@ -125,9 +126,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             {
                 MerchantName = receipt.MerchantName,
                 PurchaseDate = receipt.PurchaseDate,
-                SourceValues = JsonSerializer.Serialize(receipt),
-                Adjustments = receipt.Adjustments.Select(adjustment => new TranscribedReceiptAdjustment(
-                    adjustment.Kind, adjustment.Amount, adjustment.Description, adjustment.CouponCode)).ToArray()
+                SourceValues = JsonSerializer.Serialize(receipt)
             };
         }
         catch (BadGatewayException)
@@ -160,7 +159,6 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         [JsonPropertyName("tax")] public decimal Tax { get; init; }
         [JsonPropertyName("tip")] public decimal Tip { get; init; }
         [JsonPropertyName("total")] public decimal Total { get; init; }
-        [JsonPropertyName("adjustments")] public IReadOnlyList<AzureReceiptAdjustment> Adjustments { get; init; } = [];
         [JsonPropertyName("items")] public IReadOnlyList<AzureReceiptItem> Items { get; init; } = [];
     }
 
@@ -175,11 +173,4 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         [JsonPropertyName("isTaxable")] public bool? IsTaxable { get; init; }
     }
 
-    internal sealed class AzureReceiptAdjustment
-    {
-        [JsonPropertyName("kind")] public ReceiptAdjustmentKind Kind { get; init; }
-        [JsonPropertyName("amount")] public decimal Amount { get; init; }
-        [JsonPropertyName("description")] public string? Description { get; init; }
-        [JsonPropertyName("couponCode")] public string? CouponCode { get; init; }
-    }
 }

@@ -17,10 +17,11 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     {
         var client = new StubChatClient(
             "{\"merchantName\":\"Corner Pizza\",\"purchaseDate\":\"2026-09-23\",\"rawText\":\"PZA LG\"," +
-            "\"subtotal\":18.00,\"tax\":1.60,\"tip\":0,\"total\":17.60," +
-            "\"adjustments\":[{\"kind\":\"FixedAmount\",\"amount\":2.00,\"description\":\"Coupon\",\"couponCode\":\"SAVE2\"}]," +
+            "\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60," +
             "\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1," +
-            "\"totalPrice\":18.00,\"taxAmount\":1.60,\"taxRate\":10,\"isTaxable\":true}]}");
+            "\"totalPrice\":18.00,\"taxAmount\":1.60,\"taxRate\":10,\"isTaxable\":true}," +
+            "{\"name\":\"Coupon SAVE2\",\"unitPrice\":-2.00,\"quantity\":1," +
+            "\"totalPrice\":-2.00,\"taxAmount\":0,\"taxRate\":null,\"isTaxable\":null}]}");
         var provider = new AzureOpenAIReceiptTranscriptionProvider(
             client,
             NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
@@ -30,7 +31,8 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
             TestContext.Current.CancellationToken);
 
         Assert.Equal(17.60m, receipt.Total);
-        var item = Assert.Single(receipt.Items);
+        Assert.Equal(2, receipt.Items.Count);
+        var item = receipt.Items[0];
         Assert.Equal("Pizza", item.Name);
         Assert.Equal(18m, item.TotalPrice);
         Assert.Equal(1.60m, item.TaxAmount);
@@ -39,7 +41,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Equal("Corner Pizza", receipt.MerchantName);
         Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
         Assert.Contains("PZA LG", receipt.SourceValues);
-        Assert.Equal(2m, Assert.Single(receipt.Adjustments).Amount);
+        Assert.Equal(-2m, receipt.Items[1].TotalPrice);
         Assert.Contains("discount", client.Prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dinner.jpg", client.AttachmentDescription);
     }

@@ -120,7 +120,7 @@
                        foot: two rates on one bill are two amounts riding two different rules. *@
                     @if (item.TaxAmount != 0)
                     {
-                        <span class="gs-divide-line-note">plus @item.TaxAmount.ToMoney() tax</span>
+                        <span class="gs-divide-line-note">tax @item.TaxAmount.ToMoney()</span>
                     }
 
                     @* No label: the item name above is the label, and MudBlazor's would print

@@ -34,12 +34,14 @@ public class ReceiptDraftDialogTest : ComponentTest
 
     private static SaveReceiptRequest Draft() => new()
     {
-        Subtotal = 30m,
-        Total = 30m,
+        Subtotal = 28m,
+        Total = 28m,
         Items =
         [
             new ReceiptItemInput { Name = "Water", Description = "WATER 40 PK", UnitPrice = 10m, TotalPrice = 10m },
-            new ReceiptItemInput { Name = "Pizza", Description = "LARGE CHEESE", UnitPrice = 20m, TotalPrice = 20m }
+            new ReceiptItemInput { Name = "Pizza", Description = "LARGE CHEESE", UnitPrice = 20m, TotalPrice = 20m },
+            new ReceiptItemInput { Name = "Coupon", UnitPrice = -2m, TotalPrice = -2m },
+            new ReceiptItemInput { Name = "Free sample", UnitPrice = 0m, TotalPrice = 0m }
         ]
     };
 
@@ -85,7 +87,9 @@ public class ReceiptDraftDialogTest : ComponentTest
 
         var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();
         Assert.NotNull(result);
-        Assert.Equal(30m, result!.Total);
+        Assert.Equal(28m, result!.Total);
+        Assert.Equal(-2m, result.Items[2].TotalPrice);
+        Assert.Equal(0m, result.Items[3].TotalPrice);
         _receipts.Verify(receipts => receipts.SaveAsync(It.IsAny<Guid>(), It.IsAny<SaveReceiptRequest>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -180,29 +184,28 @@ public class ReceiptDraftDialogTest : ComponentTest
     }
 
     [Fact]
-    public async Task Editing_a_coupon_and_one_item_name_saves_both_changes()
+    public async Task Editing_a_coupon_line_and_one_item_name_saves_both_changes()
     {
-        var adjustment = new ReceiptAdjustmentResponse(Guid.NewGuid(), ReceiptAdjustmentKind.FixedAmount,
-            2m, "Old coupon", "SAVE2");
-        var bill = Bill() with { Total = 28m, Adjustments = [adjustment] };
+        var original = Bill();
+        var coupon = Line("Old coupon", -2m, "SAVE2");
+        var bill = original with { Subtotal = 28m, Total = 28m, Items = [..original.Items, coupon] };
         _receipts.Setup(receipts => receipts.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(bill);
 
         var (provider, _) = await OpenAsync(bill);
-        var coupon = provider.FindComponents<MudTextField<string>>()
-            .Single(field => field.Instance.Label == "Description");
-        var name = provider.FindComponents<MudTextField<string>>()
-            .First(field => field.Instance.Label == "Item");
-        await provider.InvokeAsync(() => coupon.Instance.ValueChanged.InvokeAsync("New coupon"));
-        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Bottled water"));
+        var names = provider.FindComponents<MudTextField<string>>()
+            .Where(field => field.Instance.Label == "Item").ToList();
+        await provider.InvokeAsync(() => names[2].Instance.ValueChanged.InvokeAsync("New coupon"));
+        await provider.InvokeAsync(() => names[0].Instance.ValueChanged.InvokeAsync("Bottled water"));
         await provider.FindAll("button")
             .Single(button => button.TextContent.Contains("Save receipt", StringComparison.Ordinal))
             .ClickAsync(new MouseEventArgs());
 
         _receipts.Verify(receipts => receipts.SaveAsync(_expense, It.Is<SaveReceiptRequest>(request =>
                 request.Items[0].Name == "Bottled water"
-                && request.Adjustments[0].Description == "New coupon"),
+                && request.Items[2].Name == "New coupon"
+                && request.Items[2].TotalPrice == -2m),
             It.IsAny<CancellationToken>()), Times.Once);
         _receipts.Verify(receipts => receipts.PatchItemAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
             It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),

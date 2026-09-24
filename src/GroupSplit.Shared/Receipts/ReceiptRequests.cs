@@ -17,16 +17,6 @@ public record SaveReceiptRequest
     [StringLength(128)] public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
     public string? SourceValues { get; init; }
-    public IReadOnlyList<ReceiptAdjustmentInput> Adjustments { get; init; } = [];
-}
-
-public record ReceiptAdjustmentInput
-{
-    public Guid? Id { get; init; }
-    public ReceiptAdjustmentKind Kind { get; init; } = ReceiptAdjustmentKind.FixedAmount;
-    [Range(0.0001, 1000000000), MaxDecimalPlaces(4)] public decimal Amount { get; init; }
-    [StringLength(256)] public string? Description { get; init; }
-    [StringLength(128)] public string? CouponCode { get; init; }
 }
 
 public record ReceiptItemInput
