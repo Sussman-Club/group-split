@@ -115,8 +115,11 @@
                                          Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
                         <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
                                          Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TaxRate" Label="Tax rate" Variant="Variant.Outlined"
-                                         Adornment="Adornment.End" AdornmentText="%" Format="N4" HideSpinButtons="true" />
+                        @if (item.IsTaxable != false)
+                        {
+                            <MudNumericField @bind-Value="item.TaxRate" Label="Tax rate" Variant="Variant.Outlined"
+                                             Adornment="Adornment.End" AdornmentText="%" Format="N4" HideSpinButtons="true" />
+                        }
                         <MudSelect T="bool?" @bind-Value="item.IsTaxable" Label="Tax status" Variant="Variant.Outlined">
                             <MudSelectItem T="bool?" Value="@((bool?)null)">Not identified</MudSelectItem>
                             <MudSelectItem T="bool?" Value="@((bool?)true)">Taxable</MudSelectItem>
@@ -440,7 +443,17 @@
         public decimal TotalPrice { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal? TaxRate { get; set; }
-        public bool? IsTaxable { get; set; }
+        private bool? _isTaxable;
+        public bool? IsTaxable
+        {
+            get => _isTaxable;
+            set
+            {
+                _isTaxable = value;
+                if (value == false)
+                    TaxRate = null;
+            }
+        }
         public Guid? SplitRuleVersionId { get; set; }
 
         private static string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;

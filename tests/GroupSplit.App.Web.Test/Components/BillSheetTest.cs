@@ -48,6 +48,17 @@ public class BillSheetTest : ComponentTest
         Assert.Equal(3, page.FindAll("li.gs-slip-line").Count);
     }
 
+    [Fact]
+    public void Tax_exempt_lines_do_not_print_a_tax_rate()
+    {
+        var exempt = Line("Exempt item", 10m, null) with { TaxRate = 5m, IsTaxable = false };
+        var taxable = Line("Taxable item", 10m, null) with { TaxRate = 8m, IsTaxable = true };
+        var page = Render<BillSheet>(p => p.Add(c => c.Receipt, Bill(exempt, taxable)));
+
+        Assert.DoesNotContain("5% rate", page.Markup);
+        Assert.Contains("8% rate", page.Markup);
+    }
+
     /// <summary>
     /// A bill nothing divides by is a receipt, not a job left undone: every line on one names
     /// no rule and none of them is missing anything.

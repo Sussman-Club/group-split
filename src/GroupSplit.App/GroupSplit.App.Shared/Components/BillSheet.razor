@@ -97,7 +97,7 @@
                        line saying the same thing again. Tax is per line now, so a bill
                        charging two rates has to say which line carried which; the figure at
                        the foot cannot. *@
-                    @if (row.Count != 1 || row.Tax != 0 || row.TaxRate is not null)
+                    @if (row.Count != 1 || row.Tax != 0 || (row.IsTaxable != false && row.TaxRate is not null))
                     {
                         <span class="gs-slip-count">
                             @if (row.Count != 1)
@@ -112,7 +112,7 @@
                             {
                                 @($"tax {row.Tax.ToMoney()}")
                             }
-                            @if (row.TaxRate is { } rate)
+                            @if (row.IsTaxable != false && row.TaxRate is { } rate)
                             {
                                 <text> @($"({rate:0.####}% rate)")</text>
                             }

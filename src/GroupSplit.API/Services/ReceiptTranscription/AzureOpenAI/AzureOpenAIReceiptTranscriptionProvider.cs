@@ -53,10 +53,18 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         yyyy-MM-dd only when the day is unambiguous; otherwise null. Put useful source wording in
         rawText so a person can review the reading.
 
-        Discounts. Return every coupon or discount as its own negative-priced item. Preserve
-        the printed wording as its name or raw text. For a percentage coupon, use the monetary
-        saving printed on the receipt; if only the percent is printed, derive its monetary
-        value from the stated eligible base and leave the source wording in rawText.
+        Discounts. Identify coupon, discount, saving, rebate, markdown, and promotion rows,
+        including abbreviated labels or codes and amounts printed with a trailing minus sign.
+        Return each distinct discount row as its own negative-priced item in printed order;
+        do not fold it into a product's price or duplicate a receipt-level savings summary.
+        Give the item a useful, evidence-based name: expand a legible label such as "MFR CPN"
+        to "Manufacturer coupon", and include the affected product only when the receipt
+        explicitly links the discount to that product. If the row has only a code or amount,
+        name it "Coupon [printed code]" or "Discount [printed code]" as appropriate, or just
+        "Discount" when no code is legible. Preserve the printed wording and code in rawText.
+        Do not invent a product, promotion, or eligibility condition. For a percentage coupon,
+        use the monetary saving printed on the receipt; if only the percent is printed, derive
+        its monetary value from the stated eligible base and leave the source wording in rawText.
 
         Tax and tip. Report tax only when it is charged on top of the line prices. When the prices
         already include it and the tax block only restates what the total already contains, set

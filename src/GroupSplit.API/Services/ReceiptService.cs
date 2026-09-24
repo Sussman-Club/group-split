@@ -15,23 +15,31 @@ public interface IReceiptService
 {
     Task<Receipt> ForExpense(Guid expenseId, CancellationToken ct = default);
     Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request, CancellationToken ct = default);
+
     Task<Receipt> PatchItem(Guid expenseId, Guid itemId, JsonPatchDocument<ReceiptItemPatch> patch,
         CancellationToken ct = default);
-    Task<Receipt> SetRule(Guid expenseId, Guid itemId, SetReceiptItemRuleRequest request, CancellationToken ct = default);
+
+    Task<Receipt> SetRule(Guid expenseId, Guid itemId, SetReceiptItemRuleRequest request,
+        CancellationToken ct = default);
+
     Task<ReceiptDivisionResponse> Preview(Guid expenseId, CancellationToken ct = default);
     Task<Expense> Divide(Guid expenseId, CancellationToken ct = default);
     Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null, CancellationToken ct = default);
     Task DeleteForExpense(Guid expenseId, CancellationToken ct = default);
 }
 
-public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
-    IGroupParticipants participants, IExpenseSplitter splitter, ISplitRuleHandler handlers) : IReceiptService
+public class ReceiptService(
+    AppDbContext dbContext,
+    ICurrentUser userContext,
+    IGroupParticipants participants,
+    IExpenseSplitter splitter,
+    ISplitRuleHandler handlers) : IReceiptService
 {
     public async Task<Receipt> ForExpense(Guid expenseId, CancellationToken ct = default)
     {
         await VisibleExpense(expenseId, ct);
         return await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct)
-            ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound, "This expense has no itemized bill.");
+               ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound, "This expense has no itemized bill.");
     }
 
     /// <summary>
@@ -45,7 +53,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     /// rule that no longer fits, figures that do not add up -- and each of them means "not
     /// yet", not "something went wrong".
     /// </remarks>
-    public async Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null, CancellationToken ct = default)
+    public async Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null,
+        CancellationToken ct = default)
     {
         var expense = await VisibleExpense(receipt.ExpenseId, ct);
         // Personal receipts are useful as itemized records even though they never produce
@@ -55,16 +64,33 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         var canDivide = expense.GroupId is not null && canEdit;
         if (canDivide)
         {
-            try { await Calculate(expense, receipt, ct); }
-            catch (ValidationException) { canDivide = false; }
-            catch (UnprocessableException) { canDivide = false; }
-            catch (ConflictException) { canDivide = false; }
+            try
+            {
+                await Calculate(expense, receipt, ct);
+            }
+            catch (ValidationException)
+            {
+                canDivide = false;
+            }
+            catch (UnprocessableException)
+            {
+                canDivide = false;
+            }
+            catch (ConflictException)
+            {
+                canDivide = false;
+            }
         }
+
         return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct))
-            with { CanEdit = canEdit };
+            with
+            {
+                CanEdit = canEdit
+            };
     }
 
-    public async Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request, CancellationToken ct = default)
+    public async Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         var expense = await MineToChange(expenseId, ct);
@@ -77,38 +103,48 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         var members = expense.GroupId is { } groupId
             ? await participants.IdsOf(groupId, ct)
             : [expense.Payer];
-        var versions = await Versions().Where(v => request.Items.Select(i => i.SplitRuleVersionId).Contains(v.Id)).ToListAsync(ct);
+        var versions = await Versions().Where(v => request.Items.Select(i => i.SplitRuleVersionId).Contains(v.Id))
+            .ToListAsync(ct);
         // An id on an incoming line says "this is that stored line, corrected", so it has to
         // name a line of this bill and name it once. One from another bill would move a line
         // between receipts, and the same id twice would leave the update writing two lines
         // over one.
         var ids = request.Items.Where(i => i.Id is not null).Select(i => i.Id!.Value).ToList();
         if (ids.Count != ids.Distinct().Count() || ids.Any(id => existing?.Items.All(i => i.Id != id) != false))
-            throw new ValidationException(ErrorCodes.ReceiptInvalid, "An item id is repeated or does not belong to this bill.");
+            throw new ValidationException(ErrorCodes.ReceiptInvalid,
+                "An item id is repeated or does not belong to this bill.");
         // Validate a detached draft first: a refused request never mutates the tracked bill.
-        var draft = new Receipt { ExpenseId = expenseId, Subtotal = request.Subtotal,
+        var draft = new Receipt
+        {
+            ExpenseId = expenseId, Subtotal = request.Subtotal,
             MerchantName = Clean(request.MerchantName, 128), PurchaseDate = request.PurchaseDate,
-            SourceValues = request.SourceValues ?? existing?.SourceValues, Tax = request.Tax, Tip = request.Tip, Total = request.Total };
+            SourceValues = request.SourceValues ?? existing?.SourceValues, Tax = request.Tax, Tip = request.Tip,
+            Total = request.Total
+        };
         for (var position = 0; position < request.Items.Count; position++)
         {
             var input = request.Items[position];
             var savedDescription = existing?.Items.FirstOrDefault(item => item.Id == input.Id)?.Description;
             var version = input.SplitRuleVersionId is { } versionId
                 ? versions.FirstOrDefault(v => v.Id == versionId)
-                    ?? throw new ValidationException(ErrorCodes.ReceiptInvalid, "The item's split rule version was not found.")
+                  ?? throw new ValidationException(ErrorCodes.ReceiptInvalid,
+                      "The item's split rule version was not found.")
                 : null;
             if (version is not null) ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, members, handlers);
-            draft.Items.Add(new ReceiptItem { Id = input.Id ?? Guid.NewGuid(), Position = position,
+            draft.Items.Add(new ReceiptItem
+            {
+                Id = input.Id ?? Guid.NewGuid(), Position = position,
                 Name = input.Name?.Trim() ?? "",
                 NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
-                    ?? input.Name?.Trim().ToLowerInvariant() ?? "",
-                Description = input.Description is null
-                    ? savedDescription
-                    : string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
+                                 ?? input.Name?.Trim().ToLowerInvariant() ?? "",
+                Description = input.Description is null ? savedDescription :
+                    string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
                 UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
                 TaxAmount = input.TaxAmount, TaxRate = input.TaxRate, IsTaxable = input.IsTaxable,
-                SplitRuleVersionId = version?.Id, SplitRuleVersion = version });
+                SplitRuleVersionId = version?.Id, SplitRuleVersion = version
+            });
         }
+
         ReceiptSplitCalculator.CalculateLineTaxes(draft);
         ReceiptSplitCalculator.RefuseIfFiguresDisagree(draft);
         if (draft.Total != expense.Amount)
@@ -133,27 +169,46 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             // Updated in place rather than replaced, so a line keeps its id: the ids are how
             // the next correction names these lines, and dropping and re-adding the bill
             // would silently clear every line's rule on the way through.
-            existing.Subtotal = draft.Subtotal; existing.MerchantName = draft.MerchantName;
-            existing.PurchaseDate = draft.PurchaseDate; existing.SourceValues = draft.SourceValues;
-            existing.Tax = draft.Tax; existing.Tip = draft.Tip; existing.Total = draft.Total;
+            existing.Subtotal = draft.Subtotal;
+            existing.MerchantName = draft.MerchantName;
+            existing.PurchaseDate = draft.PurchaseDate;
+            existing.SourceValues = draft.SourceValues;
+            existing.Tax = draft.Tax;
+            existing.Tip = draft.Tip;
+            existing.Total = draft.Total;
             foreach (var removed in existing.Items.Where(i => draft.Items.All(d => d.Id != i.Id)).ToList())
-            { dbContext.Remove(removed); existing.Items.Remove(removed); }
+            {
+                dbContext.Remove(removed);
+                existing.Items.Remove(removed);
+            }
+
             foreach (var line in draft.Items)
             {
                 var stored = existing.Items.FirstOrDefault(i => i.Id == line.Id);
                 if (stored is null)
-                { line.ReceiptId = existing.Id; existing.Items.Add(line); dbContext.Entry(line).State = EntityState.Added; }
+                {
+                    line.ReceiptId = existing.Id;
+                    existing.Items.Add(line);
+                    dbContext.Entry(line).State = EntityState.Added;
+                }
                 else
                 {
-                    stored.Position = line.Position; stored.Name = line.Name; stored.NormalizedName = line.NormalizedName;
+                    stored.Position = line.Position;
+                    stored.Name = line.Name;
+                    stored.NormalizedName = line.NormalizedName;
                     stored.Description = line.Description;
-                    stored.UnitPrice = line.UnitPrice; stored.Quantity = line.Quantity; stored.TotalPrice = line.TotalPrice;
-                    stored.TaxAmount = line.TaxAmount; stored.TaxRate = line.TaxRate; stored.IsTaxable = line.IsTaxable;
+                    stored.UnitPrice = line.UnitPrice;
+                    stored.Quantity = line.Quantity;
+                    stored.TotalPrice = line.TotalPrice;
+                    stored.TaxAmount = line.TaxAmount;
+                    stored.TaxRate = line.TaxRate;
+                    stored.IsTaxable = line.IsTaxable;
                     stored.SplitRuleVersionId = line.SplitRuleVersionId;
                     stored.SplitRuleVersion = line.SplitRuleVersion;
                 }
             }
         }
+
         var receiptId = existing?.Id ?? draft.Id;
         var unlinkedAttachments = await dbContext.Set<ReceiptAttachment>()
             .Where(attachment => attachment.ExpenseId == expenseId && attachment.ReceiptId == null)
@@ -173,20 +228,22 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         return await ForExpense(expenseId, ct);
     }
 
-    public async Task<Receipt> SetRule(Guid expenseId, Guid itemId, SetReceiptItemRuleRequest request, CancellationToken ct = default)
+    public async Task<Receipt> SetRule(Guid expenseId, Guid itemId, SetReceiptItemRuleRequest request,
+        CancellationToken ct = default)
     {
         var expense = await MineToChange(expenseId, ct);
         var receipt = await ForExpense(expenseId, ct);
         var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
         var item = receipt.Items.FirstOrDefault(i => i.Id == itemId)
-            ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
+                   ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
         SplitRuleVersion? version = null;
         if (request.SplitRuleVersionId is { } id)
         {
             version = await Versions().FirstOrDefaultAsync(v => v.Id == id, ct)
-                ?? throw new ValidationException(ErrorCodes.ReceiptInvalid, "Split rule version not found.");
+                      ?? throw new ValidationException(ErrorCodes.ReceiptInvalid, "Split rule version not found.");
             ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, await Members(expense, ct), handlers);
         }
+
         item.SplitRuleVersionId = version?.Id;
         item.SplitRuleVersion = version;
 
@@ -212,7 +269,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         await MineToChange(expenseId, ct);
         var receipt = await ForExpense(expenseId, ct);
         var stored = receipt.Items.FirstOrDefault(item => item.Id == itemId)
-            ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
+                     ?? throw new NotFoundException(ErrorCodes.ReceiptItemNotFound, "Item not found on this bill.");
 
         var model = new ReceiptItemPatch
         {
@@ -302,7 +359,8 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
         var subtotals = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers, true)
             .ToDictionary(s => s.UserId, s => s.Amount);
         return new ReceiptDivisionResponse(receipt.Id, receipt.Total,
-            shares.Select(s => new ReceiptShareResponse(s.UserId, subtotals.GetValueOrDefault(s.UserId), s.Amount)).ToList());
+            shares.Select(s => new ReceiptShareResponse(s.UserId, subtotals.GetValueOrDefault(s.UserId), s.Amount))
+                .ToList());
     }
 
     /// <summary>
@@ -349,7 +407,7 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     private async Task<bool> ReceiptCurrentlyDrivesLedger(Expense expense, CancellationToken ct)
     {
         return await splitter.DividesByItsBill(expense, ct)
-            && await splitter.DivisionCameFromItsRule(expense, ct);
+               && await splitter.DivisionCameFromItsRule(expense, ct);
     }
 
     /// <summary>
@@ -378,16 +436,20 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
     }
 
     private IQueryable<SplitRuleVersion> Versions() => dbContext.Set<SplitRuleVersion>()
-        .Include(v => (v as WeightedSplitRuleVersion)!.Participants).Include(v => v.SplitRule).ThenInclude(r => r.Group);
+        .Include(v => (v as WeightedSplitRuleVersion)!.Participants).Include(v => v.SplitRule)
+        .ThenInclude(r => r.Group);
 
     private IQueryable<Receipt> Loaded() => dbContext.Set<Receipt>()
-        .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion).ThenInclude(v => (v as WeightedSplitRuleVersion)!.Participants)
-        .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion).ThenInclude(v => v!.SplitRule).ThenInclude(r => r.Group);
+        .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion)
+        .ThenInclude(v => (v as WeightedSplitRuleVersion)!.Participants)
+        .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion).ThenInclude(v => v!.SplitRule)
+        .ThenInclude(r => r.Group);
 
     private static string? Clean(string? value, int maximumLength)
     {
         var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed.Length <= maximumLength ? trimmed : trimmed[..maximumLength];
+        return string.IsNullOrWhiteSpace(trimmed) ? null :
+            trimmed.Length <= maximumLength ? trimmed : trimmed[..maximumLength];
     }
 
     private async Task<Expense> VisibleExpense(Guid expenseId, CancellationToken ct)
@@ -450,5 +512,4 @@ public class ReceiptService(AppDbContext dbContext, ICurrentUser userContext,
             .Query()
             .AnyAsync(@group => @group.Id == groupId, ct);
     }
-
 }

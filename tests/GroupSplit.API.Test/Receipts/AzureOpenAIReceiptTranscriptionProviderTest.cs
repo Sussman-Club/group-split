@@ -43,6 +43,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Contains("PZA LG", receipt.SourceValues);
         Assert.Equal(-2m, receipt.Items[1].TotalPrice);
         Assert.Contains("discount", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("negative-priced item", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("evidence-based name", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Coupon [printed code]", client.Prompt, StringComparison.Ordinal);
+        Assert.Contains("do not invent a product", client.Prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dinner.jpg", client.AttachmentDescription);
     }
 

@@ -211,4 +211,35 @@ public class ReceiptDraftDialogTest : ComponentTest
             It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task Marking_an_item_tax_exempt_hides_and_clears_its_tax_rate()
+    {
+        var original = Bill();
+        var bill = original with
+        {
+            Items = [original.Items[0] with { TaxRate = 10m, IsTaxable = true }, original.Items[1]]
+        };
+        _receipts.Setup(receipts => receipts.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bill);
+
+        var (provider, _) = await OpenAsync(bill);
+        Assert.Equal(2, provider.FindComponents<MudNumericField<decimal?>>()
+            .Count(field => field.Instance.Label == "Tax rate"));
+
+        var status = provider.FindComponents<MudSelect<bool?>>().First();
+        await provider.InvokeAsync(() => status.Instance.ValueChanged.InvokeAsync(false));
+
+        Assert.Single(provider.FindComponents<MudNumericField<decimal?>>()
+            .Where(field => field.Instance.Label == "Tax rate"));
+
+        await provider.FindAll("button")
+            .Single(button => button.TextContent.Contains("Save receipt", StringComparison.Ordinal))
+            .ClickAsync(new MouseEventArgs());
+
+        _receipts.Verify(receipts => receipts.SaveAsync(_expense, It.Is<SaveReceiptRequest>(request =>
+                request.Items[0].IsTaxable == false && request.Items[0].TaxRate == null),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

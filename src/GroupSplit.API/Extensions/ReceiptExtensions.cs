@@ -18,16 +18,18 @@ public static class ReceiptExtensions
         bool canDivide, bool dividesItsExpense) => new(
         receipt.Id, receipt.ExpenseId, receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
         receipt.Items.Count(i => i.SplitRuleVersionId is null), canDivide, dividesItsExpense,
-        receipt.Items.OrderBy(i => i.Position).ThenBy(i => i.Id).Select(i => new ReceiptItemResponse(
-            i.Id, i.Name, i.UnitPrice, i.Quantity, i.TotalPrice, i.TaxAmount, i.SplitRuleVersionId,
-            i.SplitRuleVersion?.SplitRule.Name,
-            i.SplitRuleVersion is { } version ? handlers.ToDto(version) : null)
-        {
-            NormalizedName = i.NormalizedName,
-            Description = i.Description,
-            TaxRate = i.TaxRate,
-            IsTaxable = i.IsTaxable
-        }).ToList())
+        [
+            .. receipt.Items.OrderBy(i => i.Position).ThenBy(i => i.Id).Select(i => new ReceiptItemResponse(
+                i.Id, i.Name, i.UnitPrice, i.Quantity, i.TotalPrice, i.TaxAmount, i.SplitRuleVersionId,
+                i.SplitRuleVersion?.SplitRule.Name,
+                i.SplitRuleVersion is { } version ? handlers.ToDto(version) : null)
+            {
+                NormalizedName = i.NormalizedName,
+                Description = i.Description,
+                TaxRate = i.TaxRate,
+                IsTaxable = i.IsTaxable
+            })
+        ])
     {
         MerchantName = receipt.MerchantName,
         PurchaseDate = receipt.PurchaseDate,
