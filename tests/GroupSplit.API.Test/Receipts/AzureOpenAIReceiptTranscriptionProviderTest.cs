@@ -47,6 +47,22 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     }
 
     [Fact]
+    public async Task A_date_the_model_wrote_another_way_is_dropped_rather_than_failing_the_reading()
+    {
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(
+            new StubChatClient("{\"purchaseDate\":\"23/09/2026\",\"subtotal\":5,\"tax\":0,\"tip\":0,\"total\":5," +
+                "\"items\":[{\"name\":\"Soup\",\"unitPrice\":5,\"quantity\":1,\"totalPrice\":5,\"taxAmount\":0}]}"),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(
+            new ReceiptSourceDocument(Guid.NewGuid(), "lunch.jpg", "image/jpeg", [1]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(receipt.PurchaseDate);
+        Assert.Equal("Soup", Assert.Single(receipt.Items).Name);
+    }
+
+    [Fact]
     public async Task Converts_chat_client_failures_to_a_retryable_bad_gateway()
     {
         var provider = new AzureOpenAIReceiptTranscriptionProvider(

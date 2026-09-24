@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GroupSplit.API.Errors;
@@ -125,7 +126,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
                 ])
             {
                 MerchantName = receipt.MerchantName,
-                PurchaseDate = receipt.PurchaseDate,
+                PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
                 SourceValues = JsonSerializer.Serialize(receipt)
             };
         }
@@ -150,10 +151,18 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         }
     }
 
+    private static DateOnly? PurchaseDateFrom(string? value) =>
+        DateOnly.TryParseExact(value?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var date)
+            ? date
+            : null;
+
     internal sealed class AzureReceipt
     {
         [JsonPropertyName("merchantName")] public string? MerchantName { get; init; }
-        [JsonPropertyName("purchaseDate")] public DateOnly? PurchaseDate { get; init; }
+        // A string, not a DateOnly: a model that writes the date any other way would
+        // otherwise fail the whole reading over the one field that is allowed to be null.
+        [JsonPropertyName("purchaseDate")] public string? PurchaseDate { get; init; }
         [JsonPropertyName("rawText")] public string? RawText { get; init; }
         [JsonPropertyName("subtotal")] public decimal Subtotal { get; init; }
         [JsonPropertyName("tax")] public decimal Tax { get; init; }

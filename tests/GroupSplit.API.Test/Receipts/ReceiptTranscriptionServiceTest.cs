@@ -187,6 +187,50 @@ public class ReceiptTranscriptionServiceTest
         Assert.Contains("true", server.Body);
     }
 
+    /// <summary>
+    /// Veryfi sends the date with a time of day, and the rest of its body carries signed image
+    /// links and card details that every member of the group would otherwise be shown.
+    /// </summary>
+    [Fact]
+    public async Task Veryfi_keeps_the_printed_day_and_only_the_evidence_a_reviewer_needs()
+    {
+        var server = new VeryfiServer("""
+            {
+              "date": "2026-09-23 18:42:00",
+              "vendor": { "name": "Corner Pizza", "address": "1 Main St", "phone_number": "555-0100" },
+              "img_url": "https://veryfi.test/signed/receipt.jpg?token=secret",
+              "payment": { "card_number": "5430", "type": "visa" },
+              "ocr_text": "CORNER PZA",
+              "subtotal": 10.00,
+              "tax": 0.00,
+              "total": 10.00,
+              "line_items": [
+                { "description": "Pizza", "price": 10.00, "quantity": 1, "total": 10.00 },
+                { "description": "Nothing off", "type": "discount", "total": 0.00 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1, 2, 3]), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
+        Assert.Equal("Pizza", Assert.Single(receipt.Items).Name);
+        Assert.Contains("CORNER PZA", receipt.SourceValues);
+        Assert.Contains("Corner Pizza", receipt.SourceValues);
+        Assert.DoesNotContain("token=secret", receipt.SourceValues);
+        Assert.DoesNotContain("5430", receipt.SourceValues);
+        Assert.DoesNotContain("555-0100", receipt.SourceValues);
+    }
+
     [Fact]
     public async Task Reprocessing_an_attachment_uses_a_new_idempotency_key()
     {
@@ -239,7 +283,7 @@ public class ReceiptTranscriptionServiceTest
 
         Assert.Equal(19m, receipt.Items.Sum(item => item.TotalPrice));
         Assert.Equal(19m, receipt.Subtotal);
-        Assert.Contains("\"subtotal\": 20.00", receipt.SourceValues);
+        Assert.Contains("\"subtotal\":20.00", receipt.SourceValues);
         Assert.Equal(2m, receipt.Items.Sum(item => item.TaxAmount));
         Assert.Equal(4, receipt.Items.Count);
         Assert.All(receipt.Items.Take(2), item =>

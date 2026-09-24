@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using GroupSplit.API.Errors;
@@ -138,10 +140,53 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             return new TranscribedReceipt(subtotal, tax, tip, total, mappedItems)
             {
                 MerchantName = Clean(vendor) ?? Clean(RawVendorName),
-                PurchaseDate = DateOnly.TryParse(Date, out var date) ? date : null,
-                SourceValues = payload
+                PurchaseDate = PurchaseDateFrom(Date),
+                SourceValues = Evidence(payload)
             };
         }
+
+        /// <summary>
+        /// The calendar day of Veryfi's <c>date</c>, which it sends as
+        /// <c>yyyy-MM-dd HH:mm:ss</c>. Only the day is kept, read without the server's culture.
+        /// </summary>
+        private static DateOnly? PurchaseDateFrom(string? value) =>
+            value?.Trim() is { Length: >= 10 } text &&
+            DateOnly.TryParseExact(text[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var date)
+                ? date
+                : null;
+
+        /// <summary>
+        /// The part of the response a reviewer needs to check the reading against the paper.
+        /// The whole body also carries signed image links and payment details, and every
+        /// member who can open the bill would see it, so only these fields are kept.
+        /// </summary>
+        private static string? Evidence(string payload)
+        {
+            if (JsonNode.Parse(payload) is not JsonObject source)
+                return null;
+            var evidence = new JsonObject();
+            foreach (var key in EvidenceFields)
+                if (source[key] is { } value)
+                    evidence[key] = value.DeepClone();
+            if (source["vendor"] is JsonObject vendor && vendor["name"] is { } vendorName)
+                evidence["vendor"] = new JsonObject { ["name"] = vendorName.DeepClone() };
+
+            var text = evidence.ToJsonString();
+            if (text.Length > SaveReceiptRequest.SourceValuesMaxLength)
+            {
+                // The OCR text is the bulk of a long receipt and the structured lines above
+                // already say what it was read as.
+                evidence.Remove("ocr_text");
+                text = evidence.ToJsonString();
+            }
+            return text.Length > SaveReceiptRequest.SourceValuesMaxLength
+                ? text[..SaveReceiptRequest.SourceValuesMaxLength]
+                : text;
+        }
+
+        private static readonly string[] EvidenceFields =
+            ["raw_vendor_name", "date", "subtotal", "tax", "tip", "total", "line_items", "ocr_text"];
 
         private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
@@ -188,12 +233,17 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             // A reduction is an ordinary signed line. Some provider rows borrow a nearby
             // purchase's positive total; their explicit discount amount is the reliable
             // amount to keep, not another thing the group bought.
-            var reduced = RoundMoney(Math.Max(0m, -(Discount ?? 0m)));
+            // Veryfi signs the discount either way round. Whichever it is, the explicit
+            // saving outranks a total that may have borrowed a neighbouring purchase price.
+            var reduced = RoundMoney(Math.Abs(Discount ?? 0m));
             if ((!string.IsNullOrEmpty(type) && ReductionTypes.Contains(type))
                 || total < 0m
                 || (reduced > 0m && !named))
             {
                 var amount = reduced > 0m ? reduced : Math.Abs(total);
+                // A reduction row that takes nothing off is not a line anybody can split.
+                if (amount == 0m)
+                    return null;
                 var label = CleanLabel(Description, FullDescription, Text)
                     ?? (string.IsNullOrWhiteSpace(Sku) ? "Discount" : $"Coupon {Sku.Trim()}");
                 if (label.Length > 128) label = label[..128].TrimEnd();

@@ -69,6 +69,14 @@ public static class ReceiptSplitCalculator
             foreach (var share in shares)
                 totals[share.UserId] = totals.GetValueOrDefault(share.UserId) + share.Amount;
         }
+        // A coupon divided among people who bought less than it takes off would credit them
+        // on an expense they did not pay. Refused, so the coupon is put with the lines it
+        // actually discounts rather than turned into money owed to somebody.
+        if (!subtotalOnly && totals.Where(total => total.Value < 0).Select(total => total.Key).ToList()
+                is { Count: > 0 } credited)
+            throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
+                    "A discount line leaves somebody owing less than nothing. Split it with the items it discounts.")
+                .WithExtension("userIds", credited);
         return totals.OrderBy(p => p.Key).Select(p => new SplitAmount(p.Key, p.Value)).ToList();
     }
 
@@ -154,18 +162,35 @@ public static class ReceiptSplitCalculator
     }
 
     /// <summary>Calculates each signed line's tax. A coupon with a printed rate can
-    /// contribute negative tax; an unknown rate gets only the receipt tax left over.</summary>
+    /// contribute negative tax. A line with no rate keeps the tax it was given, and only
+    /// what the receipt tax still leaves over is spread across such lines.</summary>
     private static IReadOnlyDictionary<Guid, decimal> CalculateTaxes(Receipt receipt, IReadOnlyList<ReceiptItem> items)
     {
         if (items.All(item => item.TaxRate is null && item.IsTaxable is null))
             return items.ToDictionary(item => item.Id, item => item.TaxAmount);
 
+        // An unrated line's own figure stands: it may be a reviewer's correction or a
+        // provider's per-line reading, and one flag elsewhere on the bill says nothing
+        // about it. Only a line marked exempt is forced to zero.
         var taxes = items.ToDictionary(item => item.Id, item => item.TaxRate is { } rate
             ? RoundMoney(item.TotalPrice * rate / 100m)
-            : 0m);
+            : item.IsTaxable == false ? 0m : item.TaxAmount);
         var remaining = receipt.Tax - taxes.Values.Sum();
+        if (remaining == 0m)
+            return taxes;
+
         var fallback = items.Where(item => item.TaxRate is null && item.IsTaxable != false &&
             (remaining > 0 ? item.TotalPrice > 0 : item.TotalPrice < 0)).ToList();
+        // A till taxes the rate's whole base once, while each line here is rounded on its
+        // own, so a fully rated bill can differ from the printed tax by up to half a cent
+        // per line. That difference is rounding rather than a misread and belongs to the
+        // rated lines themselves; anything larger is left to be refused as not adding up.
+        if (fallback.Count == 0)
+        {
+            var rated = items.Where(item => item.TaxRate is > 0 && item.TotalPrice != 0m).ToList();
+            if (Math.Abs(remaining) <= .005m * rated.Count)
+                fallback = rated;
+        }
         foreach (var (item, share) in Allocate(Math.Abs(remaining), fallback.Select(item => Math.Abs(item.TotalPrice)).ToArray())
                      .Select((share, index) => (fallback[index], share)))
             taxes[item.Id] += Math.Sign(remaining) * share;

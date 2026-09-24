@@ -9,6 +9,10 @@ namespace GroupSplit.Shared;
 /// </summary>
 public record SaveReceiptRequest
 {
+    /// <summary>How much reading evidence a bill keeps. It is returned with every bill,
+    /// so it stays a review aid rather than an archive of whatever a client sends.</summary>
+    public const int SourceValuesMaxLength = 64 * 1024;
+
     [MaxDecimalPlaces(2)] public decimal Subtotal { get; init; }
     [MaxDecimalPlaces(2)] public decimal Tax { get; init; }
     [MaxDecimalPlaces(2)] public decimal Tip { get; init; }
@@ -16,7 +20,7 @@ public record SaveReceiptRequest
     [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
     [StringLength(128)] public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
-    public string? SourceValues { get; init; }
+    [StringLength(SourceValuesMaxLength)] public string? SourceValues { get; init; }
 }
 
 public record ReceiptItemInput

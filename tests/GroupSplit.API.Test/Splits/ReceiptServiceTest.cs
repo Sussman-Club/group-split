@@ -178,6 +178,91 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(-.50m, bill.Items.Single(item => item.Name == "Taxed coupon").TaxAmount);
     }
 
+    /// <summary>
+    /// Two rates on one bill, typed in line by line. Marking one line taxable says nothing
+    /// about the other, so neither figure moves.
+    /// </summary>
+    [Fact]
+    public async Task A_tax_flag_on_one_line_keeps_the_other_lines_reviewed_tax()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Shopping", Amount = 21.80m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 20m, Tax = 1.80m, Total = 21.80m,
+            Items = [
+                new ReceiptItemInput { Name = "Food", UnitPrice = 10m, TotalPrice = 10m,
+                    TaxAmount = .80m, IsTaxable = true },
+                new ReceiptItemInput { Name = "Wine", UnitPrice = 10m, TotalPrice = 10m,
+                    TaxAmount = 1m }]
+        }, Ct);
+
+        Assert.Equal(.80m, bill.Items.Single(item => item.Name == "Food").TaxAmount);
+        Assert.Equal(1m, bill.Items.Single(item => item.Name == "Wine").TaxAmount);
+    }
+
+    /// <summary>
+    /// The till taxed the 2.10 once and printed 0.21; each line on its own rounds to 0.11.
+    /// That cent is rounding, not a misread, and the bill still saves at the printed tax.
+    /// </summary>
+    [Fact]
+    public async Task Per_line_rate_rounding_settles_on_the_printed_tax()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Shopping", Amount = 2.31m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 2.10m, Tax = .21m, Total = 2.31m,
+            Items = [
+                new ReceiptItemInput { Name = "A", UnitPrice = 1.05m, TotalPrice = 1.05m, TaxRate = 10m },
+                new ReceiptItemInput { Name = "B", UnitPrice = 1.05m, TotalPrice = 1.05m, TaxRate = 10m }]
+        }, Ct);
+
+        Assert.Equal(.21m, bill.Items.Sum(item => item.TaxAmount));
+        Assert.Equal([.10m, .11m], bill.Items.Select(item => item.TaxAmount).Order());
+    }
+
+    [Fact]
+    public async Task A_rated_bill_whose_tax_is_off_by_more_than_rounding_is_refused()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Shopping", Amount = 11.50m, DateTime = DateTimeOffset.UtcNow }, Ct);
+
+        var refusal = await Assert.ThrowsAsync<UnprocessableException>(() =>
+            Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+            {
+                Subtotal = 10m, Tax = 1.50m, Total = 11.50m,
+                Items = [new ReceiptItemInput { Name = "A", UnitPrice = 10m, TotalPrice = 10m, TaxRate = 10m }]
+            }, Ct));
+
+        Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, refusal.Code);
+    }
+
+    /// <summary>
+    /// A coupon put on somebody who bought nothing would credit them on an expense they did
+    /// not pay. The bill is refused for division until the coupon goes with what it discounts.
+    /// </summary>
+    [Fact]
+    public async Task A_coupon_on_somebody_who_bought_nothing_is_not_divided()
+    {
+        var (expense, group, _) = await AnExpense();
+        var mine = (await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group, Name = "My coupon", Definition = new SoleSplitRuleDto(Self)
+        }, Ct)).Current!.Id;
+        var other = (await GetService<IGroupParticipants>().IdsOf(group, Ct)).Single(id => id != Self);
+        var theirs = (await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group, Name = "Theirs", Definition = new SoleSplitRuleDto(other)
+        }, Ct)).Current!.Id;
+
+        await Receipts.SaveForExpense(expense.Id,
+            Bill(Item("Dinner", 50m, theirs), Item("Coupon", -2m, mine)), Ct);
+
+        var refusal = await Assert.ThrowsAsync<UnprocessableException>(() => Receipts.Preview(expense.Id, Ct));
+        Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, refusal.Code);
+    }
+
     [Fact]
     public async Task A_personal_receipt_cannot_use_a_group_split_rule()
     {
