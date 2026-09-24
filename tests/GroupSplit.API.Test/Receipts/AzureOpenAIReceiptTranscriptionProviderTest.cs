@@ -16,9 +16,12 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     public async Task Sends_the_receipt_to_the_keyed_chat_client_and_maps_structured_output()
     {
         var client = new StubChatClient(
-            "{\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60,\"discount\":2.00," +
+            "{\"merchantName\":\"Corner Pizza\",\"purchaseDate\":\"2026-09-23\",\"rawText\":\"PZA LG\"," +
+            "\"subtotal\":16.00,\"tax\":1.60,\"tip\":0,\"total\":17.60," +
             "\"items\":[{\"name\":\"Pizza\",\"unitPrice\":18.00,\"quantity\":1," +
-            "\"totalPrice\":16.00,\"discountAmount\":2.00,\"taxAmount\":1.60}]}");
+            "\"totalPrice\":18.00,\"taxAmount\":1.60,\"taxRate\":10,\"isTaxable\":true}," +
+            "{\"name\":\"Coupon SAVE2\",\"unitPrice\":-2.00,\"quantity\":1," +
+            "\"totalPrice\":-2.00,\"taxAmount\":0,\"taxRate\":null,\"isTaxable\":null}]}");
         var provider = new AzureOpenAIReceiptTranscriptionProvider(
             client,
             NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
@@ -28,11 +31,39 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
             TestContext.Current.CancellationToken);
 
         Assert.Equal(17.60m, receipt.Total);
-        var item = Assert.Single(receipt.Items);
+        Assert.Equal(2, receipt.Items.Count);
+        var item = receipt.Items[0];
         Assert.Equal("Pizza", item.Name);
+        Assert.Equal(18m, item.TotalPrice);
         Assert.Equal(1.60m, item.TaxAmount);
+        Assert.Equal(10m, item.TaxRate);
+        Assert.True(item.IsTaxable);
+        Assert.Equal("Corner Pizza", receipt.MerchantName);
+        Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
+        Assert.Contains("PZA LG", receipt.SourceValues);
+        Assert.Equal(-2m, receipt.Items[1].TotalPrice);
         Assert.Contains("discount", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("negative-priced item", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("evidence-based name", client.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Coupon [printed code]", client.Prompt, StringComparison.Ordinal);
+        Assert.Contains("do not invent a product", client.Prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dinner.jpg", client.AttachmentDescription);
+    }
+
+    [Fact]
+    public async Task A_date_the_model_wrote_another_way_is_dropped_rather_than_failing_the_reading()
+    {
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(
+            new StubChatClient("{\"purchaseDate\":\"23/09/2026\",\"subtotal\":5,\"tax\":0,\"tip\":0,\"total\":5," +
+                "\"items\":[{\"name\":\"Soup\",\"unitPrice\":5,\"quantity\":1,\"totalPrice\":5,\"taxAmount\":0}]}"),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(
+            new ReceiptSourceDocument(Guid.NewGuid(), "lunch.jpg", "image/jpeg", [1]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(receipt.PurchaseDate);
+        Assert.Equal("Soup", Assert.Single(receipt.Items).Name);
     }
 
     [Fact]
