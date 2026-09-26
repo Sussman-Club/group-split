@@ -1,6 +1,6 @@
 using GroupSplit.Data.PostgreSQL;
 using GroupSplit.Seeder.Abstractions;
-using GroupSplit.Seeder.Keycloak;
+using GroupSplit.Keycloak;
 using GroupSplit.Seeder.Options;
 using GroupSplit.Seeder.Orchestration;
 using Microsoft.Extensions.DependencyInjection;

@@ -2,25 +2,26 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using GroupSplit.Seeder.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace GroupSplit.Seeder.Keycloak;
+namespace GroupSplit.Keycloak;
 
 /// <summary>
-/// The slice of Keycloak's Admin REST API the seeder needs: sign in as the bootstrap admin,
-/// look a user up, create one, delete one.
+/// The slice of Keycloak's Admin REST API the app needs: sign in as the bootstrap admin,
+/// look a user up, create one, delete one, and reconcile realm-level settings.
 /// </summary>
 /// <remarks>
 /// Hand-rolled rather than taken from a package: four calls against a documented, stable API
-/// is less to own than a dependency, and the seeder is the only caller. The base address is
+/// is less to own than a dependency. The base address is
 /// the Keycloak resource, resolved by service discovery from the AppHost's reference.
 /// </remarks>
 public sealed class KeycloakAdminClient(
     HttpClient http,
-    IOptions<KeycloakSeedOptions> options,
-    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient
+    IOptions<KeycloakAdminOptions> options,
+    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient, IKeycloakRealmAdminClient
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -30,7 +31,7 @@ public sealed class KeycloakAdminClient(
     /// </summary>
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromSeconds(30);
 
-    private readonly KeycloakSeedOptions _options = options.Value;
+    private readonly KeycloakAdminOptions _options = options.Value;
 
     private string? _token;
     private DateTimeOffset _tokenObtainedAt;
@@ -38,7 +39,76 @@ public sealed class KeycloakAdminClient(
     /// <summary>The realm's default role, read once. It cannot change under a seeding run.</summary>
     private KeycloakRole? _defaultRole;
 
-    public string Realm => _options.Realm;
+    public string Realm => KeycloakRealmDefinition.RealmName;
+
+    public Task<JsonObject> GetRealmAsync(CancellationToken ct = default) => ReadRealmAsync(Realm, ct);
+
+    public Task UpdateRealmAsync(JsonObject realm, CancellationToken ct = default) =>
+        WriteRealmAsync(Realm, realm, ct);
+
+    public string AdminRealm => _options.AdminRealm;
+
+    public Task<JsonObject> GetAdminRealmAsync(CancellationToken ct = default) => ReadRealmAsync(AdminRealm, ct);
+
+    public Task UpdateAdminRealmAsync(JsonObject realm, CancellationToken ct = default) =>
+        WriteRealmAsync(AdminRealm, realm, ct);
+
+    public async Task<JsonObject?> GetClientAsync(string clientId, CancellationToken ct = default)
+    {
+        var query = $"admin/realms/{Realm}/clients?clientId={Uri.EscapeDataString(clientId)}";
+
+        using var request = await AuthorizedAsync(HttpMethod.Get, query, ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read client {clientId} on realm {Realm}", ct);
+
+        // The filter is an exact match on clientId, which the realm keeps unique.
+        var matches = await response.Content.ReadFromJsonAsync<List<JsonObject>>(Json, ct);
+
+        return matches?.FirstOrDefault();
+    }
+
+    public async Task UpdateClientAsync(JsonObject client, CancellationToken ct = default)
+    {
+        var id = client["id"]?.GetValue<string>()
+                 ?? throw new ArgumentException("The client representation carries no id.", nameof(client));
+
+        using var request = await AuthorizedAsync(HttpMethod.Put, $"admin/realms/{Realm}/clients/{id}", ct);
+        request.Content = JsonContent.Create(client, options: Json);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"update client {client["clientId"]} on realm {Realm}", ct);
+    }
+
+    private async Task<JsonObject> ReadRealmAsync(string realm, CancellationToken ct)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{realm}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the realm {realm}", ct);
+
+        return await response.Content.ReadFromJsonAsync<JsonObject>(Json, ct)
+            ?? throw new InvalidOperationException($"Keycloak returned no representation for realm {realm}.");
+    }
+
+    private async Task WriteRealmAsync(string realm, JsonObject representation, CancellationToken ct)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Put, $"admin/realms/{realm}", ct);
+        request.Content = JsonContent.Create(representation, options: Json);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"update the settings on realm {realm}", ct);
+    }
+
+    public async Task DeleteRealmAsync(CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Delete, $"admin/realms/{Realm}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        if (response.StatusCode == HttpStatusCode.NotFound) return;
+
+        await ThrowOnFailure(response, $"delete realm {Realm}", ct);
+    }
 
     /// <summary>
     /// Signs in as the bootstrap admin, confirming the credentials work before any user is
@@ -221,7 +291,7 @@ public sealed class KeycloakAdminClient(
         if (!_options.IsConfigured)
         {
             throw new InvalidOperationException(
-                "Keycloak admin credentials are not configured; nothing can be seeded into the realm.");
+                "Keycloak admin credentials are not configured.");
         }
 
         using var response = await http.PostAsync(

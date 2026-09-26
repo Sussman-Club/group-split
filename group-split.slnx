@@ -6,11 +6,13 @@
     <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
     <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
   </Folder>
-  <!-- Aspire: the app model that runs everything locally, the seeding worker it
-       launches, and the telemetry/health/service-discovery defaults services opt into. -->
+  <!-- Aspire: the app model, the seeding and realm workers, their shared Keycloak
+       admin client, and the telemetry/health/service-discovery defaults. -->
   <Folder Name="/src/Aspire/">
     <Project Path="src/GroupSplit.AppHost/GroupSplit.AppHost.csproj" />
     <Project Path="src/GroupSplit.Seeder/GroupSplit.Seeder.csproj" />
+    <Project Path="src/GroupSplit.RealmWorker/GroupSplit.RealmWorker.csproj" />
+    <Project Path="src/GroupSplit.Keycloak/GroupSplit.Keycloak.csproj" />
     <Project Path="src/GroupSplit.ServiceDefaults/GroupSplit.ServiceDefaults.csproj" />
   </Folder>
   <!-- Front ends: the MAUI app, the Blazor Web host and its WebAssembly client,

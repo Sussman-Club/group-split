@@ -340,7 +340,7 @@ jobs:
           # that CI built, rather than a tag that could later be moved.
           output_dir="src/GroupSplit.AppHost/aspire-output"
           env_file="$output_dir/.env.production"
-          image_variables=(API_IMAGE WEB_IMAGE MIGRATIONS_INTERNAL_IMAGE)
+          image_variables=(API_IMAGE WEB_IMAGE MIGRATIONS_INTERNAL_IMAGE REALM_SETTINGS_IMAGE)
           declare -A tagged_images
           declare -A pinned_images
 

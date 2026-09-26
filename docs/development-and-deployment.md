@@ -28,11 +28,12 @@ each mode carries that shape as a pair of extension methods next to the code tha
 | Resource | Run mode | Publish mode |
 | --- | --- | --- |
 | Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
+| Realm settings | `realm-settings` waits for healthy Keycloak, then reconciles the managed settings from the realm export; the API waits for the worker to finish | The same worker runs as a one-shot Compose service and waits for Keycloak's healthcheck; the API starts only after it exits successfully |
 | Postgres | `WithPostgresMcp` on each database (Aspire's own) | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
 | API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
 | Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithPrepareOnPush`, which makes `aspire do push` also write the Compose artifacts |
 
-Only run mode adds the MAUI head, the seeder and its dashboard command, Scalar, and Mailpit
+Only run mode adds the MAUI head, demo seeder, local realm-reset command, Scalar, and Mailpit
 itself; publish mode adds the deployment-only parameters below, while the shared integration
 parameters are declared in both modes. `PublishAs*` calls,
 which Aspire ignores in run mode, stay on the shared chain where they read as part of the
@@ -391,13 +392,75 @@ on the same thirty days, because the realm has no way to tell the two apart any 
 grants nothing -- both cookies that could reach it are gone with the browser -- but it is
 rows in the session table for longer than they are worth.
 
-Realm changes reach a running Keycloak only on a fresh import. Development keeps a data
-volume and deployment keeps a database, so both skip the import once the realm exists: after
-changing `realms.json`, either drop the volume locally, or apply the same values through the
-admin console on the deployed realm. Turning `rememberMe` off is not retroactive either:
+Realm import only creates a realm that does not exist yet. The `realm-settings` worker
+reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
+in both run and publish modes. It does the same for the `web-app` client's redirect URIs, web
+origins and post-logout redirect URIs, resolving `${WEB_HOSTNAME}` from its environment.
+It leaves SMTP configuration,
+the rest of each client, protocol mappers, authentication flows, identity providers, roles,
+and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
+restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
+retroactive either:
 sessions created while it was on keep their extended lifetime until they expire
 ([CVE-2025-11429](https://advisories.gitlab.com/pkg/maven/org.keycloak/keycloak-services/CVE-2025-11429/)),
 so on a realm that had it on, existing sessions have to be ended rather than waited out.
+
+## What the public origin exposes of Keycloak
+
+The web app forwards two subtrees under `/idp` to Keycloak, and nothing else:
+
+- `/idp/realms/group-split/**`: the sign-in and registration pages, the OIDC endpoints both apps
+  read their metadata and signing keys from, the Google broker callback, and the account
+  console;
+- `/idp/resources/**`: the static files those pages load.
+
+Everything else under `/idp` answers 404 from the web app and never reaches Keycloak. That
+includes the admin console, the admin REST API, the `master` realm and its token endpoint, other
+realms, and the welcome page. So does a path carrying an encoded slash or backslash, which could
+route as the app's realm here and be read as something else by Keycloak. See
+[`MapKeycloakForwarder`](../src/GroupSplit.App/GroupSplit.App.Web/WebAppExtensions.cs).
+
+The seeder, the realm worker and the AppHost tests reach Keycloak inside the network, so none
+of them depends on the forwarder. Deployed, Keycloak serves even its internal address below
+`/idp`, so the worker is given `Keycloak__RelativePath=/idp` and calls
+`http://keycloak:8080/idp/...`. Without it every admin call is a 404, and the API never starts.
+
+### Reaching the deployed admin console
+
+The admin console is reachable only from the host, through an SSH tunnel. Keycloak's HTTP port
+is published on the host's loopback address alone (`127.0.0.1:8180`), so neither the internet
+nor the LAN can reach it. A port Docker publishes on every interface would walk past the host
+firewall.
+
+```bash
+ssh -L 8180:127.0.0.1:8180 <deploy-host>
+```
+
+With the tunnel open, browse to `http://localhost:8180/idp/admin/` and sign in as the Keycloak
+admin. Two settings make the console work at that address rather than at the public one:
+
+- **`KC_HOSTNAME_ADMIN=http://localhost:8180/idp`** moves where the console itself is served.
+- **The `master` realm's Frontend URL**, which the realm worker sets on every deploy from
+  `Realm__AdminConsoleUrl`, moves the console's sign-in to the same address. Without it the
+  console signs in to `master` on the public origin, which now answers 404, and hangs on a blank
+  page.
+
+Only `master` gets that frontend URL. The app realm keeps the public origin its users and tokens
+need. If 8180 is taken on the host, change `KeycloakDeploymentExtensions.AdminConsolePort`.
+
+For one-off commands without a browser, use the admin CLI inside the container. Pass the
+credentials on each call, because each `exec` is a new process and a `config credentials` login
+does not carry over:
+
+```bash
+docker compose exec keycloak /opt/keycloak/bin/kcadm.sh get realms/group-split/clients \
+  -q clientId=web-app --no-config --server http://localhost:8080/idp \
+  --realm master --user admin --password "$KEYCLOAK_PASSWORD"
+```
+
+Settings that belong to the repository still go in `realms.json`, where the realm worker applies
+them on the next deploy. The admin console and CLI are for one-off inspection and for what the
+worker deliberately leaves alone.
 
 ## Sessions across a deploy
 
