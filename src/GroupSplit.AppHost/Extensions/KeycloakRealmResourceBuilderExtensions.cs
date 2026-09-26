@@ -10,6 +10,35 @@ public static class KeycloakRealmResourceBuilderExtensions
     /// </summary>
     private const string DefaultKeycloakAdminUser = "admin";
 
+    /// <summary>
+    /// The placeholder <c>realms.json</c> builds the web app's redirect URIs from. Keycloak
+    /// resolves it itself on a first-boot import; the realm worker resolves it when it
+    /// reconciles a realm that already exists. Both have to be given the same value.
+    /// <para>
+    /// Named after the <c>web-hostname</c> parameter's Compose variable on purpose. Deployed,
+    /// the realm file travels as an inline Compose config, and Compose interpolates every
+    /// <c>${...}</c> in it before Keycloak sees it -- from its own variables, not the
+    /// container's. A name Compose did not know would arrive as an empty string, and the first
+    /// import would store <c>/signin-oidc</c> as the only redirect URI.
+    /// </para>
+    /// </summary>
+    public const string WebHostnameVariable = "WEB_HOSTNAME";
+
+    extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEnvironment
+    {
+        /// <summary>
+        /// Tells Keycloak, or the realm worker, the one origin the <c>web-app</c> client may
+        /// send a browser back to. Locally that is the web app's HTTPS endpoint, whose port the
+        /// test host moves on every run; deployed it is the public origin.
+        /// </summary>
+        public IResourceBuilder<T> WithWebAppOrigin(EndpointReference origin)
+            => builder.WithEnvironment(WebHostnameVariable, origin);
+
+        /// <inheritdoc cref="WithWebAppOrigin(IResourceBuilder{T}, EndpointReference)"/>
+        public IResourceBuilder<T> WithWebAppOrigin(IResourceBuilder<ParameterResource> origin)
+            => builder.WithEnvironment(WebHostnameVariable, origin);
+    }
+
     extension<TProject>(IResourceBuilder<TProject> builder) where TProject : ProjectResource
     {
         /// <summary>Passes Keycloak's own bootstrap-admin credentials to an admin worker.</summary>

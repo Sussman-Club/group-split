@@ -233,9 +233,21 @@ login switches, password and brute-force policy, token lifetimes, and SSO timeou
 second run with no changes makes no API update. If Keycloak never becomes ready, the worker
 fails and the deployment does not silently skip reconciliation.
 
-The worker deliberately does not manage SMTP settings, clients, protocol mappers,
-authentication flows, identity providers, roles, or users. Those remain governed by realm
-import and their existing seeders. This boundary is explicit in
+It also manages where the `web-app` client may send a browser back to. The client's
+`redirectUris`, `webOrigins` and post-logout redirect URIs are reconciled, because a realm
+created while they were wildcards otherwise keeps them as wildcards. `realms.json` writes
+them as `${WEB_HOSTNAME}/signin-oidc` and `${WEB_HOSTNAME}/signout-callback-oidc`, with no
+web origins.
+
+Deployed, `WEB_HOSTNAME` is the public origin, and Compose fills it into the imported file
+itself. Locally, the AppHost sets it on Keycloak and on the worker to the web app's HTTPS
+endpoint. Keycloak refuses a sign-in from any other origin, including the web app's plain HTTP
+endpoint locally. If the variable is missing, the worker fails rather than store the
+placeholder.
+
+The worker deliberately does not manage SMTP settings, the rest of each client, protocol
+mappers, authentication flows, identity providers, roles, or users. Those remain governed by
+realm import and their existing seeders. This boundary is explicit in
 [`KeycloakRealmDefinition`](src/GroupSplit.Keycloak/KeycloakRealmDefinition.cs).
 
 To restore the complete local realm to its checked-in first-boot definition, use **Reset

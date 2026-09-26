@@ -118,6 +118,13 @@ if (builder.ExecutionContext.IsRunMode)
 
     keycloak.AsDevelopmentKeycloak(mailpit);
 
+    // Where a local sign-in may be sent back to: the web app's own HTTPS endpoint, and
+    // nowhere else. Given to Keycloak for a first-boot import and to the worker for a realm
+    // that already exists, because the port is the test host's to choose on every run.
+    var webOrigin = web.GetEndpoint("https");
+    keycloak.WithWebAppOrigin(webOrigin);
+    realmSettings.WithWebAppOrigin(webOrigin);
+
     var realmReset = builder.AddProject<GroupSplit_RealmWorker>("realm-reset")
         .WithExplicitStart()
         .WithEnvironment("Realm__Operation", "reset")
@@ -193,9 +200,11 @@ else
     // it on the web origin under its relative path. Keycloak's port stays off the host.
     keycloak
         .AsDeployedKeycloak(hostname)
+        .WithWebAppOrigin(hostname)
         .WithSmtp();
 
     realmSettings
+        .WithWebAppOrigin(hostname)
         .WithRemoteImageTag(deploymentVersion)
         .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 

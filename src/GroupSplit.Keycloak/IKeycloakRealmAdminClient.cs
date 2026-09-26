@@ -14,4 +14,10 @@ public interface IKeycloakRealmAdminClient
     Task UpdateRealmAsync(JsonObject realm, CancellationToken ct = default);
 
     Task DeleteRealmAsync(CancellationToken ct = default);
+
+    /// <summary>The client with this <c>clientId</c> in the app's realm, or null when there is none.</summary>
+    Task<JsonObject?> GetClientAsync(string clientId, CancellationToken ct = default);
+
+    /// <summary>Replaces the client whose internal <c>id</c> the representation carries.</summary>
+    Task UpdateClientAsync(JsonObject client, CancellationToken ct = default);
 }

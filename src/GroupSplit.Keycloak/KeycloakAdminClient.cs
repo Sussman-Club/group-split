@@ -41,24 +41,56 @@ public sealed class KeycloakAdminClient(
 
     public string Realm => KeycloakRealmDefinition.RealmName;
 
-    public async Task<JsonObject> GetRealmAsync(CancellationToken ct = default)
+    public Task<JsonObject> GetRealmAsync(CancellationToken ct = default) => ReadRealmAsync(Realm, ct);
+
+    public Task UpdateRealmAsync(JsonObject realm, CancellationToken ct = default) =>
+        WriteRealmAsync(Realm, realm, ct);
+
+    public async Task<JsonObject?> GetClientAsync(string clientId, CancellationToken ct = default)
     {
-        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}", ct);
+        var query = $"admin/realms/{Realm}/clients?clientId={Uri.EscapeDataString(clientId)}";
+
+        using var request = await AuthorizedAsync(HttpMethod.Get, query, ct);
         using var response = await http.SendAsync(request, ct);
 
-        await ThrowOnFailure(response, $"read the realm {Realm}", ct);
+        await ThrowOnFailure(response, $"read client {clientId} on realm {Realm}", ct);
 
-        return await response.Content.ReadFromJsonAsync<JsonObject>(Json, ct)
-            ?? throw new InvalidOperationException($"Keycloak returned no representation for realm {Realm}.");
+        // The filter is an exact match on clientId, which the realm keeps unique.
+        var matches = await response.Content.ReadFromJsonAsync<List<JsonObject>>(Json, ct);
+
+        return matches?.FirstOrDefault();
     }
 
-    public async Task UpdateRealmAsync(JsonObject realm, CancellationToken ct = default)
+    public async Task UpdateClientAsync(JsonObject client, CancellationToken ct = default)
     {
-        using var request = await AuthorizedAsync(HttpMethod.Put, $"admin/realms/{Realm}", ct);
-        request.Content = JsonContent.Create(realm, options: Json);
+        var id = client["id"]?.GetValue<string>()
+                 ?? throw new ArgumentException("The client representation carries no id.", nameof(client));
+
+        using var request = await AuthorizedAsync(HttpMethod.Put, $"admin/realms/{Realm}/clients/{id}", ct);
+        request.Content = JsonContent.Create(client, options: Json);
         using var response = await http.SendAsync(request, ct);
 
-        await ThrowOnFailure(response, $"update the settings on realm {Realm}", ct);
+        await ThrowOnFailure(response, $"update client {client["clientId"]} on realm {Realm}", ct);
+    }
+
+    private async Task<JsonObject> ReadRealmAsync(string realm, CancellationToken ct)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{realm}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the realm {realm}", ct);
+
+        return await response.Content.ReadFromJsonAsync<JsonObject>(Json, ct)
+            ?? throw new InvalidOperationException($"Keycloak returned no representation for realm {realm}.");
+    }
+
+    private async Task WriteRealmAsync(string realm, JsonObject representation, CancellationToken ct)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Put, $"admin/realms/{realm}", ct);
+        request.Content = JsonContent.Create(representation, options: Json);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"update the settings on realm {realm}", ct);
     }
 
     public async Task DeleteRealmAsync(CancellationToken ct = default)

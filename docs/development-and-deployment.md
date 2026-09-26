@@ -394,13 +394,44 @@ rows in the session table for longer than they are worth.
 
 Realm import only creates a realm that does not exist yet. The `realm-settings` worker
 reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
-in both run and publish modes. It leaves SMTP configuration, clients, protocol mappers,
-authentication flows, identity providers, roles, and users alone. Use the local **Reset
-Keycloak realm** command to delete the realm and restart Keycloak when a complete re-import
-is needed. Turning `rememberMe` off is not retroactive either:
+in both run and publish modes. It does the same for the `web-app` client's redirect URIs, web
+origins and post-logout redirect URIs, resolving `${WEB_HOSTNAME}` from its environment.
+It leaves SMTP configuration,
+the rest of each client, protocol mappers, authentication flows, identity providers, roles,
+and users alone. Use the local **Reset Keycloak realm** command to delete the realm and
+restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
+retroactive either:
 sessions created while it was on keep their extended lifetime until they expire
 ([CVE-2025-11429](https://advisories.gitlab.com/pkg/maven/org.keycloak/keycloak-services/CVE-2025-11429/)),
 so on a realm that had it on, existing sessions have to be ended rather than waited out.
+
+## What the public origin exposes of Keycloak
+
+The web app forwards two subtrees under `/idp` to Keycloak, and nothing else:
+
+- `/idp/realms/group-split/**`: the sign-in and registration pages, the OIDC endpoints both apps
+  read their metadata and signing keys from, the Google broker callback, and the account
+  console;
+- `/idp/resources/**`: the static files those pages load.
+
+Everything else under `/idp` answers 404 from the web app and never reaches Keycloak. That
+includes the admin console, the admin REST API, the `master` realm and its token endpoint, other
+realms, and the welcome page. So does a path carrying an encoded slash or backslash, which could
+route as the app's realm here and be read as something else by Keycloak. See
+[`MapKeycloakForwarder`](../src/GroupSplit.App/GroupSplit.App.Web/WebAppExtensions.cs).
+
+The seeder, the realm worker and the AppHost tests reach Keycloak inside the network, so none
+of them depends on the forwarder. To administer a deployed Keycloak, use its admin CLI inside
+the container:
+
+```bash
+docker compose exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+  --server http://localhost:8080/idp --realm master --user admin
+```
+
+Settings that belong to the repository still go in `realms.json`, where the realm worker applies
+them on the next deploy. The admin CLI is for one-off inspection and for what the worker
+deliberately leaves alone.
 
 ## Sessions across a deploy
 

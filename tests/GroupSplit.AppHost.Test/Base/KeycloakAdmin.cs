@@ -50,7 +50,7 @@ public sealed class KeycloakAdmin(HttpClient client, string username, string pas
             })
         };
 
-        await SendAsync(request, ct);
+        (await SendAsync(request, ct)).Dispose();
     }
 
     /// <summary>
@@ -78,28 +78,42 @@ public sealed class KeycloakAdmin(HttpClient client, string username, string pas
             })
         };
 
-        await SendAsync(request, ct);
+        (await SendAsync(request, ct)).Dispose();
 
         return email;
+    }
+
+    /// <summary>Reads an admin REST resource, relative to Keycloak's root, as JSON.</summary>
+    public async Task<JsonElement> GetAsync(string path, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        using var response = await SendAsync(request, ct);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+
+        return payload.RootElement.Clone();
     }
 
     /// <summary>
     /// Attaches a fresh admin token and reports the body on failure, because Keycloak
     /// explains a rejected realm or user in it and says nothing useful in the status.
     /// </summary>
-    private async Task SendAsync(HttpRequestMessage request, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         request.Headers.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", await TokenAsync(ct));
 
-        using var response = await client.SendAsync(request, ct);
+        var response = await client.SendAsync(request, ct);
 
         if (!response.IsSuccessStatusCode)
         {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            response.Dispose();
+
             throw new InvalidOperationException(
-                $"Keycloak answered {(int)response.StatusCode} to "
-                + $"{request.Method} {request.RequestUri}: {await response.Content.ReadAsStringAsync(ct)}");
+                $"Keycloak answered {(int)response.StatusCode} to {request.Method} {request.RequestUri}: {body}");
         }
+
+        return response;
     }
 
     private async Task<string> TokenAsync(CancellationToken ct)

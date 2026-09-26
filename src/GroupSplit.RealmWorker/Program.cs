@@ -13,7 +13,7 @@ var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Re
 switch (builder.Configuration["Realm:Operation"])
 {
     case "reconcile":
-        await new RealmSettingsReconciler(keycloak, logger)
+        await new RealmSettingsReconciler(keycloak, logger, name => builder.Configuration[name])
             .ReconcileAsync(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
         break;
 
