@@ -398,7 +398,7 @@ in both run and publish modes. It does the same for the `web-app` client's redir
 origins and post-logout redirect URIs, resolving `${WEB_HOSTNAME}` from its environment.
 It leaves SMTP configuration,
 the rest of each client, protocol mappers, authentication flows, identity providers, roles,
-and users alone. Use the local **Reset Keycloak realm** command to delete the realm and
+and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
 restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
 retroactive either:
 sessions created while it was on keep their extended lifetime until they expire
@@ -421,8 +421,10 @@ route as the app's realm here and be read as something else by Keycloak. See
 [`MapKeycloakForwarder`](../src/GroupSplit.App/GroupSplit.App.Web/WebAppExtensions.cs).
 
 The seeder, the realm worker and the AppHost tests reach Keycloak inside the network, so none
-of them depends on the forwarder. To administer a deployed Keycloak, use its admin CLI inside
-the container:
+of them depends on the forwarder. Deployed, Keycloak serves even its internal address below
+`/idp`, so the worker is given `Keycloak__RelativePath=/idp` and calls
+`http://keycloak:8080/idp/...`. Without it every admin call is a 404, and the API never starts.
+To administer a deployed Keycloak, use its admin CLI inside the container:
 
 ```bash
 docker compose exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \

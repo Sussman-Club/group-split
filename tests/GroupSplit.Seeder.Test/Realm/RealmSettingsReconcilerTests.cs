@@ -109,6 +109,38 @@ public sealed class RealmSettingsReconcilerTests
         Assert.Equal(0, admin.ClientUpdates);
     }
 
+    /// <summary>The post-logout attribute is several URIs joined with <c>##</c>, and a set like the list above.</summary>
+    [Fact]
+    public async Task A_multi_valued_attribute_in_another_order_is_not_a_change()
+    {
+        var current = Imported();
+        var attributes = KeycloakRealmDefinition.Client(current, "web-app")!["attributes"]!;
+        attributes["post.logout.redirect.uris"] =
+            $"{Origin}/signout-callback-oidc##{Origin}/signout-callback-oidc";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(0, admin.ClientUpdates);
+    }
+
+    /// <summary>
+    /// Only attributes are split on <c>##</c>. A realm setting is compared as the string it is,
+    /// so a value that differs only in how it would split is still a change.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_setting_is_compared_as_a_whole_string()
+    {
+        var current = Imported();
+        current["displayName"] = "Group Split##Group Split";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.Equal("Group Split", admin.RealmData["displayName"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task A_second_run_changes_nothing()
     {

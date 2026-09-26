@@ -97,7 +97,7 @@ public sealed class RealmSettingsReconciler(
                 current["attributes"] = attributes = new JsonObject();
             }
 
-            changed.AddRange(Apply(attributes, (JsonObject)wanted["attributes"]!, managed.Attributes)
+            changed.AddRange(Apply(attributes, (JsonObject)wanted["attributes"]!, managed.Attributes, multiValued: true)
                 .Select(name => $"attributes.{name}"));
         }
 
@@ -115,10 +115,15 @@ public sealed class RealmSettingsReconciler(
             changed.Count, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
     }
 
-
     /// <summary>Copies each named value that differs from <paramref name="desired"/> onto <paramref name="current"/>.</summary>
+    /// <param name="multiValued">
+    /// Whether a string holds several values joined with <c>##</c>, as a client attribute such
+    /// as <c>post.logout.redirect.uris</c> does. Only then is it compared as a set; an ordinary
+    /// realm setting that happened to contain <c>##</c> must still compare as the string it is.
+    /// </param>
     /// <returns>The names that changed.</returns>
-    private static List<string> Apply(JsonObject current, JsonObject desired, IEnumerable<string> names)
+    private static List<string> Apply(
+        JsonObject current, JsonObject desired, IEnumerable<string> names, bool multiValued = false)
     {
         var changed = new List<string>();
 
@@ -126,7 +131,7 @@ public sealed class RealmSettingsReconciler(
         {
             var value = desired[name];
 
-            if (Same(current[name], value)) continue;
+            if (Same(current[name], value, multiValued)) continue;
 
             current[name] = value?.DeepClone();
             changed.Add(name);
@@ -140,14 +145,15 @@ public sealed class RealmSettingsReconciler(
     /// whatever order it stores it, so comparing it as an array would rewrite the client on
     /// every run. A multi-valued attribute is one string joined with <c>##</c>, for the same reason.
     /// </summary>
-    private static bool Same(JsonNode? current, JsonNode? desired)
+    private static bool Same(JsonNode? current, JsonNode? desired, bool multiValued)
     {
         if (current is JsonArray currentItems && desired is JsonArray desiredItems)
         {
             return Values(currentItems).SetEquals(Values(desiredItems));
         }
 
-        if (current is JsonValue currentValue && desired is JsonValue desiredValue
+        if (multiValued
+            && current is JsonValue currentValue && desired is JsonValue desiredValue
             && currentValue.TryGetValue<string>(out var currentText)
             && desiredValue.TryGetValue<string>(out var desiredText))
         {

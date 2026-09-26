@@ -243,12 +243,17 @@ public static class WebAppExtensions
         return builder;
     }
 
-    /// <summary>Whether <paramref name="path"/> has no encoded separator and no backslash left in it.</summary>
+    /// <summary>
+    /// Whether <paramref name="path"/> has no encoded separator, no backslash and no semicolon
+    /// left in it. The semicolon is for matrix parameters, which some servers strip before
+    /// resolving <c>..</c> -- the shape of <c>/..;/</c> traversals. Keycloak never puts one in a path.
+    /// </summary>
     internal static bool IsUnambiguous(PathString path)
     {
         var value = path.Value ?? string.Empty;
 
         return !value.Contains('\\')
+               && !value.Contains(';')
                && !value.Contains("%2F", StringComparison.OrdinalIgnoreCase)
                && !value.Contains("%5C", StringComparison.OrdinalIgnoreCase);
     }

@@ -69,21 +69,31 @@ public static class KeycloakRealmResourceBuilderExtensions
                 executeCommand: async context =>
                 {
                     var commands = context.Services.GetRequiredService<ResourceCommandService>();
+                    var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
+
+                    // Only a run that stopped after this start counts. A second reset would
+                    // otherwise be answered by the snapshot the first one left behind, and
+                    // Keycloak would restart while the realm was still being deleted.
+                    var requestedAt = DateTime.UtcNow;
 
                     var reset = await commands.ExecuteCommandAsync(
                         resetWorker.Resource, "resource-start", context.CancellationToken);
                     if (!reset.Success) return reset;
 
-                    var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
-                    var state = await notifications.WaitForResourceAsync(
+                    var ended = await notifications.WaitForResourceAsync(
                         resetWorker.Resource.Name,
-                        [KnownResourceStates.Finished, KnownResourceStates.Exited,
-                            KnownResourceStates.FailedToStart],
+                        resource => resource.Snapshot.StopTimeStamp > requestedAt
+                                    || resource.Snapshot.State?.Text == KnownResourceStates.FailedToStart,
                         context.CancellationToken);
-                    if (state != KnownResourceStates.Finished)
+
+                    // A project that exits non-zero still ends in Finished, so the exit code is
+                    // what says whether the realm was actually deleted.
+                    if (ended.Snapshot.State?.Text != KnownResourceStates.Finished || ended.Snapshot.ExitCode != 0)
                     {
-                        throw new InvalidOperationException(
-                            $"The realm reset worker ended in state '{state}'; Keycloak was not restarted.");
+                        return CommandResults.Failure(
+                            $"The realm reset worker ended in state '{ended.Snapshot.State?.Text}' with exit code "
+                            + $"{ended.Snapshot.ExitCode?.ToString() ?? "none"}; Keycloak was not restarted. "
+                            + "See the realm-reset logs.");
                     }
 
                     var stop = await commands.ExecuteCommandAsync(

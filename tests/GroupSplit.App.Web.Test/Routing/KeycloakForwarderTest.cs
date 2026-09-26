@@ -114,14 +114,17 @@ public sealed class KeycloakForwarderTest : IAsyncLifetime
 
     /// <summary>
     /// Paths that route as the app's realm here but that the next hop could read as
-    /// another: an encoded slash or backslash survives routing undecoded.
+    /// another: an encoded slash or backslash survives routing undecoded, and a semicolon is
+    /// how <c>/..;/</c> traversals get past servers that strip matrix parameters.
     /// </summary>
     [Theory]
     [InlineData("/idp/realms/group-split/..%2F..%2Fadmin%2F")]
     [InlineData("/idp/realms/group-split/%2e%2e%2fmaster/protocol/openid-connect/token")]
     [InlineData("/idp/realms/group-split/..%5Cmaster")]
     [InlineData("/idp/resources/..%2F..%2Fadmin/")]
-    public async Task A_path_with_an_encoded_separator_is_not_forwarded(string path)
+    [InlineData("/idp/realms/group-split/..;/master/protocol/openid-connect/token")]
+    [InlineData("/idp/realms/group-split/account;jsessionid=x")]
+    public async Task A_path_with_an_encoded_separator_or_a_semicolon_is_not_forwarded(string path)
     {
         using var response = await _client.GetAsync(path, TestContext.Current.CancellationToken);
 
@@ -135,6 +138,7 @@ public sealed class KeycloakForwarderTest : IAsyncLifetime
     [InlineData("/idp/realms/group-split/a%2fb", false)]
     [InlineData("/idp/realms/group-split/a%5cb", false)]
     [InlineData("/idp/realms/group-split/a\\b", false)]
+    [InlineData("/idp/realms/group-split/..;/master", false)]
     public void Ambiguous_paths_are_recognised(string path, bool unambiguous)
     {
         Assert.Equal(unambiguous, WebAppExtensions.IsUnambiguous(new PathString(path)));

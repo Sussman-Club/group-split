@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace GroupSplit.Keycloak;
 
@@ -22,11 +23,13 @@ public static class KeycloakAdminExtensions
             builder.Services.AddServiceDiscovery();
 
             builder.Services
-                .AddHttpClient<KeycloakAdminClient>(client =>
+                .AddHttpClient<KeycloakAdminClient>((services, client) =>
                 {
-                    // A trailing slash, so the relative paths the client builds append rather
-                    // than replace the last segment.
-                    client.BaseAddress = new Uri(KeycloakEndpoint + "/");
+                    // Below the relative path Keycloak serves at, and with a trailing slash so
+                    // the relative paths the client builds append rather than replace the last
+                    // segment.
+                    client.BaseAddress = services.GetRequiredService<IOptions<KeycloakAdminOptions>>()
+                        .Value.BaseAddressFor(KeycloakEndpoint);
                 })
                 .AddServiceDiscovery();
 

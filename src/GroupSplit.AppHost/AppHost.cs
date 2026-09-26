@@ -118,10 +118,18 @@ if (builder.ExecutionContext.IsRunMode)
 
     keycloak.AsDevelopmentKeycloak(mailpit);
 
-    // Where a local sign-in may be sent back to: the web app's own HTTPS endpoint, and
-    // nowhere else. Given to Keycloak for a first-boot import and to the worker for a realm
-    // that already exists, because the port is the test host's to choose on every run.
-    var webOrigin = web.GetEndpoint("https");
+    // Where a local sign-in may be sent back to: the web app's own endpoint, and nowhere else.
+    // Given to Keycloak for a first-boot import and to the worker for a realm that already
+    // exists, because the port is the test host's to choose on every run.
+    //
+    // As the browser sees it, pinned to the localhost network. Keycloak is a container, and an
+    // endpoint handed to a container otherwise resolves to the address containers use to reach
+    // the host -- so a first-boot import, or a realm reset, stored a redirect URI no browser
+    // ever sends. HTTPS when the web app has it, which is every profile but the AppHost's plain
+    // "http" one.
+    var webScheme = web.Resource.Annotations.OfType<EndpointAnnotation>()
+        .Any(endpoint => endpoint.Name == "https") ? "https" : "http";
+    var webOrigin = web.GetEndpoint(webScheme, KnownNetworkIdentifiers.LocalhostNetwork);
     keycloak.WithWebAppOrigin(webOrigin);
     realmSettings.WithWebAppOrigin(webOrigin);
 
@@ -205,6 +213,10 @@ else
 
     realmSettings
         .WithWebAppOrigin(hostname)
+        // Deployed, Keycloak answers only below its relative path, admin API included. Without
+        // this the worker's first call is a 404, it exits non-zero, and the API -- which waits
+        // for it to finish -- never starts.
+        .WithEnvironment("Keycloak__RelativePath", KeycloakDeploymentExtensions.RelativePath)
         .WithRemoteImageTag(deploymentVersion)
         .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
