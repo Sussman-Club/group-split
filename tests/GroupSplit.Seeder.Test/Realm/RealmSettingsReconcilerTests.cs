@@ -141,6 +141,50 @@ public sealed class RealmSettingsReconcilerTests
         Assert.Equal("Group Split", admin.RealmData["displayName"]!.GetValue<string>());
     }
 
+    private const string AdminConsoleUrl = "http://localhost:8180/idp";
+
+    private static string? DeployedEnvironment(string name) =>
+        name == RealmSettingsReconciler.AdminConsoleUrlKey ? AdminConsoleUrl : Environment(name);
+
+    /// <summary>
+    /// Deployed, the admin console comes in through an SSH tunnel, and it signs in to the admin
+    /// realm -- whose endpoints would otherwise be built on the public origin, where they 404.
+    /// </summary>
+    [Fact]
+    public async Task A_configured_admin_console_address_becomes_the_admin_realm_frontend()
+    {
+        var admin = new StubRealmAdmin(Imported());
+
+        await Reconcile(admin, DeployedEnvironment);
+
+        Assert.Equal(1, admin.AdminRealmUpdates);
+        Assert.Equal(AdminConsoleUrl, admin.AdminRealmData["attributes"]!["frontendUrl"]!.GetValue<string>());
+        Assert.Equal("kept", admin.AdminRealmData["attributes"]!["unrelated"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task An_admin_realm_already_at_the_address_is_not_rewritten()
+    {
+        var admin = new StubRealmAdmin(Imported());
+
+        await Reconcile(admin, DeployedEnvironment);
+        await Reconcile(admin, DeployedEnvironment);
+
+        Assert.Equal(1, admin.AdminRealmUpdates);
+    }
+
+    /// <summary>Locally the console is Keycloak's own endpoint, so the admin realm is left exactly as it is.</summary>
+    [Fact]
+    public async Task Without_an_admin_console_address_the_admin_realm_is_not_touched()
+    {
+        var admin = new StubRealmAdmin(Imported());
+
+        await Reconcile(admin);
+
+        Assert.Equal(0, admin.AdminRealmReads);
+        Assert.Equal(0, admin.AdminRealmUpdates);
+    }
+
     [Fact]
     public async Task A_second_run_changes_nothing()
     {
@@ -238,6 +282,30 @@ public sealed class RealmSettingsReconcilerTests
 
             Clients[clientId] = (JsonObject)client.DeepClone();
             ClientUpdates++;
+            return Task.CompletedTask;
+        }
+
+        public string AdminRealm => "master";
+
+        public JsonObject AdminRealmData { get; private set; } = new()
+        {
+            ["realm"] = "master",
+            ["attributes"] = new JsonObject { ["unrelated"] = "kept" }
+        };
+
+        public int AdminRealmReads { get; private set; }
+        public int AdminRealmUpdates { get; private set; }
+
+        public Task<JsonObject> GetAdminRealmAsync(CancellationToken ct = default)
+        {
+            AdminRealmReads++;
+            return Task.FromResult((JsonObject)AdminRealmData.DeepClone());
+        }
+
+        public Task UpdateAdminRealmAsync(JsonObject realm, CancellationToken ct = default)
+        {
+            AdminRealmData = (JsonObject)realm.DeepClone();
+            AdminRealmUpdates++;
             return Task.CompletedTask;
         }
     }

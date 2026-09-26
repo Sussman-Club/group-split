@@ -217,6 +217,9 @@ else
         // this the worker's first call is a 404, it exits non-zero, and the API -- which waits
         // for it to finish -- never starts.
         .WithEnvironment("Keycloak__RelativePath", KeycloakDeploymentExtensions.RelativePath)
+        // The admin realm's frontend URL, so the admin console signs in through the SSH tunnel
+        // rather than the public origin. See KeycloakDeploymentExtensions.AdminConsolePort.
+        .WithEnvironment("Realm__AdminConsoleUrl", KeycloakDeploymentExtensions.AdminConsoleUrl)
         .WithRemoteImageTag(deploymentVersion)
         .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 

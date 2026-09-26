@@ -3,16 +3,27 @@ using GroupSplit.Keycloak;
 
 namespace GroupSplit.RealmWorker;
 
-/// <summary>Brings the allowlisted realm and client settings back to the checked-in realm export.</summary>
+/// <summary>
+/// Brings the allowlisted realm and client settings back to the checked-in realm export, and,
+/// when an admin console address is configured, points the admin realm at it.
+/// </summary>
 /// <param name="environment">
 /// Resolves the <c>${...}</c> placeholders the export carries, from the same variables the
-/// Keycloak container is given for its first-boot import.
+/// Keycloak container is given for its first-boot import, and reads
+/// <see cref="AdminConsoleUrlKey"/>.
 /// </param>
 public sealed class RealmSettingsReconciler(
     IKeycloakRealmAdminClient keycloak,
     ILogger logger,
     Func<string, string?> environment)
 {
+    /// <summary>
+    /// Where operators reach the admin console, when that is not the public origin. Deployed,
+    /// the public origin no longer serves the admin console or the admin realm, and an operator
+    /// comes in through an SSH tunnel instead.
+    /// </summary>
+    public const string AdminConsoleUrlKey = "Realm:AdminConsoleUrl";
+
     public async Task ReconcileAsync(CancellationToken ct = default)
     {
         var desired = Desired();
@@ -23,6 +34,45 @@ public sealed class RealmSettingsReconciler(
         {
             await ReconcileClientAsync(desired, managed, ct);
         }
+
+        if (environment(AdminConsoleUrlKey) is { Length: > 0 } adminConsoleUrl)
+        {
+            await ReconcileAdminFrontendAsync(adminConsoleUrl, ct);
+        }
+    }
+
+    /// <summary>
+    /// Gives the admin realm its own frontend URL: the admin console's address.
+    /// </summary>
+    /// <remarks>
+    /// <c>KC_HOSTNAME_ADMIN</c> moves where the console itself is served, but the console signs
+    /// in to the admin realm, and a realm's endpoints follow <c>KC_HOSTNAME</c> -- the public
+    /// origin -- unless the realm names a frontend URL of its own. Left there, the console's
+    /// sign-in and its third-party-cookie check go to the public host, which answers 404 for
+    /// the admin realm, and the console hangs on a blank page. Only the admin realm is pointed
+    /// elsewhere; the app realm keeps the public origin its users and tokens need.
+    /// </remarks>
+    private async Task ReconcileAdminFrontendAsync(string adminConsoleUrl, CancellationToken ct)
+    {
+        var current = await keycloak.GetAdminRealmAsync(ct);
+
+        if (current["attributes"] is not JsonObject attributes)
+        {
+            current["attributes"] = attributes = new JsonObject();
+        }
+
+        if (attributes["frontendUrl"]?.GetValue<string>() == adminConsoleUrl)
+        {
+            logger.LogInformation("Keycloak admin realm {Realm} already uses the admin console address.",
+                keycloak.AdminRealm);
+            return;
+        }
+
+        attributes["frontendUrl"] = adminConsoleUrl;
+
+        await keycloak.UpdateAdminRealmAsync(current, ct);
+        logger.LogInformation("Pointed Keycloak admin realm {Realm} at the admin console address {Url}.",
+            keycloak.AdminRealm, adminConsoleUrl);
     }
 
     /// <summary>

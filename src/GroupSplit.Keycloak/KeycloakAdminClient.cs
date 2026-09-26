@@ -46,6 +46,13 @@ public sealed class KeycloakAdminClient(
     public Task UpdateRealmAsync(JsonObject realm, CancellationToken ct = default) =>
         WriteRealmAsync(Realm, realm, ct);
 
+    public string AdminRealm => _options.AdminRealm;
+
+    public Task<JsonObject> GetAdminRealmAsync(CancellationToken ct = default) => ReadRealmAsync(AdminRealm, ct);
+
+    public Task UpdateAdminRealmAsync(JsonObject realm, CancellationToken ct = default) =>
+        WriteRealmAsync(AdminRealm, realm, ct);
+
     public async Task<JsonObject?> GetClientAsync(string clientId, CancellationToken ct = default)
     {
         var query = $"admin/realms/{Realm}/clients?clientId={Uri.EscapeDataString(clientId)}";

@@ -22,6 +22,23 @@ public static class KeycloakDeploymentExtensions
     /// </summary>
     public const string RelativePath = "/idp";
 
+    /// <summary>
+    /// The host port the deployed admin console is reachable on -- from the host itself, and
+    /// nowhere else.
+    /// <para>
+    /// The public origin no longer carries the admin console (the web app forwards only the app
+    /// realm), so it needs a way in that the internet does not have. Keycloak's HTTP port is
+    /// published on the host's loopback address only, and an operator reaches it through SSH:
+    /// <c>ssh -L 8180:127.0.0.1:8180 &lt;host&gt;</c>, then <c>http://localhost:8180/idp/admin/</c>.
+    /// Loopback rather than all interfaces because a port Docker publishes on 0.0.0.0 is open to
+    /// the LAN and walks past the host firewall.
+    /// </para>
+    /// </summary>
+    public const int AdminConsolePort = 8180;
+
+    /// <summary>Where an operator's browser reaches the admin console, at the local end of the tunnel.</summary>
+    public static readonly string AdminConsoleUrl = "http://localhost:" + AdminConsolePort + RelativePath;
+
     extension(IResourceBuilder<KeycloakResource> keycloak)
     {
         /// <summary>
@@ -51,6 +68,13 @@ public static class KeycloakDeploymentExtensions
                 .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
                 .WithEnvironment("KC_HOSTNAME", ReferenceExpression.Create($"{hostname}{RelativePath}"))
                 .WithEnvironment("KC_HTTP_RELATIVE_PATH", RelativePath)
+                // The admin console's own address, which is the SSH tunnel's end rather than the
+                // public origin: Keycloak builds the console's redirects and its master-realm
+                // sign-in from this, so without it the console would send the browser to the
+                // public host, where /idp/admin now answers 404. See AdminConsolePort.
+                .WithEnvironment("KC_HOSTNAME_ADMIN", AdminConsoleUrl)
+                .PublishAsDockerComposeService((_, service) =>
+                    service.Ports.Add($"127.0.0.1:{AdminConsolePort}:8080"))
                 // The management interface inherits KC_HTTP_RELATIVE_PATH when left unset,
                 // which would move the readiness probe below to /auth/health/ready. Pinned so
                 // the two can move independently.

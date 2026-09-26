@@ -424,16 +424,43 @@ The seeder, the realm worker and the AppHost tests reach Keycloak inside the net
 of them depends on the forwarder. Deployed, Keycloak serves even its internal address below
 `/idp`, so the worker is given `Keycloak__RelativePath=/idp` and calls
 `http://keycloak:8080/idp/...`. Without it every admin call is a 404, and the API never starts.
-To administer a deployed Keycloak, use its admin CLI inside the container:
+
+### Reaching the deployed admin console
+
+The admin console is reachable only from the host, through an SSH tunnel. Keycloak's HTTP port
+is published on the host's loopback address alone (`127.0.0.1:8180`), so neither the internet
+nor the LAN can reach it. A port Docker publishes on every interface would walk past the host
+firewall.
 
 ```bash
-docker compose exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://localhost:8080/idp --realm master --user admin
+ssh -L 8180:127.0.0.1:8180 <deploy-host>
+```
+
+With the tunnel open, browse to `http://localhost:8180/idp/admin/` and sign in as the Keycloak
+admin. Two settings make the console work at that address rather than at the public one:
+
+- **`KC_HOSTNAME_ADMIN=http://localhost:8180/idp`** moves where the console itself is served.
+- **The `master` realm's Frontend URL**, which the realm worker sets on every deploy from
+  `Realm__AdminConsoleUrl`, moves the console's sign-in to the same address. Without it the
+  console signs in to `master` on the public origin, which now answers 404, and hangs on a blank
+  page.
+
+Only `master` gets that frontend URL. The app realm keeps the public origin its users and tokens
+need. If 8180 is taken on the host, change `KeycloakDeploymentExtensions.AdminConsolePort`.
+
+For one-off commands without a browser, use the admin CLI inside the container. Pass the
+credentials on each call, because each `exec` is a new process and a `config credentials` login
+does not carry over:
+
+```bash
+docker compose exec keycloak /opt/keycloak/bin/kcadm.sh get realms/group-split/clients \
+  -q clientId=web-app --no-config --server http://localhost:8080/idp \
+  --realm master --user admin --password "$KEYCLOAK_PASSWORD"
 ```
 
 Settings that belong to the repository still go in `realms.json`, where the realm worker applies
-them on the next deploy. The admin CLI is for one-off inspection and for what the worker
-deliberately leaves alone.
+them on the next deploy. The admin console and CLI are for one-off inspection and for what the
+worker deliberately leaves alone.
 
 ## Sessions across a deploy
 

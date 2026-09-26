@@ -20,4 +20,11 @@ public interface IKeycloakRealmAdminClient
 
     /// <summary>Replaces the client whose internal <c>id</c> the representation carries.</summary>
     Task UpdateClientAsync(JsonObject client, CancellationToken ct = default);
+
+    /// <summary>The realm the bootstrap admin signs in to -- <c>master</c>, unless configured otherwise.</summary>
+    string AdminRealm { get; }
+
+    Task<JsonObject> GetAdminRealmAsync(CancellationToken ct = default);
+
+    Task UpdateAdminRealmAsync(JsonObject realm, CancellationToken ct = default);
 }
