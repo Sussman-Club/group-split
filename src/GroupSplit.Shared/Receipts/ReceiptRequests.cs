@@ -9,11 +9,18 @@ namespace GroupSplit.Shared;
 /// </summary>
 public record SaveReceiptRequest
 {
+    /// <summary>How much reading evidence a bill keeps. It is returned with every bill,
+    /// so it stays a review aid rather than an archive of whatever a client sends.</summary>
+    public const int SourceValuesMaxLength = 64 * 1024;
+
     [MaxDecimalPlaces(2)] public decimal Subtotal { get; init; }
     [MaxDecimalPlaces(2)] public decimal Tax { get; init; }
     [MaxDecimalPlaces(2)] public decimal Tip { get; init; }
     [MaxDecimalPlaces(2)] public decimal Total { get; init; }
     [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
+    [StringLength(128)] public string? MerchantName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
+    [StringLength(SourceValuesMaxLength)] public string? SourceValues { get; init; }
 }
 
 public record ReceiptItemInput
@@ -36,6 +43,8 @@ public record ReceiptItemInput
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
     [MaxDecimalPlaces(2)] public decimal TotalPrice { get; init; }
     [MaxDecimalPlaces(2)] public decimal TaxAmount { get; init; }
+    [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; init; }
+    public bool? IsTaxable { get; init; }
     /// <summary>The exact saved version to use. Null leaves this line unfinished.</summary>
     public Guid? SplitRuleVersionId { get; init; }
 }
@@ -52,6 +61,8 @@ public sealed class ReceiptItemPatch
     [MaxDecimalPlaces(3)] public decimal Quantity { get; set; } = 1;
     [MaxDecimalPlaces(2)] public decimal TotalPrice { get; set; }
     [MaxDecimalPlaces(2)] public decimal TaxAmount { get; set; }
+    [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; set; }
+    public bool? IsTaxable { get; set; }
     public Guid? SplitRuleVersionId { get; set; }
 }
 

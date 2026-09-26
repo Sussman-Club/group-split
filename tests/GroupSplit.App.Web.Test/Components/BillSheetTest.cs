@@ -29,6 +29,36 @@ public class BillSheetTest : ComponentTest
         Assert.Contains("30.00", page.Markup);
     }
 
+    [Fact]
+    public void Prints_extracted_merchant_date_coupon_and_tax_rate()
+    {
+        var item = Line("Coffee", 12m, null, tax: .90m) with { TaxRate = 10m, IsTaxable = true };
+        var receipt = Bill(item, Line("Loyalty coupon SAVE2", -2m, null), Line("Free sample", 0m, null)) with
+        {
+            MerchantName = "Corner Store",
+            PurchaseDate = new DateOnly(2026, 9, 23)
+        };
+
+        var page = Render<BillSheet>(p => p.Add(c => c.Receipt, receipt));
+
+        Assert.Contains("Corner Store", page.Markup);
+        Assert.Contains("Loyalty coupon SAVE2", page.Markup);
+        Assert.Contains("Free sample", page.Markup);
+        Assert.Contains("10% rate", page.Markup);
+        Assert.Equal(3, page.FindAll("li.gs-slip-line").Count);
+    }
+
+    [Fact]
+    public void Tax_exempt_lines_do_not_print_a_tax_rate()
+    {
+        var exempt = Line("Exempt item", 10m, null) with { TaxRate = 5m, IsTaxable = false };
+        var taxable = Line("Taxable item", 10m, null) with { TaxRate = 8m, IsTaxable = true };
+        var page = Render<BillSheet>(p => p.Add(c => c.Receipt, Bill(exempt, taxable)));
+
+        Assert.DoesNotContain("5% rate", page.Markup);
+        Assert.Contains("8% rate", page.Markup);
+    }
+
     /// <summary>
     /// A bill nothing divides by is a receipt, not a job left undone: every line on one names
     /// no rule and none of them is missing anything.

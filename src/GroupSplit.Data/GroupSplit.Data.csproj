@@ -12,4 +12,8 @@
       <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\GroupSplit.Shared\GroupSplit.Shared.csproj" />
+    </ItemGroup>
+
 </Project>

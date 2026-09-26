@@ -7,7 +7,7 @@ using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
 // Named once: the API reaches the bucket through the reference below, and the deployed
 // storage container is told to create it by the same name.
-const string ReceiptsBucket = "receipts";
+const string receiptsBucket = "receipts";
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -24,7 +24,7 @@ var db = dbServer.AddDatabase("db", "groupsplit");
 var storageServer = builder.AddRustFs("storage")
     .WithDataVolume();
 
-var storage = storageServer.AddBucket(ReceiptsBucket);
+var storage = storageServer.AddBucket(receiptsBucket);
 
 var azureOpenAiParameters = builder.AddAzureOpenAIReceiptTranscriptionParameters();
 
@@ -222,7 +222,7 @@ else
     dbServer.AsDeployedPostgres();
 
     storageServer
-        .AsDeployedRustFs(ReceiptsBucket)
+        .AsDeployedRustFs(receiptsBucket)
         .WithRustFsConsole();
 
     // A remote host can only pull images it can reach, so publish tags into the shared

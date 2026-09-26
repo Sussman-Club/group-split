@@ -17,6 +17,9 @@ public sealed record ReceiptResponse(
     IReadOnlyList<ReceiptItemResponse> Items)
 {
     public bool CanEdit { get; init; }
+    public string? MerchantName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
+    public string? SourceValues { get; init; }
 }
 
 /// <summary>
@@ -29,6 +32,8 @@ public sealed record ReceiptItemResponse(
 {
     public string NormalizedName { get; init; } = string.Empty;
     public string? Description { get; init; }
+    public decimal? TaxRate { get; init; }
+    public bool? IsTaxable { get; init; }
 }
 
 public sealed record ReceiptDivisionResponse(

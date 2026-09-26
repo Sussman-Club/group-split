@@ -1148,6 +1148,43 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Transactions_create_sends_exact_shares_in_its_one_create_request()
+    {
+        var anabel = Guid.NewGuid();
+        var carlos = Guid.NewGuid();
+
+        _api.Returns("/api/transactions", Transaction("Dinner"));
+
+        var result = await Cli.RunAsync(
+            "transactions", "create", "Dinner", "60",
+            "--group", Guid.NewGuid().ToString(),
+            "--split", $"{anabel}=42.50",
+            "--split", $"{carlos}=17.50");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var request = Assert.Single(_api.Requests, request => request.Method == "POST");
+        var shares = request.Json.GetProperty("splits");
+
+        Assert.Equal(anabel, shares[0].GetProperty("userId").GetGuid());
+        Assert.Equal(42.50m, shares[0].GetProperty("amount").GetDecimal());
+        Assert.Equal(carlos, shares[1].GetProperty("userId").GetGuid());
+        Assert.Equal(17.50m, shares[1].GetProperty("amount").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Transactions_create_refuses_a_rule_and_exact_shares_before_it_is_sent()
+    {
+        var result = await Cli.RunAsync(
+            "transactions", "create", "Dinner", "60",
+            "--split-rule", Guid.NewGuid().ToString(),
+            "--split", $"{Guid.NewGuid()}=60");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
+    }
+
+    [Fact]
     public async Task Transactions_update_patches_the_rule_and_leaves_the_shares_alone()
     {
         var id = Guid.NewGuid();

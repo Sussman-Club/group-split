@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using GroupSplit.API.Errors;
+using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.Extensions.Options;
 
@@ -64,13 +67,12 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
             var parsed = JsonSerializer.Deserialize<VeryfiDocument>(payload, Json)
                 ?? throw new JsonException("Veryfi returned an empty document response.");
-            var (receipt, pricesAsPrinted) = parsed.ToReceipt();
+            var receipt = parsed.ToReceipt(payload);
             logger.LogInformation(
-                "Veryfi returned {StructuredLineItemCount} structured line item(s) and mapped {MappedItemCount} positive named item(s) for receipt attachment {AttachmentId}; line prices {PriceOutcome}.",
+                "Veryfi returned {StructuredLineItemCount} structured line item(s) and mapped {MappedItemCount} named item(s) for receipt attachment {AttachmentId}.",
                 parsed.LineItems?.Count ?? 0,
                 receipt.Items.Count,
-                document.AttachmentId,
-                pricesAsPrinted ? "kept as printed" : "scaled to the receipt subtotal");
+                document.AttachmentId);
             return receipt;
         }
         catch (BadGatewayException)
@@ -87,107 +89,106 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
     private sealed class VeryfiDocument
     {
-        [JsonPropertyName("subtotal")] public decimal? Subtotal { get; init; }
         [JsonPropertyName("tax")] public decimal? Tax { get; init; }
         [JsonPropertyName("tip")] public decimal? Tip { get; init; }
         [JsonPropertyName("total")] public decimal? Total { get; init; }
+        [JsonPropertyName("vendor")] public JsonElement Vendor { get; init; }
+        [JsonPropertyName("raw_vendor_name")] public string? RawVendorName { get; init; }
+        [JsonPropertyName("date")] public string? Date { get; init; }
         [JsonPropertyName("line_items")] public IReadOnlyList<VeryfiLineItem>? LineItems { get; init; }
 
-        public (TranscribedReceipt Receipt, bool PricesAsPrinted) ToReceipt()
+        public TranscribedReceipt ToReceipt(string payload)
         {
-            var rows = (LineItems ?? []).Select(line => line.ToRow()).OfType<VeryfiRow>().ToList();
-            var candidates = rows.Select(row => row.Item).OfType<ReceiptItemDraft>().ToList();
-            var reductions = rows.Select(row => row.Reduction).OfType<ReceiptReduction>().ToList();
-
-            var gross = candidates.Sum(item => item.TotalPrice);
-            var subtotal = RoundMoney(Math.Max(0m, Subtotal ?? gross - reductions.Sum(reduction => reduction.Amount)));
+            var candidates = (LineItems ?? []).Select(line => line.ToRow()).OfType<ReceiptItemDraft>().ToList();
+            // Never change a printed line to force a match with a receipt-level value.
+            // A mismatch remains visible during review; the raw provider response retains
+            // the original subtotal for comparison.
+            var subtotal = candidates.Sum(item => item.TotalPrice);
             var tax = RoundMoney(Math.Max(0m, Tax ?? candidates.Sum(item => item.TaxAmount)));
             var tip = RoundMoney(Math.Max(0m, Tip ?? 0m));
             var total = RoundMoney(Math.Max(0m, Total ?? subtotal + tax + tip));
 
-            // A coupon names the line it comes off, so taking it off that one line leaves every
-            // other line at the price the bill printed. Only when the coupons cannot be placed
-            // does the receipt-level subtotal get spread across the rows instead, which moves
-            // every price on the bill and is a last resort rather than the ordinary reading.
-            var attributed = Attribute(candidates, reductions, subtotal);
-            var items = attributed ?? ReconcileSubtotal(candidates, subtotal);
-            var itemTaxes = items.Sum(item => item.TaxAmount) == tax
-                ? items.Select(item => item.TaxAmount).ToArray()
-                : Allocate(tax, items.Select(item => item.TotalPrice).ToArray());
+            var itemTaxes = candidates.Select(item => item.TaxAmount).ToArray();
+            var remainingTax = tax - itemTaxes.Sum();
+            var unknown = Enumerable.Range(0, candidates.Count)
+                .Where(index => !candidates[index].TaxKnown &&
+                    (remainingTax > 0 ? candidates[index].TotalPrice > 0 : candidates[index].TotalPrice < 0))
+                .ToArray();
+            var shares = Allocate(Math.Abs(remainingTax), unknown.Select(index => Math.Abs(candidates[index].TotalPrice)).ToArray());
+            foreach (var (index, share) in unknown.Zip(shares))
+                itemTaxes[index] += Math.Sign(remainingTax) * share;
 
-            var mappedItems = items.Select((item, index) => new TranscribedReceiptItem(
+            var mappedItems = candidates.Select((item, index) => new TranscribedReceiptItem(
                 item.Name,
-                UnitPriceFor(item),
+                item.UnitPrice ?? RoundMoney(item.TotalPrice / item.Quantity),
                 item.Quantity,
                 item.TotalPrice,
                 itemTaxes[index])
             {
                 NormalizedName = item.NormalizedName,
-                Description = item.Description
+                Description = item.Description,
+                TaxRate = item.TaxRate,
+                IsTaxable = item.IsTaxable
             }).ToArray();
 
-            return (new TranscribedReceipt(subtotal, tax, tip, total, mappedItems),
-                items.All(item => item.TotalPrice == item.PrintedTotal));
+            string? vendor = Vendor.ValueKind switch
+            {
+                JsonValueKind.String => Vendor.GetString(),
+                JsonValueKind.Object when Vendor.TryGetProperty("name", out var name) => name.GetString(),
+                _ => null
+            };
+            return new TranscribedReceipt(subtotal, tax, tip, total, mappedItems)
+            {
+                MerchantName = Clean(vendor) ?? Clean(RawVendorName),
+                PurchaseDate = PurchaseDateFrom(Date),
+                SourceValues = Evidence(payload)
+            };
         }
 
         /// <summary>
-        /// The price per unit Veryfi read, for as long as the line still carries the total that
-        /// price was read against. A line whose total has moved -- a coupon taken off it, or the
-        /// subtotal spread over it -- no longer costs what the paper said, so its unit price is
-        /// worked out from what the line now comes to.
+        /// The calendar day of Veryfi's <c>date</c>, which it sends as
+        /// <c>yyyy-MM-dd HH:mm:ss</c>. Only the day is kept, read without the server's culture.
         /// </summary>
-        private static decimal UnitPriceFor(ReceiptItemDraft item) =>
-            item.TotalPrice == item.PrintedTotal && item.UnitPrice is { } printed
-                ? printed
-                : Math.Max(0.01m, RoundMoney(item.TotalPrice / item.Quantity));
-
-        /// <summary>
-        /// Takes each reduction off the single line it names. All or nothing, and only when the
-        /// result lands exactly on the receipt's own subtotal: a partly attributed bill would be
-        /// a set of prices read two different ways off one piece of paper.
-        /// </summary>
-        private static List<ReceiptItemDraft>? Attribute(
-            List<ReceiptItemDraft> items, List<ReceiptReduction> reductions, decimal subtotal)
-        {
-            if (reductions.Count == 0 || items.Count == 0)
-                return null;
-
-            var totals = items.Select(item => item.TotalPrice).ToArray();
-            foreach (var reduction in reductions)
-            {
-                var named = Enumerable.Range(0, items.Count)
-                    .Where(index => items[index].Skus.Any(reduction.Names.Contains))
-                    .ToArray();
-                // Nothing named, or more than one line answering to the same number, is a coupon
-                // this cannot place. Guessing at one would take money off the wrong line.
-                if (named.Length != 1 || totals[named[0]] - reduction.Amount <= 0m)
-                    return null;
-                totals[named[0]] -= reduction.Amount;
-            }
-
-            return totals.Sum() == subtotal
-                ? items.Select((item, index) => item with { TotalPrice = totals[index] }).ToList()
+        private static DateOnly? PurchaseDateFrom(string? value) =>
+            value?.Trim() is { Length: >= 10 } text &&
+            DateOnly.TryParseExact(text[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var date)
+                ? date
                 : null;
-        }
 
-        private static List<ReceiptItemDraft> ReconcileSubtotal(List<ReceiptItemDraft> candidates, decimal subtotal)
+        /// <summary>
+        /// The part of the response a reviewer needs to check the reading against the paper.
+        /// The whole body also carries signed image links and payment details, and every
+        /// member who can open the bill would see it, so only these fields are kept.
+        /// </summary>
+        private static string? Evidence(string payload)
         {
-            var retained = candidates;
-            while (retained.Count > 0)
+            if (JsonNode.Parse(payload) is not JsonObject source)
+                return null;
+            var evidence = new JsonObject();
+            foreach (var key in EvidenceFields)
+                if (source[key] is { } value)
+                    evidence[key] = value.DeepClone();
+            if (source["vendor"] is JsonObject vendor && vendor["name"] is { } vendorName)
+                evidence["vendor"] = new JsonObject { ["name"] = vendorName.DeepClone() };
+
+            var text = evidence.ToJsonString();
+            if (text.Length > SaveReceiptRequest.SourceValuesMaxLength)
             {
-                var totals = Allocate(subtotal, retained.Select(item => item.TotalPrice).ToArray());
-                var withTotals = retained.Select((item, index) => item with { TotalPrice = totals[index] }).ToList();
-                var positive = withTotals.Where(item => item.TotalPrice > 0m).ToList();
-                if (positive.Count == retained.Count)
-                    return positive;
-
-                // Do not render zero-value rows as purchasable items. Re-run the allocation
-                // over the remaining positive rows so their totals still equal the subtotal.
-                retained = positive;
+                // The OCR text is the bulk of a long receipt and the structured lines above
+                // already say what it was read as.
+                evidence.Remove("ocr_text");
+                text = evidence.ToJsonString();
             }
-
-            return [];
+            return text.Length > SaveReceiptRequest.SourceValuesMaxLength
+                ? text[..SaveReceiptRequest.SourceValuesMaxLength]
+                : text;
         }
+
+        private static readonly string[] EvidenceFields =
+            ["raw_vendor_name", "date", "subtotal", "tax", "tip", "total", "line_items", "ocr_text"];
+
+        private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private sealed class VeryfiLineItem
@@ -216,8 +217,9 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         [JsonPropertyName("total")] public decimal? Total { get; init; }
         [JsonPropertyName("discount")] public decimal? Discount { get; init; }
         [JsonPropertyName("tax")] public decimal? Tax { get; init; }
+        [JsonPropertyName("tax_rate")] public decimal? TaxRate { get; init; }
 
-        public VeryfiRow? ToRow()
+        public ReceiptItemDraft? ToRow()
         {
             var type = Type?.Trim();
             if (!string.IsNullOrEmpty(type) && NonItemTypes.Contains(type))
@@ -228,26 +230,32 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             var named = new[] { ProductInfo?.ExpandedDescription, Description, FullDescription }
                 .Any(value => !string.IsNullOrWhiteSpace(value));
 
-            // A row that takes money off and names nothing bought is a coupon, whatever its
-            // total came out as. Costco prints its coupons in a column of their own, and a
-            // provider that reads a neighbouring "2 @ 14.99" into the same row hands back a
-            // positive total for what is still a coupon -- 27.28 for a 2.70 saving. Believing
-            // that total would put a thing nobody bought on the bill and lose the saving.
-            var reduced = RoundMoney(Math.Max(0m, -(Discount ?? 0m)));
+            // A reduction is an ordinary signed line. Some provider rows borrow a nearby
+            // purchase's positive total; their explicit discount amount is the reliable
+            // amount to keep, not another thing the group bought.
+            // Veryfi signs the discount either way round. Whichever it is, the explicit
+            // saving outranks a total that may have borrowed a neighbouring purchase price.
+            var reduced = RoundMoney(Math.Abs(Discount ?? 0m));
             if ((!string.IsNullOrEmpty(type) && ReductionTypes.Contains(type))
                 || total < 0m
                 || (reduced > 0m && !named))
             {
-                var amount = reduced > 0m ? reduced : -total;
-                return amount > 0m
-                    ? new VeryfiRow(null, new ReceiptReduction(amount, Tokens(Sku, Text, Description, FullDescription)))
-                    : null;
+                var amount = reduced > 0m ? reduced : Math.Abs(total);
+                // A reduction row that takes nothing off is not a line anybody can split.
+                if (amount == 0m)
+                    return null;
+                var label = CleanLabel(Description, FullDescription, Text)
+                    ?? (string.IsNullOrWhiteSpace(Sku) ? "Discount" : $"Coupon {Sku.Trim()}");
+                if (label.Length > 128) label = label[..128].TrimEnd();
+                return new ReceiptItemDraft(label, label.ToLowerInvariant(), Text?.Trim(),
+                    1m, -amount, -amount, RoundMoney(Tax ?? 0m), Tax.HasValue, TaxRate,
+                    TaxRate is { } couponRate ? couponRate > 0m : null);
             }
 
             var name = new[] { ProductInfo?.ExpandedDescription, Description, FullDescription }
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim()
                 ?? NameFromText(Text, Sku);
-            if (string.IsNullOrWhiteSpace(name) || total <= 0m)
+            if (string.IsNullOrWhiteSpace(name))
                 return null;
             // A bill refuses a name longer than this, and a row whose name came off its raw
             // text can run long. Better a clipped name than a draft that will not save.
@@ -259,12 +267,11 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             var normalizedName = string.IsNullOrWhiteSpace(NormalizedDescription)
                 ? null
                 : NormalizedDescription.Trim().ToLowerInvariant();
-            var skus = Tokens(Sku);
-            if (skus.Count == 0)
-                skus = Tokens(Text);
-
-            return new VeryfiRow(new ReceiptItemDraft(name, normalizedName, Description?.Trim(), skus,
-                count, unitPrice, total, total, tax), null);
+            var taxable = TaxRate is { } rate ? rate > 0m
+                : Text is { } text && Regex.IsMatch(text, @"\sN\s*$", RegexOptions.IgnoreCase) ? false
+                : (bool?)null;
+            return new ReceiptItemDraft(name, normalizedName, Description?.Trim(),
+                count, unitPrice, total, tax, Tax.HasValue, TaxRate, taxable);
         }
 
         /// <summary>
@@ -319,10 +326,12 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             return Tokens(sku, text).FirstOrDefault() is { } number ? $"Item {number}" : null;
         }
 
+        private static string? CleanLabel(params string?[] values) => values
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
         /// <summary>
-        /// The item numbers a row mentions. Costco prints a coupon as "388175 / 1776788", the
-        /// second being the number of the line it comes off. Three digits and up, so that a
-        /// quantity or a price under a hundred is never taken for one.
+        /// Item numbers used when the printed line has no readable product name. Three
+        /// digits and up keeps a quantity or small price from becoming a fallback name.
         /// </summary>
         private static IReadOnlyList<string> Tokens(params string?[] values) => values
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -350,27 +359,20 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         [JsonPropertyName("expanded_description")] public string? ExpandedDescription { get; init; }
     }
 
-    /// <summary>One parsed Veryfi row: something bought, or an amount that comes off the bill.</summary>
-    private sealed record VeryfiRow(ReceiptItemDraft? Item, ReceiptReduction? Reduction);
-
-    /// <summary>An amount to take off, and the item numbers the row named while doing so.</summary>
-    private sealed record ReceiptReduction(decimal Amount, IReadOnlyList<string> Names);
-
     /// <summary>
-    /// A line on its way to becoming a bill item. <see cref="PrintedTotal"/> is what the paper
-    /// said and never moves, so a line whose total has since been changed can be told apart
-    /// from one still standing at the price it was read at.
+    /// A line on its way to becoming a bill item, with its printed total intact.
     /// </summary>
     private sealed record ReceiptItemDraft(
         string Name,
         string? NormalizedName,
         string? Description,
-        IReadOnlyList<string> Skus,
         decimal Quantity,
         decimal? UnitPrice,
-        decimal PrintedTotal,
         decimal TotalPrice,
-        decimal TaxAmount);
+        decimal TaxAmount,
+        bool TaxKnown,
+        decimal? TaxRate,
+        bool? IsTaxable);
 
     private static decimal RoundMoney(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
 
