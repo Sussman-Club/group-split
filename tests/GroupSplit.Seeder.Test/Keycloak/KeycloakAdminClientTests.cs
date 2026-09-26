@@ -1,8 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using GroupSplit.Seeder.Keycloak;
-using GroupSplit.Seeder.Options;
+using GroupSplit.Keycloak;
 using Microsoft.Extensions.Logging.Abstractions;
 using MsOptions = Microsoft.Extensions.Options.Options;
 
@@ -25,13 +24,13 @@ public class KeycloakAdminClientTests
     private const string RealmWithDefaultRole =
         """{"realm":"group-split","defaultRole":{"id":"a-role-id","name":"default-roles-group-split","composite":true,"clientRole":false}}""";
 
-    private static KeycloakAdminClient ClientFor(StubHandler handler, KeycloakSeedOptions? options = null)
+    private static KeycloakAdminClient ClientFor(StubHandler handler, KeycloakAdminOptions? options = null)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://keycloak.test/") };
 
         return new KeycloakAdminClient(
             http,
-            MsOptions.Create(options ?? new KeycloakSeedOptions { AdminUser = "admin", AdminPassword = "secret" }),
+            MsOptions.Create(options ?? new KeycloakAdminOptions { AdminUser = "admin", AdminPassword = "secret" }),
             NullLogger<KeycloakAdminClient>.Instance);
     }
 
@@ -260,7 +259,7 @@ public class KeycloakAdminClientTests
         var handler = new StubHandler();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            ClientFor(handler, new KeycloakSeedOptions()).SignInAsync(TestContext.Current.CancellationToken));
+            ClientFor(handler, new KeycloakAdminOptions()).SignInAsync(TestContext.Current.CancellationToken));
 
         Assert.Empty(handler.Requests);
     }

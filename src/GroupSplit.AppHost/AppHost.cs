@@ -59,6 +59,14 @@ var keycloak = builder.AddKeycloak("keycloak")
     .WaitFor(keycloakDb)
     .WithOtlpExporter();
 
+// Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
+// a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
+var realmSettings = builder.AddProject<GroupSplit_RealmWorker>("realm-settings")
+    .WithEnvironment("Realm__Operation", "reconcile")
+    .WithReference(keycloak)
+    .WithKeycloakAdminAccess(keycloak)
+    .WaitFor(keycloak);
+
 var migrations = db
     .AddEFMigrations("migrations",
         "../GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj",
@@ -85,7 +93,9 @@ var api = builder.AddProject<GroupSplit_API>("api")
     // which leaves the API running with bank sync reported as off.
     .WithPlaid()
     .WithVeryfiReceiptTranscription()
-    .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters);
+    .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters)
+    // Do not serve traffic until the realm settings have been reconciled successfully.
+    .WaitForCompletion(realmSettings);
 
 var web = builder.AddProject<GroupSplit_App_Web>("web")
     .WithReference(keycloak)
@@ -107,6 +117,30 @@ if (builder.ExecutionContext.IsRunMode)
     var mailpit = builder.AddMailPit("mailpit");
 
     keycloak.AsDevelopmentKeycloak(mailpit);
+
+    // Where a local sign-in may be sent back to: the web app's own endpoint, and nowhere else.
+    // Given to Keycloak for a first-boot import and to the worker for a realm that already
+    // exists, because the port is the test host's to choose on every run.
+    //
+    // As the browser sees it, pinned to the localhost network. Keycloak is a container, and an
+    // endpoint handed to a container otherwise resolves to the address containers use to reach
+    // the host -- so a first-boot import, or a realm reset, stored a redirect URI no browser
+    // ever sends. HTTPS when the web app has it, which is every profile but the AppHost's plain
+    // "http" one.
+    var webScheme = web.Resource.Annotations.OfType<EndpointAnnotation>()
+        .Any(endpoint => endpoint.Name == "https") ? "https" : "http";
+    var webOrigin = web.GetEndpoint(webScheme, KnownNetworkIdentifiers.LocalhostNetwork);
+    keycloak.WithWebAppOrigin(webOrigin);
+    realmSettings.WithWebAppOrigin(webOrigin);
+
+    var realmReset = builder.AddProject<GroupSplit_RealmWorker>("realm-reset")
+        .WithExplicitStart()
+        .WithEnvironment("Realm__Operation", "reset")
+        .WithReference(keycloak)
+        .WithKeycloakAdminAccess(keycloak)
+        .WaitFor(keycloak);
+
+    realmSettings.WithLocalRealmResetCommand(keycloak, realmReset);
 
     builder
         .AddMauiProject("app", "../GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj")
@@ -174,7 +208,20 @@ else
     // it on the web origin under its relative path. Keycloak's port stays off the host.
     keycloak
         .AsDeployedKeycloak(hostname)
+        .WithWebAppOrigin(hostname)
         .WithSmtp();
+
+    realmSettings
+        .WithWebAppOrigin(hostname)
+        // Deployed, Keycloak answers only below its relative path, admin API included. Without
+        // this the worker's first call is a 404, it exits non-zero, and the API -- which waits
+        // for it to finish -- never starts.
+        .WithEnvironment("Keycloak__RelativePath", KeycloakDeploymentExtensions.RelativePath)
+        // The admin realm's frontend URL, so the admin console signs in through the SSH tunnel
+        // rather than the public origin. See KeycloakDeploymentExtensions.AdminConsolePort.
+        .WithEnvironment("Realm__AdminConsoleUrl", KeycloakDeploymentExtensions.AdminConsoleUrl)
+        .WithRemoteImageTag(deploymentVersion)
+        .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
     web
         .WithKeycloakAuthority(authority)

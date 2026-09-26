@@ -20,12 +20,6 @@ internal static class EfCommandNames
 
 public static class SeederResourceBuilderExtensions
 {
-    /// <summary>
-    /// The bootstrap admin Keycloak creates when the app model names none. Matches the
-    /// default behind <c>KC_BOOTSTRAP_ADMIN_USERNAME</c>.
-    /// </summary>
-    private const string DefaultKeycloakAdminUser = "admin";
-
     extension(IDistributedApplicationBuilder builder)
     {
         public IResourceBuilder<SeederResource> AddSeeder<TProject>([ResourceName] string name)
@@ -67,22 +61,10 @@ public static class SeederResourceBuilderExtensions
         /// </summary>
         public IResourceBuilder<SeederResource> WithKeycloakSeeding(
             IResourceBuilder<KeycloakResource> keycloak)
-        {
-            var builder = resourceBuilder
+            => resourceBuilder
                 .WithReference(keycloak)
                 .WaitFor(keycloak)
-                .WithEnvironment("Keycloak__AdminPassword",
-                    ReferenceExpression.Create($"{keycloak.Resource.AdminPasswordParameter}"));
-
-            // The username parameter is null unless one was passed to AddKeycloak, and this
-            // model does not pass one -- so the container takes Keycloak's own default and
-            // the seeder has to be told the same name. The password is always a parameter,
-            // generated when it is not supplied, so it needs no such fallback.
-            return keycloak.Resource.AdminUserNameParameter is { } adminUser
-                ? builder.WithEnvironment("Keycloak__AdminUser",
-                    ReferenceExpression.Create($"{adminUser}"))
-                : builder.WithEnvironment("Keycloak__AdminUser", DefaultKeycloakAdminUser);
-        }
+                .WithKeycloakAdminAccess(keycloak);
 
         public IResourceBuilder<SeederResource> WithResetAndSeedCommand()
         {
@@ -119,4 +101,5 @@ public static class SeederResourceBuilderExtensions
                 });
         }
     }
+
 }

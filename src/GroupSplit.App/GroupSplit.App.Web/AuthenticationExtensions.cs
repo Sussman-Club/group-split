@@ -147,7 +147,7 @@ public static class AuthenticationExtensions
                 })
                 .AddKeycloakOpenIdConnect(
                     serviceName: "keycloak",
-                    realm: "group-split",
+                    realm: WebAppExtensions.KeycloakRealm,
                     options =>
                     {
                         options.ClientId = "web-app";

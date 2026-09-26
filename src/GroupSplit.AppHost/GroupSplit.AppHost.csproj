@@ -19,6 +19,7 @@
              starts against output that was never produced. -->
         <ProjectReference Include="..\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj" />
         <ProjectReference Include="..\GroupSplit.Seeder\GroupSplit.Seeder.csproj" />
+        <ProjectReference Include="..\GroupSplit.RealmWorker\GroupSplit.RealmWorker.csproj" />
     </ItemGroup>
 
     <ItemGroup>
