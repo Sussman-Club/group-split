@@ -19,6 +19,13 @@ public static class WebAppExtensions
     private const string KeycloakPrefix = "/idp";
 
     /// <summary>
+    /// The one realm the browser has any business with. Everything else Keycloak serves --
+    /// the admin console, the <c>master</c> realm, the admin REST API, the welcome page -- is
+    /// for the operators and the workers, which reach Keycloak inside the network.
+    /// </summary>
+    internal const string KeycloakRealm = "group-split";
+
+    /// <summary>
     /// Path bank providers send webhooks to. Matches the API's own <c>WebhooksApi</c> route,
     /// and is deliberately left on the forwarded path so the API still sees which provider
     /// is calling.
@@ -154,11 +161,33 @@ public static class WebAppExtensions
         /// own endpoint, which leaves this route unused rather than wrong, and that is
         /// cheaper than branching the pipeline on the environment.
         /// </para>
+        /// <para>
+        /// Only two subtrees go through: the app's realm, which carries the sign-in pages,
+        /// the OIDC endpoints the API and this app read their metadata and keys from, and the
+        /// account console; and <c>/resources</c>, the static files those pages load. It used to
+        /// be the whole prefix, which put the admin console and the <c>master</c> realm's token
+        /// endpoint on the public origin -- one password away from every identity in the realm.
+        /// Anything else under the prefix answers 404 here and never reaches Keycloak.
+        /// </para>
+        /// <para>
+        /// A path carrying an encoded slash or a backslash is refused as well. Kestrel resolves
+        /// <c>..</c> segments before routing sees them, but it leaves <c>%2F</c> encoded, and a
+        /// path that routes as the app's realm here must not be one Keycloak reads as another.
+        /// </para>
         /// </summary>
         public IEndpointConventionBuilder MapKeycloakForwarder()
-            => app.MapForwarder($"{KeycloakPrefix}/{{*path}}", "http://keycloak")
+        {
+            var keycloak = app.MapGroup(KeycloakPrefix);
+
+            keycloak.MapForwarder($"/realms/{KeycloakRealm}/{{**path}}", "http://keycloak");
+            keycloak.MapForwarder("/resources/{**path}", "http://keycloak");
+            keycloak.Map("/{**path}", () => Results.NotFound());
+
+            return keycloak
                 .AllowAnonymous()
-                .DisableAntiforgery();
+                .DisableAntiforgery()
+                .RefuseAmbiguousPaths();
+        }
 
         /// <summary>
         /// Carries a bank provider's webhooks through to the API.
@@ -183,5 +212,44 @@ public static class WebAppExtensions
             => app.MapForwarder($"{WebhookPrefix}/{{*path}}", "https+http://api")
                 .AllowAnonymous()
                 .DisableAntiforgery();
+    }
+
+    /// <summary>
+    /// Answers 404 for a path whose segments the next hop could split differently from
+    /// routing: one with an encoded slash or backslash still in it, or a literal backslash.
+    /// </summary>
+    private static TBuilder RefuseAmbiguousPaths<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        builder.Add(endpoint =>
+        {
+            // The forwarders are built from a request delegate, so theirs is already here. A
+            // route handler's may not be yet when conventions run; the only one in the group is
+            // the catch-all, which answers 404 whatever the path.
+            if (endpoint.RequestDelegate is not { } next) return;
+
+            endpoint.RequestDelegate = context =>
+            {
+                if (!IsUnambiguous(context.Request.Path))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return Task.CompletedTask;
+                }
+
+                return next(context);
+            };
+        });
+
+        return builder;
+    }
+
+    /// <summary>Whether <paramref name="path"/> has no encoded separator and no backslash left in it.</summary>
+    internal static bool IsUnambiguous(PathString path)
+    {
+        var value = path.Value ?? string.Empty;
+
+        return !value.Contains('\\')
+               && !value.Contains("%2F", StringComparison.OrdinalIgnoreCase)
+               && !value.Contains("%5C", StringComparison.OrdinalIgnoreCase);
     }
 }
