@@ -2,6 +2,12 @@ using GroupSplit.Keycloak;
 using GroupSplit.RealmWorker;
 
 var builder = Host.CreateApplicationBuilder(args);
+// Logs to the dashboard as well as stdout. Deployed, this worker's stdout is only readable on
+// the host, and a failure here is what keeps the API from starting -- the reason has to be
+// somewhere an operator can see it without a shell there. OpenTelemetry alone rather than the
+// full service defaults, whose resilience handler would retry the admin calls behind the
+// reconciler's back.
+builder.ConfigureOpenTelemetry();
 builder.AddKeycloakAdminClient();
 
 using var host = builder.Build();
