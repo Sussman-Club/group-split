@@ -447,7 +447,7 @@ jobs:
           # Mask the generated secrets before anything below can print them. GitHub masks
           # only its own secrets; values Aspire generates -- the storage keys, say -- would
           # reach the log in the clear through any Compose output that echoes them.
-          while IFS= read -r line; do
+          while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in ''|'#'*) continue ;; esac
             key="${line%%=*}"
             value="${line#*=}"
