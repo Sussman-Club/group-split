@@ -61,10 +61,10 @@ var keycloak = builder.AddKeycloak("keycloak")
 
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
+// Its admin credentials differ by mode, so each branch below gives it its own.
 var realmSettings = builder.AddProject<GroupSplit_RealmWorker>("realm-settings")
     .WithEnvironment("Realm__Operation", "reconcile")
     .WithReference(keycloak)
-    .WithKeycloakAdminAccess(keycloak)
     .WaitFor(keycloak);
 
 var migrations = db
@@ -131,7 +131,9 @@ if (builder.ExecutionContext.IsRunMode)
         .Any(endpoint => endpoint.Name == "https") ? "https" : "http";
     var webOrigin = web.GetEndpoint(webScheme, KnownNetworkIdentifiers.LocalhostNetwork);
     keycloak.WithWebAppOrigin(webOrigin);
-    realmSettings.WithWebAppOrigin(webOrigin);
+    realmSettings
+        .WithWebAppOrigin(webOrigin)
+        .WithKeycloakAdminAccess(keycloak);
 
     var realmReset = builder.AddProject<GroupSplit_RealmWorker>("realm-reset")
         .WithExplicitStart()
@@ -211,7 +213,21 @@ else
         .WithWebAppOrigin(hostname)
         .WithSmtp();
 
+    // The account the realm worker signs in to the admin API as. Not Keycloak's bootstrap
+    // admin: KC_BOOTSTRAP_ADMIN_* only creates a user when the master realm has none, so on a
+    // Keycloak that already existed the bootstrap name and password need not belong to anybody
+    // -- and production's admin is not called "admin". Signed in as a user that does not exist,
+    // the worker exits non-zero and the API, which waits for it, never starts.
+    var keycloakAdminUser = builder
+        .AddParameter("keycloak-admin-user")
+        .WithDescription("Username of an existing Keycloak master-realm admin, for the realm worker.");
+    var keycloakAdminPassword = builder
+        .AddParameter("keycloak-admin-password", secret: true)
+        .WithDescription("Password of keycloak-admin-user.");
+
     realmSettings
+        .WithEnvironment("Keycloak__AdminUser", keycloakAdminUser)
+        .WithEnvironment("Keycloak__AdminPassword", keycloakAdminPassword)
         .WithWebAppOrigin(hostname)
         // Deployed, Keycloak answers only below its relative path, admin API included. Without
         // this the worker's first call is a 404, it exits non-zero, and the API -- which waits
