@@ -91,6 +91,8 @@ jobs:
           DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
           DB_SERVER_PASSWORD: ${{ secrets.DB_SERVER_PASSWORD }}
           KEYCLOAK_PASSWORD: ${{ secrets.KEYCLOAK_PASSWORD }}
+          KEYCLOAK_ADMIN_USER: ${{ vars.KEYCLOAK_ADMIN_USER }}
+          KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
           CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
           SMTP_ENABLED: ${{ vars.SMTP_ENABLED }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
@@ -151,7 +153,7 @@ jobs:
           }
 
           require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
-                  CACHE_PASSWORD
+                  KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD CACHE_PASSWORD
 
           require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
             || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
@@ -312,6 +314,7 @@ jobs:
           # environment.
           parameters="
             WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
+            KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD
             SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER SMTP_PASSWORD
             GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
             PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV PLAID_REDIRECT_URI

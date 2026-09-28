@@ -78,7 +78,8 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
-| `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. |
+| `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. Only used when Keycloak first creates its master realm. |
+| `keycloak-admin-user`, `keycloak-admin-password` | variable `KEYCLOAK_ADMIN_USER`; secret `KEYCLOAK_ADMIN_PASSWORD` | yes | An existing master-realm admin, which the `realm-settings` worker signs in as on every deploy. Not the bootstrap admin, which need not exist once somebody has replaced it. Wrong or missing, the worker fails and the API does not start. |
 | `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
 | `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
 | `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
