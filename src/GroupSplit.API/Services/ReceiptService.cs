@@ -157,7 +157,7 @@ public class ReceiptService(
         // Keep an incomplete receipt editable without making the receipt endpoint refuse it
         // merely because the expense was already divided. The existing ledger remains the
         // last valid answer until every line has a rule and the next edit can recalculate it.
-        var canRedivide = redivide && CanDivide(draft, expense, members);
+        var canRedivide = redivide && await CanDivide(draft, expense, members, ct);
 
         if (existing is null)
         {
@@ -247,7 +247,7 @@ public class ReceiptService(
         item.SplitRuleVersionId = version?.Id;
         item.SplitRuleVersion = version;
 
-        if (redivide && CanDivide(receipt, expense, await Members(expense, ct)))
+        if (redivide && await CanDivide(receipt, expense, await Members(expense, ct), ct))
         {
             expense.Receipt = receipt;
             await splitter.WriteSplitsAsync(expense, ct);
@@ -356,6 +356,13 @@ public class ReceiptService(
                 .WithExtension("difference", expense.Amount - receipt.Total);
         var members = await Members(expense, ct);
         var shares = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
+
+        // A bill divides among the people still in the group, so a line that was somebody's
+        // who has left comes out as nobody's -- which would move what they owed. Refused here,
+        // where both the preview and the divide ask, so neither promises what the other
+        // cannot do.
+        DepartedPositions.RefuseIfSharesMove(await participants.DepartedOn(expense, ct), shares);
+
         var subtotals = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers, true)
             .ToDictionary(s => s.UserId, s => s.Amount);
         return new ReceiptDivisionResponse(receipt.Id, receipt.Total,
@@ -414,11 +421,18 @@ public class ReceiptService(
     /// Checks a draft without changing the tracked expense. An incomplete bill stays a
     /// useful draft; a complete bill is safe to use for the atomic split rewrite below.
     /// </summary>
-    private bool CanDivide(Receipt receipt, Expense expense, IReadOnlyCollection<Guid> members)
+    /// <remarks>
+    /// Also false for a bill that would move what somebody who has left owed: the bill is
+    /// saved as written and the ledger keeps the shares it has, which is what an incomplete
+    /// bill gets too.
+    /// </remarks>
+    private async Task<bool> CanDivide(Receipt receipt, Expense expense, IReadOnlyCollection<Guid> members,
+        CancellationToken ct)
     {
         try
         {
-            ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
+            var shares = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
+            DepartedPositions.RefuseIfSharesMove(await participants.DepartedOn(expense, ct), shares);
             return true;
         }
         catch (ValidationException)

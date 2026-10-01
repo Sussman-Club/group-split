@@ -112,8 +112,13 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     /// The reproduction: a group of two on a one-to-one rule, the second member settles and
     /// goes, and the old expense is divided again.
     /// </summary>
+    /// <remarks>
+    /// This used to succeed, handing the leaver's 100 to the person still here and leaving
+    /// the leaver owed 100 that nobody on the page owed back. It is refused now, by name, and
+    /// nothing moves.
+    /// </remarks>
     [Fact]
-    public async Task Re_dividing_an_old_expense_gives_a_member_who_has_left_nothing()
+    public async Task Re_dividing_an_old_expense_a_member_who_has_left_shared_is_refused()
     {
         var (groupId, other) = await GroupOfTwo();
         var categoryId = await CreateCategory(groupId, "Rent", Shares((Self, 1), (other, 1)));
@@ -124,54 +129,50 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
 
         await Departs(groupId, other);
 
-        await Redivide(expense.Id, groupId, categoryId, 300.00m);
+        var refused = await Assert.ThrowsAsync<ConflictException>(() =>
+            Redivide(expense.Id, groupId, categoryId, 300.00m).AsTask());
+
+        Assert.Equal(ErrorCodes.TransactionMovesDepartedBalance, refused.Code);
+        Assert.Equal([other], Assert.IsAssignableFrom<IReadOnlyList<Guid>>(refused.Extensions["userIds"]));
+
+        DbContext.ChangeTracker.Clear();
 
         var splits = await SplitsOf(expense.Id);
 
-        // The version this expense holds is superseded and still names them -- that is what
-        // makes it readable at all -- but the division is between the people who are here.
-        Assert.DoesNotContain(splits, split => split.UserId == other);
-        Assert.Equal(300.00m, Assert.Single(splits).Amount);
-        Assert.Equal(Self, splits[0].UserId);
+        Assert.Equal(100.00m, splits.Single(split => split.UserId == other).Amount);
+        Assert.Equal(200.00m, splits.Sum(split => split.Amount));
     }
 
     /// <summary>
-    /// And every share the re-divided expense holds belongs to somebody the group's
-    /// balances list.
+    /// Once somebody has gone, a new expense filed under the same category divides between
+    /// the people who are here: the pruned version names only them, so every share belongs
+    /// to somebody the group's balances list.
     /// </summary>
     /// <remarks>
-    /// The property underneath "the balances sum to zero", and the one that survives a
-    /// departure. A group's column adds up because every share belongs to a name on the page
-    /// -- <c>GroupService.NetBalances</c> says so where it chooses participants over members
-    /// -- and a division paying somebody who has gone puts a share outside the listing
-    /// entirely, which is the shape the column comes apart in.
-    /// <para>
-    /// Zero itself is not assertable here, and not because of this: a member who settles and
-    /// leaves keeps the transactions they paid for, so re-dividing an expense they held a
-    /// share of moves their position whichever way it is divided -- to nothing, with this,
-    /// and to a different number without it. The invariant that can be held is the one
-    /// checked below, and the tests that do assert zero are the ones where nobody has left.
-    /// </para>
+    /// The property underneath "the balances sum to zero". It used to be checked on an old
+    /// expense divided again, with a remark that zero itself could not be asserted after a
+    /// departure, because dividing again moved the leaver's position. Nothing can move it
+    /// now, so zero is asserted here as it is everywhere else.
     /// </remarks>
     [Fact]
-    public async Task Every_share_of_a_re_divided_expense_belongs_to_somebody_the_group_lists()
+    public async Task Every_share_of_an_expense_after_a_departure_belongs_to_somebody_the_group_lists()
     {
         var (groupId, other) = await GroupOfTwo();
         var categoryId = await CreateCategory(groupId, "Rent", Shares((Self, 1), (other, 1)));
 
-        var expense = await AnExpense(groupId, categoryId, 200.00m);
+        await AnExpense(groupId, categoryId, 200.00m);
 
         await AssertBalancesSumToZero(groupId);
 
         await Departs(groupId, other);
 
-        await Redivide(expense.Id, groupId, categoryId, 300.00m);
+        var later = await AnExpense(groupId, categoryId, 300.00m);
 
         var listed = (await Balances(groupId)).Select(balance => balance.UserId).ToHashSet();
 
         Assert.DoesNotContain(other, listed);
 
-        var splits = await SplitsOf(expense.Id);
+        var splits = await SplitsOf(later.Id);
 
         Assert.All(splits, split => Assert.Contains(split.UserId, listed));
         Assert.Equal(300.00m, splits.Sum(split => split.Amount));

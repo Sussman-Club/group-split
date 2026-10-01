@@ -133,7 +133,8 @@ Everything else here is a consequence of these.
 1. **Every transaction's shares sum to its amount.** Stored once, when the transaction is
    written or edited; see `TransactionSplit`.
 2. **A group's balances sum to zero**, which follows from (1) as long as every share belongs
-   to somebody in the listing.
+   to somebody in the listing -- or to somebody who left square and whose part nothing has
+   moved since, which `TRANSACTION_MOVES_DEPARTED_BALANCE` guarantees.
 
 That second clause is why the group's balances *include* pending invitees. A listing of
 members alone would show a column that does not add up, with the missing side belonging to

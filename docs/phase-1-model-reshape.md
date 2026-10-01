@@ -382,6 +382,12 @@ the new amount, against a division the caller had never asked to keep. So the mo
 without them, and the update route fills them in only for a patch that actually addresses
 them, which is the one caller that needs an index to address.
 
+*Since then:* this was reversed on 2026-09-09 (47c6904). `GetUpdateModel` carries the stored
+shares into every patch, so a rename never re-divides anything, and the service tells
+"keep these" from "make them exactly these" by comparing them with what is stored. A carried
+share for somebody who has since left is accepted as it is, and changing it is refused with
+`TRANSACTION_MOVES_DEPARTED_BALANCE` (#314).
+
 Transfers are not patchable in the parts that define them, and in the end that needed no
 code: every transaction route reads `Set<Expense>()`, so a transfer is not something the
 transactions API can address at all and a patch naming one is a 404. `TransferNotEditable`
