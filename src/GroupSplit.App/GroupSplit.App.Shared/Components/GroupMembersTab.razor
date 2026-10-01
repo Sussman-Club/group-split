@@ -270,7 +270,7 @@
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first." },
+            { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first. The group's join link stops working, and they will need a new link or invitation to come back." },
             { x => x.ButtonText, "Remove" },
             { x => x.Color, Color.Error }
         };

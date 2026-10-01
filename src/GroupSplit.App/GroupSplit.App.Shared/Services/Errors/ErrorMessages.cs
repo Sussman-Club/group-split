@@ -64,6 +64,9 @@ public static class ErrorMessages
         [ErrorCodes.GroupJoinLinkNotFound] = "That join link is not one of ours. Check you copied the whole of it.",
         [ErrorCodes.GroupJoinLinkExpired] = "That join link has expired. Ask someone in the group for a new one.",
         [ErrorCodes.GroupJoinLinkRevoked] = "That join link has been withdrawn. Ask someone in the group for a new one.",
+        [ErrorCodes.GroupRejoinNeedsNewInvitation] =
+            "You are no longer in this group, and this link was shared before you left. " +
+            "Ask someone in the group for a new one.",
         [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
         [ErrorCodes.GroupInvitationNoName] = "An invitation needs a name to make it out to.",
         [ErrorCodes.GroupMemberNotJoined] =

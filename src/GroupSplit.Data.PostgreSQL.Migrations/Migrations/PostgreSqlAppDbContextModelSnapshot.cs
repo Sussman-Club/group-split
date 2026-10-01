@@ -369,7 +369,19 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<DateTimeOffset?>("LeftAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LeftByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LeftReason")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.HasKey("GroupId", "UserId");
+
+                    b.HasIndex("LeftByUserId");
 
                     b.HasIndex("UserId");
 
@@ -1126,6 +1138,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("LeftByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("GroupSplit.Data.Entities.User", null)
                         .WithMany()

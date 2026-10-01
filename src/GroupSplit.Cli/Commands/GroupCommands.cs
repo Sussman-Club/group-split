@@ -260,6 +260,8 @@ public static class GroupCommands
                 changes:
                 [
                     $"{name} loses access to the group and its history.",
+                    "The group's join link stops working; make a new one to share.",
+                    $"{name} needs a link or invitation issued after this to come back.",
                     "Refused if their balance in it is not settled."
                 ],
                 confirmCommand: $"groupsplit groups remove-member {id} {member} --yes");

@@ -94,7 +94,7 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
         var user = await DbContext.Set<Data.Entities.User>()
             .FirstAsync(candidate => candidate.Id == userId, Ct);
 
-        await Groups.DetachMember(group, user, Ct);
+        await Groups.DetachMember(group, user, Data.Entities.LeftReason.AccountDeleted, user.Id, Ct);
         await DbContext.SaveChangesAsync(Ct);
     }
 

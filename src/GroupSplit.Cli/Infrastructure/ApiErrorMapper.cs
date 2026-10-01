@@ -76,6 +76,10 @@ public static class ApiErrorMapper
             => "It is the same payment: groupsplit inbox link <row-id> <transaction-id>   "
                + "You really paid twice: groupsplit inbox file <row-id> --file-anyway   "
                + "Not a match at all: groupsplit inbox dismiss-match <row-id> <transaction-id>",
+        // Nothing the caller can change about this link will make it work: it predates
+        // their leaving. The fix is a new one, and only a member can make it.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupRejoinNeedsNewInvitation
+            => "Ask someone in the group for a new link, then: groupsplit invitations join <link>",
         _ => null
     };
 

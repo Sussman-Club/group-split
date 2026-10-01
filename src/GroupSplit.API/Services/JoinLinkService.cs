@@ -122,6 +122,10 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
         var link = await Usable(token, ct);
         var userId = userContext.User.Id;
 
+        // Said on the landing page, before the button, rather than after it: a link somebody
+        // held while they were in the group is not a way back for them.
+        await joiner.EnsureMayRejoin(link.GroupId, userId, link.CreatedAt, ct);
+
         return await context.Set<GroupJoinLink>()
             .Where(candidate => candidate.Id == link.Id)
             .Select(candidate => new JoinLinkResponse(
@@ -145,7 +149,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
             .Include(candidate => candidate.Users)
             .FirstAsync(candidate => candidate.Id == link.GroupId, ct);
 
-        var joined = await joiner.Join(group, user, ct);
+        var outcome = await joiner.Join(group, user, link.CreatedAt, ct);
 
         // No standing invitation is answered by this, and none can be. This used to close
         // the one addressed to the joiner's email, and there are no addresses any more: an
@@ -155,7 +159,8 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
         // still waiting on the person it named -- which it should be, since nothing has told
         // it the two are the same. Withdrawing the invitation is how it says so, and that
         // hands the position over rather than dropping it.
-        return new JoinedGroupResponse(group.Id, group.Name, group.Users.Count, !joined);
+        return new JoinedGroupResponse(group.Id, group.Name, group.Users.Count,
+            outcome is JoinOutcome.AlreadyAMember);
     }
 
     /// <summary>

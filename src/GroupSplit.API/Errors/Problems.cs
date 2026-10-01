@@ -47,6 +47,7 @@ public static class Problems
         [ErrorCodes.TransactionPayerNotInGroup] = "Payer is not a member of the group",
         [ErrorCodes.SplitUserNotInGroup] = "A share names someone outside the group",
         [ErrorCodes.SettlementWithSelf] = "A settlement needs two different people",
+        [ErrorCodes.GroupRejoinNeedsNewInvitation] = "This link is older than your departure",
         [ErrorCodes.CategoryNameTaken] = "Category name already in use",
         [ErrorCodes.CategoryInUse] = "Category still has expenses filed under it",
         [ErrorCodes.SplitRuleNameTaken] = "Rule name already in use",

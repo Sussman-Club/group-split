@@ -218,6 +218,17 @@ silence about the division, which is what they have meant since 2026-09-09.
   it had" is only true while the row still says what it said in March. The rule's history
   gains an entry saying the group changed shape, which is a better record than the silent
   deletion it replaces.
+- **A departure is recorded, never deleted.** All three ways out close the membership row
+  with `LeftAt`, `LeftReason` (`Left`, `Removed` or `AccountDeleted`) and `LeftByUserId`.
+  A query filter on `GroupMembership` keeps closed rows out of `Group.Users` and
+  `User.Groups`, so every "is this person a member" read still means a current member.
+- **A way back in is only as good as its date.** A join link made, or an invitation sent,
+  at or before somebody's departure does not admit them
+  (`GROUP_REJOIN_NEEDS_NEW_INVITATION`). One issued afterwards does, and they come back as
+  an ordinary member on the same row, with `JoinedAt` reset and their archive flag cleared.
+  Removing a member also puts out the group's live join link, because they may have passed
+  it on; leaving does not, because the link is the group's and leaving expresses no
+  distrust.
 - **They have to be settled up first.** A member with a non-zero balance in the group cannot
   be removed and cannot leave (`GROUP_MEMBER_NOT_SETTLED`), so a departure never leaves a
   debt behind with nobody to owe it.

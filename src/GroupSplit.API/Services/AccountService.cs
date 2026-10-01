@@ -82,7 +82,7 @@ public sealed class AccountService(
 
         foreach (var group in sharedGroups)
         {
-            await groups.DetachMember(group, user, cancellationToken);
+            await groups.DetachMember(group, user, LeftReason.AccountDeleted, user.Id, cancellationToken);
         }
 
         // Nothing to do about invitations sent *to* them: an invitation names a person the

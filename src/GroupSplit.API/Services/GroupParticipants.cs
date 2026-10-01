@@ -57,6 +57,32 @@ public enum RuleHandling
 }
 
 /// <summary>
+/// What one account is to one group. A fact about the pair, never an authorization answer
+/// on its own: the services decide what each standing may do, and
+/// <c>docs/participants.md</c> is the table of those decisions.
+/// </summary>
+public enum ParticipantStanding
+{
+    /// <summary>Holds an open membership. May read and change the group.</summary>
+    Member,
+
+    /// <summary>
+    /// A stand-in named by a pending invitation. Choosable wherever money is recorded, and
+    /// nowhere else.
+    /// </summary>
+    Invited,
+
+    /// <summary>
+    /// Was a member and is not now: a closed membership row, or -- for somebody who left
+    /// before departures were kept -- a name the group's ledger or rules still carry.
+    /// </summary>
+    Departed,
+
+    /// <summary>None of the above.</summary>
+    Stranger
+}
+
+/// <summary>
 /// Who a group may point at when it records money: its members, and the people it has
 /// invited and is still waiting on.
 /// </summary>
@@ -110,6 +136,18 @@ public interface IGroupParticipants
 
     /// <summary>Whether that person has been invited to the group and has not joined it.</summary>
     Task<bool> IsPendingInvitee(Guid groupId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// What <paramref name="userId"/> is to <paramref name="groupId"/>: a member, invited,
+    /// departed, or nobody.
+    /// </summary>
+    /// <remarks>
+    /// Member wins over everything, because a current membership is the only standing that
+    /// grants anything. Departed is asked last and of two sources: a closed membership row,
+    /// which every departure writes now, and the ledger, which is all that is left of the
+    /// departures from before it did.
+    /// </remarks>
+    Task<ParticipantStanding> StandingOf(Guid groupId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// A new stand-in for a person a group has named: a row with that name on it, no
@@ -214,6 +252,42 @@ public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions 
         context.Set<GroupInvitation>()
             .AnyAsync(invitation => invitation.GroupId == groupId &&
                                     invitation.ParticipantUserId == userId, ct);
+
+    public async Task<ParticipantStanding> StandingOf(Guid groupId, Guid userId, CancellationToken ct = default)
+    {
+        // With the filter off, so a closed row answers too; the open one is told apart by its
+        // date.
+        var membership = await context.Set<GroupMembership>()
+            .IgnoreQueryFilters()
+            .Where(row => row.GroupId == groupId && row.UserId == userId)
+            .Select(row => new { row.LeftAt })
+            .FirstOrDefaultAsync(ct);
+
+        if (membership is { LeftAt: null })
+            return ParticipantStanding.Member;
+
+        if (await IsPendingInvitee(groupId, userId, ct))
+            return ParticipantStanding.Invited;
+
+        if (membership is not null || await HasTraceIn(groupId, userId, ct))
+            return ParticipantStanding.Departed;
+
+        return ParticipantStanding.Stranger;
+    }
+
+    /// <summary>
+    /// Whether the group's ledger or rules still name somebody: the same four places the
+    /// past-members listing reads.
+    /// </summary>
+    private async Task<bool> HasTraceIn(Guid groupId, Guid userId, CancellationToken ct) =>
+        await context.Set<Transaction>().AnyAsync(transaction =>
+            transaction.GroupId == groupId && transaction.UserId == userId, ct) ||
+        await context.Set<TransactionSplit>().AnyAsync(split =>
+            split.Transaction.GroupId == groupId && split.UserId == userId, ct) ||
+        await context.Set<SplitRuleParticipant>().AnyAsync(participant =>
+            participant.SplitRuleVersion.SplitRule.Group.Id == groupId && participant.UserId == userId, ct) ||
+        await context.Set<SoleSplitRuleVersion>().AnyAsync(version =>
+            version.SplitRule.Group.Id == groupId && version.UserId == userId, ct);
 
     public User StandInFor(string name)
     {

@@ -76,6 +76,11 @@ and `LeftAt` arrive in Phase 2 alongside invitations, which is the only code tha
 read them. The roadmap lists them in the target-model table because that table describes
 the destination, not this phase.
 
+*Since then:* `JoinedAt` arrived with invitations, and `LeftAt`, with `LeftReason` and
+`LeftByUserId`, arrived with the rejoin rule (#310). `Role` and `Status` are not coming --
+members are equal, and a closed row is the only status a membership has -- and
+`InvitedEmail` was superseded by invitations that name a person rather than an address.
+
 **Leaving a group stays guarded, and the guard changes hands.** Today
 `RuleVersionReferencesRemovedMember` refuses a write whenever a rule version names
 somebody no longer in the group -- a guard that exists only because the split lives on

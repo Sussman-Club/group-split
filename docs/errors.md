@@ -68,12 +68,12 @@ routing, authentication, model binding, an unhandled exception.
 | Code | When |
 | --- | --- |
 | `GROUP_NOT_FOUND` | The group does not exist, or the caller is not a member. |
-| `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. |
+| `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. Removing somebody who is not a member -- who has already left, or was never in the group -- answers this too. |
 | `ACCOUNT_NOT_FOUND` | The account to delete does not exist. |
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
-| `GROUP_INVITATION_NOT_FOUND` | No invitation answers to that token or id, or it has already been claimed, declined or withdrawn. A personal link works once, so a forwarded copy of a claimed one lands here -- and gets the same answer a mistyped URL does, deliberately: the alternative is telling whoever holds it that it used to be good. |
+| `GROUP_INVITATION_NOT_FOUND` | No invitation answers to that token or id, or it has already been claimed, declined or withdrawn. A personal link works once, so a forwarded copy of a claimed one lands here -- and gets the same answer a mistyped URL does, deliberately: the alternative is telling whoever holds it that it used to be good. The second of two people claiming one link at the same moment gets this too, and is never let in. |
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
@@ -114,7 +114,8 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
 | `GROUP_JOIN_LINK_EXPIRED` | The join link is past its expiry. Somebody in the group makes a new one. | |
-| `GROUP_JOIN_LINK_REVOKED` | The join link was withdrawn by the group before it expired. Kept apart from expiry because they are different things to have happened to the person holding the link. | |
+| `GROUP_JOIN_LINK_REVOKED` | The join link was withdrawn by the group before it expired. Kept apart from expiry because they are different things to have happened to the person holding the link. Removing a member puts out the group's live link, so a link they joined by answers this afterwards. | |
+| `GROUP_REJOIN_NEEDS_NEW_INVITATION` | Somebody who left the group, or was removed from it, used a join link or an invitation issued at or before their departure. Answered by the landing page's read as well as by joining or claiming, so the page can say it before the button. A link or invitation issued after they left works. | `leftAt`, `leftReason` (`Left`, `Removed` or `AccountDeleted`), `issuedAt`. |
 | `BANK_SYNC_UNAVAILABLE` | This deployment has no bank provider configured, so there is nothing to link through. `GET /bank-connections` says the same thing without failing, through `enabled`. | |
 | `RECEIPT_TRANSCRIPTION_UNAVAILABLE` | This deployment has no receipt transcription provider configured. Uploading and viewing receipt files still works. | |
 | `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment; deleting the expense is how you undo it. | |

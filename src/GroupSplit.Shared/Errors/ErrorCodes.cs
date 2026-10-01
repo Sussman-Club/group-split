@@ -77,6 +77,15 @@ public static class ErrorCodes
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
     public const string GroupJoinLinkExpired = "GROUP_JOIN_LINK_EXPIRED";
     public const string GroupJoinLinkRevoked = "GROUP_JOIN_LINK_REVOKED";
+
+    /// <summary>
+    /// Somebody who left the group, or was removed from it, tried to come back through a join
+    /// link or an invitation that was issued before they went. A way back in is only as good
+    /// as its date: they need one somebody in the group issued after they left, which is how
+    /// the group says it wants them back.
+    /// </summary>
+    public const string GroupRejoinNeedsNewInvitation = "GROUP_REJOIN_NEEDS_NEW_INVITATION";
+
     public const string TransactionGroupLeft = "TRANSACTION_GROUP_LEFT";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";

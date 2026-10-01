@@ -68,8 +68,10 @@ public interface IGroupService
     /// People who are no longer members but still appear in the group's recorded history.
     /// </summary>
     /// <remarks>
-    /// Membership rows are removed when somebody leaves. The ledger is the durable history,
-    /// so this is a read-only context list and never a participant list for new money.
+    /// Read from the ledger rather than from closed membership rows: departures from before
+    /// those rows were kept left nothing else behind, and somebody the ledger does not name
+    /// has nothing on the page to explain. A read-only context list, never a participant
+    /// list for new money.
     /// </remarks>
     Task<IQueryable<User>> GetGroupPastMembers(Guid groupId, CancellationToken cancellationToken = default);
 
@@ -81,9 +83,14 @@ public interface IGroupService
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Drops <paramref name="user"/> from <paramref name="group"/> and out of the split
-    /// rules that name them, so later expenses stop giving a share to somebody who has
-    /// left.
+    /// Ends <paramref name="user"/>'s membership of <paramref name="group"/> and takes them
+    /// out of the split rules that name them, so later expenses stop giving a share to
+    /// somebody who has left.
+    /// <para>
+    /// The membership row is closed rather than deleted: <paramref name="reason"/> and
+    /// <paramref name="byUserId"/> are written onto it with the moment, which is what lets a
+    /// link shared while they were still in the group be refused to them afterwards.
+    /// </para>
     /// <para>
     /// Deliberately does not save. Callers batch it with their own changes, which is what
     /// lets an account leaving several groups at once apply as one unit instead of
@@ -92,7 +99,8 @@ public interface IGroupService
     /// ask it of every group up front.
     /// </para>
     /// </summary>
-    Task DetachMember(Group group, User user, CancellationToken cancellationToken = default);
+    Task DetachMember(Group group, User user, LeftReason reason, Guid? byUserId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Everything that has happened in a group -- what it spent and who has paid whom --
@@ -193,7 +201,8 @@ public class GroupService(
     ISplitRuleRevisions revisions,
     IMemberSplitRules memberRules,
     IBillSplitRule billRule,
-    IEvenSplitRule evenRule) : IGroupService
+    IEvenSplitRule evenRule,
+    IJoinLinkService joinLinks) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -374,21 +383,25 @@ public class GroupService(
         if (group is null)
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
-        // Before the balance check below: "the group is archived" is the more useful thing
-        // to hear, and it is the one the person can act on.
-        var user = await context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        // Who they are to this group decides what there is to remove. Only a member has a
+        // membership. Somebody invited is in the members listing, marked as waiting, and can
+        // be reached here by mistake: withdrawing the invitation is the act, and it says what
+        // becomes of anything recorded against them. Anybody else -- somebody who has already
+        // gone, or was never here -- has nothing to remove, and this used to answer them with
+        // a success that changed nothing.
+        switch (await participants.StandingOf(groupId, userId, cancellationToken))
+        {
+            case ParticipantStanding.Invited:
+                throw new ConflictException(ErrorCodes.GroupMemberNotJoined,
+                    "That person has been invited and has not joined, so there is no membership to " +
+                    "remove. Withdraw the invitation instead.");
 
-        if (user is null)
-            throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
+            case ParticipantStanding.Departed or ParticipantStanding.Stranger:
+                throw new NotFoundException(ErrorCodes.UserNotFound,
+                    "That person is not a member of this group.");
+        }
 
-        // The members list now shows the people the group is waiting on too, so this can be
-        // asked of one of them. They are not a member and there is nothing to remove:
-        // withdrawing the invitation is the act, and it says what becomes of anything
-        // recorded against them.
-        if (await participants.IsPendingInvitee(groupId, userId, cancellationToken))
-            throw new ConflictException(ErrorCodes.GroupMemberNotJoined,
-                "That person has been invited and has not joined, so there is no membership to " +
-                "remove. Withdraw the invitation instead.");
+        var user = await context.Set<User>().FirstAsync(u => u.Id == userId, cancellationToken);
 
         var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
         var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
@@ -399,9 +412,17 @@ public class GroupService(
             throw new ConflictException(ErrorCodes.GroupMemberNotSettled, "The member has to settle up before leaving the group.")
                 .WithExtension("balance", userBalance);
 
-        await DetachMember(group, user, cancellationToken);
+        await DetachMember(group, user, LeftReason.Removed, currentUser.Id, cancellationToken);
 
-        await context.SaveChangesAsync(cancellationToken);
+        // And the group's live join link goes out with them. They could read it while they
+        // were a member and may have passed it on; the rejoin rule stops them using it, but
+        // not whoever they gave it to. Leaving does not do this: the link is the group's,
+        // sitting in its thread for other people, and leaving expresses no distrust.
+        //
+        // Revoke saves, which is what writes the departure too: one round trip, so a removal
+        // cannot land without its revocation or the other way round.
+        await joinLinks.Revoke(groupId, cancellationToken);
+
         return groupQuery;
     }
 
@@ -427,12 +448,21 @@ public class GroupService(
     /// anybody owed.
     /// </para>
     /// </remarks>
-    public async Task DetachMember(Group group, User user, CancellationToken cancellationToken = default)
+    public async Task DetachMember(Group group, User user, LeftReason reason, Guid? byUserId,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(user);
 
-        group.Users.Remove(user);
+        // The row, not the collection: removing them from group.Users would delete it, and a
+        // departure is something the group has to remember. The filter hides the closed row
+        // from every read of Users and Groups from here on.
+        var membership = await context.Set<GroupMembership>()
+            .FirstAsync(row => row.GroupId == group.Id && row.UserId == user.Id, cancellationToken);
+
+        membership.LeftAt = DateTimeOffset.UtcNow;
+        membership.LeftReason = reason;
+        membership.LeftByUserId = byUserId;
 
         await revisions.WithoutParticipant(
             group.Id, user.Id, toUserId: null, RuleHandling.Prune, cancellationToken);
@@ -647,7 +677,7 @@ public class GroupService(
                     "Settle up before leaving the group.")
                 .WithExtension("balance", balance);
 
-        await DetachMember(group, user, cancellationToken);
+        await DetachMember(group, user, LeftReason.Left, user.Id, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
     }

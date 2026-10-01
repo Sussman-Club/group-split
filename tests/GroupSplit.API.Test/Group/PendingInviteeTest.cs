@@ -447,7 +447,7 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 .Include(candidate => candidate.Users)
                 .FirstAsync(candidate => candidate.Id == group.Id, Ct);
 
-            Assert.True(await joiner.Join(tracked, carlos, Ct));
+            Assert.Equal(JoinOutcome.Joined, await joiner.Join(tracked, carlos, DateTimeOffset.UtcNow, Ct));
         }
 
         Assert.Single(await Invitations.ForGroup(group.Id, Ct));
@@ -719,7 +719,7 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var inviter = await DbContext.Set<Data.Entities.User>()
             .FirstAsync(user => user.Id == TestUser().Id, Ct);
 
-        await Groups.DetachMember(tracked, inviter, Ct);
+        await Groups.DetachMember(tracked, inviter, Data.Entities.LeftReason.Left, inviter.Id, Ct);
         await DbContext.SaveChangesAsync(Ct);
 
         // Withdrawn by the member who is left, because withdrawing is a thing a member of
@@ -808,7 +808,7 @@ public class PendingInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var me = await DbContext.Set<Data.Entities.User>()
             .FirstAsync(user => user.Id == TestUser().Id, Ct);
 
-        await Groups.DetachMember(tracked, me, Ct);
+        await Groups.DetachMember(tracked, me, Data.Entities.LeftReason.Left, me.Id, Ct);
         await DbContext.SaveChangesAsync(Ct);
 
         // Declined by whoever holds the link, which needs no membership -- so this is

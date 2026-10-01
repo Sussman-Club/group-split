@@ -80,7 +80,13 @@ A **personal invitation link** hands over a position in the group's ledger. Forw
 somebody else inherits the debts recorded against that name. So:
 
 - **Single use.** Claiming deletes the invitation, and the token lives on that row, so a
-  forwarded copy has nothing left to claim and gets the same 404 a mistyped link does.
+  forwarded copy has nothing left to claim and gets the same 404 a mistyped link does. The
+  delete is the first thing the claim does, inside one transaction, so two people claiming
+  the same link at the same moment end with one member and one 404 -- never a 500, and never
+  a second membership.
+- **Not a way back for somebody who left after it was sent.** A link issued before a
+  person's departure is refused to them with `GROUP_REJOIN_NEEDS_NEW_INVITATION`, on the
+  landing page and on the claim alike.
 - **It says nothing about the money.** `GET /invitations/claims/{token}` answers the group's
   name, its size, who asked and which person the invitation was made out to.
   What is recorded against that person is the group's until the claim makes it somebody's.
@@ -144,10 +150,16 @@ with a person who has not joined.
 
 `IInvitationService.Claim` is the one moment a position changes hands:
 
-1. the claimer joins the group;
+1. the invitation is deleted, first and inside a transaction, which is what decides a race
+   between two claimers;
 2. `HandOver` moves the stand-in's shares, the transactions it was down as having paid for,
    **and its places in the group's split rules** onto the claimer's account;
-3. the invitation and the stand-in both go.
+3. the claimer joins the group, through `IGroupJoiner.Join`;
+4. the stand-in goes.
+
+Somebody who is already a member may claim one too -- a group can name the same person
+twice -- and it merges the stand-in's position into theirs. The claim page says so and asks
+again before doing it, because it is the one claim that changes an existing balance.
 
 The rules are the half that is easy to get backwards, and was: one hand-over served both
 directions and pruned in both, so claiming an invitation took the new member out of the very
@@ -174,6 +186,11 @@ one.** Nothing has told the group that the person who walked in is the person it
 guessing from a name would be the mistake this design refuses. The group goes on waiting;
 withdrawing the invitation is how it says otherwise, and that hands the position over rather
 than dropping it.
+
+**Neither door admits somebody whose departure is newer than it.** A join link is dated by
+when it was made, an invitation by when it was sent, and `IGroupJoiner` refuses either to a
+person whose membership ended at or after that moment. Removing a member also puts out the
+group's live join link; leaving does not.
 
 ## Declining and withdrawing: the case that needed deciding
 
@@ -255,6 +272,9 @@ here rather than left implicit.
 | What an account has open | `InvitationService.Mine`, written by `Describe` |
 | What happens when a link is claimed | `InvitationService.Claim`, `IGroupParticipants.HandOver` |
 | What happens when one is declined or withdrawn | `InvitationService.Close`, `IGroupParticipants.HandOver` |
+| What somebody is to a group: member, invited, departed, nobody | `IGroupParticipants.StandingOf` |
+| Whether a departed person may use a link or an invitation | `IGroupJoiner.Join`, `EnsureMayRejoin` |
+| Which of two claimers wins | `InvitationService.Claim`: the invitation is deleted first, in a transaction |
 
 ## Known gaps
 
@@ -263,9 +283,13 @@ here rather than left implicit.
   they open the link once -- after that it is in their own list and stays there. Closing this
   properly means a channel to reach somebody on, which is a bigger question than invitations.
 - **A forwarded link can be claimed by the wrong person.** Single use limits the damage to
-  one taking rather than many, and the claim page says whose name it is before anybody
-  presses anything, but nothing verifies that the claimer is who the group meant. Binding a
-  claim to something the group can check would be the next step.
+  one taking rather than many -- and holds under concurrency now, not only in sequence --
+  and the claim page says whose name it is before anybody presses anything, but nothing
+  verifies that the claimer is who the group meant. Binding a claim to something the group
+  can check would be the next step.
+- **Departures from before membership rows were kept leave no date.** Those rows were
+  deleted, so there is nothing for the rejoin rule to compare against. Such people are
+  recognised as departed only from the ledger, and any link can still let them back in.
 - **An account deleting itself can empty a group.** `AccountService.DeleteAccount` detaches
   from every group without the last-member check `GroupService.Leave` applies, so a group
   can end up with no members and a pending invitation nobody can absorb. Nothing is lost

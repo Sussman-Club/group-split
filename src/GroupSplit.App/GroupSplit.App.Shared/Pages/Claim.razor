@@ -9,6 +9,7 @@
 @inject IGroupCommands GroupCommands
 @inject ApiErrorPresenter Errors
 @inject IAuthService AuthService
+@inject IDialogService DialogService
 @inject NavigationManager Nav
 
 @*
@@ -67,10 +68,23 @@ else if (_invitation is { } invitation)
            somebody may be taking on a fortnight of shares. The amounts are deliberately not
            here -- the link can be forwarded, and what the group has recorded is theirs
            until this is claimed -- and the app says what moved the moment it is. *@
-        <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">
-            Anything the group has already recorded against @invitation.Name becomes yours:
-            their shares, and anything they are down as having paid for. No amounts change.
-        </MudAlert>
+        @if (invitation.AlreadyAMember)
+        {
+            @* A member opening somebody else's link, most often to check it works before
+               sending it. Claiming is still allowed -- the group may have named them twice --
+               but it merges two people's money into one, so the page says that plainly and
+               the button asks again before doing it. *@
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="w-100" Style="text-align: left">
+                @MergeWarning(invitation)
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">
+                Anything the group has already recorded against @invitation.Name becomes yours:
+                their shares, and anything they are down as having paid for. No amounts change.
+            </MudAlert>
+        }
 
         <div class="gs-link-landing-actions">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
@@ -78,7 +92,9 @@ else if (_invitation is { } invitation)
                        EndIcon="@Icons.Material.Rounded.ArrowForward"
                        Disabled="@_busy"
                        OnClick="@ClaimAsync">
-                @($"Join as {invitation.Name}")
+                @(invitation.AlreadyAMember
+                    ? $"This is me: merge {invitation.Name} into my account"
+                    : $"Join as {invitation.Name}")
             </MudButton>
 
             <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy" OnClick="@DeclineAsync">
@@ -141,13 +157,28 @@ else if (_invitation is { } invitation)
     /// behind -- so the sentence is built rather than interpolated blind.
     /// </summary>
     private static string Asked(InvitationClaimResponse invitation) =>
-        string.IsNullOrWhiteSpace(invitation.InvitedByUserName)
-            ? $"You have been invited as {invitation.Name}. {Members(invitation.MemberCount)} already."
-            : $"{invitation.InvitedByUserName} invited you as {invitation.Name}. {Members(invitation.MemberCount)} already.";
+        invitation.AlreadyAMember
+            ? $"You are already in {invitation.GroupName}. This invitation is made out to {invitation.Name}."
+            : string.IsNullOrWhiteSpace(invitation.InvitedByUserName)
+                ? $"You have been invited as {invitation.Name}. {Members(invitation.MemberCount)} already."
+                : $"{invitation.InvitedByUserName} invited you as {invitation.Name}. {Members(invitation.MemberCount)} already.";
+
+    /// <summary>
+    /// What claiming does to somebody who is already a member, said before the button and
+    /// again in the confirmation: it is the one claim that changes an existing balance.
+    /// </summary>
+    internal static string MergeWarning(InvitationClaimResponse invitation) =>
+        $"Claiming this merges {invitation.Name} into your account. Their shares, anything they are " +
+        $"down as having paid for, and their places in split rules become yours, and {invitation.Name} " +
+        "leaves the members list. No amounts change, but your balance does. Only do this if the group " +
+        "named you twice.";
 
     private async Task ClaimAsync()
     {
         if (_invitation is null) return;
+
+        if (_invitation.AlreadyAMember && !await ConfirmMergeAsync(_invitation))
+            return;
 
         _busy = true;
 
@@ -175,6 +206,23 @@ else if (_invitation is { } invitation)
 
         if (declined)
             Nav.NavigateTo("/");
+    }
+
+    private async Task<bool> ConfirmMergeAsync(InvitationClaimResponse invitation)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, MergeWarning(invitation) },
+            { x => x.ButtonText, "Merge" },
+            { x => x.Color, Color.Warning }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
+            $"Merge {invitation.Name} into your account", parameters, options);
+
+        return await dialog.ConfirmedAsync();
     }
 
     private static string Members(int count) =>

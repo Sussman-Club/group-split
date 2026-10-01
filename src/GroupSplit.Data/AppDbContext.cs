@@ -62,6 +62,32 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                             .IsRequired()
                             .HasDefaultValueSql("CURRENT_TIMESTAMP")
                             .ValueGeneratedOnAdd();
+
+                        // Stored by name, as a bank connection's status is, so a row read
+                        // straight from the database says what happened.
+                        join.Property(membership => membership.LeftReason)
+                            .HasConversion<string>()
+                            .HasMaxLength(16);
+
+                        // Who ended it, kept only while that account exists.
+                        join.HasOne<User>()
+                            .WithMany()
+                            .HasForeignKey(membership => membership.LeftByUserId)
+                            .OnDelete(DeleteBehavior.SetNull);
+
+                        // A departed membership is history, not a member. Every reach
+                        // through Users or Groups -- Include, Any, Count, SelectMany,
+                        // Collection().Query() -- goes through this row, so filtering it here
+                        // is what keeps every "is this person a member" read meaning a
+                        // current member without each one having to say so.
+                        //
+                        // Two things to know before reaching past it. IgnoreQueryFilters is
+                        // query-wide: used inside a subquery of a read that is scoped through
+                        // Users or Groups, it would let a departed person through that scope
+                        // too. And loading a closed row into a context that tracks the group
+                        // and the person puts them back into group.Users in memory, so a
+                        // decision about a departed row has to be made from the row.
+                        join.HasQueryFilter(membership => membership.LeftAt == null);
                     });
 
             entity.HasIndex(user => user.Email).IsUnique();

@@ -203,6 +203,10 @@ public sealed class InvitationService(
 
         var userId = userContext.User.Id;
 
+        // Before it is remembered: somebody who left after this was sent is not somebody it
+        // is waiting on, and the page should say so before the button rather than after.
+        await joiner.EnsureMayRejoin(invitation.GroupId, userId, invitation.InvitedAt, ct);
+
         // Asked once and used twice: to answer the page, and to decide whether this is
         // worth remembering.
         var alreadyAMember = await context.Set<GroupMembership>()
@@ -236,35 +240,84 @@ public sealed class InvitationService(
     public async Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default)
     {
         var user = userContext.User;
-        var invitation = await Held(token, ct);
+        var held = await Held(token, ct);
 
-        var group = await context.Set<Group>()
-            .Include(candidate => candidate.Users)
-            .FirstAsync(candidate => candidate.Id == invitation.GroupId, ct);
+        var standIn = held.ParticipantUserId;
+        var name = held.Name;
+        var invitedAt = held.InvitedAt;
 
-        await joiner.Join(group, user, ct);
+        // Before anything is written, so a refusal leaves the invitation standing for the
+        // person it was meant for.
+        await joiner.EnsureMayRejoin(held.GroupId, user.Id, invitedAt, ct);
 
-        // The position moves onto their own account: their shares become the claimer's, and
-        // the expenses the stand-in was down as having paid for become theirs. No amount
-        // changes, so every transaction still divides into exactly its own amount.
-        // Transfer, not prune. The group wrote "Carlos gets one share" and meant it, so
-        // Carlos claiming his link is the group getting what it asked for -- and pruning
-        // here left the new member out of the very templates that named them, silently.
-        var taken = await participants.HandOver(
-            group.Id, invitation.ParticipantUserId, user.Id, RuleHandling.Transfer, ct);
+        Group group = null!;
 
-        var standIn = invitation.ParticipantUserId;
-        var name = invitation.Name;
+        // One transaction for the whole claim, run by the context's execution strategy: the
+        // deployed provider retries transient failures, and a transaction the strategy did
+        // not open is one it refuses to run at all.
+        var taken = await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            // Each attempt from what the database holds. See Fresh: a retry on top of the
+            // last attempt's tracked writes skips some, repeats others, and on a claim can end
+            // by deleting a stand-in whose shares were never moved.
+            Fresh(user);
 
-        context.Remove(invitation);
+            var invitation = await Held(token, ct);
 
-        // The stand-in with it, now that nothing points at it. It exists to hold a position
-        // until somebody claims it, and this is that moment; leaving it would leave a row
-        // named after a person who is now in the group under their own account, turning up in
-        // nothing and explaining nothing.
-        await DiscardStandInIfUnused(standIn, ct);
+            group = await context.Set<Group>()
+                .Include(candidate => candidate.Users)
+                .FirstAsync(candidate => candidate.Id == invitation.GroupId, ct);
 
-        await context.SaveChangesAsync(ct);
+            // The invitation is the first thing in it. The row is the single-use token, so
+            // taking it first is what makes the link work once: two people claiming the same
+            // link at the same moment both get past Held, but only one of them can delete the
+            // row. On Postgres the second delete waits on the first one's lock and then finds
+            // nothing, which EF reports as a concurrency failure -- and at that point the
+            // loser has written nothing, so there is nothing to undo and no membership to take
+            // back. Everything after this is the winner's alone.
+            await using var transaction = await context.Database.BeginTransactionAsync(ct);
+
+            context.Remove(invitation);
+
+            try
+            {
+                await context.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
+                    "That invitation link was not found. It may already have been claimed.");
+            }
+
+            // The position moves onto their own account: their shares become the claimer's,
+            // and the expenses the stand-in was down as having paid for become theirs. No
+            // amount changes, so every transaction still divides into exactly its own amount.
+            // Transfer, not prune. The group wrote "Carlos gets one share" and meant it, so
+            // Carlos claiming his link is the group getting what it asked for -- and pruning
+            // here left the new member out of the very templates that named them, silently.
+            //
+            // Before the join, which needs no membership to have happened yet: the position
+            // moves, and then the person walks in and finds it theirs.
+            var handover = await participants.HandOver(
+                group.Id, standIn, user.Id, RuleHandling.Transfer, ct);
+
+            // Join's own saves run inside this transaction. EF puts a savepoint before every
+            // save made inside one and rolls back to it if the save fails, which is what keeps
+            // the recovery in IMemberSplitRules.EnsureFor working here: without it, the unique
+            // violation it catches would leave Postgres refusing every statement after it.
+            await joiner.Join(group, user, invitedAt, ct);
+
+            // The stand-in with it, now that nothing points at it. It exists to hold a
+            // position until somebody claims it, and this is that moment; leaving it would
+            // leave a row named after a person who is now in the group under their own
+            // account, turning up in nothing and explaining nothing.
+            await DiscardStandInIfUnused(standIn, ct);
+
+            await context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return handover;
+        });
 
         return new InvitationClaimedResponse(
             group.Id,
@@ -360,6 +413,29 @@ public sealed class InvitationService(
             // does not read as though money had changed hands.
             moved.MovedAnything ? absorber?.Id : null,
             moved.MovedAnything ? Describe(absorber) : null);
+    }
+
+    /// <summary>
+    /// Starts an attempt at a multi-save transaction from the database rather than from
+    /// whatever the last attempt left tracked.
+    /// </summary>
+    /// <remarks>
+    /// The deployed provider retries a transaction that hit a transient failure by running
+    /// the whole delegate again on the same context. Every save inside the first attempt
+    /// marked its changes as stored, and the rollback did not unmark them, so the second
+    /// attempt would read tracked rows that claim writes the database no longer has: an
+    /// update to a value already set is skipped, an addition to an amount is made twice, and
+    /// a membership the first attempt reopened reads as already open. Clearing first makes an
+    /// attempt mean the same thing whichever one it is. The signed-in account is put back,
+    /// because the services hold on to it and it is the one row every write here refers to.
+    /// </remarks>
+    private void Fresh(User signedIn)
+    {
+        context.ChangeTracker.Clear();
+
+        // That one row, and nothing reachable from it: whatever its navigations held belongs
+        // to the attempt being thrown away.
+        context.Entry(signedIn).State = EntityState.Unchanged;
     }
 
     /// <summary>
