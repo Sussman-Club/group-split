@@ -1061,8 +1061,10 @@ groupsplit split-rules list --group <group-id>
  9a20...                               Household 3-way   -                                     -
 ```
 
-**All for** is the member a rule puts the whole amount on, read off the division it stands
-for; **built in** is whether the group was given the rule rather than writing it.
+**All for** is the participant a rule puts the whole amount on, read off the division it
+stands for -- a member, or somebody the group has invited and is waiting on, who has one from
+the moment they are named; **built in** is whether the group was given the rule rather than
+writing it.
 
 Naming one on an expense divides the whole of it that way, whatever the category says:
 

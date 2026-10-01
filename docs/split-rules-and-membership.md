@@ -109,16 +109,19 @@ A rule that anything has been divided by cannot be deleted. The service refuses 
 first (`SPLIT_RULE_IN_USE`), and the foreign key from `Transaction` refuses it underneath, so
 an expense cannot be left with amounts and no account of where they came from.
 
-## The rule every group holds for every member
+## The rule every group holds for every participant
 
-Beside the rules a group writes, it is given one per member: **all of it is for them**. They
+Beside the rules a group writes, it is given one per participant -- every member, and
+everybody it has invited and is waiting on: **all of it is for them**. They
 exist because the commonest thing an expense has to say is the one thing its category
 cannot -- the weekly shop is even, and this one is Ana's gym on the joint card -- and a group
 should not have to invent a rule apiece, name them, and keep them in step with its
 membership before anybody can say it.
 
-One appears as each member joins, and the migration that introduced them wrote one per
-existing membership -- the same migration that gave every kind of version a table of its
+One appears as each member joins, and as each person is invited -- the friend invited for
+the trip is the one most likely to need "all of it is theirs", and should not have to join
+first. The migration that introduced them wrote one per existing membership, and a later
+one wrote one per pending invitation. The first was the same migration that gave every kind of version a table of its
 own, so that "who the whole amount is for" is a column in the table of the kind that has
 one, required, rather than a nullable column on a table the other four kinds share. Two
 facts, kept in the two places that state them:
@@ -146,6 +149,16 @@ division for as long as it exists. That is not tidiness: an expense can name one
 anybody having created it, so a restatement would move money on expenses recorded under a
 division nobody chose. A group that wants "all of it is for Ana, until we say otherwise"
 creates a rule of its own -- the same kind, and editable like any other.
+
+**An invitee's rule follows their position.** When the invitation is claimed by somebody
+with no rule of their own in the group, it becomes theirs: its versions are repointed, and
+expenses recorded "all for Luz" before she joined now say her account. When the position
+lands on somebody who already has one -- a member claiming it, or a decline or withdrawal
+handing it to the inviter -- it is retired: deleted if nothing was divided by it and nothing
+defaults to it, and otherwise kept for that history, repointed at the receiver, and no longer
+provisioned, so it leaves the "One pays" picker and becomes an ordinary rule the group may
+rename. `IMemberSplitRules.HandOver` decides which, and is the one place that writes
+`BuiltIn` back to false.
 
 A departure leaves them alone, and can: the member is an account, which is anonymised rather
 than erased, so the rule goes on naming a row that is still there. What it stops doing is

@@ -275,6 +275,7 @@ here rather than left implicit.
 | What somebody is to a group: member, invited, departed, nobody | `IGroupParticipants.StandingOf` |
 | Whether a departed person may use a link or an invitation | `IGroupJoiner.Join`, `EnsureMayRejoin` |
 | Which of two claimers wins | `InvitationService.Claim`: the invitation is deleted first, in a transaction |
+| What becomes of the invitee's own "all for them" rule | `IMemberSplitRules.HandOver`: theirs on a claim, retired when the receiver already has one |
 
 ## Known gaps
 

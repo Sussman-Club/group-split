@@ -361,6 +361,32 @@ public class SplitEditorTest : ComponentTest
         Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Somebody the group is waiting on has their own rule now, so "One pays" can put the
+    /// whole amount on them before they join -- named as the person, marked as invited.
+    /// </summary>
+    [Fact]
+    public void An_invitees_rule_is_offered_under_one_pays_and_named_with_the_invited_mark()
+    {
+        var luz = new UserInfo(Guid.NewGuid(), "Luz", "Garcia", null, IsPendingInvitee: true);
+        var rule = new SplitRuleResponse(Guid.NewGuid(), Guid.NewGuid(), "All for Luz",
+            BuiltIn: true, AllForUserId: luz.Id);
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, [Members[0], luz])
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.PayerId, Ana)
+            .Add(e => e.MemberRules, new[] { rule })
+            .Add(e => e.SplitRuleId, rule.Id)
+            .Add(e => e.Preview, Divided("All for Luz")));
+
+        var chosen = editor.FindAll(".gs-seg-btn")
+            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+
+        Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Luz Garcia (invited)", editor.Markup, StringComparison.Ordinal);
+    }
+
     private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");
 
     private static Task Automatically(IRenderedComponent<SplitEditor> editor) =>

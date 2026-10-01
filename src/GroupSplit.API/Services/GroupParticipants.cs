@@ -220,7 +220,10 @@ public interface IGroupParticipants
         RuleHandling rules, CancellationToken ct = default);
 }
 
-public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions revisions) : IGroupParticipants
+public sealed class GroupParticipants(
+    AppDbContext context,
+    ISplitRuleRevisions revisions,
+    IMemberSplitRules memberRules) : IGroupParticipants
 {
     public IQueryable<User> Of(Guid groupId) =>
         context.Set<User>()
@@ -372,6 +375,12 @@ public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions 
             amountPaid += transaction.Amount;
             transaction.UserId = toUserId;
         }
+
+        // The rule the group holds for them first, because it is the one rule that is
+        // theirs rather than one that merely names them: it becomes the receiver's, or is
+        // retired if the receiver already has one. The revisions below skip provisioned
+        // rules, so nothing built in reaches them.
+        await memberRules.HandOver(groupId, fromUserId, toUserId, ct);
 
         // Both, rather than the receiver only when the rules are to follow them: a rule
         // that puts the whole amount on the person leaving has no weight to prune and

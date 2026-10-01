@@ -620,6 +620,10 @@ Their id is `participantUserId`, from `groups invitations`, and it is the id `gr
 lists them under with `isPendingInvitee` true. It is **not** the invitation's own id, which is
 only for withdrawing it, and not the token, which is the link to send them.
 
+They also have the built-in rule every member has, putting the whole amount on them: the
+`split-rules list` row whose "All for" is their id. `--split-rule` with it records "this one
+is all theirs" before they join, and the rule becomes theirs when they claim the link.
+
 Two things you cannot do with them:
 
 - **No repayment may name them.** `groups settle`, `groups settle-between`, `groups

@@ -100,7 +100,8 @@ public sealed class InvitationService(
     ICurrentUser userContext,
     AppDbContext context,
     IGroupJoiner joiner,
-    IGroupParticipants participants)
+    IGroupParticipants participants,
+    IMemberSplitRules memberRules)
     : IInvitationService
 {
     /// <summary>
@@ -116,7 +117,9 @@ public sealed class InvitationService(
         ArgumentNullException.ThrowIfNull(request);
 
         var inviter = userContext.User;
-        var group = await MemberGroup(groupId, ct);
+
+        // Before anything else, so a caller outside the group is told so whatever they sent.
+        await MemberGroup(groupId, ct);
 
         var names = request.Names
             .Select(name => (name ?? string.Empty).Trim())
@@ -132,28 +135,51 @@ public sealed class InvitationService(
 
         var invitedAt = DateTimeOffset.UtcNow;
 
-        foreach (var name in names)
+        // Every name or none. Each one's rule is saved before the next is named, so the batch
+        // is several saves, and a failure part way through must not leave the first few
+        // invited and the request answered with an error. Run by the execution strategy, as
+        // a transaction has to be on the deployed provider; see Fresh for why each attempt
+        // starts from nothing.
+        await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            // The stand-in first, because the invitation is not merely a note that somebody
-            // was asked: it is what makes this person somebody the group can give a share
-            // to, which needs a row to give it to.
-            //
-            // One per invitation, and never an existing account -- there is no address to
-            // recognise one by, and claiming is what attaches a real person to it.
-            var participant = participants.StandInFor(name);
+            Fresh(inviter);
 
-            context.Add(new GroupInvitation
+            var group = await MemberGroup(groupId, ct);
+
+            await using var transaction = await context.Database.BeginTransactionAsync(ct);
+
+            foreach (var name in names)
             {
-                Group = group,
-                Name = name,
-                Token = NewToken(),
-                Participant = participant,
-                InvitedBy = inviter,
-                InvitedAt = invitedAt
-            });
-        }
+                // The stand-in first, because the invitation is not merely a note that
+                // somebody was asked: it is what makes this person somebody the group can
+                // give a share to, which needs a row to give it to.
+                //
+                // One per invitation, and never an existing account -- there is no address to
+                // recognise one by, and claiming is what attaches a real person to it.
+                var participant = participants.StandInFor(name);
 
-        await context.SaveChangesAsync(ct);
+                context.Add(new GroupInvitation
+                {
+                    Group = group,
+                    Name = name,
+                    Token = NewToken(),
+                    Participant = participant,
+                    InvitedBy = inviter,
+                    InvitedAt = invitedAt
+                });
+
+                // And the rule every participant has: all of it is for them. The expense
+                // somebody was invited for is often exactly that one -- their flight, their
+                // ticket -- and it should not have to wait for them to join. EnsureFor saves,
+                // so each name's rule is written before the next is named, and two invitees
+                // called Dani get "All for Dani" and "All for Dani (2)" rather than a
+                // collision.
+                await memberRules.EnsureFor(group, participant, ct);
+            }
+
+            await context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
 
         return await ForGroup(groupId, ct);
     }
@@ -300,6 +326,11 @@ public sealed class InvitationService(
             // moves, and then the person walks in and finds it theirs.
             var handover = await participants.HandOver(
                 group.Id, standIn, user.Id, RuleHandling.Transfer, ct);
+
+            // Written before the join, which finds the member's own rule by asking the
+            // database whose it is: the rule the group held for the stand-in is theirs now,
+            // and the join must see that rather than provision a second.
+            await context.SaveChangesAsync(ct);
 
             // Join's own saves run inside this transaction. EF puts a savepoint before every
             // save made inside one and rolls back to it if the save fails, which is what keeps
@@ -452,6 +483,30 @@ public sealed class InvitationService(
     {
         if (await context.Set<SplitRuleParticipant>()
                 .AnyAsync(participant => participant.UserId == standIn, ct))
+            return;
+
+        // The hand-over repoints or retires the rule the group held for them, so nothing
+        // should name them here either. Asked all the same, of the tracker as well as the
+        // database: a version still naming them is a restricted key the delete cannot pass.
+        // Declining and withdrawing have not saved yet, so a version the hand-over moved or
+        // deleted still names them in the database; the tracker is what says it no longer will.
+        var tracked = context.ChangeTracker.Entries<SoleSplitRuleVersion>().ToList();
+
+        if (tracked.Any(entry => entry.State != EntityState.Deleted && entry.Entity.UserId == standIn))
+            return;
+
+        var settled = tracked
+            .Where(entry => entry.State == EntityState.Deleted || entry.Entity.UserId != standIn)
+            .Select(entry => entry.Entity.Id)
+            .ToHashSet();
+
+        var stored = await context.Set<SoleSplitRuleVersion>()
+            .AsNoTracking()
+            .Where(version => version.UserId == standIn)
+            .Select(version => version.Id)
+            .ToListAsync(ct);
+
+        if (stored.Any(id => !settled.Contains(id)))
             return;
 
         var emptied = await context.Set<User>()

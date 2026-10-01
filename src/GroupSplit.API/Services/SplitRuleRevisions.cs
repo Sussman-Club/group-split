@@ -133,6 +133,12 @@ public sealed class SplitRuleRevisions(
     /// for.
     /// </para>
     /// <para>
+    /// Provisioned rules are not moved here. The one a group holds for a stand-in is
+    /// handed over by <c>IMemberSplitRules.HandOver</c> before this runs -- it becomes the
+    /// receiver's, or is retired when they already have one -- so nothing built in that
+    /// names a stand-in ever reaches this.
+    /// </para>
+    /// <para>
     /// So nothing here happens when nobody is named, which is a member leaving. Their
     /// account is anonymised rather than erased, the version goes on naming a row that is
     /// still there, and what the rule said in March is still what it said. What it stops
