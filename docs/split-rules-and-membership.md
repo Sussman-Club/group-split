@@ -9,6 +9,9 @@ last March.
 Which leaves one question this document exists to answer: a rule names people, and people
 join groups and leave them. What does the rule mean then?
 
+What each kind of person in a group -- member, invited, departed -- may do, outside the
+rules, is [participants.md](participants.md).
+
 ## Split rules are versioned
 
 A `SplitRule` is a name a group owns and a category points at. What it *says* is a

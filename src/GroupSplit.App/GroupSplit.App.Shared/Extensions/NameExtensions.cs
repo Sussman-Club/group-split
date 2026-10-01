@@ -19,7 +19,7 @@ public static class NameExtensions
         person is null
             ? string.Empty
             : person.IsPendingInvitee
-                ? $"{person.FullName} (invited)"
+                ? ParticipantCopy.Invited(person.FullName)
                 : person.FullName;
 
     /// <summary>
