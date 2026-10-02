@@ -36,7 +36,10 @@ came back with that meaning, which is why `Describe` writes down who opened what
 ## Membership and participation are different questions
 
 **Membership** is who may read and change a group. Every authorization check in the app asks
-that of `Group.Users` and must go on asking it of nothing else.
+that of `Group.Users` and must go on asking it of nothing else. `Group.Users` means current
+members: a departure closes the membership row rather than deleting it, and a query filter
+keeps closed rows out. The whole table of who may do what, by standing, is
+[participants.md](participants.md).
 
 **Participation** is who may be given a share. It is the wider set -- members plus the people
 the group has named and is waiting on -- and it is what `IGroupParticipants` answers.
