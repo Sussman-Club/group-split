@@ -73,7 +73,11 @@ It takes either kind of transaction, but the read behind the prompt is the expen
 which cannot see a settlement -- so for one of those the confirmation names the id rather
 than the row, and says what deleting it does instead. Only a 404 is taken that way: any
 other failure of the read stops the command, because a fault that read as "just a
-settlement then" would delete a row nobody had been shown.
+settlement then" would delete a row nobody had been shown. A transaction somebody who has
+left the group paid for or had a share of cannot be deleted at all
+(`TRANSACTION_MOVES_DEPARTED_BALANCE`, naming them): they left square, and deleting it would
+leave them owed or owing with nobody to settle with. The prompt says so; the refusal comes
+after it, because only the API knows who has left.
 
 ## Settling across groups
 

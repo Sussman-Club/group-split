@@ -117,6 +117,7 @@ public static class ReceiptsApi
                 .WithName("SaveReceipt")
                 .Produces<ReceiptResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
@@ -157,6 +158,7 @@ public static class ReceiptsApi
                 .Produces<ReceiptResponse>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
@@ -202,6 +204,7 @@ public static class ReceiptsApi
                 .WithName("PreviewReceiptDivision")
                 .Produces<ReceiptDivisionResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 
@@ -222,6 +225,7 @@ public static class ReceiptsApi
                 .WithName("DivideByReceipt")
                 .Produces<ReceiptDivisionResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
 

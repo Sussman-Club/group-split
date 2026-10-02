@@ -9,6 +9,9 @@ last March.
 Which leaves one question this document exists to answer: a rule names people, and people
 join groups and leave them. What does the rule mean then?
 
+What each kind of person in a group -- member, invited, departed -- may do, outside the
+rules, is [participants.md](participants.md).
+
 ## Split rules are versioned
 
 A `SplitRule` is a name a group owns and a category points at. What it *says* is a
@@ -60,6 +63,12 @@ records no version at all. The edit dialog's **Automatically** sends it, `transa
 beforehand what it would come to.
 A division carried forward unchanged keeps the version behind it, so provenance survives
 every edit that is not about the money.
+
+None of this may move what somebody who has left paid or owed. Dividing again, asked for or
+following an amount edit, divides among the people still here, so on an expense a leaver
+shared it would hand their share to the rest; it is refused instead
+(`TRANSACTION_MOVES_DEPARTED_BALANCE`). An amount edit with the shares set by hand, leaving
+the leaver's as it is, is the way to correct such an expense.
 
 ### Writing a past the app did not live through
 
@@ -245,6 +254,15 @@ silence about the division, which is what they have meant since 2026-09-09.
 - **They have to be settled up first.** A member with a non-zero balance in the group cannot
   be removed and cannot leave (`GROUP_MEMBER_NOT_SETTLED`), so a departure never leaves a
   debt behind with nobody to owe it.
+- **What a leaver paid and owed is fixed from then on.** The group's balances list only the
+  people still in it, so they add up only while every departed person's part of every
+  transaction stays as it was when they left square. An edit, a re-division, a move to
+  another group or a delete that would change it is refused with
+  `TRANSACTION_MOVES_DEPARTED_BALANCE`, naming them. Everything else still works: renaming,
+  re-noting, re-dating, re-filing, re-pointing a bill line, and changing the other shares.
+  The check is `DepartedPositions`, against a snapshot `IGroupParticipants.DepartedOn` takes
+  before the edit is applied; it reads the transaction rather than membership rows, so it
+  covers a stand-in left behind by a withdrawn invitation too.
 - **What was theirs is redistributed among the rest, not left as a hole.** Weights are
   proportional and the division normalises by whatever total it is given, so two members left
   holding one share each divide the whole amount between them.

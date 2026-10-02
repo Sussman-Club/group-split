@@ -167,11 +167,8 @@ else if (_invitation is { } invitation)
     /// What claiming does to somebody who is already a member, said before the button and
     /// again in the confirmation: it is the one claim that changes an existing balance.
     /// </summary>
-    internal static string MergeWarning(InvitationClaimResponse invitation) =>
-        $"Claiming this merges {invitation.Name} into your account. Their shares, anything they are " +
-        $"down as having paid for, and their places in split rules become yours, and {invitation.Name} " +
-        "leaves the members list. No amounts change, but your balance does. Only do this if the group " +
-        "named you twice.";
+    private static string MergeWarning(InvitationClaimResponse invitation) =>
+        ParticipantCopy.MergeWarning(invitation.Name);
 
     private async Task ClaimAsync()
     {
