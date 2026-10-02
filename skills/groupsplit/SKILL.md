@@ -102,12 +102,14 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 
 ## Confirming a destructive change
 
-Fourteen actions stop unless confirmed: `groups.remove-member`, `groups.settle`,
-`groups.settle-up`, `settle.pay`, `groups.leave`, `groups.link.create` (when a link already
-exists), `groups.link.revoke`, `transactions.delete`, `categories.delete`,
-`split-rules.delete`, `merchants.update` (only when it renames -- a merchant is shared by
-every group that has spent there, so the prompt carries the count), `merchants.delete`,
-`bank.unlink` and `users.delete`.
+These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
+`groups.withdraw-invitation`, `groups.settle`, `groups.settle-between`, `groups.settle-up`,
+`settle.pay`, `groups.link.create` (when a link already exists), `groups.link.revoke`,
+`invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
+`receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
+`categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `merchants.update`
+(only when it renames -- a merchant is shared by every group that has spent there, so the
+prompt carries the count), `merchants.delete`, `bank.unlink` and `users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 
@@ -166,6 +168,13 @@ along when reporting a problem.
   cannot be is settled up with: every repayment naming one is refused with
   `SETTLEMENT_WITH_PENDING_INVITEE`, and their balance simply stands. Claiming, declining and
   withdrawing all move that position, and all say what moved -- report it.
+- **Somebody who has left is fixed in place.** They cannot be a payer or a share on anything
+  new. On an old expense they were on, renaming, re-dating and re-filing work, and so does a
+  new amount with `--split` keeping their share exactly as it is; deleting it, re-dividing
+  it or any other amount change is refused with `TRANSACTION_MOVES_DEPARTED_BALANCE`, which
+  names them. Report that refusal -- do not work around it. To come back they need a link or
+  invitation issued after they left (`GROUP_REJOIN_NEEDS_NEW_INVITATION` otherwise). Who may
+  do what is one table in `docs/participants.md`.
 - **A lost link is recoverable only if it was opened.** `invitations list` answers the
   invitations whose links this account has opened -- there is no address to match, so
   nothing knows about one that was never followed. If the user never opened theirs, the

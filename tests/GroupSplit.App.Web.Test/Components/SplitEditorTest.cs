@@ -361,6 +361,66 @@ public class SplitEditorTest : ComponentTest
         Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Somebody the group is waiting on has their own rule now, so "One pays" can put the
+    /// whole amount on them before they join -- named as the person, marked as invited.
+    /// </summary>
+    [Fact]
+    public void An_invitees_rule_is_offered_under_one_pays_and_named_with_the_invited_mark()
+    {
+        var luz = new UserInfo(Guid.NewGuid(), "Luz", "Garcia", null, IsPendingInvitee: true);
+        var rule = new SplitRuleResponse(Guid.NewGuid(), Guid.NewGuid(), "All for Luz",
+            BuiltIn: true, AllForUserId: luz.Id);
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, [Members[0], luz])
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.PayerId, Ana)
+            .Add(e => e.MemberRules, new[] { rule })
+            .Add(e => e.SplitRuleId, rule.Id)
+            .Add(e => e.Preview, Divided("All for Luz")));
+
+        var chosen = editor.FindAll(".gs-seg-btn")
+            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+
+        Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Luz Garcia (invited)", editor.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Somebody who has left keeps their share on an old expense. Splitting it by hand shows
+    /// it, fixed, and counts it -- otherwise the column cannot add up and the one amount edit
+    /// the API allows on such an expense cannot be made.
+    /// </summary>
+    [Fact]
+    public async Task By_hand_a_leavers_share_is_shown_fixed_and_counted()
+    {
+        var gone = Guid.NewGuid();
+
+        IReadOnlyList<SplitInput>? sent = null;
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 300m)
+            .Add(e => e.PayerId, Ana)
+            .Add(e => e.Stored, [
+                new SplitInput { UserId = Ana, Amount = 100m },
+                new SplitInput { UserId = Omar, Amount = 100m },
+                new SplitInput { UserId = gone, Amount = 100m }
+            ])
+            .Add(e => e.Leavers, [new TransactionSplitResponse(gone, "Dani", 100m)])
+            .Add(e => e.ValueChanged, (IReadOnlyList<SplitInput>? value) => sent = value));
+
+        await ByHand(editor);
+
+        Assert.Contains("Dani (left the group)", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Every cent of", editor.Markup, StringComparison.Ordinal);
+
+        Assert.NotNull(sent);
+        Assert.Equal(100m, sent.Single(split => split.UserId == gone).Amount);
+        Assert.Equal(300m, sent.Sum(split => split.Amount));
+    }
+
     private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");
 
     private static Task Automatically(IRenderedComponent<SplitEditor> editor) =>

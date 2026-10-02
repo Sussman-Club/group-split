@@ -87,6 +87,15 @@ public static class ErrorCodes
     public const string GroupRejoinNeedsNewInvitation = "GROUP_REJOIN_NEEDS_NEW_INVITATION";
 
     public const string TransactionGroupLeft = "TRANSACTION_GROUP_LEFT";
+
+    /// <summary>
+    /// An edit, a re-division, a move to another group or a delete would change what
+    /// somebody who has left the group paid or owed on this transaction. They left with a
+    /// zero balance, and the group's balances add up only while their part stands as it was
+    /// recorded. Renaming, re-noting, re-dating and re-filing are allowed, as is changing the
+    /// other shares while leaving theirs alone.
+    /// </summary>
+    public const string TransactionMovesDepartedBalance = "TRANSACTION_MOVES_DEPARTED_BALANCE";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";
     public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";

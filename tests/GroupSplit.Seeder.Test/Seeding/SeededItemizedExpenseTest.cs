@@ -84,6 +84,7 @@ public class SeededItemizedExpenseTest
         services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
         services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
         services.AddScoped<IGroupParticipants, GroupParticipants>();
+        services.AddScoped<IMemberSplitRules, MemberSplitRules>();
         return services.BuildServiceProvider();
     }
 

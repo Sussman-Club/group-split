@@ -1,5 +1,6 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -150,6 +151,17 @@ public interface IGroupParticipants
     Task<ParticipantStanding> StandingOf(Guid groupId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Everybody the transaction names -- as its payer or in a share -- who is no longer a
+    /// participant of its group, with what they hold on it. Empty for a personal one.
+    /// </summary>
+    /// <remarks>
+    /// Read off the transaction rather than off membership rows, so it covers everybody who
+    /// can be named and gone: a member who left, one removed, and a stand-in whose invitation
+    /// closed without anybody to hand its position to. Needs the splits loaded.
+    /// </remarks>
+    Task<IReadOnlyList<ParticipantPosition>> DepartedOn(Transaction transaction, CancellationToken ct = default);
+
+    /// <summary>
     /// A new stand-in for a person a group has named: a row with that name on it, no
     /// address, and no identity, so nobody can sign in as it.
     /// </summary>
@@ -220,7 +232,10 @@ public interface IGroupParticipants
         RuleHandling rules, CancellationToken ct = default);
 }
 
-public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions revisions) : IGroupParticipants
+public sealed class GroupParticipants(
+    AppDbContext context,
+    ISplitRuleRevisions revisions,
+    IMemberSplitRules memberRules) : IGroupParticipants
 {
     public IQueryable<User> Of(Guid groupId) =>
         context.Set<User>()
@@ -273,6 +288,22 @@ public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions 
             return ParticipantStanding.Departed;
 
         return ParticipantStanding.Stranger;
+    }
+
+    public async Task<IReadOnlyList<ParticipantPosition>> DepartedOn(Transaction transaction,
+        CancellationToken ct = default)
+    {
+        if (transaction.GroupId is not { } groupId)
+            return [];
+
+        var current = await IdsOf(groupId, ct);
+
+        return transaction.Splits.Select(split => split.UserId)
+            .Append(transaction.Payer)
+            .Distinct()
+            .Where(userId => !current.Contains(userId))
+            .Select(userId => ParticipantPosition.Of(transaction, userId, groupId))
+            .ToList();
     }
 
     /// <summary>
@@ -372,6 +403,12 @@ public sealed class GroupParticipants(AppDbContext context, ISplitRuleRevisions 
             amountPaid += transaction.Amount;
             transaction.UserId = toUserId;
         }
+
+        // The rule the group holds for them first, because it is the one rule that is
+        // theirs rather than one that merely names them: it becomes the receiver's, or is
+        // retired if the receiver already has one. The revisions below skip provisioned
+        // rules, so nothing built in reaches them.
+        await memberRules.HandOver(groupId, fromUserId, toUserId, ct);
 
         // Both, rather than the receiver only when the rules are to follow them: a rule
         // that puts the whole amount on the person leaving has no weight to prune and

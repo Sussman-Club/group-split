@@ -48,6 +48,7 @@ public static class Problems
         [ErrorCodes.SplitUserNotInGroup] = "A share names someone outside the group",
         [ErrorCodes.SettlementWithSelf] = "A settlement needs two different people",
         [ErrorCodes.GroupRejoinNeedsNewInvitation] = "This link is older than your departure",
+        [ErrorCodes.TransactionMovesDepartedBalance] = "The change would move the balance of somebody who has left",
         [ErrorCodes.CategoryNameTaken] = "Category name already in use",
         [ErrorCodes.CategoryInUse] = "Category still has expenses filed under it",
         [ErrorCodes.SplitRuleNameTaken] = "Rule name already in use",

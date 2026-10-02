@@ -80,6 +80,12 @@ public static class ApiErrorMapper
         // their leaving. The fix is a new one, and only a member can make it.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupRejoinNeedsNewInvitation
             => "Ask someone in the group for a new link, then: groupsplit invitations join <link>",
+        // The edit is not wrong in itself; the person it would move has gone. Say what is
+        // still open, so the caller does not try the same thing a different way.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.TransactionMovesDepartedBalance
+            => "Its name, note, date and category can still change. To change the amount, pass "
+               + "--split and keep the leaver's share exactly as it is. It cannot be deleted while "
+               + "they hold a part of it.",
         _ => null
     };
 

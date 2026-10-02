@@ -36,7 +36,10 @@ came back with that meaning, which is why `Describe` writes down who opened what
 ## Membership and participation are different questions
 
 **Membership** is who may read and change a group. Every authorization check in the app asks
-that of `Group.Users` and must go on asking it of nothing else.
+that of `Group.Users` and must go on asking it of nothing else. `Group.Users` means current
+members: a departure closes the membership row rather than deleting it, and a query filter
+keeps closed rows out. The whole table of who may do what, by standing, is
+[participants.md](participants.md).
 
 **Participation** is who may be given a share. It is the wider set -- members plus the people
 the group has named and is waiting on -- and it is what `IGroupParticipants` answers.
@@ -133,7 +136,8 @@ Everything else here is a consequence of these.
 1. **Every transaction's shares sum to its amount.** Stored once, when the transaction is
    written or edited; see `TransactionSplit`.
 2. **A group's balances sum to zero**, which follows from (1) as long as every share belongs
-   to somebody in the listing.
+   to somebody in the listing -- or to somebody who left square and whose part nothing has
+   moved since, which `TRANSACTION_MOVES_DEPARTED_BALANCE` guarantees.
 
 That second clause is why the group's balances *include* pending invitees. A listing of
 members alone would show a column that does not add up, with the missing side belonging to
@@ -275,6 +279,7 @@ here rather than left implicit.
 | What somebody is to a group: member, invited, departed, nobody | `IGroupParticipants.StandingOf` |
 | Whether a departed person may use a link or an invitation | `IGroupJoiner.Join`, `EnsureMayRejoin` |
 | Which of two claimers wins | `InvitationService.Claim`: the invitation is deleted first, in a transaction |
+| What becomes of the invitee's own "all for them" rule | `IMemberSplitRules.HandOver`: theirs on a claim, retired when the receiver already has one |
 
 ## Known gaps
 

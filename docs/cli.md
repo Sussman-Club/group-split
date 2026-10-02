@@ -73,7 +73,11 @@ It takes either kind of transaction, but the read behind the prompt is the expen
 which cannot see a settlement -- so for one of those the confirmation names the id rather
 than the row, and says what deleting it does instead. Only a 404 is taken that way: any
 other failure of the read stops the command, because a fault that read as "just a
-settlement then" would delete a row nobody had been shown.
+settlement then" would delete a row nobody had been shown. A transaction somebody who has
+left the group paid for or had a share of cannot be deleted at all
+(`TRANSACTION_MOVES_DEPARTED_BALANCE`, naming them): they left square, and deleting it would
+leave them owed or owing with nobody to settle with. The prompt says so; the refusal comes
+after it, because only the API knows who has left.
 
 ## Settling across groups
 
@@ -1061,8 +1065,10 @@ groupsplit split-rules list --group <group-id>
  9a20...                               Household 3-way   -                                     -
 ```
 
-**All for** is the member a rule puts the whole amount on, read off the division it stands
-for; **built in** is whether the group was given the rule rather than writing it.
+**All for** is the participant a rule puts the whole amount on, read off the division it
+stands for -- a member, or somebody the group has invited and is waiting on, who has one from
+the moment they are named; **built in** is whether the group was given the rule rather than
+writing it.
 
 Naming one on an expense divides the whole of it that way, whatever the category says:
 

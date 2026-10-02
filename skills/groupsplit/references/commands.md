@@ -59,7 +59,7 @@ Groups you belong to, their members and their balances.
 | `groups rename <group-id> <name>` | Rename a group. |
 | `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
 | `groups members <group-id>` | List a group's members, and the people it has invited and is waiting on. The `Status` column, and `isPendingInvitee` in JSON, say which. |
-| `groups remove-member <group-id> <user-id>` | Remove a member from a group. |
+| `groups remove-member <group-id> <user-id>` | Remove a member from a group. Requires that their balance in it is settled. The group's join link stops working, and they need a link or invitation issued afterwards to come back. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
 | `groups settle-between <group-id> <from-user-id> <to-user-id> <amount>` | Record a repayment between two named members, whichever of them you are — including neither. |
@@ -67,7 +67,7 @@ Groups you belong to, their members and their balances.
 | `groups activity <group-id>` | The group's ledger: everything that happened in it, newest first, with your share of each entry and your balance as at it. |
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
-| `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. |
+| `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. Coming back needs a link or invitation issued after you left. |
 | `groups invite <group-id> <name>...` | Name people the group is sharing costs with. Answers with a single-use link for each; there is no email. |
 | `groups invitations <group-id>` | List the people a group is still waiting on, with their links and the ids to name them by. |
 | `groups withdraw-invitation <group-id> <invitation-id>` | Withdraw an invitation nobody has answered. Confirmation required: their link stops working, and anything recorded against them goes to a member. |
@@ -303,7 +303,7 @@ Personal invitation links and group join links you were sent.
 | --- | --- |
 | `invitations list` | The invitations whose links you have opened and not answered, with their tokens. Not "sent to me" -- there is no address to match. |
 | `invitations show <link>` | Show what a personal invitation link leads to, without claiming it. Says nothing about the money. |
-| `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name and their places in the group's split rules. Confirmation required. |
+| `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name and their places in the group's split rules and the group's "all for them" rule. If two people claim one link at once, one gets in and the other gets GROUP_INVITATION_NOT_FOUND. Confirmation required. |
 | `invitations decline <link>` | Decline it. Confirmation required: anything the group recorded against that name goes to a member of it. |
 | `invitations link <link>` | Show which group a *join* link leads to, without joining. |
 | `invitations join <link>` | Join the group a join link leads to, as yourself. |
@@ -619,6 +619,10 @@ anything, and do not leave them out of a division the user described as includin
 Their id is `participantUserId`, from `groups invitations`, and it is the id `groups members`
 lists them under with `isPendingInvitee` true. It is **not** the invitation's own id, which is
 only for withdrawing it, and not the token, which is the link to send them.
+
+They also have the built-in rule every member has, putting the whole amount on them: the
+`split-rules list` row whose "All for" is their id. `--split-rule` with it records "this one
+is all theirs" before they join, and the rule becomes theirs when they claim the link.
 
 Two things you cannot do with them:
 

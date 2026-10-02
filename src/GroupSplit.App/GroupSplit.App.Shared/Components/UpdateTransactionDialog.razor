@@ -150,6 +150,7 @@
                                      Amount="@_model.Amount"
                                      PayerId="@_model.PaidByUserId"
                                      Stored="@_storedSplits"
+                                     Leavers="@Leavers"
                                      Before="@_storedSplits"
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
@@ -344,6 +345,18 @@
     /// </summary>
     private IReadOnlyList<SplitInput> _storedSplits = [];
 
+    /// <summary>The stored shares with their names, so the leavers among them can be shown.</summary>
+    private IReadOnlyList<TransactionSplitResponse> _storedRows = [];
+
+    /// <summary>
+    /// Shares held by people no longer in the group. Worked out on read rather than stored,
+    /// because the shares and the members arrive separately and either may come second.
+    /// </summary>
+    private IReadOnlyList<TransactionSplitResponse> Leavers =>
+        _members.Count == 0
+            ? []
+            : [.. _storedRows.Where(row => _members.All(member => member.Id != row.UserId))];
+
     /// <summary>
     /// Whether the person has asked for the division to be worked out again, which is what
     /// choosing "Automatically" means on an expense that already has shares.
@@ -518,6 +531,7 @@
 
             _storedSplits = [.. details.Splits.Select(split =>
                 new SplitInput { UserId = split.UserId, Amount = split.Amount })];
+            _storedRows = [.. details.Splits];
 
             // Which side the split control opens on, and it is a question only the API can
             // answer: the amounts alone do not say who decided them. A rule version means a
@@ -743,6 +757,7 @@
         // Belongs to the group this is leaving, and the API refuses one from anywhere else.
         _model.SplitRuleId = null;
         _storedSplits = [];
+        _storedRows = [];
 
         // Nothing to put back: the shares it opened with name the old group's members, and
         // the endpoint drops them on a move.

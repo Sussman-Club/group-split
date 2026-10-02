@@ -73,6 +73,10 @@ public static class ErrorMessages
             "That person has been invited and has not joined, so there is no membership to remove. " +
             "Withdraw the invitation instead.",
         [ErrorCodes.TransactionGroupLeft] = "You are no longer in this transaction's group, so it cannot be changed.",
+        [ErrorCodes.TransactionMovesDepartedBalance] =
+            "This would change what somebody who has left the group paid or owed here. They settled up " +
+            "before leaving, so their part stays as it is. You can still change the name, note, date or " +
+            "category, or set the other shares yourself and leave theirs unchanged.",
 
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",

@@ -85,6 +85,12 @@ membership and participation are different questions, why a personal link is gua
 heavily than a join link, and what becomes of a position when an invitation is claimed,
 declined or withdrawn -- is in [docs/pending-invitees.md](docs/pending-invitees.md).
 
+Who may do what in a group -- a member, somebody invited, somebody who has left, and anybody
+else -- with the refusal each gets, is one table in [docs/participants.md](docs/participants.md).
+Members are equal: there are no roles. A departure is remembered rather than deleted, so a link
+shared before somebody left does not bring them back, and nothing may change what they paid or
+owed once they have gone.
+
 ## Errors
 
 Every non-2xx API response is RFC 9457 problem details carrying a stable `code`, a `traceId`
