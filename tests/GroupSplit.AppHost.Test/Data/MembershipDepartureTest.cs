@@ -92,7 +92,7 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
         using var scope = await As(ownerId);
 
         var group = await Service<IGroupService>(scope).CreateGroup(
-            new CreateGroupRequest { Name = $"{name} {Guid.NewGuid():N}"[..40] }, Ct);
+            new CreateGroupRequest { Name = $"{name} {Guid.NewGuid():N}" }, Ct);
 
         return group.Id;
     }

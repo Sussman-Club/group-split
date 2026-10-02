@@ -1073,7 +1073,12 @@ public sealed class MutationCommandTests : IDisposable
             "transactions", "update", id.ToString(), "--amount", "1200", "--preview", "--output", "text");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains("the rule has changed since", result.Stdout);
+
+        // The console wraps at 80 columns, and where it breaks this line moves with the
+        // width of the date in it -- a one-digit day puts the break inside the clause.
+        var unwrapped = string.Join(' ', result.Stdout.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        Assert.Contains("the rule has changed since", unwrapped);
     }
 
     /// <summary>
