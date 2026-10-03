@@ -250,8 +250,33 @@ public static class GroupCommands
             // Read the roster first so the confirmation can name the person. A guid is not
             // something anybody should have to recognise before agreeing to remove it.
             var members = await context.Groups.GetGroupMembersAsync(id, ct);
-            var removed = members.FirstOrDefault(candidate => candidate.Id == member);
-            var name = removed?.FullName ?? member.ToString();
+
+            // The same read says when there is nobody to remove, and saying it here spares
+            // the caller a confirmation for something the server would only refuse: somebody
+            // who has left, or never belonged, is not on the roster at all.
+            var removed = members.FirstOrDefault(candidate => candidate.Id == member)
+                          ?? throw new CliException(
+                              new CliError(
+                                  "That person is not a member of this group.",
+                                  Shared.Errors.ErrorCodes.UserNotFound,
+                                  $"List who is: groupsplit groups members {id}"),
+                              ExitCodes.InvalidInput);
+
+            // The roster lists invitees too, because they hold shares. Removing is not how
+            // one goes: there is no membership yet, only an invitation to withdraw.
+            if (removed.IsPendingInvitee)
+            {
+                throw new CliException(
+                    new CliError(
+                        $"{removed.FullName} has been invited and has not joined, so there is no "
+                        + "membership to remove. Withdraw the invitation instead.",
+                        Shared.Errors.ErrorCodes.GroupMemberNotJoined,
+                        $"Find it with: groupsplit groups invitations {id}   "
+                        + $"Then: groupsplit groups withdraw-invitation {id} <invitation-id>"),
+                    ExitCodes.InvalidInput);
+            }
+
+            var name = removed.FullName;
 
             Confirmation.Require(
                 context,

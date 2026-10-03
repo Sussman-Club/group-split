@@ -53,7 +53,9 @@ arguments, so this table can go stale and that one cannot.
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
 `groups settle`. `bank unlink`, `categories delete`, `split-rules delete`,
-`merchants delete` and `receipts delete` do the same. `receipts divide` goes further and
+`merchants delete` and `receipts delete` do the same. The roster read also lets
+`groups remove-member` refuse before asking: somebody not on it, or only invited, is an error
+straight away rather than a confirmation the server would then refuse. `receipts divide` goes further and
 reads the division itself, so the prompt lists what each person ends up owing rather than
 saying the shares will change -- it is money moving between people's balances, and the
 figures are the thing worth reading before agreeing to them. `merchants update` is the one command whose confirmation is

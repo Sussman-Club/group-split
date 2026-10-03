@@ -480,6 +480,48 @@ public sealed class MutationCommandTests : IDisposable
             result.Json.GetProperty("confirmCommand").GetString());
     }
 
+    /// <summary>
+    /// Somebody who has left is not on the roster, so there is nobody to name and nothing
+    /// the server would agree to. Refused before the confirmation, not after it.
+    /// </summary>
+    [Fact]
+    public async Task Groups_remove_member_refuses_somebody_not_in_the_group_before_asking()
+    {
+        var id = Guid.NewGuid();
+        var departed = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members", new[] { Member(Guid.NewGuid(), "Omar") });
+
+        var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), departed.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal(GroupSplit.Shared.Errors.ErrorCodes.UserNotFound, result.Error.GetProperty("code").GetString());
+        Assert.DoesNotContain(_api.Requests, request => request.Method == "DELETE");
+    }
+
+    /// <summary>
+    /// An invitee is on the roster, because they hold shares, but has no membership to take
+    /// away. Pointed at withdrawing the invitation, which is how one of them goes.
+    /// </summary>
+    [Fact]
+    public async Task Groups_remove_member_points_an_invitee_at_withdrawing_the_invitation()
+    {
+        var id = Guid.NewGuid();
+        var invitee = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members", new[]
+        {
+            new { id = invitee, firstName = "Pat", isPendingInvitee = true }
+        });
+
+        var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), invitee.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal(GroupSplit.Shared.Errors.ErrorCodes.GroupMemberNotJoined, result.Error.GetProperty("code").GetString());
+        Assert.Contains("withdraw-invitation", result.Error.GetProperty("remediation").GetString());
+        Assert.DoesNotContain(_api.Requests, request => request.Method == "DELETE");
+    }
+
     [Fact]
     public async Task Groups_activity_shows_transfers_beside_expenses()
     {

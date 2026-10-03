@@ -59,7 +59,7 @@ Groups you belong to, their members and their balances.
 | `groups rename <group-id> <name>` | Rename a group. |
 | `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
 | `groups members <group-id>` | List a group's members, and the people it has invited and is waiting on. The `Status` column, and `isPendingInvitee` in JSON, say which. |
-| `groups remove-member <group-id> <user-id>` | Remove a member from a group. Requires that their balance in it is settled. The group's join link stops working, and they need a link or invitation issued afterwards to come back. |
+| `groups remove-member <group-id> <user-id>` | Remove a member from a group. Requires that their balance in it is settled. The group's join link stops working, and they need a link or invitation issued afterwards to come back. Somebody not on the roster -- including anyone who has already left -- is refused with `USER_NOT_FOUND` before any confirmation is asked for. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
 | `groups settle-between <group-id> <from-user-id> <to-user-id> <amount>` | Record a repayment between two named members, whichever of them you are — including neither. |
@@ -631,7 +631,8 @@ Two things you cannot do with them:
   balance is real and stands until somebody claims their link; there is simply no account to
   pay. If a user asks you to settle with one, say that rather than recording something else.
 - **`groups remove-member` is not how they go.** It answers `GROUP_MEMBER_NOT_JOINED`, since
-  there is no membership to remove. `groups withdraw-invitation` is the act.
+  there is no membership to remove -- before asking for confirmation, since the roster it
+  reads already says so. `groups withdraw-invitation` is the act.
 
 **If the user has lost their own link**, `invitations list` has it -- provided they opened
 it at least once. If they never did, only the group can send it again.
