@@ -168,6 +168,79 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
         Assert.False(await context.Set<User>().AnyAsync(user => user.Id == standIn, Ct));
     }
 
+    /// <summary>
+    /// The other half of the same race: somebody opening the link while somebody else claims
+    /// it. Opening remembers that this person saw it, and that insert names the invitation --
+    /// so if the claim deletes it in between, the insert fails its foreign key.
+    /// </summary>
+    /// <remarks>
+    /// Made certain rather than left to the scheduler. The claim's delete is held open in a
+    /// transaction of its own: the opener's reads still find the invitation, and their insert
+    /// waits on the deleted row's lock. Committing the delete then is the moment the race
+    /// loses, every time.
+    /// </remarks>
+    [Fact(Timeout = 180_000)]
+    public async Task Opening_an_invitation_while_somebody_claims_it_is_a_404_not_a_500()
+    {
+        var people = await People(2);
+        var (host, opener) = (people[0], people[1]);
+
+        var groupId = await NewGroupOf(host, "Opened");
+
+        string token;
+
+        using (var scope = await As(host))
+        {
+            token = Assert.Single(await Service<IInvitationService>(scope).Invite(groupId,
+                new InviteToGroupRequest { Names = ["Whoever opens it"] }, Ct)).Token;
+        }
+
+        using var claiming = _services!.CreateScope();
+        var claimContext = Service<AppDbContext>(claiming);
+
+        await using var claim = await claimContext.Database.BeginTransactionAsync(Ct);
+
+        await claimContext.Set<GroupInvitation>()
+            .Where(invitation => invitation.Token == token)
+            .ExecuteDeleteAsync(Ct);
+
+        using var opening = await As(opener);
+        var opened = Service<IInvitationService>(opening).Describe(token, Ct);
+
+        await UntilWaitingOnALock(opened, "InvitationOpened");
+        await claim.CommitAsync(Ct);
+
+        var refused = await Assert.ThrowsAsync<NotFoundException>(() => opened);
+        Assert.Equal(ErrorCodes.GroupInvitationNotFound, refused.Code);
+    }
+
+    /// <summary>
+    /// Returns once a statement touching <paramref name="table"/> is waiting on a lock, or
+    /// once <paramref name="work"/> has finished without ever waiting -- which the assertions
+    /// after it then report, rather than the test hanging until its timeout.
+    /// </summary>
+    private async Task UntilWaitingOnALock(Task work, string table)
+    {
+        using var scope = _services!.CreateScope();
+        var context = Service<AppDbContext>(scope);
+
+        while (!work.IsCompleted)
+        {
+            var waiting = await context.Database.SqlQuery<int>($"""
+                SELECT count(*)::int AS "Value"
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND wait_event_type = 'Lock'
+                  AND query LIKE {"%" + table + "%"}
+                """).SingleAsync(Ct);
+
+            if (waiting > 0)
+                return;
+
+            await Task.Delay(50, Ct);
+        }
+    }
+
     [Fact(Timeout = 180_000)]
     public async Task The_membership_filter_translates_and_hides_a_departed_row_on_postgres()
     {

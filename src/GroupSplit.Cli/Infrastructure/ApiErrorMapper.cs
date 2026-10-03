@@ -64,6 +64,10 @@ public static class ApiErrorMapper
     private static string? Remediation(HttpStatusCode status, string code) => status switch
     {
         HttpStatusCode.Unauthorized => "Run: groupsplit auth login",
+        // A 403 that is not about who is signed in: removing yourself is called leaving, and
+        // pointing at auth status sends the caller looking for a problem they do not have.
+        HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.GroupCannotRemoveSelf
+            => "To leave the group yourself: groupsplit groups leave <group-id>",
         HttpStatusCode.Forbidden => "The account you are signed in as is not allowed to do this. "
                                     + "Check with: groupsplit auth status",
         HttpStatusCode.NotFound => "Check the id. List what you can see with: groupsplit groups list",
@@ -77,9 +81,13 @@ public static class ApiErrorMapper
                + "You really paid twice: groupsplit inbox file <row-id> --file-anyway   "
                + "Not a match at all: groupsplit inbox dismiss-match <row-id> <transaction-id>",
         // Nothing the caller can change about this link will make it work: it predates
-        // their leaving. The fix is a new one, and only a member can make it.
+        // their leaving. The fix is a new one, and only a member can make it. Both commands
+        // are named because the same code answers a join link and a personal invitation, and
+        // nothing here says which of the two the caller was holding.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupRejoinNeedsNewInvitation
-            => "Ask someone in the group for a new link, then: groupsplit invitations join <link>",
+            => "Ask someone in the group for a new link or invitation, then: "
+               + "groupsplit invitations join <link> for a join link, "
+               + "or groupsplit invitations claim <link> for an invitation",
         // The edit is not wrong in itself; the person it would move has gone. Say what is
         // still open, so the caller does not try the same thing a different way.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.TransactionMovesDepartedBalance

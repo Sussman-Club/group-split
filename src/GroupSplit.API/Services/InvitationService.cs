@@ -247,20 +247,23 @@ public sealed class InvitationService(
         if (!alreadyAMember)
             await Remember(invitation.Id, userId, ct);
 
+        // Read again rather than projected from what Held found, and so able to come back
+        // empty: somebody may have claimed the link in the moments since.
         return await context.Set<GroupInvitation>()
-            .Where(candidate => candidate.Id == invitation.Id)
-            .Select(candidate => new InvitationClaimResponse(
-                candidate.Id,
-                candidate.GroupId,
-                candidate.Group.Name,
-                candidate.Group.Users.Count,
-                candidate.Name,
-                candidate.InvitedBy == null
-                    ? null
-                    : candidate.InvitedBy.FirstName + " " + candidate.InvitedBy.LastName,
-                candidate.InvitedAt,
-                alreadyAMember))
-            .FirstAsync(ct);
+                   .Where(candidate => candidate.Id == invitation.Id)
+                   .Select(candidate => new InvitationClaimResponse(
+                       candidate.Id,
+                       candidate.GroupId,
+                       candidate.Group.Name,
+                       candidate.Group.Users.Count,
+                       candidate.Name,
+                       candidate.InvitedBy == null
+                           ? null
+                           : candidate.InvitedBy.FirstName + " " + candidate.InvitedBy.LastName,
+                       candidate.InvitedAt,
+                       alreadyAMember))
+                   .FirstOrDefaultAsync(ct)
+               ?? throw AlreadyClaimed();
     }
 
     public async Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default)
@@ -311,8 +314,7 @@ public sealed class InvitationService(
             }
             catch (DbUpdateConcurrencyException)
             {
-                throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
-                    "That invitation link was not found. It may already have been claimed.");
+                throw AlreadyClaimed();
             }
 
             // The position moves onto their own account: their shares become the claimer's,
@@ -562,6 +564,16 @@ public sealed class InvitationService(
             // with it.
             row.State = EntityState.Detached;
         }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
+        {
+            // The invitation went between Held and this insert: somebody claimed it while
+            // this person's page was loading. That is the answer a link already claimed
+            // gets, not a 500 -- the same race Claim settles, met on the read instead.
+            row.State = EntityState.Detached;
+
+            throw AlreadyClaimed();
+        }
     }
 
     /// <summary>
@@ -585,9 +597,16 @@ public sealed class InvitationService(
 
         return await context.Set<GroupInvitation>()
                    .FirstOrDefaultAsync(candidate => candidate.Token == normalized, ct)
-               ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
-                   "That invitation link was not found. It may already have been claimed.");
+               ?? throw AlreadyClaimed();
     }
+
+    /// <summary>
+    /// What a link answers once its invitation is gone, whenever in the request that is
+    /// found out: before reading it, while remembering it was opened, or while claiming it.
+    /// </summary>
+    private static NotFoundException AlreadyClaimed() =>
+        new(ErrorCodes.GroupInvitationNotFound,
+            "That invitation link was not found. It may already have been claimed.");
 
     /// <summary>
     /// What to call somebody: their name, or the address when nobody has told us one.

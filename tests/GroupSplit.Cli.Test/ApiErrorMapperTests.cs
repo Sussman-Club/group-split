@@ -95,6 +95,40 @@ public sealed class ApiErrorMapperTests
         Assert.Contains("auth login", ApiErrorMapper.Map(Exception(401, new { title = "x" })).Error.Remediation);
     }
 
+    /// <summary>
+    /// Removing yourself is a 403, but nothing is wrong with the account: the way out of a
+    /// group is leaving it, and that is what the caller is pointed at.
+    /// </summary>
+    [Fact]
+    public void Removing_yourself_points_at_leaving_rather_than_at_auth()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(403, new
+        {
+            title = "Forbidden",
+            code = SharedErrorCodes.GroupCannotRemoveSelf
+        })).Error.Remediation;
+
+        Assert.Contains("groups leave", remediation);
+        Assert.DoesNotContain("auth status", remediation);
+    }
+
+    /// <summary>
+    /// One code answers a stale join link and a stale invitation alike, so the way back
+    /// names the command for each rather than assuming the join link.
+    /// </summary>
+    [Fact]
+    public void A_stale_link_names_both_ways_back_in()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.GroupRejoinNeedsNewInvitation
+        })).Error.Remediation;
+
+        Assert.Contains("invitations join", remediation);
+        Assert.Contains("invitations claim", remediation);
+    }
+
     [Fact]
     public void Validation_messages_are_flattened_into_details()
     {
