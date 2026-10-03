@@ -324,15 +324,29 @@
 
     private Task ReloadAsync() => _loadedFor == Guid.Empty ? Task.CompletedTask : LoadRecentAsync();
 
+    /// <summary>
+    /// Redraws when the state service's figures land. The balances above are read from it
+    /// rather than passed in, so the parent re-rendering is not enough: none of this tab's
+    /// parameters change when they arrive, and Blazor skips a child whose parameters have
+    /// not. Without this, whichever of the two reads answered first decided the page --
+    /// recent entries before balances left "Balances appear once there is an expense." on a
+    /// group with expenses, until something else happened to redraw it.
+    /// </summary>
+    private void Redraw() => InvokeAsync(StateHasChanged);
+
     protected override void OnInitialized()
     {
         Changes.TransactionsChanged += ReloadAsync;
         Changes.GroupsChanged += ReloadAsync;
+        GroupsService.OnTransactionsChanged += Redraw;
+        GroupsService.OnGroupSelected += Redraw;
     }
 
     public void Dispose()
     {
         Changes.TransactionsChanged -= ReloadAsync;
         Changes.GroupsChanged -= ReloadAsync;
+        GroupsService.OnTransactionsChanged -= Redraw;
+        GroupsService.OnGroupSelected -= Redraw;
     }
 }
