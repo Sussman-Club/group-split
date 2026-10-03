@@ -87,6 +87,11 @@ public class ClaimTest : ComponentTest
         _commands.Verify(commands => commands.ClaimInvitationAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
 
+        // It asks, and leaves the explaining to the page behind it rather than saying the
+        // same paragraph twice in a row.
+        Assert.Contains("Are you and Luz the same person?", dialogs.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("named you twice", dialogs.Markup, StringComparison.Ordinal);
+
         await DialogButton(dialogs, "Merge").ClickAsync(new());
         await claiming;
 

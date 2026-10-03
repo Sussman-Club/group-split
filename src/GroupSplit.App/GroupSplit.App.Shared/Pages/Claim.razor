@@ -164,8 +164,9 @@ else if (_invitation is { } invitation)
                 : $"{invitation.InvitedByUserName} invited you as {invitation.Name}. {Members(invitation.MemberCount)} already.";
 
     /// <summary>
-    /// What claiming does to somebody who is already a member, said before the button and
-    /// again in the confirmation: it is the one claim that changes an existing balance.
+    /// What claiming does to somebody who is already a member, said before the button: it is
+    /// the one claim that changes an existing balance. The confirmation after it asks rather
+    /// than repeating this.
     /// </summary>
     private static string MergeWarning(InvitationClaimResponse invitation) =>
         ParticipantCopy.MergeWarning(invitation.Name);
@@ -209,7 +210,7 @@ else if (_invitation is { } invitation)
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, MergeWarning(invitation) },
+            { x => x.ContentText, ParticipantCopy.MergeQuestion(invitation.Name, invitation.GroupName) },
             { x => x.ButtonText, "Merge" },
             { x => x.Color, Color.Warning }
         };

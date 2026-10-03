@@ -33,4 +33,20 @@ public static class ParticipantCopy
         $"down as having paid for, and their places in split rules become yours, and {name} " +
         "leaves the members list. No amounts change, but your balance does. Only do this if the group " +
         "named you twice.";
+
+    /// <summary>
+    /// Why an expense or settlement cannot be deleted: somebody on it has left, and settled
+    /// up on it before they went. Says what is still open, so the next try is not the same
+    /// thing by another route.
+    /// </summary>
+    public static string CannotDelete(string leaver, string noun) =>
+        $"{leaver} has left the group and settled up on this {noun} before leaving, so it " +
+        "stays as it was recorded. You can still edit it, as long as their part stays the same.";
+
+    /// <summary>
+    /// The question that confirms a merge. Short, because <see cref="MergeWarning"/> is on
+    /// the page behind it: the dialog asks, it does not explain the same thing twice.
+    /// </summary>
+    public static string MergeQuestion(string name, string groupName) =>
+        $"Are you and {name} the same person? Your balance in {groupName} will include theirs.";
 }

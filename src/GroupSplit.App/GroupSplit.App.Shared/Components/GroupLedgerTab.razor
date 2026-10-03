@@ -10,6 +10,7 @@
 @inject ITransactionsClient TransactionsClient
 @inject ITransactionsPageStateService TransactionsService
 @inject ITransactionCommands Transactions
+@inject IDepartedDeleteGuard DeleteGuard
 @inject IDialogService DialogService
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
@@ -631,6 +632,9 @@
     {
         var settlement = entry.Kind is ActivityKind.Transfer;
 
+        if (await RefusedForALeaverAsync(entry.Id, settlement ? "settlement" : "expense"))
+            return;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, settlement
@@ -650,6 +654,30 @@
             return;
 
         await Transactions.DeleteAsync(entry.Id, entry.Name, settlement ? "settlement" : "expense");
+    }
+
+    /// <summary>
+    /// Says why an entry cannot go, instead of offering to delete it, when somebody on it has
+    /// left the group. The server would refuse the delete; this spares the "Delete?" whose
+    /// only outcome is that refusal.
+    /// </summary>
+    private async Task<bool> RefusedForALeaverAsync(Guid id, string noun)
+    {
+        if (await DeleteGuard.FirstLeaverOnAsync(id) is not { } leaver)
+            return false;
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, ParticipantCopy.CannotDelete(leaver, noun) },
+            { x => x.ButtonText, "OK" },
+            { x => x.ShowCancel, false }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        await DialogService.ShowAsync<ConfirmationDialog>($"This {noun} stays", parameters, options);
+
+        return true;
     }
 
     private static string Headline(GroupLedgerEntryResponse entry) =>
