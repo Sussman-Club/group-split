@@ -32,7 +32,10 @@ public class DepartedDeleteGuardTest
 
     private DepartedDeleteGuard Guard() => new(_transactions.Object, _groups.Object);
 
-    private Guid Expense(Guid paidBy, string paidByName, Guid? groupId, params (Guid Id, string Name)[] shares)
+    private Guid Expense(Guid paidBy, string paidByName, Guid? groupId, params (Guid Id, string Name)[] shares) =>
+        ExpenseWith(paidBy, paidByName, groupId, [.. shares.Select(share => (share.Id, share.Name, 10m))]);
+
+    private Guid ExpenseWith(Guid paidBy, string paidByName, Guid? groupId, params (Guid Id, string Name, decimal Amount)[] shares)
     {
         var id = Guid.NewGuid();
 
@@ -45,7 +48,7 @@ public class DepartedDeleteGuardTest
                 GroupId = groupId,
                 PaidByUserId = paidBy,
                 PaidByUserName = paidByName,
-                Splits = [.. shares.Select(share => new TransactionSplitResponse(share.Id, share.Name, 10m))]
+                Splits = [.. shares.Select(share => new TransactionSplitResponse(share.Id, share.Name, share.Amount))]
             });
 
         return id;
@@ -56,7 +59,7 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Anabel, "Anabel Benítez", GroupId, (Anabel, "Anabel Benítez"), (Omar, "Omar Rivero"));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id));
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));
     }
 
     [Fact]
@@ -64,7 +67,7 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Sofia, "Sofia Kovács", GroupId, (Anabel, "Anabel Benítez"), (Sofia, "Sofia Kovács"));
 
-        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id));
+        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id, GroupId));
     }
 
     [Fact]
@@ -72,17 +75,34 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Anabel, "Anabel Benítez", GroupId, (Anabel, "Anabel Benítez"), (Sofia, "Sofia Kovács"));
 
-        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id));
+        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id, GroupId));
     }
 
+    /// <summary>
+    /// A personal expense has no group to have left, and the row says so: nothing is read.
+    /// </summary>
     [Fact]
-    public async Task Nobody_on_a_personal_expense_which_has_no_group_to_leave()
+    public async Task Nobody_on_a_personal_expense_and_nothing_read_to_find_that_out()
     {
         var id = Expense(Anabel, "Anabel Benítez", groupId: null, (Anabel, "Anabel Benítez"));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id));
-        _groups.Verify(client => client.GetGroupMembersAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, groupId: null));
+
+        Assert.Empty(_transactions.Invocations);
+        Assert.Empty(_groups.Invocations);
+    }
+
+    /// <summary>
+    /// The server refuses a delete only for a leaver whose position is not nothing, so a
+    /// share of zero must not make the page refuse what the API would allow.
+    /// </summary>
+    [Fact]
+    public async Task Nobody_when_the_leaver_holds_a_share_of_nothing()
+    {
+        var id = ExpenseWith(Anabel, "Anabel Benítez", GroupId,
+            (Anabel, "Anabel Benítez", 20m), (Sofia, "Sofia Kovács", 0m));
+
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));
     }
 
     [Fact]
@@ -94,6 +114,6 @@ public class DepartedDeleteGuardTest
             .Setup(client => client.GetTransactionAsync(id, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("Not found", 404, null, new Dictionary<string, IEnumerable<string>>(), null));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id));
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));
     }
 }

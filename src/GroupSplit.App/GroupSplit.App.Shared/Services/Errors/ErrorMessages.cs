@@ -76,7 +76,8 @@ public static class ErrorMessages
         [ErrorCodes.TransactionMovesDepartedBalance] =
             "This would change what somebody who has left the group paid or owed here. They settled up " +
             "before leaving, so their part stays as it is. You can still change the name, note, date or " +
-            "category, or set the other shares yourself and leave theirs unchanged.",
+            "category. If they only had a share, you can also set the other shares yourself and leave " +
+            "theirs unchanged; if they paid for it, the amount stays too.",
 
         [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",
@@ -155,6 +156,14 @@ public static class ErrorMessages
         [ErrorCodes.PossibleDuplicateExpense] = "This looks like an expense you have already recorded. Check the suggestion on the row before adding it again.",
         [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction."
     };
+
+    /// <summary>
+    /// <c>GROUP_REJOIN_NEEDS_NEW_INVITATION</c> for somebody another member removed. The
+    /// refusal carries the reason, and "before you left" is the wrong thing to tell them.
+    /// </summary>
+    public const string RejoinAfterRemoval =
+        "You were removed from this group, and this link was shared before that. " +
+        "Ask someone in the group for a new one.";
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>
     public static bool Knows(string code) => ByCode.ContainsKey(code);

@@ -140,9 +140,14 @@ public sealed class InvitationService(
         // invited and the request answered with an error. Run by the execution strategy, as
         // a transaction has to be on the deployed provider; see Fresh for why each attempt
         // starts from nothing.
+        var retrying = false;
+
         await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            Fresh(inviter);
+            if (retrying)
+                Fresh(inviter);
+
+            retrying = true;
 
             var group = await MemberGroup(groupId, ct);
 
@@ -284,12 +289,17 @@ public sealed class InvitationService(
         // One transaction for the whole claim, run by the context's execution strategy: the
         // deployed provider retries transient failures, and a transaction the strategy did
         // not open is one it refuses to run at all.
+        var retrying = false;
+
         var taken = await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            // Each attempt from what the database holds. See Fresh: a retry on top of the
-            // last attempt's tracked writes skips some, repeats others, and on a claim can end
-            // by deleting a stand-in whose shares were never moved.
-            Fresh(user);
+            // A retry from what the database holds. See Fresh: a retry on top of the last
+            // attempt's tracked writes skips some, repeats others, and on a claim can end by
+            // deleting a stand-in whose shares were never moved.
+            if (retrying)
+                Fresh(user);
+
+            retrying = true;
 
             var invitation = await Held(token, ct);
 
@@ -461,6 +471,11 @@ public sealed class InvitationService(
     /// a membership the first attempt reopened reads as already open. Clearing first makes an
     /// attempt mean the same thing whichever one it is. The signed-in account is put back,
     /// because the services hold on to it and it is the one row every write here refers to.
+    /// <para>
+    /// Only before a retry. The first attempt has no earlier one to forget, and clearing then
+    /// would throw away anything this request had tracked and not yet saved before the
+    /// claim or invitation began -- changes that are nobody's to discard here.
+    /// </para>
     /// </remarks>
     private void Fresh(User signedIn)
     {

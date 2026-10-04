@@ -153,6 +153,13 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         foreach (var version in theirs.Versions.OfType<SoleSplitRuleVersion>())
             version.UserId = toUserId;
 
+        // Named for whom it is now for. A rule called "All for Luz" that puts everything on
+        // Ana -- the absorber, or the account Luz claimed as -- is the name telling a category
+        // that defaults to it the wrong thing. Retired beside the receiver's own rule, it
+        // takes the next free name after theirs: "All for Ana (2)".
+        var receiver = await context.Set<User>().FirstAsync(user => user.Id == toUserId, ct);
+        theirs.Name = await FreeName(groupId, receiver, ct, except: theirs.Id);
+
         // Either it becomes the receiver's own rule, or -- when they already have one, and
         // something still divides by this -- it is retired: kept, out of the picker, and no
         // longer anybody's provisioned rule, which is what lets the receiver's stay the one.
@@ -202,10 +209,12 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
     /// It leaves a name that can go stale: somebody who fills their profile in afterwards
     /// keeps the rule they were provisioned under. Renaming it later would mean writing to a
     /// rule the API otherwise refuses to write to, and every screen that shows one of these
-    /// has the member in hand.
+    /// has the member in hand. The exception is a hand-over, where the rule changes hands
+    /// and the old name would name the wrong person: <paramref name="except"/> lets the rule
+    /// being renamed not count its own name as taken.
     /// </para>
     /// </remarks>
-    private async Task<string> FreeName(Guid groupId, User user, CancellationToken ct)
+    private async Task<string> FreeName(Guid groupId, User user, CancellationToken ct, Guid? except = null)
     {
         var known = People.Display(user) is { Length: > 0 } display ? display : "one member";
 
@@ -213,7 +222,7 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         var stem = Truncated($"All for {known}", 58);
 
         var taken = await context.Set<SplitRule>()
-            .Where(rule => rule.Group.Id == groupId && rule.Name.StartsWith(stem))
+            .Where(rule => rule.Group.Id == groupId && rule.Id != except && rule.Name.StartsWith(stem))
             .Select(rule => rule.Name)
             .ToListAsync(ct);
 

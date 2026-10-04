@@ -91,9 +91,13 @@ public static class ApiErrorMapper
         // The edit is not wrong in itself; the person it would move has gone. Say what is
         // still open, so the caller does not try the same thing a different way.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.TransactionMovesDepartedBalance
-            => "Its name, note, date and category can still change. To change the amount, pass "
-               + "--split and keep the leaver's share exactly as it is. It cannot be deleted while "
-               + "they hold a part of it.",
+            // The amount only when the leaver did not pay: what they paid is the amount, so an
+            // expense a leaver paid for keeps it. Said both ways, because nothing here knows
+            // which of the two this refusal was.
+            => "Its name, note, date and category can still change. If they had a share but did "
+               + "not pay, the amount can change too: pass --split and keep their share exactly as "
+               + "it is. If they paid, the amount stays. It cannot be deleted while they hold a "
+               + "part of it.",
         _ => null
     };
 

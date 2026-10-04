@@ -229,8 +229,13 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
 
         var provisioned = await ProvisionedIn(group.Id);
 
-        Assert.Single(provisioned, rule => rule.ProvisionedForUserId == luz.Id);
+        var hers = Assert.Single(provisioned, rule => rule.ProvisionedForUserId == luz.Id);
         Assert.DoesNotContain(provisioned, rule => rule.ProvisionedForUserId == invitation.ParticipantUserId);
+
+        // Named for the account that claimed it, not for the name the group typed.
+        var shown = $"{luz.FirstName} {luz.LastName}".Trim() is { Length: > 0 } name ? name : luz.Email;
+        // Cut to fit the column where the name is long, which a test address is.
+        Assert.StartsWith(hers.Name, $"All for {shown}");
     }
 
     /// <summary>
@@ -264,7 +269,11 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
 
         Assert.False(kept.BuiltIn);
         Assert.Null(kept.ProvisionedForUserId);
-        Assert.Single(await ProvisionedIn(group.Id), rule => rule.ProvisionedForUserId == Self);
+
+        // No longer "All for Luz": it puts everything on whoever absorbed her, and says so,
+        // beside that member's own rule.
+        var mine = Assert.Single(await ProvisionedIn(group.Id), rule => rule.ProvisionedForUserId == Self);
+        Assert.Equal($"{mine.Name} (2)", kept.Name);
     }
 
     // ---- One join link in force --------------------------------------------------------------

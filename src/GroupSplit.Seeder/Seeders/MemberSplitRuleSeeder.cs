@@ -33,24 +33,16 @@ public class MemberSplitRuleSeeder(
     {
         var groups = await db.Set<Group>().Include(@group => @group.Users).ToListAsync(ct);
 
-        var seeded = 0;
+        // Counted once either side rather than around every call: the number is only for the
+        // log line, and each member's and invitee's rule is exactly one provisioned rule.
+        var before = await Provisioned(ct);
 
         foreach (var group in groups)
         {
+            // Find-or-create, so running the seeder twice writes nothing the second time --
+            // the same property every other seeder here has.
             foreach (var member in group.Users)
-            {
-                // Find-or-create, so running the seeder twice writes nothing the second
-                // time -- the same property every other seeder here has.
-                var before = await db.Set<SplitRule>()
-                    .CountAsync(rule => rule.Group.Id == group.Id, ct);
-
                 await memberRules.EnsureFor(group, member, ct);
-
-                var after = await db.Set<SplitRule>()
-                    .CountAsync(rule => rule.Group.Id == group.Id, ct);
-
-                seeded += after - before;
-            }
         }
 
         // And everybody the groups are waiting on, who has one as well from the moment they
@@ -62,18 +54,11 @@ public class MemberSplitRuleSeeder(
             .ToListAsync(ct);
 
         foreach (var invitation in invitations)
-        {
-            var before = await db.Set<SplitRule>()
-                .CountAsync(rule => rule.Group.Id == invitation.GroupId, ct);
-
             await memberRules.EnsureFor(invitation.Group, invitation.Participant, ct);
 
-            var after = await db.Set<SplitRule>()
-                .CountAsync(rule => rule.Group.Id == invitation.GroupId, ct);
-
-            seeded += after - before;
-        }
-
-        logger.LogInformation("Seeded {Count} {Entity}", seeded, "MemberSplitRule");
+        logger.LogInformation("Seeded {Count} {Entity}", await Provisioned(ct) - before, "MemberSplitRule");
     }
+
+    private Task<int> Provisioned(CancellationToken ct) =>
+        db.Set<SplitRule>().CountAsync(rule => rule.ProvisionedForUserId != null, ct);
 }

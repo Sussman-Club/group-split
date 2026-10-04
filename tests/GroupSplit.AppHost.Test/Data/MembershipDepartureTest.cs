@@ -9,8 +9,11 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.PostgreSQL;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace GroupSplit.AppHost.Test.Data;
 
@@ -32,6 +35,9 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
 
     private ServiceProvider? _services;
 
+    /// <summary>Disarmed unless a test arms it; see <see cref="ClaimMidRead"/>.</summary>
+    private ClaimMidRead? _claimMidRead;
+
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     public async ValueTask InitializeAsync()
@@ -43,8 +49,10 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
         var services = new ServiceCollection();
 
         services.AddLogging();
+        _claimMidRead = new ClaimMidRead(connectionString!);
+
         services.AddDbContext<AppDbContext, PostgreSqlAppDbContext>(
-            options => options.UseNpgsql(connectionString));
+            options => options.UseNpgsql(connectionString).AddInterceptors(_claimMidRead));
         services.AddDomainServices();
         services.AddSingleton<Amazon.S3.IAmazonS3>(Moq.Mock.Of<Amazon.S3.IAmazonS3>());
         services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
@@ -238,6 +246,84 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
                 return;
 
             await Task.Delay(50, Ct);
+        }
+    }
+
+    /// <summary>
+    /// The member's side of the same race. A member opening a link -- to check it works before
+    /// sending it -- is not remembered as having opened it, so there is no insert to fail and
+    /// no lock to wait on: the window is between the invitation being found and the page's
+    /// answer being read. The interceptor claims the invitation in exactly that window.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task A_member_opening_an_invitation_claimed_mid_read_is_told_it_is_gone()
+    {
+        var people = await People(1);
+        var host = people[0];
+
+        var groupId = await NewGroupOf(host, "MemberOpens");
+
+        string token;
+
+        using (var scope = await As(host))
+        {
+            token = Assert.Single(await Service<IInvitationService>(scope).Invite(groupId,
+                new InviteToGroupRequest { Names = ["Whoever claims it"] }, Ct)).Token;
+        }
+
+        _claimMidRead!.Arm(token);
+
+        using (var scope = await As(host))
+        {
+            var refused = await Assert.ThrowsAsync<NotFoundException>(() =>
+                Service<IInvitationService>(scope).Describe(token, Ct));
+
+            Assert.Equal(ErrorCodes.GroupInvitationNotFound, refused.Code);
+        }
+
+        Assert.True(_claimMidRead.Fired);
+    }
+
+    /// <summary>
+    /// Deletes an invitation, on a connection of its own, just before the read that answers
+    /// the landing page goes out -- the moment a concurrent claim would have to land in to
+    /// leave that read empty. That read is the one that joins the inviter's name, which no
+    /// earlier read of the invitation does.
+    /// </summary>
+    private sealed class ClaimMidRead(string connectionString) : DbCommandInterceptor
+    {
+        private string? _token;
+
+        public bool Fired { get; private set; }
+
+        public void Arm(string token)
+        {
+            _token = token;
+            Fired = false;
+        }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_token is { } token &&
+                command.CommandText.Contains("FROM \"GroupInvitation\"") &&
+                command.CommandText.Contains("\"FirstName\""))
+            {
+                _token = null;
+
+                await using var connection = new NpgsqlConnection(connectionString);
+                await connection.OpenAsync(cancellationToken);
+
+                await using var claim = new NpgsqlCommand(
+                    "DELETE FROM \"GroupInvitation\" WHERE \"Token\" = @token", connection);
+                claim.Parameters.AddWithValue("token", token);
+                await claim.ExecuteNonQueryAsync(cancellationToken);
+
+                Fired = true;
+            }
+
+            return result;
         }
     }
 

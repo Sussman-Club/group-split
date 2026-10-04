@@ -142,6 +142,23 @@ public class ApiErrorsTest
         Assert.Equal(50m, only.Balance);
     }
 
+    /// <summary>
+    /// One code answers a stale link for somebody who left and for somebody who was removed.
+    /// The reason is on the problem, and the message follows it -- "before you left" is the
+    /// wrong thing to tell somebody another member took out.
+    /// </summary>
+    [Theory]
+    [InlineData("Removed", ErrorMessages.RejoinAfterRemoval)]
+    [InlineData("Left", null)]
+    public void A_stale_link_says_how_the_person_went(string reason, string? expected)
+    {
+        var problem = Problem(409, ErrorCodes.GroupRejoinNeedsNewInvitation, TraceId, ("leftReason", reason));
+
+        var error = ApiErrors.Read(Typed(409, problem));
+
+        Assert.Equal(expected ?? ErrorMessages.For(ErrorCodes.GroupRejoinNeedsNewInvitation), error.Message);
+    }
+
     // ---- Validation --------------------------------------------------------------------------
 
     [Fact]

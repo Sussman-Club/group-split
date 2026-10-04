@@ -555,7 +555,7 @@ public class GroupLedgerTabTest : ComponentTest
         _entries = [Transfer(id)];
 
         var guard = new Mock<IDepartedDeleteGuard>();
-        guard.Setup(g => g.FirstLeaverOnAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync("Sofia Kovács");
+        guard.Setup(g => g.FirstLeaverOnAsync(id, It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync("Sofia Kovács");
         Services.AddSingleton(guard.Object);
 
         var tab = Render();

@@ -310,15 +310,22 @@ public sealed class GroupParticipants(
     /// Whether the group's ledger or rules still name somebody: the same four places the
     /// past-members listing reads.
     /// </summary>
-    private async Task<bool> HasTraceIn(Guid groupId, Guid userId, CancellationToken ct) =>
-        await context.Set<Transaction>().AnyAsync(transaction =>
-            transaction.GroupId == groupId && transaction.UserId == userId, ct) ||
-        await context.Set<TransactionSplit>().AnyAsync(split =>
-            split.Transaction.GroupId == groupId && split.UserId == userId, ct) ||
-        await context.Set<SplitRuleParticipant>().AnyAsync(participant =>
-            participant.SplitRuleVersion.SplitRule.Group.Id == groupId && participant.UserId == userId, ct) ||
-        await context.Set<SoleSplitRuleVersion>().AnyAsync(version =>
-            version.SplitRule.Group.Id == groupId && version.UserId == userId, ct);
+    /// <remarks>
+    /// One query, four EXISTS: asked of the group row so the database answers the whole
+    /// question in a single round trip rather than four in a row.
+    /// </remarks>
+    private Task<bool> HasTraceIn(Guid groupId, Guid userId, CancellationToken ct) =>
+        context.Set<Group>()
+            .Where(group => group.Id == groupId)
+            .AnyAsync(_ =>
+                context.Set<Transaction>().Any(transaction =>
+                    transaction.GroupId == groupId && transaction.UserId == userId) ||
+                context.Set<TransactionSplit>().Any(split =>
+                    split.Transaction.GroupId == groupId && split.UserId == userId) ||
+                context.Set<SplitRuleParticipant>().Any(participant =>
+                    participant.SplitRuleVersion.SplitRule.Group.Id == groupId && participant.UserId == userId) ||
+                context.Set<SoleSplitRuleVersion>().Any(version =>
+                    version.SplitRule.Group.Id == groupId && version.UserId == userId), ct);
 
     public User StandInFor(string name)
     {
