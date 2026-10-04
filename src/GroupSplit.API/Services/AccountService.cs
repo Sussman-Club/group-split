@@ -109,6 +109,7 @@ public sealed class AccountService(
         user.FirstName = null;
         user.LastName = null;
         user.Email = null;
+        user.Kind = UserKind.Deleted;
 
         // One save for the whole thing, so a failure part way through leaves the account
         // as it was rather than stranded between states.

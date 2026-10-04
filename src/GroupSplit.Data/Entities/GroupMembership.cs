@@ -59,8 +59,10 @@ public class GroupMembership
     /// </summary>
     /// <remarks>
     /// Cleared again when the same person rejoins, which reuses the row rather than adding a
-    /// second: the key is the pair, and a group has one relationship with each person, not a
-    /// history of them. The rejoin rule only needs the latest departure.
+    /// second: the key is the pair, and this row is the relationship as it stands. Earlier
+    /// stints are not lost with it -- every join, departure and return is also written to
+    /// <see cref="GroupMembershipEvent"/>, which is where "who removed whom, and when" is
+    /// answered. The rejoin rule only needs the latest departure, and reads it here.
     /// </remarks>
     public DateTimeOffset? LeftAt { get; set; }
 

@@ -72,6 +72,13 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(user);
 
+        // Only somebody who signs in becomes a member. A stand-in holds a position until it
+        // is claimed and a deleted account holds nothing; either one here is a bug in the
+        // caller, and a membership row for it would be one nobody could ever use or leave.
+        if (user.Kind is not UserKind.Account)
+            throw new InvalidOperationException(
+                $"Only an account can join a group, and user {user.Id} is a {user.Kind}.");
+
         // Nothing here answers an invitation, and there is nothing for it to answer. An
         // invitation names a person the group invented and holds a stand-in of its own, so a
         // signed-in account is never the participant of a pending one -- the way in through

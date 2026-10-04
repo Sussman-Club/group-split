@@ -34,6 +34,18 @@ public class User : Entity
     public string? Email { get; set; }
 
     /// <summary>
+    /// Which of the three things this row is: somebody with an account, a stand-in a group
+    /// named, or an account that has been deleted and anonymised.
+    /// </summary>
+    /// <remarks>
+    /// Stated rather than worked out. The three used to be told apart by what was missing --
+    /// no identity and a name is a stand-in, no identity and no name a deleted account -- which
+    /// every reader had to know and nothing checked. The table now refuses the combinations
+    /// that cannot happen: a stand-in with an address, a deleted account with a name.
+    /// </remarks>
+    public UserKind Kind { get; set; }
+
+    /// <summary>
     /// The sign-in behind this person, or null for a stand-in the group named and nobody
     /// has claimed.
     /// </summary>
@@ -44,4 +56,20 @@ public class User : Entity
 
     /// <summary>What they paid for. What they <em>owe</em> is <see cref="TransactionSplit"/>.</summary>
     public virtual ICollection<Transaction> Transactions { get; } = [];
+}
+
+/// <summary>What a <see cref="User"/> row stands for.</summary>
+public enum UserKind
+{
+    /// <summary>Somebody who signs in. The default, because it is what provisioning makes.</summary>
+    Account,
+
+    /// <summary>
+    /// A person a group named before they had an account. Never a member: claiming the
+    /// invitation hands the position to the claimer's own account.
+    /// </summary>
+    StandIn,
+
+    /// <summary>An account its owner deleted. Kept, anonymised, because history names it.</summary>
+    Deleted
 }

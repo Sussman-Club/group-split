@@ -325,7 +325,7 @@ public sealed class GroupParticipants(
         // The name goes in FirstName, which is where every listing already looks. It is the
         // whole of what the group has told us, and splitting a typed-in "Ana Ruiz" into two
         // columns would be the app deciding which half is the surname.
-        var standIn = new User { FirstName = name };
+        var standIn = new User { FirstName = name, Kind = UserKind.StandIn };
 
         context.Add(standIn);
 

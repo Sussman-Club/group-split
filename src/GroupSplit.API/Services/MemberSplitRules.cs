@@ -75,14 +75,12 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(user);
 
-        // The name index is also the small, provider-enforced critical section for this
-        // find-or-create.  Keeping the member id on the sole-version is the right shape for
-        // a rule's division, but it means there cannot be a direct unique index on
-        // (group, member) without copying that fact onto SplitRule.  Concurrent calls for
-        // the same member therefore propose the same available name; one writes it and the
-        // other re-reads it.  That is the one conflict this find-or-create owns. A name
-        // collision for a different member remains an ordinary join failure, rather than
-        // an unbounded retry loop that assumes other writers will eventually stop.
+        // A find-or-create with two ways to lose a race, both settled by the database. Two
+        // calls for the same member collide on IX_SplitRule_GroupId_ProvisionedForUserId --
+        // one rule per person per group -- and the loser re-reads the winner's. Two calls for
+        // different members who want the same name collide on IX_SplitRule_GroupId_Name, and
+        // the loser takes the next free name. A few tries, not a loop that assumes the other
+        // writers will stop.
         for (var attempt = 1; ; attempt++)
         {
             var existing = await ExistingFor(group.Id, user.Id, ct);
@@ -96,6 +94,7 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             {
                 Group = group,
                 BuiltIn = true,
+                ProvisionedForUserId = user.Id,
                 Name = await FreeName(group.Id, user, ct),
                 Versions = { version }
             };
@@ -111,7 +110,8 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
                 when (exception.InnerException is PostgresException
                       {
                           SqlState: PostgresErrorCodes.UniqueViolation,
-                          ConstraintName: "IX_SplitRule_GroupId_Name"
+                          ConstraintName: "IX_SplitRule_GroupId_Name" or
+                          "IX_SplitRule_GroupId_ProvisionedForUserId"
                       })
             {
                 // Unlike user provisioning, this context can be carrying a freshly joined
@@ -120,10 +120,9 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
                 context.Entry(version).State = EntityState.Detached;
                 context.Entry(rule).State = EntityState.Detached;
 
-                // Ours, written by the other call: the answer this wanted. Otherwise it was
+                // Ours, written by the other call: the next read finds it. Otherwise it was
                 // somebody else taking the name first -- two members inviting a "Dani" in the
-                // same second -- and the next free name is one read away. A few tries, not a
-                // loop that assumes the other writers will stop.
+                // same second -- and the next free name is one read away.
                 if (attempt >= 3)
                     throw;
             }
@@ -154,8 +153,18 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         foreach (var version in theirs.Versions.OfType<SoleSplitRuleVersion>())
             version.UserId = toUserId;
 
+        // Either it becomes the receiver's own rule, or -- when they already have one, and
+        // something still divides by this -- it is retired: kept, out of the picker, and no
+        // longer anybody's provisioned rule, which is what lets the receiver's stay the one.
         if (receiverHasOne)
+        {
             theirs.BuiltIn = false;
+            theirs.ProvisionedForUserId = null;
+        }
+        else
+        {
+            theirs.ProvisionedForUserId = toUserId;
+        }
     }
 
     /// <summary>
@@ -171,20 +180,13 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
 
     /// <summary>The provisioned rule this group already holds for this member, if any.</summary>
     private Task<SplitRule?> ExistingFor(Guid groupId, Guid userId, CancellationToken ct) =>
-        // Asked of the versions, because that is where "who it is for" is written down: a
-        // provisioned rule of this group whose open version names this person.
-        //
-        // As a predicate on the rules rather than a read of the versions themselves, because
-        // the answer is a rule with its versions loaded -- and an Include cannot follow a
-        // Select that changed what the query is about.
+        // By the column the unique index is on, so the answer is the one rule the database
+        // allows. With its versions, which a hand-over rewrites.
         context.Set<SplitRule>()
             .Include(rule => rule.Versions)
             .FirstOrDefaultAsync(rule =>
-                rule.BuiltIn &&
                 rule.Group.Id == groupId &&
-                rule.Versions.Any(version =>
-                    version.SupersededAt == null &&
-                    (version as SoleSplitRuleVersion)!.UserId == userId), ct);
+                rule.ProvisionedForUserId == userId, ct);
 
     /// <summary>
     /// "All for Ana", or the next thing to it that the group has not already used.

@@ -61,5 +61,17 @@ public class SplitRule : Entity
     /// <see cref="SplitRuleVersion.SupersededAt"/>, which is the one it is on now --
     /// <c>SplitRuleExtensions.Current</c> reads it.
     /// </summary>
+    /// <summary>
+    /// For the rule a group keeps for each member and invitee -- "All for Luz" -- whose it is.
+    /// Null on every other rule, built in or not.
+    /// </summary>
+    /// <remarks>
+    /// The same person the rule's open version names, held here as well so the table can
+    /// promise one such rule per person per group: a unique index over (group, this), which
+    /// it could not state across the version tables. Kept in step by
+    /// <c>IMemberSplitRules</c>, the only code that writes these rules or moves them.
+    /// </remarks>
+    public Guid? ProvisionedForUserId { get; set; }
+
     public virtual ICollection<SplitRuleVersion> Versions { get; } = [];
 }

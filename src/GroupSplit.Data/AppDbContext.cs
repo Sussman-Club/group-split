@@ -40,6 +40,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(user => user.LastName).HasMaxLength(64);
             entity.Property(user => user.Email).HasMaxLength(128);
 
+            // By name, like LeftReason: a row read in psql should say what it is.
+            entity.Property(user => user.Kind)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
             // The join carries a payload now -- who has archived which group -- so it is a
             // type rather than one EF keeps to itself. Pinned to the table and column names
             // EF had already chosen, so this is an added column and not a moved membership.
@@ -91,6 +97,40 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                     });
 
             entity.HasIndex(user => user.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<GroupMembershipEvent>(entity =>
+        {
+            entity.Property(change => change.Kind)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
+            entity.Property(change => change.At).IsRequired();
+
+            // A group's history goes with the group, and is all there is to read it by.
+            entity.HasOne<Group>()
+                .WithMany()
+                .HasForeignKey(change => change.GroupId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict, like every reference to a person in history: accounts are anonymised
+            // rather than deleted, and the stand-ins that are deleted are never members.
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(change => change.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(change => change.ByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Read as one group's story in order, or one person's across groups.
+            entity.HasIndex(change => new { change.GroupId, change.At });
+            entity.HasIndex(change => change.UserId);
         });
 
         modelBuilder.Entity<GroupInvitation>(entity =>
@@ -203,10 +243,16 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .HasDefaultValue(Currencies.Default);
 
+            // No action rather than restrict. Both refuse to delete a rule a group defaults to;
+            // the difference is when they look. Restrict looks at once, so deleting a group --
+            // whose rules cascade from it -- tripped over the group's own default before the
+            // group row itself was gone, and no group could be deleted at all. No action looks
+            // at the end of the statement, by which time the row pointing at the rule has
+            // gone with it.
             entity.HasOne(group => group.DefaultSplitRule)
                 .WithMany()
                 .HasForeignKey(group => group.DefaultSplitRuleId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.NoAction);
 
             entity.HasIndex(group => group.Name);
         });
@@ -223,6 +269,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // A group's rules are picked from a list by name, so two with the same name
             // are two the member cannot tell apart.
             entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
+
+            // Whose "all for one" rule this is. Restrict: a stand-in is deleted only once
+            // every rule naming it has moved, and the error is the right answer if one has not.
+            // The one-per-person promise is a partial unique index, so it lives in
+            // PostgreSqlAppDbContext with the other one.
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(rule => rule.ProvisionedForUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SplitRuleVersion>(entity =>
@@ -339,14 +394,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(category => category.GroupId)
                 .IsRequired();
 
-            // Restrict rather than cascade or set-null: a rule several categories default
+            // Refused rather than cascade or set-null: a rule several categories default
             // to is exactly the rule somebody will try to delete, and silently emptying
             // their defaults would change how every future expense in them is split
-            // without saying so.
+            // without saying so. No action rather than restrict, for the reason Group gives:
+            // it still refuses that, and lets a group go with its categories and rules.
             entity.HasOne(category => category.DefaultSplitRule)
                 .WithMany()
                 .HasForeignKey(category => category.DefaultSplitRuleId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.NoAction);
 
             // Inherited from the constraint Rule carried on (GroupId, Category), which is
             // the same statement now that the label has a table of its own.
@@ -363,10 +419,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Restrict, not the cascade a required key gets by default. Deleting a person must
+            // never delete what they owed: the group's balances add up only while every share
+            // is still there. Stand-ins are the only users ever deleted, and only after their
+            // shares have moved -- if one has not, the delete should fail, not succeed quietly.
             entity.HasOne(split => split.User)
                 .WithMany()
                 .HasForeignKey(split => split.UserId)
-                .IsRequired();
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
 
             // One row per person per transaction: a second would be a second opinion about
             // what they owed.
@@ -390,10 +451,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .HasDefaultValue(Currencies.Default);
 
+            // Restrict, as on TransactionSplit: deleting whoever paid must not delete the
+            // expense, and with it every share the group recorded on it.
             entity.HasOne(transaction => transaction.User)
                 .WithMany(user => user.Transactions)
                 .HasForeignKey(transaction => transaction.UserId)
-                .IsRequired();
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(transaction => transaction.Group)
                 .WithMany()
@@ -727,5 +791,128 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         }
 
         base.OnModelCreating(modelBuilder);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        var recorded = RecordMembershipEvents();
+
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch
+        {
+            Forget(recorded);
+            throw;
+        }
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        var recorded = RecordMembershipEvents();
+
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch
+        {
+            Forget(recorded);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Adds a <see cref="GroupMembershipEvent"/> for every membership this save creates,
+    /// closes or reopens, so the history is written in the same transaction as the change.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than beside each caller because a membership moves from several places --
+    /// creating a group adds one through <c>Group.Users</c>, joining and claiming through the
+    /// joiner, leaving and removal through the group service, the seeder through both -- and
+    /// a history that depends on each of them remembering is one that will have gaps.
+    /// <para>
+    /// DetectChanges first: a membership added through the skip navigation is not an entry
+    /// of its own until it has run, and SaveChanges would only run it after this has looked.
+    /// </para>
+    /// </remarks>
+    private List<GroupMembershipEvent> RecordMembershipEvents()
+    {
+        ChangeTracker.DetectChanges();
+
+        var recorded = new List<GroupMembershipEvent>();
+
+        foreach (var entry in ChangeTracker.Entries<GroupMembership>().ToList())
+        {
+            var membership = entry.Entity;
+            GroupMembershipEvent? change = null;
+
+            if (entry.State is EntityState.Added)
+            {
+                change = new GroupMembershipEvent
+                {
+                    Kind = MembershipEventKind.Joined,
+                    // Unset when the row came through Group.Users and the database default
+                    // is to fill it in; now is that default, a moment early.
+                    At = membership.JoinedAt == default ? DateTimeOffset.UtcNow : membership.JoinedAt,
+                    ByUserId = membership.UserId
+                };
+            }
+            else if (entry.State is EntityState.Modified)
+            {
+                var wasOpen = entry.Property(row => row.LeftAt).OriginalValue is null;
+                var isOpen = membership.LeftAt is null;
+
+                if (wasOpen && !isOpen)
+                {
+                    change = new GroupMembershipEvent
+                    {
+                        Kind = membership.LeftReason switch
+                        {
+                            LeftReason.Removed => MembershipEventKind.Removed,
+                            LeftReason.AccountDeleted => MembershipEventKind.AccountDeleted,
+                            _ => MembershipEventKind.Left
+                        },
+                        At = membership.LeftAt!.Value,
+                        ByUserId = membership.LeftByUserId
+                    };
+                }
+                else if (!wasOpen && isOpen)
+                {
+                    change = new GroupMembershipEvent
+                    {
+                        Kind = MembershipEventKind.Rejoined,
+                        At = membership.JoinedAt,
+                        ByUserId = membership.UserId
+                    };
+                }
+            }
+
+            if (change is null)
+                continue;
+
+            change.GroupId = membership.GroupId;
+            change.UserId = membership.UserId;
+
+            Add(change);
+            recorded.Add(change);
+        }
+
+        return recorded;
+    }
+
+    /// <summary>
+    /// Takes back the events a failed save added. The membership change they describe is
+    /// still pending, or has been abandoned -- the joiner detaches a row that lost a race --
+    /// and either way the next save records it afresh if it happens at all. Left tracked,
+    /// they would be written by that next save beside a second copy, or with nothing behind
+    /// them.
+    /// </summary>
+    private void Forget(List<GroupMembershipEvent> recorded)
+    {
+        foreach (var change in recorded)
+            Entry(change).State = EntityState.Detached;
     }
 }

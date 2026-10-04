@@ -32,6 +32,68 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
 
         // The provider's row verbatim, queryable when a field it holds is wanted later
         // without adding a column for it. Text on every other provider.
+        // One "all for one" rule per person per group. Across the version tables this could
+        // only be hoped for -- two joins racing each made one, and only a clash of names
+        // stopped them -- so SplitRule carries whose it is, and this makes it so.
+        modelBuilder.Entity<SplitRule>(entity =>
+        {
+            entity.HasIndex("GroupId", nameof(SplitRule.ProvisionedForUserId))
+                .IsUnique()
+                .HasFilter("\"ProvisionedForUserId\" IS NOT NULL")
+                .HasDatabaseName("IX_SplitRule_GroupId_ProvisionedForUserId");
+
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_SplitRule_ProvisionedOnlyBuiltIn",
+                "\"ProvisionedForUserId\" IS NULL OR \"BuiltIn\""));
+        });
+
+        // One join link in force per group: making a new one revokes the last, and two
+        // members making one at the same moment no longer leave two standing. Expired links
+        // count as in force here -- they are revoked when replaced, not when they lapse --
+        // because "now" cannot appear in an index.
+        modelBuilder.Entity<GroupJoinLink>()
+            .HasIndex(link => link.GroupId)
+            .IsUnique()
+            .HasFilter("\"RevokedAt\" IS NULL")
+            .HasDatabaseName("IX_GroupJoinLink_GroupId_Unrevoked");
+
+        // A departure is three columns written together, and the query filter reads only
+        // the first. These keep a half-written one -- a reason with no time, a time with no
+        // reason, a remover on a standing membership -- out of the table instead of hidden
+        // by the filter.
+        modelBuilder.Entity<GroupMembership>().ToTable("GroupUser", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_GroupUser_LeftReason",
+                "\"LeftReason\" IN ('Left', 'Removed', 'AccountDeleted')");
+
+            table.HasCheckConstraint(
+                "CK_GroupUser_Departure",
+                "(\"LeftAt\" IS NULL) = (\"LeftReason\" IS NULL) AND (\"LeftAt\" IS NOT NULL OR \"LeftByUserId\" IS NULL)");
+        });
+
+        modelBuilder.Entity<GroupMembershipEvent>().ToTable(table => table.HasCheckConstraint(
+            "CK_GroupMembershipEvent_Kind",
+            "\"Kind\" IN ('Joined', 'Rejoined', 'Left', 'Removed', 'AccountDeleted')"));
+
+        // What each kind of user may hold. A stand-in has no address -- one would make it an
+        // account somebody could sign in as -- and a deleted account has nothing left that
+        // says who it was.
+        modelBuilder.Entity<User>().ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_User_Kind",
+                "\"Kind\" IN ('Account', 'StandIn', 'Deleted')");
+
+            table.HasCheckConstraint(
+                "CK_User_StandInHasNoEmail",
+                "\"Kind\" <> 'StandIn' OR \"Email\" IS NULL");
+
+            table.HasCheckConstraint(
+                "CK_User_DeletedIsAnonymous",
+                "\"Kind\" <> 'Deleted' OR (\"FirstName\" IS NULL AND \"LastName\" IS NULL AND \"Email\" IS NULL)");
+        });
+
         modelBuilder.Entity<BankTransaction>(entity =>
         {
             entity.Property(row => row.RawJson).HasColumnType("jsonb");

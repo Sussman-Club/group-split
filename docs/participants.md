@@ -100,6 +100,24 @@ ended at or after that moment, on the landing page's read as well as on the join
 afterwards is how a group says it wants them back, and they return as an ordinary member on
 the same row, with `JoinedAt` reset.
 
+## What the database holds it to
+
+The services decide who may do what; the schema makes sure that whatever they decide, a bug
+cannot write something that makes no sense. Migration `GroupManagementIntegrity` added:
+
+| Guarantee | How |
+| --- | --- |
+| Deleting a person never deletes money | `Transaction.UserId` and `TransactionSplit.UserId` restrict. Only stand-ins are ever deleted, and only once their position has moved; if it has not, the delete fails instead of taking expenses and shares with it. |
+| Every membership change is remembered | `GroupMembershipEvent`: one row per join, departure (left, removed, account deleted) and return, with who did it. Written by `AppDbContext` in the same save as the change, so no path can skip it. `GroupUser` stays the current state and reopens on a return; the history is no longer lost when it does. |
+| A departure is written whole | Check constraints on `GroupUser`: `LeftAt` and `LeftReason` are set together, the reason is one of the three, and nobody is recorded as the remover of a standing membership. |
+| Each user row says what it is | `User.Kind`: `Account`, `StandIn` or `Deleted`. A stand-in cannot have an address, a deleted account cannot have a name, and the joiner refuses to make anything but an account a member. |
+| One join link in force per group | A partial unique index over unrevoked links. Making a link revokes the last one, expired ones included -- closed at the moment they lapsed, so they still read as expired. |
+| One "all for one" rule per person per group | `SplitRule.ProvisionedForUserId` and a partial unique index on it, kept in step by `IMemberSplitRules`. A rule retired by a hand-over belongs to nobody. |
+| A group can be deleted with what hangs off it | The default-rule keys on `Group` and `Category` are no action rather than restrict: a rule something defaults to still cannot be deleted on its own, but it no longer blocks its own group going. Nothing deletes groups today. |
+
+`GroupSchemaTest` in `GroupSplit.AppHost.Test` writes past the services at each of these and
+checks Postgres refuses.
+
 ## Known gaps
 
 - **Departures from before membership rows were kept leave no date**, so any link lets those

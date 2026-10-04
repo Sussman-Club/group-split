@@ -96,7 +96,7 @@ public class GroupInvitationSeeder(
 
         // A name and nothing else: no address, and no identity, so nobody can sign in as
         // it. What every listing shows for them is that name.
-        db.Add(new User { Id = id, FirstName = dto.Name.Trim() });
+        db.Add(new User { Id = id, FirstName = dto.Name.Trim(), Kind = UserKind.StandIn });
 
         return id;
     }
