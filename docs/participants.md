@@ -103,7 +103,7 @@ the same row, with `JoinedAt` reset.
 ## What the database holds it to
 
 The services decide who may do what; the schema makes sure that whatever they decide, a bug
-cannot write something that makes no sense. Migration `GroupManagementIntegrity` added:
+cannot write something that makes no sense. Migration `GroupParticipantsAndMembership` added:
 
 | Guarantee | How |
 | --- | --- |

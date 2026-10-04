@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 {
     [DbContext(typeof(PostgreSqlAppDbContext))]
-    [Migration("20261001130738_AllForOnePendingInviteeSplitRules")]
-    partial class AllForOnePendingInviteeSplitRules
+    [Migration("20261004211300_GroupParticipantsAndMembership")]
+    partial class GroupParticipantsAndMembership
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -346,6 +346,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
+                    b.HasIndex("GroupId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_GroupJoinLink_GroupId_Unrevoked")
+                        .HasFilter("\"RevokedAt\" IS NULL");
+
                     b.HasIndex("Token")
                         .IsUnique();
 
@@ -388,7 +393,49 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("GroupUser", (string)null);
+                    b.ToTable("GroupUser", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_GroupUser_Departure", "(\"LeftAt\" IS NULL) = (\"LeftReason\" IS NULL) AND (\"LeftAt\" IS NOT NULL OR \"LeftByUserId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_GroupUser_LeftReason", "\"LeftReason\" IN ('Left', 'Removed', 'AccountDeleted')");
+                        });
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.GroupMembershipEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("GroupId", "At");
+
+                    b.ToTable("GroupMembershipEvent", t =>
+                        {
+                            t.HasCheckConstraint("CK_GroupMembershipEvent_Kind", "\"Kind\" IN ('Joined', 'Rejoined', 'Left', 'Removed', 'AccountDeleted')");
+                        });
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.InvitationOpened", b =>
@@ -707,12 +754,25 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("ProvisionedForUserId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ProvisionedForUserId");
 
                     b.HasIndex("GroupId", "Name")
                         .IsUnique();
 
-                    b.ToTable("SplitRule");
+                    b.HasIndex("GroupId", "ProvisionedForUserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SplitRule_GroupId_ProvisionedForUserId")
+                        .HasFilter("\"ProvisionedForUserId\" IS NOT NULL");
+
+                    b.ToTable("SplitRule", t =>
+                        {
+                            t.HasCheckConstraint("CK_SplitRule_ProvisionedOnlyBuiltIn", "\"ProvisionedForUserId\" IS NULL OR \"BuiltIn\"");
+                        });
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRuleParticipant", b =>
@@ -885,6 +945,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("LastName")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -894,7 +959,14 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("User");
+                    b.ToTable("User", t =>
+                        {
+                            t.HasCheckConstraint("CK_User_DeletedIsAnonymous", "\"Kind\" <> 'Deleted' OR (\"FirstName\" IS NULL AND \"LastName\" IS NULL AND \"Email\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_User_Kind", "\"Kind\" IN ('Account', 'StandIn', 'Deleted')");
+
+                            t.HasCheckConstraint("CK_User_StandInHasNoEmail", "\"Kind\" <> 'StandIn' OR \"Email\" IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.UserIdentity", b =>
@@ -1067,7 +1139,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.SplitRule", "DefaultSplitRule")
                         .WithMany()
                         .HasForeignKey("DefaultSplitRuleId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
                         .WithMany("Categories")
@@ -1085,7 +1157,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.SplitRule", "DefaultSplitRule")
                         .WithMany()
                         .HasForeignKey("DefaultSplitRuleId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("DefaultSplitRule");
                 });
@@ -1151,6 +1223,26 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.GroupMembershipEvent", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GroupSplit.Data.Entities.Group", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -1252,6 +1344,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProvisionedForUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Group");
                 });
 
@@ -1309,7 +1406,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.User", "User")
                         .WithMany("Transactions")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("BankTransaction");
@@ -1334,7 +1431,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Transaction");
