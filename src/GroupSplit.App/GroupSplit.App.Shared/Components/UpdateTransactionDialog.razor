@@ -104,7 +104,7 @@
                                   CategoryId="@_model.CategoryId"
                                   CategoryIdChanged="@OnCategoryPickedAsync"
                                   ShowPayer="@IsShared"
-                                  Members="@_members"
+                                  Members="@PayerChoices"
                                   PayerId="@_model.PaidByUserId"
                                   PayerIdChanged="@OnPayerPickedAsync"
                                   Date="@_selectedDate"
@@ -390,7 +390,24 @@
         _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "uncategorized";
 
     private string PayerName =>
-        _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
+        PayerChoices.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
+
+    /// <summary>
+    /// Who the payer picker offers: the group's members and invitees, and -- on an expense
+    /// paid for by somebody who has since left -- that person too, marked as gone.
+    /// </summary>
+    /// <remarks>
+    /// Without them the picker could not name who actually paid: the chip read "paid by"
+    /// with nothing after it and the box stood empty, on exactly the expenses where who
+    /// paid is the thing that cannot change. Offered only while the expense is still in
+    /// the group it was paid in; a move picks a payer from the new group's members.
+    /// </remarks>
+    private IReadOnlyList<UserInfo> PayerChoices =>
+        _members.Count == 0 ||
+        _model.GroupId != Original.GroupId ||
+        _members.Any(member => member.Id == Original.PaidByUserId)
+            ? _members
+            : [.. _members, new UserInfo(Original.PaidByUserId, Original.PaidByUserName, null, null, IsPastMember: true)];
 
     /// <summary>
     /// What the merchant chip shows.

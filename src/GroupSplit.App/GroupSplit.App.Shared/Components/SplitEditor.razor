@@ -302,6 +302,12 @@
                                 {
                                     <span class="gs-tag">invited</span>
                                 }
+                                else if (Leavers.Any(leaver => leaver.UserId == share.UserId))
+                                {
+                                    @* As in the custom view, so the division reads the same
+                                       whichever side of the toggle it is on. *@
+                                    <span class="gs-tag neutral">left the group</span>
+                                }
                             </div>
                         </div>
                         @* What it was, where an edit has moved it. The consequence of

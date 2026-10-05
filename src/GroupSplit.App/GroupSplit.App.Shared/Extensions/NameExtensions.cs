@@ -6,7 +6,7 @@ public static class NameExtensions
 {
     /// <summary>
     /// What to call somebody in a list of a group's people, saying so when they have been
-    /// invited and have not joined.
+    /// invited and have not joined, or have left.
     /// </summary>
     /// <remarks>
     /// One helper rather than a marker per screen, because the marker has to be everywhere
@@ -20,7 +20,9 @@ public static class NameExtensions
             ? string.Empty
             : person.IsPendingInvitee
                 ? ParticipantCopy.Invited(person.FullName)
-                : person.FullName;
+                : person.IsPastMember
+                    ? ParticipantCopy.Left(person.FullName)
+                    : person.FullName;
 
     /// <summary>
     /// A list of names as a sentence says it: "Groceries, Utilities and Rent".

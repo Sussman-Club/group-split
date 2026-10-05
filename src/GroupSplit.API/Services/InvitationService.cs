@@ -271,7 +271,10 @@ public sealed class InvitationService(
                ?? throw AlreadyClaimed();
     }
 
-    public async Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default)
+    public Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default) =>
+        AgainIfARuleClashed(() => ClaimOnce(token, ct));
+
+    private async Task<InvitationClaimedResponse> ClaimOnce(string token, CancellationToken ct)
     {
         var user = userContext.User;
         var held = await Held(token, ct);
@@ -374,11 +377,15 @@ public sealed class InvitationService(
             taken.RulesAffected);
     }
 
-    public async Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default) =>
-        await Close(await Held(token, ct), InvitationOutcome.Declined, ct);
+    public Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default) =>
+        AgainIfARuleClashed(async () => await Close(await Held(token, ct), InvitationOutcome.Declined, ct));
 
-    public async Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
-        CancellationToken ct = default)
+    public Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
+        CancellationToken ct = default) =>
+        AgainIfARuleClashed(() => WithdrawOnce(groupId, invitationId, ct));
+
+    private async Task<InvitationClosedResponse> WithdrawOnce(Guid groupId, Guid invitationId,
+        CancellationToken ct)
     {
         await MemberGroup(groupId, ct);
 
@@ -477,6 +484,40 @@ public sealed class InvitationService(
     /// claim or invitation began -- changes that are nobody's to discard here.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Runs a claim, decline or withdrawal again, once, if it lost a race for one of a
+    /// group's rules.
+    /// </summary>
+    /// <remarks>
+    /// Each of them hands the invitee's "all for one" rule to somebody, renaming it for them
+    /// or retiring it beside theirs under the next free name. Two of them at the same moment
+    /// -- two invitations merged into the same member, say -- each work out the same free
+    /// name, or each make the same person the rule's owner, and the second save breaks the
+    /// name index or the one-rule-per-person index. Nothing of that attempt was kept: the
+    /// claim's transaction rolled back, and the others save once, at the end. So it goes
+    /// again from what the database now holds, where the first one's rule is visible and is
+    /// picked around. Once, not until it works: a second clash means something other than
+    /// a race, and that should be seen.
+    /// </remarks>
+    private async Task<T> AgainIfARuleClashed<T>(Func<Task<T>> once)
+    {
+        try
+        {
+            return await once();
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+                  {
+                      SqlState: PostgresErrorCodes.UniqueViolation,
+                      ConstraintName: "IX_SplitRule_GroupId_Name" or "IX_SplitRule_GroupId_ProvisionedForUserId"
+                  })
+        {
+            Fresh(userContext.User);
+
+            return await once();
+        }
+    }
+
     private void Fresh(User signedIn)
     {
         context.ChangeTracker.Clear();

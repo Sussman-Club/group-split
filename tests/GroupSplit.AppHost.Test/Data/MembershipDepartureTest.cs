@@ -250,6 +250,81 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
+    /// Two invitations merged into the same member at the same moment. Each hands its
+    /// invitee's rule over -- used by an expense, so retired beside the member's own under
+    /// the next free name -- and each works out the same name. The one that loses the race
+    /// on the name index goes again and picks around the other's, so both claims land and
+    /// the two retired rules end up with names of their own.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task Two_invitations_merged_into_one_member_at_once_both_land()
+    {
+        var people = await People(1);
+        var host = people[0];
+
+        var groupId = await NewGroupOf(host, "Twins");
+
+        List<GroupInvitationResponse> invitations;
+
+        using (var scope = await As(host))
+        {
+            invitations = [.. await Service<IInvitationService>(scope).Invite(groupId,
+                new InviteToGroupRequest { Names = ["Twin A", "Twin B"] }, Ct)];
+
+            // Something divides by each invitee's rule, so a merge retires it rather than
+            // deleting it -- which is the path that renames.
+            foreach (var invitation in invitations)
+            {
+                var rule = await Service<AppDbContext>(scope).Set<SplitRule>()
+                    .FirstAsync(candidate => candidate.ProvisionedForUserId == invitation.ParticipantUserId, Ct);
+
+                await Service<ITransactionService>(scope).Create(new CreateTransactionRequest
+                {
+                    Name = $"For {invitation.Name}",
+                    Amount = 10m,
+                    DateTime = DateTimeOffset.UtcNow,
+                    GroupId = groupId,
+                    SplitRuleId = rule.Id
+                }, Ct);
+            }
+        }
+
+        var gate = new TaskCompletionSource();
+
+        async Task<Exception?> Merge(string token)
+        {
+            using var scope = await As(host);
+            await gate.Task;
+
+            try
+            {
+                await Service<IInvitationService>(scope).Claim(token, Ct);
+                return null;
+            }
+            catch (Exception exception)
+            {
+                return exception;
+            }
+        }
+
+        var merging = invitations.Select(invitation => Merge(invitation.Token)).ToArray();
+        gate.SetResult();
+        var outcomes = await Task.WhenAll(merging);
+
+        Assert.All(outcomes, Assert.Null);
+
+        using var check = _services!.CreateScope();
+
+        var retired = await Service<AppDbContext>(check).Set<SplitRule>()
+            .Where(rule => rule.Group.Id == groupId && !rule.BuiltIn && rule.Name.StartsWith("All for "))
+            .Select(rule => rule.Name)
+            .ToListAsync(Ct);
+
+        Assert.Equal(2, retired.Count);
+        Assert.Equal(2, retired.Distinct().Count());
+    }
+
+    /// <summary>
     /// The member's side of the same race. A member opening a link -- to check it works before
     /// sending it -- is not remembered as having opened it, so there is no insert to fail and
     /// no lock to wait on: the window is between the invitation being found and the page's

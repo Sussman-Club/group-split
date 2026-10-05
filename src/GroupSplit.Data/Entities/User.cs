@@ -7,10 +7,11 @@ namespace GroupSplit.Data.Entities;
 /// That last part is the whole of what is unusual here. A group can name somebody it splits
 /// with before they have an account, and start owing them money immediately, so a user row
 /// exists from the moment the group types a name: <see cref="Identity"/> is null for them,
-/// and <see cref="Email"/> usually is too. They are a real holder of real shares, and
-/// claiming an invitation attaches an identity to the row that was already theirs rather
-/// than making a second one -- which is what keeps the history from splitting in two on the
-/// day they join.
+/// and <see cref="Email"/> is too. They are a real holder of real shares, and claiming the
+/// invitation moves those shares -- and anything they were down as having paid -- onto the
+/// claimer's own account, then deletes the stand-in: it never becomes an account itself
+/// (see <see cref="UserKind.StandIn"/>), and the history stays whole because every row it
+/// held now names the person who claimed it.
 /// <para>
 /// So nothing here may assume an identity, and a name is all some rows will ever have. See
 /// <c>IGroupParticipants.StandInFor</c> for where they come from and

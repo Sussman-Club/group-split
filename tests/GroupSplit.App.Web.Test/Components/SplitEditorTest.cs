@@ -392,6 +392,33 @@ public class SplitEditorTest : ComponentTest
     /// it, fixed, and counts it -- otherwise the column cannot add up and the one amount edit
     /// the API allows on such an expense cannot be made.
     /// </summary>
+    /// <summary>
+    /// The division as it stands, before anything is typed: a leaver's share is listed with
+    /// everybody else's, and says that they have gone -- as it does once split by hand.
+    /// </summary>
+    [Fact]
+    public void A_leavers_share_is_marked_in_the_division_as_it_stands()
+    {
+        var gone = Guid.NewGuid();
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 300m)
+            .Add(e => e.PayerId, Ana)
+            .Add(e => e.Preview, new SplitPreviewResponse(
+            [
+                new TransactionSplitResponse(Ana, "Ana Benitez", 200m),
+                new TransactionSplitResponse(gone, "Dani", 100m)
+            ], null))
+            .Add(e => e.Leavers, [new TransactionSplitResponse(gone, "Dani", 100m)]));
+
+        var row = editor.FindAll(".gs-row").Single(candidate => candidate.TextContent.Contains("Dani"));
+        Assert.Contains("left the group", row.TextContent, StringComparison.Ordinal);
+
+        var ana = editor.FindAll(".gs-row").Single(candidate => candidate.TextContent.Contains("Ana Benitez"));
+        Assert.DoesNotContain("left the group", ana.TextContent, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task By_hand_a_leavers_share_is_shown_fixed_and_counted()
     {

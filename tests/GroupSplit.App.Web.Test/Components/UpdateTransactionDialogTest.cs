@@ -129,6 +129,55 @@ public class UpdateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// An expense paid for by somebody who has since left names them as its payer, marked as
+    /// gone. They are not one of the group's members, which is where the picker used to look,
+    /// so the chip read "paid by" and nothing else.
+    /// </summary>
+    [Fact]
+    public async Task A_payer_who_has_left_is_named_and_marked_as_gone()
+    {
+        var transactionId = Guid.NewGuid();
+        var gone = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 60m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = GroupId,
+                PaidByUserId = gone,
+                PaidByUserName = "Sofia Kovacs",
+                Splits =
+                [
+                    new TransactionSplitResponse(MeId, "Ana Benitez", 30m),
+                    new TransactionSplitResponse(gone, "Sofia Kovacs", 30m)
+                ]
+            });
+
+        var (provider, _) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 60m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = gone,
+            PaidByUserName = "Sofia Kovacs"
+        });
+
+        provider.WaitForAssertion(() =>
+        {
+            var chip = provider.FindAll("button.gs-expense-chip")
+                .Single(candidate => candidate.GetAttribute("aria-label")!.StartsWith("payer:", StringComparison.Ordinal));
+
+            Assert.Contains("Sofia Kovacs (left the group)", chip.GetAttribute("aria-label"), StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
     /// An edit with a field the API will refuse does not close the dialog.
     /// </summary>
     /// <remarks>
