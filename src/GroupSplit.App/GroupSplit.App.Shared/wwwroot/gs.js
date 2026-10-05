@@ -22,7 +22,22 @@
         // Storage can be blocked; the system preference is a fine answer.
     }
 
-    root.dataset.theme = resolve(stored) ? "dark" : "light";
+    // What this file has put on <html>, kept so reapply() can put it back.
+    // Every write to either attribute goes through stamp() or markReady().
+    let theme = resolve(stored) ? "dark" : "light";
+    let ready = false;
+
+    function stamp(isDark) {
+        theme = isDark ? "dark" : "light";
+        root.dataset.theme = theme;
+    }
+
+    function markReady() {
+        ready = true;
+        root.setAttribute("data-gs-ready", "");
+    }
+
+    stamp(theme === "dark");
 
     // --------------------------------------------------------- counters --
 
@@ -235,7 +250,7 @@
         if (seg) {
             const mode = seg.dataset.mode;
             write(storageKey, mode);
-            root.dataset.theme = resolve(mode) ? "dark" : "light";
+            stamp(resolve(mode));
             const group = seg.closest(".gs-seg");
             const buttons = [...group.querySelectorAll(".gs-seg-btn")];
             buttons.forEach(b => b.classList.toggle("active", b === seg));
@@ -260,13 +275,25 @@
 
     window.gs = {
         setTheme(isDark) {
-            root.dataset.theme = isDark ? "dark" : "light";
+            stamp(isDark);
         },
 
         // Called once Blazor has rendered interactively: hands the chrome over
         // and hides the boot indicator.
         ready() {
-            root.setAttribute("data-gs-ready", "");
+            markReady();
+        },
+
+        // Called by GroupSplit.App.Shared.lib.module.js after every enhanced
+        // page update. Enhanced navigation rewrites <html> to match the
+        // server's copy of the next page and removes any attribute that copy
+        // does not have; the server's <html> has neither of these, so without
+        // this a link followed before the runtime takes over dropped the page
+        // to the light palette and brought the boot bar back, with rows and
+        // chips muted under it.
+        reapply() {
+            if (root.dataset.theme !== theme) root.dataset.theme = theme;
+            if (ready && !root.hasAttribute("data-gs-ready")) root.setAttribute("data-gs-ready", "");
         },
 
         rail() {
