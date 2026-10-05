@@ -22,8 +22,8 @@
         // Storage can be blocked; the system preference is a fine answer.
     }
 
-    // What this file has put on <html>, kept so it can be put back. Every write
-    // to either attribute goes through stamp() or markReady() below.
+    // What this file has put on <html>, kept so reapply() can put it back.
+    // Every write to either attribute goes through stamp() or markReady().
     let theme = resolve(stored) ? "dark" : "light";
     let ready = false;
 
@@ -38,18 +38,6 @@
     }
 
     stamp(theme === "dark");
-
-    // Enhanced navigation rewrites <html> to match the server's copy of the
-    // next page, and removes any attribute that copy does not have. The
-    // server's <html> has neither of these, so a link followed before the
-    // runtime takes over -- or any other enhanced load -- drops the page to
-    // the light palette and brings the boot bar back, with rows and chips
-    // muted under it. Putting them back here runs before the next paint, so
-    // neither frame is ever seen.
-    new MutationObserver(function () {
-        if (root.dataset.theme !== theme) root.dataset.theme = theme;
-        if (ready && !root.hasAttribute("data-gs-ready")) root.setAttribute("data-gs-ready", "");
-    }).observe(root, { attributes: true, attributeFilter: ["data-theme", "data-gs-ready"] });
 
     // --------------------------------------------------------- counters --
 
@@ -294,6 +282,18 @@
         // and hides the boot indicator.
         ready() {
             markReady();
+        },
+
+        // Called by GroupSplit.App.Shared.lib.module.js after every enhanced
+        // page update. Enhanced navigation rewrites <html> to match the
+        // server's copy of the next page and removes any attribute that copy
+        // does not have; the server's <html> has neither of these, so without
+        // this a link followed before the runtime takes over dropped the page
+        // to the light palette and brought the boot bar back, with rows and
+        // chips muted under it.
+        reapply() {
+            if (root.dataset.theme !== theme) root.dataset.theme = theme;
+            if (ready && !root.hasAttribute("data-gs-ready")) root.setAttribute("data-gs-ready", "");
         },
 
         rail() {
