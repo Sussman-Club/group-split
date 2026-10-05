@@ -46,8 +46,15 @@ public class SplitRule : Entity
     /// money on expenses recorded under a division nobody chose. <see cref="SplitRule"/> only
     /// records the fact; <c>SplitRuleService</c> is what refuses.
     /// </para>
+    /// <para>
+    /// Settable for one reason, and written in one place. When a guest is claimed by
+    /// somebody who already has a rule of their own, the guest's rule is retired: deleted if
+    /// nothing was divided by it, and otherwise kept for that history and handed back to the
+    /// group as an ordinary rule, which is this flag going false.
+    /// <c>IMemberSplitRules.HandOver</c> is that place.
+    /// </para>
     /// </remarks>
-    public bool BuiltIn { get; init; }
+    public bool BuiltIn { get; set; }
 
     /// <summary>
     /// Every division this rule has stood for, newest last. Exactly one of them has no

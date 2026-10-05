@@ -90,6 +90,10 @@ public abstract class ComponentTest : BunitContext
         // this one, which is the point of the policy being a registration at all.
         Services.AddSingleton<IRemainderPolicy, LargestShareRemainderPolicy>();
 
+        // Asked before every delete whether somebody on it has left the group. Nobody has,
+        // unless a test about that says so by registering its own.
+        Services.AddSingleton(Mock.Of<IDepartedDeleteGuard>());
+
         // Two dialogs say where an expense's shares came from, and the reader that answers
         // that joins a category to a rule to a version. Registered here, with clients that
         // answer "nothing", so a test about something else does not have to stand up three

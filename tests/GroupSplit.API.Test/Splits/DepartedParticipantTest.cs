@@ -94,7 +94,7 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
         var user = await DbContext.Set<Data.Entities.User>()
             .FirstAsync(candidate => candidate.Id == userId, Ct);
 
-        await Groups.DetachMember(group, user, Ct);
+        await Groups.DetachMember(group, user, Data.Entities.LeftReason.AccountDeleted, user.Id, Ct);
         await DbContext.SaveChangesAsync(Ct);
     }
 
@@ -112,8 +112,59 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     /// The reproduction: a group of two on a one-to-one rule, the second member settles and
     /// goes, and the old expense is divided again.
     /// </summary>
+    /// <remarks>
+    /// This used to succeed, handing the leaver's 100 to the person still here and leaving
+    /// the leaver owed 100 that nobody on the page owed back. It is refused now, by name, and
+    /// nothing moves.
+    /// </remarks>
     [Fact]
-    public async Task Re_dividing_an_old_expense_gives_a_member_who_has_left_nothing()
+    public async Task A_new_amount_on_an_expense_a_leaver_paid_is_refused_by_their_name()
+    {
+        var (groupId, other) = await GroupOfTwo();
+        var categoryId = await CreateCategory(groupId, "Rent", Shares((Self, 1), (other, 1)));
+
+        // Paid by the member who is about to leave.
+        var expense = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Dinner",
+            Amount = 100.00m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId,
+            CategoryId = categoryId,
+            PaidByUserId = other
+        }, Ct);
+
+        await Departs(groupId, other);
+
+        // What the edit dialog sends: the new amount, with the shares as they stood. They no
+        // longer add up, but that is not the reason -- the leaver's part is the amount itself.
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => Transactions.Update(expense.Id,
+            new UpdateTransactionRequest
+            {
+                Name = "Dinner",
+                Amount = 120.00m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserId = other,
+                GroupId = groupId,
+                CategoryId = categoryId,
+                Splits =
+                [
+                    new SplitInput { UserId = Self, Amount = 50.00m },
+                    new SplitInput { UserId = other, Amount = 50.00m }
+                ]
+            }, Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.TransactionMovesDepartedBalance, refused.Code);
+        Assert.Equal([other], Assert.IsAssignableFrom<IReadOnlyList<Guid>>(refused.Extensions["userIds"]));
+
+        DbContext.ChangeTracker.Clear();
+
+        Assert.Equal(100.00m, (await DbContext.Set<Expense>().AsNoTracking()
+            .FirstAsync(candidate => candidate.Id == expense.Id, Ct)).Amount);
+    }
+
+    [Fact]
+    public async Task Re_dividing_an_old_expense_a_member_who_has_left_shared_is_refused()
     {
         var (groupId, other) = await GroupOfTwo();
         var categoryId = await CreateCategory(groupId, "Rent", Shares((Self, 1), (other, 1)));
@@ -124,54 +175,50 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
 
         await Departs(groupId, other);
 
-        await Redivide(expense.Id, groupId, categoryId, 300.00m);
+        var refused = await Assert.ThrowsAsync<ConflictException>(() =>
+            Redivide(expense.Id, groupId, categoryId, 300.00m).AsTask());
+
+        Assert.Equal(ErrorCodes.TransactionMovesDepartedBalance, refused.Code);
+        Assert.Equal([other], Assert.IsAssignableFrom<IReadOnlyList<Guid>>(refused.Extensions["userIds"]));
+
+        DbContext.ChangeTracker.Clear();
 
         var splits = await SplitsOf(expense.Id);
 
-        // The version this expense holds is superseded and still names them -- that is what
-        // makes it readable at all -- but the division is between the people who are here.
-        Assert.DoesNotContain(splits, split => split.UserId == other);
-        Assert.Equal(300.00m, Assert.Single(splits).Amount);
-        Assert.Equal(Self, splits[0].UserId);
+        Assert.Equal(100.00m, splits.Single(split => split.UserId == other).Amount);
+        Assert.Equal(200.00m, splits.Sum(split => split.Amount));
     }
 
     /// <summary>
-    /// And every share the re-divided expense holds belongs to somebody the group's
-    /// balances list.
+    /// Once somebody has gone, a new expense filed under the same category divides between
+    /// the people who are here: the pruned version names only them, so every share belongs
+    /// to somebody the group's balances list.
     /// </summary>
     /// <remarks>
-    /// The property underneath "the balances sum to zero", and the one that survives a
-    /// departure. A group's column adds up because every share belongs to a name on the page
-    /// -- <c>GroupService.NetBalances</c> says so where it chooses participants over members
-    /// -- and a division paying somebody who has gone puts a share outside the listing
-    /// entirely, which is the shape the column comes apart in.
-    /// <para>
-    /// Zero itself is not assertable here, and not because of this: a member who settles and
-    /// leaves keeps the transactions they paid for, so re-dividing an expense they held a
-    /// share of moves their position whichever way it is divided -- to nothing, with this,
-    /// and to a different number without it. The invariant that can be held is the one
-    /// checked below, and the tests that do assert zero are the ones where nobody has left.
-    /// </para>
+    /// The property underneath "the balances sum to zero". It used to be checked on an old
+    /// expense divided again, with a remark that zero itself could not be asserted after a
+    /// departure, because dividing again moved the leaver's position. Nothing can move it
+    /// now, so zero is asserted here as it is everywhere else.
     /// </remarks>
     [Fact]
-    public async Task Every_share_of_a_re_divided_expense_belongs_to_somebody_the_group_lists()
+    public async Task Every_share_of_an_expense_after_a_departure_belongs_to_somebody_the_group_lists()
     {
         var (groupId, other) = await GroupOfTwo();
         var categoryId = await CreateCategory(groupId, "Rent", Shares((Self, 1), (other, 1)));
 
-        var expense = await AnExpense(groupId, categoryId, 200.00m);
+        await AnExpense(groupId, categoryId, 200.00m);
 
         await AssertBalancesSumToZero(groupId);
 
         await Departs(groupId, other);
 
-        await Redivide(expense.Id, groupId, categoryId, 300.00m);
+        var later = await AnExpense(groupId, categoryId, 300.00m);
 
         var listed = (await Balances(groupId)).Select(balance => balance.UserId).ToHashSet();
 
         Assert.DoesNotContain(other, listed);
 
-        var splits = await SplitsOf(expense.Id);
+        var splits = await SplitsOf(later.Id);
 
         Assert.All(splits, split => Assert.Contains(split.UserId, listed));
         Assert.Equal(300.00m, splits.Sum(split => split.Amount));
@@ -232,18 +279,12 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     }
 
     /// <summary>
-    /// A rule that puts the whole amount on somebody has no weight to prune and nobody to
-    /// prune it among, so it follows them to whoever takes over their position -- which is
-    /// what the hand-over has just done with their shares and the expenses they were down as
-    /// having paid for.
+    /// A rule that puts the whole amount on a guest follows them to whoever claims them --
+    /// which is what the claim has just done with their shares and the expenses they were
+    /// down as having paid for.
     /// </summary>
-    /// <remarks>
-    /// It also has to: closing an invitation deletes the stand-in it was holding, and a rule
-    /// still naming that row is a foreign key the delete cannot get past. That is the
-    /// difference from a member leaving, whose account is anonymised rather than erased.
-    /// </remarks>
     [Fact]
-    public async Task A_rule_naming_an_invitee_who_never_joins_names_whoever_absorbs_them()
+    public async Task A_rule_naming_a_guest_names_whoever_claims_them()
     {
         var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
 
@@ -257,15 +298,14 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
             Definition = new SoleSplitRuleDto(invitation.ParticipantUserId)
         }, Ct);
 
-        await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+        // Claimed by the member who made the link, who turns out to be Dani.
+        await Invitations.Claim(invitation.Token, Ct);
 
         var versions = await DbContext.Set<SplitRuleVersion>()
+            .AsNoTracking()
             .Where(version => version.SplitRuleId == rule.Id)
             .ToListAsync(Ct);
 
-        // Rewritten rather than superseded, which is the one place a version is: the row it
-        // named is deleted with the invitation, so a second version would leave the first
-        // pointing at nobody. The inviter absorbs them, being the only member there is.
         var only = Assert.IsType<SoleSplitRuleVersion>(Assert.Single(versions));
 
         Assert.Equal(Self, only.UserId);

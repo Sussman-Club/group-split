@@ -64,6 +64,10 @@
 
                 @* First, and a size up: what an edit is usually about is this figure, and
                    what it does to everybody's share is directly underneath. *@
+                @* Locked when whoever paid has left: what they paid is the amount, and they
+                   left square, so no new figure can leave their part as it was. Said here,
+                   beside the field, rather than after Save -- where it used to arrive as "the
+                   shares have to add up", which sent people looking at the wrong thing. *@
                 <MudNumericField @bind-Value="_model.Amount"
                                  @bind-Value:after="OnMoneyChangedAsync"
                                  For="@(() => _model.Amount)"
@@ -73,6 +77,8 @@
                                  AdornmentText="$"
                                  HideSpinButtons="true"
                                  Format="N2"
+                                 ReadOnly="@PayerHasLeft"
+                                 HelperText="@(PayerHasLeft ? $"{Original.PaidByUserName} paid this and has left the group, so the amount stays." : null)"
                                  Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
@@ -104,7 +110,7 @@
                                   CategoryId="@_model.CategoryId"
                                   CategoryIdChanged="@OnCategoryPickedAsync"
                                   ShowPayer="@IsShared"
-                                  Members="@_members"
+                                  Members="@PayerChoices"
                                   PayerId="@_model.PaidByUserId"
                                   PayerIdChanged="@OnPayerPickedAsync"
                                   Date="@_selectedDate"
@@ -150,6 +156,7 @@
                                      Amount="@_model.Amount"
                                      PayerId="@_model.PaidByUserId"
                                      Stored="@_storedSplits"
+                                     Leavers="@Leavers"
                                      Before="@_storedSplits"
                                      Value="@_model.Splits"
                                      ValueChanged="@OnSplitsChangedAsync"
@@ -344,6 +351,18 @@
     /// </summary>
     private IReadOnlyList<SplitInput> _storedSplits = [];
 
+    /// <summary>The stored shares with their names, so the leavers among them can be shown.</summary>
+    private IReadOnlyList<TransactionSplitResponse> _storedRows = [];
+
+    /// <summary>
+    /// Shares held by people no longer in the group. Worked out on read rather than stored,
+    /// because the shares and the members arrive separately and either may come second.
+    /// </summary>
+    private IReadOnlyList<TransactionSplitResponse> Leavers =>
+        _members.Count == 0
+            ? []
+            : [.. _storedRows.Where(row => _members.All(member => member.Id != row.UserId))];
+
     /// <summary>
     /// Whether the person has asked for the division to be worked out again, which is what
     /// choosing "Automatically" means on an expense that already has shares.
@@ -377,7 +396,35 @@
         _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "uncategorized";
 
     private string PayerName =>
-        _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
+        PayerChoices.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
+
+    /// <summary>
+    /// Who the payer picker offers: the group's members and guests, and -- on an expense
+    /// paid for by somebody who has since left -- that person too, marked as gone.
+    /// </summary>
+    /// <remarks>
+    /// Without them the picker could not name who actually paid: the chip read "paid by"
+    /// with nothing after it and the box stood empty, on exactly the expenses where who
+    /// paid is the thing that cannot change. Offered only while the expense is still in
+    /// the group it was paid in; a move picks a payer from the new group's members.
+    /// </remarks>
+    /// <summary>
+    /// Whether the person who paid has left the group the expense is in. Known once the
+    /// group's people have loaded: a payer missing from them, on an expense still in its
+    /// own group, is somebody who has gone.
+    /// </summary>
+    private bool PayerHasLeft =>
+        _members.Count > 0 &&
+        Original.GroupId is not null &&
+        _model.GroupId == Original.GroupId &&
+        _members.All(member => member.Id != Original.PaidByUserId);
+
+    private IReadOnlyList<UserInfo> PayerChoices =>
+        _members.Count == 0 ||
+        _model.GroupId != Original.GroupId ||
+        _members.Any(member => member.Id == Original.PaidByUserId)
+            ? _members
+            : [.. _members, new UserInfo(Original.PaidByUserId, Original.PaidByUserName, null, null, IsPastMember: true)];
 
     /// <summary>
     /// What the merchant chip shows.
@@ -518,6 +565,7 @@
 
             _storedSplits = [.. details.Splits.Select(split =>
                 new SplitInput { UserId = split.UserId, Amount = split.Amount })];
+            _storedRows = [.. details.Splits];
 
             // Which side the split control opens on, and it is a question only the API can
             // answer: the amounts alone do not say who decided them. A rule version means a
@@ -743,6 +791,7 @@
         // Belongs to the group this is leaving, and the API refuses one from anywhere else.
         _model.SplitRuleId = null;
         _storedSplits = [];
+        _storedRows = [];
 
         // Nothing to put back: the shares it opened with name the old group's members, and
         // the endpoint drops them on a move.

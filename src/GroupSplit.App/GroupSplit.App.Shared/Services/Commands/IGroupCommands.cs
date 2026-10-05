@@ -31,13 +31,32 @@ public interface IGroupCommands
         CancellationToken ct = default);
 
     /// <summary>
-    /// Names people the group is sharing costs with, minting a link for each. Nobody is a
-    /// member until somebody claims their link.
+    /// Adds people the group is sharing costs with as guests, by name. Nobody is sent
+    /// anything: a guest has no link until a member issues one with
+    /// <see cref="IssueGuestLinkAsync"/>.
     /// </summary>
-    Task<bool> InviteAsync(Guid groupId, string groupName, InviteToGroupRequest request,
+    Task<bool> AddGuestsAsync(Guid groupId, string groupName, AddGuestsRequest request,
         CancellationToken ct = default);
 
-    Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string name,
+    /// <summary>
+    /// The guest with a link to take their place. Without <paramref name="replace"/> it is
+    /// the link already out, if there is one -- so "send link" and "copy link" are the same
+    /// call -- and with it a new one, which stops the old one working. Null when it did not
+    /// go through.
+    /// </summary>
+    /// <remarks>
+    /// Says nothing on success. Issuing a link is always the first half of copying it, and
+    /// the component that copies is the one that knows whether the clipboard took it, so
+    /// the sentence afterwards is its to say.
+    /// </remarks>
+    Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid groupId, Guid guestUserId, bool replace,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Stops a guest's link working. The guest stays, with everything recorded for them; a
+    /// new link can be sent whenever somebody likes.
+    /// </summary>
+    Task<bool> RevokeGuestLinkAsync(Guid groupId, Guid guestUserId, string name,
         CancellationToken ct = default);
 
     /// <summary>
@@ -56,6 +75,10 @@ public interface IGroupCommands
     /// </summary>
     Task<JoinedGroupResponse?> JoinByLinkAsync(string token, CancellationToken ct = default);
 
+    /// <summary>
+    /// Takes a member or a guest out of the group. Either has to be square first; a refusal
+    /// for that says who owes what, from the balance the API sends back with it.
+    /// </summary>
     Task<bool> RemoveMemberAsync(Guid groupId, Guid memberUserId, string memberName,
         CancellationToken ct = default);
 
@@ -73,6 +96,14 @@ public interface IGroupCommands
         CancellationToken ct = default);
 
     /// <summary>
+    /// Records a repayment between two people, neither of whom has to be the caller. How a
+    /// member writes down what two guests squared up between themselves: neither of them can
+    /// sign in to say so. The names are only for the message that follows.
+    /// </summary>
+    Task<bool> RecordRepaymentAsync(Guid groupId, RecordRepaymentRequest request, string fromName,
+        string toName, CancellationToken ct = default);
+
+    /// <summary>
     /// Records every repayment between the caller and the rest of a group at once. Null when
     /// it did not go through, so the caller can leave its dialog open.
     /// </summary>
@@ -80,15 +111,15 @@ public interface IGroupCommands
         CancellationToken ct = default);
 
     /// <summary>
-    /// Claims a personal invitation link: joins the group as the person it names, taking on
-    /// whatever the group had recorded against that name.
+    /// Claims a guest's link: joins the group in the guest's place, taking on whatever the
+    /// group had recorded for them.
     /// </summary>
     Task<InvitationClaimedResponse?> ClaimInvitationAsync(string token,
         CancellationToken ct = default);
 
     /// <summary>
-    /// Turns one down. What was recorded against the name goes to a member of the group; the
-    /// answer says whose it is now.
+    /// Says a guest's link is not for whoever opened it. Only the link stops: the guest
+    /// stays in the group exactly as they were, and nothing recorded for them moves.
     /// </summary>
     Task<bool> DeclineInvitationAsync(string token, string groupName,
         CancellationToken ct = default);

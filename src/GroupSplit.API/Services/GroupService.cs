@@ -24,7 +24,7 @@ public record GroupMemberBalance(
     string UserName,
     decimal AmountPaid,
     decimal AmountOwed,
-    bool IsPendingInvitee = false)
+    bool IsGuest = false)
 {
     public decimal Balance => AmountPaid - AmountOwed;
 }
@@ -52,38 +52,47 @@ public interface IGroupService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Everybody a group can point at: its members, and the people it has invited and is
-    /// still waiting on.
+    /// Everybody a group can point at: its members, and its guests.
     /// </summary>
     /// <remarks>
     /// Wider than the name suggests, on purpose, because this is what every screen that
-    /// offers a choice of person reads -- a payer, a share, a rule's participants -- and an
-    /// invitee is choosable in all three. Which of them has actually joined is on the rows:
-    /// <see cref="UserInfo.IsPendingInvitee"/>. Nothing here decides who may read or change
-    /// the group; that is membership, and it is asked of <c>Group.Users</c> alone.
+    /// offers a choice of person reads -- a payer, a share, a rule's participants -- and a
+    /// guest is choosable in all three. Which of them is a guest is on the rows:
+    /// <see cref="UserInfo.IsGuest"/>. Nothing here decides who may read or change the group;
+    /// that is membership, and it is asked of <c>Group.Users</c> alone.
     /// </remarks>
     Task<IQueryable<User>> GetGroupMembers(Guid groupId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// People who are no longer members but still appear in the group's recorded history.
+    /// People who are no longer members or guests but still appear in the group's recorded
+    /// history: members who left or were removed, and removed guests.
     /// </summary>
     /// <remarks>
-    /// Membership rows are removed when somebody leaves. The ledger is the durable history,
-    /// so this is a read-only context list and never a participant list for new money.
+    /// Read from the ledger rather than from closed membership rows: departures from before
+    /// those rows were kept left nothing else behind, and somebody the ledger does not name
+    /// has nothing on the page to explain. A read-only context list, never a participant
+    /// list for new money.
     /// </remarks>
     Task<IQueryable<User>> GetGroupPastMembers(Guid groupId, CancellationToken cancellationToken = default);
 
 
 
     /// <summary>
-    /// Removes a member from a group by ID and user ID
+    /// Removes a member or a guest from a group, once they are square with it. A member's
+    /// membership is closed; a guest stops being one. Either way they stay in the group's
+    /// history as somebody who has gone.
     /// </summary>
     Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Drops <paramref name="user"/> from <paramref name="group"/> and out of the split
-    /// rules that name them, so later expenses stop giving a share to somebody who has
-    /// left.
+    /// Ends <paramref name="user"/>'s membership of <paramref name="group"/> and takes them
+    /// out of the split rules that name them, so later expenses stop giving a share to
+    /// somebody who has left.
+    /// <para>
+    /// The membership row is closed rather than deleted: <paramref name="reason"/> and
+    /// <paramref name="byUserId"/> are written onto it with the moment, which is what lets a
+    /// link shared while they were still in the group be refused to them afterwards.
+    /// </para>
     /// <para>
     /// Deliberately does not save. Callers batch it with their own changes, which is what
     /// lets an account leaving several groups at once apply as one unit instead of
@@ -92,7 +101,8 @@ public interface IGroupService
     /// ask it of every group up front.
     /// </para>
     /// </summary>
-    Task DetachMember(Group group, User user, CancellationToken cancellationToken = default);
+    Task DetachMember(Group group, User user, LeftReason reason, Guid? byUserId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Everything that has happened in a group -- what it spent and who has paid whom --
@@ -193,7 +203,8 @@ public class GroupService(
     ISplitRuleRevisions revisions,
     IMemberSplitRules memberRules,
     IBillSplitRule billRule,
-    IEvenSplitRule evenRule) : IGroupService
+    IEvenSplitRule evenRule,
+    IJoinLinkService joinLinks) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -347,8 +358,17 @@ public class GroupService(
         return from user in context.Set<User>()
                where mine.Any(candidate => candidate.Id == groupId) &&
                      !user.Groups.Any(candidate => candidate.Id == groupId) &&
-                     !context.Set<GroupInvitation>().Any(invitation =>
-                         invitation.GroupId == groupId && invitation.ParticipantUserId == user.Id) &&
+                     // A current guest is a participant, not history -- and a removed one,
+                     // filtered out of this, is history.
+                     !context.Set<GroupGuest>().Any(guest =>
+                         guest.GroupId == groupId && guest.ParticipantUserId == user.Id) &&
+                     // A claimed guest's stand-in is nobody: the person is a member under
+                     // their own account, and an old rule version naming the stand-in is not
+                     // a reason to list them twice. Asked of the history rather than with the
+                     // guest filter off, which would turn it off for the whole query.
+                     !context.Set<GroupMembershipEvent>().Any(change =>
+                         change.GroupId == groupId && change.UserId == user.Id &&
+                         change.Kind == MembershipEventKind.GuestClaimed) &&
                      (context.Set<Transaction>().Any(transaction =>
                           transaction.GroupId == groupId && transaction.UserId == user.Id) ||
                       context.Set<TransactionSplit>().Any(split =>
@@ -374,34 +394,52 @@ public class GroupService(
         if (group is null)
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
-        // Before the balance check below: "the group is archived" is the more useful thing
-        // to hear, and it is the one the person can act on.
-        var user = await context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        // Who they are to this group decides what there is to remove: a member's membership,
+        // or a guest's place. Anybody else -- somebody who has already gone, or was never
+        // here -- has nothing to remove, and this used to answer them with a success that
+        // changed nothing.
+        var standing = await participants.StandingOf(groupId, userId, cancellationToken);
 
-        if (user is null)
-            throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
+        if (standing is ParticipantStanding.Departed or ParticipantStanding.Stranger)
+            throw new NotFoundException(ErrorCodes.UserNotFound,
+                "That person is not a member or guest of this group.");
 
-        // The members list now shows the people the group is waiting on too, so this can be
-        // asked of one of them. They are not a member and there is nothing to remove:
-        // withdrawing the invitation is the act, and it says what becomes of anything
-        // recorded against them.
-        if (await participants.IsPendingInvitee(groupId, userId, cancellationToken))
-            throw new ConflictException(ErrorCodes.GroupMemberNotJoined,
-                "That person has been invited and has not joined, so there is no membership to " +
-                "remove. Withdraw the invitation instead.");
-
+        // The same rule for both: square first. Somebody who goes while owing or owed takes
+        // that with them, and the group's balances would no longer add up among the people
+        // still in it. For a guest the members record the repayment that squares them.
         var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
         var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
             .Select(x => x.Balance)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (userBalance is not 0)
-            throw new ConflictException(ErrorCodes.GroupMemberNotSettled, "The member has to settle up before leaving the group.")
+            throw new ConflictException(ErrorCodes.GroupMemberNotSettled,
+                    standing is ParticipantStanding.Guest
+                        ? "That guest has to be square with the group before they can be removed. Record what they paid or were paid back first."
+                        : "The member has to settle up before leaving the group.")
                 .WithExtension("balance", userBalance);
 
-        await DetachMember(group, user, cancellationToken);
+        if (standing is ParticipantStanding.Guest)
+        {
+            await DetachGuest(group, userId, currentUser.Id, cancellationToken);
 
-        await context.SaveChangesAsync(cancellationToken);
+            // The group's join link stays: a guest never had a way to read it.
+            return groupQuery;
+        }
+
+        var user = await context.Set<User>().FirstAsync(u => u.Id == userId, cancellationToken);
+
+        await DetachMember(group, user, LeftReason.Removed, currentUser.Id, cancellationToken);
+
+        // And the group's live join link goes out with them. They could read it while they
+        // were a member and may have passed it on; the rejoin rule stops them using it, but
+        // not whoever they gave it to. Leaving does not do this: the link is the group's,
+        // sitting in its thread for other people, and leaving expresses no distrust.
+        //
+        // Revoke saves, which is what writes the departure too: one round trip, so a removal
+        // cannot land without its revocation or the other way round.
+        await joinLinks.Revoke(groupId, cancellationToken);
+
         return groupQuery;
     }
 
@@ -427,15 +465,62 @@ public class GroupService(
     /// anybody owed.
     /// </para>
     /// </remarks>
-    public async Task DetachMember(Group group, User user, CancellationToken cancellationToken = default)
+    public async Task DetachMember(Group group, User user, LeftReason reason, Guid? byUserId,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(user);
 
-        group.Users.Remove(user);
+        // The row, not the collection: removing them from group.Users would delete it, and a
+        // departure is something the group has to remember. The filter hides the closed row
+        // from every read of Users and Groups from here on.
+        var membership = await context.Set<GroupMembership>()
+            .FirstAsync(row => row.GroupId == group.Id && row.UserId == user.Id, cancellationToken);
+
+        membership.LeftAt = DateTimeOffset.UtcNow;
+        membership.LeftReason = reason;
+        membership.LeftByUserId = byUserId;
 
         await revisions.WithoutParticipant(
             group.Id, user.Id, toUserId: null, RuleHandling.Prune, cancellationToken);
+    }
+
+    /// <summary>
+    /// Ends a guest's place in the group, keeps them in its history, and takes them out of the
+    /// rules that name them. Saves.
+    /// </summary>
+    /// <remarks>
+    /// The guest's row ends rather than going, the same choice a departure makes, and for the
+    /// same reasons: the ledger still names them, and the group should still be able to say
+    /// who they were. Once ended they read as departed everywhere a departed member does --
+    /// their shares cannot be moved, they cannot be named for new money, and they show among
+    /// the past participants. Their link stops working, and the rules stop naming them from
+    /// their next version on, exactly as for a member who leaves.
+    /// </remarks>
+    private async Task DetachGuest(Group group, Guid userId, Guid byUserId, CancellationToken ct)
+    {
+        var guest = await context.Set<GroupGuest>()
+            .FirstAsync(row => row.GroupId == group.Id && row.ParticipantUserId == userId, ct);
+
+        guest.EndedAt = DateTimeOffset.UtcNow;
+        guest.EndReason = GuestEndReason.Removed;
+        guest.EndedByUserId = byUserId;
+
+        await context.EndLink(guest, ct);
+
+        await revisions.WithoutParticipant(group.Id, userId, toUserId: null, RuleHandling.Prune, ct);
+
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Claimed, removed, or given a new link at the same moment: the guest is not what
+            // this decision was made about, so it is not made.
+            throw new ConflictException(ErrorCodes.GroupGuestChanged,
+                "Somebody else changed this guest at the same moment. Look again before removing them.");
+        }
     }
 
     public async Task<IQueryable<Transaction>> GetGroupActivity(Guid groupId,
@@ -490,8 +575,8 @@ public class GroupService(
         return from @group in groups
                from user in context.Set<User>()
                where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
-                     context.Set<GroupInvitation>().Any(invitation =>
-                         invitation.GroupId == @group.Id && invitation.ParticipantUserId == user.Id)
+                     context.Set<GroupGuest>().Any(guest =>
+                         guest.GroupId == @group.Id && guest.ParticipantUserId == user.Id)
                select new GroupMemberBalance(
                    @group.Id,
                    @group.Name,
@@ -518,15 +603,15 @@ public class GroupService(
     private IQueryable<GroupNetBalance> NetBalances(IQueryable<Group> groupQuery)
     {
         // Participants and not members, because the column has to add up. Shares are
-        // recorded against an invited address from the moment it is invited, so a listing of
-        // members alone would show a group whose balances did not sum to zero, with the
-        // missing side belonging to nobody on the page.
+        // recorded against guests like anybody else, so a listing of members alone would show
+        // a group whose balances did not sum to zero, with the missing side belonging to
+        // nobody on the page.
         var groupBalance =
                     from @group in groupQuery
                     from user in context.Set<User>()
                     where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
-                          context.Set<GroupInvitation>().Any(invitation =>
-                              invitation.GroupId == @group.Id && invitation.ParticipantUserId == user.Id)
+                          context.Set<GroupGuest>().Any(guest =>
+                              guest.GroupId == @group.Id && guest.ParticipantUserId == user.Id)
                     select new GroupNetBalance
                     {
                         UserId = user.Id,
@@ -543,7 +628,7 @@ public class GroupService(
                         AmountOwed = (from split in context.Set<TransactionSplit>()
                                       where split.Transaction.GroupId == @group.Id && split.User == user
                                       select split.Amount).Sum(),
-                        IsPendingInvitee = !user.Groups.Any(candidate => candidate.Id == @group.Id)
+                        IsGuest = !user.Groups.Any(candidate => candidate.Id == @group.Id)
                     } into balance
                     select new GroupNetBalance
                     {
@@ -552,7 +637,7 @@ public class GroupService(
                         AmountPaid = balance.AmountPaid,
                         AmountOwed = balance.AmountOwed,
                         Balance = balance.AmountPaid - balance.AmountOwed,
-                        IsPendingInvitee = balance.IsPendingInvitee
+                        IsGuest = balance.IsGuest
                     };
 
         return groupBalance;
@@ -563,33 +648,15 @@ public class GroupService(
     {
         var currentUser = userContext.User;
 
-        var groupQuery = from @group in await GetGroupById(groupId, cancellationToken)
-                         from groupUser in (from groupUser in @group.Users
-                                            where groupUser.Id == request.UserId
-                                            select groupUser).DefaultIfEmpty()
-                         select new
-                         {
-                             Group = @group,
-                             User = groupUser
-                         };
+        var resultGroup = await (await GetGroupById(groupId, cancellationToken))
+                              .FirstOrDefaultAsync(cancellationToken)
+                          ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
-        var result = await groupQuery.FirstOrDefaultAsync(cancellationToken);
-
-        if (result is not { Group: { } resultGroup, User: var user })
-            throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-
-        // Before the missing-member check below, which is what somebody the group has
-        // invited and is waiting on would otherwise fall into: they are not in Users, so the
-        // join above finds nothing for them. Their balance is real and is on the group's
-        // balances page, so "not found" would be a lie about a person the caller can see.
-        // What is missing is the other end of the payment.
-        if (await participants.IsPendingInvitee(groupId, request.UserId, cancellationToken))
-            throw new ConflictException(ErrorCodes.SettlementWithPendingInvitee,
-                "That person has been invited to the group and has not joined yet, so there is " +
-                "nobody to settle up with. Their balance stands until they accept.");
-
-        if (user is null)
-            throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
+        // A participant, not only a member: a guest's balance is real and is on the group's
+        // balances page, and the members record what a guest pays and is paid. Somebody who
+        // has gone is not here to settle with.
+        var user = await participants.Find(groupId, request.UserId, cancellationToken)
+                   ?? throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
 
         if (user.Id == currentUser.Id)
             throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
@@ -647,7 +714,7 @@ public class GroupService(
                     "Settle up before leaving the group.")
                 .WithExtension("balance", balance);
 
-        await DetachMember(group, user, cancellationToken);
+        await DetachMember(group, user, LeftReason.Left, user.Id, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
     }

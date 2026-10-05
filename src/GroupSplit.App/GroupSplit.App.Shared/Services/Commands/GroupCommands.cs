@@ -1,6 +1,7 @@
 using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
@@ -52,83 +53,61 @@ public sealed class GroupCommands(
         }, "Could not update the group.");
     }
 
-    public Task<bool> InviteAsync(Guid groupId, string groupName, InviteToGroupRequest request,
+    public Task<bool> AddGuestsAsync(Guid groupId, string groupName, AddGuestsRequest request,
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
-            await groups.InviteToGroupAsync(groupId, request, ct);
+            var added = await groups.AddGroupGuestsAsync(groupId, request, ct);
 
-            var count = request.Names.Count;
+            // What the API added, rather than what was typed: it is the answer to what
+            // happened, and the two only differ if the server had a reason to.
+            var names = added.Select(guest => guest.Name).ToList();
 
-            // "Added" would be the wrong word and the old one: nothing has been sent
-            // anywhere. The group has named somebody it can start splitting with, and the
-            // link that reaches them is on the members page for whenever they want it.
+            // "Added", and nothing about a link: nobody has been sent anything, and that is
+            // the point. The group can split with them from this moment; a link is a
+            // separate act on the People tab, for the few guests who will ever want one.
             snackbar.Add(
-                count == 1
-                    ? $"{request.Names[0]} added to {groupName}. Send them their link when you like."
-                    : $"{count} people added to {groupName}. Send each of them their link when you like.",
+                names.Count == 1
+                    ? $"{names[0]} added to {groupName} as a guest."
+                    : $"{names.Count} guests added to {groupName}.",
                 Severity.Success);
 
-            // Nobody has joined yet, so the membership has not moved -- but the group's
-            // pending list has, and that is read off the same announcement.
+            // The membership has not moved, but every screen that chooses a person has a
+            // new one to offer -- and those read off the same announcement.
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not send the invitation.");
+        }, "Could not add them.");
 
-    /// <summary>
-    /// Takes an invitation back, saying what became of anything the group had already
-    /// recorded against the person it named.
-    /// </summary>
-    /// <remarks>
-    /// The second message is the whole reason this reads the answer at all. An invited
-    /// person can be carrying shares -- that is what inviting somebody makes possible --
-    /// and those go to a member rather than disappearing, which is a change to that
-    /// member's balance and has to be said out loud rather than left to be noticed.
-    /// </remarks>
-    public Task<bool> WithdrawInvitationAsync(Guid groupId, Guid invitationId, string name,
+    public async Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid groupId, Guid guestUserId, bool replace,
+        CancellationToken ct = default)
+    {
+        GroupGuestResponse? guest = null;
+
+        var done = await errors.TryAsync(async () =>
+        {
+            guest = await groups.IssueGuestLinkAsync(groupId, guestUserId,
+                new IssueGuestLinkRequest { Replace = replace }, ct);
+
+            // Announced even when the link was already out and nothing changed: the People
+            // tab reads "link sent" off the guests listing, and a first link has to land
+            // there. A re-read that finds nothing new costs one request.
+            await changes.NotifyGroupsChangedAsync();
+        }, replace ? "Could not make a new link." : "Could not make a link.");
+
+        return done ? guest : null;
+    }
+
+    public Task<bool> RevokeGuestLinkAsync(Guid groupId, Guid guestUserId, string name,
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
-            var closed = await groups.WithdrawGroupInvitationAsync(groupId, invitationId, ct);
+            await groups.RevokeGuestLinkAsync(groupId, guestUserId, ct);
 
-            snackbar.Add($"Invitation to {name} withdrawn.", Severity.Success);
-
-            if (closed.MovedAnything && closed.AbsorbedByUserName is { } absorber)
-            {
-                snackbar.Add(
-                    $"What was recorded against {name} is now {absorber}'s: " +
-                    $"{closed.SharesMoved} share(s) and {closed.PaymentsMoved} payment(s). " +
-                    "No amounts changed.",
-                    Severity.Info);
-            }
-
-            WarnAboutEmptiedRules(closed);
+            // Both halves, because "stop link" next to "remove" could be read as the gentler
+            // of two ways to take somebody out. It is not that: they are still a guest.
+            snackbar.Add($"{name}'s link no longer works. {name} is still a guest.", Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not withdraw the invitation.");
-
-    /// <summary>
-    /// Says so when answering an invitation left a split rule naming nobody.
-    /// </summary>
-    /// <remarks>
-    /// A warning and not a receipt. A rule with nobody left in it has changed what it means
-    /// -- a shares or percentage rule refuses the next expense filed under it, an even one
-    /// starts dividing between everybody -- and this is the moment somebody can still be
-    /// told, rather than whoever records the next expense finding out on their behalf.
-    /// </remarks>
-    private void WarnAboutEmptiedRules(InvitationClosedResponse closed)
-    {
-        if (closed.RulesEmptied == 0)
-            return;
-
-        snackbar.Add(
-            closed.RulesEmptied == 1
-                ? "One split rule now names nobody. Check it before the next expense: an even " +
-                  "rule like that divides between everybody, and any other kind will refuse."
-                : $"{closed.RulesEmptied} split rules now name nobody. Check them before the " +
-                  "next expense: an even rule like that divides between everybody, and any " +
-                  "other kind will refuse.",
-            Severity.Warning);
-    }
+        }, "Could not stop the link.");
 
     public async Task<GroupJoinLinkResponse?> CreateJoinLinkAsync(Guid groupId, string groupName,
         CancellationToken ct = default)
@@ -180,14 +159,38 @@ public sealed class GroupCommands(
         return done ? joined : null;
     }
 
-    public Task<bool> RemoveMemberAsync(Guid groupId, Guid memberUserId, string memberName,
-        CancellationToken ct = default) =>
-        errors.TryAsync(async () =>
+    /// <remarks>
+    /// Captured rather than tried, for the one refusal worth rewording. "Not settled" is the
+    /// same code for leaving and for removing, so the table's sentence can only state the
+    /// rule; here the person is named and the refusal carries their balance, which turns it
+    /// into the thing to do next -- for a guest, a repayment a member has to record.
+    /// </remarks>
+    public async Task<bool> RemoveMemberAsync(Guid groupId, Guid memberUserId, string memberName,
+        CancellationToken ct = default)
+    {
+        var error = await errors.CaptureAsync(async () =>
         {
             await groups.RemoveGroupMemberAsync(groupId, memberUserId, ct);
             snackbar.Add($"{memberName} removed from the group.", Severity.Success);
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not remove the member.");
+        });
+
+        if (error is null)
+            return true;
+
+        if (error.Code == ErrorCodes.GroupMemberNotSettled &&
+            error.Extension<decimal?>("balance") is { } balance and not 0m)
+        {
+            // Stays until dismissed, like every other refusal: it is the answer to what
+            // somebody just pressed, and it carries a figure they may want to go and check.
+            snackbar.Add($"Could not remove {memberName}. {ErrorMessages.NotSquare(memberName, balance)}",
+                Severity.Error);
+            return false;
+        }
+
+        await errors.ShowAsync(error, $"Could not remove {memberName}.");
+        return false;
+    }
 
     public Task<bool> LeaveAsync(Guid groupId, string groupName, CancellationToken ct = default) =>
         errors.TryAsync(async () =>
@@ -232,6 +235,20 @@ public sealed class GroupCommands(
             await changes.NotifyTransactionsChangedAsync();
         }, "Could not record the settlement.");
 
+    public Task<bool> RecordRepaymentAsync(Guid groupId, RecordRepaymentRequest request, string fromName,
+        string toName, CancellationToken ct = default) =>
+        errors.TryAsync(async () =>
+        {
+            await groups.RecordRepaymentAsync(groupId, request, ct);
+
+            // Both names, because the caller is on neither end: "you paid" would be wrong,
+            // and a receipt that left out who is the one somebody could not check.
+            snackbar.Add($"Recorded: {fromName} paid {toName} {request.Amount.ToMoney()}.", Severity.Success);
+
+            // A transfer like any other, so the same announcement settling makes.
+            await changes.NotifyTransactionsChangedAsync();
+        }, "Could not record the repayment.");
+
     public async Task<SettleUpResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
         CancellationToken ct = default)
     {
@@ -256,14 +273,14 @@ public sealed class GroupCommands(
     }
 
     /// <summary>
-    /// Claims a personal invitation: joins the group, as the person the group named.
+    /// Claims a guest's link: joins the group in the guest's place.
     /// </summary>
     /// <remarks>
     /// The second message is the whole reason this reads the answer. Claiming is not only
-    /// joining: whatever the group had recorded against that name -- shares, and anything
-    /// they were down as having paid for -- is the claimer's from this moment. No amount
-    /// changes, and their balance in the group does, so it is said rather than left to be
-    /// noticed on the next screen.
+    /// joining: whatever the group had recorded for that guest -- shares, and anything they
+    /// were down as having paid for -- is the claimer's from this moment. No amount changes,
+    /// and their balance in the group does, so it is said rather than left to be noticed on
+    /// the next screen.
     /// </remarks>
     public async Task<InvitationClaimedResponse?> ClaimInvitationAsync(string token,
         CancellationToken ct = default)
@@ -274,12 +291,12 @@ public sealed class GroupCommands(
         {
             claimed = await invitations.ClaimInvitationAsync(token, ct);
 
-            snackbar.Add($"You have joined {claimed.GroupName} as {claimed.Name}.", Severity.Success);
+            snackbar.Add(Joined(claimed), Severity.Success);
 
             if (claimed.SharesTaken > 0 || claimed.PaymentsTaken > 0)
             {
                 snackbar.Add(
-                    $"{claimed.SharesTaken} share(s) recorded against {claimed.Name} are yours now. " +
+                    $"{claimed.SharesTaken} share(s) recorded for {claimed.Name} are yours now. " +
                     "No amounts changed.",
                     Severity.Info);
             }
@@ -300,20 +317,46 @@ public sealed class GroupCommands(
             }
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not claim the invitation.");
+        }, "Could not join the group.");
 
         return done ? claimed : null;
     }
 
     /// <summary>
-    /// Turns an invitation down, saying so when the group had already been recording money
-    /// against the person it named.
+    /// The sentence a claim lands with, saying so when repayments disappeared in it.
     /// </summary>
     /// <remarks>
-    /// Whoever declines is entitled to know, even though it is not theirs to sort out: a
-    /// group that has been splitting the rent against that name for a fortnight has a
-    /// position in it, and "declined" alone would leave them wondering what happened to it.
-    /// It went to a member of the group, unchanged.
+    /// Repayments between the guest and the claimer would read as the claimer paying
+    /// themselves once the two are one person, so the API deletes them. Their balance is
+    /// what it was -- each pair netted to nothing for them -- but rows they may remember
+    /// recording have gone from the ledger, and that is said in the same breath as joining
+    /// rather than discovered later.
+    /// </remarks>
+    private static string Joined(InvitationClaimedResponse claimed)
+    {
+        var joined = $"You have joined {claimed.GroupName} as {claimed.Name}.";
+
+        return claimed.SettlementsCancelled switch
+        {
+            0 => joined,
+            1 => $"{joined} 1 repayment between you and {claimed.Name} cancelled out.",
+            var count => $"{joined} {count} repayments between you and {claimed.Name} cancelled out."
+        };
+    }
+
+    /// <summary>
+    /// Says a guest's link is not for whoever opened it.
+    /// </summary>
+    /// <remarks>
+    /// Whoever declines is entitled to know what became of the person the link was for, even
+    /// though it is not theirs to sort out: nothing. Only the link stops; the group still has
+    /// them as a guest, with everything recorded for them, and can send somebody else a new
+    /// link. It used to hand the guest's position to a member, which is why there was a
+    /// second sentence here and a warning about emptied rules; neither can happen now.
+    /// <para>
+    /// The names come from the answer rather than from the page, so the sentence is about
+    /// the guest the API actually closed the link on.
+    /// </para>
     /// </remarks>
     public Task<bool> DeclineInvitationAsync(string token, string groupName,
         CancellationToken ct = default) =>
@@ -321,18 +364,11 @@ public sealed class GroupCommands(
         {
             var closed = await invitations.DeclineInvitationAsync(token, ct);
 
-            snackbar.Add($"Invitation to {groupName} declined.", Severity.Success);
+            var group = string.IsNullOrWhiteSpace(closed.GroupName) ? groupName : closed.GroupName;
 
-            if (closed.MovedAnything && closed.AbsorbedByUserName is { } absorber)
-            {
-                snackbar.Add(
-                    $"{groupName} had recorded {closed.SharesMoved} share(s) against " +
-                    $"{closed.Name}. That is now {absorber}'s, with no amounts changed.",
-                    Severity.Info);
-            }
-
-            WarnAboutEmptiedRules(closed);
+            snackbar.Add($"{group} still has {closed.Name} as a guest. The link no longer works.",
+                Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not decline the invitation.");
+        }, "Could not turn the link down.");
 }

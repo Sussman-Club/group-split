@@ -8,6 +8,7 @@
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject ITransactionsClient TransactionsClient
+@inject IDepartedDeleteGuard DeleteGuard
 @inject ITransactionsPageStateService TransactionsService
 @inject IGroupsPageStateService GroupsService
 @inject IInboxStateService Inbox
@@ -879,6 +880,16 @@
 
     private async Task DeleteAsync(TransactionResponse row)
     {
+        // Somebody on it has left the group, so the server would refuse: say why instead of
+        // asking. See GroupLedgerTab, which does the same for a group's own list.
+        if (await DeleteGuard.FirstLeaverOnAsync(row.Id, row.GroupId) is { } leaver)
+        {
+            await DialogService.ShowDepartedNoticeAsync(
+                leaver, row.Kind is ActivityKind.Transfer ? "settlement" : "expense");
+
+            return;
+        }
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, $"Are you sure you want to delete \"{row.Name}\"?" },

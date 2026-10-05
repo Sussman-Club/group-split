@@ -1,8 +1,7 @@
-using System.Buffers.Text;
-using System.Security.Cryptography;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
@@ -11,87 +10,78 @@ using Npgsql;
 namespace GroupSplit.API.Services;
 
 /// <summary>
-/// Asking somebody to join a group, and their answer.
+/// A guest's link, from the side of whoever holds it: what it says, taking the guest over,
+/// and saying it is not for them. Plus the routes from when guests were invitations.
 /// </summary>
 /// <remarks>
-/// Adding a member used to be a write the group made about somebody else: an address was
-/// looked up, and if an account had it, that account was in the group from that moment --
-/// and if none had, the address was silently dropped and the person who typed it was told
-/// the member had been added. Both halves are wrong. Joining a group is something a person
-/// agrees to.
+/// A guest's link is heavier than a join link and is treated so. That one lets somebody in
+/// as themselves, claiming nothing; this one hands over a position in the group's ledger, so
+/// it is single use -- claiming clears it -- and it says nothing about the money before it is
+/// claimed.
 /// <para>
-/// It stopped being an address at all. Inviting somebody names them and mints a link, which
-/// the group sends however they actually talk to them; whoever opens that link and claims it
-/// becomes that person. An address was the handle, the display name and the invitee's own
-/// list all at once, and it limited a group to asking people whose email they happened to
-/// have.
-/// </para>
-/// <para>
-/// The link is heavier than a join link and is treated so. That one lets somebody in as
-/// themselves, claiming nothing; this one hands over a position in the group's ledger, so it
-/// is single use -- claiming removes the row the token lives on -- and it says nothing about
-/// the money before it is claimed.
+/// The group's side -- adding guests, issuing and stopping links -- is
+/// <see cref="IGuestService"/>. The group-side methods here are the routes that predate it,
+/// kept for one release so a client built before guests still works: inviting is adding with
+/// a link, the list is the guests with a link out, and withdrawing stops the link.
 /// </para>
 /// </remarks>
 public interface IInvitationService
 {
     /// <summary>
-    /// Invites each named person to a group the caller belongs to, minting a link for each.
+    /// Adds each named person as a guest and issues each a link. The route from before
+    /// guests; <see cref="IGuestService.Add"/> without links is the default now.
     /// </summary>
-    /// <returns>The group's pending invitations after the write, links included.</returns>
+    /// <returns>The group's guests that have a link out, after the write.</returns>
     Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId, InviteToGroupRequest request,
         CancellationToken ct = default);
 
-    /// <summary>Who a group is waiting on. Readable by its members.</summary>
+    /// <summary>The group's guests that have a link out, in the shape from before guests.</summary>
     Task<IReadOnlyList<GroupInvitationResponse>> ForGroup(Guid groupId, CancellationToken ct = default);
 
     /// <summary>
-    /// The invitations the caller has opened and not yet answered, newest first.
+    /// The links the caller has opened that still work, newest first.
     /// </summary>
     /// <remarks>
-    /// The invitee's own list. It used to be "every invitation sent to my address", and
-    /// there are no addresses any more -- so it is "every invitation whose link I have
-    /// opened" instead, which is what <see cref="Describe"/> writes down.
-    /// <para>
-    /// It carries the tokens, which is the point: this is the list somebody uses to get
-    /// back to a link they have already opened once and no longer have the message for.
-    /// Nothing is disclosed by it, since holding the token is what put the row there.
-    /// </para>
+    /// The holder's own list: "every link I have opened", which is what <see cref="Describe"/>
+    /// writes down. It carries the tokens, which is the point -- this is how somebody gets
+    /// back to a link they no longer have the message for -- and nothing is disclosed by it,
+    /// since holding the token is what put the row there.
     /// </remarks>
     Task<IReadOnlyList<GroupInvitationResponse>> Mine(CancellationToken ct = default);
 
     /// <summary>
     /// What the link says about itself, for the page somebody lands on after opening one.
-    /// Says nothing about what is recorded against the person; see
+    /// Says nothing about what is recorded against the guest; see
     /// <see cref="InvitationClaimResponse"/>.
     /// </summary>
     /// <remarks>
     /// Remembers that the caller has seen it, so <see cref="Mine"/> can offer it again. A
     /// read that writes, which is worth being uneasy about and is the right place all the
-    /// same: opening the link is exactly the event being recorded, and the alternative is a
-    /// second round trip from the one page that already knows.
+    /// same: opening the link is exactly the event being recorded.
     /// </remarks>
     Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default);
 
     /// <summary>
-    /// Claims one: the caller joins the group and becomes the person the invitation names.
+    /// Claims one: the caller joins the group and takes the guest's place.
     /// </summary>
     /// <remarks>
-    /// The one moment a position changes hands. Everything recorded against the stand-in --
-    /// its shares, and anything it was down as having paid for -- moves onto the caller's own
-    /// account, with no amount changed, and the invitation and the stand-in both go. So the
-    /// link works once: there is nothing left for a second holder of it to claim.
+    /// The one moment a position changes hands. Everything recorded against the guest -- their
+    /// shares, anything they were down as having paid for, their place in the rules -- moves
+    /// onto the caller's own account, with no amount changed. The guest ends, and the link
+    /// with it, so there is nothing left for a second holder to claim.
     /// </remarks>
     Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default);
 
     /// <summary>
-    /// Turns one down, on behalf of whoever holds the link. The row goes, the group may ask
-    /// again, and anything recorded against the person is handed to a member -- see
-    /// <see cref="InvitationClosedResponse"/>.
+    /// "This isn't me", from whoever holds the link: the link stops working. The guest stays,
+    /// with everything recorded for them, and a member can send a new one.
     /// </summary>
     Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default);
 
-    /// <summary>Withdraws one the caller's group sent, on the same terms.</summary>
+    /// <summary>
+    /// Stops the link of the guest with that invitation id. The route from before guests;
+    /// <see cref="IGuestService.RevokeLink"/> is the one keyed by user id.
+    /// </summary>
     Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
         CancellationToken ct = default);
 }
@@ -100,60 +90,16 @@ public sealed class InvitationService(
     ICurrentUser userContext,
     AppDbContext context,
     IGroupJoiner joiner,
-    IGroupParticipants participants)
+    IGroupParticipants participants,
+    IGuestService guests)
     : IInvitationService
 {
-    /// <summary>
-    /// Bytes of randomness behind a token, before encoding, matching the join link's. This
-    /// one guards more -- a position in a ledger rather than a seat in a group -- so it is
-    /// certainly not less.
-    /// </summary>
-    private const int TokenBytes = 24;
-
     public async Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId,
         InviteToGroupRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var inviter = userContext.User;
-        var group = await MemberGroup(groupId, ct);
-
-        var names = request.Names
-            .Select(name => (name ?? string.Empty).Trim())
-            .Where(name => name.Length > 0)
-            .ToList();
-
-        // Nothing usable in the list at all. Refused rather than answered with the group's
-        // existing invitations, which would read as success for a request that asked for
-        // something and got nothing.
-        if (names.Count == 0)
-            throw new ValidationException(ErrorCodes.GroupInvitationNoName,
-                "An invitation needs a name to make it out to.");
-
-        var invitedAt = DateTimeOffset.UtcNow;
-
-        foreach (var name in names)
-        {
-            // The stand-in first, because the invitation is not merely a note that somebody
-            // was asked: it is what makes this person somebody the group can give a share
-            // to, which needs a row to give it to.
-            //
-            // One per invitation, and never an existing account -- there is no address to
-            // recognise one by, and claiming is what attaches a real person to it.
-            var participant = participants.StandInFor(name);
-
-            context.Add(new GroupInvitation
-            {
-                Group = group,
-                Name = name,
-                Token = NewToken(),
-                Participant = participant,
-                InvitedBy = inviter,
-                InvitedAt = invitedAt
-            });
-        }
-
-        await context.SaveChangesAsync(ct);
+        await guests.Add(groupId, new AddGuestsRequest { Names = request.Names, IssueLinks = true }, ct);
 
         return await ForGroup(groupId, ct);
     }
@@ -163,17 +109,17 @@ public sealed class InvitationService(
     {
         var userId = userContext.User.Id;
 
-        // Scoped to the caller's own groups, and that scoping is load-bearing now rather
-        // than merely tidy: the rows carry the links, and a link is a claim on a position in
-        // this group's ledger.
+        // Scoped to the caller's own groups, and that scoping is load-bearing: the rows carry
+        // the links, and a link is a claim on a position in this group's ledger.
         //
-        // Ordered before the projection, not after -- see the note on Describe.
+        // Ordered before the projection, not after -- see the note on Project.
         return await Project(
-                from invitation in context.Set<GroupInvitation>()
-                where invitation.GroupId == groupId &&
-                      invitation.Group.Users.Any(user => user.Id == userId)
-                orderby invitation.Name, invitation.InvitedAt
-                select invitation)
+                from guest in context.Set<GroupGuest>()
+                where guest.GroupId == groupId &&
+                      guest.Token != null &&
+                      guest.Group.Users.Any(user => user.Id == userId)
+                orderby guest.Name, guest.AddedAt
+                select guest)
             .ToListAsync(ct);
     }
 
@@ -181,90 +127,148 @@ public sealed class InvitationService(
     {
         var userId = userContext.User.Id;
 
-        // Answered invitations are absent because the row is gone, not because this filters
-        // them out: opening one is remembered against the invitation, and answering it
-        // deletes the invitation and cascades. So there is no state here that could drift
-        // out of step with whether the group is still waiting.
-        //
-        // Ordered before the projection, not after -- see the note on Project.
+        // A link that has ended is absent because ending it forgets who opened it
+        // (GuestLinkExtensions.EndLink), and a guest that has ended is filtered out besides.
+        // The token test is the belt to those braces: a row written in the moment between a
+        // link being read and being ended must not offer a link that no longer works.
         return await Project(
                 from opened in context.Set<InvitationOpened>()
-                join invitation in context.Set<GroupInvitation>()
-                    on opened.InvitationId equals invitation.Id
-                where opened.UserId == userId
-                orderby invitation.InvitedAt descending
-                select invitation)
+                join guest in context.Set<GroupGuest>()
+                    on opened.GuestId equals guest.Id
+                where opened.UserId == userId && guest.Token != null
+                orderby guest.LinkIssuedAt descending
+                select guest)
             .ToListAsync(ct);
     }
 
     public async Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default)
     {
-        var invitation = await Held(token, ct);
+        var guest = await Held(token, ct);
 
         var userId = userContext.User.Id;
 
-        // Asked once and used twice: to answer the page, and to decide whether this is
-        // worth remembering.
+        // Before it is remembered: somebody who left after this link was sent is not somebody
+        // it is waiting on, and the page should say so before the button rather than after.
+        await joiner.EnsureMayRejoin(guest.GroupId, userId, guest.LinkIssuedAt!.Value, ct);
+
         var alreadyAMember = await context.Set<GroupMembership>()
-            .AnyAsync(membership => membership.GroupId == invitation.GroupId &&
+            .AnyAsync(membership => membership.GroupId == guest.GroupId &&
                                     membership.UserId == userId, ct);
 
-        // A member of the group is not somebody this invitation is waiting on. They open the
-        // link to check it works before sending it, which is a sensible thing to do and must
-        // not put an invitation meant for somebody else into their own "waiting on you" --
-        // a list of decisions they cannot make, and could only clear by answering on the
-        // invitee's behalf.
+        // A member of the group opening the link -- to check it works before sending it --
+        // must not put it into their own list of links waiting on them.
         if (!alreadyAMember)
-            await Remember(invitation.Id, userId, ct);
+            await Remember(guest.Id, userId, ct);
 
-        return await context.Set<GroupInvitation>()
-            .Where(candidate => candidate.Id == invitation.Id)
-            .Select(candidate => new InvitationClaimResponse(
-                candidate.Id,
-                candidate.GroupId,
-                candidate.Group.Name,
-                candidate.Group.Users.Count,
-                candidate.Name,
-                candidate.InvitedBy == null
-                    ? null
-                    : candidate.InvitedBy.FirstName + " " + candidate.InvitedBy.LastName,
-                candidate.InvitedAt,
-                alreadyAMember))
-            .FirstAsync(ct);
+        // Read again rather than projected from what Held found, and so able to come back
+        // empty: somebody may have claimed the link in the moments since.
+        return await context.Set<GroupGuest>()
+                   .Where(candidate => candidate.Id == guest.Id && candidate.Token != null)
+                   .Select(candidate => new InvitationClaimResponse(
+                       candidate.Id,
+                       candidate.GroupId,
+                       candidate.Group.Name,
+                       candidate.Group.Users.Count,
+                       candidate.Name,
+                       candidate.LinkIssuedBy != null
+                           ? candidate.LinkIssuedBy.FirstName + " " + candidate.LinkIssuedBy.LastName
+                           : candidate.AddedBy != null
+                               ? candidate.AddedBy.FirstName + " " + candidate.AddedBy.LastName
+                               : null,
+                       candidate.LinkIssuedAt!.Value,
+                       alreadyAMember))
+                   .FirstOrDefaultAsync(ct)
+               ?? throw AlreadyClaimed();
     }
 
-    public async Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default)
+    public Task<InvitationClaimedResponse> Claim(string token, CancellationToken ct = default) =>
+        AgainIfARuleClashed(() => ClaimOnce(token, ct));
+
+    private async Task<InvitationClaimedResponse> ClaimOnce(string token, CancellationToken ct)
     {
         var user = userContext.User;
-        var invitation = await Held(token, ct);
+        var held = await Held(token, ct);
 
-        var group = await context.Set<Group>()
-            .Include(candidate => candidate.Users)
-            .FirstAsync(candidate => candidate.Id == invitation.GroupId, ct);
+        var standIn = held.ParticipantUserId;
+        var name = held.Name;
+        var issuedAt = held.LinkIssuedAt!.Value;
 
-        await joiner.Join(group, user, ct);
+        // Before anything is written, so a refusal leaves the link standing for the person it
+        // was meant for.
+        await joiner.EnsureMayRejoin(held.GroupId, user.Id, issuedAt, ct);
 
-        // The position moves onto their own account: their shares become the claimer's, and
-        // the expenses the stand-in was down as having paid for become theirs. No amount
-        // changes, so every transaction still divides into exactly its own amount.
-        // Transfer, not prune. The group wrote "Carlos gets one share" and meant it, so
-        // Carlos claiming his link is the group getting what it asked for -- and pruning
-        // here left the new member out of the very templates that named them, silently.
-        var taken = await participants.HandOver(
-            group.Id, invitation.ParticipantUserId, user.Id, RuleHandling.Transfer, ct);
+        Group group = null!;
 
-        var standIn = invitation.ParticipantUserId;
-        var name = invitation.Name;
+        // One transaction for the whole claim, run by the context's execution strategy: the
+        // deployed provider retries transient failures, and a transaction the strategy did
+        // not open is one it refuses to run at all.
+        var retrying = false;
 
-        context.Remove(invitation);
+        var taken = await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            // A retry from what the database holds; see CallerScope.StartOver.
+            if (retrying)
+                context.StartOver(user);
 
-        // The stand-in with it, now that nothing points at it. It exists to hold a position
-        // until somebody claims it, and this is that moment; leaving it would leave a row
-        // named after a person who is now in the group under their own account, turning up in
-        // nothing and explaining nothing.
-        await DiscardStandInIfUnused(standIn, ct);
+            retrying = true;
 
-        await context.SaveChangesAsync(ct);
+            var guest = await Held(token, ct);
+
+            group = await context.Set<Group>()
+                .Include(candidate => candidate.Users)
+                .FirstAsync(candidate => candidate.Id == guest.GroupId, ct);
+
+            await using var transaction = await context.Database.BeginTransactionAsync(ct);
+
+            // The guest ends first, and the link with it. The token is a concurrency token, so
+            // this is what makes the link work once: two people claiming the same link at the
+            // same moment both get past Held, but only one update finds the token still there.
+            // On Postgres the second waits on the first one's lock, then finds the row no
+            // longer matches and updates nothing, which EF reports as a concurrency failure --
+            // and at that point the loser has written nothing, so there is nothing to undo and
+            // no membership to take back. The same holds against a member replacing or
+            // stopping the link, or removing the guest, at that moment.
+            guest.EndedAt = DateTimeOffset.UtcNow;
+            guest.EndReason = GuestEndReason.Claimed;
+            guest.EndedByUserId = user.Id;
+
+            await context.EndLink(guest, ct);
+
+            try
+            {
+                await context.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw AlreadyClaimed();
+            }
+
+            // The position moves onto their own account: their shares become the claimer's,
+            // the expenses the guest was down as having paid for become theirs, and their
+            // places in the rules follow them. No amount changes, so every transaction still
+            // divides into exactly its own amount.
+            //
+            // Before the join, which needs no membership to have happened yet: the position
+            // moves, and then the person walks in and finds it theirs.
+            var handover = await participants.HandOver(group.Id, standIn, user.Id, ct);
+
+            // Written before the join, which finds the member's own rule by asking the
+            // database whose it is: the rule the group held for the guest is theirs now,
+            // and the join must see that rather than provision a second.
+            await context.SaveChangesAsync(ct);
+
+            // Join's own saves run inside this transaction. EF puts a savepoint before every
+            // save made inside one and rolls back to it if the save fails, which is what keeps
+            // the recovery in IMemberSplitRules.EnsureFor working here.
+            await joiner.Join(group, user, issuedAt, ct);
+
+            // The stand-in stays. It holds nothing now, so it reads as nobody to the group,
+            // and it is what the membership history names for the time before the claim.
+            await context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return handover;
+        });
 
         return new InvitationClaimedResponse(
             group.Id,
@@ -275,140 +279,114 @@ public sealed class InvitationService(
             taken.AmountOwed,
             taken.PaymentsMoved,
             taken.AmountPaid,
-            taken.RulesAffected);
+            taken.RulesAffected,
+            taken.SettlementsCancelled,
+            taken.AmountCancelled);
     }
 
     public async Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default) =>
-        await Close(await Held(token, ct), InvitationOutcome.Declined, ct);
+        await StopLink(await Held(token, ct), InvitationOutcome.Declined, ct);
 
     public async Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
         CancellationToken ct = default)
     {
-        await MemberGroup(groupId, ct);
+        var userId = userContext.User.Id;
 
-        var invitation = await context.Set<GroupInvitation>()
-                             .FirstOrDefaultAsync(candidate =>
-                                 candidate.Id == invitationId && candidate.GroupId == groupId, ct)
-                         ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
-                             "That invitation was not found.");
+        var guest = await context.Set<GroupGuest>()
+                        .FirstOrDefaultAsync(candidate =>
+                            candidate.Id == invitationId && candidate.GroupId == groupId &&
+                            candidate.Group.Users.Any(user => user.Id == userId), ct)
+                    ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
+                        "That invitation was not found.");
 
-        return await Close(invitation, InvitationOutcome.Withdrawn, ct);
+        return await StopLink(guest, InvitationOutcome.Withdrawn, ct);
     }
 
     /// <summary>
-    /// The half declining and withdrawing have in common: the invitation stops being
-    /// pending, and whatever it was holding stops belonging to a stand-in nobody will ever
-    /// sign in as.
+    /// The link stops working; the guest stays, holding everything they held.
     /// </summary>
     /// <remarks>
-    /// One path for both, because the event is the same event -- the group is not getting
-    /// this member -- and what happens to the money cannot depend on which side said so.
-    /// What it must not do is quietly vanish: a group's balances sum to zero because every
-    /// share belongs to somebody in the listing, and dropping a participant who held shares
-    /// would leave the column not adding up with nothing to explain why. So the position
-    /// moves, in full, to one named member, and the answer says whose it now is.
+    /// Turning a link down used to drop the guest and hand everything they held to some
+    /// member, because a guest could not be settled with or removed and so had to go
+    /// somewhere. Neither is true now. Whoever opened the link is saying it is not them,
+    /// which is a fact about the link: the guest is still the person the group spent with.
     /// </remarks>
-    private async Task<InvitationClosedResponse> Close(GroupInvitation invitation,
-        InvitationOutcome outcome, CancellationToken ct)
+    private async Task<InvitationClosedResponse> StopLink(GroupGuest guest, InvitationOutcome outcome,
+        CancellationToken ct)
     {
         var groupName = await context.Set<Group>()
-            .Where(candidate => candidate.Id == invitation.GroupId)
+            .Where(candidate => candidate.Id == guest.GroupId)
             .Select(candidate => candidate.Name)
             .FirstAsync(ct);
 
-        var absorber = await participants.Absorber(invitation, ct);
+        if (guest.Token is not null)
+        {
+            await context.EndLink(guest, ct);
 
-        var moved = absorber is null
-            ? ParticipantHandover.Nothing
-            : await participants.HandOver(invitation.GroupId, invitation.ParticipantUserId,
-                absorber.Id, RuleHandling.Prune, ct);
-
-        var standIn = invitation.ParticipantUserId;
-
-        context.Remove(invitation);
-
-        // The stand-in goes too, but only once its position has actually moved and no
-        // historical split-rule version still names it. The first condition is not tidiness:
-        // TransactionSplit.UserId and Transaction.UserId are required, so their foreign keys
-        // cascade, and deleting a stand-in that still holds shares would take those rows with
-        // it -- silently. The second protects the immutable rule history: the newly opened
-        // version may omit the stand-in while the superseded version must retain it.
-        //
-        // So a hand-over having run is the precondition. It moves everything a stand-in can
-        // hold, because a stand-in can only ever be named inside its own group: every path
-        // that writes a payer or a share checks it against that group's participants, and
-        // there is nobody who could name one on a personal expense. The helper below then
-        // decides whether deleting the now-empty account is safe for rule history as well.
-        if (absorber is not null)
-            await DiscardStandInIfUnused(standIn, ct);
-
-        await context.SaveChangesAsync(ct);
+            try
+            {
+                await context.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw AlreadyClaimed();
+            }
+        }
 
         return new InvitationClosedResponse(
-            invitation.Id,
-            invitation.GroupId,
-            groupName,
-            invitation.Name,
-            outcome,
-            moved.SharesMoved,
-            moved.AmountOwed,
-            moved.PaymentsMoved,
-            moved.AmountPaid,
-            moved.RulesAffected,
-            moved.RulesEmptied,
-            // Named only when they actually took something on, so a routine "no thanks"
-            // does not read as though money had changed hands.
-            moved.MovedAnything ? absorber?.Id : null,
-            moved.MovedAnything ? Describe(absorber) : null);
+            guest.Id, guest.GroupId, groupName, guest.Name, outcome,
+            0, 0m, 0, 0m, 0, 0, null, null);
     }
 
     /// <summary>
-    /// Deletes a stand-in after its invitation is answered, unless rule history still needs
-    /// it as the principal for a superseded weighted version.
+    /// Runs a claim again, once, if it lost a race for one of a group's rules.
     /// </summary>
     /// <remarks>
-    /// A hand-over opens a new version without the stand-in, but it deliberately leaves the
-    /// closed version unchanged. Deleting the account in that case would let the required
-    /// foreign key cascade through the old participant rows and erase the rule's history.
-    /// The same protection is needed for claiming as for declining or withdrawing.
+    /// A claim hands the guest's "all for one" rule to the claimer, renaming it for them or
+    /// retiring it beside theirs under the next free name. Two claims at the same moment --
+    /// two guests merged into the same member, say -- each work out the same free name, and
+    /// the second save breaks the name index. Nothing of that attempt was kept: the claim's
+    /// transaction rolled back. So it goes again from what the database now holds, where the
+    /// first one's rule is visible and is picked around. Once, not until it works: a second
+    /// clash means something other than a race, and that should be seen.
     /// </remarks>
-    private async Task DiscardStandInIfUnused(Guid standIn, CancellationToken ct)
+    private async Task<T> AgainIfARuleClashed<T>(Func<Task<T>> once)
     {
-        if (await context.Set<SplitRuleParticipant>()
-                .AnyAsync(participant => participant.UserId == standIn, ct))
-            return;
+        try
+        {
+            return await once();
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+                  {
+                      SqlState: PostgresErrorCodes.UniqueViolation,
+                      ConstraintName: "IX_SplitRule_GroupId_Name"
+                  })
+        {
+            context.StartOver(userContext.User);
 
-        var emptied = await context.Set<User>()
-            .FirstOrDefaultAsync(row => row.Id == standIn, ct);
-
-        if (emptied is not null)
-            context.Remove(emptied);
+            return await once();
+        }
     }
 
     /// <summary>
-    /// Writes down that this account has seen this invitation, so it can be offered again.
+    /// Writes down that this account has opened this guest's link, so it can be offered again.
     /// </summary>
     /// <remarks>
-    /// Once. Re-reading a link does not make the invitation newer, and the list is ordered
-    /// by when the group sent it rather than by when somebody last looked.
-    /// <para>
-    /// A stand-in is never here: nobody can sign in as one, so the caller is always a real
-    /// account. What can happen is a member of the group opening the link -- to check it
-    /// works, or because they were sent their own -- and there is no harm in that being
-    /// remembered; the claim page tells them they are already in.
-    /// </para>
+    /// Once. Re-reading a link does not make it newer, and the list is ordered by when the
+    /// link was issued rather than by when somebody last looked.
     /// </remarks>
-    private async Task Remember(Guid invitationId, Guid userId, CancellationToken ct)
+    private async Task Remember(Guid guestId, Guid userId, CancellationToken ct)
     {
         var already = await context.Set<InvitationOpened>()
-            .AnyAsync(opened => opened.InvitationId == invitationId && opened.UserId == userId, ct);
+            .AnyAsync(opened => opened.GuestId == guestId && opened.UserId == userId, ct);
 
         if (already)
             return;
 
         var row = context.Add(new InvitationOpened
         {
-            InvitationId = invitationId,
+            GuestId = guestId,
             UserId = userId,
             OpenedAt = DateTimeOffset.UtcNow
         });
@@ -421,30 +399,24 @@ public sealed class InvitationService(
             when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             // Somebody else's request wrote the same row between the check above and this,
-            // which is the answer this method wanted anyway. Two overlapping reads of one
-            // link are ordinary -- a double-clicked button, a page rendered on the server
-            // and again after hydration -- and neither of them should turn a read into a
-            // 500. The same race UserProvisioner catches on a first sign-in.
-            //
-            // The failed insert is detached rather than the tracker cleared: this runs
-            // inside a request that goes on to read, and clearing would take its entities
-            // with it.
+            // which is the answer this method wanted anyway: a double-clicked button, a page
+            // rendered on the server and again after hydration. The failed insert is detached
+            // rather than the tracker cleared, because this request goes on to read.
             row.State = EntityState.Detached;
         }
     }
 
     /// <summary>
-    /// The invitation a token names.
+    /// The guest a token names.
     /// </summary>
     /// <remarks>
     /// Holding the token is the whole authorisation, which is what makes it worth guarding:
-    /// there is no second check, because there is no account for the invitation to be
-    /// addressed to. A token that names nothing is a 404 -- and so is a token that has
-    /// already been claimed, because claiming deletes the row. That is the same answer a
-    /// mistyped link gets, and deliberately: the alternative is telling whoever holds a
-    /// forwarded link that it used to be good.
+    /// there is no second check, because there is no account for the link to be addressed
+    /// to. A token that names nothing is a 404 -- and so is one that has been claimed,
+    /// replaced or stopped. That is the same answer a mistyped link gets, and deliberately:
+    /// the alternative is telling whoever holds a forwarded link that it used to be good.
     /// </remarks>
-    private async Task<GroupInvitation> Held(string token, CancellationToken ct)
+    private async Task<GroupGuest> Held(string token, CancellationToken ct)
     {
         var normalized = (token ?? string.Empty).Trim();
 
@@ -452,57 +424,42 @@ public sealed class InvitationService(
             throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
                 "That invitation link was not found.");
 
-        return await context.Set<GroupInvitation>()
+        return await context.Set<GroupGuest>()
                    .FirstOrDefaultAsync(candidate => candidate.Token == normalized, ct)
-               ?? throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
-                   "That invitation link was not found. It may already have been claimed.");
+               ?? throw AlreadyClaimed();
     }
 
     /// <summary>
-    /// What to call somebody: their name, or the address when nobody has told us one.
+    /// What a link answers once it has stopped working, whenever in the request that is
+    /// found out: before reading it, or while claiming it.
     /// </summary>
-    private static string? Describe(User? user) =>
-        user is null ? null : People.Display(user);
-
-    private async Task<Group> MemberGroup(Guid groupId, CancellationToken ct)
-    {
-        var userId = userContext.User.Id;
-
-        return await context.Set<Group>()
-                   .FirstOrDefaultAsync(group =>
-                       group.Id == groupId && group.Users.Any(user => user.Id == userId), ct)
-               ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-    }
+    private static NotFoundException AlreadyClaimed() =>
+        new(ErrorCodes.GroupInvitationNotFound,
+            "That invitation link was not found. It may already have been claimed or replaced.");
 
     /// <summary>
-    /// The wire shape, projected from whatever query is handed in.
+    /// The wire shape from before guests, projected from whatever query is handed in. Only
+    /// for guests with a link out.
     /// </summary>
     /// <remarks>
     /// Order the query <em>before</em> it gets here. Ordering the result of this instead
     /// asks the database to sort by a member of a constructor call it has no way to build,
-    /// and the whole query fails to translate -- which is what
-    /// <c>GET /invitations</c> did on its first run against Postgres. It ran perfectly on
-    /// the in-memory provider the unit tests use, because that one evaluates anything it
-    /// cannot translate rather than refusing.
+    /// and the whole query fails to translate -- which the in-memory provider the unit tests
+    /// use does not notice, because it evaluates anything it cannot translate.
     /// </remarks>
-    private static IQueryable<GroupInvitationResponse> Project(IQueryable<GroupInvitation> invitations) =>
-        from invitation in invitations
+    private static IQueryable<GroupInvitationResponse> Project(IQueryable<GroupGuest> linked) =>
+        from guest in linked
         select new GroupInvitationResponse(
-            invitation.Id,
-            invitation.GroupId,
-            invitation.Group.Name,
-            invitation.Name,
-            invitation.Token,
-            invitation.InvitedBy == null
-                ? null
-                : invitation.InvitedBy.FirstName + " " + invitation.InvitedBy.LastName,
-            invitation.InvitedAt,
-            invitation.ParticipantUserId);
-
-    /// <summary>
-    /// A URL-safe token from the cryptographic generator, never from <c>Guid.NewGuid</c>:
-    /// this is the whole of the authorisation, so it has to be unguessable rather than
-    /// merely unique.
-    /// </summary>
-    private static string NewToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(TokenBytes));
+            guest.Id,
+            guest.GroupId,
+            guest.Group.Name,
+            guest.Name,
+            guest.Token!,
+            guest.LinkIssuedBy != null
+                ? guest.LinkIssuedBy.FirstName + " " + guest.LinkIssuedBy.LastName
+                : guest.AddedBy != null
+                    ? guest.AddedBy.FirstName + " " + guest.AddedBy.LastName
+                    : null,
+            guest.LinkIssuedAt!.Value,
+            guest.ParticipantUserId);
 }

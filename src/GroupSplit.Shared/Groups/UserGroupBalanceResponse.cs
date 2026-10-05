@@ -38,17 +38,23 @@ public record GroupNetBalance
     public decimal Balance { get; set; }
 
     /// <summary>
-    /// True for somebody the group has invited and is still waiting on.
+    /// True for one of the group's guests: somebody it shares costs with who has no account
+    /// in it.
     /// </summary>
     /// <remarks>
-    /// Their row is here because the group's balances have to add up: shares are recorded
-    /// against an invited address from the moment it is invited, and a listing that left
-    /// them out would not sum to zero. What they are not in is <see
-    /// cref="UserGroupBalanceResponse.Plan"/> and the two slices of it -- there is no
-    /// account to pay yet, so a payment naming them could not be recorded, and a plan is a
-    /// list of things to do.
+    /// Their row is like anybody else's, and they are in the plan like anybody else: the
+    /// members record what a guest pays and is paid, so a payment naming one can be recorded
+    /// and the plan clears the whole group.
     /// </remarks>
-    public bool IsPendingInvitee { get; set; }
+    public bool IsGuest { get; set; }
+
+    /// <summary>The name <see cref="IsGuest"/> had before guests were renamed; still written for older clients.</summary>
+    [Obsolete("Use IsGuest.")]
+    public bool IsPendingInvitee
+    {
+        get => IsGuest;
+        set => IsGuest = value;
+    }
 }
 
 public record DebtInfo

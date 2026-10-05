@@ -82,7 +82,7 @@ public sealed class AccountService(
 
         foreach (var group in sharedGroups)
         {
-            await groups.DetachMember(group, user, cancellationToken);
+            await groups.DetachMember(group, user, LeftReason.AccountDeleted, user.Id, cancellationToken);
         }
 
         // Nothing to do about invitations sent *to* them: an invitation names a person the
@@ -109,6 +109,7 @@ public sealed class AccountService(
         user.FirstName = null;
         user.LastName = null;
         user.Email = null;
+        user.Kind = UserKind.Deleted;
 
         // One save for the whole thing, so a failure part way through leaves the account
         // as it was rather than stranded between states.

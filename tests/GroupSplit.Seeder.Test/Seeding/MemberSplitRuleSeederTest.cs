@@ -59,6 +59,51 @@ public class MemberSplitRuleSeederTest
             secondRun.Select(rule => rule.Id).OrderBy(id => id));
     }
 
+    /// <summary>
+    /// The seeded guests are rows put straight into the table, like the memberships, so their
+    /// rules are the seeder's to write too.
+    /// </summary>
+    [Fact]
+    public async Task Seeds_one_rule_per_guest_and_is_idempotent()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase($"invitee-rules-{Guid.NewGuid()}")
+            .Options);
+
+        var group = new Group { Name = "Ski trip" };
+        var ana = new User { FirstName = "Ana", LastName = "B", Email = "ana@example.com" };
+        var tomas = new User { FirstName = "Tomás" };
+        group.Users.Add(ana);
+
+        db.AddRange(group, ana, tomas, new GroupGuest
+        {
+            Group = group,
+            Name = "Tomás",
+            Participant = tomas,
+            AddedBy = ana,
+            AddedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync(Ct);
+
+        var seeder = new MemberSplitRuleSeeder(
+            db,
+            NullLogger<MemberSplitRuleSeeder>.Instance,
+            new MemberSplitRules(db));
+
+        await seeder.SeedAsync(Ct);
+        await seeder.SeedAsync(Ct);
+
+        var rules = await CurrentRules(db, Ct);
+
+        var his = Assert.Single(rules, rule => rule.Versions
+            .OfType<SoleSplitRuleVersion>()
+            .Any(version => version.UserId == tomas.Id));
+
+        Assert.True(his.BuiltIn);
+        Assert.Equal("All for Tomás", his.Name);
+        Assert.Equal(2, rules.Count);
+    }
+
     private static Task<List<SplitRule>> CurrentRules(AppDbContext db, CancellationToken ct) =>
         db.Set<SplitRule>()
             .Include(rule => rule.Versions)

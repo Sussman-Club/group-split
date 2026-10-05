@@ -173,7 +173,7 @@ Fewer tables, and each one answers a question a person would ask.
 | Today | Proposed |
 |---|---|
 | `Group` <-> `User` (implicit join) | `Group` (+ `Currency`, `ArchivedAt`) |
-| `Rule` + `RuleFlags` | `GroupMembership` (Role, Status, JoinedAt, LeftAt, InvitedEmail) |
+| `Rule` + `RuleFlags` | `GroupMembership` (JoinedAt, ArchivedAt, LeftAt, LeftReason, LeftByUserId -- built; Role, Status and InvitedEmail dropped: members are equal, and invitations name a person) |
 | `RuleVersion` TPT: Personal, Percent, Shares (: Percent), Settlement | `SplitRule` (GroupId, Name, Kind, participants + weights) -- an editable template |
 | `PercentRuleUser`, `SharesRuleUser` | `Category` (GroupId, Name, DefaultSplitRuleId?) -- a label that may pre-fill a split |
 | `Transaction -> RuleVersion` | `Transaction` (abstract, TPH: GroupId?, PaidBy, Amount, Currency, Date, Name, Description, BankTransactionId?) with leaves `Expense` (+ CategoryId?) and `Transfer` |

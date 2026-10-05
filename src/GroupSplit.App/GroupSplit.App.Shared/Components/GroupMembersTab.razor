@@ -14,12 +14,20 @@
 @implements IDisposable
 
 @*
-    Who is in the group, who has been asked, and the two ways out.
+    Who is in the group, who the group splits with that has no account, who used to be in
+    it, and the ways in and out.
 
     Members used to be a pair of icon buttons in the toolbar that opened dialogs, so there
     was no page anywhere that simply listed them -- and leaving a group was not possible at
     all: removing a member refused to name yourself, which left the one person who might
     want to go with nothing to press.
+
+    The second card used to be "Invited": people the group had named and was waiting on,
+    each with a link and a withdraw button that handed whatever was recorded against them
+    to a member. Most of them were never going to answer, and waiting was the wrong word for
+    a group that had been splitting the rent with them for months. They are guests now: a
+    settled state, recorded for by the members, with a link only for the few who want one,
+    and removed like anybody else once they are square.
 *@
 
 <div class="gs-two-col">
@@ -31,9 +39,9 @@
         </div>
 
         @* The people who have actually joined. The listing this comes from also carries the
-           ones the group is waiting on -- they can be given a share, so every screen that
-           chooses a person needs them -- but here they belong in the card next door, which
-           is about the invitation rather than about a membership. *@
+           group's guests -- they can be given a share, so every screen that chooses a
+           person needs them -- but here they have a card of their own, because what can be
+           done about a guest is different. *@
         <div class="gs-list">
             @foreach (var member in _joined)
             {
@@ -66,7 +74,7 @@
 
         <div style="padding-top: 12px; display: flex; gap: 8px; flex-wrap: wrap">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="@InviteAsync">Invite someone</MudButton>
+                       StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="@AddPeopleAsync">Add people</MudButton>
             @* Leaving needs a settled balance, and the API says so -- the button is not
                hidden on a hunch about what the balance is. *@
             <MudButton Variant="Variant.Text" Class="gs-btn-danger"
@@ -74,11 +82,103 @@
         </div>
         </div>
 
+        <div class="gs-card gs-card-pad gs-reveal gs-guests" style="--i: 1">
+            <div class="gs-card-title">
+                <h2>Guests</h2>
+                <span class="gs-tag neutral">@_guests.Count</span>
+            </div>
+
+            @* Said once, here, rather than on every row: the one thing about a guest that
+               somebody could not guess is who does the recording. Kept to a line, for the
+               same reason the old invitations note was cut from four to two -- prose longer
+               than the rows it introduces reads as the card's content. *@
+            <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
+                @ParticipantCopy.GuestsNote
+            </MudText>
+
+            @if (_guests.Count == 0)
+            {
+                <div class="gs-empty" style="padding: 24px">
+                    <MudIcon Icon="@Icons.Material.Rounded.PersonAddAlt" />
+                    <span>No guests. Add whoever is sharing the costs, and you can start splitting with them straight away.</span>
+                </div>
+            }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var guest in _guests)
+                    {
+                        var row = guest;
+                        <div class="gs-row gs-row-tight-action" style="cursor: default">
+                            <Avatar Name="@row.Name" />
+                            <div style="min-width: 0">
+                                <div class="title"><span>@row.Name</span></div>
+                                <div class="meta">@GuestMeta(row)</div>
+                            </div>
+                            @* Every action in one element, because the row is a three-column
+                               grid and only its third child is placed in the action column --
+                               a fourth child dropped onto a line of its own under the avatar.
+
+                               The link is copied rather than shown, because it is a bearer
+                               credential on this guest's whole position in the ledger, and a
+                               URL on screen is a URL in a screenshot. *@
+                            <div class="gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                                @if (!row.HasLink)
+                                {
+                                    @* Issue and copy in one press. Nobody wants a link to look
+                                       at; they want one to paste into a chat, so "send" is the
+                                       clipboard and the message after it says what it does. *@
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-quiet"
+                                               StartIcon="@Icons.Material.Rounded.Link"
+                                               Disabled="@(_busy == row.UserId)"
+                                               aria-label="@($"Send {row.Name} a link")"
+                                               OnClick="@(() => SendLinkAsync(row))">Send link</MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-quiet"
+                                               StartIcon="@(_copied == row.UserId ? Icons.Material.Rounded.Check : Icons.Material.Rounded.ContentCopy)"
+                                               Color="@(_copied == row.UserId ? Color.Success : Color.Default)"
+                                               Disabled="@(_busy == row.UserId)"
+                                               aria-label="@($"Copy the link for {row.Name}")"
+                                               OnClick="@(() => CopyLinkAsync(row))">Copy link</MudButton>
+
+                                    @* The two things to do with a link that is already out,
+                                       tucked behind a menu because neither is the common
+                                       case and both make the copy somebody already sent
+                                       stop working. *@
+                                    <MudMenu Icon="@Icons.Material.Rounded.MoreVert" Size="Size.Small" Dense
+                                             AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                                             aria-label="@($"More about {row.Name}'s link")">
+                                        <MudMenuItem Icon="@Icons.Material.Rounded.Autorenew"
+                                                     OnClick="@(() => NewLinkAsync(row))">New link</MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Rounded.LinkOff"
+                                                     OnClick="@(() => StopLinkAsync(row))">Stop link</MudMenuItem>
+                                    </MudMenu>
+                                }
+
+                                @* The same icon and colour as removing a member, one card up,
+                                   because it is the same act with the same rule: square
+                                   first, and the history stays. *@
+                                <MudTooltip Text="Remove from the group" ShowOnFocus="false">
+                                    <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   aria-label="@($"Remove {row.Name}")"
+                                                   OnClick="@(() => RemoveGuestAsync(row))" />
+                                </MudTooltip>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
         @if (_past.Count > 0)
         {
-            <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+            <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
                 <div class="gs-card-title">
-                    <h2>Past members</h2>
+                    <h2>Past members and guests</h2>
                     <span class="gs-tag neutral">@_past.Count</span>
                 </div>
                 <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
@@ -87,11 +187,14 @@
                 <div class="gs-list">
                     @foreach (var person in _past)
                     {
+                        @* A removed guest is told apart from a member who went, because they
+                           never joined: "past member" would claim a membership the ledger
+                           never had. *@
                         <div class="gs-row" style="cursor: default">
                             <Avatar Name="@person.FullName" />
                             <div style="min-width: 0">
                                 <div class="title">@person.FullName</div>
-                                <div class="meta">Past member · history stays in the group</div>
+                                <div class="meta">@(person.IsGuest ? "Past guest" : "Past member") · history stays in the group</div>
                             </div>
                         </div>
                     }
@@ -100,88 +203,11 @@
         }
     </div>
 
-    @* The two ways in, stacked beside the members: the link somebody pastes into the
-       group's own chat, and the people the group named and is still waiting on -- each with
-       a link of their own. *@
+    @* The way in for people who will sign in themselves: the link somebody pastes into the
+       group's own chat. A guest's link is on their row instead, because it is made out to
+       one person's place rather than to anybody. *@
     <div class="gs-stack">
         <GroupJoinLinkCard GroupId="@GroupId" Reveal="1" />
-
-        <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
-            <div class="gs-card-title">
-                <h2>Invited</h2>
-                <span class="gs-tag">@_pending.Count waiting</span>
-            </div>
-
-            @* Said once, here, rather than on every row: an invitation is not only a person
-               to send a link to, it is a person the group can start recording money against,
-               which is why they turn up in the payer list and the split editor.
-
-               Kept to two lines. It was four, which is more prose than the rows it
-               introduces and read as the card's content rather than its note. What is left
-               is the part somebody could not guess: that these people already count. *@
-            @if (_pending.Count > 0)
-            {
-                <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
-                    They count already — give them a share, or record what they paid. Their
-                    link works once, and whoever opens it becomes that person.
-                </MudText>
-            }
-
-            @if (_pending.Count == 0)
-            {
-                <div class="gs-empty" style="padding: 24px">
-                    <MudIcon Icon="@Icons.Material.Rounded.PersonAddAlt" />
-                    <span>Nobody is waiting to join. Name whoever is sharing the costs and you can start splitting with them straight away.</span>
-                </div>
-            }
-            else
-            {
-                <div class="gs-list">
-                    @foreach (var invitation in _pending)
-                    {
-                        var pending = invitation;
-                        <div class="gs-row gs-row-tight-action" style="cursor: default">
-                            <Avatar Name="@pending.Name" />
-                            <div style="min-width: 0">
-                                <div class="title"><span>@pending.Name</span></div>
-                                <div class="meta">
-                                    Invited @Clock.Local(pending.InvitedAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(pending.InvitedByUserName) ? "" : $" by {pending.InvitedByUserName}")
-                                </div>
-                            </div>
-                            @* Both buttons in one element, because the row is a three-column
-                               grid and only its third child is placed in the action column --
-                               a fourth child dropped onto a line of its own under the avatar.
-
-                               The link is the whole point of the row: it is how this person
-                               ever becomes a member. Copied rather than shown, because it is
-                               a bearer credential on their position in the ledger, and a URL
-                               on screen is a URL in a screenshot. *@
-                            <div class="gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
-                                <MudTooltip Text="@(_copied == pending.Id ? "Link copied" : "Copy their invitation link")" ShowOnFocus="false">
-                                    <MudIconButton Icon="@(_copied == pending.Id ? Icons.Material.Rounded.Check : Icons.Material.Rounded.ContentCopy)"
-                                                   Size="Size.Small"
-                                                   Color="@(_copied == pending.Id ? Color.Success : Color.Default)"
-                                                   aria-label="@($"Copy the invitation link for {pending.Name}")"
-                                                   OnClick="@(() => CopyLinkAsync(pending))" />
-                                </MudTooltip>
-                                @* The same icon and colour as removing a member, one card
-                                   over, because it is the same kind of act: this person
-                                   stops being part of the group. It was a plain grey close
-                                   cross, which reads as "dismiss this row" -- and what it
-                                   actually does is move somebody's money. *@
-                                <MudTooltip Text="Withdraw the invitation" ShowOnFocus="false">
-                                    <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
-                                                   Size="Size.Small"
-                                                   Color="Color.Error"
-                                                   aria-label="@($"Withdraw the invitation to {pending.Name}")"
-                                                   OnClick="@(() => WithdrawAsync(pending))" />
-                                </MudTooltip>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
     </div>
 </div>
 
@@ -190,24 +216,33 @@
 
     [Parameter] public UserInfo? UserInfo { get; set; }
 
+    /// <summary>
+    /// Everybody the group can point at today: its members and its guests. What the add
+    /// dialog shows as already here, so nobody is added twice by accident.
+    /// </summary>
     private List<UserInfo> _members = [];
 
     /// <summary>
     /// The members who have actually joined. What the API answers with is wider -- it
-    /// includes the people the group has invited, because they can be given a share -- and
-    /// the card above is about memberships.
+    /// includes the group's guests, because they can be given a share -- and the card above
+    /// is about memberships.
     /// </summary>
     private List<UserInfo> _joined = [];
 
-    private IReadOnlyList<UserInfo> _past = [];
+    /// <summary>
+    /// The guests, read from their own listing rather than picked out of the members one:
+    /// that one says who they are, and this one says who added them and whether a link is
+    /// out, which is what their row is about.
+    /// </summary>
+    private IReadOnlyList<GroupGuestResponse> _guests = [];
 
-    private IReadOnlyList<GroupInvitationResponse> _pending = [];
+    private IReadOnlyList<UserInfo> _past = [];
 
     /// <summary>The group the lists were last read for, so they are not read again for it.</summary>
     /// <remarks>
     /// Parameters are set on every render of the page above, and the page renders on every
     /// announcement about the group -- several per load. Reading the members and the
-    /// invitations on each of those was two requests per render, all answering the same
+    /// guests on each of those was two requests per render, all answering the same
     /// question; they are read once per group, and again only when a write says the
     /// membership moved.
     /// </remarks>
@@ -220,6 +255,12 @@
 
     /// <summary>Whose link was last copied, so the row can say it landed.</summary>
     private Guid? _copied;
+
+    /// <summary>
+    /// Whose link is on its way from the server, so a second press does not ask for a
+    /// second one while the first is still being made.
+    /// </summary>
+    private Guid? _busy;
 
     protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
 
@@ -238,39 +279,61 @@
         var version = ++_version;
 
         var members = await GroupsService.GetGroupMembersAsync().ToListAsync();
-        var pending = await GroupsService.GetGroupInvitationsAsync();
+        var guests = await GroupsService.GetGroupGuestsAsync();
         var past = await GroupsService.GetGroupPastMembersAsync();
 
         if (version != _version)
             return;
 
         _members = members;
-        _joined = [.. members.Where(member => !member.IsPendingInvitee)];
+        _joined = [.. members.Where(member => !member.IsGuest)];
+        _guests = guests;
         _past = [.. past.Where(member => member.IsPastMember)];
-        _pending = pending;
 
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task InviteAsync()
+    /// <summary>
+    /// The line under a guest's name: what they are, when and by whom they were added, and
+    /// whether anybody has sent them a link -- the one fact about a guest that decides
+    /// which buttons the row offers, so it is said in words beside them too.
+    /// </summary>
+    private string GuestMeta(GroupGuestResponse guest)
+    {
+        var added = $"Guest · added {Clock.Local(guest.AddedAt).ToString("d MMM yyyy")}";
+
+        if (!string.IsNullOrWhiteSpace(guest.AddedByUserName))
+            added += $" by {guest.AddedByUserName}";
+
+        var link = guest switch
+        {
+            { HasLink: false } => " · no link",
+            { LinkIssuedAt: { } issued } => $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}",
+            _ => " · link sent"
+        };
+
+        return added + link;
+    }
+
+    private async Task AddPeopleAsync()
     {
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
 
-        var parameters = new DialogParameters<AddGroupMemberDialog> { { x => x.CurrentUsers, _members.ToArray() } };
+        var parameters = new DialogParameters<AddGuestsDialog> { { x => x.CurrentUsers, _members.ToArray() } };
 
-        var dialog = await DialogService.ShowAsync<AddGroupMemberDialog>("Invite people", parameters, options);
+        var dialog = await DialogService.ShowAsync<AddGuestsDialog>("Add people", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<InviteToGroupRequest>();
+        var request = await dialog.GetReturnValueAsync<AddGuestsRequest>();
 
         if (request is not null)
-            await GroupsService.InviteToGroupAsync(request);
+            await GroupsService.AddGuestsAsync(request);
     }
 
     private async Task RemoveAsync(UserInfo member)
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first." },
+            { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first. The group's join link stops working, and they will need a new link to come back." },
             { x => x.ButtonText, "Remove" },
             { x => x.Color, Color.Error }
         };
@@ -284,16 +347,114 @@
     }
 
     /// <summary>
-    /// Copies somebody's invitation link, built here rather than by the API.
+    /// Removing a guest, behind a confirmation, through the same call as removing a member.
+    /// </summary>
+    /// <remarks>
+    /// The rule is the same one too, and the question says it up front: a guest has to be
+    /// square, because the members are the only ones who could ever record what they still
+    /// owe or are owed. A refusal says who owes what -- the command reads the balance the
+    /// API sends back with it -- and nothing recorded for them is taken away either way: a
+    /// removed guest moves to the past card, like a member who left.
+    /// </remarks>
+    private async Task RemoveGuestAsync(GroupGuestResponse guest)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, ParticipantCopy.RemoveGuestQuestion(guest.Name) },
+            { x => x.ButtonText, "Remove" },
+            { x => x.Color, Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove guest", parameters, options);
+
+        if (await dialog.ConfirmedAsync())
+            await GroupsService.RemoveGroupMemberAsync(guest.UserId, guest.Name);
+    }
+
+    /// <summary>
+    /// A guest's first link: issued and copied in one press.
+    /// </summary>
+    /// <remarks>
+    /// Not a replace: if somebody else on another screen sent one a moment ago, the API
+    /// answers with that one rather than putting it out, so two members pressing this at once
+    /// end up holding the same link instead of one of them holding a dead one.
+    /// </remarks>
+    private async Task SendLinkAsync(GroupGuestResponse guest)
+    {
+        _busy = guest.UserId;
+
+        var issued = await GroupsService.IssueGuestLinkAsync(guest.UserId, replace: false);
+
+        _busy = null;
+
+        if (issued?.Token is { } token)
+            await CopyAsync(guest.UserId, issued.Name, token, ParticipantCopy.GuestLinkCopied(issued.Name));
+    }
+
+    /// <summary>
+    /// The link that is already out, copied again -- asked of the server rather than read
+    /// off the listing.
+    /// </summary>
+    /// <remarks>
+    /// The listing is as old as this page's last read, and another member may have replaced
+    /// the link since; copying the cached token would hand somebody a dead link with a
+    /// message saying it was copied. Issuing without replacing is idempotent -- it answers
+    /// with whatever link is out now -- so it is the same press, one request, and always
+    /// current.
+    /// </remarks>
+    private Task CopyLinkAsync(GroupGuestResponse guest) => SendLinkAsync(guest);
+
+    /// <summary>
+    /// A fresh link in place of the one that is out, behind a confirmation, because the copy
+    /// already sent stops working -- the reason to want one is usually that it went to the
+    /// wrong chat, and the reason to be asked is that it may have gone to the right one.
+    /// </summary>
+    private async Task NewLinkAsync(GroupGuestResponse guest)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Make a new link for {guest.Name}? The one you sent before stops working." },
+            { x => x.ButtonText, "New link" }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("New link", parameters, options);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        _busy = guest.UserId;
+
+        var issued = await GroupsService.IssueGuestLinkAsync(guest.UserId, replace: true);
+
+        _busy = null;
+
+        if (issued?.Token is { } token)
+            await CopyAsync(guest.UserId, issued.Name, token,
+                $"New link for {issued.Name} copied. The old one no longer works.");
+    }
+
+    /// <summary>
+    /// Puts the link out without replacing it. No confirmation: nothing is lost that "send
+    /// link" cannot put back, and the guest stays exactly as they were.
+    /// </summary>
+    private Task StopLinkAsync(GroupGuestResponse guest) =>
+        GroupsService.RevokeGuestLinkAsync(guest.UserId, guest.Name);
+
+    /// <summary>
+    /// Copies a guest's link, built here rather than by the API.
     /// </summary>
     /// <remarks>
     /// The address the app is published at is the browser's own, and an API that guessed it
     /// would guess wrong for every deployment but the one it was configured for -- the same
     /// reason the join link card builds its URL here.
     /// </remarks>
-    private async Task CopyLinkAsync(GroupInvitationResponse invitation)
+    private async Task CopyAsync(Guid guestUserId, string name, string token, string copiedMessage)
     {
-        var url = $"{Nav.BaseUri.TrimEnd('/')}/claim/{invitation.Token}";
+        var url = $"{Nav.BaseUri.TrimEnd('/')}/claim/{token}";
         var copied = false;
 
         try
@@ -307,40 +468,13 @@
 
         if (copied)
         {
-            _copied = invitation.Id;
+            _copied = guestUserId;
             StateHasChanged();
         }
 
         Snackbar.Add(
-            copied
-                ? $"Link for {invitation.Name} copied. It works once."
-                : $"Could not copy it. The link is /claim/{invitation.Token}.",
+            copied ? copiedMessage : $"Could not copy the link for {name}. It is {url}",
             copied ? Severity.Success : Severity.Warning);
-    }
-
-    /// <summary>
-    /// Withdrawing one, behind a confirmation, because it can move money.
-    /// </summary>
-    /// <remarks>
-    /// It used to be one tap, and rightly so: an invitation was a message, and taking back
-    /// a message somebody has not read costs nothing. It is more than that now -- shares
-    /// can be recorded against the address -- so the tap can change a member's balance, and
-    /// what happens is said before rather than only afterwards.
-    /// </remarks>
-    private async Task WithdrawAsync(GroupInvitationResponse invitation)
-    {
-        var parameters = new DialogParameters<ConfirmationDialog>
-        {
-            { x => x.ContentText, $"Withdraw the invitation to {invitation.Name}? Their link stops working, and anything already recorded against them -- shares, and anything they paid for -- goes to a member of the group. No amounts change." },
-            { x => x.ButtonText, "Withdraw" }
-        };
-
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Withdraw invitation", parameters, options);
-
-        if (await dialog.ConfirmedAsync())
-            await GroupsService.WithdrawInvitationAsync(invitation.Id, invitation.Name);
     }
 
     private async Task LeaveAsync()

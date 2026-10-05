@@ -33,7 +33,7 @@ has to reach for `curl` and a bearer token to do.
 | | |
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
-| `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `invite`, `invitations`, `withdraw-invitation`, `link show\|create\|revoke` |
+| `groups` | `list`, `show`, `create`, `rename`, `members`, `remove-member`, `balances`, `settle`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `add-guest`, `guests`, `guest-link create\|revoke`, `link show\|create\|revoke`, and the deprecated `invite`, `invitations`, `withdraw-invitation` |
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `archive`, `unarchive`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |
@@ -53,7 +53,9 @@ arguments, so this table can go stale and that one cannot.
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
 `groups settle`. `bank unlink`, `categories delete`, `split-rules delete`,
-`merchants delete` and `receipts delete` do the same. `receipts divide` goes further and
+`merchants delete` and `receipts delete` do the same. The roster read also lets
+`groups remove-member` refuse before asking: somebody not on it is an error
+straight away rather than a confirmation the server would then refuse. `receipts divide` goes further and
 reads the division itself, so the prompt lists what each person ends up owing rather than
 saying the shares will change -- it is money moving between people's balances, and the
 figures are the thing worth reading before agreeing to them. `merchants update` is the one command whose confirmation is
@@ -73,7 +75,11 @@ It takes either kind of transaction, but the read behind the prompt is the expen
 which cannot see a settlement -- so for one of those the confirmation names the id rather
 than the row, and says what deleting it does instead. Only a 404 is taken that way: any
 other failure of the read stops the command, because a fault that read as "just a
-settlement then" would delete a row nobody had been shown.
+settlement then" would delete a row nobody had been shown. A transaction somebody who has
+left the group paid for or had a share of cannot be deleted at all
+(`TRANSACTION_MOVES_DEPARTED_BALANCE`, naming them): they left square, and deleting it would
+leave them owed or owing with nobody to settle with. The prompt says so; the refusal comes
+after it, because only the API knows who has left.
 
 ## Settling across groups
 
@@ -110,35 +116,24 @@ groupsplit settle history --json
 Every repayment you were party to, in any group, newest first. It answers "did I already pay
 this?", which used to mean opening each group's activity in turn.
 
-## People the group is waiting on
+## Guests
 
-A group names whoever is sharing the costs. That makes them somebody it can point at
-straight away -- they can be given a share and can be the payer of an expense from the
-moment they are named, which is the point, because the trip that prompted the invitation is
-already booked. What reaches them is a link.
+A group names whoever is sharing the costs. Somebody with no account in it is a **guest**:
+the members record everything for them -- their expenses, their shares, what they pay back
+and are paid -- and nobody has to sign up for any of it.
 
 ```bash
-groupsplit groups invite <group-id> Carlos Nuria
+groupsplit groups add-guest <group-id> Carlos Nuria
 ```
 
 ```
- Invitation                            Name    User id                               Link token
- f1a00001-0000-4000-8000-000000000001  Carlos  f1b00001-0000-4000-8000-000000000001  8wS3n...
- f1a00002-0000-4000-8000-000000000002  Nuria   f1b00002-0000-4000-8000-000000000002  Qk1zv...
-
-Send each person their own link. It works once, and whoever opens it becomes that person in
-the group.
+ User id                               Name    Added       Link
+ f1b00001-0000-4000-8000-000000000001  Carlos  2026-10-05  none
+ f1b00002-0000-4000-8000-000000000002  Nuria   2026-10-05  none
 ```
 
-The link is `<web-app>/claim/<token>`. There is no email: a group knows the friend it went on
-the trip with by name, not by address, and the link goes through whatever they actually talk
-on. Nobody is notified: sending the link is the group's job. Once somebody has opened theirs it
-is in `invitations list` and stays there until it is answered, but until then the link is the
-whole of the introduction.
-
-**Two ids, and they answer different questions.** The first withdraws the invitation. The
-second -- `participantUserId` -- is who you name in a split or as the payer, and it is the
-same id `groups members` lists them under:
+**One id per guest**, the user id, and it is the id for everything: a split, a payer, a
+repayment, a link, removing them. It is the same id `groups members` lists them under:
 
 ```bash
 groupsplit groups members <group-id>
@@ -146,8 +141,8 @@ groupsplit groups members <group-id>
 
 ```
  Id                                    Name              Email             Status
- 0d1ac8ae-709c-4c4c-8f0f-0c7e951b3a52  Anabel Benítez    anabel@test.com   joined
- f1b00001-0000-4000-8000-000000000001  Carlos            -                 invited
+ 0d1ac8ae-709c-4c4c-8f0f-0c7e951b3a52  Anabel Benítez    anabel@test.com   member
+ f1b00001-0000-4000-8000-000000000001  Carlos            -                 guest
 ```
 
 ```bash
@@ -157,71 +152,98 @@ groupsplit tx create --group <group-id> --amount 90 --name Rent \
 groupsplit tx create --group <group-id> --amount 40 --name Taxi --paid-by <carlos-id>
 ```
 
-Their balance is in `groups balances`, marked `(invited)`, and it has to be: the column sums
-to zero only because every share belongs to somebody on the page. It is *not* in the
-transfers underneath it, because a plan is a list of payments somebody can make. Naming one
-in `groups settle`, `groups settle-between` or `settle pay` is refused with
-`SETTLEMENT_WITH_PENDING_INVITEE`.
+Their balance is in `groups balances`, marked `(guest)`, and in the transfers underneath it
+like anybody else's. Settling with one is an ordinary repayment, recorded by a member:
+
+```bash
+groupsplit groups settle <group-id> <carlos-id> 30            # Carlos paid you 30
+groupsplit groups settle-between <group-id> <carlos-id> <nuria-id> 15   # Carlos paid Nuria
+groupsplit settle pay <carlos-id>                             # across groups; marked (guest)
+```
+
+### Removing a guest
+
+```bash
+groupsplit groups remove-member <group-id> <carlos-id> --yes
+```
+
+The same command as for a member, on the same terms: refused with `GROUP_MEMBER_NOT_SETTLED`
+(and their balance) until they are square, which for a guest means a member recording what
+they paid or were paid back. Once removed they are a past guest: still in the history and in
+`past-members`, their shares on old expenses fixed (`TRANSACTION_MOVES_DEPARTED_BALANCE`), and
+nobody can name them for new money. Removing a guest leaves the group's join link alone --
+they never had a way to read it.
+
+### Their link
+
+A guest can be given a link, so the real person can take their place: whoever claims it
+joins the group and everything recorded for that guest becomes theirs.
+
+```bash
+groupsplit groups guest-link create <group-id> <carlos-id>        # issue, or show the one out
+groupsplit groups guest-link create <group-id> <carlos-id> --new  # replace it; asks first
+groupsplit groups guest-link revoke <group-id> <carlos-id>        # stop it; the guest stays
+groupsplit groups add-guest <group-id> Carlos --link              # add and issue in one go
+```
+
+`create` without `--new` is idempotent: asking again prints the link already out, so it is
+safe to run whenever somebody needs it re-sent. The link is `<web-app>/claim/<token>`; the
+text output prints that URL when the CLI knows the server origin, and the JSON carries the
+token. Nobody is notified: sending the link is the group's job. Replacing a link kills the
+old one *and* forgets who had opened it, so a link that leaked is not handed on.
 
 ### The receiving side
 
 ```bash
-groupsplit invitations list            # links you have opened and not answered
+groupsplit invitations list            # links you have opened that still work
 groupsplit invitations show <link>     # what it leads to, claiming nothing
-groupsplit invitations claim <link>    # join as that person, taking on their position
-groupsplit invitations decline <link>  # turn it down
+groupsplit invitations claim <link>    # join as that guest, taking on their position
+groupsplit invitations decline <link>  # "this isn't me": the link stops working
 ```
 
-`list` is not "invitations sent to me" — nothing can answer that without an address. It is
-every invitation whose link this account has **opened**, which the API writes down as it
-happens, and it carries the tokens. That makes it the way back to a link when the message it
-arrived in is gone — the case somebody hits after opening a link, signing in, and getting on
-with something else. The same list is the "Waiting on you" row on the web app's home page.
+`list` is every guest link this account has **opened** and that still works, which the API
+writes down as it happens, and it carries the tokens. That makes it the way back to a link
+when the message it arrived in is gone. The same list is the "Waiting on you" row on the web
+app's home page.
 
-All three take the whole URL as readily as the token inside it. `show` says the group, its
-size, who asked and which name the invitation was made out to -- and deliberately nothing
-about the money: a link can be forwarded, and what is recorded against that name is the
-group's until somebody claims it.
+All four take the whole URL as readily as the token inside it. `show` says the group, its
+size, who sent the link and which guest it was made out for -- and deliberately nothing about
+the money: a link can be forwarded, and what is recorded for that guest is the group's until
+somebody claims it.
 
 `claim` is gated by the [confirmation protocol](#confirming-changes), because it takes on a
-position rather than only joining a group: the shares recorded against that name, and the
-expenses they were down as having paid for, become the claimer's. No amount changes, and the
-claimer's balance does. Afterwards the link is spent -- claiming deletes the invitation the
-token lives on, so a forwarded copy gets the same 404 a mistyped URL does.
+position rather than only joining a group: the shares recorded for that guest, the expenses
+they were down as having paid for and their places in the rules become the claimer's. No
+amount changes, and the claimer's balance does. If the claimer is already a member and had
+recorded repayments with that guest -- the same person, twice -- those repayments are
+deleted, because they would read as paying yourself; the answer counts them. Afterwards the
+link is spent, so a forwarded copy gets the same 404 a mistyped URL does.
 
-Do not treat a personal link like a group join link. `groups link create` makes the group's
+`decline` only stops the link. The group keeps the guest and everything recorded for them,
+and a member can send a new link. Nothing moves, so there is no money to report:
+
+```
+ Group    The flat
+ Guest    Carlos
+ Outcome  link turned down
+
+Carlos is still a guest of The flat. Nothing moved. A member can send a new link.
+```
+
+Do not treat a guest's link like a group join link. `groups link create` makes the group's
 open door: reusable, expiring, and it lets somebody in as *themselves*, claiming nothing.
-Forwarding one of those costs a group an unwanted member; forwarding a personal link hands
+Forwarding one of those costs a group an unwanted member; forwarding a guest's link hands
 somebody else's debts to a stranger.
 
-### Declining and withdrawing
+### From before guests
 
-Both hand everything the person was holding -- their shares, and anything they were down as
-having paid for -- to one member of the group: whoever sent the invitation, or the group's
-longest-standing member if they have since left. No amount changes, and the group's balances
-still add up. Both go through the confirmation gate for that reason, and both print what
-moved:
+`groups invite`, `groups invitations` and `groups withdraw-invitation` still work, for one
+release, against the deprecated routes: `invite` is `add-guest --link`, `invitations` lists the
+guests that have a link out (by their old invitation id), and `withdraw-invitation` now only
+stops the link -- the guest stays. The JSON still carries `isPendingInvitee` beside `isGuest`
+for the same release.
 
-```bash
-groupsplit groups withdraw-invitation <group-id> <invitation-id> --yes
-groupsplit invitations decline <link> --yes
-```
-
-```
- Group           The flat
- Name            Carlos
- Outcome         withdrawn
- Now belongs to  Anabel Benítez
- Shares moved    3 (62.50)
- Payments moved  1 (40.00)
- Rules pruned    1
-
-No amount changed. Every transaction still sums to its own amount, and the group's
-balances still sum to zero.
-```
-
-The whole design, and why it is this rather than a refusal, is in
-[pending-invitees.md](pending-invitees.md).
+The whole design, and why, is in [guests.md](guests.md).
 
 ## Installing it
 
@@ -1061,8 +1083,9 @@ groupsplit split-rules list --group <group-id>
  9a20...                               Household 3-way   -                                     -
 ```
 
-**All for** is the member a rule puts the whole amount on, read off the division it stands
-for; **built in** is whether the group was given the rule rather than writing it.
+**All for** is the participant a rule puts the whole amount on, read off the division it
+stands for -- a member, or a guest, who has one from the moment they are added; **built in** is whether the group was given the rule rather than
+writing it.
 
 Naming one on an expense divides the whole of it that way, whatever the category says:
 

@@ -5,6 +5,7 @@ using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -59,8 +60,11 @@ public class ApiUnitTest : IAsyncLifetime
         // Register test-specific services (things that must be unique per test)
 
         // 1. Register the database with in-memory provider (unique database per test)
+        // The provider has no transactions, and says so by throwing. The services that open
+        // one do it for Postgres's sake, so here it is a no-op rather than a failure.
         services.AddDbContext<AppDbContext>(options =>
-            options.UseInMemoryDatabase(databaseName));
+            options.UseInMemoryDatabase(databaseName)
+                .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
 
         // 2. Setup and register mocked HTTP context accessor (unique user per test)
         services.AddScoped<UserClaims>(sp => new UserClaims(Guid.NewGuid().ToString(), $"testuser_{Guid.NewGuid()}@example.com"));
@@ -206,31 +210,32 @@ public class ApiUnitTest : IAsyncLifetime
     {
         var ct = TestContext.Current.CancellationToken;
 
-        var group = await DbContext.Set<Data.Entities.Group>()
-            .Include(candidate => candidate.Users)
-            .FirstAsync(candidate => candidate.Id == groupId, ct);
-
         foreach (var member in members)
         {
-            // Re-read: the user was very likely made in another scope, and so belongs to
-            // another context instance than the one about to save.
-            var tracked = await DbContext.Set<Data.Entities.User>()
-                .FirstAsync(candidate => candidate.Id == member.Id, ct);
-
-            if (group.Users.All(existing => existing.Id != tracked.Id))
-                group.Users.Add(tracked);
-        }
-
-        await DbContext.SaveChangesAsync(ct);
-
-        // The store default that fills this in production is not applied by the in-memory
-        // provider, so the rows this helper makes would carry the zero date without it.
-        foreach (var member in members)
-        {
+            // The row itself, open or closed: somebody who left and is put back by a test is
+            // back, the way a fresh link would bring them.
             var membership = await DbContext.Set<Data.Entities.GroupMembership>()
-                .FirstAsync(row => row.GroupId == groupId && row.UserId == member.Id, ct);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(row => row.GroupId == groupId && row.UserId == member.Id, ct);
 
-            membership.JoinedAt = DateTimeOffset.UtcNow;
+            if (membership is null)
+            {
+                // Written with its date: the store default that fills it in production is not
+                // applied by the in-memory provider.
+                DbContext.Add(new Data.Entities.GroupMembership
+                {
+                    GroupId = groupId,
+                    UserId = member.Id,
+                    JoinedAt = DateTimeOffset.UtcNow
+                });
+            }
+            else if (membership.LeftAt is not null)
+            {
+                membership.LeftAt = null;
+                membership.LeftReason = null;
+                membership.LeftByUserId = null;
+                membership.JoinedAt = DateTimeOffset.UtcNow;
+            }
         }
 
         await DbContext.SaveChangesAsync(ct);

@@ -36,7 +36,7 @@ public class SeederCompositionTest
 
         // The seed files are opened only when a seeder runs, so the paths need not exist;
         // they only need to be there for the options to bind.
-        foreach (var file in new[] { "Groups", "Users", "Categories", "Transactions", "Invitations" })
+        foreach (var file in new[] { "Groups", "Users", "Categories", "Transactions", "Guests" })
             builder.Configuration[$"Seeder:Paths:{file}"] = $"SeedData/{file.ToLowerInvariant()}.json";
 
         builder.AddPostgreSqlAppDbContext("db");
@@ -75,29 +75,29 @@ public class SeederCompositionTest
         Assert.Contains(seeders, seeder => seeder is Seeders.CategorySeeder);
         Assert.Contains(seeders, seeder => seeder is Seeders.BillSplitRuleSeeder);
         Assert.Contains(seeders, seeder => seeder is Seeders.MerchantSeeder);
-        Assert.Contains(seeders, seeder => seeder is Seeders.GroupInvitationSeeder);
+        Assert.Contains(seeders, seeder => seeder is Seeders.GroupGuestSeeder);
     }
 
     /// <summary>
-    /// An invitation names a group and the member who sent it, so both have to exist first.
+    /// A guest names a group and the member who added them, so both have to exist first.
     /// </summary>
     /// <remarks>
     /// A layer runs its seeders at the same time in separate scopes, so "before" here is
-    /// the only thing that makes the foreign keys resolvable -- an invitation written
+    /// the only thing that makes the foreign keys resolvable -- a guest written
     /// beside the groups would race the group it points at.
     /// </remarks>
     [Fact]
-    public void The_invitations_are_seeded_after_the_groups_and_the_people_who_sent_them()
+    public void The_guests_are_seeded_after_the_groups_and_the_people_who_added_them()
     {
         using var host = ComposeSeederHost();
         using var scope = host.Services.CreateScope();
 
         var layers = scope.ServiceProvider.GetServices<ISeeder>().TopologicallySort();
 
-        var invitations = LayerOf<Seeders.GroupInvitationSeeder>(layers);
+        var guests = LayerOf<Seeders.GroupGuestSeeder>(layers);
 
-        Assert.True(invitations > LayerOf<Seeders.GroupSeeder>(layers));
-        Assert.True(invitations > LayerOf<Seeders.UserSeeder>(layers));
+        Assert.True(guests > LayerOf<Seeders.GroupSeeder>(layers));
+        Assert.True(guests > LayerOf<Seeders.UserSeeder>(layers));
     }
 
     /// <summary>

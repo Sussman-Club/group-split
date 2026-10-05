@@ -106,7 +106,7 @@ public class ExpenseSplitter(
 
         if (given is not null)
         {
-            var stated = AsStated(given, expense.Amount, members);
+            var stated = AsStated(given, expense.Amount, Holders(expense, members));
 
             // Amounts somebody typed are their own record: there is no rule behind them,
             // and claiming one would make a later edit re-divide by a division nobody
@@ -282,6 +282,14 @@ public class ExpenseSplitter(
             // started failing with RECEIPT_INVALID.
             return false;
         }
+        catch (ConflictException)
+        {
+            // A bill whose line rule names somebody who has left the group. That is a 409
+            // when somebody chooses such a version, and nothing at all here: it was escaping
+            // from this question, which every edit asks, so no edit of the expense could be
+            // made -- including re-pointing the very line it complained about.
+            return false;
+        }
 
         return IsWhatItAlreadyHolds(expense, wouldBe);
     }
@@ -450,6 +458,22 @@ public class ExpenseSplitter(
     /// invitations. Their share is an ordinary share -- it is stored the same way, counted
     /// in the same balances, and belongs to them the moment they accept.
     /// </remarks>
+    /// <summary>
+    /// Who a stored division may name: the group's participants, and anybody who already
+    /// holds a share on this expense.
+    /// </summary>
+    /// <remarks>
+    /// The second half is for somebody who has left. Their share on an old expense is
+    /// history, and an edit that carries it forward unchanged -- every edit does, since the
+    /// endpoint hands the stored shares to any patch that says nothing about them -- must not
+    /// be refused for naming them. Whether the share is still the same is not asked here:
+    /// <see cref="DepartedPositions"/> refuses a change to it by its own code, which says what
+    /// is actually wrong. Nobody else gets in this way: a share for somebody the expense never
+    /// named is still a stranger.
+    /// </remarks>
+    private static IReadOnlyCollection<Guid> Holders(Expense expense, IReadOnlyCollection<Guid> members) =>
+        members.Concat(expense.Splits.Select(split => split.UserId)).ToHashSet();
+
     private async Task<IReadOnlyCollection<Guid>> MembersOf(Expense expense, CancellationToken ct)
     {
         var groupId = expense.Group?.Id ?? expense.GroupId;
@@ -592,7 +616,7 @@ public class ExpenseSplitter(
     private void Replace(
         Expense expense, IReadOnlyList<SplitAmount> splits, IReadOnlyCollection<Guid> members)
     {
-        RefuseIfItIsNotAStorableDivision(expense, splits, members);
+        RefuseIfItIsNotAStorableDivision(expense, splits, Holders(expense, members));
 
         var expenseIsTracked = dbContext.Entry(expense).State is not EntityState.Detached;
 

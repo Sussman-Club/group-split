@@ -39,12 +39,19 @@ public record GroupActivityResponse
     public string PaidByUserName { get; init; } = "";
 
     /// <summary>
-    /// True when whoever paid has been invited to the group and has not joined yet. An
-    /// invitee can front money for the group from the moment they are asked, so their name
-    /// turns up in the ledger before they ever sign in -- and the ledger should say which
-    /// kind of person it is naming.
+    /// True when whoever paid is one of the group's guests. A guest can front money for the
+    /// group like anybody else, so their name turns up in the ledger without their ever
+    /// signing in -- and the ledger should say which kind of person it is naming.
     /// </summary>
-    public bool PaidByIsPendingInvitee { get; init; }
+    public bool PaidByIsGuest { get; init; }
+
+    /// <summary>The name <see cref="PaidByIsGuest"/> had before guests were renamed; still written for older clients.</summary>
+    [Obsolete("Use PaidByIsGuest.")]
+    public bool PaidByIsPendingInvitee
+    {
+        get => PaidByIsGuest;
+        init => PaidByIsGuest = value;
+    }
 
     /// <summary>
     /// Who received it, on a transfer, and null on an expense -- where the money went to a

@@ -16,9 +16,8 @@ namespace GroupSplit.Data.Entities;
 public class Group : Entity
 {
     /// <summary>
-    /// Who is in it now. Somebody invited and still to answer is not here yet -- they are
-    /// in <see cref="Invitations"/>, and are a participant in the group's money before they
-    /// are a member of it.
+    /// Who is in it now. A guest is not here -- they are in <see cref="Guests"/>, a
+    /// participant in the group's money without being a member of it.
     /// </summary>
     public virtual ICollection<User> Users { get; } = [];
 
@@ -34,8 +33,12 @@ public class Group : Entity
     /// <summary>The id of <see cref="DefaultSplitRule"/>, exposed for group settings writes.</summary>
     public Guid? DefaultSplitRuleId { get; set; }
 
-    /// <summary>Who has been asked to join and has not answered yet.</summary>
-    public virtual ICollection<GroupInvitation> Invitations { get; } = [];
+    /// <summary>
+    /// The people it shares costs with who have no account in it. Current guests only: a
+    /// removed or claimed one is filtered out, the way a departed member is out of
+    /// <see cref="Users"/>.
+    /// </summary>
+    public virtual ICollection<GroupGuest> Guests { get; } = [];
 
     /// <summary>
     /// The shareable links into this group, live and dead alike -- a revoked one is kept so

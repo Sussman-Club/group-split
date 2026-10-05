@@ -15,7 +15,7 @@ namespace GroupSplit.Seeder.Seeders;
 // And after the invitations, because a group divides its spending between its participants
 // -- its members and the people it has invited and is waiting on. Seeded the other way
 // round, every balance here would be computed as though nobody had been invited.
-[DependsOn(typeof(GroupInvitationSeeder))]
+[DependsOn(typeof(GroupGuestSeeder))]
 public class TransactionSeeder(
     AppDbContext db,
     ILogger<TransactionSeeder> logger,

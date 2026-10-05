@@ -31,6 +31,7 @@ public static class DomainServiceExtensions
             services.AddScoped<IGroupParticipants, GroupParticipants>();
             services.AddScoped<ISettlementService, SettlementService>();
             services.AddScoped<IInvitationService, InvitationService>();
+            services.AddScoped<IGuestService, GuestService>();
             services.AddScoped<IJoinLinkService, JoinLinkService>();
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<IExpenseProvenance, ExpenseProvenance>();

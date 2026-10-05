@@ -93,6 +93,9 @@ ones worth handling by name:
 | `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The `--split` figures do not add up to the amount. |
 | `SPLIT_USER_NOT_IN_GROUP`, `RULE_USERS_NOT_IN_GROUP`, `TRANSACTION_PAYER_NOT_IN_GROUP` | A user id names somebody who is not in that group. |
 | `GROUP_MEMBER_NOT_SETTLED`, `ACCOUNT_NOT_SETTLED` | Leaving or deleting is blocked until balances are square. |
+| `TRANSACTION_MOVES_DEPARTED_BALANCE` | The change would move what somebody who has left paid or owed. Rename, re-date or re-file freely; to change the amount, keep their share in `--split`. It cannot be deleted. `userIds` names them. |
+| `GROUP_REJOIN_NEEDS_NEW_INVITATION` | The user left this group after the link was issued. Only a link or invitation issued since will bring them back. |
+| `GROUP_INVITATION_NOT_FOUND` | The personal link was claimed, declined or withdrawn -- possibly a moment ago, by somebody else. |
 | `CURRENCY_MISMATCH` | The amount is not in the group's currency. |
 | `CATEGORY_IN_USE`, `SPLIT_RULE_IN_USE` | Something still points at it. Move those first. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | An expense with no group cannot be divided. |

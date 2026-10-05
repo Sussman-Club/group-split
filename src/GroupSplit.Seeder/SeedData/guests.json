@@ -5,14 +5,13 @@
     "Name": "Tomás",
     "Token": "demo-invite-tomas",
     "ParticipantUserId": "F1B00003-0000-4000-8000-000000000003",
-    "InvitedByUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "AddedByUserId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
     "DaysAgo": 1
   },
   {
     "Id": "F1A00005-0000-4000-8000-000000000005",
     "GroupId": "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
     "Name": "Hannah",
-    "Token": "demo-invite-hannah",
     "ParticipantUserId": "F1B00005-0000-4000-8000-000000000005",
     "DaysAgo": 5
   },
@@ -22,7 +21,7 @@
     "Name": "Anabel",
     "Token": "demo-invite-book-club",
     "ParticipantUserId": "F1B00006-0000-4000-8000-000000000006",
-    "InvitedByUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
+    "AddedByUserId": "7C5E1D92-3A48-4B60-9E27-15D8A0C3F4B6",
     "DaysAgo": 3
   }
 ]

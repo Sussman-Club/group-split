@@ -5,22 +5,30 @@ namespace GroupSplit.App.Shared.Extensions;
 public static class NameExtensions
 {
     /// <summary>
-    /// What to call somebody in a list of a group's people, saying so when they have been
-    /// invited and have not joined.
+    /// What to call somebody in a list of a group's people, saying so when they are a guest,
+    /// a guest who was removed, or somebody who left.
     /// </summary>
     /// <remarks>
     /// One helper rather than a marker per screen, because the marker has to be everywhere
     /// a person can be chosen -- who paid, whose share, who a rule names -- and a screen
-    /// that forgot it would be offering an invitee as though they were a member. The name
+    /// that forgot it would be offering a guest as though they were a member. The name
     /// itself falls back to the address, which is all a group knows about somebody who has
     /// never signed in; see <see cref="UserInfo.FullName"/>.
+    /// <para>
+    /// Past before guest. A removed guest carries both flags -- the API goes on saying what
+    /// they were -- and read the other way round they would be labelled as a guest still in
+    /// the group, which is exactly what removing them stopped them being.
+    /// </para>
     /// </remarks>
     public static string Label(this UserInfo? person) =>
-        person is null
-            ? string.Empty
-            : person.IsPendingInvitee
-                ? $"{person.FullName} (invited)"
-                : person.FullName;
+        person switch
+        {
+            null => string.Empty,
+            { IsPastMember: true, IsGuest: true } => ParticipantCopy.RemovedGuest(person.FullName),
+            { IsPastMember: true } => ParticipantCopy.Left(person.FullName),
+            { IsGuest: true } => ParticipantCopy.Guest(person.FullName),
+            _ => person.FullName
+        };
 
     /// <summary>
     /// A list of names as a sentence says it: "Groceries, Utilities and Rent".

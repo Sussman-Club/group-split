@@ -2,13 +2,16 @@
 @namespace GroupSplit.App.Shared.Components
 
 @*
-    Asking people into a group, by name.
+    Adding people to a group, by name, as guests.
 
-    It used to ask for email addresses, and that limited a group to inviting people whose
-    address somebody happened to have -- which is not how most people know the friend they
-    went on the trip with. Naming somebody is enough: they become a person the group can
-    give a share to straight away, and what reaches them is a link, shown on the Members tab
-    once this closes.
+    It used to ask for email addresses, and that limited a group to people whose address
+    somebody happened to have -- which is not how most people know the friend they went on
+    the trip with. Then it asked for names and minted each one a link, which was still an
+    invitation: the dialog said "Invite", the tab listed them as "waiting", and most of them
+    were never going to answer, because most people a group splits with never want an
+    account. Now a name is the whole of it. They are a guest the moment this closes, the
+    members record everything for them, and a link is a separate thing a member can send
+    later, from the People tab, to the few who want to take their place themselves.
 *@
 
 <MudDialog>
@@ -20,14 +23,14 @@
 
     <DialogContent>
         <MudText Typo="Typo.body2" Class="gs-muted" Style="padding-bottom: 8px">
-            Name whoever is sharing the costs. You can start splitting with them at once, and
-            send each of them a link when you are ready.
+            Name whoever is sharing the costs. They join as guests: you can record expenses,
+            shares and repayments for them right away. Nobody gets a link unless you send one.
         </MudText>
 
         <MudForm @ref="@_form">
             <MudStack Row AlignItems="AlignItems.Center">
                 @* The same bound the API and the columns behind it hold, so somebody is
-                   stopped at the keyboard rather than at Save. *@
+                   stopped at the keyboard rather than at Add. *@
                 <MudTextField @bind-Value="_currentInput"
                               Label="Name"
                               Variant="Variant.Outlined"
@@ -42,7 +45,7 @@
         </MudForm>
 
         <MudChipSet T="string" Style="padding-top: 5px;">
-            @* Who is already here, so nobody is named twice by accident. *@
+            @* Who is already here, guests included, so nobody is named twice by accident. *@
             @foreach (var person in CurrentUsers)
             {
                 <MudChip T="UserInfo" Value=person Variant="Variant.Filled" Color="Color.Primary">
@@ -63,7 +66,7 @@
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
                    Disabled="@(_model.Names.Count == 0)" OnClick="@Submit">
-            Invite
+            Add
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -81,12 +84,17 @@
 
     private string _currentInput = string.Empty;
 
-    private readonly InviteToGroupRequest _model = new();
+    /// <summary>
+    /// What the dialog hands back. No links, ever, from here: <see cref="AddGuestsRequest.IssueLinks"/>
+    /// stays false, because sending somebody a link is a decision about that one person and
+    /// belongs on their row, not a tick box beside a list of names.
+    /// </summary>
+    private readonly AddGuestsRequest _model = new() { IssueLinks = false };
 
     /// <summary>
     /// Adds the typed name to the list. Duplicates within this dialog are dropped, because
     /// pressing Enter twice is not two people -- but two people really can share a name, so
-    /// nothing stops somebody naming a second Dani in a later invitation.
+    /// nothing stops somebody adding a second Dani later.
     /// </summary>
     private void AddNameToList()
     {

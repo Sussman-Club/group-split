@@ -33,25 +33,19 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
     private static Dictionary<Guid, UserGroupBalanceResponse> MinimizeTransactions(
      IEnumerable<GroupNetBalance> netBalances)
     {
+        // Everybody, guests included: the members record what a guest pays and is paid, so a
+        // line naming one is a payment somebody can write down, and a plan that left them out
+        // would not clear the group.
         var balances = netBalances.ToList();
-        
-        // Somebody the group has invited and is waiting on is in the balances and out of
-        // the plan. Their share of the spending is real and their row has to be here for
-        // the column to add up, but a plan is a list of payments to make, and there is no
-        // account on the other end of a payment to them yet -- so a line naming one could
-        // not be recorded even if somebody tried. What is left is a plan that does not clear
-        // everybody, which is the truth: the group cannot square up with a person who has
-        // not joined.
-        var settleable = balances.Where(nb => !nb.IsPendingInvitee).ToList();
 
         var creditors = FilterAndSort(
-            settleable,
+            balances,
             nb => nb.Balance > 0,
             descending: true
         );
 
         var debtors = FilterAndSort(
-            settleable,
+            balances,
             nb => nb.Balance < 0,
             descending: false
         );

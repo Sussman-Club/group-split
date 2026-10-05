@@ -153,7 +153,6 @@ public class SettlementService(
         // Scoped to the caller's own groups, as everywhere else: a group they are not in is
         // not found, rather than one they can write repayments into.
         var group = await (await groups.GetGroupById(groupId, cancellationToken))
-                        .Include(candidate => candidate.Users)
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
@@ -161,19 +160,15 @@ public class SettlementService(
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
                 "A settlement needs two different people.");
 
-        // Before the two lookups below, which would report somebody the caller can see on
-        // the balances page as not being in the group at all. An invitee holds a position
-        // and has no account to pay or be paid; the position simply stands until they join.
-        await RefuseIfPendingInvitee(group.Id, request.FromUserId, cancellationToken);
-        await RefuseIfPendingInvitee(group.Id, request.ToUserId, cancellationToken);
-
-        var from = group.Users.FirstOrDefault(member => member.Id == request.FromUserId)
+        // Participants, not only members, at either end: the members record what a guest
+        // pays and is paid -- to a member, or to another guest. Somebody who has gone is not.
+        var from = await participants.Find(group.Id, request.FromUserId, cancellationToken)
                    ?? throw new NotFoundException(ErrorCodes.UserNotFound,
-                       "The member who paid is not in this group.");
+                       "The person who paid is not in this group.");
 
-        var to = group.Users.FirstOrDefault(member => member.Id == request.ToUserId)
+        var to = await participants.Find(group.Id, request.ToUserId, cancellationToken)
                  ?? throw new NotFoundException(ErrorCodes.UserNotFound,
-                     "The member who was paid is not in this group.");
+                     "The person who was paid is not in this group.");
 
         // Whatever the caller says, not what a balance implies. Nothing is checked against
         // what is outstanding: a group entering its history writes repayments for months
@@ -310,17 +305,6 @@ public class SettlementService(
     }
 
     /// <summary>
-    /// Refuses a repayment naming somebody the group has invited and is waiting on.
-    /// </summary>
-    private async Task RefuseIfPendingInvitee(Guid groupId, Guid userId, CancellationToken ct)
-    {
-        if (await participants.IsPendingInvitee(groupId, userId, ct))
-            throw new ConflictException(ErrorCodes.SettlementWithPendingInvitee,
-                "That person has been invited to the group and has not joined yet, so there is " +
-                "nobody to settle up with. Their balance stands until they accept.");
-    }
-
-    /// <summary>
     /// Both halves of the cross-group plan: what the caller owes by person, and what they
     /// are owed by person, each largest first.
     /// </summary>
@@ -349,9 +333,7 @@ public class SettlementService(
                     AmountPaid = row.AmountPaid,
                     AmountOwed = row.AmountOwed,
                     Balance = row.Balance,
-                    // Carried through, so the minimisation can leave them out of the plan
-                    // while their row goes on making the group's column add up.
-                    IsPendingInvitee = row.IsPendingInvitee
+                    IsGuest = row.IsGuest
                 })
                 .ToList();
 
@@ -362,24 +344,26 @@ public class SettlementService(
 
             var position = await debtCalculator.GetUserBalance(balances);
 
+            var guests = balances.Where(balance => balance.IsGuest).Select(balance => balance.UserId).ToHashSet();
+
             foreach (var debt in position.YouOwed)
-                Accumulate(youPay, debt, inGroup.Key.GroupId, inGroup.Key.GroupName);
+                Accumulate(youPay, debt, inGroup.Key.GroupId, inGroup.Key.GroupName, guests.Contains(debt.UserId));
 
             foreach (var credit in position.OwedToYou)
-                Accumulate(owedToYou, credit, inGroup.Key.GroupId, inGroup.Key.GroupName);
+                Accumulate(owedToYou, credit, inGroup.Key.GroupId, inGroup.Key.GroupName, guests.Contains(credit.UserId));
         }
 
         return (Finish(youPay), Finish(owedToYou));
     }
 
     private static void Accumulate(Dictionary<Guid, PersonBuilder> side, DebtInfo debt,
-        Guid groupId, string groupName)
+        Guid groupId, string groupName, bool isGuest)
     {
         if (debt.Amount <= 0)
             return;
 
         if (!side.TryGetValue(debt.UserId, out var person))
-            side[debt.UserId] = person = new PersonBuilder(debt.UserName);
+            side[debt.UserId] = person = new PersonBuilder(debt.UserName, isGuest);
 
         person.Groups.Add(new GroupDebt(groupId, groupName, debt.Amount));
     }
@@ -397,7 +381,8 @@ public class SettlementService(
                entry.Key,
                entry.Value.Name,
                amount,
-               [.. entry.Value.Groups.OrderByDescending(@group => @group.Amount).ThenBy(@group => @group.GroupName)])
+               [.. entry.Value.Groups.OrderByDescending(@group => @group.Amount).ThenBy(@group => @group.GroupName)],
+               entry.Value.IsGuest)
     ];
 
     /// <summary>
@@ -435,9 +420,15 @@ public class SettlementService(
         return allocations;
     }
 
-    private sealed class PersonBuilder(string name)
+    /// <remarks>
+    /// <see cref="IsGuest"/> is the same in every group the person spans, because a guest's
+    /// stand-in belongs to exactly one group.
+    /// </remarks>
+    private sealed class PersonBuilder(string name, bool isGuest)
     {
         public string Name { get; } = name;
+
+        public bool IsGuest { get; } = isGuest;
 
         public List<GroupDebt> Groups { get; } = [];
     }

@@ -95,6 +95,84 @@ public sealed class ApiErrorMapperTests
         Assert.Contains("auth login", ApiErrorMapper.Map(Exception(401, new { title = "x" })).Error.Remediation);
     }
 
+    /// <summary>
+    /// Removing yourself is a 403, but nothing is wrong with the account: the way out of a
+    /// group is leaving it, and that is what the caller is pointed at.
+    /// </summary>
+    [Fact]
+    public void Removing_yourself_points_at_leaving_rather_than_at_auth()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(403, new
+        {
+            title = "Forbidden",
+            code = SharedErrorCodes.GroupCannotRemoveSelf
+        })).Error.Remediation;
+
+        Assert.Contains("groups leave", remediation);
+        Assert.DoesNotContain("auth status", remediation);
+    }
+
+    /// <summary>
+    /// One code answers a stale join link and a stale invitation alike, so the way back
+    /// names the command for each rather than assuming the join link.
+    /// </summary>
+    [Fact]
+    public void A_stale_link_names_both_ways_back_in()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.GroupRejoinNeedsNewInvitation
+        })).Error.Remediation;
+
+        Assert.Contains("invitations join", remediation);
+        Assert.Contains("invitations claim", remediation);
+    }
+
+    /// <summary>
+    /// The same refusal answers leaving and removing, so the hint says how a balance gets
+    /// squared without assuming whose it is -- "square them up" would be wrong for somebody
+    /// leaving.
+    /// </summary>
+    [Fact]
+    public void A_balance_that_is_not_zero_says_how_to_record_a_repayment_for_either_case()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.GroupMemberNotSettled
+        })).Error.Remediation;
+
+        Assert.Contains("groups balances", remediation);
+        Assert.Contains("groups settle", remediation);
+        Assert.Contains("settle-between", remediation);
+        Assert.DoesNotContain("them", remediation);
+    }
+
+    [Fact]
+    public void Losing_a_race_over_a_guest_says_to_look_again()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.GroupGuestChanged
+        })).Error.Remediation;
+
+        Assert.Contains("groups guests", remediation);
+    }
+
+    [Fact]
+    public void A_guest_route_given_the_wrong_id_points_at_the_guest_listing()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(404, new
+        {
+            title = "Not Found",
+            code = SharedErrorCodes.GroupGuestNotFound
+        })).Error.Remediation;
+
+        Assert.Contains("groups guests", remediation);
+    }
+
     [Fact]
     public void Validation_messages_are_flattened_into_details()
     {

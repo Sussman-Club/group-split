@@ -84,12 +84,23 @@ public static class ApiErrors
         }
 
         if (code is not null)
-            return new ApiError(ApiErrorKind.Refused, ErrorMessages.For(code, status),
+            return new ApiError(ApiErrorKind.Refused, RefusalMessage(code, status, problem),
                 code, status, traceId, problem);
 
         return new ApiError(ApiErrorKind.Unknown, ErrorMessages.ForStatus(status),
             null, status, traceId, problem);
     }
+
+    /// <summary>
+    /// The message for a refusal: the code's, except where the problem says something the
+    /// code alone does not. A stale link is refused the same way to somebody who left and to
+    /// somebody who was removed, and only the problem's reason tells the two apart.
+    /// </summary>
+    private static string RefusalMessage(string code, int? status, ProblemDetails? problem) =>
+        code == ErrorCodes.GroupRejoinNeedsNewInvitation &&
+        problem?.GetExtension<string>("leftReason", GroupSplitSerializer.Options) == "Removed"
+            ? ErrorMessages.RejoinAfterRemoval
+            : ErrorMessages.For(code, status);
 
     /// <summary>Problem details out of a raw body, or null when the body is not that.</summary>
     private static ProblemDetails? Parse(string? body)

@@ -9,30 +9,33 @@
 @inject IGroupCommands GroupCommands
 @inject ApiErrorPresenter Errors
 @inject IAuthService AuthService
+@inject IDialogService DialogService
 @inject NavigationManager Nav
 
 @*
-    Where a personal invitation link lands.
+    Where a guest's link lands.
 
     The difference from /join is what is on the other end of the button. That one lets
     somebody into a group as themselves, claiming nothing. This one hands them a position:
-    the shares the group has been recording against the person it named become theirs. So
-    the page says whose name it is before anybody presses anything, and the link works once.
+    the group has been keeping track of somebody as a guest, and whoever claims the link
+    takes that guest's place -- their shares, what they paid, their places in split rules.
+    So the page says whose place it is before anybody presses anything, and the link works
+    once.
 
-    Anonymous, because the person following one very often has no account yet -- that is the
-    case invitations exist for. Signing in is a round trip through the identity provider, so
-    the URL they were going to is handed along as returnUrl and they come back here rather
-    than to the home page, with the link still in hand.
+    Anonymous, because the person following one very often has no account yet -- that is
+    the case guests' links exist for. Signing in is a round trip through the identity
+    provider, so the URL they were going to is handed along as returnUrl and they come back
+    here rather than to the home page, with the link still in hand.
 
     Every state wears the same card, so the page does not change shape as it resolves: one
-    surface whose heading and body swap, rather than four different-looking screens.
+    surface whose heading and body swap, rather than five different-looking screens.
 *@
 
 <PageTitle>Join a group - Group Split</PageTitle>
 
 @if (UserInfo is null)
 {
-    <LinkLanding Title="You have been invited"
+    <LinkLanding Title="Someone sent you a link to a group"
                  Subtitle="Sign in, or create an account, and we will bring you straight back here.">
         <RememberMeChoice @bind-Value="_remember" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
@@ -43,19 +46,31 @@
 }
 else if (_loading)
 {
-    <LinkLanding Title="You have been invited">
+    <LinkLanding Title="Someone sent you a link to a group">
         <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
             <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
-            <span>Looking up the invitation…</span>
+            <span>Looking up the link…</span>
         </div>
+    </LinkLanding>
+}
+else if (_declined is { } declined)
+{
+    @* The answer to "this isn't me", on the page rather than only in a snackbar: it is the
+       last thing this person will see of the group, and the part worth leaving them with
+       is that nothing happened to anybody -- the guest is still there, only the link is
+       gone. *@
+    <LinkLanding Title="This link no longer works"
+                 Subtitle="@($"{declined.GroupName} still has {declined.Name} as a guest. Nothing recorded for them has changed.")">
+        <MudButton Variant="Variant.Text" Href="/"
+                   StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
     </LinkLanding>
 }
 else if (_error is not null)
 {
-    @* Most often: somebody has already claimed it. A personal link works once, so a
-       forwarded copy of one lands here, and the message says so rather than implying the
-       URL was mistyped. *@
-    <LinkLanding Title="This invitation is no longer open" Subtitle="@_error">
+    @* Most often: somebody has already claimed it, or a member stopped it. A guest's link
+       works once, so a forwarded copy of one lands here, and the message says so rather
+       than implying the URL was mistyped. *@
+    <LinkLanding Title="This link no longer works" Subtitle="@_error">
         <MudButton Variant="Variant.Text" Href="/"
                    StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
     </LinkLanding>
@@ -64,13 +79,26 @@ else if (_invitation is { } invitation)
 {
     <LinkLanding Title="@invitation.GroupName" Subtitle="@Asked(invitation)">
         @* Said plainly, because it is the whole difference between this and a join link:
-           somebody may be taking on a fortnight of shares. The amounts are deliberately not
+           somebody may be taking on months of shares. The amounts are deliberately not
            here -- the link can be forwarded, and what the group has recorded is theirs
            until this is claimed -- and the app says what moved the moment it is. *@
-        <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">
-            Anything the group has already recorded against @invitation.Name becomes yours:
-            their shares, and anything they are down as having paid for. No amounts change.
-        </MudAlert>
+        @if (invitation.AlreadyAMember)
+        {
+            @* A member opening a guest's link, most often to check it works before sending
+               it. Claiming is still allowed -- the group may have added them as a guest by
+               mistake -- but it merges two people's money into one, so the page says that
+               plainly and the button asks again before doing it. *@
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="w-100" Style="text-align: left">
+                @MergeWarning(invitation)
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">
+                @Sent(invitation) No amounts change: what was recorded for @invitation.Name
+                simply becomes yours.
+            </MudAlert>
+        }
 
         <div class="gs-link-landing-actions">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
@@ -78,12 +106,28 @@ else if (_invitation is { } invitation)
                        EndIcon="@Icons.Material.Rounded.ArrowForward"
                        Disabled="@_busy"
                        OnClick="@ClaimAsync">
-                @($"Join as {invitation.Name}")
+                @(invitation.AlreadyAMember
+                    ? $"This is me: merge {invitation.Name} into my account"
+                    : $"Join as {invitation.Name}")
             </MudButton>
 
-            <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy" OnClick="@DeclineAsync">
-                Not me, or not joining
-            </MudButton>
+            @if (invitation.AlreadyAMember)
+            {
+                @* Not "This isn't me" for a member. Declining stops the link, and a member
+                   here is almost always checking a link a member made on purpose -- for
+                   them the way out has to leave it working, or checking the link would be
+                   what broke it. *@
+                <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy"
+                           Href="@($"/groups/{invitation.GroupId}")">
+                    Back to @invitation.GroupName
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy" OnClick="@DeclineAsync">
+                    This isn't me
+                </MudButton>
+            }
         </div>
     </LinkLanding>
 }
@@ -94,7 +138,7 @@ else if (_invitation is { } invitation)
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
     /// <summary>
-    /// Asked here as well as on /login: an invite link is a way into the app like any
+    /// Asked here as well as on /login: a guest's link is a way into the app like any
     /// other, and the tick has to mean the same thing whichever door somebody came in by.
     /// </summary>
     private bool _remember;
@@ -103,6 +147,12 @@ else if (_invitation is { } invitation)
     private string? _error;
     private bool _loading;
     private bool _busy;
+
+    /// <summary>
+    /// The link this person just said was not for them, kept so the page can say what
+    /// became of the guest once the link itself has stopped answering.
+    /// </summary>
+    private InvitationClaimResponse? _declined;
 
     /// <summary>The token the state below belongs to, so it is not re-read on every render.</summary>
     private string? _resolved;
@@ -119,6 +169,7 @@ else if (_invitation is { } invitation)
 
         _loading = true;
         _error = null;
+        _declined = null;
 
         var failure = await Errors.CaptureAsync(async () =>
             _invitation = await Invitations.GetInvitationClaimAsync(Token));
@@ -136,18 +187,39 @@ else if (_invitation is { } invitation)
     }
 
     /// <summary>
-    /// Who is asking and as whom, which is what somebody needs before they agree to it. The
-    /// inviter is nullable -- an account that has since been deleted leaves its invitations
-    /// behind -- so the sentence is built rather than interpolated blind.
+    /// What the group has been doing and what claiming does, which is what somebody needs
+    /// before they agree to it.
     /// </summary>
     private static string Asked(InvitationClaimResponse invitation) =>
+        invitation.AlreadyAMember
+            ? $"You are already in {invitation.GroupName}. This link is for {invitation.Name}, a guest."
+            : $"{invitation.GroupName} has been keeping track of {invitation.Name} as a guest. " +
+              $"Join to take over: everything recorded for {invitation.Name} becomes yours.";
+
+    /// <summary>
+    /// Who sent it, and how many people are on the other side. The sender is nullable -- an
+    /// account that has since been deleted leaves its links behind -- so the sentence is
+    /// built rather than interpolated blind.
+    /// </summary>
+    private static string Sent(InvitationClaimResponse invitation) =>
         string.IsNullOrWhiteSpace(invitation.InvitedByUserName)
-            ? $"You have been invited as {invitation.Name}. {Members(invitation.MemberCount)} already."
-            : $"{invitation.InvitedByUserName} invited you as {invitation.Name}. {Members(invitation.MemberCount)} already.";
+            ? $"{Members(invitation.MemberCount)} already."
+            : $"{invitation.InvitedByUserName} sent you this link. {Members(invitation.MemberCount)} already.";
+
+    /// <summary>
+    /// What claiming does to somebody who is already a member, said before the button: it is
+    /// the one claim that changes an existing balance. The confirmation after it asks rather
+    /// than repeating this.
+    /// </summary>
+    private static string MergeWarning(InvitationClaimResponse invitation) =>
+        ParticipantCopy.MergeWarning(invitation.Name);
 
     private async Task ClaimAsync()
     {
         if (_invitation is null) return;
+
+        if (_invitation.AlreadyAMember && !await ConfirmMergeAsync(_invitation))
+            return;
 
         _busy = true;
 
@@ -160,21 +232,43 @@ else if (_invitation is { } invitation)
     }
 
     /// <summary>
-    /// Turning it down, which is a real answer and not only a way out of the page: it tells
-    /// the group not to wait, and hands what they had recorded to one of their members.
+    /// Saying the link is not for this person, which is a real answer and not only a way off
+    /// the page: it stops the link, so whoever forwarded it to the wrong chat finds out the
+    /// next time they look, and nobody else can take the guest's place with it.
     /// </summary>
+    /// <remarks>
+    /// The guest is untouched. Declining used to hand their position to a member of the
+    /// group; now it only ends the link, and the page says so before leaving them to it.
+    /// </remarks>
     private async Task DeclineAsync()
     {
-        if (_invitation is null) return;
+        if (_invitation is not { } invitation) return;
 
         _busy = true;
 
-        var declined = await GroupCommands.DeclineInvitationAsync(Token, _invitation.GroupName);
+        var declined = await GroupCommands.DeclineInvitationAsync(Token, invitation.GroupName);
 
         _busy = false;
 
         if (declined)
-            Nav.NavigateTo("/");
+            _declined = invitation;
+    }
+
+    private async Task<bool> ConfirmMergeAsync(InvitationClaimResponse invitation)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, ParticipantCopy.MergeQuestion(invitation.Name, invitation.GroupName) },
+            { x => x.ButtonText, "Merge" },
+            { x => x.Color, Color.Warning }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
+            $"Merge {invitation.Name} into your account", parameters, options);
+
+        return await dialog.ConfirmedAsync();
     }
 
     private static string Members(int count) =>
