@@ -75,7 +75,7 @@ public static class Extensions
             // People asked into a group who have not answered. Without them the Invited
             // card, the home page's "Waiting on you" and `invitations list` are all empty,
             // which made the two ways in to a group the least looked-at part of the app.
-            builder.AddSeeder<GroupInvitationSeeder>();
+            builder.AddSeeder<GroupGuestSeeder>();
 
             // Identity provider. Reads the same users.json as UserSeeder but writes to
             // Keycloak rather than the database, so it depends on none of the above.
@@ -96,7 +96,7 @@ public static class Extensions
             services.AddJsonSeedSource<TransactionSeedDto>(opt => opt.Paths.Transactions);
             services.AddJsonSeedSource<SettlementSeedDto>(opt => opt.Paths.Settlements);
             services.AddJsonSeedSource<BankConnectionSeedDto>(opt => opt.Paths.BankConnections);
-            services.AddJsonSeedSource<InvitationSeedDto>(opt => opt.Paths.Invitations);
+            services.AddJsonSeedSource<GuestSeedDto>(opt => opt.Paths.Guests);
             return services;
         }
 

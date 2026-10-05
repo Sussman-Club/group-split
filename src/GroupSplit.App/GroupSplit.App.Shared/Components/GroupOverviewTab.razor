@@ -31,18 +31,24 @@
                 {
                     <div class="gs-eyebrow">You are owed</div>
                     <Money Value="UserBalance" Animate Class="gs-hero-amount" />
+                    @* Guests count: they are people the group shares costs with, and what
+                       they owe is owed to somebody like anybody else's. *@
                     <div class="gs-hero-sub">by @People(balance.OwedToYou.Count()) in @GroupName</div>
                     <div class="gs-hero-list">
                         @foreach (var debt in balance.OwedToYou)
                         {
                             var owed = debt;
+                            var guest = IsGuest(owed.UserId);
                             <div class="gs-hero-row">
                                 <Avatar Name="@owed.UserName" Size="sm" />
-                                <div class="who">@owed.UserName <small>owes you</small></div>
+                                <div class="who">@Named(owed.UserId, owed.UserName) <small>owes you</small></div>
                                 <Money Value="owed.Amount" Animate />
+                                @* Named for a guest. "They paid" reads as the other person
+                                   telling the app, and a guest cannot: it is you saying it on
+                                   their behalf, so the button says whose payment it is. *@
                                 <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                            OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
-                                    They paid
+                                    @(guest ? $"{owed.UserName} paid" : "They paid")
                                 </MudButton>
                             </div>
                         }
@@ -61,7 +67,7 @@
                             var owing = debt;
                             <div class="gs-hero-row">
                                 <Avatar Name="@owing.UserName" Size="sm" />
-                                <div class="who">@owing.UserName <small>is waiting on you</small></div>
+                                <div class="who">@Named(owing.UserId, owing.UserName) <small>is waiting on you</small></div>
                                 <Money Value="owing.Amount" Animate />
                                 <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                            OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem)))">
@@ -95,7 +101,7 @@
                         <div class="gs-plan-row @(yours ? "" : "is-theirs")">
                             <Avatar Name="@line.FromUserName" Size="sm" />
                             <div style="min-width: 0">
-                                <div class="who">@Who(line.FromUserId, line.FromUserName) <small>pays</small> @Who(line.ToUserId, line.ToUserName)</div>
+                                <div class="who">@Payer(line) <small>@(line.FromUserId == UserId ? "pay" : "pays")</small> @Who(line.ToUserId, line.ToUserName)</div>
                                 <div class="meta">@Explain(line)</div>
                             </div>
                             <Money Value="line.Amount" />
@@ -106,10 +112,24 @@
                                     @(line.FromUserId == UserId ? "I paid them" : "They paid me")
                                 </MudButton>
                             }
+                            else if (BetweenGuests(line))
+                            {
+                                @* Two guests, so nobody on either end can sign in to say it
+                                   happened. Every member records for guests, so this line is
+                                   any member's to record -- named in full, because the
+                                   person pressing it is on neither end of it. *@
+                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                           aria-label="@($"Record that {line.FromUserName} paid {line.ToUserName}")"
+                                           OnClick="@(() => RecordBetweenGuestsAsync(line))">
+                                    @line.FromUserName paid @line.ToUserName
+                                </MudButton>
+                            }
                             else
                             {
                                 @* Not the caller's to record. Listed because a plan that
-                                   hides a step does not add up. *@
+                                   hides a step does not add up. A line between a guest and
+                                   another member is that member's, the same as a line
+                                   between two other members: they were there for it. *@
                                 <span class="gs-muted" style="font-size: .8125rem">their call</span>
                             }
                         </div>
@@ -160,12 +180,14 @@
                                     {
                                         <span class="gs-muted" style="font-weight: 500"> (you)</span>
                                     }
-                                    @* Their balance is real and is part of what makes this
-                                       column add up; what is missing is somebody to pay.
-                                       Which is why they are here and not in the plan. *@
-                                    @if (member.IsPendingInvitee)
+                                    @* A guest's balance is like anybody's, and they are in the
+                                       plan too. The mark is so the name is not read as a
+                                       member who can sign in and settle it themselves. *@
+                                    @if (member.IsGuest)
                                     {
-                                        <span class="gs-muted" style="font-weight: 500"> (invited)</span>
+                                        @* The space is in the expression: Razor drops a literal one
+                                           that only precedes code, which ran the mark into the name. *@
+                                        <span class="gs-muted" style="font-weight: 500">@($" {ParticipantCopy.GuestMark}")</span>
                                     }
                                 </div>
                                 <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
@@ -251,7 +273,34 @@
     private bool Involves(SettlementPayment payment) =>
         payment.FromUserId == UserId || payment.ToUserId == UserId;
 
-    private string Who(Guid userId, string name) => userId == UserId ? "you" : name;
+    private string Who(Guid userId, string name) => userId == UserId ? "you" : Named(userId, name);
+
+    /// <summary>
+    /// The start of a plan line: "You", capitalised because it opens the sentence, or the
+    /// payer's name. It read "you pays Sofia" when the caller was the one paying.
+    /// </summary>
+    private string Payer(SettlementPayment line) =>
+        line.FromUserId == UserId ? "You" : Who(line.FromUserId, line.FromUserName);
+
+    /// <summary>
+    /// Whether somebody in this group's balances is one of its guests. Read off the balances
+    /// rather than carried on each debt or plan line, because those name a person and an
+    /// amount and nothing else -- and the balances are the one listing here that has
+    /// everybody in it.
+    /// </summary>
+    private bool IsGuest(Guid userId) =>
+        Balance?.NetBalances.Any(member => member.UserId == userId && member.IsGuest) ?? false;
+
+    /// <summary>A name, with the guest mark when it belongs to a guest.</summary>
+    private string Named(Guid userId, string name) =>
+        IsGuest(userId) ? ParticipantCopy.Guest(name) : name;
+
+    /// <summary>
+    /// A plan line with a guest on both ends: one nobody involved can record, and so one any
+    /// member may.
+    /// </summary>
+    private bool BetweenGuests(SettlementPayment payment) =>
+        IsGuest(payment.FromUserId) && IsGuest(payment.ToUserId);
 
     /// <summary>
     /// What this line does for the plan. Naming the person it clears is the check somebody
@@ -260,6 +309,9 @@
     /// </summary>
     private string Explain(SettlementPayment payment)
     {
+        if (BetweenGuests(payment))
+            return "between two guests — any member can record it";
+
         if (!Involves(payment))
             return "not yours to record — shown so the plan adds up";
 
@@ -285,6 +337,49 @@
             payment.FromUserId == UserId
                 ? SettlementDirection.YouPaidThem
                 : SettlementDirection.TheyPaidYou));
+    }
+
+    /// <summary>
+    /// Records a line between two guests, for the amount the plan says, once somebody has
+    /// said it happened.
+    /// </summary>
+    /// <remarks>
+    /// Asked first rather than recorded on the press. The caller is on neither end, so a
+    /// mis-tap writes a repayment between two other people that neither of them can see or
+    /// undo -- and the question is short enough to read in the time it takes to answer.
+    /// <para>
+    /// Written here rather than handed to the page like the caller's own lines: those open
+    /// the settle dialog, which is built around "you" on one end, and this has two names
+    /// and no "you" in it. It goes through the page state service, so the write is the same
+    /// command the CLI's record-repayment uses and is announced the same way.
+    /// </para>
+    /// </remarks>
+    private async Task RecordBetweenGuestsAsync(SettlementPayment payment)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            {
+                x => x.ContentText,
+                $"Record that {payment.FromUserName} paid {payment.ToUserName} {payment.Amount.ToMoney()}? " +
+                "Both of them are guests, so this goes in the group's ledger for them."
+            },
+            { x => x.ButtonText, "Record" }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
+            $"{payment.FromUserName} paid {payment.ToUserName}", parameters, options);
+
+        if (!await dialog.ConfirmedAsync())
+            return;
+
+        await GroupsService.RecordRepaymentAsync(new RecordRepaymentRequest
+        {
+            FromUserId = payment.FromUserId,
+            ToUserId = payment.ToUserId,
+            Amount = payment.Amount
+        }, payment.FromUserName, payment.ToUserName);
     }
 
     protected override async Task OnParametersSetAsync()

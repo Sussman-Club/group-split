@@ -276,7 +276,7 @@
             var members = await GroupsClient.GetGroupMembersAsync(history.GroupId);
 
             // Label, not FullName: this list is the group's participants, which includes
-            // people invited who have not joined, and a rule may name one. DistinctBy
+            // the group's guests, and a rule may name one. DistinctBy
             // because a duplicate id would throw out of a block written to be quiet, and
             // ArgumentException is not an API failure -- it would escape to the error
             // boundary and take the page behind this dialog down.

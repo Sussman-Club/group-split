@@ -48,9 +48,9 @@ public static class ActivityProjectionExtensions
                            ? transaction.User.Email ?? ""
                            : transaction.User.FirstName +
                              (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                       PaidByIsPendingInvitee = transaction.Group != null &&
-                                                transaction.Group.Invitations.Any(invitation =>
-                                                    invitation.ParticipantUserId == transaction.UserId),
+                       PaidByIsGuest = transaction.Group != null &&
+                                       transaction.Group.Guests.Any(guest =>
+                                           guest.ParticipantUserId == transaction.UserId),
                        // A transfer has exactly one split, to whoever was paid, and that is
                        // what makes it a transfer. On an expense the shares say who carried
                        // it, and there is no single other party to name.
@@ -169,9 +169,9 @@ public static class ActivityProjectionExtensions
                            ? transaction.User.Email ?? ""
                            : transaction.User.FirstName +
                              (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                       PaidByIsPendingInvitee = transaction.Group != null &&
-                                                transaction.Group.Invitations.Any(invitation =>
-                                                    invitation.ParticipantUserId == transaction.UserId),
+                       PaidByIsGuest = transaction.Group != null &&
+                                       transaction.Group.Guests.Any(guest =>
+                                           guest.ParticipantUserId == transaction.UserId),
                        PaidToUserId = transaction is Transfer
                            ? transaction.Splits.Select(split => (Guid?)split.UserId).FirstOrDefault()
                            : null,
@@ -240,9 +240,9 @@ public static class ActivityProjectionExtensions
                            ? transaction.User.Email ?? ""
                            : transaction.User.FirstName +
                              (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                       PaidByIsPendingInvitee = transaction.Group != null &&
-                                                transaction.Group.Invitations.Any(invitation =>
-                                                    invitation.ParticipantUserId == transaction.UserId),
+                       PaidByIsGuest = transaction.Group != null &&
+                                       transaction.Group.Guests.Any(guest =>
+                                           guest.ParticipantUserId == transaction.UserId),
                        PaidToUserId = transaction is Transfer
                            ? transaction.Splits.Select(split => (Guid?)split.UserId).FirstOrDefault()
                            : null,

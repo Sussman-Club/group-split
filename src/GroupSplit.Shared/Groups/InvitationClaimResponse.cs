@@ -3,19 +3,25 @@ using System.Text.Json.Serialization;
 namespace GroupSplit.Shared;
 
 /// <summary>
-/// What a personal invitation link says about itself before anybody claims it.
+/// What a guest's link says about itself before anybody claims it.
 /// </summary>
 /// <remarks>
 /// Deliberately silent about money. A link is a bearer credential on a position in a
 /// group's ledger, and it can be forwarded, so what somebody holding one may learn is
 /// exactly what they would learn by claiming it and looking: the group's name, its size, who
-/// asked, and which person the invitation was made out to. What is <em>recorded</em> against
+/// sent the link, and which guest it was made out for. What is <em>recorded</em> against
 /// that person is the group's, and stays theirs until the claim makes it somebody's.
 /// <para>
 /// Naming the group is what makes the page worth showing: "You have been invited to Lisbon
 /// as Carlos" is something a person can agree to, and "claim an invitation" is not.
 /// </para>
 /// </remarks>
+/// <param name="InvitationId">
+/// The id the guest had as an invitation, which the compatibility routes still take -- not
+/// the user id every guest route is keyed by.
+/// </param>
+/// <param name="InvitedByUserName">Who sent the link: whoever issued it, or added the guest.</param>
+/// <param name="InvitedAt">When the link was issued.</param>
 /// <param name="AlreadyAMember">
 /// True when the claimer is already in the group. Claiming is still the right thing to do --
 /// it is what makes the position theirs -- so this is a note for the page and not a refusal.
@@ -45,6 +51,11 @@ public record InvitationClaimResponse(
 /// <param name="RulesTaken">
 /// How many split rules now name the claimer where they named the stand-in.
 /// </param>
+/// <param name="SettlementsCancelled">
+/// Repayments recorded between the guest and the claimer, which would now read as the
+/// claimer paying themselves, and so were deleted. They netted to nothing for the claimer,
+/// so their balance is what it was.
+/// </param>
 public record InvitationClaimedResponse(
     Guid GroupId,
     string GroupName,
@@ -54,7 +65,9 @@ public record InvitationClaimedResponse(
     decimal AmountOwed,
     int PaymentsTaken,
     decimal AmountPaid,
-    int RulesTaken)
+    int RulesTaken,
+    int SettlementsCancelled = 0,
+    decimal AmountCancelled = 0m)
 {
     /// <summary>Whether the group had recorded anything against them before they claimed it.</summary>
     [JsonIgnore]

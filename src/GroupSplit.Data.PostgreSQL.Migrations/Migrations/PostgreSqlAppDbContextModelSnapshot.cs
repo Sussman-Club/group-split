@@ -270,19 +270,36 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("Group");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.GroupInvitation", b =>
+            modelBuilder.Entity("GroupSplit.Data.Entities.GroupGuest", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AddedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EndedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("InvitedAt")
+                    b.Property<DateTimeOffset?>("LinkIssuedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("InvitedByUserId")
+                    b.Property<Guid?>("LinkIssuedByUserId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Name")
@@ -294,15 +311,20 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Token")
-                        .IsRequired()
+                        .IsConcurrencyToken()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("InvitedByUserId");
+                    b.HasIndex("AddedByUserId");
 
-                    b.HasIndex("ParticipantUserId");
+                    b.HasIndex("EndedByUserId");
+
+                    b.HasIndex("LinkIssuedByUserId");
+
+                    b.HasIndex("ParticipantUserId")
+                        .IsUnique();
 
                     b.HasIndex("Token")
                         .IsUnique();
@@ -310,7 +332,16 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("GroupId", "ParticipantUserId")
                         .IsUnique();
 
-                    b.ToTable("GroupInvitation");
+                    b.ToTable("GroupGuest", t =>
+                        {
+                            t.HasCheckConstraint("CK_GroupGuest_End", "(\"EndedAt\" IS NULL) = (\"EndReason\" IS NULL) AND (\"EndedAt\" IS NOT NULL OR \"EndedByUserId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_GroupGuest_EndReason", "\"EndReason\" IN ('Removed', 'Claimed')");
+
+                            t.HasCheckConstraint("CK_GroupGuest_EndedNoLink", "\"EndedAt\" IS NULL OR \"Token\" IS NULL");
+
+                            t.HasCheckConstraint("CK_GroupGuest_Link", "(\"Token\" IS NULL) = (\"LinkIssuedAt\" IS NULL) AND (\"Token\" IS NOT NULL OR \"LinkIssuedByUserId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.GroupJoinLink", b =>
@@ -431,13 +462,13 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.ToTable("GroupMembershipEvent", t =>
                         {
-                            t.HasCheckConstraint("CK_GroupMembershipEvent_Kind", "\"Kind\" IN ('Joined', 'Rejoined', 'Left', 'Removed', 'AccountDeleted')");
+                            t.HasCheckConstraint("CK_GroupMembershipEvent_Kind", "\"Kind\" IN ('Joined', 'Rejoined', 'Left', 'Removed', 'AccountDeleted', 'GuestAdded', 'GuestRemoved', 'GuestClaimed')");
                         });
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.InvitationOpened", b =>
                 {
-                    b.Property<Guid>("InvitationId")
+                    b.Property<Guid>("GuestId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("UserId")
@@ -446,7 +477,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<DateTimeOffset>("OpenedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("InvitationId", "UserId");
+                    b.HasKey("GuestId", "UserId");
 
                     b.HasIndex("UserId");
 
@@ -1159,17 +1190,27 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("DefaultSplitRule");
                 });
 
-            modelBuilder.Entity("GroupSplit.Data.Entities.GroupInvitation", b =>
+            modelBuilder.Entity("GroupSplit.Data.Entities.GroupGuest", b =>
                 {
+                    b.HasOne("GroupSplit.Data.Entities.User", "AddedBy")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("EndedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
-                        .WithMany("Invitations")
+                        .WithMany("Guests")
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("GroupSplit.Data.Entities.User", "InvitedBy")
+                    b.HasOne("GroupSplit.Data.Entities.User", "LinkIssuedBy")
                         .WithMany()
-                        .HasForeignKey("InvitedByUserId")
+                        .HasForeignKey("LinkIssuedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("GroupSplit.Data.Entities.User", "Participant")
@@ -1178,9 +1219,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("AddedBy");
+
                     b.Navigation("Group");
 
-                    b.Navigation("InvitedBy");
+                    b.Navigation("LinkIssuedBy");
 
                     b.Navigation("Participant");
                 });
@@ -1245,9 +1288,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.InvitationOpened", b =>
                 {
-                    b.HasOne("GroupSplit.Data.Entities.GroupInvitation", null)
+                    b.HasOne("GroupSplit.Data.Entities.GroupGuest", null)
                         .WithMany()
-                        .HasForeignKey("InvitationId")
+                        .HasForeignKey("GuestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1535,7 +1578,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 {
                     b.Navigation("Categories");
 
-                    b.Navigation("Invitations");
+                    b.Navigation("Guests");
 
                     b.Navigation("JoinLinks");
 

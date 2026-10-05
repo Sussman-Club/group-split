@@ -9,7 +9,7 @@ last March.
 Which leaves one question this document exists to answer: a rule names people, and people
 join groups and leave them. What does the rule mean then?
 
-What each kind of person in a group -- member, invited, departed -- may do, outside the
+What each kind of person in a group -- member, guest, departed -- may do, outside the
 rules, is [participants.md](participants.md).
 
 ## Split rules are versioned
@@ -120,17 +120,17 @@ an expense cannot be left with amounts and no account of where they came from.
 
 ## The rule every group holds for every participant
 
-Beside the rules a group writes, it is given one per participant -- every member, and
-everybody it has invited and is waiting on: **all of it is for them**. They
+Beside the rules a group writes, it is given one per participant -- every member, and every
+guest: **all of it is for them**. They
 exist because the commonest thing an expense has to say is the one thing its category
 cannot -- the weekly shop is even, and this one is Ana's gym on the joint card -- and a group
 should not have to invent a rule apiece, name them, and keep them in step with its
 membership before anybody can say it.
 
-One appears as each member joins, and as each person is invited -- the friend invited for
-the trip is the one most likely to need "all of it is theirs", and should not have to join
-first. The migration that introduced them wrote one per existing membership, and a later
-one wrote one per pending invitation. The first was the same migration that gave every kind of version a table of its
+One appears as each member joins, and as each guest is added -- the friend on the trip is
+the one most likely to need "all of it is theirs", and should not have to sign up first. The
+migration that introduced them wrote one per existing membership, and a later one wrote one
+per guest (then called a pending invitation). The first was the same migration that gave every kind of version a table of its
 own, so that "who the whole amount is for" is a column in the table of the kind that has
 one, required, rather than a nullable column on a table the other four kinds share. Two
 facts, kept in the two places that state them:
@@ -159,11 +159,10 @@ anybody having created it, so a restatement would move money on expenses recorde
 division nobody chose. A group that wants "all of it is for Ana, until we say otherwise"
 creates a rule of its own -- the same kind, and editable like any other.
 
-**An invitee's rule follows their position.** When the invitation is claimed by somebody
-with no rule of their own in the group, it becomes theirs: its versions are repointed, and
-expenses recorded "all for Luz" before she joined now say her account. When the position
-lands on somebody who already has one -- a member claiming it, or a decline or withdrawal
-handing it to the inviter -- it is retired: deleted if nothing was divided by it and nothing
+**A guest's rule follows their position.** When their link is claimed by somebody with no
+rule of their own in the group, it becomes theirs: its versions are repointed, and expenses
+recorded "all for Luz" before she joined now say her account. When the position lands on
+somebody who already has one -- a member claiming it -- it is retired: deleted if nothing was divided by it and nothing
 defaults to it, and otherwise kept for that history, repointed at the receiver, and no longer
 provisioned, so it leaves the "One pays" picker and becomes an ordinary rule the group may
 rename. `IMemberSplitRules.HandOver` decides which, and is the one place that writes
@@ -230,10 +229,9 @@ silence about the division, which is what they have meant since 2026-09-09.
   each.** Not marked, not zeroed, and not deleted out of the version the rule is on: the
   current version closes and a new one opens without them. This happens on all three ways
   out -- removed by somebody else, leaving of their own accord, and deleting the account --
-  because all three go through `GroupService.DetachMember`. A pending invitee whose
-  invitation is declined or withdrawn is handled the same way, by
-  `IGroupParticipants.HandOver`. Both go through `ISplitRuleRevisions`, which is the only
-  place a rule changes without somebody editing it.
+  because all three go through `GroupService.DetachMember`. A guest who is removed is
+  handled the same way, by `GroupService.DetachGuest`. Both go through
+  `ISplitRuleRevisions`, which is the only place a rule changes without somebody editing it.
 
   Editing the version in place would have been shorter and would have broken the guarantee
   above: an expense recorded last March points at that row, and "divide it again by the rule
@@ -244,7 +242,7 @@ silence about the division, which is what they have meant since 2026-09-09.
   with `LeftAt`, `LeftReason` (`Left`, `Removed` or `AccountDeleted`) and `LeftByUserId`.
   A query filter on `GroupMembership` keeps closed rows out of `Group.Users` and
   `User.Groups`, so every "is this person a member" read still means a current member.
-- **A way back in is only as good as its date.** A join link made, or an invitation sent,
+- **A way back in is only as good as its date.** A join link made, or a guest's link issued,
   at or before somebody's departure does not admit them
   (`GROUP_REJOIN_NEEDS_NEW_INVITATION`). One issued afterwards does, and they come back as
   an ordinary member on the same row, with `JoinedAt` reset and their archive flag cleared.
@@ -262,27 +260,26 @@ silence about the division, which is what they have meant since 2026-09-09.
   re-noting, re-dating, re-filing, re-pointing a bill line, and changing the other shares.
   The check is `DepartedPositions`, against a snapshot `IGroupParticipants.DepartedOn` takes
   before the edit is applied; it reads the transaction rather than membership rows, so it
-  covers a stand-in left behind by a withdrawn invitation too.
+  covers a removed guest too.
 - **What was theirs is redistributed among the rest, not left as a hole.** Weights are
   proportional and the division normalises by whatever total it is given, so two members left
   holding one share each divide the whole amount between them.
 - **A rule that puts the whole amount on one person follows them, or stays as it is.** It
   has no weight to prune and nobody to prune it among, so there are only two things it can
-  do. Where the hand-over names somebody taking their place -- an invitation claimed,
-  declined or withdrawn -- every version naming them is repointed at the receiver, closed
-  versions included, and no new version is opened. That is the one place a superseded
-  version is ever written, and it is written for the same reason the hand-over rewrites the
-  shares on expenses years old: a stand-in is deleted when its invitation closes, and a
-  version left naming it is a foreign key the delete cannot get past. Where nobody is named
-  -- a member leaving -- nothing moves at all: their account survives, so the version goes
-  on naming a row that is still there, and the rule simply stops dividing.
+  do. Where the hand-over names somebody taking their place -- a guest's link claimed --
+  every version naming them is repointed at the claimer, closed versions included, and no
+  new version is opened. That is the one place a superseded version is ever written, and it
+  is written for the same reason the hand-over rewrites the shares on expenses years old: the
+  claim is the person turning out to have been somebody else all along. Where nobody is
+  named -- a member leaving, a guest removed -- nothing moves at all: the account or stand-in
+  survives, so the version goes on naming a row that is still there, and the rule simply
+  stops dividing.
 - **A rule cannot be written naming somebody outside the group.** Create and update both
   refuse it (`RULE_USERS_NOT_IN_GROUP`), so the only way a rule names a non-member is a
   client holding a rule it read before the membership moved. "Outside" means outside the
-  group's *participants*, though, which is wider than its members: somebody the group has
-  named and is waiting on may be named by a rule too, because the next expense is exactly the
-  one they need a share of -- see [pending-invitees.md](pending-invitees.md). If they never
-  join, the rule stops naming them, by the same pruning a departure does below.
+  group's *participants*, though, which is wider than its members: a guest may be named by a
+  rule too -- see [guests.md](guests.md). If they are removed, the rule stops naming them, by
+  the same pruning a departure does above.
 - **A new member is named by nothing.** Rules are not rewritten when somebody joins, so an
   expense divided by an existing percentage or shares rule gives them no share until the
   rule is edited. An even rule naming nobody -- the default -- includes them from the moment
@@ -319,8 +316,8 @@ share stayed in the divisor and diluted everybody left.
 
 A shares rule where only the departing member held a share, or a rule naming them alone:
 the weights that survive are then all zero, or there are none, and `SplitCalculator.Divide`
-refuses both. Somebody invited and never joined leaves a rule the same way, since declining
-or withdrawing prunes their name too.
+refuses both. A removed guest leaves a rule the same way, since removing prunes their name
+too.
 
 What that costs has changed. It used to be a 500 with a trace id on the next expense filed
 under a category pointing at that rule -- a fault report for what is a coherent request
@@ -328,24 +325,19 @@ about an incoherent template. `ExpenseSplitter` now turns the refusal into
 `SPLIT_RULE_INVALID`, naming the rule and saying the two ways out: edit it, or file the
 expense under nothing and have it divided evenly.
 
-Nor is the timing a gap any more, on the invitation paths at least. A hand-over counts the
-rules it left naming nobody and reports them, so declining or withdrawing says so at the
-moment it causes it -- in the CLI's output and in the app's snackbar -- rather than leaving
-it for whoever records the next expense. That count is the one number in
-`InvitationClosedResponse` that is a warning rather than a receipt.
-
-Two things it still does not cover. A member **leaving** goes through
-`GroupService.DetachMember`, which reports nothing, so a departure can still empty a rule in
-silence. And an **even** rule emptied this way does not refuse at all: naming nobody is how
+The timing is still a gap. A member **leaving** goes through `GroupService.DetachMember`
+and a guest being removed through `DetachGuest`, and neither reports the rules it emptied,
+so a departure can empty a rule in silence. (Declining or withdrawing an invitation used to
+count them; neither touches a rule any more.) And an **even** rule emptied this way does not refuse at all: naming nobody is how
 an even split says "between everybody", so it silently widens rather than failing, and the
 warning above is the only thing that mentions it.
 
 ## Which way a rule moves depends on the direction
 
-Somebody **arriving** keeps their place in a rule. When an invitation is claimed the weight
+Somebody **arriving** keeps their place in a rule. When a guest's link is claimed the weight
 follows the person onto their own account -- added to a weight they already held, since a
 rule may hold only one opinion about somebody -- because the group wrote "Carlos gets one
 share" and meant it. One hand-over served both directions at first and pruned in both, so
-claiming an invitation quietly took the new member out of the very templates that had named
-them. `RuleHandling` is a parameter rather than a default for that reason: passing the wrong
-one is invisible.
+claiming quietly took the new member out of the very templates that had named them. The
+claim is the only hand-over left, and it always transfers; departures prune through
+`ISplitRuleRevisions.WithoutParticipant` with `RuleHandling.Prune`.

@@ -7,16 +7,25 @@ namespace GroupSplit.Shared;
 /// Who owes it. Carried beside the name because the edit dialog sends these back as
 /// <see cref="SplitInput"/>, and a name is not something the API can be addressed by.
 /// </param>
-/// <param name="IsPendingInvitee">
-/// True when the share belongs to somebody the group has invited and is still waiting on.
-/// The share itself is ordinary -- it counts in the balances like any other -- but who
-/// holds it is worth showing, because nobody should read the name as a member who joined.
+/// <param name="IsGuest">
+/// True when the share belongs to one of the group's guests. The share itself is ordinary --
+/// it counts in the balances like any other -- but who holds it is worth showing, because
+/// nobody should read the name as a member who joined.
 /// </param>
 public record TransactionSplitResponse(
     Guid UserId,
     string UserName,
     decimal Amount,
-    bool IsPendingInvitee = false);
+    bool IsGuest = false)
+{
+    /// <summary>The name <see cref="IsGuest"/> had before guests were renamed; still written for older clients.</summary>
+    [Obsolete("Use IsGuest.")]
+    public bool IsPendingInvitee
+    {
+        get => IsGuest;
+        init => IsGuest = value;
+    }
+}
 
 public record TransactionDetailsResponse : TransactionResponse
 {

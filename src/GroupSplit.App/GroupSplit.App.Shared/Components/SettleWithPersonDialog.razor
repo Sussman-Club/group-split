@@ -27,6 +27,18 @@
 
                 <MudText Typo="Typo.subtitle2">@Standing</MudText>
 
+                @* A guest cannot sign in to say they paid or were paid, so whatever is
+                   recorded here is the reader's word for both of them. Said under the
+                   figure, because it is about who does the recording and not about how
+                   much. *@
+                @if (Person.IsGuest && Person.Groups.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="gs-muted">
+                        @Person.UserName is a @ParticipantCopy.GuestIn(Person.Groups[0].GroupName), so
+                        you are recording this for them.
+                    </MudText>
+                }
+
                 @* Where the figure comes from, so the arithmetic is checkable here rather
                    than by opening two groups. Shown whenever the debt spans more than one,
                    because that is exactly the case the person has never been able to see. *@

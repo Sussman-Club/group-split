@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Extensions;
 using GroupSplit.Shared.Errors;
 
 namespace GroupSplit.App.Shared.Services.Errors;
@@ -60,7 +61,13 @@ public static class ErrorMessages
                                              + "Choose a rule for each item before dividing it.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
-        [ErrorCodes.GroupInvitationNotFound] = "That invitation is no longer open.",
+        // A guest's link is what reaches this now, and it most often means somebody already
+        // used it or a member stopped it -- not that the URL was mistyped.
+        [ErrorCodes.GroupInvitationNotFound] = "That link no longer works. Ask someone in the group for a new one.",
+        // Somebody else on the People tab got there first: removed the guest, or the guest's
+        // link was claimed and they are a member now. Either way the row is out of date.
+        [ErrorCodes.GroupGuestNotFound] =
+            "That guest is no longer in the group. Someone may have removed them, or taken their place with their link.",
         [ErrorCodes.GroupJoinLinkNotFound] = "That join link is not one of ours. Check you copied the whole of it.",
         [ErrorCodes.GroupJoinLinkExpired] = "That join link has expired. Ask someone in the group for a new one.",
         [ErrorCodes.GroupJoinLinkRevoked] = "That join link has been withdrawn. Ask someone in the group for a new one.",
@@ -68,10 +75,11 @@ public static class ErrorMessages
             "You are no longer in this group, and this link was shared before you left. " +
             "Ask someone in the group for a new one.",
         [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
-        [ErrorCodes.GroupInvitationNoName] = "An invitation needs a name to make it out to.",
-        [ErrorCodes.GroupMemberNotJoined] =
-            "That person has been invited and has not joined, so there is no membership to remove. " +
-            "Withdraw the invitation instead.",
+        [ErrorCodes.GroupInvitationNoName] = "A guest needs a name.",
+        // GROUP_MEMBER_NOT_JOINED and SETTLEMENT_WITH_PENDING_INVITEE had messages here. Both
+        // are retired -- guests are removed and settled with like anybody else -- and the
+        // API never sends them, so a sentence for them would only be a promise about a
+        // refusal that cannot happen.
         [ErrorCodes.TransactionGroupLeft] = "You are no longer in this transaction's group, so it cannot be changed.",
         [ErrorCodes.TransactionMovesDepartedBalance] =
             "This would change what somebody who has left the group paid or owed here. They settled up " +
@@ -79,18 +87,22 @@ public static class ErrorMessages
             "category. If they only had a share, you can also set the other shares yourself and leave " +
             "theirs unchanged; if they paid for it, the amount stays too.",
 
-        [ErrorCodes.GroupMemberNotSettled] = "This member still has a balance in the group. Settle up before removing them.",
+        // One refusal for three acts: removing a member, removing a guest, and leaving. So it
+        // names nobody and says the rule they all share; removing somebody from the People
+        // tab says who and how much instead, from the balance the refusal carries -- see
+        // NotSquare below.
+        // Somebody else changed the same guest a moment earlier; nothing was written. The
+        // People tab re-reads on the change announcement, so looking again is enough.
+        [ErrorCodes.GroupGuestChanged] =
+            "Someone else changed this guest at the same moment, so nothing was done. Look again and try once more.",
+        [ErrorCodes.GroupMemberNotSettled] =
+            "Nobody can leave or be removed while they still owe or are owed money in this group. Settle up first.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",
         [ErrorCodes.TransactionPayerNotInGroup] =
-            "The person who paid is neither a member of this group nor invited to it.",
+            "The person who paid is neither a member nor a guest of this group.",
         [ErrorCodes.SplitUserNotInGroup] =
-            "One of the shares names someone who is neither in this group nor invited to it.",
+            "One of the shares names someone who is neither a member nor a guest of this group.",
         [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
-        // Their balance is real and on the page. What is missing is an account on the other
-        // end of the payment, which is why this is not "not a member of this group".
-        [ErrorCodes.SettlementWithPendingInvitee] =
-            "That person has been invited and has not joined yet, so there is nobody to pay. " +
-            "Their balance stands until they accept.",
         [ErrorCodes.SettlementNothingToSettle] = "You are already square with everybody in this group.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
         // Points at the thing they almost certainly meant. Moving a year of expenses out of
@@ -164,6 +176,24 @@ public static class ErrorMessages
     public const string RejoinAfterRemoval =
         "You were removed from this group, and this link was shared before that. " +
         "Ask someone in the group for a new one.";
+
+    /// <summary>
+    /// <c>GROUP_MEMBER_NOT_SETTLED</c> for one named person, from the balance the refusal
+    /// carries: who, which way, and how much.
+    /// </summary>
+    /// <remarks>
+    /// The table's own sentence has to cover leaving as well as removing, so it can only
+    /// state the rule. Somebody pressing Remove on a row knows who they meant and wants to
+    /// know what is standing in the way, which for a guest is a repayment the members have
+    /// to record themselves -- so the amount and its direction are the useful part.
+    /// <para>
+    /// The sign is the group's: a positive balance is money owed to them.
+    /// </para>
+    /// </remarks>
+    public static string NotSquare(string name, decimal balance) =>
+        balance > 0
+            ? $"{name} is still owed {balance.ToMoney()} in this group. Record what they were paid back, then remove them."
+            : $"{name} still owes {Math.Abs(balance).ToMoney()} in this group. Record what they paid back, then remove them.";
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>
     public static bool Knows(string code) => ByCode.ContainsKey(code);

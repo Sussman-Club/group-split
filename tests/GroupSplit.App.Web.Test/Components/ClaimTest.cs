@@ -10,15 +10,18 @@ using MudBlazor;
 namespace GroupSplit.App.Web.Test.Components;
 
 /// <summary>
-/// The page a personal invitation link lands on, and what it asks before handing a position
-/// over.
+/// The page a guest's link lands on, and what it asks before handing a position over.
 /// </summary>
 /// <remarks>
-/// A member of the group opening somebody else's link -- to check it works before sending
-/// it, most often -- used to see exactly what the invitee sees: "Join as Luz", one click
-/// from merging Luz's balance into their own. Claiming is still allowed for them, because a
-/// group can name the same person twice, but the page now says what it would do and asks
+/// A member of the group opening a guest's link -- to check it works before sending it,
+/// most often -- used to see exactly what the guest sees: "Join as Luz", one click from
+/// merging Luz's balance into their own. Claiming is still allowed for them, because a
+/// group can add the same person twice, but the page now says what it would do and asks
 /// again.
+/// <para>
+/// Somebody who is not the guest says so with "This isn't me", which stops the link and
+/// nothing else: the page then says the group still has the guest.
+/// </para>
 /// </remarks>
 public class ClaimTest : ComponentTest
 {
@@ -74,7 +77,7 @@ public class ClaimTest : ComponentTest
 
         var (page, dialogs) = await Open();
 
-        Assert.Contains("You are already in The flat. This invitation is made out to Luz.", page.Markup,
+        Assert.Contains("You are already in The flat. This link is for Luz, a guest.", page.Markup,
             StringComparison.Ordinal);
         Assert.Contains("merges Luz into your account", page.Markup, StringComparison.Ordinal);
 
@@ -129,5 +132,88 @@ public class ClaimTest : ComponentTest
 
         Assert.DoesNotContain("Merge Luz into your account", dialogs.Markup, StringComparison.Ordinal);
         _commands.Verify(commands => commands.ClaimInvitationAsync(Token, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The page says what the group has been doing and what taking over means, before the
+    /// button that does it.
+    /// </summary>
+    [Fact]
+    public async Task The_page_says_the_group_has_been_keeping_track_of_the_guest()
+    {
+        TheLinkSays(alreadyAMember: false);
+
+        var (page, _) = await Open();
+
+        Assert.Contains(
+            "The flat has been keeping track of Luz as a guest. Join to take over: everything recorded for Luz becomes yours.",
+            page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Ana sent you this link.", page.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("invited", page.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// "This isn't me" stops the link and nothing else, and the page says so: the guest is
+    /// still in the group, and the link is what stopped working.
+    /// </summary>
+    [Fact]
+    public async Task This_isnt_me_stops_the_link_and_says_the_guest_stays()
+    {
+        TheLinkSays(alreadyAMember: false);
+
+        _commands
+            .Setup(commands => commands.DeclineInvitationAsync(Token, "The flat", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var (page, _) = await Open();
+
+        await Button(page, "This isn't me").ClickAsync(new());
+
+        _commands.Verify(commands => commands.DeclineInvitationAsync(Token, "The flat", It.IsAny<CancellationToken>()),
+            Times.Once);
+        _commands.Verify(commands => commands.ClaimInvitationAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        page.WaitForAssertion(() =>
+        {
+            Assert.Contains("This link no longer works", page.Markup, StringComparison.Ordinal);
+            Assert.Contains("The flat still has Luz as a guest.", page.Markup, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
+    /// A refusal leaves the page where it was, so the person can try again or claim.
+    /// </summary>
+    [Fact]
+    public async Task A_decline_that_did_not_go_through_leaves_the_link_on_the_page()
+    {
+        TheLinkSays(alreadyAMember: false);
+
+        _commands
+            .Setup(commands => commands.DeclineInvitationAsync(Token, "The flat", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var (page, _) = await Open();
+
+        await Button(page, "This isn't me").ClickAsync(new());
+
+        Assert.DoesNotContain("This link no longer works", page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Join as Luz", page.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A member checking a link is not offered the button that would stop it: for them the
+    /// way off the page leaves the link working for the guest it was made for.
+    /// </summary>
+    [Fact]
+    public async Task A_member_is_not_offered_to_stop_the_link()
+    {
+        TheLinkSays(alreadyAMember: true);
+
+        var (page, _) = await Open();
+
+        Assert.DoesNotContain(page.FindAll("button, a"),
+            element => element.TextContent.Trim() == "This isn't me");
+        Assert.Contains(page.FindAll("a"), element => element.TextContent.Trim() == "Back to The flat");
     }
 }

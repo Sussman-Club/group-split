@@ -21,13 +21,19 @@ namespace GroupSplit.API.Services;
 /// mentioned at the moment it was caused -- which
 /// <c>docs/split-rules-and-membership.md</c> named as the gap worth closing.
 /// </remarks>
+/// <param name="SettlementsCancelled">
+/// Repayments between the two people that the hand-over would have turned into somebody
+/// paying themselves, and so deleted instead.
+/// </param>
 public record ParticipantHandover(
     int SharesMoved,
     decimal AmountOwed,
     int PaymentsMoved,
     decimal AmountPaid,
     int RulesAffected,
-    int RulesEmptied = 0)
+    int RulesEmptied = 0,
+    int SettlementsCancelled = 0,
+    decimal AmountCancelled = 0m)
 {
     public static readonly ParticipantHandover Nothing = new(0, 0m, 0, 0m, 0);
 
@@ -68,14 +74,15 @@ public enum ParticipantStanding
     Member,
 
     /// <summary>
-    /// A stand-in named by a pending invitation. Choosable wherever money is recorded, and
-    /// nowhere else.
+    /// A current guest's stand-in. Choosable wherever money is recorded, settleable, and
+    /// removable once square -- and nothing else: there is nobody to sign in as them.
     /// </summary>
-    Invited,
+    Guest,
 
     /// <summary>
-    /// Was a member and is not now: a closed membership row, or -- for somebody who left
-    /// before departures were kept -- a name the group's ledger or rules still carry.
+    /// Was a member or a guest and is not now: a closed membership row, a removed guest, or
+    /// -- for somebody who left before departures were kept -- a name the group's ledger or
+    /// rules still carry.
     /// </summary>
     Departed,
 
@@ -84,27 +91,24 @@ public enum ParticipantStanding
 }
 
 /// <summary>
-/// Who a group may point at when it records money: its members, and the people it has
-/// invited and is still waiting on.
+/// Who a group may point at when it records money: its members, and its guests.
 /// </summary>
 /// <remarks>
 /// The distinction this exists to keep straight. <em>Membership</em> is who may read and
 /// change the group -- every authorization check in the app asks that question of
 /// <c>Group.Users</c> and must go on asking it of nothing else. <em>Participation</em> is
-/// who may be given a share, which is a wider set, because spending does not wait for
-/// people to answer their invitations: the flat is moved into and the trip is booked before
-/// everybody has signed up.
+/// who may be given a share, which is a wider set, because the people a group spends with
+/// are not all going to sign up: the flat is shared and the trip is taken with whoever came.
 /// <para>
-/// So a pending invitee is choosable wherever a person is chosen for money -- a
-/// transaction's payer, a stated split, a split rule -- and choosable nowhere else. They
-/// are not in the group, cannot see it, and there is nobody to settle up with; what they
-/// have is a position in its balances, waiting for them.
+/// So a guest is choosable wherever a person is chosen for money -- a transaction's payer,
+/// a stated split, a split rule, either end of a repayment -- and nowhere else. They are not
+/// in the group and cannot see it; the members record everything for them.
 /// </para>
 /// </remarks>
 public interface IGroupParticipants
 {
     /// <summary>
-    /// Everyone a group may record money against, members and pending invitees alike.
+    /// Everyone a group may record money against, members and guests alike.
     /// </summary>
     /// <remarks>
     /// One query over the users with an <c>OR</c> rather than a union of two, so the rows
@@ -118,35 +122,35 @@ public interface IGroupParticipants
     Task<IReadOnlyCollection<Guid>> IdsOf(Guid groupId, CancellationToken ct = default);
 
     /// <summary>
-    /// The wire shape of a group's people, each row saying whether they have joined.
+    /// The wire shape of a group's people, each row saying whether they are a guest.
     /// </summary>
     /// <remarks>
     /// Takes the query rather than the group's id because the scoping is the caller's --
     /// <c>GetGroupMembers</c> answers with nothing at all for a group the reader is not in --
     /// and only the flag belongs here. It is a fact about the pair and not about the person:
-    /// the same account can be a member of one group and an unanswered invitation in another,
-    /// so the group being read has to be said.
+    /// a stand-in is a guest of exactly one group, and an account is a member of some groups
+    /// and not others, so the group being read has to be said.
     /// </remarks>
     IQueryable<UserInfo> Describe(IQueryable<User> people, Guid groupId);
 
     /// <summary>
     /// The participant of <paramref name="groupId"/> with that id, or null when they are
-    /// neither a member nor invited.
+    /// neither a member nor a guest.
     /// </summary>
     Task<User?> Find(Guid groupId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>Whether that person has been invited to the group and has not joined it.</summary>
-    Task<bool> IsPendingInvitee(Guid groupId, Guid userId, CancellationToken ct = default);
+    /// <summary>Whether that person is one of the group's current guests.</summary>
+    Task<bool> IsGuest(Guid groupId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// What <paramref name="userId"/> is to <paramref name="groupId"/>: a member, invited,
+    /// What <paramref name="userId"/> is to <paramref name="groupId"/>: a member, a guest,
     /// departed, or nobody.
     /// </summary>
     /// <remarks>
     /// Member wins over everything, because a current membership is the only standing that
     /// grants anything. Departed is asked last and of two sources: a closed membership row,
-    /// which every departure writes now, and the ledger, which is all that is left of the
-    /// departures from before it did.
+    /// which every departure writes now, and the ledger, which is what is left of a removed
+    /// guest and of the departures from before membership rows were kept.
     /// </remarks>
     Task<ParticipantStanding> StandingOf(Guid groupId, Guid userId, CancellationToken ct = default);
 
@@ -156,8 +160,8 @@ public interface IGroupParticipants
     /// </summary>
     /// <remarks>
     /// Read off the transaction rather than off membership rows, so it covers everybody who
-    /// can be named and gone: a member who left, one removed, and a stand-in whose invitation
-    /// closed without anybody to hand its position to. Needs the splits loaded.
+    /// can be named and gone: a member who left, one removed, and a removed guest. Needs the
+    /// splits loaded.
     /// </remarks>
     Task<IReadOnlyList<ParticipantPosition>> DepartedOn(Transaction transaction, CancellationToken ct = default);
 
@@ -166,43 +170,26 @@ public interface IGroupParticipants
     /// address, and no identity, so nobody can sign in as it.
     /// </summary>
     /// <remarks>
-    /// It exists to be given shares before there is an account to give them to. Claiming
-    /// the invitation is what puts a real person behind it, and claiming moves the position
-    /// onto that person's own account and deletes this -- so a stand-in is never a lasting
-    /// second row for somebody who is already here.
+    /// It exists to be given shares when there is no account to give them to. Claiming the
+    /// guest's link is what puts a real person behind it, and claiming moves the position
+    /// onto that person's own account and leaves this empty -- so a stand-in never holds
+    /// anything for somebody who is already here.
     /// <para>
     /// Always new, and never an existing account: there is no address to recognise one by,
     /// and guessing from a name would be handing a stranger's ledger to whoever the group
     /// happened to call Dani.
     /// </para>
     /// <para>
-    /// Added to the context and not saved. The caller is writing the invitation in the same
-    /// unit of work, and a stand-in with no invitation behind it is a row nothing would
-    /// ever point at.
+    /// Added to the context and not saved. The caller is writing the guest in the same unit
+    /// of work, and a stand-in with no guest behind it is a row nothing would ever point at.
     /// </para>
     /// </remarks>
     User StandInFor(string name);
 
     /// <summary>
-    /// Who takes over what an invitation was holding, when it is declined or withdrawn: the
-    /// member who sent it, or -- if they have gone -- the group's longest-standing member.
-    /// </summary>
-    /// <remarks>
-    /// Not a choice the caller makes, and deliberately the same rule on both sides. The
-    /// group is present when it withdraws one and could be asked; the invitee declining is
-    /// not in the group and could not be asked at all, and an outcome that depended on who
-    /// pressed the button would be two different rules for one event.
-    /// <para>
-    /// Null only for a group with no members left, which
-    /// <c>GROUP_CANNOT_LEAVE_LAST_MEMBER</c> makes unreachable.
-    /// </para>
-    /// </remarks>
-    Task<User?> Absorber(GroupInvitation invitation, CancellationToken ct = default);
-
-    /// <summary>
-    /// Hands everything one participant holds in a group to another: their shares, the
-    /// transactions they were down as having paid for, and their place in the group's split
-    /// rules.
+    /// Hands everything a guest holds in a group to the account that claimed them: their
+    /// shares, the transactions they were down as having paid for, and their place in the
+    /// group's split rules.
     /// </summary>
     /// <remarks>
     /// Amounts are never touched. A share moves from one name to another, and where the
@@ -211,12 +198,15 @@ public interface IGroupParticipants
     /// every transaction still sums to its own amount, which is the invariant the group's
     /// balances rest on, and the group's balances still sum to zero.
     /// <para>
-    /// The rules are the caller's to say, through <paramref name="rules"/>, because the two
-    /// directions want opposite things: somebody claiming their link should keep the place a
-    /// rule gave them, and somebody who is never coming should lose it. Passing the wrong
-    /// one is silent -- a claimed invitation whose rules were pruned leaves the new member
-    /// out of the templates that named them, and nothing says so -- which is why it is a
-    /// parameter and not a default.
+    /// The rules follow them: the group wrote "Carlos gets one share" and meant it, so Carlos
+    /// claiming his link is the group getting what it asked for.
+    /// </para>
+    /// <para>
+    /// A repayment between the two of them would become one from the claimer to themselves
+    /// -- a member who recorded "Pat paid me back" and then turns out to be Pat. Those are
+    /// deleted rather than moved. They net to nothing for whoever holds both ends, so no
+    /// balance changes, and a row saying somebody paid themselves would only confuse the
+    /// ledger.
     /// </para>
     /// <para>
     /// Either way the rules change by gaining a version rather than by being edited, through
@@ -225,11 +215,11 @@ public interface IGroupParticipants
     /// </para>
     /// <para>
     /// Does not save, so the caller can apply it together with whatever else the same
-    /// action changes -- an invitation being removed, an account being anonymised.
+    /// action changes -- the guest's row ending, the claimer joining.
     /// </para>
     /// </remarks>
     Task<ParticipantHandover> HandOver(Guid groupId, Guid fromUserId, Guid toUserId,
-        RuleHandling rules, CancellationToken ct = default);
+        CancellationToken ct = default);
 }
 
 public sealed class GroupParticipants(
@@ -240,9 +230,9 @@ public sealed class GroupParticipants(
     public IQueryable<User> Of(Guid groupId) =>
         context.Set<User>()
             .Where(user => user.Groups.Any(@group => @group.Id == groupId) ||
-                           context.Set<GroupInvitation>().Any(invitation =>
-                               invitation.GroupId == groupId &&
-                               invitation.ParticipantUserId == user.Id));
+                           context.Set<GroupGuest>().Any(guest =>
+                               guest.GroupId == groupId &&
+                               guest.ParticipantUserId == user.Id));
 
     public async Task<IReadOnlyCollection<Guid>> IdsOf(Guid groupId, CancellationToken ct = default) =>
         await Of(groupId).Select(user => user.Id).ToListAsync(ct);
@@ -250,23 +240,22 @@ public sealed class GroupParticipants(
     public IQueryable<UserInfo> Describe(IQueryable<User> people, Guid groupId) =>
         from user in people
         select new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
-            // A participant who is not a member is one of the invited: that is what the
-            // listing is the union of.
+            // A participant who is not a member is a guest: that is what the listing is the
+            // union of.
             !user.Groups.Any(@group => @group.Id == groupId));
 
     public Task<User?> Find(Guid groupId, Guid userId, CancellationToken ct = default) =>
         Of(groupId).FirstOrDefaultAsync(user => user.Id == userId, ct);
 
     /// <remarks>
-    /// No membership check beside it, because the two sets cannot overlap: an invitation's
-    /// participant is a stand-in the group made, nobody can sign in as one, and claiming the
-    /// invitation deletes it. So being named by a pending invitation is the whole of the
-    /// question.
+    /// No membership check beside it, because the two sets cannot overlap: a guest's
+    /// participant is a stand-in the group made, and nobody can sign in as one. So being a
+    /// current guest's stand-in is the whole of the question.
     /// </remarks>
-    public Task<bool> IsPendingInvitee(Guid groupId, Guid userId, CancellationToken ct = default) =>
-        context.Set<GroupInvitation>()
-            .AnyAsync(invitation => invitation.GroupId == groupId &&
-                                    invitation.ParticipantUserId == userId, ct);
+    public Task<bool> IsGuest(Guid groupId, Guid userId, CancellationToken ct = default) =>
+        context.Set<GroupGuest>()
+            .AnyAsync(guest => guest.GroupId == groupId &&
+                               guest.ParticipantUserId == userId, ct);
 
     public async Task<ParticipantStanding> StandingOf(Guid groupId, Guid userId, CancellationToken ct = default)
     {
@@ -281,10 +270,22 @@ public sealed class GroupParticipants(
         if (membership is { LeftAt: null })
             return ParticipantStanding.Member;
 
-        if (await IsPendingInvitee(groupId, userId, ct))
-            return ParticipantStanding.Invited;
+        if (await IsGuest(groupId, userId, ct))
+            return ParticipantStanding.Guest;
 
-        if (membership is not null || await HasTraceIn(groupId, userId, ct))
+        if (membership is not null)
+            return ParticipantStanding.Departed;
+
+        // A claimed guest's stand-in is nobody: the person is a member under their own
+        // account, and an old rule version still naming the stand-in is not a departure.
+        // Asked of the history, the same way the past-members listing leaves them out, so
+        // the two agree.
+        if (await context.Set<GroupMembershipEvent>().AnyAsync(change =>
+                change.GroupId == groupId && change.UserId == userId &&
+                change.Kind == MembershipEventKind.GuestClaimed, ct))
+            return ParticipantStanding.Stranger;
+
+        if (await HasTraceIn(groupId, userId, ct))
             return ParticipantStanding.Departed;
 
         return ParticipantStanding.Stranger;
@@ -339,39 +340,33 @@ public sealed class GroupParticipants(
         return standIn;
     }
 
-    public async Task<User?> Absorber(GroupInvitation invitation, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(invitation);
-
-        if (invitation.InvitedByUserId is { } inviterId)
-        {
-            var inviter = await context.Set<User>()
-                .FirstOrDefaultAsync(user => user.Id == inviterId &&
-                                             user.Groups.Any(@group => @group.Id == invitation.GroupId), ct);
-
-            if (inviter is not null)
-                return inviter;
-        }
-
-        // Longest-standing member. Deterministic, and the person likeliest to recognise
-        // what the money was: the group's own creator, in the ordinary case where nobody
-        // has left.
-        return await (from membership in context.Set<GroupMembership>()
-                      join user in context.Set<User>() on membership.UserId equals user.Id
-                      where membership.GroupId == invitation.GroupId
-                      orderby membership.JoinedAt, membership.UserId
-                      select user)
-            .FirstOrDefaultAsync(ct);
-    }
-
     public async Task<ParticipantHandover> HandOver(Guid groupId, Guid fromUserId, Guid toUserId,
-        RuleHandling rules, CancellationToken ct = default)
+        CancellationToken ct = default)
     {
         if (fromUserId == toUserId)
             return ParticipantHandover.Nothing;
 
+        // First, and found before anything moves: a repayment between the two of them is the
+        // one row the hand-over cannot simply repoint, because it would end up naming the
+        // claimer at both ends. A transfer has one payer and one share and never names the
+        // same person twice, so these are exactly the ones with one of the two at each end.
+        var between = await context.Set<Transfer>()
+            .Include(transfer => transfer.Splits)
+            .Where(transfer => transfer.GroupId == groupId &&
+                               ((transfer.UserId == fromUserId &&
+                                 transfer.Splits.Any(split => split.UserId == toUserId)) ||
+                                (transfer.UserId == toUserId &&
+                                 transfer.Splits.Any(split => split.UserId == fromUserId))))
+            .ToListAsync(ct);
+
+        var cancelled = between.Select(transfer => transfer.Id).ToList();
+
+        context.RemoveRange(between.SelectMany(transfer => transfer.Splits));
+        context.RemoveRange(between);
+
         var shares = await context.Set<TransactionSplit>()
-            .Where(split => split.Transaction.GroupId == groupId && split.UserId == fromUserId)
+            .Where(split => split.Transaction.GroupId == groupId && split.UserId == fromUserId &&
+                            !cancelled.Contains(split.TransactionId))
             .ToListAsync(ct);
 
         // The receiver's own shares on the same transactions, so a transaction that names
@@ -400,7 +395,8 @@ public sealed class GroupParticipants(
         }
 
         var paid = await context.Set<Transaction>()
-            .Where(transaction => transaction.GroupId == groupId && transaction.UserId == fromUserId)
+            .Where(transaction => transaction.GroupId == groupId && transaction.UserId == fromUserId &&
+                                  !cancelled.Contains(transaction.Id))
             .ToListAsync(ct);
 
         var amountPaid = 0m;
@@ -417,14 +413,13 @@ public sealed class GroupParticipants(
         // rules, so nothing built in reaches them.
         await memberRules.HandOver(groupId, fromUserId, toUserId, ct);
 
-        // Both, rather than the receiver only when the rules are to follow them: a rule
-        // that puts the whole amount on the person leaving has no weight to prune and
-        // nowhere to prune it to, and this hand-over is about to delete them -- so it moves
-        // to whoever is taking their position either way, which is what has just happened to
-        // their shares and to the expenses they were down as having paid for.
-        var rewrite = await revisions.WithoutParticipant(groupId, fromUserId, toUserId, rules, ct);
+        // The rules that name them follow them, weight and all, and a rule that put the whole
+        // amount on them now puts it on the claimer.
+        var rewrite = await revisions.WithoutParticipant(groupId, fromUserId, toUserId,
+            RuleHandling.Transfer, ct);
 
         return new ParticipantHandover(
-            shares.Count, amountOwed, paid.Count, amountPaid, rewrite.Rules, rewrite.Emptied);
+            shares.Count, amountOwed, paid.Count, amountPaid, rewrite.Rules, rewrite.Emptied,
+            between.Count, between.Sum(transfer => transfer.Amount));
     }
 }

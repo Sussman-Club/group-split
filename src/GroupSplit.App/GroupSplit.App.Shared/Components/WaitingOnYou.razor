@@ -64,17 +64,16 @@
                 </div>
             }
 
-            @* Invitations somebody has opened and not answered.
+            @* Guests' links somebody has opened and not answered.
 
                It used to be every invitation sent to their address, and there are no
-               addresses on an invitation now -- so this is the ones whose link they have
-               opened, which the API writes down as it happens. Without it, opening a link
-               and wandering off left the invitation reachable only through the chat thread
-               it arrived in.
+               addresses on a link -- so this is the ones they have opened, which the API
+               writes down as it happens. Without it, opening a link and wandering off left
+               it reachable only through the chat thread it arrived in.
 
-               No Accept button, where the old row had one. Claiming takes on whatever the
-               group has recorded against that name, and the page that says so is /claim --
-               a one-tap Accept out here would be agreeing to a position nobody had been
+               No Accept button, where the old row had one. Claiming takes the guest's place
+               and everything recorded for them, and the page that says so is /claim -- a
+               one-tap Accept out here would be agreeing to a position nobody had been
                shown. *@
             @foreach (var invitation in _invitations)
             {
@@ -85,11 +84,11 @@
                         <div class="title">
                             <span>
                                 @(string.IsNullOrWhiteSpace(pending.InvitedByUserName)
-                                    ? $"You have been invited to {pending.GroupName} as {pending.Name}"
-                                    : $"{pending.InvitedByUserName} invited you to {pending.GroupName} as {pending.Name}")
+                                    ? $"A link to join {pending.GroupName} as {pending.Name}"
+                                    : $"{pending.InvitedByUserName} sent you a link to join {pending.GroupName} as {pending.Name}")
                             </span>
                         </div>
-                        <div class="meta">Invited @Clock.Local(pending.InvitedAt).ToString("d MMM")</div>
+                        <div class="meta">@pending.Name is a guest there · link sent @Clock.Local(pending.InvitedAt).ToString("d MMM")</div>
                     </div>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                Class="gs-btn-pill"
@@ -181,7 +180,7 @@
 
         await Errors.TryAsync(async () =>
                 loaded = [.. await InvitationsClient.GetMyInvitationsAsync()],
-            "Could not load your invitations.");
+            "Could not load the links you have opened.");
 
         _invitations = loaded;
         await InvokeAsync(StateHasChanged);

@@ -298,9 +298,9 @@
                         <div style="min-width: 0">
                             <div class="title">
                                 <span>@share.UserName</span>
-                                @if (share.IsPendingInvitee)
+                                @if (share.IsGuest)
                                 {
-                                    <span class="gs-tag">invited</span>
+                                    <span class="gs-tag">guest</span>
                                 }
                                 else if (Leavers.Any(leaver => leaver.UserId == share.UserId))
                                 {
@@ -334,9 +334,9 @@
     </text>;
 
     /// <summary>
-    /// Everyone who may be given a share: the group's members, and the people it has
-    /// invited and is waiting on -- who are marked as such on their field, since a share
-    /// against somebody who has not joined is an ordinary share and not an ordinary member.
+    /// Everyone who may be given a share: the group's members, and its guests -- who are
+    /// marked as such on their field, since a share against somebody with no account in the
+    /// group is an ordinary share and not an ordinary member.
     /// </summary>
     [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
 

@@ -164,10 +164,8 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Contains(members, member => member.Id == claimer.Id);
         Assert.Empty(await Invitations.ForGroup(group.Id, Ct));
 
-        // The stand-in goes with it: it existed to hold a position until somebody claimed
-        // it, and somebody has.
-        Assert.Null(await DbContext.Set<Data.Entities.User>()
-            .FirstOrDefaultAsync(user => user.Id == invitation.ParticipantUserId, Ct));
+        // The stand-in stays, holding nothing, and is nobody to the group now.
+        Assert.False(await GetService<IGroupParticipants>().IsGuest(group.Id, invitation.ParticipantUserId, Ct));
     }
 
     [Fact]

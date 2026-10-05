@@ -61,11 +61,11 @@ public class MemberSplitRuleSeederTest
     }
 
     /// <summary>
-    /// The seeded invitations are rows put straight into the table, like the memberships, so
-    /// their invitees' rules are the seeder's to write too.
+    /// The seeded guests are rows put straight into the table, like the memberships, so their
+    /// rules are the seeder's to write too.
     /// </summary>
     [Fact]
-    public async Task Seeds_one_rule_per_pending_invitee_and_is_idempotent()
+    public async Task Seeds_one_rule_per_guest_and_is_idempotent()
     {
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase($"invitee-rules-{Guid.NewGuid()}")
@@ -76,14 +76,13 @@ public class MemberSplitRuleSeederTest
         var tomas = new User { FirstName = "Tomás" };
         group.Users.Add(ana);
 
-        db.AddRange(group, ana, tomas, new GroupInvitation
+        db.AddRange(group, ana, tomas, new GroupGuest
         {
             Group = group,
             Name = "Tomás",
-            Token = "seeded-token",
             Participant = tomas,
-            InvitedBy = ana,
-            InvitedAt = DateTimeOffset.UtcNow
+            AddedBy = ana,
+            AddedAt = DateTimeOffset.UtcNow
         });
         await db.SaveChangesAsync(Ct);
 

@@ -9,8 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace GroupSplit.API.Test.Splits;
 
 /// <summary>
-/// The rule a group holds for somebody it has invited and is waiting on: all of it is for
-/// them, the same as every member has.
+/// The rule a group holds for each of its guests: all of it is for them, the same as every
+/// member has.
 /// </summary>
 /// <remarks>
 /// A participant can pay, hold a share and be named by a rule whether they have joined yet
@@ -155,7 +155,9 @@ public class AllForOneInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(rule.Versions.Single().Id, expense.SplitRuleVersionId);
         Assert.Equal(luz.Id, Assert.Single(expense.Splits).UserId);
 
-        Assert.False(await DbContext.Set<Data.Entities.User>()
+        // The stand-in stays, holding nothing: it is what the history names for the time
+        // before the claim.
+        Assert.True(await DbContext.Set<Data.Entities.User>()
             .AnyAsync(user => user.Id == invitation.ParticipantUserId, Ct));
     }
 
@@ -202,8 +204,12 @@ public class AllForOneInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(120m, expense.Splits.Single().Amount);
     }
 
+    /// <summary>
+    /// Turning a link down or stopping it is about the link: the guest, and the rule that is
+    /// theirs, both stay.
+    /// </summary>
     [Fact]
-    public async Task Declining_retires_the_invitees_rule_to_whoever_absorbs_them()
+    public async Task Declining_the_link_leaves_the_guests_rule_theirs()
     {
         var (group, invitation) = await AGroupWaitingOn("Luz");
         var theirs = await BuiltInFor(group.Id, invitation.ParticipantUserId);
@@ -213,26 +219,33 @@ public class AllForOneInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var kept = Assert.Single(await RulesOf(group.Id), rule => rule.Id == theirs!.Id);
 
-        Assert.False(kept.BuiltIn);
-        Assert.Equal(Self, kept.AllFor);
-        Assert.False(await DbContext.Set<Data.Entities.User>()
-            .AnyAsync(user => user.Id == invitation.ParticipantUserId, Ct));
-
-        var balances = await (await Groups.GetGroupNetBalance(group.Id, Ct)).ToListAsync(Ct);
-        Assert.Equal(0m, balances.Sum(balance => balance.Balance));
+        Assert.True(kept.BuiltIn);
+        Assert.Equal(invitation.ParticipantUserId, kept.AllFor);
     }
 
     [Fact]
-    public async Task Withdrawing_retires_the_invitees_rule_to_whoever_absorbs_them()
+    public async Task Withdrawing_the_link_leaves_the_guests_rule_theirs()
     {
         var (group, invitation) = await AGroupWaitingOn("Luz");
         var theirs = await BuiltInFor(group.Id, invitation.ParticipantUserId);
 
         await Invitations.Withdraw(group.Id, invitation.Id, Ct);
 
-        Assert.DoesNotContain(await RulesOf(group.Id), rule => rule.Id == theirs!.Id);
-        Assert.False(await DbContext.Set<Data.Entities.User>()
-            .AnyAsync(user => user.Id == invitation.ParticipantUserId, Ct));
+        Assert.Contains(await RulesOf(group.Id), rule => rule.Id == theirs!.Id && rule.BuiltIn);
+    }
+
+    /// <summary>
+    /// A removed guest keeps their rule the way a member who leaves does: naming the
+    /// stand-in that is still there, and no longer dividing anything new.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_guest_keeps_their_rule_like_a_leaver()
+    {
+        var (group, invitation) = await AGroupWaitingOn("Luz");
+
+        await Groups.RemoveGroupMember(group.Id, invitation.ParticipantUserId, Ct);
+
+        Assert.NotNull(await BuiltInFor(group.Id, invitation.ParticipantUserId));
     }
 
     /// <summary>

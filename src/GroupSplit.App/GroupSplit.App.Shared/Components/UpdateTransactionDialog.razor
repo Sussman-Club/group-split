@@ -393,7 +393,7 @@
         PayerChoices.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
 
     /// <summary>
-    /// Who the payer picker offers: the group's members and invitees, and -- on an expense
+    /// Who the payer picker offers: the group's members and guests, and -- on an expense
     /// paid for by somebody who has since left -- that person too, marked as gone.
     /// </summary>
     /// <remarks>
