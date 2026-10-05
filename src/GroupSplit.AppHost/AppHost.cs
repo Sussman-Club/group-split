@@ -108,8 +108,10 @@ var web = builder.AddProject<GroupSplit_App_Web>("web")
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    dbServer.WithDbx();
-    cache.WithDbx();
+    // DBX for browsing, REPL for a psql or redis-cli shell in the dashboard's terminal dock,
+    // signed in with the resource's own credentials.
+    dbServer.WithDbx().WithRepl();
+    cache.WithDbx().WithRepl();
 
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
