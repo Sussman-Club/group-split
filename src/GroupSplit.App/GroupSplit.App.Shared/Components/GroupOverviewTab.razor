@@ -101,7 +101,7 @@
                         <div class="gs-plan-row @(yours ? "" : "is-theirs")">
                             <Avatar Name="@line.FromUserName" Size="sm" />
                             <div style="min-width: 0">
-                                <div class="who">@Who(line.FromUserId, line.FromUserName) <small>pays</small> @Who(line.ToUserId, line.ToUserName)</div>
+                                <div class="who">@Payer(line) <small>@(line.FromUserId == UserId ? "pay" : "pays")</small> @Who(line.ToUserId, line.ToUserName)</div>
                                 <div class="meta">@Explain(line)</div>
                             </div>
                             <Money Value="line.Amount" />
@@ -185,7 +185,9 @@
                                        member who can sign in and settle it themselves. *@
                                     @if (member.IsGuest)
                                     {
-                                        <span class="gs-muted" style="font-weight: 500"> @ParticipantCopy.GuestMark</span>
+                                        @* The space is in the expression: Razor drops a literal one
+                                           that only precedes code, which ran the mark into the name. *@
+                                        <span class="gs-muted" style="font-weight: 500">@($" {ParticipantCopy.GuestMark}")</span>
                                     }
                                 </div>
                                 <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
@@ -272,6 +274,13 @@
         payment.FromUserId == UserId || payment.ToUserId == UserId;
 
     private string Who(Guid userId, string name) => userId == UserId ? "you" : Named(userId, name);
+
+    /// <summary>
+    /// The start of a plan line: "You", capitalised because it opens the sentence, or the
+    /// payer's name. It read "you pays Sofia" when the caller was the one paying.
+    /// </summary>
+    private string Payer(SettlementPayment line) =>
+        line.FromUserId == UserId ? "You" : Who(line.FromUserId, line.FromUserName);
 
     /// <summary>
     /// Whether somebody in this group's balances is one of its guests. Read off the balances

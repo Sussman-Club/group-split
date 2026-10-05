@@ -158,6 +158,63 @@ public class GroupOverviewTabTest : ComponentTest
             "Dani", "Luz", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// The People panel's guest mark is separated from the name. Razor drops a literal space
+    /// that only precedes code, and it read "Dani(guest)".
+    /// </summary>
+    [Fact]
+    public void A_guest_in_the_people_panel_is_marked_with_a_space_before_the_mark()
+    {
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances =
+            [
+                new GroupNetBalance { UserId = Me, UserName = "Ana Ruiz", Balance = 20m },
+                new GroupNetBalance { UserId = Dani, UserName = "Dani", Balance = -20m, IsGuest = true }
+            ]
+        };
+
+        var tab = RenderFor(Me);
+
+        tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll(".gs-balance-row").Count));
+
+        var dani = tab.FindAll(".gs-balance-row .name")
+            .Single(name => name.TextContent.Contains("Dani", StringComparison.Ordinal));
+
+        Assert.Contains("Dani (guest)", System.Text.RegularExpressions.Regex.Replace(dani.TextContent, @"\s+", " "),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A plan line the reader pays on starts "You pay", not "you pays".
+    /// </summary>
+    [Fact]
+    public void A_plan_line_you_pay_on_reads_you_pay()
+    {
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances =
+            [
+                new GroupNetBalance { UserId = Me, UserName = "Ana Ruiz", Balance = -10m },
+                new GroupNetBalance { UserId = Omar, UserName = "Omar Rivero", Balance = 10m }
+            ],
+            YouOwed = [new DebtInfo { UserId = Omar, UserName = "Omar Rivero", Amount = 10m }],
+            Plan =
+            [
+                new SettlementPayment { FromUserId = Me, FromUserName = "Ana Ruiz", ToUserId = Omar, ToUserName = "Omar Rivero", Amount = 10m }
+            ]
+        };
+
+        var tab = RenderFor(Me);
+
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll(".gs-plan-row")));
+
+        var who = System.Text.RegularExpressions.Regex.Replace(
+            tab.Find(".gs-plan-row .who").TextContent, @"\s+", " ").Trim();
+
+        Assert.Equal("You pay Omar Rivero", who);
+    }
+
     [Fact]
     public void Balances_that_land_after_the_recent_entries_are_drawn()
     {
