@@ -22,7 +22,34 @@
         // Storage can be blocked; the system preference is a fine answer.
     }
 
-    root.dataset.theme = resolve(stored) ? "dark" : "light";
+    // What this file has put on <html>, kept so it can be put back. Every write
+    // to either attribute goes through stamp() or markReady() below.
+    let theme = resolve(stored) ? "dark" : "light";
+    let ready = false;
+
+    function stamp(isDark) {
+        theme = isDark ? "dark" : "light";
+        root.dataset.theme = theme;
+    }
+
+    function markReady() {
+        ready = true;
+        root.setAttribute("data-gs-ready", "");
+    }
+
+    stamp(theme === "dark");
+
+    // Enhanced navigation rewrites <html> to match the server's copy of the
+    // next page, and removes any attribute that copy does not have. The
+    // server's <html> has neither of these, so a link followed before the
+    // runtime takes over -- or any other enhanced load -- drops the page to
+    // the light palette and brings the boot bar back, with rows and chips
+    // muted under it. Putting them back here runs before the next paint, so
+    // neither frame is ever seen.
+    new MutationObserver(function () {
+        if (root.dataset.theme !== theme) root.dataset.theme = theme;
+        if (ready && !root.hasAttribute("data-gs-ready")) root.setAttribute("data-gs-ready", "");
+    }).observe(root, { attributes: true, attributeFilter: ["data-theme", "data-gs-ready"] });
 
     // --------------------------------------------------------- counters --
 
@@ -235,7 +262,7 @@
         if (seg) {
             const mode = seg.dataset.mode;
             write(storageKey, mode);
-            root.dataset.theme = resolve(mode) ? "dark" : "light";
+            stamp(resolve(mode));
             const group = seg.closest(".gs-seg");
             const buttons = [...group.querySelectorAll(".gs-seg-btn")];
             buttons.forEach(b => b.classList.toggle("active", b === seg));
@@ -260,13 +287,13 @@
 
     window.gs = {
         setTheme(isDark) {
-            root.dataset.theme = isDark ? "dark" : "light";
+            stamp(isDark);
         },
 
         // Called once Blazor has rendered interactively: hands the chrome over
         // and hides the boot indicator.
         ready() {
-            root.setAttribute("data-gs-ready", "");
+            markReady();
         },
 
         rail() {
