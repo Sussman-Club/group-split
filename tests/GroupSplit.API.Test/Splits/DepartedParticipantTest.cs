@@ -118,6 +118,52 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     /// nothing moves.
     /// </remarks>
     [Fact]
+    public async Task A_new_amount_on_an_expense_a_leaver_paid_is_refused_by_their_name()
+    {
+        var (groupId, other) = await GroupOfTwo();
+        var categoryId = await CreateCategory(groupId, "Rent", Shares((Self, 1), (other, 1)));
+
+        // Paid by the member who is about to leave.
+        var expense = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Dinner",
+            Amount = 100.00m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId,
+            CategoryId = categoryId,
+            PaidByUserId = other
+        }, Ct);
+
+        await Departs(groupId, other);
+
+        // What the edit dialog sends: the new amount, with the shares as they stood. They no
+        // longer add up, but that is not the reason -- the leaver's part is the amount itself.
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => Transactions.Update(expense.Id,
+            new UpdateTransactionRequest
+            {
+                Name = "Dinner",
+                Amount = 120.00m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserId = other,
+                GroupId = groupId,
+                CategoryId = categoryId,
+                Splits =
+                [
+                    new SplitInput { UserId = Self, Amount = 50.00m },
+                    new SplitInput { UserId = other, Amount = 50.00m }
+                ]
+            }, Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.TransactionMovesDepartedBalance, refused.Code);
+        Assert.Equal([other], Assert.IsAssignableFrom<IReadOnlyList<Guid>>(refused.Extensions["userIds"]));
+
+        DbContext.ChangeTracker.Clear();
+
+        Assert.Equal(100.00m, (await DbContext.Set<Expense>().AsNoTracking()
+            .FirstAsync(candidate => candidate.Id == expense.Id, Ct)).Amount);
+    }
+
+    [Fact]
     public async Task Re_dividing_an_old_expense_a_member_who_has_left_shared_is_refused()
     {
         var (groupId, other) = await GroupOfTwo();

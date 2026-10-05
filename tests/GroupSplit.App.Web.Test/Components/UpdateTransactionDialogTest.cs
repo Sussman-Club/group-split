@@ -175,6 +175,16 @@ public class UpdateTransactionDialogTest : ComponentTest
 
             Assert.Contains("Sofia Kovacs (left the group)", chip.GetAttribute("aria-label"), StringComparison.Ordinal);
         });
+
+        // And the amount is locked, with the reason beside it: what she paid is the amount,
+        // so no new figure could leave her part as it was. It used to be editable and was
+        // refused only after Save, as "the shares have to add up".
+        provider.WaitForAssertion(() =>
+        {
+            Assert.True(provider.Find(".gs-amount input").HasAttribute("readonly"));
+            Assert.Contains("Sofia Kovacs paid this and has left the group, so the amount stays.",
+                provider.Markup, StringComparison.Ordinal);
+        });
     }
 
     /// <summary>

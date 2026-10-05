@@ -695,6 +695,16 @@ public class TransactionService(
         var groupMoved = expense.GroupId != request.GroupId;
         var payerMoved = expense.UserId != request.PaidByUserId;
 
+        // What a departed payer paid *is* the amount, so no new amount can leave their part
+        // as it was -- whatever the shares say. Refused here, by name, before the shares are
+        // checked: shares carried over from before the edit no longer add up to the new
+        // amount, and "the shares have to add up" was the answer the person got, which sent
+        // them looking at the wrong thing.
+        if (amountMoved &&
+            departed.FirstOrDefault(position => position.UserId == expense.UserId && position.Paid != 0m)
+                is { } departedPayer)
+            throw DepartedPositions.Refusal([departedPayer.UserId]);
+
         // The destination, which is the group it is already in unless the request moves it.
         // Resolved the way a create resolves its group -- one of the caller's, or none for
         // personal -- so moving into a group the caller is not in is the same 404 as

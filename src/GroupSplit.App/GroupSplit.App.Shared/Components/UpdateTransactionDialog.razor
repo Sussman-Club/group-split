@@ -64,6 +64,10 @@
 
                 @* First, and a size up: what an edit is usually about is this figure, and
                    what it does to everybody's share is directly underneath. *@
+                @* Locked when whoever paid has left: what they paid is the amount, and they
+                   left square, so no new figure can leave their part as it was. Said here,
+                   beside the field, rather than after Save -- where it used to arrive as "the
+                   shares have to add up", which sent people looking at the wrong thing. *@
                 <MudNumericField @bind-Value="_model.Amount"
                                  @bind-Value:after="OnMoneyChangedAsync"
                                  For="@(() => _model.Amount)"
@@ -73,6 +77,8 @@
                                  AdornmentText="$"
                                  HideSpinButtons="true"
                                  Format="N2"
+                                 ReadOnly="@PayerHasLeft"
+                                 HelperText="@(PayerHasLeft ? $"{Original.PaidByUserName} paid this and has left the group, so the amount stays." : null)"
                                  Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
@@ -402,6 +408,17 @@
     /// paid is the thing that cannot change. Offered only while the expense is still in
     /// the group it was paid in; a move picks a payer from the new group's members.
     /// </remarks>
+    /// <summary>
+    /// Whether the person who paid has left the group the expense is in. Known once the
+    /// group's people have loaded: a payer missing from them, on an expense still in its
+    /// own group, is somebody who has gone.
+    /// </summary>
+    private bool PayerHasLeft =>
+        _members.Count > 0 &&
+        Original.GroupId is not null &&
+        _model.GroupId == Original.GroupId &&
+        _members.All(member => member.Id != Original.PaidByUserId);
+
     private IReadOnlyList<UserInfo> PayerChoices =>
         _members.Count == 0 ||
         _model.GroupId != Original.GroupId ||
