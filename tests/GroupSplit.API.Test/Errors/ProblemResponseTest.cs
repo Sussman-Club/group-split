@@ -216,6 +216,61 @@ public class ProblemResponseTest : IAsyncLifetime
     }
 
     /// <summary>
+    /// Deleting an expense a removed member shared would leave them owed money nobody on the
+    /// page owes back: refused, naming who.
+    /// </summary>
+    [Fact]
+    public async Task Deleting_an_expense_a_departed_member_shared_is_a_conflict_that_names_them()
+    {
+        var (groupId, _, other) = await GroupWhereTheOtherOwesMe();
+
+        (await Client.PostAsJsonAsync($"/groups/{groupId}/settle",
+            new SettleRequest { UserId = other.Id, Amount = 50m }, Json, Ct)).EnsureSuccessStatusCode();
+        (await Client.DeleteAsync($"/groups/{groupId}/members/{other.Id}", Ct)).EnsureSuccessStatusCode();
+
+        var expense = (await Client.GetFromJsonAsync<PagedResponse<TransactionResponse>>(
+            $"/groups/{groupId}/transactions", Json, Ct))!.Items.First();
+
+        var response = await Client.DeleteAsync($"/transactions/{expense.Id}", Ct);
+
+        var problem = await ReadProblem(response, HttpStatusCode.Conflict);
+        Assert.Equal(ErrorCodes.TransactionMovesDepartedBalance, problem.Code);
+        Assert.Equal([other.Id], problem.GetExtension<List<Guid>>("userIds", Json));
+    }
+
+    /// <summary>
+    /// Somebody removed from a group opening an invitation they saw while they were still in
+    /// it: refused on the landing page, with what the page needs to say why.
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_older_than_a_removal_is_a_conflict_that_says_so()
+    {
+        using var otherClient = _host.ClientForAnotherUser();
+        var other = await WhoAmI(otherClient);
+
+        var groupId = await CreateGroup("Flat");
+
+        var invited = await Client.PostAsJsonAsync($"/groups/{groupId}/invitations",
+            new InviteToGroupRequest { Names = ["Other", "Dani"] }, Json, Ct);
+        invited.EnsureSuccessStatusCode();
+
+        var pending = (await invited.Content.ReadFromJsonAsync<GroupInvitationResponse[]>(Json, Ct))!;
+        var theirs = pending.Single(invitation => invitation.Name == "Other");
+        var danis = pending.Single(invitation => invitation.Name == "Dani");
+
+        (await otherClient.PostAsync($"/invitations/claims/{theirs.Token}", null, Ct)).EnsureSuccessStatusCode();
+        (await Client.DeleteAsync($"/groups/{groupId}/members/{other.Id}", Ct)).EnsureSuccessStatusCode();
+
+        var response = await otherClient.GetAsync($"/invitations/claims/{danis.Token}", Ct);
+
+        var problem = await ReadProblem(response, HttpStatusCode.Conflict);
+        Assert.Equal(ErrorCodes.GroupRejoinNeedsNewInvitation, problem.Code);
+        Assert.Equal("Removed", problem.GetExtension<string>("leftReason", Json));
+        Assert.NotEqual(default, problem.GetExtension<DateTimeOffset>("leftAt", Json));
+        Assert.Equal(danis.InvitedAt, problem.GetExtension<DateTimeOffset>("issuedAt", Json));
+    }
+
+    /// <summary>
     /// The one refusal the app already reacted to, moved onto the contract: the groups that
     /// block the deletion ride on the problem as an extension member, so the client branches
     /// on the code and reads the list, rather than on the shape of the body.

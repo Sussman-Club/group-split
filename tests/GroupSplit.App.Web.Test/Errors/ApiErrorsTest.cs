@@ -142,6 +142,23 @@ public class ApiErrorsTest
         Assert.Equal(50m, only.Balance);
     }
 
+    /// <summary>
+    /// One code answers a stale link for somebody who left and for somebody who was removed.
+    /// The reason is on the problem, and the message follows it -- "before you left" is the
+    /// wrong thing to tell somebody another member took out.
+    /// </summary>
+    [Theory]
+    [InlineData("Removed", ErrorMessages.RejoinAfterRemoval)]
+    [InlineData("Left", null)]
+    public void A_stale_link_says_how_the_person_went(string reason, string? expected)
+    {
+        var problem = Problem(409, ErrorCodes.GroupRejoinNeedsNewInvitation, TraceId, ("leftReason", reason));
+
+        var error = ApiErrors.Read(Typed(409, problem));
+
+        Assert.Equal(expected ?? ErrorMessages.For(ErrorCodes.GroupRejoinNeedsNewInvitation), error.Message);
+    }
+
     // ---- Validation --------------------------------------------------------------------------
 
     [Fact]
@@ -233,23 +250,97 @@ public class ApiErrorsTest
     // ---- The table itself -----------------------------------------------------------------------
 
     /// <summary>
+    /// The codes the catalog still declares, split by whether the API can send them. A code
+    /// marked obsolete is kept only so older clients compile; the API never sends it.
+    /// </summary>
+    private static IEnumerable<(string Code, bool Retired)> Catalog() =>
+        typeof(ErrorCodes)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.IsLiteral && field.FieldType == typeof(string))
+            .Select(field => ((string)field.GetRawConstantValue()!, field.IsDefined(typeof(ObsoleteAttribute), false)));
+
+    /// <summary>
     /// Every code the shared catalog declares has a message here. Adding a code without one
     /// would not fail to compile; it would fall back to the status message at runtime, which
     /// is what this is for.
     /// </summary>
+    /// <remarks>
+    /// Retired codes are the exception. They are never sent, so a sentence for one would
+    /// only be a promise about a refusal that cannot happen -- and keeping them would mean
+    /// keeping copy about pending invitees, which no longer exist, in the one table that is
+    /// supposed to say what the app means today.
+    /// </remarks>
     [Fact]
     public void Every_code_in_the_catalog_has_a_message()
     {
-        var codes = typeof(ErrorCodes)
-            .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(field => field.IsLiteral && field.FieldType == typeof(string))
-            .Select(field => (string)field.GetRawConstantValue()!)
-            .ToList();
+        var codes = Catalog().Where(entry => !entry.Retired).Select(entry => entry.Code).ToList();
 
         Assert.NotEmpty(codes);
 
         var missing = codes.Where(code => !ErrorMessages.Knows(code)).ToList();
 
         Assert.True(missing.Count == 0, $"codes without a message: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>
+    /// The two codes guests retired have no words left here, and a newer API sending one
+    /// anyway would still get its status message rather than a blank.
+    /// </summary>
+    [Fact]
+    public void The_retired_invitee_codes_have_no_message_of_their_own()
+    {
+        var retired = Catalog().Where(entry => entry.Retired).Select(entry => entry.Code).ToList();
+
+        Assert.Contains("GROUP_MEMBER_NOT_JOINED", retired);
+        Assert.Contains("SETTLEMENT_WITH_PENDING_INVITEE", retired);
+        Assert.All(retired, code => Assert.False(ErrorMessages.Knows(code), $"{code} still has a message"));
+
+        Assert.Equal(ErrorMessages.ForStatus(409), ErrorMessages.For("SETTLEMENT_WITH_PENDING_INVITEE", 409));
+    }
+
+    /// <summary>
+    /// A guest that is gone by the time somebody acts on their row -- removed, or claimed by
+    /// whoever held their link -- is said in words, not as a bare 404.
+    /// </summary>
+    [Fact]
+    public void A_guest_that_is_gone_has_its_own_message()
+    {
+        var error = ApiErrors.Read(Typed(404, Problem(404, ErrorCodes.GroupGuestNotFound)));
+
+        Assert.Equal(ApiErrorKind.Refused, error.Kind);
+        Assert.Equal(ErrorCodes.GroupGuestNotFound, error.Code);
+        Assert.True(ErrorMessages.Knows(ErrorCodes.GroupGuestNotFound));
+        Assert.Equal(ErrorMessages.For(ErrorCodes.GroupGuestNotFound), error.Message);
+        Assert.Contains("guest", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// "Not settled" answers removing a member, removing a guest and leaving, so the table's
+    /// sentence cannot be about any one of them -- it used to say "this member", which was
+    /// wrong for two of the three.
+    /// </summary>
+    [Fact]
+    public void Not_settled_reads_for_members_guests_and_leaving_alike()
+    {
+        var message = ErrorMessages.For(ErrorCodes.GroupMemberNotSettled);
+
+        Assert.DoesNotContain("member", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("leave or be removed", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The balance a refusal to remove somebody carries comes back out of it, so the People
+    /// tab can say how much and which way.
+    /// </summary>
+    [Fact]
+    public void The_balance_on_a_not_settled_refusal_is_readable()
+    {
+        var problem = Problem(409, ErrorCodes.GroupMemberNotSettled, TraceId, ("balance", -12.5m));
+
+        var error = ApiErrors.Read(Typed(409, problem));
+
+        Assert.Equal(-12.5m, error.Extension<decimal?>("balance"));
+        Assert.Equal("Dani still owes $12.50 in this group. Record what they paid back, then remove them.",
+            ErrorMessages.NotSquare("Dani", -12.5m));
     }
 }

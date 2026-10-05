@@ -163,15 +163,8 @@ public static class JoinLinkCommands
     /// way to know that, and the token alone is the honest answer.
     /// </summary>
     internal static JoinLinkView Describe(CliContext context, GroupJoinLinkResponse link) =>
-        new(link.GroupId, link.GroupName, link.Token, Url(context, link.Token), link.CreatedByUserName,
-            link.ExpiresAt);
-
-    internal static string? Url(CliContext context, string token)
-    {
-        var web = context.Endpoints.WebOrNull;
-
-        return web is null ? null : $"{web.GetLeftPart(UriPartial.Path).TrimEnd('/')}/join/{token}";
-    }
+        new(link.GroupId, link.GroupName, link.Token, WebLinks.Join(context, link.Token),
+            link.CreatedByUserName, link.ExpiresAt);
 
     private static IRenderable Render(JoinLinkView view)
     {

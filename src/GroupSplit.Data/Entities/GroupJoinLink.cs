@@ -4,12 +4,10 @@ namespace GroupSplit.Data.Entities;
 /// A link that lets whoever holds it join one group.
 /// </summary>
 /// <remarks>
-/// The second way into a group, alongside <see cref="GroupInvitation"/>, and the one people
-/// actually use. An invitation is keyed on an address and is only discoverable by signing
-/// in and looking, so somebody invited before they have an account has no way to know --
-/// which is the case invitations were added for. A link goes into the thread where the
-/// group already talks, and whoever is in that thread can join. Reaching an invitee stops
-/// depending on a mail relay.
+/// The ordinary way into a group, beside a guest's own link (<see cref="GroupGuest.Token"/>),
+/// which hands somebody a position the group has already recorded. This one hands over
+/// nothing: it goes into the thread where the group already talks, and whoever is in that
+/// thread can join as themselves.
 /// <para>
 /// <see cref="Token"/> is a bearer credential: holding it is the whole of the
 /// authorisation. So it names exactly one group, grants nothing but ordinary membership of

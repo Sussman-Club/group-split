@@ -6,6 +6,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GroupSplit.API.Services;
 
@@ -85,35 +86,55 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
     public async Task<GroupJoinLinkResponse> Create(Guid groupId, CancellationToken ct = default)
     {
         var group = await MemberGroup(groupId, ct);
-        var now = DateTimeOffset.UtcNow;
 
-        // Whatever was standing goes out with this one. Two members pressing the button at
-        // the same moment is the one way a group ends up with two live links; the newest
-        // wins the reads, and revoking clears both, so nothing is left half-alive.
-        await RevokeLive(groupId, now, ct);
-
-        var link = new GroupJoinLink
+        // Whatever was standing goes out with this one, and the database holds the group to
+        // one unrevoked link. Two members pressing the button at the same moment both revoke
+        // what they can see and both insert; the second insert breaks the index, and that
+        // member goes round again -- revoking the first one's link this time -- so the newer
+        // press wins and nothing is left half-alive.
+        for (var attempt = 1; ; attempt++)
         {
-            Group = group,
-            Token = NewToken(),
-            CreatedBy = userContext.User,
-            CreatedAt = now,
-            ExpiresAt = now + GroupJoinLink.Lifetime
-        };
+            var now = DateTimeOffset.UtcNow;
 
-        context.Add(link);
-        await context.SaveChangesAsync(ct);
+            await RevokeStanding(groupId, now, ct);
 
-        return await DescribeForGroup(
-                context.Set<GroupJoinLink>().Where(candidate => candidate.Id == link.Id))
-            .FirstAsync(ct);
+            var link = new GroupJoinLink
+            {
+                Group = group,
+                Token = NewToken(),
+                CreatedBy = userContext.User,
+                CreatedAt = now,
+                ExpiresAt = now + GroupJoinLink.Lifetime
+            };
+
+            context.Add(link);
+
+            try
+            {
+                await context.SaveChangesAsync(ct);
+
+                return await DescribeForGroup(
+                        context.Set<GroupJoinLink>().Where(candidate => candidate.Id == link.Id))
+                    .FirstAsync(ct);
+            }
+            catch (DbUpdateException exception)
+                when (attempt < 3 &&
+                      exception.InnerException is PostgresException
+                      {
+                          SqlState: PostgresErrorCodes.UniqueViolation,
+                          ConstraintName: "IX_GroupJoinLink_GroupId_Unrevoked"
+                      })
+            {
+                context.Entry(link).State = EntityState.Detached;
+            }
+        }
     }
 
     public async Task Revoke(Guid groupId, CancellationToken ct = default)
     {
         await MemberGroup(groupId, ct);
 
-        await RevokeLive(groupId, DateTimeOffset.UtcNow, ct);
+        await RevokeStanding(groupId, DateTimeOffset.UtcNow, ct);
         await context.SaveChangesAsync(ct);
     }
 
@@ -121,6 +142,10 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
     {
         var link = await Usable(token, ct);
         var userId = userContext.User.Id;
+
+        // Said on the landing page, before the button, rather than after it: a link somebody
+        // held while they were in the group is not a way back for them.
+        await joiner.EnsureMayRejoin(link.GroupId, userId, link.CreatedAt, ct);
 
         return await context.Set<GroupJoinLink>()
             .Where(candidate => candidate.Id == link.Id)
@@ -145,7 +170,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
             .Include(candidate => candidate.Users)
             .FirstAsync(candidate => candidate.Id == link.GroupId, ct);
 
-        var joined = await joiner.Join(group, user, ct);
+        var outcome = await joiner.Join(group, user, link.CreatedAt, ct);
 
         // No standing invitation is answered by this, and none can be. This used to close
         // the one addressed to the joiner's email, and there are no addresses any more: an
@@ -155,7 +180,8 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
         // still waiting on the person it named -- which it should be, since nothing has told
         // it the two are the same. Withdrawing the invitation is how it says so, and that
         // hands the position over rather than dropping it.
-        return new JoinedGroupResponse(group.Id, group.Name, group.Users.Count, !joined);
+        return new JoinedGroupResponse(group.Id, group.Name, group.Users.Count,
+            outcome is JoinOutcome.AlreadyAMember);
     }
 
     /// <summary>
@@ -176,7 +202,9 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
                    ?? throw new NotFoundException(ErrorCodes.GroupJoinLinkNotFound,
                        "That join link was not found.");
 
-        if (link.RevokedAt is not null)
+        // Revoked before it lapsed. One closed at its own expiry -- see RevokeStanding -- is
+        // an expired link, and says so below.
+        if (link.RevokedAt is { } revokedAt && revokedAt < link.ExpiresAt)
             throw new ConflictException(ErrorCodes.GroupJoinLinkRevoked,
                 "That join link has been withdrawn by the group.");
 
@@ -196,13 +224,24 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
     }
 
     /// <summary>
-    /// Marks the group's live links revoked. Does not save: the callers either save on
-    /// their own account or have a row of their own to write in the same round trip.
+    /// Closes every link the group has not revoked, expired ones included. Does not save:
+    /// the callers either save on their own account or have a row of their own to write in
+    /// the same round trip.
     /// </summary>
-    private async Task RevokeLive(Guid groupId, DateTimeOffset now, CancellationToken ct)
+    /// <remarks>
+    /// Expired ones too, because the database counts them: it allows one unrevoked link per
+    /// group and cannot ask an index what time it is. One that had already lapsed is closed
+    /// at the moment it lapsed rather than now, which is what keeps <see cref="Usable"/>
+    /// telling whoever opens it that it expired rather than that the group withdrew it.
+    /// </remarks>
+    private async Task RevokeStanding(Guid groupId, DateTimeOffset now, CancellationToken ct)
     {
-        foreach (var standing in await Live(groupId).ToListAsync(ct))
-            standing.RevokedAt = now;
+        var standing = await context.Set<GroupJoinLink>()
+            .Where(link => link.GroupId == groupId && link.RevokedAt == null)
+            .ToListAsync(ct);
+
+        foreach (var link in standing)
+            link.RevokedAt = link.ExpiresAt < now ? link.ExpiresAt : now;
     }
 
     /// <summary>
@@ -228,15 +267,8 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
                 link.CreatedAt,
                 link.ExpiresAt));
 
-    private async Task<Group> MemberGroup(Guid groupId, CancellationToken ct)
-    {
-        var userId = userContext.User.Id;
-
-        return await context.Set<Group>()
-                   .FirstOrDefaultAsync(group =>
-                       group.Id == groupId && group.Users.Any(user => user.Id == userId), ct)
-               ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-    }
+    private Task<Group> MemberGroup(Guid groupId, CancellationToken ct) =>
+        context.GroupOfMember(groupId, userContext.User.Id, ct);
 
     /// <summary>
     /// A URL-safe token from the cryptographic generator, never from <c>Guid.NewGuid</c>:

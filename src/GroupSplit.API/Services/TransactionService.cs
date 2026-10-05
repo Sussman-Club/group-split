@@ -357,15 +357,23 @@ public class TransactionService(
         // question, same step, same code.
         await RefuseIfLeft(existing, ct);
 
+        // The same snapshot Update takes, so the preview refuses what the save would.
+        var departed = await participants.DepartedOn(existing, ct);
+
         var group = request.GroupId == existing.GroupId
             ? await GroupFor(existing.GroupId, ct)
             : await GroupFor(request.GroupId, ct);
 
-        var payer = await ParticipantOf(group, request.PaidByUserId, ct)
-                    ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                        group is null
-                            ? "A personal expense can only have been paid by you."
-                            : "The paying user is neither a member of the group nor invited to it.");
+        var groupMoved = group?.Id != existing.GroupId;
+
+        // And the payer asked about only when it changes, as the save asks it.
+        var payerId = request.PaidByUserId == existing.UserId && !groupMoved
+            ? existing.UserId
+            : (await ParticipantOf(group, request.PaidByUserId, ct)
+               ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                   group is null
+                       ? "A personal expense can only have been paid by you."
+                       : "The paying user is neither a member of the group nor invited to it.")).Id;
 
         var category = await CategoryFor(group, request.CategoryId, ct);
 
@@ -421,7 +429,7 @@ public class TransactionService(
             Name = request.Name,
             GroupId = group?.Id,
             CategoryId = category?.Id,
-            UserId = payer.Id,
+            UserId = payerId,
 
             SplitRuleVersionId = version,
 
@@ -441,13 +449,21 @@ public class TransactionService(
         // from one merely carried forward -- the difference between an edit that loses the
         // rule behind the expense and one that keeps it. Copies, because these belong to
         // the stored expense and the draft is about to have its own written over them.
-        foreach (var split in existing.Splits)
-            draft.Splits.Add(new TransactionSplit { UserId = split.UserId, Amount = split.Amount });
+        //
+        // Not on a move, where they name the old group's people, as the save drops them.
+        if (!groupMoved)
+        {
+            foreach (var split in existing.Splits)
+                draft.Splits.Add(new TransactionSplit { UserId = split.UserId, Amount = split.Amount });
+        }
 
         if (request.SplitRuleId is not null)
             await splitter.WriteSplitsByRuleAsync(draft, version!.Value, ct);
         else
             await splitter.WriteSplitsAsync(draft, stated, ct);
+
+        if (existing.GroupId is { } recordedIn)
+            DepartedPositions.RefuseIfMoved(departed, draft, recordedIn);
 
         return await Describe(draft, group?.Id, ct);
     }
@@ -478,14 +494,14 @@ public class TransactionService(
             .Where(user => named.Contains(user.Id))
             .ToDictionaryAsync(user => user.Id, People.Display, ct);
 
-        var waiting = await PendingInviteesIn(groupId, ct);
+        var guests = await GuestsIn(groupId, ct);
 
         var described = splits
             .Select(split => new TransactionSplitResponse(
                 split.UserId,
                 names.GetValueOrDefault(split.UserId, string.Empty),
                 split.Amount,
-                waiting.Contains(split.UserId)))
+                guests.Contains(split.UserId)))
             .ToList();
 
         return new SplitPreviewResponse(described, version?.SplitRule.Name, version?.SupersededAt);
@@ -509,10 +525,10 @@ public class TransactionService(
         if (transaction is null)
             return null;
 
-        // Who among the people on this transaction has not joined the group yet. One query
+        // Who among the people on this transaction is one of the group's guests. One query
         // for the whole transaction rather than one per share, and empty for a personal
-        // expense, which has no group to be invited to.
-        var waiting = await PendingInviteesIn(transaction.GroupId, ct);
+        // expense, which has no group to have guests.
+        var guests = await GuestsIn(transaction.GroupId, ct);
 
         // Read, not re-derived. The amounts below are the ones the group's balances are
         // summed from, so a detail view that computed its own could disagree with them.
@@ -521,7 +537,7 @@ public class TransactionService(
                 split.User.Id,
                 People.Display(split.User),
                 split.Amount,
-                waiting.Contains(split.User.Id)))
+                guests.Contains(split.User.Id)))
             .ToList();
 
         var expense = transaction as Expense;
@@ -541,7 +557,7 @@ public class TransactionService(
             GroupName = transaction.Group?.Name,
             PaidByUserId = transaction.User.Id,
             PaidByUserName = People.Display(transaction.User),
-            PaidByIsPendingInvitee = waiting.Contains(transaction.User.Id),
+            PaidByIsGuest = guests.Contains(transaction.User.Id),
             PaidToUserId = recipientSplit?.UserId,
             PaidToUserName = recipientSplit?.UserName,
             CategoryId = expense?.CategoryId,
@@ -595,45 +611,61 @@ public class TransactionService(
 
         await RefuseIfLeft(transaction, ct);
 
+        // What everybody who has left holds on it, taken before a single field moves. They
+        // left square, and the group's balances add up only while that stays true, so no
+        // edit may change it; the check is made against this once the edit is applied.
+        var departed = await participants.DepartedOn(transaction, ct);
+        var recordedIn = transaction.GroupId;
+
         if (transaction is Transfer transfer)
         {
-            // Members on both ends, unlike the expense below. A settlement is money that
-            // actually changed hands between two people, and somebody who has not accepted
-            // their invitation has no account to have handed it to -- see
-            // RefuseIfPendingInvitee, which says so rather than reporting them missing.
-            var payer = await MemberOf(transfer.Group, request.PaidByUserId, ct)
-                        ?? await RefuseIfPendingInvitee(transfer.Group, request.PaidByUserId, ct)
-                        ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                            "The paying user is not a member of the group.");
+            // Participants on both ends, as for an expense: the members record what a guest
+            // pays and is paid.
+            //
+            // Asked only of an end that is changing. The settlement that let somebody leave
+            // names them, and a corrected date or note on it must not be refused because
+            // they have gone.
+            var payerId = request.PaidByUserId;
+
+            if (payerId != transfer.UserId)
+            {
+                transfer.User = await ParticipantOf(transfer.Group, payerId, ct)
+                                ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                                    "The paying user is not a member or guest of the group.");
+            }
 
             transfer.Amount = request.Amount;
             transfer.DateTime = request.DateTime.ToUniversalTime();
             transfer.Description = request.Description;
-            transfer.User = payer;
 
             if (request.Splits is { Count: > 0 } splits)
             {
                 var recipientId = splits[0].UserId;
-                var recipient = await MemberOf(transfer.Group, recipientId, ct)
-                                ?? await RefuseIfPendingInvitee(transfer.Group, recipientId, ct)
-                                ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                                    "The recipient is not a member of the group.");
+                var existingSplit = transfer.Splits.FirstOrDefault();
 
-                if (recipient.Id == payer.Id)
+                if (recipientId == payerId)
                     throw new ConflictException(ErrorCodes.SettlementWithSelf,
                         "A settlement needs two different people.");
 
-                var existingSplit = transfer.Splits.FirstOrDefault();
-                if (existingSplit is not null)
+                if (existingSplit?.UserId != recipientId)
                 {
-                    existingSplit.User = recipient;
-                    existingSplit.UserId = recipient.Id;
-                    existingSplit.Amount = request.Amount;
+                    var recipient = await ParticipantOf(transfer.Group, recipientId, ct)
+                                    ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                                        "The recipient is not a member or guest of the group.");
+
+                    if (existingSplit is not null)
+                    {
+                        existingSplit.User = recipient;
+                        existingSplit.UserId = recipient.Id;
+                    }
+                    else
+                    {
+                        existingSplit = new TransactionSplit { User = recipient, Amount = request.Amount };
+                        transfer.Splits.Add(existingSplit);
+                    }
                 }
-                else
-                {
-                    transfer.Splits.Add(new TransactionSplit { User = recipient, Amount = request.Amount });
-                }
+
+                existingSplit!.Amount = request.Amount;
             }
             else
             {
@@ -642,6 +674,9 @@ public class TransactionService(
                     split.Amount = request.Amount;
                 }
             }
+
+            if (recordedIn is { } transferGroup)
+                DepartedPositions.RefuseIfMoved(departed, transfer, transferGroup);
 
             await dbContext.SaveChangesAsync(ct);
             return transfer;
@@ -656,6 +691,19 @@ public class TransactionService(
         var cameFromRule = await splitter.DivisionCameFromItsRule(expense, ct);
         var inputsMoved = InputsMoved(expense, request);
         var saysNothingNew = SaysNothingNew(expense.Splits, request.Splits);
+        var amountMoved = expense.Amount != request.Amount;
+        var groupMoved = expense.GroupId != request.GroupId;
+        var payerMoved = expense.UserId != request.PaidByUserId;
+
+        // What a departed payer paid *is* the amount, so no new amount can leave their part
+        // as it was -- whatever the shares say. Refused here, by name, before the shares are
+        // checked: shares carried over from before the edit no longer add up to the new
+        // amount, and "the shares have to add up" was the answer the person got, which sent
+        // them looking at the wrong thing.
+        if (amountMoved &&
+            departed.FirstOrDefault(position => position.UserId == expense.UserId && position.Paid != 0m)
+                is { } departedPayer)
+            throw DepartedPositions.Refusal([departedPayer.UserId]);
 
         // The destination, which is the group it is already in unless the request moves it.
         // Resolved the way a create resolves its group -- one of the caller's, or none for
@@ -681,13 +729,24 @@ public class TransactionService(
             {
                 request.Splits = null;
             }
+
+            // The old group's shares go before anything divides again. They name the old
+            // group's people, and left in place they would read as this expense's holders
+            // in a group they were never in.
+            dbContext.RemoveRange(expense.Splits);
+            expense.Splits.Clear();
         }
 
-        var expensePayer = await ParticipantOf(group, request.PaidByUserId, ct)
-                    ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                        group is null
-                            ? "A personal expense can only have been paid by you."
-                            : "The paying user is neither a member of the group nor invited to it.");
+        // Asked of the payer only when it is changing. The person who paid for a dinner a
+        // year ago may have left since, and that is no reason to refuse correcting its name.
+        if (payerMoved || groupMoved)
+        {
+            expense.User = await ParticipantOf(group, request.PaidByUserId, ct)
+                           ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
+                               group is null
+                                   ? "A personal expense can only have been paid by you."
+                                   : "The paying user is neither a member of the group nor invited to it.");
+        }
 
         var category = await CategoryFor(group, request.CategoryId, ct);
 
@@ -698,7 +757,6 @@ public class TransactionService(
         expense.Category = category;
         expense.CategoryId = category?.Id;
         expense.MerchantId = await MerchantFor(request.MerchantId, ct);
-        expense.User = expensePayer;
 
         // Both halves together, and only where the answer actually moved. EF fixes the
         // navigation up from the tracker as the expense is read, so assigning null to it
@@ -720,11 +778,23 @@ public class TransactionService(
         // the division itself, which is the one case where keeping it is the whole point.
         if (request.SplitRuleId is not null)
             await splitter.WriteSplitsByRuleAsync(expense, division!.Value, ct);
+        else if (cameFromRule && inputsMoved && saysNothingNew)
+            await splitter.WriteSplitsAsync(expense, null, ct);
+        else if (request.Splits is not null && saysNothingNew && !amountMoved && !groupMoved)
+        {
+            // The shares the expense already holds, carried in by the endpoint, on an edit
+            // that moved nothing they were worked out from: a rename, a note, a date, a
+            // payer or a category whose rule did not produce them. Written back as they are
+            // they would be checked against today's participants, and an expense somebody
+            // has since left could not be renamed at all. There is nothing to write.
+        }
         else
-            await splitter.WriteSplitsAsync(
-                expense,
-                cameFromRule && inputsMoved && saysNothingNew ? null : request.Splits,
-                ct);
+            await splitter.WriteSplitsAsync(expense, request.Splits, ct);
+
+        // Last, against the positions taken before anything moved: whatever the edit was,
+        // what a departed participant paid and owed here is what it was.
+        if (recordedIn is { } recordedGroup)
+            DepartedPositions.RefuseIfMoved(departed, expense, recordedGroup);
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -819,12 +889,26 @@ public class TransactionService(
 
     public async Task Delete(Guid id, CancellationToken ct = default)
     {
-        var transaction = await ScopedTransaction(id).FirstOrDefaultAsync(ct);
+        var transaction = await ScopedTransaction(id)
+            .Include(candidate => candidate.Splits)
+            .FirstOrDefaultAsync(ct);
 
         if (transaction is null)
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
 
         await RefuseIfLeft(transaction, ct);
+
+        // Deleting it takes everybody's part in it out of the group's balances, and the part
+        // of somebody who has left goes with nobody on the page to show for it. They left
+        // square; this would leave them owed, or owing, with no way to settle. The same holds
+        // for the settlement that let them leave.
+        var moved = (await participants.DepartedOn(transaction, ct))
+            .Where(position => !position.IsNothing)
+            .Select(position => position.UserId)
+            .ToList();
+
+        if (moved.Count > 0)
+            throw DepartedPositions.Refusal(moved);
 
         if (transaction is Expense)
             await receiptAttachments.DeleteForExpense(id, ct);
@@ -851,47 +935,25 @@ public class TransactionService(
     }
 
     /// <summary>
-    /// The member of <paramref name="group"/> with that id, or -- when there is no group --
-    /// the caller themselves, since a personal expense is one only they can have paid.
+    /// Which of a group's participants are its guests, as ids. Empty for no group at all,
+    /// which is what a personal expense has.
     /// </summary>
-    private Task<User?> MemberOf(Group? group, Guid userId, CancellationToken ct)
-    {
-        if (group is null)
-        {
-            var currentUser = userContext.User;
-            return Task.FromResult(userId == currentUser.Id ? currentUser : null);
-        }
-
-        return dbContext.Entry(group).Collection(g => g.Users).Query()
-            .FirstOrDefaultAsync(user => user.Id == userId, ct)!;
-    }
-
-    /// <summary>
-    /// Which of a group's participants have been invited and have not joined, as ids.
-    /// Empty for no group at all, which is what a personal expense has.
-    /// </summary>
-    private async Task<HashSet<Guid>> PendingInviteesIn(Guid? groupId, CancellationToken ct)
+    private async Task<HashSet<Guid>> GuestsIn(Guid? groupId, CancellationToken ct)
     {
         if (groupId is not { } id)
             return [];
 
-        return [.. await dbContext.Set<GroupInvitation>()
-            .Where(invitation => invitation.GroupId == id)
-            .Select(invitation => invitation.ParticipantUserId)
+        return [.. await dbContext.Set<GroupGuest>()
+            .Where(guest => guest.GroupId == id)
+            .Select(guest => guest.ParticipantUserId)
             .ToListAsync(ct)];
     }
 
     /// <summary>
-    /// The participant of <paramref name="group"/> with that id: a member, or somebody the
-    /// group has invited and is waiting on. When there is no group, the caller themselves,
-    /// since a personal expense is one only they can have paid.
+    /// The participant of <paramref name="group"/> with that id: a member, or one of its
+    /// guests. When there is no group, the caller themselves, since a personal expense is one
+    /// only they can have paid.
     /// </summary>
-    /// <remarks>
-    /// Wider than <see cref="MemberOf"/> by exactly one thing, and only expenses use it.
-    /// The trip is booked and the flat is moved into before everybody has answered their
-    /// invitation, so an expense may be paid for by an invitee and divided with them; a
-    /// settlement may not, because there is no account on the other end of it yet.
-    /// </remarks>
     private Task<User?> ParticipantOf(Group? group, Guid userId, CancellationToken ct)
     {
         if (group is null)
@@ -901,25 +963,6 @@ public class TransactionService(
         }
 
         return participants.Find(group.Id, userId, ct);
-    }
-
-    /// <summary>
-    /// Says what is actually wrong when a settlement names somebody the group has invited
-    /// and is still waiting on, rather than letting them read as a stranger.
-    /// </summary>
-    /// <remarks>
-    /// Returns null when they are not one, so it composes as a second guess after
-    /// <see cref="MemberOf"/> and leaves the original refusal to the caller. It never
-    /// returns a user: there is nothing here it would be right to go on and record.
-    /// </remarks>
-    private async Task<User?> RefuseIfPendingInvitee(Group? group, Guid userId, CancellationToken ct)
-    {
-        if (group is not null && await participants.IsPendingInvitee(group.Id, userId, ct))
-            throw new ConflictException(ErrorCodes.SettlementWithPendingInvitee,
-                "That person has been invited to the group and has not joined yet, so there is " +
-                "nobody to settle up with. Their balance stands until they accept.");
-
-        return null;
     }
 
     /// <summary>

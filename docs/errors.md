@@ -68,12 +68,13 @@ routing, authentication, model binding, an unhandled exception.
 | Code | When |
 | --- | --- |
 | `GROUP_NOT_FOUND` | The group does not exist, or the caller is not a member. |
-| `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. |
+| `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. Removing somebody who is not a member -- who has already left, or was never in the group -- answers this too. |
 | `ACCOUNT_NOT_FOUND` | The account to delete does not exist. |
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
-| `GROUP_INVITATION_NOT_FOUND` | No invitation answers to that token or id, or it has already been claimed, declined or withdrawn. A personal link works once, so a forwarded copy of a claimed one lands here -- and gets the same answer a mistyped URL does, deliberately: the alternative is telling whoever holds it that it used to be good. |
+| `GROUP_INVITATION_NOT_FOUND` | No guest's link answers to that token (or no guest to that old invitation id): it was never issued, or has been claimed, replaced, stopped or turned down, or the guest was removed. A guest's link works once, so a forwarded copy of a claimed one lands here -- and gets the same answer a mistyped URL does, deliberately: the alternative is telling whoever holds it that it used to be good. The second of two people claiming one link at the same moment gets this too, and is never let in. |
+| `GROUP_GUEST_NOT_FOUND` | A guest route named a user id that is not a current guest of the group: never one, removed, or claimed and now a member. Guest routes take the guest's user id, not the old invitation id. |
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
@@ -92,7 +93,8 @@ routing, authentication, model binding, an unhandled exception.
 
 | Code | When | Extra members |
 | --- | --- | --- |
-| `GROUP_MEMBER_NOT_SETTLED` | The member being removed still has a balance in the group. | `balance`: their net balance, negative when they owe. |
+| `GROUP_GUEST_CHANGED` | Two members changed the same guest at the same moment -- a removal racing a link being issued, replaced or stopped, or the link being claimed -- and this request lost. Nothing it asked for was written. Read the guest again and decide afresh. | |
+| `GROUP_MEMBER_NOT_SETTLED` | The member or guest being removed still has a balance in the group. For a guest, a member records the repayment that squares them first. | `balance`: their net balance, negative when they owe. |
 | `ACCOUNT_NOT_SETTLED` | The account being deleted still has a balance in one or more groups. Nothing was changed. | `outstandingBalances`: an array of `{ groupId, groupName, balance }`. |
 | `CATEGORY_NAME_TAKEN` | The group already has a category with that name. | |
 | `CATEGORY_IN_USE` | The category still has expenses filed under it. Move them first. | |
@@ -105,16 +107,18 @@ routing, authentication, model binding, an unhandled exception.
 | `SPLIT_RULE_KIND_FIXED` | `PUT /split-rules/{id}` gave a rule a division of a different kind from the one it stands for. A rule is a named division a group refers to and the shape of that division is part of what the rule is -- the categories pointing at it, and every expense divided by it, were pointed at a rule that divided that way. Changing the numbers is an edit; changing the shape is a different rule wearing the name. Writing a history is exempt: it records a past that really did change shape. | `splitRuleId`. |
 | `SPLIT_RULE_BILL_IS_PROVISIONED` | `POST /split-rules` asked for a second "divide it by the bill" rule. Every group is given exactly one and it is not written by hand: the rule holds no settings for a second to differ by, because what it divides by lives on the receipt, one line at a time. Two of them are the same rule under two names, and the names were the only thing a second ever bought -- at the cost of every client having to pick among indistinguishable rules to offer "divide it by the bill". The refusal names the one the group already holds, so use that id. | `splitRuleId` of the one it holds. |
 | `SPLIT_RULE_NOT_IN_GROUP` | An expense named a `splitRuleId` belonging to some other group, or named one at all while having no group to divide between. The same answer whether the rule exists or not. | `splitRuleId`, on the first. |
-| `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is neither a member of the group nor invited to it. Somebody with a standing invitation is a participant in the group's money and may be the payer -- see [pending invitees](pending-invitees.md). | |
-| `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is neither a member of the group nor invited to it. | |
+| `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is neither a member nor a guest of the group. A guest is a participant in the group's money and may be the payer -- see [guests](guests.md). | |
+| `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is neither a member nor a guest of the group. A share the expense already holds for somebody who has since left is not refused here: carrying it forward unchanged is allowed, and changing it is `TRANSACTION_MOVES_DEPARTED_BALANCE`. | |
 | `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
-| `SETTLEMENT_WITH_PENDING_INVITEE` | The repayment names somebody the group has invited and is still waiting on. Their balance is real and is in the group's balances; what is missing is an account on the other end of a payment. The balance stands until they accept. | |
-| `GROUP_MEMBER_NOT_JOINED` | A membership was acted on -- removing a member -- for somebody who has been invited and has not joined. They are in the members listing, marked as waiting, so they can be reached here by mistake. Withdrawing the invitation is the act that ends their part in the group, and it says what becomes of anything recorded against them. | |
+| `SETTLEMENT_WITH_PENDING_INVITEE` | **Retired; never sent.** A repayment used to be refused when it named an invitee. Guests can be settled with -- see [guests](guests.md). | |
+| `GROUP_MEMBER_NOT_JOINED` | **Retired; never sent.** Removing an invitee used to be refused. A guest is removed like a member, once square. | |
 | `SETTLEMENT_NOTHING_TO_SETTLE` | Squaring up when the caller owes nobody in the group and is owed by nobody. | |
+| `TRANSACTION_MOVES_DEPARTED_BALANCE` | An edit, a re-division, a move to another group, a bill division or a delete would change what somebody who has left the group paid or owed on this transaction. They left with a zero balance, and the group's balances add up only while their part stands as recorded. Renaming, re-noting, re-dating, re-filing and re-pointing a bill line are allowed, as is setting the other shares by hand while leaving theirs as it is. | `userIds`: the people whose part would move. |
 | `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
 | `GROUP_JOIN_LINK_EXPIRED` | The join link is past its expiry. Somebody in the group makes a new one. | |
-| `GROUP_JOIN_LINK_REVOKED` | The join link was withdrawn by the group before it expired. Kept apart from expiry because they are different things to have happened to the person holding the link. | |
+| `GROUP_JOIN_LINK_REVOKED` | The join link was withdrawn by the group before it expired. Kept apart from expiry because they are different things to have happened to the person holding the link. Removing a member puts out the group's live link, so a link they joined by answers this afterwards. | |
+| `GROUP_REJOIN_NEEDS_NEW_INVITATION` | Somebody who left the group, or was removed from it, used a join link or an invitation issued at or before their departure. Answered by the landing page's read as well as by joining or claiming, so the page can say it before the button. A link or invitation issued after they left works. | `leftAt`, `leftReason` (`Left`, `Removed` or `AccountDeleted`), `issuedAt`. |
 | `BANK_SYNC_UNAVAILABLE` | This deployment has no bank provider configured, so there is nothing to link through. `GET /bank-connections` says the same thing without failing, through `enabled`. | |
 | `RECEIPT_TRANSCRIPTION_UNAVAILABLE` | This deployment has no receipt transcription provider configured. Uploading and viewing receipt files still works. | |
 | `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment; deleting the expense is how you undo it. | |

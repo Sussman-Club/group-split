@@ -406,7 +406,7 @@
         {
             var members = await GroupsClient.GetGroupMembersAsync(GroupId);
 
-            // Label, not FullName: a rule may name somebody invited who has not joined, and
+            // Label, not FullName: a rule may name one of the group's guests, and
             // a screen that forgets the mark offers them as a member. DistinctBy so a
             // duplicate id cannot throw ArgumentException out of a quiet block and take the
             // group page down with it.

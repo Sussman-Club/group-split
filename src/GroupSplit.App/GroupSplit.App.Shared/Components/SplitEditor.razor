@@ -194,6 +194,25 @@
                                  Immediate="true"
                                  Format="N2"/>
             }
+
+            @* Somebody who has left keeps the share they settled up on. Shown, because the
+               column has to add up and their part is in it; fixed, because changing it is
+               the one edit the API refuses. *@
+            @foreach (var leaver in Leavers)
+            {
+                <MudNumericField T="decimal"
+                                 @key="leaver.UserId"
+                                 Value="@leaver.Amount"
+                                 Label="@ParticipantCopy.Left(leaver.UserName)"
+                                 HelperText="@ParticipantCopy.LeaverShareFixed"
+                                 Disabled="true"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                 HideSpinButtons="true"
+                                 Format="N2"/>
+            }
         </MudStack>
 
         <MudAlert Severity="@(Assigned ? Severity.Success : Severity.Warning)" Dense="true">
@@ -279,9 +298,15 @@
                         <div style="min-width: 0">
                             <div class="title">
                                 <span>@share.UserName</span>
-                                @if (share.IsPendingInvitee)
+                                @if (share.IsGuest)
                                 {
-                                    <span class="gs-tag">invited</span>
+                                    <span class="gs-tag">guest</span>
+                                }
+                                else if (Leavers.Any(leaver => leaver.UserId == share.UserId))
+                                {
+                                    @* As in the custom view, so the division reads the same
+                                       whichever side of the toggle it is on. *@
+                                    <span class="gs-tag neutral">left the group</span>
                                 }
                             </div>
                         </div>
@@ -309,9 +334,9 @@
     </text>;
 
     /// <summary>
-    /// Everyone who may be given a share: the group's members, and the people it has
-    /// invited and is waiting on -- who are marked as such on their field, since a share
-    /// against somebody who has not joined is an ordinary share and not an ordinary member.
+    /// Everyone who may be given a share: the group's members, and its guests -- who are
+    /// marked as such on their field, since a share against somebody with no account in the
+    /// group is an ordinary share and not an ordinary member.
     /// </summary>
     [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
 
@@ -401,6 +426,17 @@
     /// even starting point below is used instead.
     /// </summary>
     [Parameter] public IReadOnlyList<SplitInput>? Stored { get; set; }
+
+    /// <summary>
+    /// Shares on this expense held by people who have since left the group, on an edit.
+    /// </summary>
+    /// <remarks>
+    /// They are not in <see cref="Members"/>, so without this a hand-split dropped them, the
+    /// column stopped adding up, and the one edit the API allows on such an expense -- a new
+    /// amount with their share left as it is -- could not be made from here. Shown read-only
+    /// and always sent as they are.
+    /// </remarks>
+    [Parameter] public IReadOnlyList<TransactionSplitResponse> Leavers { get; set; } = [];
 
     /// <summary>
     /// What each person holds today, so the preview can show what an edit moves.
@@ -632,6 +668,10 @@
     private string NameOf(SplitRuleResponse rule) =>
         Members.FirstOrDefault(member => member.Id == rule.AllForUserId)?.Label() ?? rule.Name;
 
+    /// <summary>The leavers' shares, exactly as stored, for every list this sends.</summary>
+    private IEnumerable<SplitInput> LeaversAsStated() =>
+        Leavers.Select(leaver => new SplitInput { UserId = leaver.UserId, Amount = leaver.Amount });
+
     private async Task SetShare(Guid userId, decimal share)
     {
         var shares = Members
@@ -640,6 +680,7 @@
                 UserId = member.Id,
                 Amount = member.Id == userId ? share : ShareOf(member.Id)
             })
+            .Concat(LeaversAsStated())
             .ToList();
 
         _shares = shares;
@@ -672,6 +713,7 @@
                     UserId = member.Id,
                     Amount = Stored.FirstOrDefault(split => split.UserId == member.Id)?.Amount ?? 0m
                 })
+                .Concat(LeaversAsStated())
                 .ToList();
         }
 

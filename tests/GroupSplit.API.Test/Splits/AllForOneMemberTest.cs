@@ -79,7 +79,7 @@ public class AllForOneMemberTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var tracked = await DbContext.Set<Data.Entities.User>().FirstAsync(user => user.Id == other.Id, Ct);
 
-        await GetService<IGroupJoiner>().Join(loaded, tracked, Ct);
+        await GetService<IGroupJoiner>().Join(loaded, tracked, DateTimeOffset.UtcNow, Ct);
 
         var rule = await RuleFor(group.Id, other.Id);
 

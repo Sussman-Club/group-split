@@ -32,6 +32,12 @@ public static class ErrorCodes
     public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
     public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
     public const string GroupInvitationNotFound = "GROUP_INVITATION_NOT_FOUND";
+
+    /// <summary>
+    /// The id names nobody who is a current guest of the group: never one, removed, or
+    /// claimed by whoever held their link and now a member.
+    /// </summary>
+    public const string GroupGuestNotFound = "GROUP_GUEST_NOT_FOUND";
     public const string GroupJoinLinkNotFound = "GROUP_JOIN_LINK_NOT_FOUND";
     public const string BankConnectionNotFound = "BANK_CONNECTION_NOT_FOUND";
     public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
@@ -53,31 +59,57 @@ public static class ErrorCodes
     // ---- Conflict (409): the request is well formed but the current state refuses it -----
 
     public const string GroupMemberNotSettled = "GROUP_MEMBER_NOT_SETTLED";
+
+    /// <summary>
+    /// Two members changed the same guest at the same moment -- one removed them while the
+    /// other issued, replaced or stopped their link, or somebody claimed it -- and this
+    /// request is the one that lost. Nothing it asked for was written. Read the guest again
+    /// and decide afresh: they may be gone, or have a different link now.
+    /// </summary>
+    public const string GroupGuestChanged = "GROUP_GUEST_CHANGED";
     public const string AccountNotSettled = "ACCOUNT_NOT_SETTLED";
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
     public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";
     public const string SettlementWithSelf = "SETTLEMENT_WITH_SELF";
 
     /// <summary>
-    /// A repayment names somebody the group has invited and is still waiting on. Their
-    /// shares count in the group's balances, but there is no account on the other end of a
-    /// payment yet: the balance simply stands until they join.
+    /// Retired: a repayment named a guest, back when guests could not be settled with. Never
+    /// sent now; kept so a client that still checks for it compiles.
     /// </summary>
+    [Obsolete("Guests can be settled with; this is never sent.")]
     public const string SettlementWithPendingInvitee = "SETTLEMENT_WITH_PENDING_INVITEE";
 
     public const string SettlementNothingToSettle = "SETTLEMENT_NOTHING_TO_SETTLE";
 
     /// <summary>
-    /// A membership was acted on for somebody who has been invited and has not joined.
-    /// They are choosable as a participant -- a payer, a share, a rule -- and are in the
-    /// group's members listing marked as waiting, so they can be reached by mistake here.
-    /// Withdrawing the invitation is the act that ends their part in the group.
+    /// Retired: removing somebody who had been invited and not joined. Guests are removed
+    /// like members now, so this is never sent; kept so a client that still checks for it
+    /// compiles.
     /// </summary>
+    [Obsolete("Guests are removed like members; this is never sent.")]
     public const string GroupMemberNotJoined = "GROUP_MEMBER_NOT_JOINED";
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
     public const string GroupJoinLinkExpired = "GROUP_JOIN_LINK_EXPIRED";
     public const string GroupJoinLinkRevoked = "GROUP_JOIN_LINK_REVOKED";
+
+    /// <summary>
+    /// Somebody who left the group, or was removed from it, tried to come back through a join
+    /// link or an invitation that was issued before they went. A way back in is only as good
+    /// as its date: they need one somebody in the group issued after they left, which is how
+    /// the group says it wants them back.
+    /// </summary>
+    public const string GroupRejoinNeedsNewInvitation = "GROUP_REJOIN_NEEDS_NEW_INVITATION";
+
     public const string TransactionGroupLeft = "TRANSACTION_GROUP_LEFT";
+
+    /// <summary>
+    /// An edit, a re-division, a move to another group or a delete would change what
+    /// somebody who has left the group paid or owed on this transaction. They left with a
+    /// zero balance, and the group's balances add up only while their part stands as it was
+    /// recorded. Renaming, re-noting, re-dating and re-filing are allowed, as is changing the
+    /// other shares while leaving theirs alone.
+    /// </summary>
+    public const string TransactionMovesDepartedBalance = "TRANSACTION_MOVES_DEPARTED_BALANCE";
     public const string CategoryNameTaken = "CATEGORY_NAME_TAKEN";
     public const string CategoryInUse = "CATEGORY_IN_USE";
     public const string SplitRuleNameTaken = "SPLIT_RULE_NAME_TAKEN";

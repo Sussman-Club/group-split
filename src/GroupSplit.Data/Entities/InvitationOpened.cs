@@ -1,7 +1,7 @@
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
-/// One account has opened one invitation's link.
+/// One account has opened one guest's link.
 /// </summary>
 /// <remarks>
 /// The invitee's own list, rebuilt from the one thing there is to build it from. An
@@ -27,10 +27,15 @@ namespace GroupSplit.Data.Entities;
 /// read there is -- what this account has open -- goes through the invitation to its group,
 /// which no navigation off <see cref="User"/> would shorten.
 /// </para>
+/// <para>
+/// Tied to the link, not just the guest: replacing or stopping a link deletes these rows, so
+/// somebody who opened a link that was later withdrawn is not handed its replacement.
+/// </para>
 /// </remarks>
 public class InvitationOpened
 {
-    public Guid InvitationId { get; init; }
+    /// <summary>The <see cref="GroupGuest"/> whose link was opened.</summary>
+    public Guid GuestId { get; init; }
 
     public Guid UserId { get; init; }
 

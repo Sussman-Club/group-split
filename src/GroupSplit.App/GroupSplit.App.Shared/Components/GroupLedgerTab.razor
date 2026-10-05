@@ -10,6 +10,7 @@
 @inject ITransactionsClient TransactionsClient
 @inject ITransactionsPageStateService TransactionsService
 @inject ITransactionCommands Transactions
+@inject IDepartedDeleteGuard DeleteGuard
 @inject IDialogService DialogService
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
@@ -630,6 +631,14 @@
     private async Task DeleteAsync(GroupLedgerEntryResponse entry)
     {
         var settlement = entry.Kind is ActivityKind.Transfer;
+
+        // Somebody on it has left the group, so the server would refuse: say why instead of
+        // asking. The spared "Delete?" is one whose only outcome is that refusal.
+        if (await DeleteGuard.FirstLeaverOnAsync(entry.Id, GroupId) is { } leaver)
+        {
+            await DialogService.ShowDepartedNoticeAsync(leaver, settlement ? "settlement" : "expense");
+            return;
+        }
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {

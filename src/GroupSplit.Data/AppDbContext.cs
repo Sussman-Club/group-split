@@ -40,6 +40,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(user => user.LastName).HasMaxLength(64);
             entity.Property(user => user.Email).HasMaxLength(128);
 
+            // By name, like LeftReason: a row read in psql should say what it is.
+            entity.Property(user => user.Kind)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
             // The join carries a payload now -- who has archived which group -- so it is a
             // type rather than one EF keeps to itself. Pinned to the table and column names
             // EF had already chosen, so this is an added column and not a moved membership.
@@ -62,72 +68,158 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                             .IsRequired()
                             .HasDefaultValueSql("CURRENT_TIMESTAMP")
                             .ValueGeneratedOnAdd();
+
+                        // Stored by name, as a bank connection's status is, so a row read
+                        // straight from the database says what happened.
+                        join.Property(membership => membership.LeftReason)
+                            .HasConversion<string>()
+                            .HasMaxLength(16);
+
+                        // Who ended it, kept only while that account exists.
+                        join.HasOne<User>()
+                            .WithMany()
+                            .HasForeignKey(membership => membership.LeftByUserId)
+                            .OnDelete(DeleteBehavior.SetNull);
+
+                        // A departed membership is history, not a member. Every reach
+                        // through Users or Groups -- Include, Any, Count, SelectMany,
+                        // Collection().Query() -- goes through this row, so filtering it here
+                        // is what keeps every "is this person a member" read meaning a
+                        // current member without each one having to say so.
+                        //
+                        // Two things to know before reaching past it. IgnoreQueryFilters is
+                        // query-wide: used inside a subquery of a read that is scoped through
+                        // Users or Groups, it would let a departed person through that scope
+                        // too. And loading a closed row into a context that tracks the group
+                        // and the person puts them back into group.Users in memory, so a
+                        // decision about a departed row has to be made from the row.
+                        join.HasQueryFilter(membership => membership.LeftAt == null);
                     });
 
             entity.HasIndex(user => user.Email).IsUnique();
         });
 
-        modelBuilder.Entity<GroupInvitation>(entity =>
+        modelBuilder.Entity<GroupMembershipEvent>(entity =>
         {
-            entity.Property(invitation => invitation.Name).HasMaxLength(64).IsRequired();
-            entity.Property(invitation => invitation.Token).HasMaxLength(64).IsRequired();
-            entity.Property(invitation => invitation.InvitedAt).IsRequired();
+            entity.Property(change => change.Kind)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
 
-            entity.HasOne(invitation => invitation.Group)
-                .WithMany(group => group.Invitations)
-                .HasForeignKey(invitation => invitation.GroupId)
+            entity.Property(change => change.At).IsRequired();
+
+            // A group's history goes with the group, and is all there is to read it by.
+            entity.HasOne<Group>()
+                .WithMany()
+                .HasForeignKey(change => change.GroupId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Required, and restricted: this is who the group's money is recorded against
-            // while the address has not answered, so an invitation without one could hold
-            // shares belonging to nobody -- and losing the row would take them with it.
-            entity.HasOne(invitation => invitation.Participant)
+            // Restrict, like every reference to a person in history: accounts are anonymised
+            // rather than deleted, and the stand-ins that are deleted are never members.
+            entity.HasOne<User>()
                 .WithMany()
-                .HasForeignKey(invitation => invitation.ParticipantUserId)
+                .HasForeignKey(change => change.UserId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // The inviter is a courtesy on the row the invitee reads ("Daniel asked you to
-            // join"), so their account going away must not take the invitation with it.
-            entity.HasOne(invitation => invitation.InvitedBy)
+            entity.HasOne<User>()
                 .WithMany()
-                .HasForeignKey(invitation => invitation.InvitedByUserId)
+                .HasForeignKey(change => change.ByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Read as one group's story in order, or one person's across groups.
+            entity.HasIndex(change => new { change.GroupId, change.At });
+            entity.HasIndex(change => change.UserId);
+        });
+
+        modelBuilder.Entity<GroupGuest>(entity =>
+        {
+            entity.Property(guest => guest.Name).HasMaxLength(64).IsRequired();
+            entity.Property(guest => guest.AddedAt).IsRequired();
+
+            // Both concurrency tokens: every write that matters to a guest -- claiming,
+            // removing, issuing or stopping a link -- changes one of them, so of two at the
+            // same moment the second matches no row and fails instead of overwriting the
+            // first. See GroupGuest.
+            entity.Property(guest => guest.Token).HasMaxLength(64).IsConcurrencyToken();
+            entity.Property(guest => guest.EndedAt).IsConcurrencyToken();
+
+            entity.Property(guest => guest.EndReason)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            entity.HasOne(guest => guest.Group)
+                .WithMany(group => group.Guests)
+                .HasForeignKey(guest => guest.GroupId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Required, and restricted: this is who the group's money is recorded against,
+            // so a guest without one could hold shares belonging to nobody -- and losing the
+            // row would take them with it.
+            entity.HasOne(guest => guest.Participant)
+                .WithMany()
+                .HasForeignKey(guest => guest.ParticipantUserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Courtesies on the row ("added by Daniel"), so those accounts going away must
+            // not take the guest with them.
+            entity.HasOne(guest => guest.AddedBy)
+                .WithMany()
+                .HasForeignKey(guest => guest.AddedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(guest => guest.LinkIssuedBy)
+                .WithMany()
+                .HasForeignKey(guest => guest.LinkIssuedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(guest => guest.EndedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             // The token is the whole lookup: somebody opens a URL and the only thing in it
             // is this. Unique because two rows answering to one token would be two
-            // positions one link could claim.
-            entity.HasIndex(invitation => invitation.Token).IsUnique();
+            // positions one link could claim. Many guests have none; Postgres does not count
+            // nulls against a unique index.
+            entity.HasIndex(guest => guest.Token).IsUnique();
 
             // Read on every membership question a group asks -- who may be given a share,
-            // whose balance to show, whether this person has joined -- both by group and by
-            // participant alone.
-            //
-            // Unique on the pair, and that is the constraint that replaced one standing
-            // invitation per address: a stand-in is made for one invitation and nothing
-            // else, so a second row naming it would be two invitations for one person's
-            // money. Names are deliberately *not* unique -- two people can be called Dani.
-            entity.HasIndex(invitation => new { invitation.GroupId, invitation.ParticipantUserId }).IsUnique();
+            // whose balance to show, whether this person has joined.
+            entity.HasIndex(guest => new { guest.GroupId, guest.ParticipantUserId }).IsUnique();
 
-            entity.HasIndex(invitation => invitation.ParticipantUserId);
+            // A stand-in is made for one guest and nothing else, ever: a second row naming
+            // it would be two guests holding one person's money. Unique on its own, so it
+            // holds across groups and across ended rows too.
+            entity.HasIndex(guest => guest.ParticipantUserId).IsUnique();
+
+            // A removed or claimed guest is history, not a guest -- the same choice
+            // GroupMembership makes with LeftAt, and for the same reason: every "is this
+            // person a guest" read means a current one without each having to say so.
+            // A removed guest then reads as departed everywhere a departed member does.
+            entity.HasQueryFilter(guest => guest.EndedAt == null);
         });
 
         modelBuilder.Entity<InvitationOpened>(entity =>
         {
-            entity.HasKey(opened => new { opened.InvitationId, opened.UserId });
+            entity.HasKey(opened => new { opened.GuestId, opened.UserId });
 
             entity.Property(opened => opened.OpenedAt).IsRequired();
 
-            // Cascade from both parents, the way a bank match dismissal does, and for the
-            // same reason: the row is a fact about a pair and has nothing left to say once
-            // either half of it is gone. Answering an invitation deletes it, and this goes
-            // with it -- which is also what takes the invitation out of the invitee's list.
+            // Cascade from both parents, the way a bank match dismissal does: the row is a
+            // fact about a pair and has nothing left to say once either half is gone. A
+            // link ending does not delete the guest, so these are removed explicitly
+            // whenever one does (GuestLinkExtensions.EndLink).
             //
-            // Postgres is happy with two cascade paths into a leaf table.
-            entity.HasOne<GroupInvitation>()
+            // EF warns that the guest's query filter would hide the principal of a required
+            // relationship. Nothing reads these through a navigation: the one read joins
+            // them to the live guests explicitly, which is the filter applied on purpose.
+            entity.HasOne<GroupGuest>()
                 .WithMany()
-                .HasForeignKey(opened => opened.InvitationId)
+                .HasForeignKey(opened => opened.GuestId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -137,7 +229,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // The one read there is: what this account has opened and not yet answered.
+            // The one read there is: which links this account has open.
             entity.HasIndex(opened => opened.UserId);
         });
 
@@ -177,10 +269,16 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .HasDefaultValue(Currencies.Default);
 
+            // No action rather than restrict. Both refuse to delete a rule a group defaults to;
+            // the difference is when they look. Restrict looks at once, so deleting a group --
+            // whose rules cascade from it -- tripped over the group's own default before the
+            // group row itself was gone, and no group could be deleted at all. No action looks
+            // at the end of the statement, by which time the row pointing at the rule has
+            // gone with it.
             entity.HasOne(group => group.DefaultSplitRule)
                 .WithMany()
                 .HasForeignKey(group => group.DefaultSplitRuleId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.NoAction);
 
             entity.HasIndex(group => group.Name);
         });
@@ -313,14 +411,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(category => category.GroupId)
                 .IsRequired();
 
-            // Restrict rather than cascade or set-null: a rule several categories default
+            // Refused rather than cascade or set-null: a rule several categories default
             // to is exactly the rule somebody will try to delete, and silently emptying
             // their defaults would change how every future expense in them is split
-            // without saying so.
+            // without saying so. No action rather than restrict, for the reason Group gives:
+            // it still refuses that, and lets a group go with its categories and rules.
             entity.HasOne(category => category.DefaultSplitRule)
                 .WithMany()
                 .HasForeignKey(category => category.DefaultSplitRuleId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.NoAction);
 
             // Inherited from the constraint Rule carried on (GroupId, Category), which is
             // the same statement now that the label has a table of its own.
@@ -337,10 +436,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Restrict, not the cascade a required key gets by default. Deleting a person must
+            // never delete what they owed: the group's balances add up only while every share
+            // is still there. Stand-ins are the only users ever deleted, and only after their
+            // shares have moved -- if one has not, the delete should fail, not succeed quietly.
             entity.HasOne(split => split.User)
                 .WithMany()
                 .HasForeignKey(split => split.UserId)
-                .IsRequired();
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
 
             // One row per person per transaction: a second would be a second opinion about
             // what they owed.
@@ -364,10 +468,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .HasDefaultValue(Currencies.Default);
 
+            // Restrict, as on TransactionSplit: deleting whoever paid must not delete the
+            // expense, and with it every share the group recorded on it.
             entity.HasOne(transaction => transaction.User)
                 .WithMany(user => user.Transactions)
                 .HasForeignKey(transaction => transaction.UserId)
-                .IsRequired();
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(transaction => transaction.Group)
                 .WithMany()
@@ -701,5 +808,169 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         }
 
         base.OnModelCreating(modelBuilder);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        var recorded = RecordMembershipEvents();
+
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch
+        {
+            Forget(recorded);
+            throw;
+        }
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        var recorded = RecordMembershipEvents();
+
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch
+        {
+            Forget(recorded);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Adds a <see cref="GroupMembershipEvent"/> for every membership this save creates,
+    /// closes or reopens, and every guest it adds or ends, so the history is written in the
+    /// same transaction as the change.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than beside each caller because a membership moves from several places --
+    /// creating a group adds one through <c>Group.Users</c>, joining and claiming through the
+    /// joiner, leaving and removal through the group service, the seeder through both -- and
+    /// a history that depends on each of them remembering is one that will have gaps.
+    /// <para>
+    /// DetectChanges first: a membership added through the skip navigation is not an entry
+    /// of its own until it has run, and SaveChanges would only run it after this has looked.
+    /// </para>
+    /// </remarks>
+    private List<GroupMembershipEvent> RecordMembershipEvents()
+    {
+        ChangeTracker.DetectChanges();
+
+        var recorded = new List<GroupMembershipEvent>();
+
+        foreach (var entry in ChangeTracker.Entries<GroupMembership>().ToList())
+        {
+            var membership = entry.Entity;
+            GroupMembershipEvent? change = null;
+
+            if (entry.State is EntityState.Added)
+            {
+                change = new GroupMembershipEvent
+                {
+                    Kind = MembershipEventKind.Joined,
+                    // Unset when the row came through Group.Users and the database default
+                    // is to fill it in; now is that default, a moment early.
+                    At = membership.JoinedAt == default ? DateTimeOffset.UtcNow : membership.JoinedAt,
+                    ByUserId = membership.UserId
+                };
+            }
+            else if (entry.State is EntityState.Modified)
+            {
+                var wasOpen = entry.Property(row => row.LeftAt).OriginalValue is null;
+                var isOpen = membership.LeftAt is null;
+
+                if (wasOpen && !isOpen)
+                {
+                    change = new GroupMembershipEvent
+                    {
+                        Kind = membership.LeftReason switch
+                        {
+                            LeftReason.Removed => MembershipEventKind.Removed,
+                            LeftReason.AccountDeleted => MembershipEventKind.AccountDeleted,
+                            _ => MembershipEventKind.Left
+                        },
+                        At = membership.LeftAt!.Value,
+                        ByUserId = membership.LeftByUserId
+                    };
+                }
+                else if (!wasOpen && isOpen)
+                {
+                    change = new GroupMembershipEvent
+                    {
+                        Kind = MembershipEventKind.Rejoined,
+                        At = membership.JoinedAt,
+                        ByUserId = membership.UserId
+                    };
+                }
+            }
+
+            if (change is null)
+                continue;
+
+            change.GroupId = membership.GroupId;
+            change.UserId = membership.UserId;
+
+            Add(change);
+            recorded.Add(change);
+        }
+
+        // A guest's place is history too, and moves from as many places: adding them, the
+        // group removing them, and whoever holds their link claiming them.
+        foreach (var entry in ChangeTracker.Entries<GroupGuest>().ToList())
+        {
+            var guest = entry.Entity;
+            GroupMembershipEvent? change = null;
+
+            if (entry.State is EntityState.Added)
+            {
+                change = new GroupMembershipEvent
+                {
+                    Kind = MembershipEventKind.GuestAdded,
+                    At = guest.AddedAt,
+                    ByUserId = guest.AddedByUserId ?? guest.AddedBy?.Id
+                };
+            }
+            else if (entry.State is EntityState.Modified &&
+                     entry.Property(row => row.EndedAt).OriginalValue is null &&
+                     guest.EndedAt is { } endedAt)
+            {
+                change = new GroupMembershipEvent
+                {
+                    Kind = guest.EndReason == GuestEndReason.Claimed
+                        ? MembershipEventKind.GuestClaimed
+                        : MembershipEventKind.GuestRemoved,
+                    At = endedAt,
+                    ByUserId = guest.EndedByUserId
+                };
+            }
+
+            if (change is null)
+                continue;
+
+            change.GroupId = guest.GroupId == default ? guest.Group.Id : guest.GroupId;
+            change.UserId = guest.ParticipantUserId == default ? guest.Participant.Id : guest.ParticipantUserId;
+
+            Add(change);
+            recorded.Add(change);
+        }
+
+        return recorded;
+    }
+
+    /// <summary>
+    /// Takes back the events a failed save added. The membership change they describe is
+    /// still pending, or has been abandoned -- the joiner detaches a row that lost a race --
+    /// and either way the next save records it afresh if it happens at all. Left tracked,
+    /// they would be written by that next save beside a second copy, or with nothing behind
+    /// them.
+    /// </summary>
+    private void Forget(List<GroupMembershipEvent> recorded)
+    {
+        foreach (var change in recorded)
+            Entry(change).State = EntityState.Detached;
     }
 }

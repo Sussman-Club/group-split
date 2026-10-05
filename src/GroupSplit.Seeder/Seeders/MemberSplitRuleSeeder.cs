@@ -23,6 +23,7 @@ namespace GroupSplit.Seeder.Seeders;
 /// </remarks>
 [DependsOn(typeof(GroupSeeder))]
 [DependsOn(typeof(UserSeeder))]
+[DependsOn(typeof(GroupGuestSeeder))]
 public class MemberSplitRuleSeeder(
     AppDbContext db,
     ILogger<MemberSplitRuleSeeder> logger,
@@ -32,26 +33,34 @@ public class MemberSplitRuleSeeder(
     {
         var groups = await db.Set<Group>().Include(@group => @group.Users).ToListAsync(ct);
 
-        var seeded = 0;
+        // Counted once either side rather than around every call: the number is only for the
+        // log line, and each member's and invitee's rule is exactly one provisioned rule.
+        var before = await Provisioned(ct);
 
         foreach (var group in groups)
         {
+            // Find-or-create, so running the seeder twice writes nothing the second time --
+            // the same property every other seeder here has.
             foreach (var member in group.Users)
-            {
-                // Find-or-create, so running the seeder twice writes nothing the second
-                // time -- the same property every other seeder here has.
-                var before = await db.Set<SplitRule>()
-                    .CountAsync(rule => rule.Group.Id == group.Id, ct);
-
                 await memberRules.EnsureFor(group, member, ct);
-
-                var after = await db.Set<SplitRule>()
-                    .CountAsync(rule => rule.Group.Id == group.Id, ct);
-
-                seeded += after - before;
-            }
         }
 
-        logger.LogInformation("Seeded {Count} {Entity}", seeded, "MemberSplitRule");
+        // And every guest, who has one as well from the moment they are added. The seeded
+        // guests are written straight into the table too, so the demo would otherwise show
+        // nobody under "One pays" for them.
+        var guests = await db.Set<GroupGuest>()
+            .Include(guest => guest.Group)
+            .Include(guest => guest.Participant)
+            .ToListAsync(ct);
+
+        foreach (var guest in guests)
+            await memberRules.EnsureFor(guest.Group, guest.Participant, ct);
+
+        logger.LogInformation("Seeded {Count} {Entity}", await Provisioned(ct) - before, "MemberSplitRule");
     }
+
+    private Task<int> Provisioned(CancellationToken ct) =>
+        db.Set<SplitRule>().CountAsync(rule => rule.BuiltIn &&
+                                               rule.Versions.OfType<SoleSplitRuleVersion>()
+                                                   .Any(version => version.SupersededAt == null), ct);
 }

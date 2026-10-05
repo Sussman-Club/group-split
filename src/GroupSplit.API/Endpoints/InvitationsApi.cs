@@ -95,7 +95,8 @@ public static class InvitationsApi
                 })
                 .WithName("GetInvitationClaim")
                 .Produces<InvitationClaimResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         /// <summary>
@@ -108,7 +109,10 @@ public static class InvitationsApi
         /// balance has moved onto the claimer's own account and the app should say so.
         /// <para>
         /// The link works once. Claiming removes the invitation the token lives on, so a
-        /// second holder of a forwarded link gets the same 404 a mistyped one does.
+        /// second holder of a forwarded link gets the same 404 a mistyped one does -- and so
+        /// does the second of two people claiming it at the same moment, who is never let in.
+        /// Somebody who left the group after the invitation was sent gets a 409 instead: it
+        /// was not an invitation to come back.
         /// </para>
         /// </remarks>
         private RouteHandlerBuilder MapClaim()
@@ -122,7 +126,8 @@ public static class InvitationsApi
                 })
                 .WithName("ClaimInvitation")
                 .Produces<InvitationClaimedResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
 
         /// <summary>

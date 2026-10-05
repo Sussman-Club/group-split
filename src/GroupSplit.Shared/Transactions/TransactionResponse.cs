@@ -27,11 +27,19 @@ public record TransactionResponse
     public string PaidByUserName { get; set; } = "";
 
     /// <summary>
-    /// True when whoever paid has been invited to the group and has not joined yet. An
-    /// invitee can front money for the group from the moment they are asked, and the label
-    /// beside their name is what keeps that from reading as a member who joined.
+    /// True when whoever paid is one of the group's guests. A guest can front money for the
+    /// group like anybody else, and the label beside their name is what keeps that from
+    /// reading as a member who joined.
     /// </summary>
-    public bool PaidByIsPendingInvitee { get; set; }
+    public bool PaidByIsGuest { get; set; }
+
+    /// <summary>The name <see cref="PaidByIsGuest"/> had before guests were renamed; still written for older clients.</summary>
+    [Obsolete("Use PaidByIsGuest.")]
+    public bool PaidByIsPendingInvitee
+    {
+        get => PaidByIsGuest;
+        set => PaidByIsGuest = value;
+    }
     public Guid? PaidToUserId { get; set; }
     public string? PaidToUserName { get; set; }
     /// <summary>What it was filed under, or null for an expense filed under nothing.</summary>

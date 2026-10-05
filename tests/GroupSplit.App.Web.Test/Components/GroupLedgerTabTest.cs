@@ -544,6 +544,37 @@ public class GroupLedgerTabTest : ComponentTest
             Times.Once);
     }
 
+    /// <summary>
+    /// Somebody on the settlement has left the group, so the server would refuse to delete
+    /// it. The tab says why, with one button, rather than offering a delete that cannot work.
+    /// </summary>
+    [Fact]
+    public async Task A_settlement_with_a_leaver_on_it_is_explained_rather_than_offered_for_deletion()
+    {
+        var id = Guid.NewGuid();
+        _entries = [Transfer(id)];
+
+        var guard = new Mock<IDepartedDeleteGuard>();
+        guard.Setup(g => g.FirstLeaverOnAsync(id, It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync("Sofia Kovács");
+        Services.AddSingleton(guard.Object);
+
+        var tab = Render();
+
+        await tab.InvokeAsync(() => Buttons(tab, "Delete").Single().Click());
+
+        _dialogs.Verify(dialogs => dialogs.ShowAsync<ConfirmationDialog>(
+            "This settlement stays",
+            It.Is<DialogParameters<ConfirmationDialog>>(parameters =>
+                ((string)parameters[nameof(ConfirmationDialog.ContentText)]!).StartsWith("Sofia Kovács has left the group")
+                && false.Equals(parameters[nameof(ConfirmationDialog.ShowCancel)])),
+            It.IsAny<DialogOptions>()), Times.Once);
+
+        _commands.Verify(
+            commands => commands.DeleteAsync(
+                It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task Declining_the_confirmation_deletes_nothing()
     {

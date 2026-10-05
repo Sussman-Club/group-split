@@ -13,6 +13,14 @@ namespace GroupSplit.Data.Entities;
 /// Mapped onto the table and columns EF had already made, so making it explicit adds a
 /// column rather than moving anyone's membership.
 /// </para>
+/// <para>
+/// A row outlives the membership it records. Leaving, being removed and deleting an account
+/// close it with <see cref="LeftAt"/> rather than deleting it, because a group has to
+/// remember that somebody left in order to refuse them a link that was shared while they
+/// were still in it. A model-wide query filter keeps closed rows out of
+/// <c>Group.Users</c> and <c>User.Groups</c>, so everything that asks "is this person a
+/// member" goes on meaning "a current member" without saying so.
+/// </para>
 /// </remarks>
 public class GroupMembership
 {
@@ -43,4 +51,46 @@ public class GroupMembership
     /// members never see this. It only moves down their own list.
     /// </summary>
     public DateTimeOffset? ArchivedAt { get; set; }
+
+    /// <summary>
+    /// When the membership ended, or null while it stands. A row with this set is history:
+    /// the person is not a member, and the query filter hides the row from every read that
+    /// does not ask for it with <c>IgnoreQueryFilters</c>.
+    /// </summary>
+    /// <remarks>
+    /// Cleared again when the same person rejoins, which reuses the row rather than adding a
+    /// second: the key is the pair, and this row is the relationship as it stands. Earlier
+    /// stints are not lost with it -- every join, departure and return is also written to
+    /// <see cref="GroupMembershipEvent"/>, which is where "who removed whom, and when" is
+    /// answered. The rejoin rule only needs the latest departure, and reads it here.
+    /// </remarks>
+    public DateTimeOffset? LeftAt { get; set; }
+
+    /// <summary>How the membership ended. Null exactly when <see cref="LeftAt"/> is.</summary>
+    public LeftReason? LeftReason { get; set; }
+
+    /// <summary>
+    /// Who ended it: the member who removed them, or the person themselves when they left or
+    /// deleted their account. Null while the membership stands, and once that account is
+    /// gone.
+    /// </summary>
+    public Guid? LeftByUserId { get; set; }
+}
+
+/// <summary>How somebody stopped being a member of a group.</summary>
+/// <remarks>
+/// All three leave the same standing behind -- the person is no longer in the group -- and
+/// differ only in who acted. The difference is kept because it is what a refusal has to say:
+/// "you left" and "you were removed" are different things to be told.
+/// </remarks>
+public enum LeftReason
+{
+    /// <summary>They left on their own.</summary>
+    Left,
+
+    /// <summary>Another member removed them.</summary>
+    Removed,
+
+    /// <summary>They deleted their account.</summary>
+    AccountDeleted
 }

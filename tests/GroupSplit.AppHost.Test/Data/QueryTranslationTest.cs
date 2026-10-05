@@ -102,6 +102,44 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
+    /// The guest routes, over the real database: adding one without a link, issuing one,
+    /// the listing, and removing them -- whose balance check, rule pruning and end-of-row
+    /// write all go through the filtered guest table.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_guest_routes_translate()
+    {
+        var group = await AGroupOfTheirs();
+        var guests = Service<IGuestService>();
+
+        var added = Assert.Single(await guests.Add(group, new AddGuestsRequest { Names = ["Translation guest"] }, Ct));
+
+        Assert.True((await guests.IssueLink(group, added.UserId, replace: false, Ct)).HasLink);
+        Assert.Contains(await guests.ForGroup(group, Ct), guest => guest.UserId == added.UserId);
+
+        await Service<IGroupService>().RemoveGroupMember(group, added.UserId, Ct);
+
+        Assert.DoesNotContain(await guests.ForGroup(group, Ct), guest => guest.UserId == added.UserId);
+    }
+
+    /// <summary>
+    /// Past members, which now leave out a claimed guest's stand-in by asking the history --
+    /// a subquery over the events beside the ledger's four.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task A_groups_past_members_translate()
+    {
+        await (await Service<IGroupService>().GetGroupPastMembers(await AGroupOfTheirs(), Ct)).ToListAsync(Ct);
+    }
+
+    /// <summary>The cross-group plan, which now carries who among the people is a guest.</summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_cross_group_plan_translates()
+    {
+        await Service<ISettlementService>().GetPlan(Ct);
+    }
+
+    /// <summary>
     /// Both join-link projections, and the write between them: the group's own view of its
     /// link, and the view somebody following one gets. Each is a constructor call reaching
     /// through two navigations, which is the shape that does not translate.
@@ -319,7 +357,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// One query over the users with an OR across two relationships -- a skip navigation to
-    /// the groups, and an exists over the invitations -- which is the shape the in-memory
+    /// the groups, and an exists over the guests -- which is the shape the in-memory
     /// provider is happiest to evaluate on the client and Npgsql has to turn into a real
     /// predicate. Every expense written in a group goes through it, so it failing to
     /// translate would be every split, not one screen.
@@ -334,7 +372,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
 
         await participants.IdsOf(group, Ct);
         await participants.Find(group, people[0].Id, Ct);
-        await participants.IsPendingInvitee(group, people[0].Id, Ct);
+        await participants.IsGuest(group, people[0].Id, Ct);
     }
 
     /// <summary>
@@ -382,15 +420,9 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Answering an invitation, over the real database: who takes over what it was holding,
-    /// and the writes that move it.
+    /// Stopping a guest's link by the old route, over the real database: the claim page's
+    /// read, then the write -- and the shares still add up, because nothing moves.
     /// </summary>
-    /// <remarks>
-    /// The seed data has invitations with shares against them -- they are seeded before the
-    /// expenses on purpose -- so this is a hand-over that actually moves rows rather than
-    /// one that finds nothing to do. Checked afterwards for the invariant the whole thing
-    /// rests on: every transaction still divides into exactly its own amount.
-    /// </remarks>
     [Fact(Timeout = 120_000)]
     public async Task Withdrawing_an_invitation_translates_and_keeps_the_shares_adding_up()
     {

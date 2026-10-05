@@ -146,11 +146,11 @@
                         <dt>Paid by</dt>
                         <dd class="gs-kv-tagged">
                             <span>@(PaidByMe ? "You" : details.PaidByUserName)</span>
-                            @* An invitee can front money for the group before they accept,
+                            @* A guest can front money for the group like anybody else,
                                so the name here is not always a member's. *@
-                            @if (details.PaidByIsPendingInvitee)
+                            @if (details.PaidByIsGuest)
                             {
-                                <span class="gs-tag">invited</span>
+                                <span class="gs-tag">guest</span>
                             }
                         </dd>
                     </div>
@@ -176,9 +176,9 @@
                                     <Avatar Name="@split.UserName" Size="sm" />
                                     <span class="gs-split-who">
                                         <span>@(split.UserId == Me ? "You" : split.UserName)</span>
-                                        @if (split.IsPendingInvitee)
+                                        @if (split.IsGuest)
                                         {
-                                            <span class="gs-tag">invited</span>
+                                            <span class="gs-tag">guest</span>
                                         }
                                     </span>
                                     <span class="gs-split-amount gs-num">@split.Amount.ToMoney()</span>

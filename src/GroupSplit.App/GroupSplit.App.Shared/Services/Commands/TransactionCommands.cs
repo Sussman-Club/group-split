@@ -1,6 +1,7 @@
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
@@ -147,8 +148,14 @@ public sealed class TransactionCommands(
 
         var error = ApiErrors.Read(exception);
 
-        if (error.Kind is not ApiErrorKind.Validation)
-            await errors.ShowAsync(error, "Could not work out how this divides.");
+        // The arithmetic case arrives two ways: as validation, and as the splitter's own 422
+        // when hand-set shares and the total disagree -- which they do for a moment every
+        // time somebody changes the total before the shares, mid-edit. Neither is news; the
+        // dialog's own total line already says the shares do not add up.
+        if (error.Kind is ApiErrorKind.Validation || error.Code == ErrorCodes.SplitsDoNotSumToAmount)
+            return;
+
+        await errors.ShowAsync(error, "Could not work out how this divides.");
     }
 
     public async Task<SplitPreviewResponse?> PreviewAsync(CreateTransactionRequest request,

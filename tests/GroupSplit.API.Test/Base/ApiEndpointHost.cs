@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -110,8 +111,10 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
 
         // One database per host, so tests cannot see each other's rows.
         var databaseName = $"EndpointDb_{Guid.NewGuid()}";
+        // Transactions are Postgres's concern; here they are a no-op, not a failure.
         builder.Services.AddDbContext<AppDbContext>(
-            options => options.UseInMemoryDatabase(databaseName));
+            options => options.UseInMemoryDatabase(databaseName)
+                .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
 
         // The same registrations Program.cs makes, minus the ones that need Aspire.
         // The production list, so a test host cannot drift from what actually runs.

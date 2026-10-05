@@ -76,6 +76,11 @@ and `LeftAt` arrive in Phase 2 alongside invitations, which is the only code tha
 read them. The roadmap lists them in the target-model table because that table describes
 the destination, not this phase.
 
+*Since then:* `JoinedAt` arrived with invitations, and `LeftAt`, with `LeftReason` and
+`LeftByUserId`, arrived with the rejoin rule (#310). `Role` and `Status` are not coming --
+members are equal, and a closed row is the only status a membership has -- and
+`InvitedEmail` was superseded by invitations that name a person rather than an address.
+
 **Leaving a group stays guarded, and the guard changes hands.** Today
 `RuleVersionReferencesRemovedMember` refuses a write whenever a rule version names
 somebody no longer in the group -- a guard that exists only because the split lives on
@@ -376,6 +381,12 @@ raise the amount, save -- came back carrying the old shares, which then failed t
 the new amount, against a division the caller had never asked to keep. So the model arrives
 without them, and the update route fills them in only for a patch that actually addresses
 them, which is the one caller that needs an index to address.
+
+*Since then:* this was reversed on 2026-09-09 (47c6904). `GetUpdateModel` carries the stored
+shares into every patch, so a rename never re-divides anything, and the service tells
+"keep these" from "make them exactly these" by comparing them with what is stored. A carried
+share for somebody who has since left is accepted as it is, and changing it is refused with
+`TRANSACTION_MOVES_DEPARTED_BALANCE` (#314).
 
 Transfers are not patchable in the parts that define them, and in the end that needed no
 code: every transaction route reads `Set<Expense>()`, so a transfer is not something the
