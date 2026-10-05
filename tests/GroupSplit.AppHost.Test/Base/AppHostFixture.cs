@@ -29,6 +29,24 @@ public class AppHostFixture : IAsyncLifetime
     /// </summary>
     public static readonly TimeSpan ResourceTimeout = TimeSpan.FromMinutes(3);
 
+    /// <summary>
+    /// Set to <c>1</c> or <c>true</c> to run the Aspire dashboard beside the stack under test,
+    /// so a test stopped at a breakpoint, or a stack that will not come up, can be looked at
+    /// the way a normal run can. The sign-in URL is written to standard output once the
+    /// application has started.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and never on in CI: nobody is there to open it, and the URL carries
+    /// the browser token. It changes nothing else about the run -- the dashboard binds to
+    /// loopback ports of its own choosing, and waits keep stopping on a failed resource
+    /// exactly as they do without it.
+    /// </remarks>
+    public const string DashboardVariable = "GROUPSPLIT_TEST_DASHBOARD";
+
+    private static bool DashboardEnabled =>
+        Environment.GetEnvironmentVariable(DashboardVariable) is { } value
+        && (value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase));
+
     public DistributedApplication Application { get; private set; } = null!;
 
     /// <summary>Sets the realm up for the tests that need an account or a short-lived token.</summary>
@@ -75,6 +93,7 @@ public class AppHostFixture : IAsyncLifetime
         // start-up budget.
         var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<GroupSplit_AppHost>(
+                new DistributedApplicationTestingBuilderOptions { EnableDashboard = DashboardEnabled },
                 [
                     $"--{WebhookTunnelExtensions.EnabledKey}=false"
                 ]);
@@ -155,6 +174,12 @@ public class AppHostFixture : IAsyncLifetime
             throw new TimeoutException(
                 $"The AppHost did not finish starting within {StartupTimeout.TotalMinutes:0} minutes."
                 + Environment.NewLine + await DescribeFailuresAsync());
+        }
+
+        if (DashboardEnabled)
+        {
+            using var dashboard = new CancellationTokenSource(ResourceTimeout);
+            Console.WriteLine($"Aspire dashboard: {await Application.GetDashboardUrlAsync(dashboard.Token)}");
         }
 
         await ConfigureRealmAsync();

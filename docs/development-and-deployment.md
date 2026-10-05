@@ -488,6 +488,23 @@ replica would still race: the refresh concurrency control is in-process, so two 
 could exchange one refresh token at once -- and the Data Protection volume above is per-host,
 so a second host would need a shared ring as well.
 
+## A dashboard for the integration tests
+
+`GroupSplit.AppHost.Test` starts the whole AppHost without a dashboard, which leaves a test
+stopped at a breakpoint, or a stack that will not come up, with nothing to look at but the
+resource states the fixture prints. Set `GROUPSPLIT_TEST_DASHBOARD=1` and the fixture runs
+the Aspire dashboard beside it, on loopback ports of its own choosing rather than the fixed
+ones a normal run's dashboard takes, and writes its sign-in URL to standard output once the
+application has started:
+
+```bash
+GROUPSPLIT_TEST_DASHBOARD=1 dotnet test --project tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
+```
+
+The URL carries the dashboard's browser token, which is why it is opt-in and never set in CI.
+Nothing else about the run changes: a wait on a resource that fails still stops rather than
+waiting for somebody to fix it from the dashboard. The dashboard goes away with the test run.
+
 ## Building in a sandbox that has no SDK
 
 CI installs .NET with `actions/setup-dotnet`, which fetches it from
