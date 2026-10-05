@@ -295,15 +295,6 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // A group's rules are picked from a list by name, so two with the same name
             // are two the member cannot tell apart.
             entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
-
-            // Whose "all for one" rule this is. Restrict: a stand-in is deleted only once
-            // every rule naming it has moved, and the error is the right answer if one has not.
-            // The one-per-person promise is a partial unique index, so it lives in
-            // PostgreSqlAppDbContext with the other one.
-            entity.HasOne<User>()
-                .WithMany()
-                .HasForeignKey(rule => rule.ProvisionedForUserId)
-                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SplitRuleVersion>(entity =>

@@ -28,7 +28,6 @@ public class MemberSplitRuleSeederTest
         {
             Group = group,
             BuiltIn = true,
-            ProvisionedForUserId = ana.Id,
             Name = "All for Ana",
             Versions = { new SoleSplitRuleVersion { UserId = ana.Id } }
         };

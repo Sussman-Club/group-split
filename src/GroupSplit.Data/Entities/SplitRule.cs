@@ -47,11 +47,11 @@ public class SplitRule : Entity
     /// records the fact; <c>SplitRuleService</c> is what refuses.
     /// </para>
     /// <para>
-    /// Settable for one reason, and written in one place. When an invitation is claimed by
-    /// somebody who already has a rule of their own, or is declined or withdrawn, the
-    /// invitee's rule is retired: deleted if nothing was divided by it, and otherwise kept
-    /// for that history and handed back to the group as an ordinary rule, which is this
-    /// flag going false. <c>IMemberSplitRules.HandOver</c> is that place.
+    /// Settable for one reason, and written in one place. When a guest is claimed by
+    /// somebody who already has a rule of their own, the guest's rule is retired: deleted if
+    /// nothing was divided by it, and otherwise kept for that history and handed back to the
+    /// group as an ordinary rule, which is this flag going false.
+    /// <c>IMemberSplitRules.HandOver</c> is that place.
     /// </para>
     /// </remarks>
     public bool BuiltIn { get; set; }
@@ -61,17 +61,5 @@ public class SplitRule : Entity
     /// <see cref="SplitRuleVersion.SupersededAt"/>, which is the one it is on now --
     /// <c>SplitRuleExtensions.Current</c> reads it.
     /// </summary>
-    /// <summary>
-    /// For the rule a group keeps for each member and invitee -- "All for Luz" -- whose it is.
-    /// Null on every other rule, built in or not.
-    /// </summary>
-    /// <remarks>
-    /// The same person the rule's open version names, held here as well so the table can
-    /// promise one such rule per person per group: a unique index over (group, this), which
-    /// it could not state across the version tables. Kept in step by
-    /// <c>IMemberSplitRules</c>, the only code that writes these rules or moves them.
-    /// </remarks>
-    public Guid? ProvisionedForUserId { get; set; }
-
     public virtual ICollection<SplitRuleVersion> Versions { get; } = [];
 }

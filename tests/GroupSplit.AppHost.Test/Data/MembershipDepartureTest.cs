@@ -396,7 +396,10 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
             foreach (var invitation in invitations)
             {
                 var rule = await Service<AppDbContext>(scope).Set<SplitRule>()
-                    .FirstAsync(candidate => candidate.ProvisionedForUserId == invitation.ParticipantUserId, Ct);
+                    .FirstAsync(candidate => candidate.BuiltIn &&
+                                             candidate.Versions.OfType<SoleSplitRuleVersion>().Any(version =>
+                                                 version.SupersededAt == null &&
+                                                 version.UserId == invitation.ParticipantUserId), Ct);
 
                 await Service<ITransactionService>(scope).Create(new CreateTransactionRequest
                 {

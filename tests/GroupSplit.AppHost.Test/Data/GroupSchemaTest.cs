@@ -136,7 +136,11 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
                 """
                 DELETE FROM "GroupGuest" WHERE "ParticipantUserId" = {0};
                 DELETE FROM "GroupMembershipEvent" WHERE "UserId" = {0};
-                DELETE FROM "SplitRule" WHERE "ProvisionedForUserId" = {0};
+                DELETE FROM "SplitRule" WHERE "Id" IN (
+                    SELECT v."SplitRuleId"
+                    FROM "SplitRuleVersion" v
+                    JOIN "SoleSplitRuleVersion" s ON s."Id" = v."Id"
+                    WHERE s."UserId" = {0});
                 """, [standIn], Ct);
         }
 
@@ -215,19 +219,58 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
         Assert.Equal("CK_User_StandInHasNoEmail", refused.ConstraintName);
     }
 
+    /// <summary>
+    /// Two calls making the same person's "all for one" rule at the same moment leave one.
+    /// </summary>
+    /// <remarks>
+    /// Nothing in the schema says so any more -- who a rule is for lives on its version, and
+    /// no index spans the two tables -- so this is the service's promise: both calls choose
+    /// the same name, the name index lets one through, and the other re-reads and returns it.
+    /// </remarks>
     [Fact(Timeout = 180_000)]
-    public async Task A_second_provisioned_rule_for_the_same_person_is_refused()
+    public async Task Two_calls_making_the_same_persons_rule_at_once_leave_one()
     {
         var owner = await Someone();
-        var (groupId, standIn) = await AGroupWaitingOnSomebody(owner, "Provisioned");
+        var (groupId, _) = await AGroupWaitingOnSomebody(owner, "Twice");
 
-        var refused = await Refused(
-            """
-            INSERT INTO "SplitRule" ("Id", "GroupId", "Name", "BuiltIn", "ProvisionedForUserId")
-            VALUES (gen_random_uuid(), {0}, 'All for Pat again', true, {1})
-            """, groupId, standIn);
+        Guid newcomer;
 
-        Assert.Equal("IX_SplitRule_GroupId_ProvisionedForUserId", refused.ConstraintName);
+        using (var scope = _services!.CreateScope())
+        {
+            var context = Service<AppDbContext>(scope);
+            var user = new User { FirstName = "Racing", Kind = UserKind.StandIn };
+            context.Add(user);
+            await context.SaveChangesAsync(Ct);
+            newcomer = user.Id;
+        }
+
+        var gate = new TaskCompletionSource();
+
+        async Task<Guid> Ensure()
+        {
+            using var scope = _services!.CreateScope();
+            var context = Service<AppDbContext>(scope);
+
+            var group = await context.Set<Group>().FirstAsync(candidate => candidate.Id == groupId, Ct);
+            var user = await context.Set<User>().FirstAsync(candidate => candidate.Id == newcomer, Ct);
+
+            await gate.Task;
+
+            return (await Service<IMemberSplitRules>(scope).EnsureFor(group, user, Ct)).Id;
+        }
+
+        var calls = new[] { Ensure(), Ensure() };
+        gate.SetResult();
+        var made = await Task.WhenAll(calls);
+
+        Assert.Equal(made[0], made[1]);
+
+        using var check = _services!.CreateScope();
+
+        Assert.Equal(1, await Service<AppDbContext>(check).Set<SplitRule>()
+            .CountAsync(rule => rule.Group.Id == groupId && rule.BuiltIn &&
+                                rule.Versions.OfType<SoleSplitRuleVersion>()
+                                    .Any(version => version.SupersededAt == null && version.UserId == newcomer), Ct));
     }
 
     /// <summary>

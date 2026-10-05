@@ -2,6 +2,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
@@ -196,9 +197,15 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
 
     // ---- Whose "all for one" rule ------------------------------------------------------------
 
+    /// <summary>
+    /// The group's built-in "all for one" rules, each with the person its open version puts
+    /// everything on -- which is the only place that fact is recorded.
+    /// </summary>
     private Task<List<SplitRule>> ProvisionedIn(Guid groupId) =>
         Fresh(db => db.Set<SplitRule>().AsNoTracking()
-            .Where(rule => rule.Group.Id == groupId && rule.ProvisionedForUserId != null)
+            .Include(rule => rule.Versions)
+            .Where(rule => rule.Group.Id == groupId && rule.BuiltIn &&
+                           rule.Versions.OfType<SoleSplitRuleVersion>().Any(version => version.SupersededAt == null))
             .ToListAsync(Ct));
 
     [Fact]
@@ -210,8 +217,8 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
 
         var provisioned = await ProvisionedIn(group.Id);
 
-        Assert.Single(provisioned, rule => rule.ProvisionedForUserId == Self);
-        Assert.Single(provisioned, rule => rule.ProvisionedForUserId == invitation.ParticipantUserId);
+        Assert.Single(provisioned, rule => rule.AllFor == Self);
+        Assert.Single(provisioned, rule => rule.AllFor == invitation.ParticipantUserId);
         Assert.All(provisioned, rule => Assert.True(rule.BuiltIn));
     }
 
@@ -229,8 +236,8 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
 
         var provisioned = await ProvisionedIn(group.Id);
 
-        var hers = Assert.Single(provisioned, rule => rule.ProvisionedForUserId == luz.Id);
-        Assert.DoesNotContain(provisioned, rule => rule.ProvisionedForUserId == invitation.ParticipantUserId);
+        var hers = Assert.Single(provisioned, rule => rule.AllFor == luz.Id);
+        Assert.DoesNotContain(provisioned, rule => rule.AllFor == invitation.ParticipantUserId);
 
         // Named for the account that claimed it, not for the name the group typed.
         var shown = $"{luz.FirstName} {luz.LastName}".Trim() is { Length: > 0 } name ? name : luz.Email;
@@ -251,7 +258,7 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
             new InviteToGroupRequest { Names = ["Luz"] }, Ct));
 
         var theirs = Assert.Single(await ProvisionedIn(group.Id),
-            rule => rule.ProvisionedForUserId == invitation.ParticipantUserId);
+            rule => rule.AllFor == invitation.ParticipantUserId);
 
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
@@ -269,11 +276,10 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
             .FirstAsync(rule => rule.Id == theirs.Id, Ct));
 
         Assert.False(kept.BuiltIn);
-        Assert.Null(kept.ProvisionedForUserId);
 
         // No longer "All for Luz": it puts everything on whoever claimed her, and says so,
         // beside that member's own rule.
-        var mine = Assert.Single(await ProvisionedIn(group.Id), rule => rule.ProvisionedForUserId == Self);
+        var mine = Assert.Single(await ProvisionedIn(group.Id), rule => rule.AllFor == Self);
         Assert.Equal($"{mine.Name} (2)", kept.Name);
     }
 

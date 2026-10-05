@@ -45,12 +45,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 nullable: false,
                 defaultValue: "Account");
 
-            migrationBuilder.AddColumn<Guid>(
-                name: "ProvisionedForUserId",
-                table: "SplitRule",
-                type: "uuid",
-                nullable: true);
-
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "LeftAt",
                 table: "GroupUser",
@@ -166,10 +160,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 SELECT version_id, user_id FROM named;
                 """);
 
-            // Whose each built-in "all for one" rule is, from its open version -- the members'
-            // and the invitees' just made. Where a person somehow has two, the oldest stays
-            // theirs and the rest are retired the way a hand-over retires one: kept, since
-            // something may divide by them, but no longer built in.
+            // One built-in "all for one" rule per person per group, read from each rule's open
+            // version -- the members' and the invitees' just made. Where a person somehow has
+            // two, the oldest stays theirs and the rest are retired the way a hand-over retires
+            // one: kept, since something may divide by them, but no longer built in.
             migrationBuilder.Sql(
                 """
                 WITH provisioned AS (
@@ -182,8 +176,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     JOIN "SoleSplitRuleVersion" s ON s."Id" = v."Id"
                     WHERE r."BuiltIn")
                 UPDATE "SplitRule" r
-                SET "ProvisionedForUserId" = CASE WHEN p.rank = 1 THEN p.user_id END,
-                    "BuiltIn" = p.rank = 1
+                SET "BuiltIn" = p.rank = 1
                 FROM provisioned p
                 WHERE p.rule_id = r."Id";
                 """);
@@ -248,23 +241,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 sql: "\"Kind\" <> 'StandIn' OR \"Email\" IS NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_SplitRule_GroupId_ProvisionedForUserId",
-                table: "SplitRule",
-                columns: new[] { "GroupId", "ProvisionedForUserId" },
-                unique: true,
-                filter: "\"ProvisionedForUserId\" IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SplitRule_ProvisionedForUserId",
-                table: "SplitRule",
-                column: "ProvisionedForUserId");
-
-            migrationBuilder.AddCheckConstraint(
-                name: "CK_SplitRule_ProvisionedOnlyBuiltIn",
-                table: "SplitRule",
-                sql: "\"ProvisionedForUserId\" IS NULL OR \"BuiltIn\"");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_GroupUser_LeftByUserId",
                 table: "GroupUser",
                 column: "LeftByUserId");
@@ -322,14 +298,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 principalTable: "User",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_SplitRule_User_ProvisionedForUserId",
-                table: "SplitRule",
-                column: "ProvisionedForUserId",
-                principalTable: "User",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Transaction_User_UserId",
@@ -394,10 +362,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 table: "GroupUser");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_SplitRule_User_ProvisionedForUserId",
-                table: "SplitRule");
-
-            migrationBuilder.DropForeignKey(
                 name: "FK_Transaction_User_UserId",
                 table: "Transaction");
 
@@ -421,18 +385,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 table: "User");
 
             migrationBuilder.DropIndex(
-                name: "IX_SplitRule_GroupId_ProvisionedForUserId",
-                table: "SplitRule");
-
-            migrationBuilder.DropIndex(
-                name: "IX_SplitRule_ProvisionedForUserId",
-                table: "SplitRule");
-
-            migrationBuilder.DropCheckConstraint(
-                name: "CK_SplitRule_ProvisionedOnlyBuiltIn",
-                table: "SplitRule");
-
-            migrationBuilder.DropIndex(
                 name: "IX_GroupUser_LeftByUserId",
                 table: "GroupUser");
 
@@ -451,10 +403,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             migrationBuilder.DropColumn(
                 name: "Kind",
                 table: "User");
-
-            migrationBuilder.DropColumn(
-                name: "ProvisionedForUserId",
-                table: "SplitRule");
 
             migrationBuilder.DropColumn(
                 name: "LeftAt",

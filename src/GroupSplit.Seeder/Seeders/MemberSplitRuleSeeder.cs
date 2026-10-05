@@ -60,5 +60,7 @@ public class MemberSplitRuleSeeder(
     }
 
     private Task<int> Provisioned(CancellationToken ct) =>
-        db.Set<SplitRule>().CountAsync(rule => rule.ProvisionedForUserId != null, ct);
+        db.Set<SplitRule>().CountAsync(rule => rule.BuiltIn &&
+                                               rule.Versions.OfType<SoleSplitRuleVersion>()
+                                                   .Any(version => version.SupersededAt == null), ct);
 }

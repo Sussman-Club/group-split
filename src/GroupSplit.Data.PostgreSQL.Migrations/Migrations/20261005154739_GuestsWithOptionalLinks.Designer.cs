@@ -785,25 +785,12 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<Guid?>("ProvisionedForUserId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("ProvisionedForUserId");
 
                     b.HasIndex("GroupId", "Name")
                         .IsUnique();
 
-                    b.HasIndex("GroupId", "ProvisionedForUserId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_SplitRule_GroupId_ProvisionedForUserId")
-                        .HasFilter("\"ProvisionedForUserId\" IS NOT NULL");
-
-                    b.ToTable("SplitRule", t =>
-                        {
-                            t.HasCheckConstraint("CK_SplitRule_ProvisionedOnlyBuiltIn", "\"ProvisionedForUserId\" IS NULL OR \"BuiltIn\"");
-                        });
+                    b.ToTable("SplitRule");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRuleParticipant", b =>
@@ -1386,11 +1373,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("GroupSplit.Data.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ProvisionedForUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Group");
                 });

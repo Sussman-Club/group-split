@@ -344,9 +344,8 @@ public sealed class InvitationService(
     /// <remarks>
     /// A claim hands the guest's "all for one" rule to the claimer, renaming it for them or
     /// retiring it beside theirs under the next free name. Two claims at the same moment --
-    /// two guests merged into the same member, say -- each work out the same free name, or
-    /// each make the same person the rule's owner, and the second save breaks the name index
-    /// or the one-rule-per-person index. Nothing of that attempt was kept: the claim's
+    /// two guests merged into the same member, say -- each work out the same free name, and
+    /// the second save breaks the name index. Nothing of that attempt was kept: the claim's
     /// transaction rolled back. So it goes again from what the database now holds, where the
     /// first one's rule is visible and is picked around. Once, not until it works: a second
     /// clash means something other than a race, and that should be seen.
@@ -361,7 +360,7 @@ public sealed class InvitationService(
             when (exception.InnerException is PostgresException
                   {
                       SqlState: PostgresErrorCodes.UniqueViolation,
-                      ConstraintName: "IX_SplitRule_GroupId_Name" or "IX_SplitRule_GroupId_ProvisionedForUserId"
+                      ConstraintName: "IX_SplitRule_GroupId_Name"
                   })
         {
             context.StartOver(userContext.User);

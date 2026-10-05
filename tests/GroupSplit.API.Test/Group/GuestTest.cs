@@ -105,7 +105,9 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Null(standIn.Email);
 
         Assert.True(await DbContext.Set<SplitRule>()
-            .AnyAsync(rule => rule.ProvisionedForUserId == guest.UserId && rule.Name == "All for Carlos", Ct));
+            .AnyAsync(rule => rule.BuiltIn && rule.Name == "All for Carlos" &&
+                              rule.Versions.OfType<SoleSplitRuleVersion>()
+                                  .Any(version => version.SupersededAt == null && version.UserId == guest.UserId), Ct));
 
         // And the old route, which lists guests with a link, has nothing to show.
         Assert.Empty(await Invitations.ForGroup(group.Id, Ct));

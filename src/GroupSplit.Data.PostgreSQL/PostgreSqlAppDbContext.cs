@@ -32,21 +32,6 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
 
         // The provider's row verbatim, queryable when a field it holds is wanted later
         // without adding a column for it. Text on every other provider.
-        // One "all for one" rule per person per group. Across the version tables this could
-        // only be hoped for -- two joins racing each made one, and only a clash of names
-        // stopped them -- so SplitRule carries whose it is, and this makes it so.
-        modelBuilder.Entity<SplitRule>(entity =>
-        {
-            entity.HasIndex("GroupId", nameof(SplitRule.ProvisionedForUserId))
-                .IsUnique()
-                .HasFilter("\"ProvisionedForUserId\" IS NOT NULL")
-                .HasDatabaseName("IX_SplitRule_GroupId_ProvisionedForUserId");
-
-            entity.ToTable(table => table.HasCheckConstraint(
-                "CK_SplitRule_ProvisionedOnlyBuiltIn",
-                "\"ProvisionedForUserId\" IS NULL OR \"BuiltIn\""));
-        });
-
         // One join link in force per group: making a new one revokes the last, and two
         // members making one at the same moment no longer leave two standing. Expired links
         // count as in force here -- they are revoked when replaced, not when they lapse --

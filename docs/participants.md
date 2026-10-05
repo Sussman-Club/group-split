@@ -122,7 +122,6 @@ cannot write something that makes no sense. Migrations `GroupParticipantsAndMemb
 | A link is claimed, replaced, stopped or removed once | `GroupGuest.Token` and `EndedAt` are concurrency tokens: of two writes to one guest at the same moment, the second matches no row and is answered as if the link or guest were gone. |
 | Each user row says what it is | `User.Kind`: `Account`, `StandIn` or `Deleted`. A stand-in cannot have an address, a deleted account cannot have a name, and the joiner refuses to make anything but an account a member. |
 | One join link in force per group | A partial unique index over unrevoked links. Making a link revokes the last one, expired ones included -- closed at the moment they lapsed, so they still read as expired. |
-| One "all for one" rule per person per group | `SplitRule.ProvisionedForUserId` and a partial unique index on it, kept in step by `IMemberSplitRules`. A rule retired by a hand-over belongs to nobody. |
 | A group can be deleted with what hangs off it | The default-rule keys on `Group` and `Category` are no action rather than restrict: a rule something defaults to still cannot be deleted on its own, but it no longer blocks its own group going. Nothing deletes groups today. |
 
 `GroupSchemaTest` in `GroupSplit.AppHost.Test` writes past the services at each of these and
@@ -139,3 +138,10 @@ checks Postgres refuses.
 - **A forwarded guest link can still be claimed by the wrong person.** Single use limits it
   to one taking; nothing checks who the claimer is. See [guests.md](guests.md).
 - **A removed guest cannot be brought back.** Adding them again by name makes a new guest.
+- **One "all for one" rule per person per group is the services' promise, not the schema's.**
+  Who a rule is for lives on its version (`SoleSplitRuleVersion.UserId`), and Postgres cannot
+  index across `SplitRule` and the version tables. `IMemberSplitRules.EnsureFor` finds the
+  rule by its open version before making one, and two calls for the same person at once pick
+  the same name, so the name index lets only one through. A column on the rule repeating the
+  person would let the database promise it, at the cost of saying the same thing twice; it
+  was tried and dropped.
