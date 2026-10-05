@@ -129,6 +129,50 @@ public sealed class ApiErrorMapperTests
         Assert.Contains("invitations claim", remediation);
     }
 
+    /// <summary>
+    /// The same refusal answers leaving and removing, so the hint says how a balance gets
+    /// squared without assuming whose it is -- "square them up" would be wrong for somebody
+    /// leaving.
+    /// </summary>
+    [Fact]
+    public void A_balance_that_is_not_zero_says_how_to_record_a_repayment_for_either_case()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.GroupMemberNotSettled
+        })).Error.Remediation;
+
+        Assert.Contains("groups balances", remediation);
+        Assert.Contains("groups settle", remediation);
+        Assert.Contains("settle-between", remediation);
+        Assert.DoesNotContain("them", remediation);
+    }
+
+    [Fact]
+    public void Losing_a_race_over_a_guest_says_to_look_again()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.GroupGuestChanged
+        })).Error.Remediation;
+
+        Assert.Contains("groups guests", remediation);
+    }
+
+    [Fact]
+    public void A_guest_route_given_the_wrong_id_points_at_the_guest_listing()
+    {
+        var remediation = ApiErrorMapper.Map(Exception(404, new
+        {
+            title = "Not Found",
+            code = SharedErrorCodes.GroupGuestNotFound
+        })).Error.Remediation;
+
+        Assert.Contains("groups guests", remediation);
+    }
+
     [Fact]
     public void Validation_messages_are_flattened_into_details()
     {

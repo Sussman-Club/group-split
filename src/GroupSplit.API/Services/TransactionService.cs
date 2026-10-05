@@ -494,14 +494,14 @@ public class TransactionService(
             .Where(user => named.Contains(user.Id))
             .ToDictionaryAsync(user => user.Id, People.Display, ct);
 
-        var waiting = await PendingInviteesIn(groupId, ct);
+        var guests = await GuestsIn(groupId, ct);
 
         var described = splits
             .Select(split => new TransactionSplitResponse(
                 split.UserId,
                 names.GetValueOrDefault(split.UserId, string.Empty),
                 split.Amount,
-                waiting.Contains(split.UserId)))
+                guests.Contains(split.UserId)))
             .ToList();
 
         return new SplitPreviewResponse(described, version?.SplitRule.Name, version?.SupersededAt);
@@ -525,10 +525,10 @@ public class TransactionService(
         if (transaction is null)
             return null;
 
-        // Who among the people on this transaction has not joined the group yet. One query
+        // Who among the people on this transaction is one of the group's guests. One query
         // for the whole transaction rather than one per share, and empty for a personal
-        // expense, which has no group to be invited to.
-        var waiting = await PendingInviteesIn(transaction.GroupId, ct);
+        // expense, which has no group to have guests.
+        var guests = await GuestsIn(transaction.GroupId, ct);
 
         // Read, not re-derived. The amounts below are the ones the group's balances are
         // summed from, so a detail view that computed its own could disagree with them.
@@ -537,7 +537,7 @@ public class TransactionService(
                 split.User.Id,
                 People.Display(split.User),
                 split.Amount,
-                waiting.Contains(split.User.Id)))
+                guests.Contains(split.User.Id)))
             .ToList();
 
         var expense = transaction as Expense;
@@ -557,7 +557,7 @@ public class TransactionService(
             GroupName = transaction.Group?.Name,
             PaidByUserId = transaction.User.Id,
             PaidByUserName = People.Display(transaction.User),
-            PaidByIsPendingInvitee = waiting.Contains(transaction.User.Id),
+            PaidByIsGuest = guests.Contains(transaction.User.Id),
             PaidToUserId = recipientSplit?.UserId,
             PaidToUserName = recipientSplit?.UserName,
             CategoryId = expense?.CategoryId,
@@ -619,10 +619,8 @@ public class TransactionService(
 
         if (transaction is Transfer transfer)
         {
-            // Members on both ends, unlike the expense below. A settlement is money that
-            // actually changed hands between two people, and somebody who has not accepted
-            // their invitation has no account to have handed it to -- see
-            // RefuseIfPendingInvitee, which says so rather than reporting them missing.
+            // Participants on both ends, as for an expense: the members record what a guest
+            // pays and is paid.
             //
             // Asked only of an end that is changing. The settlement that let somebody leave
             // names them, and a corrected date or note on it must not be refused because
@@ -631,10 +629,9 @@ public class TransactionService(
 
             if (payerId != transfer.UserId)
             {
-                transfer.User = await MemberOf(transfer.Group, payerId, ct)
-                                ?? await RefuseIfPendingInvitee(transfer.Group, payerId, ct)
+                transfer.User = await ParticipantOf(transfer.Group, payerId, ct)
                                 ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                                    "The paying user is not a member of the group.");
+                                    "The paying user is not a member or guest of the group.");
             }
 
             transfer.Amount = request.Amount;
@@ -652,10 +649,9 @@ public class TransactionService(
 
                 if (existingSplit?.UserId != recipientId)
                 {
-                    var recipient = await MemberOf(transfer.Group, recipientId, ct)
-                                    ?? await RefuseIfPendingInvitee(transfer.Group, recipientId, ct)
+                    var recipient = await ParticipantOf(transfer.Group, recipientId, ct)
                                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                                        "The recipient is not a member of the group.");
+                                        "The recipient is not a member or guest of the group.");
 
                     if (existingSplit is not null)
                     {
@@ -929,47 +925,25 @@ public class TransactionService(
     }
 
     /// <summary>
-    /// The member of <paramref name="group"/> with that id, or -- when there is no group --
-    /// the caller themselves, since a personal expense is one only they can have paid.
+    /// Which of a group's participants are its guests, as ids. Empty for no group at all,
+    /// which is what a personal expense has.
     /// </summary>
-    private Task<User?> MemberOf(Group? group, Guid userId, CancellationToken ct)
-    {
-        if (group is null)
-        {
-            var currentUser = userContext.User;
-            return Task.FromResult(userId == currentUser.Id ? currentUser : null);
-        }
-
-        return dbContext.Entry(group).Collection(g => g.Users).Query()
-            .FirstOrDefaultAsync(user => user.Id == userId, ct)!;
-    }
-
-    /// <summary>
-    /// Which of a group's participants have been invited and have not joined, as ids.
-    /// Empty for no group at all, which is what a personal expense has.
-    /// </summary>
-    private async Task<HashSet<Guid>> PendingInviteesIn(Guid? groupId, CancellationToken ct)
+    private async Task<HashSet<Guid>> GuestsIn(Guid? groupId, CancellationToken ct)
     {
         if (groupId is not { } id)
             return [];
 
-        return [.. await dbContext.Set<GroupInvitation>()
-            .Where(invitation => invitation.GroupId == id)
-            .Select(invitation => invitation.ParticipantUserId)
+        return [.. await dbContext.Set<GroupGuest>()
+            .Where(guest => guest.GroupId == id)
+            .Select(guest => guest.ParticipantUserId)
             .ToListAsync(ct)];
     }
 
     /// <summary>
-    /// The participant of <paramref name="group"/> with that id: a member, or somebody the
-    /// group has invited and is waiting on. When there is no group, the caller themselves,
-    /// since a personal expense is one only they can have paid.
+    /// The participant of <paramref name="group"/> with that id: a member, or one of its
+    /// guests. When there is no group, the caller themselves, since a personal expense is one
+    /// only they can have paid.
     /// </summary>
-    /// <remarks>
-    /// Wider than <see cref="MemberOf"/> by exactly one thing, and only expenses use it.
-    /// The trip is booked and the flat is moved into before everybody has answered their
-    /// invitation, so an expense may be paid for by an invitee and divided with them; a
-    /// settlement may not, because there is no account on the other end of it yet.
-    /// </remarks>
     private Task<User?> ParticipantOf(Group? group, Guid userId, CancellationToken ct)
     {
         if (group is null)
@@ -979,25 +953,6 @@ public class TransactionService(
         }
 
         return participants.Find(group.Id, userId, ct);
-    }
-
-    /// <summary>
-    /// Says what is actually wrong when a settlement names somebody the group has invited
-    /// and is still waiting on, rather than letting them read as a stranger.
-    /// </summary>
-    /// <remarks>
-    /// Returns null when they are not one, so it composes as a second guess after
-    /// <see cref="MemberOf"/> and leaves the original refusal to the caller. It never
-    /// returns a user: there is nothing here it would be right to go on and record.
-    /// </remarks>
-    private async Task<User?> RefuseIfPendingInvitee(Group? group, Guid userId, CancellationToken ct)
-    {
-        if (group is not null && await participants.IsPendingInvitee(group.Id, userId, ct))
-            throw new ConflictException(ErrorCodes.SettlementWithPendingInvitee,
-                "That person has been invited to the group and has not joined yet, so there is " +
-                "nobody to settle up with. Their balance stands until they accept.");
-
-        return null;
     }
 
     /// <summary>

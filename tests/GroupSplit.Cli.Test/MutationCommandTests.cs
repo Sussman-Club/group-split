@@ -500,26 +500,51 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     /// <summary>
-    /// An invitee is on the roster, because they hold shares, but has no membership to take
-    /// away. Pointed at withdrawing the invitation, which is how one of them goes.
+    /// A guest is removed by the same command, on a guest's terms: they have no access to
+    /// lose and never saw the join link, so the confirmation says what does happen.
     /// </summary>
     [Fact]
-    public async Task Groups_remove_member_points_an_invitee_at_withdrawing_the_invitation()
+    public async Task Groups_remove_member_of_a_guest_says_what_removing_a_guest_does()
     {
         var id = Guid.NewGuid();
-        var invitee = Guid.NewGuid();
+        var guest = Guid.NewGuid();
 
         _api.Returns($"/api/groups/{id}/members", new[]
         {
-            new { id = invitee, firstName = "Pat", isPendingInvitee = true }
+            new { id = guest, firstName = "Pat", isGuest = true }
         });
 
-        var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), invitee.ToString(), "--yes");
+        var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), guest.ToString());
 
-        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
-        Assert.Equal(GroupSplit.Shared.Errors.ErrorCodes.GroupMemberNotJoined, result.Error.GetProperty("code").GetString());
-        Assert.Contains("withdraw-invitation", result.Error.GetProperty("remediation").GetString());
+        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+
+        var changes = string.Join(" ", result.Json.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString()));
+
+        Assert.Contains("past guest", changes);
+        Assert.Contains("square", changes);
+        Assert.DoesNotContain("join link", changes);
         Assert.DoesNotContain(_api.Requests, request => request.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task Groups_remove_member_of_a_guest_sends_the_delete_once_confirmed()
+    {
+        var id = Guid.NewGuid();
+        var guest = Guid.NewGuid();
+
+        _api.Returns($"/api/groups/{id}/members", new[]
+        {
+            new { id = guest, firstName = "Pat", isGuest = true }
+        });
+
+        _api.Returns($"/api/groups/{id}/members/{guest}", new { id, name = "The flat", memberCount = 1 });
+
+        var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), guest.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(_api.Requests, request => request.Method == "DELETE" &&
+                                                  request.Path == $"/api/groups/{id}/members/{guest}");
     }
 
     [Fact]
@@ -592,16 +617,11 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     /// <summary>
-    /// Withdrawing needs confirming, and it did not used to.
+    /// Stopping a link by the old route still asks first: a link stopped by mistake has to
+    /// be re-sent by somebody.
     /// </summary>
-    /// <remarks>
-    /// The old reason it needed none was that an unanswered invitation could be sent again,
-    /// so nothing was lost. That is still true of the invitation and is no longer the whole
-    /// story: an invited address is somebody the group can record money against, so
-    /// withdrawing can hand a fortnight of shares to a member and move their balance.
-    /// </remarks>
     [Fact]
-    public async Task Groups_withdraw_invitation_asks_first_because_it_can_move_money()
+    public async Task Groups_withdraw_invitation_asks_first()
     {
         var id = Guid.NewGuid();
         var invitation = Guid.NewGuid();
@@ -619,8 +639,12 @@ public sealed class MutationCommandTests : IDisposable
         Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
     }
 
+    /// <summary>
+    /// The old route only stops the link now, and the receipt says the guest is still
+    /// there rather than talking about money that did not move.
+    /// </summary>
     [Fact]
-    public async Task Groups_withdraw_invitation_says_whose_the_money_is_now()
+    public async Task Groups_withdraw_invitation_says_the_guest_stays()
     {
         var id = Guid.NewGuid();
         var invitation = Guid.NewGuid();
@@ -631,8 +655,8 @@ public sealed class MutationCommandTests : IDisposable
         {
             invitationId = invitation, groupId = id, groupName = "The flat",
             name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
-            sharesMoved = 3, amountOwed = 62.50m, paymentsMoved = 1, amountPaid = 40m,
-            rulesAffected = 1, absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
+            sharesMoved = 0, amountOwed = 0m, paymentsMoved = 0, amountPaid = 0m,
+            rulesAffected = 0, rulesEmptied = 0
         });
 
         var result = await Cli.RunAsync(
@@ -641,86 +665,19 @@ public sealed class MutationCommandTests : IDisposable
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
         Assert.Contains("Omar", result.Stdout);
-        Assert.Contains("Anabel", result.Stdout);
+        Assert.Contains("still a guest", result.Stdout);
         Assert.Contains(_api.Requests, r => r.Method == "DELETE");
     }
 
     /// <summary>
-    /// The warning about a rule left naming nobody has to reach the person who caused it.
+    /// The members listing has to say which of them are guests.
     /// </summary>
     /// <remarks>
-    /// The count is the only thing in this receipt worth interrupting somebody about. A
-    /// rule with nobody in it has changed what it means -- a shares or percentage rule
-    /// refuses the next expense filed under it, an even one quietly divides between
-    /// everybody -- and this is the last moment it can be said to whoever caused it rather
-    /// than discovered by whoever records the next expense.
+    /// It is what an agent reads to find the id to put in a split, name as the payer or
+    /// settle with, and a guest is all three -- while being nobody who can see the group.
     /// </remarks>
     [Fact]
-    public async Task Groups_withdraw_invitation_warns_about_a_rule_left_naming_nobody()
-    {
-        var id = Guid.NewGuid();
-        var invitation = Guid.NewGuid();
-
-        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar", invitation) });
-
-        _api.Returns($"/api/groups/{id}/invitations/{invitation}", new
-        {
-            invitationId = invitation, groupId = id, groupName = "The flat",
-            name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
-            sharesMoved = 1, amountOwed = 20m, paymentsMoved = 0, amountPaid = 0m,
-            rulesAffected = 1, rulesEmptied = 1,
-            absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
-        });
-
-        var result = await Cli.RunAsync(
-            "groups", "withdraw-invitation", id.ToString(), invitation.ToString(),
-            "--yes", "--output", "text");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains("name nobody", result.Stdout);
-
-        // And where to go and look, which is the point of saying it at all.
-        Assert.Contains("split-rules list", result.Stdout);
-    }
-
-    /// <summary>
-    /// A rule that still names somebody is not worth a warning.
-    /// </summary>
-    [Fact]
-    public async Task Groups_withdraw_invitation_says_nothing_about_a_rule_that_still_names_somebody()
-    {
-        var id = Guid.NewGuid();
-        var invitation = Guid.NewGuid();
-
-        _api.Returns($"/api/groups/{id}/invitations", new[] { Invitation(id, "Omar", invitation) });
-
-        _api.Returns($"/api/groups/{id}/invitations/{invitation}", new
-        {
-            invitationId = invitation, groupId = id, groupName = "The flat",
-            name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
-            sharesMoved = 1, amountOwed = 20m, paymentsMoved = 0, amountPaid = 0m,
-            rulesAffected = 1, rulesEmptied = 0,
-            absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
-        });
-
-        var result = await Cli.RunAsync(
-            "groups", "withdraw-invitation", id.ToString(), invitation.ToString(),
-            "--yes", "--output", "text");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.DoesNotContain("name nobody", result.Stdout);
-    }
-
-    /// <summary>
-    /// The members listing has to say which of them have actually joined.
-    /// </summary>
-    /// <remarks>
-    /// It is what an agent reads to find the id to put in a split or name as the payer, and
-    /// an invited address is choosable for both -- while being nobody there is an account to
-    /// settle up with. Without the column the two are indistinguishable.
-    /// </remarks>
-    [Fact]
-    public async Task Groups_members_says_who_has_joined_and_who_was_only_invited()
+    public async Task Groups_members_says_who_is_a_member_and_who_is_a_guest()
     {
         var id = Guid.NewGuid();
 
@@ -729,27 +686,27 @@ public sealed class MutationCommandTests : IDisposable
             new
             {
                 id = Guid.NewGuid(), firstName = "Anabel", lastName = "Benitez",
-                email = "anabel@test.com", isPendingInvitee = false
+                email = "anabel@test.com", isGuest = false
             },
             new
             {
                 id = Guid.NewGuid(), firstName = (string?)null, lastName = (string?)null,
-                email = "omar@test.com", isPendingInvitee = true
+                email = "omar@test.com", isGuest = true
             }
         });
 
         var result = await Cli.RunAsync("groups", "members", id.ToString(), "--output", "text");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains("joined", result.Stdout);
-        Assert.Contains("invited", result.Stdout);
+        Assert.Contains("member", result.Stdout);
+        Assert.Contains("guest", result.Stdout);
 
         // And the address stands in for the name they have not got.
         Assert.Contains("omar@test.com", result.Stdout);
     }
 
     /// <summary>
-    /// Declining is gated for the same reason withdrawing is: it can move money.
+    /// Declining is gated for the same reason withdrawing is: a stopped link has to be re-sent.
     /// </summary>
     [Fact]
     public async Task Invitations_decline_asks_first_and_names_the_group()
@@ -765,7 +722,7 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Invitations_decline_says_whose_the_money_is_now()
+    public async Task Invitations_decline_says_the_group_keeps_the_guest()
     {
         _api.Returns("/api/invitations/claims/token-omar", Claim());
 
@@ -773,16 +730,16 @@ public sealed class MutationCommandTests : IDisposable
         {
             invitationId = Guid.NewGuid(), groupId = Guid.NewGuid(), groupName = "The flat",
             name = "Omar", outcome = (int)InvitationOutcome.Declined,
-            sharesMoved = 2, amountOwed = 45m, paymentsMoved = 0, amountPaid = 0m,
-            rulesAffected = 0, absorbedByUserId = Guid.NewGuid(), absorbedByUserName = "Anabel"
+            sharesMoved = 0, amountOwed = 0m, paymentsMoved = 0, amountPaid = 0m,
+            rulesAffected = 0
         });
 
         var result = await Cli.RunAsync(
             "invitations", "decline", "token-omar", "--yes", "--output", "text");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains("declined", result.Stdout);
-        Assert.Contains("Anabel", result.Stdout);
+        Assert.Contains("turned down", result.Stdout);
+        Assert.Contains("still a guest", result.Stdout);
     }
 
     /// <summary>

@@ -244,7 +244,7 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
     /// only one.
     /// </summary>
     [Fact]
-    public async Task A_declined_invitees_used_rule_is_retired_and_belongs_to_nobody()
+    public async Task A_guest_claimed_by_a_member_retires_their_used_rule_to_nobody()
     {
         var group = await AGroup();
         var invitation = Assert.Single(await Invitations.Invite(group.Id,
@@ -262,7 +262,8 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
             SplitRuleId = theirs.Id
         }, Ct);
 
-        await Invitations.Decline(invitation.Token, Ct);
+        // Claimed by somebody already in the group, who has a rule of their own.
+        await Invitations.Claim(invitation.Token, Ct);
 
         var kept = await Fresh(db => db.Set<SplitRule>().AsNoTracking()
             .FirstAsync(rule => rule.Id == theirs.Id, Ct));
@@ -270,7 +271,7 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
         Assert.False(kept.BuiltIn);
         Assert.Null(kept.ProvisionedForUserId);
 
-        // No longer "All for Luz": it puts everything on whoever absorbed her, and says so,
+        // No longer "All for Luz": it puts everything on whoever claimed her, and says so,
         // beside that member's own rule.
         var mine = Assert.Single(await ProvisionedIn(group.Id), rule => rule.ProvisionedForUserId == Self);
         Assert.Equal($"{mine.Name} (2)", kept.Name);

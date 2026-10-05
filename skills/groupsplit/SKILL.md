@@ -3,9 +3,9 @@ name: groupsplit
 description: >-
   Drive the GroupSplit CLI (`groupsplit`) for shared expenses: groups, members, expenses,
   balances, settlements, split rules, categories, receipt files, itemised receipts,
-  invitations, linked bank accounts and imported bank rows.
+  guests and their links, linked bank accounts and imported bank rows.
   USE FOR: splitting expenses, reading balances or ledgers, recording expenses or
-  settlements, itemising receipts, managing members or invitations, or filing imported bank
+  settlements, itemising receipts, managing members or guests, or filing imported bank
   rows; or whenever a `groupsplit` binary or `~/.config/groupsplit/config.json` is present.
   DO NOT USE FOR: working on the GroupSplit codebase itself -- builds, tests, Aspire, EF
   migrations -- or other expense trackers.
@@ -105,6 +105,8 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
 `groups.withdraw-invitation`, `groups.settle`, `groups.settle-between`, `groups.settle-up`,
 `settle.pay`, `groups.link.create` (when a link already exists), `groups.link.revoke`,
+`groups.guest-link.create` (only with `--new` on a guest who has a link),
+`groups.guest-link.revoke`,
 `invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
 `receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
 `categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `merchants.update`
@@ -161,13 +163,14 @@ along when reporting a problem.
   server would apply and creates nothing.
 - **Do not print the output of `groupsplit auth token`.** It is a bearer token. It is for
   piping into another tool, not for a transcript.
-- **Somebody invited and still to answer counts as a person.** A group names whoever it is
-  sharing costs with -- there is no email invitation -- and from that moment they can be
-  given a share and can be the payer, so use their id (`participantUserId`, or the
-  `groups members` row where `isPendingInvitee` is true) as you would a member's. What they
-  cannot be is settled up with: every repayment naming one is refused with
-  `SETTLEMENT_WITH_PENDING_INVITEE`, and their balance simply stands. Claiming, declining and
-  withdrawing all move that position, and all say what moved -- report it.
+- **A guest counts as a person.** A group names whoever it is sharing costs with
+  (`groups add-guest`) -- there is no email and, by default, no link -- and from that moment
+  they can be given a share, be the payer, and be settled with, so use their user id (the
+  `groups members` row where `isGuest` is true, or `groups guests`) as you would a member's.
+  You record their side of everything: "Carlos paid me back" is `groups settle` with
+  Carlos's id. Removing one is `groups remove-member` once they are square, and they stay in
+  the history as a past guest. A claim moves a guest's position onto the claimer's account
+  and says what moved -- report it.
 - **Somebody who has left is fixed in place.** They cannot be a payer or a share on anything
   new. On an old expense they were on, renaming, re-dating and re-filing work, and so does a
   new amount with `--split` keeping their share exactly as it is; deleting it, re-dividing
@@ -176,11 +179,11 @@ along when reporting a problem.
   invitation issued after they left (`GROUP_REJOIN_NEEDS_NEW_INVITATION` otherwise). Who may
   do what is one table in `docs/participants.md`.
 - **A lost link is recoverable only if it was opened.** `invitations list` answers the
-  invitations whose links this account has opened -- there is no address to match, so
-  nothing knows about one that was never followed. If the user never opened theirs, the
-  group has to send it again.
-- **An invitation link is a credential, not an id.** Whoever opens one takes on the shares
-  recorded against that name, so it belongs to the person the user is sending it to and
+  guest links this account has opened -- there is no address to match, so nothing knows
+  about one that was never followed. If the user never opened theirs, a member can print it
+  again with `groups guest-link create`.
+- **A guest's link is a credential, not an id.** Whoever opens one takes on the shares
+  recorded for that guest, so it belongs to the person the user is sending it to and
   nowhere else. Do not paste one into a shared channel, a commit, an issue, or a transcript
   you did not have to write it into, and do not confuse it with `groups link`, which is the
   group's open door and claims nothing.

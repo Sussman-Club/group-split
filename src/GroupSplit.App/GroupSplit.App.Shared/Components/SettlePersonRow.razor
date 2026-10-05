@@ -37,8 +37,17 @@
     /// be the total repeated beside itself -- and two or more carry their own amounts,
     /// because that is the case somebody has to be able to check.
     /// </summary>
-    private string Breakdown => Person.Groups.Count == 1
-        ? Person.Groups[0].GroupName
-        : string.Join(" · ", Person.Groups.Select(part =>
-            $"{part.Amount.ToMoney()} in {part.GroupName}"));
+    /// <remarks>
+    /// A guest is always the one-group case: a guest belongs to exactly one group, and the
+    /// same real person a guest in two groups is two lines here. Their line says "guest in"
+    /// that group, because that is what makes the button beside it the reader's to press --
+    /// nobody on the other end can.
+    /// </remarks>
+    private string Breakdown => Person switch
+    {
+        { IsGuest: true, Groups.Count: > 0 } => ParticipantCopy.GuestIn(Person.Groups[0].GroupName),
+        { Groups.Count: 1 } => Person.Groups[0].GroupName,
+        _ => string.Join(" · ", Person.Groups.Select(part =>
+            $"{part.Amount.ToMoney()} in {part.GroupName}"))
+    };
 }

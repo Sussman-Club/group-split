@@ -58,8 +58,8 @@ Groups you belong to, their members and their balances.
 | `groups create <name>` | Create a group. |
 | `groups rename <group-id> <name>` | Rename a group. |
 | `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
-| `groups members <group-id>` | List a group's members, and the people it has invited and is waiting on. The `Status` column, and `isPendingInvitee` in JSON, say which. |
-| `groups remove-member <group-id> <user-id>` | Remove a member from a group. Requires that their balance in it is settled. The group's join link stops working, and they need a link or invitation issued afterwards to come back. Somebody not on the roster -- including anyone who has already left -- is refused with `USER_NOT_FOUND` before any confirmation is asked for. |
+| `groups members <group-id>` | List a group's people: its members and its guests. The `Status` column, and `isGuest` in JSON, say which. |
+| `groups remove-member <group-id> <user-id>` | Remove a member or a guest. Requires that their balance in it is settled (`GROUP_MEMBER_NOT_SETTLED` otherwise, with the balance). Removing a member stops the group's join link, and they need a link issued afterwards to come back; removing a guest leaves the join link alone and keeps them as a past guest. Somebody not on the roster -- including anyone who has already left -- is refused with `USER_NOT_FOUND` before any confirmation is asked for. |
 | `groups balances <group-id>` | Show who owes whom in a group. |
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
 | `groups settle-between <group-id> <from-user-id> <to-user-id> <amount>` | Record a repayment between two named members, whichever of them you are — including neither. |
@@ -67,10 +67,14 @@ Groups you belong to, their members and their balances.
 | `groups activity <group-id>` | The group's ledger: everything that happened in it, newest first, with your share of each entry and your balance as at it. |
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
-| `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. Coming back needs a link or invitation issued after you left. |
-| `groups invite <group-id> <name>...` | Name people the group is sharing costs with. Answers with a single-use link for each; there is no email. |
-| `groups invitations <group-id>` | List the people a group is still waiting on, with their links and the ids to name them by. |
-| `groups withdraw-invitation <group-id> <invitation-id>` | Withdraw an invitation nobody has answered. Confirmation required: their link stops working, and anything recorded against them goes to a member. |
+| `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. Coming back needs a link issued after you left. |
+| `groups add-guest <group-id> <name>... [--link]` | Add people the group shares costs with as guests. No link unless `--link`. Answers with each guest's user id. |
+| `groups guests <group-id>` | List a group's guests by user id, with whether each has a link out. |
+| `groups guest-link create <group-id> <user-id> [--new]` | Print the guest's link, issuing one if there is none. `--new` replaces it (confirmation required): the old one stops working. |
+| `groups guest-link revoke <group-id> <user-id>` | Stop the guest's link. Confirmation required. The guest stays. |
+| `groups invite <group-id> <name>...` | Deprecated: `add-guest --link`. |
+| `groups invitations <group-id>` | Deprecated: lists the guests with a link out, by their old invitation id. |
+| `groups withdraw-invitation <group-id> <invitation-id>` | Deprecated: stops that guest's link. The guest stays; nothing moves. |
 | `groups link show <group-id>` | Show a group's standing join link. |
 | `groups link create <group-id>` | Make a join link for a group. Any link the group already had stops working. |
 | `groups link revoke <group-id>` | Turn off a group's join link, so the URL stops working. |
@@ -297,19 +301,19 @@ moves it onto a different rule.
 
 ### invitations
 
-Personal invitation links and group join links you were sent.
+Guest links and group join links you were sent.
 
 | Command | |
 | --- | --- |
-| `invitations list` | The invitations whose links you have opened and not answered, with their tokens. Not "sent to me" -- there is no address to match. |
-| `invitations show <link>` | Show what a personal invitation link leads to, without claiming it. Says nothing about the money. |
-| `invitations claim <link>` | Claim it: join the group as the person it names, taking on the shares recorded against that name and their places in the group's split rules and the group's "all for them" rule. If two people claim one link at once, one gets in and the other gets GROUP_INVITATION_NOT_FOUND. Confirmation required. |
-| `invitations decline <link>` | Decline it. Confirmation required: anything the group recorded against that name goes to a member of it. |
+| `invitations list` | The guest links you have opened that still work, with their tokens. Not "sent to me" -- there is no address to match. |
+| `invitations show <link>` | Show what a guest's link leads to, without claiming it. Says nothing about the money. |
+| `invitations claim <link>` | Claim it: join the group in the guest's place, taking on the shares recorded for them, their places in the group's split rules and their "all for them" rule. Repayments recorded between you and that guest are deleted (they would be self-payments) and counted. If two people claim one link at once, one gets in and the other gets GROUP_INVITATION_NOT_FOUND. Confirmation required. |
+| `invitations decline <link>` | "This isn't me": the link stops working. The group keeps the guest; nothing moves. Confirmation required. |
 | `invitations link <link>` | Show which group a *join* link leads to, without joining. |
 | `invitations join <link>` | Join the group a join link leads to, as yourself. |
 
 `list` is the only command here that does not take a link, and it is how you find one: it
-answers every invitation whose link this account has opened, so it is the way back to one
+answers every guest link this account has opened and that still works, so it is the way back to one
 when the user no longer has the message. Everything else takes the link, and all of them
 accept the whole URL as readily as the token inside it.
 
@@ -603,48 +607,56 @@ whoever follows it in **as themselves**, claiming nothing. On the receiving side
 `invitations link <link>` says which group it leads to without joining, and
 `invitations join <link>` joins.
 
-A **personal invitation link** comes from `groups invite <group-id> <name>...`, one per
-person. It hands over a *position in the group's ledger*: the shares recorded against that
-name become the claimer's. So it works once, it says nothing about the money until claimed,
-and `invitations claim <link>` is gated by the confirmation protocol. Never suggest
-forwarding one, and never paste one where the group's join link would do.
+A **guest's link** comes from `groups guest-link create <group-id> <user-id>`, one per
+guest. It hands over a *position in the group's ledger*: the shares recorded for that guest
+become the claimer's. So it works once, it says nothing about the money until claimed, and
+`invitations claim <link>` is gated by the confirmation protocol. Never suggest forwarding
+one, and never paste one where the group's join link would do.
 
-### Somebody who has been invited and has not answered
+### Guests
 
-`groups invite <group-id> <name>...` names people the group is sharing costs with. That makes
-them somebody it can point at at once, so **use their id the way you would a member's**: give
-them a share with `--split`, or name them with `--paid-by`. Do not wait for anybody to claim
-anything, and do not leave them out of a division the user described as including them.
+`groups add-guest <group-id> <name>...` names people the group is sharing costs with who have
+no account in it. That makes them somebody it can point at at once, so **use their id the way
+you would a member's**: give them a share with `--split`, name them with `--paid-by`, settle
+with them. Do not wait for anybody to sign up, and do not leave them out of a division the
+user described as including them.
 
-Their id is `participantUserId`, from `groups invitations`, and it is the id `groups members`
-lists them under with `isPendingInvitee` true. It is **not** the invitation's own id, which is
-only for withdrawing it, and not the token, which is the link to send them.
+Their id is the **user id** -- from `groups add-guest`, `groups guests`, or the `groups
+members` row with `isGuest` true. One id for everything: splits, payer, repayments, their
+link, removing them. Not the token, which is the link to send them.
 
 They also have the built-in rule every member has, putting the whole amount on them: the
 `split-rules list` row whose "All for" is their id. `--split-rule` with it records "this one
-is all theirs" before they join, and the rule becomes theirs when they claim the link.
+is all theirs", and the rule becomes the claimer's if somebody claims their link.
 
-Two things you cannot do with them:
+**You record their side.** A guest cannot sign in, so "Carlos paid me back 30" is
+`groups settle <group-id> <carlos-id> 30`, "I paid Carlos" adds `--direction youpaidthem`,
+and "Carlos paid Nuria" is `groups settle-between <group-id> <carlos-id> <nuria-id> <amount>`.
+`groups settle-up` and `settle pay` include guests like anybody else (`settle plan` marks them
+`(guest)`).
 
-- **No repayment may name them.** `groups settle`, `groups settle-between`, `groups
-  settle-up` and `settle pay` all refuse with `SETTLEMENT_WITH_PENDING_INVITEE`. Their
-  balance is real and stands until somebody claims their link; there is simply no account to
-  pay. If a user asks you to settle with one, say that rather than recording something else.
-- **`groups remove-member` is not how they go.** It answers `GROUP_MEMBER_NOT_JOINED`, since
-  there is no membership to remove -- before asking for confirmation, since the roster it
-  reads already says so. `groups withdraw-invitation` is the act.
+**Removing one** is `groups remove-member <group-id> <user-id>`, refused with
+`GROUP_MEMBER_NOT_SETTLED` (and their balance) until they are square -- record the repayment
+first. Afterwards they are a past guest: their old shares are fixed, nobody can name them for
+new money, and the group's join link is untouched.
+
+**A link is optional.** Issue one only when the user wants the real person to take over:
+`groups guest-link create` prints the link (and is safe to repeat -- it returns the one
+already out), `--new` replaces it, `revoke` stops it. Declining a link only stops it; the
+guest stays.
 
 **If the user has lost their own link**, `invitations list` has it -- provided they opened
-it at least once. If they never did, only the group can send it again.
+it at least once. If they never did, a member can print it again with `groups guest-link
+create`.
 
-**The tokens are credentials.** A personal link is a claim on a position in the group's
-ledger: whoever opens it takes on the shares recorded against that name. Hand one to the user
+**The tokens are credentials.** A guest's link is a claim on a position in the group's
+ledger: whoever opens it takes on the shares recorded for that guest. Hand one to the user
 who asked for it and nowhere else -- never into a shared channel, a commit, an issue, or a
 transcript you did not have to write it into. Say "send Carlos his link" rather than pasting
 it unasked.
 
-Claiming, declining and withdrawing all move money, and all three answer with what moved and
-whose it is now. **Report that output**: it is somebody's balance that changed.
+A claim moves money onto the claimer's account and answers with what moved, including any
+repayments that cancelled out. **Report that output**: it is somebody's balance that changed.
 
 ### Settling up
 

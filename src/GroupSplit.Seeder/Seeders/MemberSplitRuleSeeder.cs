@@ -23,7 +23,7 @@ namespace GroupSplit.Seeder.Seeders;
 /// </remarks>
 [DependsOn(typeof(GroupSeeder))]
 [DependsOn(typeof(UserSeeder))]
-[DependsOn(typeof(GroupInvitationSeeder))]
+[DependsOn(typeof(GroupGuestSeeder))]
 public class MemberSplitRuleSeeder(
     AppDbContext db,
     ILogger<MemberSplitRuleSeeder> logger,
@@ -45,16 +45,16 @@ public class MemberSplitRuleSeeder(
                 await memberRules.EnsureFor(group, member, ct);
         }
 
-        // And everybody the groups are waiting on, who has one as well from the moment they
-        // are invited. The seeded invitations are written straight into the table too, so
-        // the demo would otherwise show nobody under "One pays" for them.
-        var invitations = await db.Set<GroupInvitation>()
-            .Include(invitation => invitation.Group)
-            .Include(invitation => invitation.Participant)
+        // And every guest, who has one as well from the moment they are added. The seeded
+        // guests are written straight into the table too, so the demo would otherwise show
+        // nobody under "One pays" for them.
+        var guests = await db.Set<GroupGuest>()
+            .Include(guest => guest.Group)
+            .Include(guest => guest.Participant)
             .ToListAsync(ct);
 
-        foreach (var invitation in invitations)
-            await memberRules.EnsureFor(invitation.Group, invitation.Participant, ct);
+        foreach (var guest in guests)
+            await memberRules.EnsureFor(guest.Group, guest.Participant, ct);
 
         logger.LogInformation("Seeded {Count} {Entity}", await Provisioned(ct) - before, "MemberSplitRule");
     }

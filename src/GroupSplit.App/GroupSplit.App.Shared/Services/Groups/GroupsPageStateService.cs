@@ -361,34 +361,38 @@ public class GroupsPageStateService : IGroupsPageStateService
         return pastMembers;
     }
 
-    public Task<bool> InviteToGroupAsync(InviteToGroupRequest request, CancellationToken cancellationToken = default)
+    public Task<bool> AddGuestsAsync(AddGuestsRequest request, CancellationToken cancellationToken = default)
     {
         var group = Selected();
 
-        return _groupCommands.InviteAsync(group.Id, group.Name, request, cancellationToken);
+        return _groupCommands.AddGuestsAsync(group.Id, group.Name, request, cancellationToken);
     }
 
-    public Task<IReadOnlyList<GroupInvitationResponse>> GetGroupInvitationsAsync(
+    public Task<IReadOnlyList<GroupGuestResponse>> GetGroupGuestsAsync(
         CancellationToken cancellationToken = default) =>
         SelectedGroup is null
-            ? Task.FromResult<IReadOnlyList<GroupInvitationResponse>>([])
-            : ReadInvitationsAsync(SelectedGroup.Id, cancellationToken);
+            ? Task.FromResult<IReadOnlyList<GroupGuestResponse>>([])
+            : ReadGuestsAsync(SelectedGroup.Id, cancellationToken);
 
-    private async Task<IReadOnlyList<GroupInvitationResponse>> ReadInvitationsAsync(Guid groupId,
+    private async Task<IReadOnlyList<GroupGuestResponse>> ReadGuestsAsync(Guid groupId,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<GroupInvitationResponse> pending = [];
+        IReadOnlyList<GroupGuestResponse> guests = [];
 
         await _errors.TryAsync(async () =>
-                pending = [.. await _groupsClient.GetGroupInvitationsAsync(groupId, cancellationToken)],
-            "Could not load the invitations.");
+                guests = [.. await _groupsClient.GetGroupGuestsAsync(groupId, cancellationToken)],
+            "Could not load the guests.");
 
-        return pending;
+        return guests;
     }
 
-    public Task<bool> WithdrawInvitationAsync(Guid invitationId, string email,
+    public Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid guestUserId, bool replace,
         CancellationToken cancellationToken = default) =>
-        _groupCommands.WithdrawInvitationAsync(Selected().Id, invitationId, email, cancellationToken);
+        _groupCommands.IssueGuestLinkAsync(Selected().Id, guestUserId, replace, cancellationToken);
+
+    public Task<bool> RevokeGuestLinkAsync(Guid guestUserId, string name,
+        CancellationToken cancellationToken = default) =>
+        _groupCommands.RevokeGuestLinkAsync(Selected().Id, guestUserId, name, cancellationToken);
 
     public Task<GroupJoinLinkResponse?> GetGroupJoinLinkAsync(CancellationToken cancellationToken = default) =>
         SelectedGroup is null
@@ -483,6 +487,10 @@ public class GroupsPageStateService : IGroupsPageStateService
     public Task<bool> SettleAsync(SettleRequest request, string otherName,
         CancellationToken cancellationToken = default) =>
         _groupCommands.SettleAsync(Selected().Id, request, otherName, cancellationToken);
+
+    public Task<bool> RecordRepaymentAsync(RecordRepaymentRequest request, string fromName, string toName,
+        CancellationToken cancellationToken = default) =>
+        _groupCommands.RecordRepaymentAsync(Selected().Id, request, fromName, toName, cancellationToken);
 
     public Task<SettleUpResponse?> SettleUpAsync(SettleUpRequest request,
         CancellationToken cancellationToken = default) =>

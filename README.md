@@ -77,15 +77,15 @@ who is taken out of it, what happens to their share, and why a percentage rule c
 reading less than 100 -- is in
 [docs/split-rules-and-membership.md](docs/split-rules-and-membership.md).
 
-Spending does not wait for people to answer their invitations, so a group names whoever it is
-sharing costs with and can point at them at once: they can be given a share, they can be the
-payer, and their balance is in the group's column. Each of them gets a single-use link, and
-whoever opens it becomes that person -- there are no email invitations. What that means -- why
-membership and participation are different questions, why a personal link is guarded more
-heavily than a join link, and what becomes of a position when an invitation is claimed,
-declined or withdrawn -- is in [docs/pending-invitees.md](docs/pending-invitees.md).
+Most people a group splits with never sign up, so a group names whoever it is sharing costs
+with and they are a **guest** at once: they can be given a share, be the payer, be settled
+with, and be removed once square, and the members record all of it. A member can send a guest
+a single-use link, and whoever claims it takes their place -- there are no email invitations.
+What that means -- why membership and participation are different questions, why a guest's
+link is guarded more heavily than a join link, and what a claim does to the ledger -- is in
+[docs/guests.md](docs/guests.md).
 
-Who may do what in a group -- a member, somebody invited, somebody who has left, and anybody
+Who may do what in a group -- a member, a guest, somebody who has left, and anybody
 else -- with the refusal each gets, is one table in [docs/participants.md](docs/participants.md).
 Members are equal: there are no roles. A departure is remembered rather than deleted, so a link
 shared before somebody left does not bring them back, and nothing may change what they paid or

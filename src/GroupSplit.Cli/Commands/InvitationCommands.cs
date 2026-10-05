@@ -173,6 +173,8 @@ public static class InvitationCommands
                     "yours: their shares, anything they are down as having paid for, and " +
                     "their places in the group's split rules.",
                     "No amount changes, but your balance in the group will.",
+                    $"Any repayment recorded between you and {invitation.Name} is deleted: " +
+                    "it would read as you paying yourself.",
                     "The link stops working afterwards."
                 ],
                 confirmCommand: $"groupsplit invitations claim {token} --yes");
@@ -204,6 +206,16 @@ public static class InvitationCommands
                                          "that name is recorded against you now.[/]\n"));
                 }
 
+                // A member claiming a guest who turns out to be them: what the two had paid
+                // each other cancels out, so it is gone rather than left as a self-payment.
+                if (value.SettlementsCancelled > 0)
+                {
+                    lines.Add(new Markup(
+                        $"[grey]{value.SettlementsCancelled} repayment(s) between you and " +
+                        $"{Markup.Escape(value.Name)} ({value.AmountCancelled:N2}) cancelled out. " +
+                        "Your balance is what the two of you came to together.[/]\n"));
+                }
+
                 return new Rows(lines);
             });
 
@@ -214,17 +226,17 @@ public static class InvitationCommands
     }
 
     /// <summary>
-    /// Turning one down, behind the confirmation gate.
+    /// "This isn't me": the link stops working, and nothing else changes.
     /// </summary>
     /// <remarks>
-    /// Gated because it can move money and not because it is hard to undo -- the group can
-    /// ask again. Naming somebody makes them a participant in the group's spending straight
-    /// away, so by the time somebody declines there may be a fortnight of shares in their
-    /// name; those go to a member of the group, and the answer says whose they are now.
+    /// The link was made for one of the group's guests, and whoever holds it is saying it is
+    /// not them. That is a fact about the link: the guest stays, with everything the group
+    /// recorded for them, and a member can send a new link. Still gated, because a link
+    /// stopped by mistake has to be re-sent by somebody else.
     /// </remarks>
     private static Command Decline()
     {
-        var command = new Command("decline", "Decline an invitation you were sent.") { Link };
+        var command = new Command("decline", "Say a guest's link is not for you, so it stops working.") { Link };
 
         command.SetHandler(async (context, ct) =>
         {
@@ -236,15 +248,13 @@ public static class InvitationCommands
             Confirmation.Require(
                 context,
                 action: "invitations.decline",
-                summary: $"Decline the invitation to {invitation.GroupName}?",
+                summary: $"Tell {invitation.GroupName} this link is not for you?",
                 changes:
                 [
                     "Nobody joins, and the link stops working.",
-                    $"Anything the group had already recorded against {invitation.Name} -- " +
-                    "shares, and anything they are down as having paid for -- goes to a " +
-                    "member of that group.",
-                    "No amount changes.",
-                    "They can invite again, with a new link."
+                    $"{invitation.GroupName} keeps {invitation.Name} as a guest, with everything " +
+                    "recorded for them. Nothing moves.",
+                    "A member can send a new link."
                 ],
                 confirmCommand: $"groupsplit invitations decline {token} --yes");
 

@@ -34,6 +34,9 @@ public static class GroupCommands
         groups.Subcommands.Add(Archive());
         groups.Subcommands.Add(Unarchive());
         groups.Subcommands.Add(Leave());
+        groups.Subcommands.Add(AddGuest());
+        groups.Subcommands.Add(Guests());
+        groups.Subcommands.Add(GuestLink());
         groups.Subcommands.Add(Invite());
         groups.Subcommands.Add(Invitations());
         groups.Subcommands.Add(Withdraw());
@@ -186,7 +189,7 @@ public static class GroupCommands
     private static Command Members()
     {
         var command = new Command("members",
-            "List a group's members, and the people it has invited and is waiting on.")
+            "List a group's people: its members, and its guests.")
         {
             GroupId
         };
@@ -203,9 +206,8 @@ public static class GroupCommands
                 }
 
                 // The status column is not decoration. This listing is what an agent reads
-                // to find the id to put in a split or name as the payer, and an invited
-                // address is choosable for both -- while being nobody you can settle up
-                // with, and nobody who can see the group.
+                // to find the id to put in a split, name as the payer or settle with, and a
+                // guest is all three -- while being nobody who can see the group.
                 var table = Tables.Grid("Id", "Name", "Email", "Status");
 
                 foreach (var member in value)
@@ -214,7 +216,7 @@ public static class GroupCommands
                         member.Id.ToString(),
                         Markup.Escape(member.FullName),
                         Markup.Escape(member.Email ?? "-"),
-                        member.IsPendingInvitee ? "[yellow]invited[/]" : "joined");
+                        member.IsGuest ? "[yellow]guest[/]" : "member");
                 }
 
                 return table;
@@ -227,17 +229,17 @@ public static class GroupCommands
     }
 
     /// <summary>
-    /// Removing somebody else, which is not the same command as leaving: only a member with
-    /// a settled balance can go, and the API refuses the rest.
+    /// Removing somebody else -- a member or a guest -- which is not the same command as
+    /// leaving: only somebody with a settled balance can go, and the API refuses the rest.
     /// </summary>
     private static Command RemoveMember()
     {
         var userId = new Argument<Guid>("user-id")
         {
-            Description = "The member's id, as shown by `groupsplit groups members`."
+            Description = "The member's or guest's id, as shown by `groupsplit groups members`."
         };
 
-        var command = new Command("remove-member", "Remove a member from a group.")
+        var command = new Command("remove-member", "Remove a member or a guest from a group.")
         {
             GroupId, userId
         };
@@ -257,38 +259,36 @@ public static class GroupCommands
             var removed = members.FirstOrDefault(candidate => candidate.Id == member)
                           ?? throw new CliException(
                               new CliError(
-                                  "That person is not a member of this group.",
+                                  "That person is not a member or guest of this group.",
                                   Shared.Errors.ErrorCodes.UserNotFound,
                                   $"List who is: groupsplit groups members {id}"),
                               ExitCodes.InvalidInput);
 
-            // The roster lists invitees too, because they hold shares. Removing is not how
-            // one goes: there is no membership yet, only an invitation to withdraw.
-            if (removed.IsPendingInvitee)
-            {
-                throw new CliException(
-                    new CliError(
-                        $"{removed.FullName} has been invited and has not joined, so there is no "
-                        + "membership to remove. Withdraw the invitation instead.",
-                        Shared.Errors.ErrorCodes.GroupMemberNotJoined,
-                        $"Find it with: groupsplit groups invitations {id}   "
-                        + $"Then: groupsplit groups withdraw-invitation {id} <invitation-id>"),
-                    ExitCodes.InvalidInput);
-            }
-
             var name = removed.FullName;
+
+            // A guest goes on the same terms -- square first, kept in the history -- but has
+            // no access to lose and never could read the join link, so that one stays.
+            string[] changes = removed.IsGuest
+                ?
+                [
+                    $"{name} stops being a guest: nobody can give them a share or settle with them.",
+                    $"{name} stays in the group's history as a past guest.",
+                    "Their link, if they have one, stops working.",
+                    "Refused unless they are square with the group."
+                ]
+                :
+                [
+                    $"{name} loses access to the group and its history.",
+                    "The group's join link stops working; make a new one to share.",
+                    $"{name} needs a link issued after this to come back.",
+                    "Refused if their balance in it is not settled."
+                ];
 
             Confirmation.Require(
                 context,
                 action: "groups.remove-member",
                 summary: $"Remove {name} from the group?",
-                changes:
-                [
-                    $"{name} loses access to the group and its history.",
-                    "The group's join link stops working; make a new one to share.",
-                    $"{name} needs a link or invitation issued after this to come back.",
-                    "Refused if their balance in it is not settled."
-                ],
+                changes: changes,
                 confirmCommand: $"groupsplit groups remove-member {id} {member} --yes");
 
             var group = await context.Groups.RemoveGroupMemberAsync(id, member, ct);
@@ -315,13 +315,11 @@ public static class GroupCommands
 
                 foreach (var balance in value.NetBalances)
                 {
-                    // Somebody invited and still to answer is in this column, because the
-                    // column has to add up to zero, and out of the transfers below, because
-                    // there is no account to pay yet. The marker is what keeps that from
-                    // looking like a plan that forgot somebody.
+                    // A guest is in this column and in the transfers below like anybody else;
+                    // the marker says the members record their side of it.
                     table.AddRow(
                         Markup.Escape(balance.UserName) +
-                        (balance.IsPendingInvitee ? " [yellow](invited)[/]" : string.Empty),
+                        (balance.IsGuest ? " [yellow](guest)[/]" : string.Empty),
                         balance.AmountPaid.ToString("N2"),
                         balance.AmountOwed.ToString("N2"),
                         Tables.Money(balance.Balance));
@@ -367,7 +365,7 @@ public static class GroupCommands
     /// </summary>
     private static Command Settle()
     {
-        var userId = new Argument<Guid>("user-id") { Description = "The other member." };
+        var userId = new Argument<Guid>("user-id") { Description = "The other member, or a guest." };
         var amount = new Argument<decimal>("amount")
         {
             Description = "How much changed hands, to two decimal places."
@@ -389,7 +387,7 @@ public static class GroupCommands
             Description = "What to remember about it, e.g. \"cash\" or a transfer reference."
         };
 
-        var command = new Command("settle", "Record a repayment between you and another member.")
+        var command = new Command("settle", "Record a repayment between you and another member or a guest.")
         {
             GroupId, userId, amount, direction, date, note
         };
@@ -442,12 +440,16 @@ public static class GroupCommands
     }
 
     /// <summary>
-    /// Records one repayment between two named members, whichever of them you are --
-    /// including neither.
+    /// Records one repayment between two named people -- members or guests -- whichever of
+    /// them you are, including neither.
     /// </summary>
     /// <remarks>
+    /// The way to record two guests paying each other back, which only a member can write
+    /// down.
+    /// <para>
     /// Separate from <c>settle</c> and <c>settle-up</c> because both of those put you on one
     /// end, and saying something about two other people should have to be asked for by name.
+    /// </para>
     /// <para>
     /// What it is for is a ledger the group already agreed on: months closed in a spreadsheet
     /// years ago, moving in. Their repayments have to be written for the imbalance their
@@ -457,8 +459,8 @@ public static class GroupCommands
     /// </remarks>
     private static Command SettleBetween()
     {
-        var fromUserId = new Argument<Guid>("from-user-id") { Description = "The member who paid." };
-        var toUserId = new Argument<Guid>("to-user-id") { Description = "The member who was paid." };
+        var fromUserId = new Argument<Guid>("from-user-id") { Description = "Who paid: a member or a guest." };
+        var toUserId = new Argument<Guid>("to-user-id") { Description = "Who was paid: a member or a guest." };
 
         var amount = new Argument<decimal>("amount")
         {
@@ -476,7 +478,7 @@ public static class GroupCommands
         };
 
         var command = new Command("settle-between",
-            "Record a repayment between two members, whoever you are.")
+            "Record a repayment between two people in a group, whoever you are.")
         {
             GroupId, fromUserId, toUserId, amount, date, note
         };
@@ -820,22 +822,248 @@ public static class GroupCommands
     }
 
     /// <summary>
-    /// Inviting people by name, which mints a link for each.
+    /// Adds people to a group as guests, by name: somebody the group shares costs with who
+    /// has no account in it.
     /// </summary>
     /// <remarks>
-    /// By name rather than by email, because a group knows the friend it went on the trip
-    /// with by name. The links are the output that matters: they are how the invitation
-    /// reaches anybody, and each one works once.
+    /// No link unless <c>--link</c> asks for one. Most of the people a group splits with
+    /// never sign up; the members record everything for them, and a link can be sent later
+    /// with <c>guest-link create</c> if the real person wants in.
     /// </remarks>
+    private static Command AddGuest()
+    {
+        var names = new Argument<string[]>("name")
+        {
+            Description = "One or more people to add, by name.",
+            Arity = ArgumentArity.OneOrMore
+        };
+
+        var link = new Option<bool>("--link")
+        {
+            Description = "Issue each of them a link to take their place, straight away."
+        };
+
+        var command = new Command("add-guest", "Add people to a group as guests, by name.")
+        {
+            GroupId, names, link
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var id = context.ParseResult.GetValue(GroupId);
+
+            var added = await context.Groups.AddGroupGuestsAsync(id, new AddGuestsRequest
+            {
+                Names = [.. context.ParseResult.GetValue(names) ?? []],
+                IssueLinks = context.ParseResult.GetValue(link)
+            }, ct);
+
+            context.Output.Write(added, value => GuestTable(context, value));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>The group's guests, with whether each has a link out.</summary>
+    private static Command Guests()
+    {
+        var command = new Command("guests", "List a group's guests.") { GroupId };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var guests = await context.Groups.GetGroupGuestsAsync(context.ParseResult.GetValue(GroupId), ct);
+
+            context.Output.Write(guests, value => value.Count == 0
+                ? new Markup(Tables.Empty("guests") + "\n")
+                : GuestTable(context, value));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// The user id first, because it is the one an agent needs next: it names the guest in
+    /// a split, as the payer, in a repayment, and to remove them.
+    /// </summary>
+    /// <remarks>
+    /// The link column is the URL when the CLI knows where the app is, and otherwise only says
+    /// one is out. Never the bare token: it is a credential on the guest's position, and a
+    /// table is what ends up pasted into a chat. JSON carries it for whoever needs it, and
+    /// <c>guest-link create</c> prints it on purpose.
+    /// </remarks>
+    private static IRenderable GuestTable(CliContext context, IEnumerable<GroupGuestResponse> guests)
+    {
+        var table = Tables.Grid("User id", "Name", "Added", "Link");
+
+        foreach (var guest in guests)
+        {
+            table.AddRow(
+                guest.UserId.ToString(),
+                Markup.Escape(guest.Name),
+                guest.AddedAt.ToLocalTime().ToString("yyyy-MM-dd"),
+                guest.Token is { } token
+                    ? WebLinks.Claim(context, token) is { } url
+                        ? Markup.Escape(url)
+                        : "yes [grey](guest-link create shows it)[/]"
+                    : "[grey]none[/]");
+        }
+
+        return table;
+    }
+
+    /// <summary>
+    /// A guest's link: issue one, replace it, or stop it.
+    /// </summary>
+    private static Command GuestLink()
+    {
+        var link = new Command("guest-link", "The link that lets the real person take a guest's place.");
+
+        link.Subcommands.Add(CreateGuestLink());
+        link.Subcommands.Add(RevokeGuestLink());
+
+        return link;
+    }
+
+    private static readonly Argument<Guid> GuestId = new("user-id")
+    {
+        Description = "The guest's user id, as shown by `groupsplit groups guests`."
+    };
+
+    private static Command CreateGuestLink()
+    {
+        var replace = new Option<bool>("--new")
+        {
+            Description = "Replace the link the guest already has, so the old one stops working."
+        };
+
+        var command = new Command("create",
+            "Show the guest's link, issuing one if there is none.")
+        {
+            GroupId, GuestId, replace
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var id = context.ParseResult.GetValue(GroupId);
+            var userId = context.ParseResult.GetValue(GuestId);
+            var fresh = context.ParseResult.GetValue(replace);
+
+            // Read first, so the confirmation is only asked for when something is lost:
+            // issuing a first link, or reading back the one that is out, destroys nothing.
+            var guest = (await context.Groups.GetGroupGuestsAsync(id, ct))
+                        .FirstOrDefault(candidate => candidate.UserId == userId)
+                        ?? throw NotAGuest(id);
+
+            if (fresh && guest.HasLink)
+            {
+                Confirmation.Require(
+                    context,
+                    action: "groups.guest-link.create",
+                    summary: $"Replace {guest.Name}'s link?",
+                    changes:
+                    [
+                        "The link already sent stops working.",
+                        "Whoever opened it is no longer offered it.",
+                        $"{guest.Name} stays a guest, with everything recorded for them."
+                    ],
+                    confirmCommand: $"groupsplit groups guest-link create {id} {userId} --new --yes");
+            }
+
+            var linked = await context.Groups.IssueGuestLinkAsync(id, userId,
+                new IssueGuestLinkRequest { Replace = fresh }, ct);
+
+            context.Output.Write(
+                new GuestLinkView(linked.UserId, linked.GroupId, linked.Name, linked.Token!,
+                    WebLinks.Claim(context, linked.Token!)),
+                value =>
+                {
+                    var table = Tables.KeyValue();
+
+                    table.AddRow("Guest", Markup.Escape(value.Name));
+                    table.AddRow("Link", Markup.Escape(value.Url ?? value.Token));
+
+                    return new Rows(table, new Markup(
+                        $"\n[grey]Whoever opens it and claims it takes {Markup.Escape(value.Name)}'s " +
+                        "place in the group: everything recorded for them becomes theirs.[/]\n"));
+                });
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static Command RevokeGuestLink()
+    {
+        var command = new Command("revoke", "Stop a guest's link. The guest stays.")
+        {
+            GroupId, GuestId
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var id = context.ParseResult.GetValue(GroupId);
+            var userId = context.ParseResult.GetValue(GuestId);
+
+            var guest = (await context.Groups.GetGroupGuestsAsync(id, ct))
+                        .FirstOrDefault(candidate => candidate.UserId == userId)
+                        ?? throw NotAGuest(id);
+
+            Confirmation.Require(
+                context,
+                action: "groups.guest-link.revoke",
+                summary: $"Stop {guest.Name}'s link?",
+                changes:
+                [
+                    "The link stops working for whoever has it.",
+                    $"{guest.Name} stays a guest, with everything recorded for them.",
+                    "A new link can be issued at any time."
+                ],
+                confirmCommand: $"groupsplit groups guest-link revoke {id} {userId} --yes");
+
+            await context.Groups.RevokeGuestLinkAsync(id, userId, ct);
+
+            context.Output.Write(
+                new { status = "revoked", groupId = id, userId, name = guest.Name },
+                value => new Markup($"[green]Stopped[/] {Markup.Escape(value.name)}'s link.\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    private static CliException NotAGuest(Guid groupId) =>
+        new(new CliError(
+                "That person is not a guest of this group.",
+                Shared.Errors.ErrorCodes.GroupGuestNotFound,
+                $"List the guests with: groupsplit groups guests {groupId}"),
+            ExitCodes.InvalidInput);
+
+    /// <summary>A guest's link as the CLI answers with it: the token, and the URL it goes in.</summary>
+    internal sealed record GuestLinkView(Guid UserId, Guid GroupId, string Name, string Token, string? Url);
+
+    // The three commands below call the routes from before guests, which the API marks
+    // deprecated. They are kept as aliases on purpose, for one release.
+#pragma warning disable CS0612
+    /// <summary>
+    /// Adds people as guests and issues each a link. Kept for scripts written before guests:
+    /// <c>add-guest --link</c> is the same thing.
+    /// </summary>
     private static Command Invite()
     {
         var names = new Argument<string[]>("name")
         {
-            Description = "One or more people to invite, by name.",
+            Description = "One or more people to add, by name.",
             Arity = ArgumentArity.OneOrMore
         };
 
-        var command = new Command("invite", "Invite people to a group by name, with a link each.")
+        var command = new Command("invite",
+            "Deprecated: use `add-guest --link`. Adds people as guests, with a link each.")
         {
             GroupId, names
         };
@@ -851,9 +1079,6 @@ public static class GroupCommands
 
             context.Output.Write(invitations, value =>
             {
-                // The user id is in the table because it is the one an agent needs next: it
-                // names this person in a split or as the payer, without waiting for them to
-                // claim anything. The token is the thing to send them.
                 var table = Tables.Grid("Invitation", "Name", "User id", "Link token");
 
                 foreach (var invitation in value)
@@ -867,8 +1092,8 @@ public static class GroupCommands
 
                 return new Rows(
                     table,
-                    new Markup("\n[grey]Send each person their own link. It works once, and " +
-                               "whoever opens it becomes that person in the group.[/]\n"));
+                    new Markup("\n[grey]Each is a guest now. Send each person their own link: " +
+                               "whoever claims it takes their place in the group.[/]\n"));
             });
 
             return ExitCodes.Success;
@@ -878,13 +1103,13 @@ public static class GroupCommands
     }
 
     /// <summary>
-    /// The invitations a group is waiting on, which is the other direction from
-    /// <c>groupsplit invitations list</c>: this is the sender's view, and all it knows about
-    /// an invitee is the address, since an invited address need not have an account yet.
+    /// The guests with a link out, in the shape from before guests. Kept for scripts;
+    /// <c>guests</c> lists every guest.
     /// </summary>
     private static Command Invitations()
     {
-        var command = new Command("invitations", "List the invitations a group is still waiting on.")
+        var command = new Command("invitations",
+            "Deprecated: use `guests`. Lists the guests that have a link out.")
         {
             GroupId
         };
@@ -898,14 +1123,10 @@ public static class GroupCommands
             {
                 if (value.Count == 0)
                 {
-                    return new Markup(Tables.Empty("outstanding invitations") + "\n");
+                    return new Markup(Tables.Empty("guests with a link") + "\n");
                 }
 
-                // The id here withdraws the invitation. The id that names this person in a
-                // split or as a payer is a different one -- participantUserId, which is in
-                // the JSON alongside the link token, and which `groups members` lists them
-                // under, marked as invited. Three guids in one table is unreadable.
-                var table = Tables.Grid("Id", "Name", "Invited by", "When");
+                var table = Tables.Grid("Id", "Name", "Link sent by", "When");
 
                 foreach (var invitation in value)
                 {
@@ -925,6 +1146,10 @@ public static class GroupCommands
         return command;
     }
 
+    /// <summary>
+    /// Stops a guest's link by its old invitation id. Kept for scripts;
+    /// <c>guest-link revoke</c> takes the guest's user id.
+    /// </summary>
     private static Command Withdraw()
     {
         var invitationId = new Argument<Guid>("invitation-id")
@@ -932,7 +1157,8 @@ public static class GroupCommands
             Description = "The invitation's id, as shown by `groupsplit groups invitations`."
         };
 
-        var command = new Command("withdraw-invitation", "Withdraw an invitation nobody has answered.")
+        var command = new Command("withdraw-invitation",
+            "Deprecated: use `guest-link revoke`. Stops a guest's link; the guest stays.")
         {
             GroupId, invitationId
         };
@@ -942,9 +1168,6 @@ public static class GroupCommands
             var id = context.ParseResult.GetValue(GroupId);
             var invitation = context.ParseResult.GetValue(invitationId);
 
-            // Read first, so the confirmation can name the address and say what is
-            // riding on it. An invitation used to be a message and withdrawing it needed no
-            // gate; it is a participant in the group's money now, so it does.
             var pending = await context.Groups.GetGroupInvitationsAsync(id, ct);
             var withdrawn = pending.FirstOrDefault(candidate => candidate.Id == invitation);
             var name = withdrawn?.Name ?? invitation.ToString();
@@ -952,15 +1175,12 @@ public static class GroupCommands
             Confirmation.Require(
                 context,
                 action: "groups.withdraw-invitation",
-                summary: $"Withdraw the invitation to {name}?",
+                summary: $"Stop {name}'s link?",
                 changes:
                 [
-                    $"Their link stops working, and {name} stops being someone this group " +
-                    "can give a share to.",
-                    "Anything already recorded against them -- shares, and anything they " +
-                    "paid for -- goes to a member of the group.",
-                    "No amount changes, and the group's balances still add up.",
-                    "They can be invited again, with a new link."
+                    "The link stops working for whoever has it.",
+                    $"{name} stays a guest, with everything recorded for them. Nothing moves.",
+                    "To take them out of the group, settle with them and use remove-member."
                 ],
                 confirmCommand: $"groupsplit groups withdraw-invitation {id} {invitation} --yes");
 
@@ -974,53 +1194,29 @@ public static class GroupCommands
         return command;
     }
 
+#pragma warning restore CS0612
+
     /// <summary>
-    /// What happened to an invitation that was withdrawn or declined, and to the money that
-    /// was recorded against it.
+    /// A guest's link that was stopped or turned down. Shared with `invitations decline`,
+    /// which is the same event from the other side.
     /// </summary>
     /// <remarks>
-    /// Shared with `invitations decline`, because the two commands are the same event from
-    /// the two sides and there is one answer to give about the money.
+    /// Only the link ends, so there is nothing about money to report: the guest and
+    /// everything recorded for them stay.
     /// </remarks>
     internal static IRenderable Closed(InvitationClosedResponse closed)
     {
         var table = Tables.KeyValue();
 
         table.AddRow("Group", Markup.Escape(closed.GroupName));
-        table.AddRow("Name", Markup.Escape(closed.Name));
-        table.AddRow("Outcome", closed.Outcome.ToString().ToLowerInvariant());
+        table.AddRow("Guest", Markup.Escape(closed.Name));
+        table.AddRow("Outcome", closed.Outcome is InvitationOutcome.Declined
+            ? "link turned down"
+            : "link stopped");
 
-        if (!closed.MovedAnything)
-        {
-            table.AddRow("Money", "nothing was recorded against them");
-
-            return table;
-        }
-
-        table.AddRow("Now belongs to", Markup.Escape(closed.AbsorbedByUserName ?? "-"));
-        table.AddRow("Shares moved", $"{closed.SharesMoved} ({closed.AmountOwed:N2})");
-        table.AddRow("Payments moved", $"{closed.PaymentsMoved} ({closed.AmountPaid:N2})");
-        table.AddRow("Rules pruned", closed.RulesAffected.ToString());
-
-        var lines = new List<IRenderable>
-        {
-            table,
-            new Markup("\n[grey]No amount changed. Every transaction still sums to its own " +
-                       "amount, and the group's balances still sum to zero.[/]\n")
-        };
-
-        // The one thing here worth interrupting somebody about. A rule with nobody left in
-        // it has changed what it means, and this is the moment it can still be said.
-        if (closed.RulesEmptied > 0)
-        {
-            lines.Add(new Markup(
-                $"\n[yellow]{closed.RulesEmptied} split rule(s) now name nobody.[/] A shares or " +
-                "percentage rule like that refuses the next expense filed under it; an even one " +
-                "divides between everybody. Check them with [bold]groupsplit split-rules list " +
-                $"--group {closed.GroupId}[/].\n"));
-        }
-
-        return new Rows(lines);
+        return new Rows(table, new Markup(
+            $"\n[grey]{Markup.Escape(closed.Name)} is still a guest of {Markup.Escape(closed.GroupName)}. " +
+            "Nothing moved. A member can send a new link.[/]\n"));
     }
 
     private static IRenderable Render(GroupResponse group)

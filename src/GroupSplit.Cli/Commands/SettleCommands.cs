@@ -242,8 +242,11 @@ public static class SettleCommands
 
         foreach (var person in people)
         {
+            // A guest is one of the group's people with no account: the members record what
+            // they pay and are paid, so they are in the plan like anybody else. Marked,
+            // because the same real person can be a guest in two groups and is then two rows.
             table.AddRow(
-                Markup.Escape(person.UserName),
+                Markup.Escape(person.UserName) + (person.IsGuest ? " [yellow](guest)[/]" : string.Empty),
                 Markup.Escape(string.Join(", ", person.Groups.Select(part =>
                     person.Groups.Count == 1 ? part.GroupName : $"{part.GroupName} {part.Amount:N2}"))),
                 $"{person.Amount:N2}");

@@ -172,20 +172,28 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
         using var check = _services!.CreateScope();
         var context = Service<AppDbContext>(check);
 
-        Assert.False(await context.Set<GroupInvitation>().AnyAsync(invitation => invitation.GroupId == groupId, Ct));
-        Assert.False(await context.Set<User>().AnyAsync(user => user.Id == standIn, Ct));
+        // The guest ended once, as claimed; the stand-in stays, holding nothing.
+        Assert.False(await context.Set<GroupGuest>().AnyAsync(guest => guest.GroupId == groupId, Ct));
+        Assert.Equal(GuestEndReason.Claimed, await context.Set<GroupGuest>().IgnoreQueryFilters()
+            .Where(guest => guest.ParticipantUserId == standIn)
+            .Select(guest => guest.EndReason)
+            .SingleAsync(Ct));
+        Assert.Single(await context.Set<GroupMembershipEvent>()
+            .Where(change => change.UserId == standIn && change.Kind == MembershipEventKind.GuestClaimed)
+            .ToListAsync(Ct));
     }
 
     /// <summary>
     /// The other half of the same race: somebody opening the link while somebody else claims
-    /// it. Opening remembers that this person saw it, and that insert names the invitation --
-    /// so if the claim deletes it in between, the insert fails its foreign key.
+    /// it. Opening remembers that this person saw it, and that insert names the guest -- whose
+    /// row the claim is updating, token and all.
     /// </summary>
     /// <remarks>
-    /// Made certain rather than left to the scheduler. The claim's delete is held open in a
-    /// transaction of its own: the opener's reads still find the invitation, and their insert
-    /// waits on the deleted row's lock. Committing the delete then is the moment the race
-    /// loses, every time.
+    /// Made certain rather than left to the scheduler. The claim's update is held open in a
+    /// transaction of its own: the opener's reads still find the link, and their insert waits
+    /// on the row's lock, because changing a uniquely indexed column locks the row against
+    /// foreign-key checks. Committing the claim then is the moment the race loses, every time
+    /// -- and the answer is the link being gone, not a 500.
     /// </remarks>
     [Fact(Timeout = 180_000)]
     public async Task Opening_an_invitation_while_somebody_claims_it_is_a_404_not_a_500()
@@ -208,9 +216,14 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
 
         await using var claim = await claimContext.Database.BeginTransactionAsync(Ct);
 
-        await claimContext.Set<GroupInvitation>()
-            .Where(invitation => invitation.Token == token)
-            .ExecuteDeleteAsync(Ct);
+        await claimContext.Set<GroupGuest>()
+            .Where(guest => guest.Token == token)
+            .ExecuteUpdateAsync(guest => guest
+                .SetProperty(row => row.EndedAt, DateTimeOffset.UtcNow)
+                .SetProperty(row => row.EndReason, GuestEndReason.Claimed)
+                .SetProperty(row => row.Token, (string?)null)
+                .SetProperty(row => row.LinkIssuedAt, (DateTimeOffset?)null)
+                .SetProperty(row => row.LinkIssuedByUserId, (Guid?)null), Ct);
 
         using var opening = await As(opener);
         var opened = Service<IInvitationService>(opening).Describe(token, Ct);
@@ -220,6 +233,113 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
 
         var refused = await Assert.ThrowsAsync<NotFoundException>(() => opened);
         Assert.Equal(ErrorCodes.GroupInvitationNotFound, refused.Code);
+    }
+
+    /// <summary>
+    /// A member removes a guest at the moment whoever holds the guest's link claims it. Only
+    /// one of the two may happen: the guest is either gone or a member, never both.
+    /// </summary>
+    /// <remarks>
+    /// Made certain the same way as the opener's race: the claim's write to the guest row is
+    /// held open, the removal's update waits on its lock, and when the claim commits Postgres
+    /// re-checks the removal's condition against the new row -- which no longer has the
+    /// token or an open end it read -- and updates nothing. That is the concurrency token
+    /// doing its job, and the removal says so rather than claiming success.
+    /// </remarks>
+    [Fact(Timeout = 180_000)]
+    public async Task Removing_a_guest_while_their_link_is_claimed_removes_nothing()
+    {
+        var people = await People(1);
+        var host = people[0];
+
+        var groupId = await NewGroupOf(host, "RemoveVsClaim");
+
+        GroupGuestResponse guest;
+
+        using (var scope = await As(host))
+        {
+            guest = Assert.Single(await Service<IGuestService>(scope).Add(groupId,
+                new AddGuestsRequest { Names = ["Claimed meanwhile"], IssueLinks = true }, Ct));
+        }
+
+        using var claiming = _services!.CreateScope();
+        var claimContext = Service<AppDbContext>(claiming);
+
+        await using var claim = await claimContext.Database.BeginTransactionAsync(Ct);
+
+        await claimContext.Set<GroupGuest>()
+            .Where(row => row.Token == guest.Token)
+            .ExecuteUpdateAsync(row => row
+                .SetProperty(r => r.EndedAt, DateTimeOffset.UtcNow)
+                .SetProperty(r => r.EndReason, GuestEndReason.Claimed)
+                .SetProperty(r => r.Token, (string?)null)
+                .SetProperty(r => r.LinkIssuedAt, (DateTimeOffset?)null)
+                .SetProperty(r => r.LinkIssuedByUserId, (Guid?)null), Ct);
+
+        using var removing = await As(host);
+        var removal = Service<IGroupService>(removing).RemoveGroupMember(groupId, guest.UserId, Ct);
+
+        await UntilWaitingOnALock(removal, "GroupGuest");
+        await claim.CommitAsync(Ct);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => removal);
+        Assert.Equal(ErrorCodes.GroupGuestChanged, refused.Code);
+
+        using var check = _services!.CreateScope();
+        Assert.Equal(GuestEndReason.Claimed, await Service<AppDbContext>(check).Set<GroupGuest>()
+            .IgnoreQueryFilters()
+            .Where(row => row.ParticipantUserId == guest.UserId)
+            .Select(row => row.EndReason)
+            .SingleAsync(Ct));
+    }
+
+    /// <summary>
+    /// One member removes a guest while another sends them their first link. The removal was
+    /// decided about a guest with no link out, which is no longer the guest there is, so it
+    /// is refused rather than quietly killing a link somebody has just sent.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task Removing_a_guest_while_a_link_is_issued_is_refused_and_the_link_stands()
+    {
+        var people = await People(1);
+        var host = people[0];
+
+        var groupId = await NewGroupOf(host, "RemoveVsLink");
+
+        GroupGuestResponse guest;
+
+        using (var scope = await As(host))
+        {
+            guest = Assert.Single(await Service<IGuestService>(scope).Add(groupId,
+                new AddGuestsRequest { Names = ["Linked meanwhile"] }, Ct));
+        }
+
+        using var issuing = _services!.CreateScope();
+        var issueContext = Service<AppDbContext>(issuing);
+
+        await using var issue = await issueContext.Database.BeginTransactionAsync(Ct);
+
+        await issueContext.Set<GroupGuest>()
+            .Where(row => row.ParticipantUserId == guest.UserId)
+            .ExecuteUpdateAsync(row => row
+                .SetProperty(r => r.Token, "issued-meanwhile-" + Guid.NewGuid().ToString("N"))
+                .SetProperty(r => r.LinkIssuedAt, DateTimeOffset.UtcNow), Ct);
+
+        using var removing = await As(host);
+        var removal = Service<IGroupService>(removing).RemoveGroupMember(groupId, guest.UserId, Ct);
+
+        await UntilWaitingOnALock(removal, "GroupGuest");
+        await issue.CommitAsync(Ct);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => removal);
+        Assert.Equal(ErrorCodes.GroupGuestChanged, refused.Code);
+
+        using var check = _services!.CreateScope();
+        var row = await Service<AppDbContext>(check).Set<GroupGuest>()
+            .SingleAsync(candidate => candidate.ParticipantUserId == guest.UserId, Ct);
+
+        Assert.Null(row.EndedAt);
+        Assert.NotNull(row.Token);
     }
 
     /// <summary>
@@ -360,7 +480,7 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Deletes an invitation, on a connection of its own, just before the read that answers
+    /// Claims a guest's link, on a connection of its own, just before the read that answers
     /// the landing page goes out -- the moment a concurrent claim would have to land in to
     /// leave that read empty. That read is the one that joins the inviter's name, which no
     /// earlier read of the invitation does.
@@ -382,7 +502,7 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
             CancellationToken cancellationToken = default)
         {
             if (_token is { } token &&
-                command.CommandText.Contains("FROM \"GroupInvitation\"") &&
+                command.CommandText.Contains("FROM \"GroupGuest\"") &&
                 command.CommandText.Contains("\"FirstName\""))
             {
                 _token = null;
@@ -391,7 +511,12 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
                 await connection.OpenAsync(cancellationToken);
 
                 await using var claim = new NpgsqlCommand(
-                    "DELETE FROM \"GroupInvitation\" WHERE \"Token\" = @token", connection);
+                    """
+                    UPDATE "GroupGuest"
+                    SET "EndedAt" = now(), "EndReason" = 'Claimed',
+                        "Token" = NULL, "LinkIssuedAt" = NULL, "LinkIssuedByUserId" = NULL
+                    WHERE "Token" = @token
+                    """, connection);
                 claim.Parameters.AddWithValue("token", token);
                 await claim.ExecuteNonQueryAsync(cancellationToken);
 

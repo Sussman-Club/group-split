@@ -233,18 +233,12 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     }
 
     /// <summary>
-    /// A rule that puts the whole amount on somebody has no weight to prune and nobody to
-    /// prune it among, so it follows them to whoever takes over their position -- which is
-    /// what the hand-over has just done with their shares and the expenses they were down as
-    /// having paid for.
+    /// A rule that puts the whole amount on a guest follows them to whoever claims them --
+    /// which is what the claim has just done with their shares and the expenses they were
+    /// down as having paid for.
     /// </summary>
-    /// <remarks>
-    /// It also has to: closing an invitation deletes the stand-in it was holding, and a rule
-    /// still naming that row is a foreign key the delete cannot get past. That is the
-    /// difference from a member leaving, whose account is anonymised rather than erased.
-    /// </remarks>
     [Fact]
-    public async Task A_rule_naming_an_invitee_who_never_joins_names_whoever_absorbs_them()
+    public async Task A_rule_naming_a_guest_names_whoever_claims_them()
     {
         var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
 
@@ -258,15 +252,14 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
             Definition = new SoleSplitRuleDto(invitation.ParticipantUserId)
         }, Ct);
 
-        await Invitations.Withdraw(group.Id, invitation.Id, Ct);
+        // Claimed by the member who made the link, who turns out to be Dani.
+        await Invitations.Claim(invitation.Token, Ct);
 
         var versions = await DbContext.Set<SplitRuleVersion>()
+            .AsNoTracking()
             .Where(version => version.SplitRuleId == rule.Id)
             .ToListAsync(Ct);
 
-        // Rewritten rather than superseded, which is the one place a version is: the row it
-        // named is deleted with the invitation, so a second version would leave the first
-        // pointing at nobody. The inviter absorbs them, being the only member there is.
         var only = Assert.IsType<SoleSplitRuleVersion>(Assert.Single(versions));
 
         Assert.Equal(Self, only.UserId);

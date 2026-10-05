@@ -74,7 +74,31 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
 
         modelBuilder.Entity<GroupMembershipEvent>().ToTable(table => table.HasCheckConstraint(
             "CK_GroupMembershipEvent_Kind",
-            "\"Kind\" IN ('Joined', 'Rejoined', 'Left', 'Removed', 'AccountDeleted')"));
+            "\"Kind\" IN ('Joined', 'Rejoined', 'Left', 'Removed', 'AccountDeleted', " +
+            "'GuestAdded', 'GuestRemoved', 'GuestClaimed')"));
+
+        // A guest's end and their link are each several columns written together, and the
+        // query filter reads only EndedAt. These keep a half-written one out of the table: an
+        // end with no reason, a reason with no end, a token with no issue date, and -- because
+        // a link is a claim on a position -- a token left standing on a guest who has gone.
+        modelBuilder.Entity<GroupGuest>().ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_GroupGuest_EndReason",
+                "\"EndReason\" IN ('Removed', 'Claimed')");
+
+            table.HasCheckConstraint(
+                "CK_GroupGuest_End",
+                "(\"EndedAt\" IS NULL) = (\"EndReason\" IS NULL) AND (\"EndedAt\" IS NOT NULL OR \"EndedByUserId\" IS NULL)");
+
+            table.HasCheckConstraint(
+                "CK_GroupGuest_Link",
+                "(\"Token\" IS NULL) = (\"LinkIssuedAt\" IS NULL) AND (\"Token\" IS NOT NULL OR \"LinkIssuedByUserId\" IS NULL)");
+
+            table.HasCheckConstraint(
+                "CK_GroupGuest_EndedNoLink",
+                "\"EndedAt\" IS NULL OR \"Token\" IS NULL");
+        });
 
         // What each kind of user may hold. A stand-in has no address -- one would make it an
         // account somebody could sign in as -- and a deleted account has nothing left that

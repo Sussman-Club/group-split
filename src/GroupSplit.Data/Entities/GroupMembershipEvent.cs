@@ -1,8 +1,9 @@
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
-/// One thing that happened to somebody's membership of a group: they joined, left, were
-/// removed, deleted their account, or came back.
+/// One thing that happened to somebody's place in a group: they joined, left, were removed,
+/// deleted their account or came back -- or, for a guest, were added, removed, or claimed by
+/// whoever held their link.
 /// </summary>
 /// <remarks>
 /// <see cref="GroupMembership"/> is the relationship as it stands, one row per person, and a
@@ -21,7 +22,7 @@ public class GroupMembershipEvent : Entity
 {
     public Guid GroupId { get; set; }
 
-    /// <summary>Whose membership this is about.</summary>
+    /// <summary>Whose membership this is about: for a guest, their stand-in.</summary>
     public Guid UserId { get; set; }
 
     public MembershipEventKind Kind { get; set; }
@@ -56,5 +57,17 @@ public enum MembershipEventKind
     Removed,
 
     /// <summary>Stopped being a member by deleting their account.</summary>
-    AccountDeleted
+    AccountDeleted,
+
+    /// <summary>Added to the group as a guest, by the member in <c>ByUserId</c>.</summary>
+    GuestAdded,
+
+    /// <summary>A guest removed by a member, once they were square.</summary>
+    GuestRemoved,
+
+    /// <summary>
+    /// A guest taken over by whoever held their link, who is <c>ByUserId</c> and has their
+    /// own <see cref="Joined"/> or <see cref="Rejoined"/> beside this.
+    /// </summary>
+    GuestClaimed
 }

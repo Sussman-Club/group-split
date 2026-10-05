@@ -118,12 +118,12 @@
         {
             if (Original.GroupId is { } groupId)
             {
-                // Members only. The listing includes the people the group has invited and
-                // is waiting on, and a settlement is money that actually changed hands
-                // between two accounts -- so offering one here would offer a payment the
-                // API refuses with SETTLEMENT_WITH_PENDING_INVITEE.
-                _groupUsers = [.. (await GroupsClient.GetGroupMembersAsync(groupId))
-                    .Where(user => !user.IsPendingInvitee)];
+                // Everybody the listing names, guests included. This used to filter guests
+                // out, back when they were pending invitees the API refused to settle with;
+                // a repayment to or from a guest is an ordinary one now, recorded by a member,
+                // so leaving them out would make one impossible to correct. Each option is
+                // labelled, so a guest is never offered as though they were a member.
+                _groupUsers = [.. await GroupsClient.GetGroupMembersAsync(groupId)];
             }
 
             if (_paidToUserId is null)

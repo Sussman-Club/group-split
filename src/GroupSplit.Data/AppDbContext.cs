@@ -133,67 +133,93 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(change => change.UserId);
         });
 
-        modelBuilder.Entity<GroupInvitation>(entity =>
+        modelBuilder.Entity<GroupGuest>(entity =>
         {
-            entity.Property(invitation => invitation.Name).HasMaxLength(64).IsRequired();
-            entity.Property(invitation => invitation.Token).HasMaxLength(64).IsRequired();
-            entity.Property(invitation => invitation.InvitedAt).IsRequired();
+            entity.Property(guest => guest.Name).HasMaxLength(64).IsRequired();
+            entity.Property(guest => guest.AddedAt).IsRequired();
 
-            entity.HasOne(invitation => invitation.Group)
-                .WithMany(group => group.Invitations)
-                .HasForeignKey(invitation => invitation.GroupId)
+            // Both concurrency tokens: every write that matters to a guest -- claiming,
+            // removing, issuing or stopping a link -- changes one of them, so of two at the
+            // same moment the second matches no row and fails instead of overwriting the
+            // first. See GroupGuest.
+            entity.Property(guest => guest.Token).HasMaxLength(64).IsConcurrencyToken();
+            entity.Property(guest => guest.EndedAt).IsConcurrencyToken();
+
+            entity.Property(guest => guest.EndReason)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            entity.HasOne(guest => guest.Group)
+                .WithMany(group => group.Guests)
+                .HasForeignKey(guest => guest.GroupId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Required, and restricted: this is who the group's money is recorded against
-            // while the address has not answered, so an invitation without one could hold
-            // shares belonging to nobody -- and losing the row would take them with it.
-            entity.HasOne(invitation => invitation.Participant)
+            // Required, and restricted: this is who the group's money is recorded against,
+            // so a guest without one could hold shares belonging to nobody -- and losing the
+            // row would take them with it.
+            entity.HasOne(guest => guest.Participant)
                 .WithMany()
-                .HasForeignKey(invitation => invitation.ParticipantUserId)
+                .HasForeignKey(guest => guest.ParticipantUserId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // The inviter is a courtesy on the row the invitee reads ("Daniel asked you to
-            // join"), so their account going away must not take the invitation with it.
-            entity.HasOne(invitation => invitation.InvitedBy)
+            // Courtesies on the row ("added by Daniel"), so those accounts going away must
+            // not take the guest with them.
+            entity.HasOne(guest => guest.AddedBy)
                 .WithMany()
-                .HasForeignKey(invitation => invitation.InvitedByUserId)
+                .HasForeignKey(guest => guest.AddedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(guest => guest.LinkIssuedBy)
+                .WithMany()
+                .HasForeignKey(guest => guest.LinkIssuedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(guest => guest.EndedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             // The token is the whole lookup: somebody opens a URL and the only thing in it
             // is this. Unique because two rows answering to one token would be two
-            // positions one link could claim.
-            entity.HasIndex(invitation => invitation.Token).IsUnique();
+            // positions one link could claim. Many guests have none; Postgres does not count
+            // nulls against a unique index.
+            entity.HasIndex(guest => guest.Token).IsUnique();
 
             // Read on every membership question a group asks -- who may be given a share,
-            // whose balance to show, whether this person has joined -- both by group and by
-            // participant alone.
-            //
-            // Unique on the pair, and that is the constraint that replaced one standing
-            // invitation per address: a stand-in is made for one invitation and nothing
-            // else, so a second row naming it would be two invitations for one person's
-            // money. Names are deliberately *not* unique -- two people can be called Dani.
-            entity.HasIndex(invitation => new { invitation.GroupId, invitation.ParticipantUserId }).IsUnique();
+            // whose balance to show, whether this person has joined.
+            entity.HasIndex(guest => new { guest.GroupId, guest.ParticipantUserId }).IsUnique();
 
-            entity.HasIndex(invitation => invitation.ParticipantUserId);
+            // A stand-in is made for one guest and nothing else, ever: a second row naming
+            // it would be two guests holding one person's money. Unique on its own, so it
+            // holds across groups and across ended rows too.
+            entity.HasIndex(guest => guest.ParticipantUserId).IsUnique();
+
+            // A removed or claimed guest is history, not a guest -- the same choice
+            // GroupMembership makes with LeftAt, and for the same reason: every "is this
+            // person a guest" read means a current one without each having to say so.
+            // A removed guest then reads as departed everywhere a departed member does.
+            entity.HasQueryFilter(guest => guest.EndedAt == null);
         });
 
         modelBuilder.Entity<InvitationOpened>(entity =>
         {
-            entity.HasKey(opened => new { opened.InvitationId, opened.UserId });
+            entity.HasKey(opened => new { opened.GuestId, opened.UserId });
 
             entity.Property(opened => opened.OpenedAt).IsRequired();
 
-            // Cascade from both parents, the way a bank match dismissal does, and for the
-            // same reason: the row is a fact about a pair and has nothing left to say once
-            // either half of it is gone. Answering an invitation deletes it, and this goes
-            // with it -- which is also what takes the invitation out of the invitee's list.
+            // Cascade from both parents, the way a bank match dismissal does: the row is a
+            // fact about a pair and has nothing left to say once either half is gone. A
+            // link ending does not delete the guest, so these are removed explicitly
+            // whenever one does (GuestLinkExtensions.EndLink).
             //
-            // Postgres is happy with two cascade paths into a leaf table.
-            entity.HasOne<GroupInvitation>()
+            // EF warns that the guest's query filter would hide the principal of a required
+            // relationship. Nothing reads these through a navigation: the one read joins
+            // them to the live guests explicitly, which is the filter applied on purpose.
+            entity.HasOne<GroupGuest>()
                 .WithMany()
-                .HasForeignKey(opened => opened.InvitationId)
+                .HasForeignKey(opened => opened.GuestId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -203,7 +229,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // The one read there is: what this account has opened and not yet answered.
+            // The one read there is: which links this account has open.
             entity.HasIndex(opened => opened.UserId);
         });
 
@@ -826,7 +852,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     /// <summary>
     /// Adds a <see cref="GroupMembershipEvent"/> for every membership this save creates,
-    /// closes or reopens, so the history is written in the same transaction as the change.
+    /// closes or reopens, and every guest it adds or ends, so the history is written in the
+    /// same transaction as the change.
     /// </summary>
     /// <remarks>
     /// Here rather than beside each caller because a membership moves from several places --
@@ -895,6 +922,46 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             change.GroupId = membership.GroupId;
             change.UserId = membership.UserId;
+
+            Add(change);
+            recorded.Add(change);
+        }
+
+        // A guest's place is history too, and moves from as many places: adding them, the
+        // group removing them, and whoever holds their link claiming them.
+        foreach (var entry in ChangeTracker.Entries<GroupGuest>().ToList())
+        {
+            var guest = entry.Entity;
+            GroupMembershipEvent? change = null;
+
+            if (entry.State is EntityState.Added)
+            {
+                change = new GroupMembershipEvent
+                {
+                    Kind = MembershipEventKind.GuestAdded,
+                    At = guest.AddedAt,
+                    ByUserId = guest.AddedByUserId ?? guest.AddedBy?.Id
+                };
+            }
+            else if (entry.State is EntityState.Modified &&
+                     entry.Property(row => row.EndedAt).OriginalValue is null &&
+                     guest.EndedAt is { } endedAt)
+            {
+                change = new GroupMembershipEvent
+                {
+                    Kind = guest.EndReason == GuestEndReason.Claimed
+                        ? MembershipEventKind.GuestClaimed
+                        : MembershipEventKind.GuestRemoved,
+                    At = endedAt,
+                    ByUserId = guest.EndedByUserId
+                };
+            }
+
+            if (change is null)
+                continue;
+
+            change.GroupId = guest.GroupId == default ? guest.Group.Id : guest.GroupId;
+            change.UserId = guest.ParticipantUserId == default ? guest.Participant.Id : guest.ParticipantUserId;
 
             Add(change);
             recorded.Add(change);

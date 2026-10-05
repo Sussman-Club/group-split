@@ -86,10 +86,10 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
         var group = await Service<IGroupService>(scope).CreateGroup(
             new CreateGroupRequest { Name = $"{name} {Guid.NewGuid():N}" }, Ct);
 
-        var invitation = Assert.Single(await Service<IInvitationService>(scope).Invite(group.Id,
-            new InviteToGroupRequest { Names = ["Pat"] }, Ct));
+        var guest = Assert.Single(await Service<IGuestService>(scope).Add(group.Id,
+            new AddGuestsRequest { Names = ["Pat"] }, Ct));
 
-        return (group.Id, invitation.ParticipantUserId);
+        return (group.Id, guest.UserId);
     }
 
     /// <summary>Runs a statement as a bug would, and returns the constraint that refused it.</summary>
@@ -127,13 +127,15 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
             }, Ct);
         }
 
-        // Past the invitation and the rule provisioned for them, which restrict on their own:
-        // this is about the ledger's keys, so they are the only ones left to refuse.
+        // Past the guest row, their history and the rule provisioned for them, which restrict
+        // on their own: this is about the ledger's keys, so they are the only ones left to
+        // refuse.
         using (var scope = _services!.CreateScope())
         {
             await Service<AppDbContext>(scope).Database.ExecuteSqlRawAsync(
                 """
-                DELETE FROM "GroupInvitation" WHERE "ParticipantUserId" = {0};
+                DELETE FROM "GroupGuest" WHERE "ParticipantUserId" = {0};
+                DELETE FROM "GroupMembershipEvent" WHERE "UserId" = {0};
                 DELETE FROM "SplitRule" WHERE "ProvisionedForUserId" = {0};
                 """, [standIn], Ct);
         }
@@ -160,7 +162,7 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
         {
             await Service<AppDbContext>(scope).Database.ExecuteSqlRawAsync(
                 """
-                DELETE FROM "GroupInvitation" WHERE "GroupId" = {0};
+                DELETE FROM "GroupGuest" WHERE "GroupId" = {0};
                 DELETE FROM "Group" WHERE "Id" = {0};
                 """, [groupId], Ct);
         }
@@ -226,6 +228,78 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
             """, groupId, standIn);
 
         Assert.Equal("IX_SplitRule_GroupId_ProvisionedForUserId", refused.ConstraintName);
+    }
+
+    /// <summary>
+    /// A guest's end and link are each several columns written together; a half-written one
+    /// is refused rather than hidden by the filter.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task A_half_written_guest_end_or_link_is_refused()
+    {
+        var owner = await Someone();
+        var (_, standIn) = await AGroupWaitingOnSomebody(owner, "GuestRow");
+
+        var endWithoutReason = await Refused(
+            """UPDATE "GroupGuest" SET "EndedAt" = now() WHERE "ParticipantUserId" = {0}""", standIn);
+        Assert.Equal("CK_GroupGuest_End", endWithoutReason.ConstraintName);
+
+        var unknownReason = await Refused(
+            """UPDATE "GroupGuest" SET "EndedAt" = now(), "EndReason" = 'Vanished' WHERE "ParticipantUserId" = {0}""", standIn);
+        Assert.Equal("CK_GroupGuest_EndReason", unknownReason.ConstraintName);
+
+        var tokenWithoutDate = await Refused(
+            """UPDATE "GroupGuest" SET "Token" = 'loose' WHERE "ParticipantUserId" = {0}""", standIn);
+        Assert.Equal("CK_GroupGuest_Link", tokenWithoutDate.ConstraintName);
+
+        var linkOnAnEndedGuest = await Refused(
+            """
+            UPDATE "GroupGuest"
+            SET "EndedAt" = now(), "EndReason" = 'Removed', "Token" = 'still-live', "LinkIssuedAt" = now()
+            WHERE "ParticipantUserId" = {0}
+            """, standIn);
+        Assert.Equal("CK_GroupGuest_EndedNoLink", linkOnAnEndedGuest.ConstraintName);
+    }
+
+    /// <summary>One stand-in belongs to one guest, ever -- across groups and ended rows.</summary>
+    [Fact(Timeout = 180_000)]
+    public async Task A_stand_in_cannot_be_two_guests()
+    {
+        var owner = await Someone();
+        var (_, standIn) = await AGroupWaitingOnSomebody(owner, "Twice");
+        var (otherGroup, _) = await AGroupWaitingOnSomebody(owner, "Elsewhere");
+
+        var refused = await Refused(
+            """
+            INSERT INTO "GroupGuest" ("Id", "GroupId", "Name", "ParticipantUserId", "AddedAt")
+            VALUES (gen_random_uuid(), {0}, 'Pat again', {1}, now())
+            """, otherGroup, standIn);
+
+        Assert.Equal("IX_GroupGuest_ParticipantUserId", refused.ConstraintName);
+    }
+
+    [Fact(Timeout = 180_000)]
+    public async Task The_history_takes_the_guest_kinds_and_nothing_else()
+    {
+        var owner = await Someone();
+        var (groupId, standIn) = await AGroupWaitingOnSomebody(owner, "History");
+
+        using (var scope = _services!.CreateScope())
+        {
+            Assert.Equal(MembershipEventKind.GuestAdded, await Service<AppDbContext>(scope)
+                .Set<GroupMembershipEvent>()
+                .Where(change => change.UserId == standIn)
+                .Select(change => change.Kind)
+                .SingleAsync(Ct));
+        }
+
+        var refused = await Refused(
+            """
+            INSERT INTO "GroupMembershipEvent" ("Id", "GroupId", "UserId", "Kind", "At")
+            VALUES (gen_random_uuid(), {0}, {1}, 'GuestVanished', now())
+            """, groupId, standIn);
+
+        Assert.Equal("CK_GroupMembershipEvent_Kind", refused.ConstraintName);
     }
 
     /// <summary>

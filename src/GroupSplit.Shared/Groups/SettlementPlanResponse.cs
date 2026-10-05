@@ -50,11 +50,17 @@ public record SettlementPlanResponse(
 /// Where the figure comes from, so the arithmetic is checkable on the row rather than by
 /// opening two groups. It always sums to <paramref name="Amount"/>.
 /// </param>
+/// <param name="IsGuest">
+/// True when this person is a guest -- of the one group in <paramref name="Groups"/>, since a
+/// guest belongs to exactly one. The same real person can be a guest in two groups and is
+/// then two people here, each named for its group.
+/// </param>
 public record PersonSettlement(
     Guid UserId,
     string UserName,
     decimal Amount,
-    IReadOnlyList<GroupDebt> Groups);
+    IReadOnlyList<GroupDebt> Groups,
+    bool IsGuest = false);
 
 /// <summary>One group's part of what two people owe each other.</summary>
 public record GroupDebt(Guid GroupId, string GroupName, decimal Amount);

@@ -362,13 +362,13 @@ public class SplitEditorTest : ComponentTest
     }
 
     /// <summary>
-    /// Somebody the group is waiting on has their own rule now, so "One pays" can put the
-    /// whole amount on them before they join -- named as the person, marked as invited.
+    /// A guest has their own rule, so "One pays" can put the whole amount on them --
+    /// named as the person, marked as a guest.
     /// </summary>
     [Fact]
-    public void An_invitees_rule_is_offered_under_one_pays_and_named_with_the_invited_mark()
+    public void A_guests_rule_is_offered_under_one_pays_and_named_with_the_guest_mark()
     {
-        var luz = new UserInfo(Guid.NewGuid(), "Luz", "Garcia", null, IsPendingInvitee: true);
+        var luz = new UserInfo(Guid.NewGuid(), "Luz", "Garcia", null, IsGuest: true);
         var rule = new SplitRuleResponse(Guid.NewGuid(), Guid.NewGuid(), "All for Luz",
             BuiltIn: true, AllForUserId: luz.Id);
 
@@ -384,7 +384,7 @@ public class SplitEditorTest : ComponentTest
             .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
 
         Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
-        Assert.Contains("Luz Garcia (invited)", editor.Markup, StringComparison.Ordinal);
+        Assert.Contains("Luz Garcia (guest)", editor.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>

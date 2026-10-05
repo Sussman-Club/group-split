@@ -267,15 +267,8 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
                 link.CreatedAt,
                 link.ExpiresAt));
 
-    private async Task<Group> MemberGroup(Guid groupId, CancellationToken ct)
-    {
-        var userId = userContext.User.Id;
-
-        return await context.Set<Group>()
-                   .FirstOrDefaultAsync(group =>
-                       group.Id == groupId && group.Users.Any(user => user.Id == userId), ct)
-               ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-    }
+    private Task<Group> MemberGroup(Guid groupId, CancellationToken ct) =>
+        context.GroupOfMember(groupId, userContext.User.Id, ct);
 
     /// <summary>
     /// A URL-safe token from the cryptographic generator, never from <c>Guid.NewGuid</c>:

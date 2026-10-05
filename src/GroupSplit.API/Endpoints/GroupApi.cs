@@ -34,6 +34,10 @@ public static class GroupApi
             group.MapGetPastMembers();
             group.MapLeave();
             group.MapRemoveMember();
+            group.MapGetGuests();
+            group.MapAddGuests();
+            group.MapIssueGuestLink();
+            group.MapRevokeGuestLink();
             group.MapGetInvitations();
             group.MapInvite();
             group.MapWithdrawInvitation();
@@ -222,12 +226,20 @@ public static class GroupApi
             return group.MapGet("{id:guid}/past-members", async (
                     Guid id,
                     IGroupService groupService,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var pastMembers = await groupService.GetGroupPastMembers(id, ct);
                     var userResponse = await pastMembers
+                        // A guest only when the history says this group removed them as one.
+                        // Being a stand-in is not enough: one left behind by an invitation
+                        // that was claimed or withdrawn before guests existed is named by old
+                        // rule versions and nothing else, and was never removed from anything.
                         .Select(user => new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
-                            false, true))
+                            context.Set<GroupMembershipEvent>().Any(change =>
+                                change.GroupId == id && change.UserId == user.Id &&
+                                change.Kind == MembershipEventKind.GuestRemoved),
+                            true))
                         .ToListAsync(ct);
                     return Results.Ok(userResponse);
                 })
@@ -235,21 +247,85 @@ public static class GroupApi
                 .Produces<UserInfo[]>();
         }
 
+        /// <summary>The group's guests, links included. Members only.</summary>
+        private RouteHandlerBuilder MapGetGuests()
+        {
+            return group.MapGet("{id:guid}/guests", async (
+                    Guid id,
+                    IGuestService guests,
+                    CancellationToken ct) => Results.Ok(await guests.ForGroup(id, ct)))
+                .WithName("GetGroupGuests")
+                .Produces<GroupGuestResponse[]>()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
         /// <summary>
-        /// Asks people to join, by name, minting a link for each.
+        /// Adds people to the group as guests, by name: somebody it shares costs with who has
+        /// no account in it.
         /// </summary>
         /// <remarks>
-        /// There is no endpoint that puts somebody in a group without their say-so: the one
-        /// that did looked an email address up and, when nothing matched, dropped it and
-        /// reported success. Nor is there an address any more. A group knows the friend it
-        /// went on the trip with by name, not by email, and the answer carries a link per
-        /// person to send through whatever they actually talk on.
-        /// <para>
-        /// The links are in the answer, which is why this stays inside the group: they are
-        /// claims on positions in its ledger, so they belong to the people who can already
-        /// see that ledger.
-        /// </para>
+        /// No link unless asked for. Most of the people a group splits with never sign up;
+        /// the members record everything for them, and a link can be sent later if the real
+        /// person wants in.
         /// </remarks>
+        private RouteHandlerBuilder MapAddGuests()
+        {
+            return group.MapPost("{id:guid}/guests", async (
+                    Guid id,
+                    AddGuestsRequest request,
+                    IGuestService guests,
+                    CancellationToken ct) => Results.Ok(await guests.Add(id, request, ct)))
+                .WithName("AddGroupGuests")
+                .Produces<GroupGuestResponse[]>()
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// The guest's link, issuing one if there is none -- or a new one, replacing the old,
+        /// when asked to.
+        /// </summary>
+        /// <remarks>
+        /// Asking again without <c>replace</c> returns the link already out, so "send link"
+        /// can always just copy. Whoever opens it and claims it takes the guest's place.
+        /// </remarks>
+        private RouteHandlerBuilder MapIssueGuestLink()
+        {
+            return group.MapPost("{id:guid}/guests/{userId:guid}/link", async (
+                    Guid id,
+                    Guid userId,
+                    IssueGuestLinkRequest? request,
+                    IGuestService guests,
+                    CancellationToken ct) =>
+                    Results.Ok(await guests.IssueLink(id, userId, request?.Replace ?? false, ct)))
+                .WithName("IssueGuestLink")
+                .Produces<GroupGuestResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        /// <summary>Stops the guest's link. The guest stays.</summary>
+        private RouteHandlerBuilder MapRevokeGuestLink()
+        {
+            return group.MapDelete("{id:guid}/guests/{userId:guid}/link", async (
+                    Guid id,
+                    Guid userId,
+                    IGuestService guests,
+                    CancellationToken ct) =>
+                {
+                    await guests.RevokeLink(id, userId, ct);
+                    return Results.NoContent();
+                })
+                .WithName("RevokeGuestLink")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
+        }
+
+        /// <summary>
+        /// Adds people as guests and issues each a link. Deprecated: add guests with
+        /// <c>POST /groups/{id}/guests</c>, and send a link when one is wanted.
+        /// </summary>
         private RouteHandlerBuilder MapInvite()
         {
             return group.MapPost("{id:guid}/invitations", async (
@@ -262,6 +338,7 @@ public static class GroupApi
                     return Results.Ok(pending);
                 })
                 .WithName("InviteToGroup")
+                .Deprecated()
                 .Produces<GroupInvitationResponse[]>()
                 .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
@@ -277,19 +354,15 @@ public static class GroupApi
                     return Results.Ok(await invitations.ForGroup(id, ct));
                 })
                 .WithName("GetGroupInvitations")
+                .Deprecated()
                 .Produces<GroupInvitationResponse[]>();
         }
 
         /// <summary>
-        /// Takes an invitation back, and says what became of anything recorded against the
-        /// address.
+        /// Stops the link of the guest with that invitation id. Deprecated: use
+        /// <c>DELETE /groups/{id}/guests/{userId}/link</c>. The guest stays, and nothing
+        /// moves -- the counts in the answer are always zero.
         /// </summary>
-        /// <remarks>
-        /// A body where this used to answer 204. An invited address is a participant in the
-        /// group's money from the moment it is invited, so withdrawing can be the end of
-        /// somebody who was carrying shares -- and money that simply vanished would leave
-        /// the group's balances not adding up. The answer names the member it went to.
-        /// </remarks>
         private RouteHandlerBuilder MapWithdrawInvitation()
         {
             return group.MapDelete("{id:guid}/invitations/{invitationId:guid}", async (
@@ -301,6 +374,7 @@ public static class GroupApi
                     return Results.Ok(await invitations.Withdraw(id, invitationId, ct));
                 })
                 .WithName("WithdrawGroupInvitation")
+                .Deprecated()
                 .Produces<InvitationClosedResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
