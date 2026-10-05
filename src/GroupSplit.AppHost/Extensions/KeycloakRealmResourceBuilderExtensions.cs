@@ -39,7 +39,7 @@ public static class KeycloakRealmResourceBuilderExtensions
             => builder.WithEnvironment(WebHostnameVariable, origin);
     }
 
-    extension<TProject>(IResourceBuilder<TProject> builder) where TProject : ProjectResource
+    extension<TProject>(IResourceBuilder<TProject> builder) where TProject : IResourceWithEnvironment
     {
         /// <summary>Passes Keycloak's own bootstrap-admin credentials to an admin worker.</summary>
         public IResourceBuilder<TProject> WithKeycloakAdminAccess(
@@ -61,7 +61,7 @@ public static class KeycloakRealmResourceBuilderExtensions
 
         public IResourceBuilder<TProject> WithLocalRealmResetCommand(
             IResourceBuilder<KeycloakResource> keycloak,
-            IResourceBuilder<ProjectResource> resetWorker)
+            IResourceBuilder<IResource> resetWorker)
         {
             return builder.WithCommand(
                 name: "reset-realm",

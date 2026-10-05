@@ -155,7 +155,7 @@ public class AppHostFixture : IAsyncLifetime
         // invisible from the other one.
         builder
             .CreateResourceBuilder(
-                builder.Resources.OfType<ProjectResource>().Single(resource => resource.Name == "web"))
+                builder.Resources.OfType<IResourceWithEnvironment>().Single(resource => resource.Name == "web"))
             .WithEnvironment("RenderMode", "ServerFirst");
 
         Application = await builder.BuildAsync();
