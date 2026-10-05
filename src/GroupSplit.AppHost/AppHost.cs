@@ -3,7 +3,7 @@ using Projects;
 using Scalar.Aspire;
 using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
-#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001
+#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001, ASPIREDOTNETPROJECT001
 
 // Named once: the API reaches the bucket through the reference below, and the deployed
 // storage container is told to create it by the same name.
@@ -66,9 +66,7 @@ var keycloak = builder.AddKeycloak("keycloak")
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
 // Its admin credentials differ by mode, so each branch below gives it its own.
-#pragma warning disable ASPIREDOTNETPROJECT001
 var realmSettings = builder.AddDotnetProject("realm-settings", realmWorkerProject)
-#pragma warning restore ASPIREDOTNETPROJECT001
     .WithEnvironment("Realm__Operation", "reconcile")
     .WithReference(keycloak)
     .WaitFor(keycloak);
@@ -83,9 +81,7 @@ var migrations = db
     .PublishAsMigrationBundle(publishContainer: true)
     .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
-#pragma warning disable ASPIREDOTNETPROJECT001
 var api = builder.AddDotnetProject("api", "../GroupSplit.API/GroupSplit.API.csproj")
-#pragma warning restore ASPIREDOTNETPROJECT001
     .WaitFor(db)
     .WithReference(db)
     .WithReference(keycloak)
@@ -105,9 +101,7 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API/GroupSplit.API.cspr
     // Do not serve traffic until the realm settings have been reconciled successfully.
     .WaitForCompletion(realmSettings);
 
-#pragma warning disable ASPIREDOTNETPROJECT001
 var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj")
-#pragma warning restore ASPIREDOTNETPROJECT001
     .WithReference(keycloak)
     .WaitFor(api)
     .WithReference(api)
@@ -147,9 +141,7 @@ if (builder.ExecutionContext.IsRunMode)
         .WithWebAppOrigin(webOrigin)
         .WithKeycloakAdminAccess(keycloak);
 
-#pragma warning disable ASPIREDOTNETPROJECT001
     var realmReset = builder.AddDotnetProject("realm-reset", realmWorkerProject)
-#pragma warning restore ASPIREDOTNETPROJECT001
         .WithExplicitStart()
         .WithEnvironment("Realm__Operation", "reset")
         .WithReference(keycloak)
