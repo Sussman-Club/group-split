@@ -3,7 +3,7 @@ using Projects;
 using Scalar.Aspire;
 using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
-#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001
+#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001, ASPIREDOTNETPROJECT001
 
 // Named once: the API reaches the bucket through the reference below, and the deployed
 // storage container is told to create it by the same name.
@@ -62,7 +62,7 @@ var keycloak = builder.AddKeycloak("keycloak")
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
 // Its admin credentials differ by mode, so each branch below gives it its own.
-var realmSettings = builder.AddProject<GroupSplit_RealmWorker>("realm-settings")
+var realmSettings = builder.AddDotnetProject("realm-settings", "../GroupSplit.RealmWorker")
     .WithEnvironment("Realm__Operation", "reconcile")
     .WithReference(keycloak)
     .WaitFor(keycloak);
@@ -77,7 +77,7 @@ var migrations = db
     .PublishAsMigrationBundle(publishContainer: true)
     .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
-var api = builder.AddProject<GroupSplit_API>("api")
+var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WaitFor(db)
     .WithReference(db)
     .WithReference(keycloak)
@@ -97,7 +97,7 @@ var api = builder.AddProject<GroupSplit_API>("api")
     // Do not serve traffic until the realm settings have been reconciled successfully.
     .WaitForCompletion(realmSettings);
 
-var web = builder.AddProject<GroupSplit_App_Web>("web")
+var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web")
     .WithReference(keycloak)
     .WaitFor(api)
     .WithReference(api)
@@ -108,8 +108,10 @@ var web = builder.AddProject<GroupSplit_App_Web>("web")
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    dbServer.WithDbx();
-    cache.WithDbx();
+    // DBX for browsing, REPL for a psql or redis-cli shell in the dashboard's terminal dock,
+    // signed in with the resource's own credentials.
+    dbServer.WithDbx().WithRepl();
+    cache.WithDbx().WithRepl();
 
     db.WithPostgresMcp();
     keycloakDb.WithPostgresMcp();
@@ -128,14 +130,16 @@ if (builder.ExecutionContext.IsRunMode)
     // ever sends. HTTPS when the web app has it, which is every profile but the AppHost's plain
     // "http" one.
     var webScheme = web.Resource.Annotations.OfType<EndpointAnnotation>()
-        .Any(endpoint => endpoint.Name == "https") ? "https" : "http";
+        .Any(endpoint => endpoint.Name == "https")
+        ? "https"
+        : "http";
     var webOrigin = web.GetEndpoint(webScheme, KnownNetworkIdentifiers.LocalhostNetwork);
     keycloak.WithWebAppOrigin(webOrigin);
     realmSettings
         .WithWebAppOrigin(webOrigin)
         .WithKeycloakAdminAccess(keycloak);
 
-    var realmReset = builder.AddProject<GroupSplit_RealmWorker>("realm-reset")
+    var realmReset = builder.AddDotnetProject("realm-reset", "../GroupSplit.RealmWorker")
         .WithExplicitStart()
         .WithEnvironment("Realm__Operation", "reset")
         .WithReference(keycloak)

@@ -57,7 +57,7 @@ public static class CliResourceBuilderExtensions
         /// </para>
         /// </summary>
         public IResourceBuilder<CliResource> WithGroupSplitEndpoints(
-            IResourceBuilder<ProjectResource> api,
+            IResourceBuilder<IResourceWithServiceDiscovery> api,
             IResourceBuilder<KeycloakResource> keycloak)
         {
             return resourceBuilder
