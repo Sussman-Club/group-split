@@ -60,10 +60,10 @@ Groups you belong to, their members and their balances.
 | `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
 | `groups members <group-id>` | List a group's people: its members and its guests. The `Status` column, and `isGuest` in JSON, say which. |
 | `groups remove-member <group-id> <user-id>` | Remove a member or a guest. Requires that their balance in it is settled (`GROUP_MEMBER_NOT_SETTLED` otherwise, with the balance). Removing a member stops the group's join link, and they need a link issued afterwards to come back; removing a guest leaves the join link alone and keeps them as a past guest. Somebody not on the roster -- including anyone who has already left -- is refused with `USER_NOT_FOUND` before any confirmation is asked for. |
-| `groups balances <group-id>` | Show who owes whom in a group. |
-| `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. |
+| `groups balances <group-id>` | Show who owes whom in a group. `--through <day>` shows it for activity dated up to that day. |
+| `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. `--through <day>` records the period it was for; the amount is still the one given. |
 | `groups settle-between <group-id> <from-user-id> <to-user-id> <amount>` | Record a repayment between two named members, whichever of them you are — including neither. |
-| `groups settle-up <group-id>` | Record every repayment between you and the rest of the group at once. |
+| `groups settle-up <group-id>` | Record every repayment between you and the rest of the group at once. `--through <day>` settles only what is owed for activity dated up to that day. |
 | `groups activity <group-id>` | The group's ledger: everything that happened in it, newest first, with your share of each entry and your balance as at it. |
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
@@ -88,7 +88,7 @@ Expenses and settlements.
 | `transactions list` | The expenses **you** paid for, newest first. With `--group`, the group's whole ledger. |
 | `transactions show <transaction-id>` | Show one transaction and how it was split. |
 | `transactions create <name> <amount>` | Record an expense. |
-| `transactions update <transaction-id>` | Change an expense. Only what moved is sent; `--redivide` asks for a fresh division, `--preview` shows the result without changing anything. |
+| `transactions update <transaction-id>` | Change an expense or a settlement. Only what moved is sent; `--redivide` asks for a fresh division, `--preview` shows the result without changing anything. On a settlement, `--covers-through <day>` and `--no-covers-through` set or clear the period it was for. |
 | `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. |
 | `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. |
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
@@ -114,8 +114,8 @@ person, because a payment does.
 
 | Command | |
 | --- | --- |
-| `settle plan` | The fewest payments that leave you square everywhere, one line per person. |
-| `settle pay <user-id>` | Record one payment between you and that person, wherever the debt between you lives. |
+| `settle plan` | The fewest payments that leave you square everywhere, one line per person. `--through <day>` for activity dated up to that day. |
+| `settle pay <user-id>` | Record one payment between you and that person, wherever the debt between you lives. `--through <day>` settles only what that period left owing. |
 | `settle history` | Every repayment you were party to, in any group, newest first. |
 
 ### categories
@@ -667,11 +667,20 @@ confirmation-gated: it moves money in the ledger.
 
 `groups settle-up <group-id>` records all of them in one go -- everything the user owes and
 is owed in that group, each repayment exactly what `groups settle` would have written for
-that pair. It settles the user's own position and nothing narrower, so it takes no amounts
-and no way to narrow it; `--date` and `--note` go onto every repayment it writes. It reads
-the balances first, so the confirmation lists the repayments themselves, and `--dry-run`
-shows that list without writing anything. Being already square is success, not a refusal:
-it says so and writes nothing.
+that pair. It settles the user's own position and takes no amounts; `--date` and `--note`
+go onto every repayment it writes. It reads the balances first, so the confirmation lists
+the repayments themselves, and `--dry-run` shows that list without writing anything. Being
+already square is success, not a refusal: it says so and writes nothing.
+
+`--through <day>` narrows it to a period: "settle August" is `--through 2026-08-31`. What is
+owed through a day counts the expenses dated up to the end of it and **every repayment
+whatever its date** -- money paid goes against the oldest debt first -- so a payment made in
+September for August is never asked for twice, and settling a period that is already square
+says so and writes nothing. Do not try to work out a month's figure by filtering expenses
+and subtracting; that leaves out repayments and is the mistake this flag exists to prevent.
+The repayments it records remember the day, and `transactions show <settlement-id>` reports
+the period they covered and anything still owed for it -- an expense dated inside the period
+and added afterwards shows there.
 
 It never records money moving between two other members. The user can say what they paid
 and what they were paid, because they were there for both; a payment between two other
@@ -688,7 +697,8 @@ naming the groups its figure comes from so the arithmetic is checkable on the ro
 figures over the top are the same ones `users position` leads with.
 
 `settle pay <user-id>` records one payment. `--amount` defaults to the whole of what is
-outstanding between the two of them; `--direction` works exactly as it does on
+outstanding between the two of them -- or, with `--through <day>`, to what that period left
+owing between them, which is also what decides the groups it lands in; `--direction` works exactly as it does on
 `groups settle` and defaults to `theypaidyou`. Behind it the API writes one transfer per
 group, in a single save, spending the amount over the groups **largest first**. That is not
 a flag and should not be presented as a choice: which group a payment lands in is
@@ -707,9 +717,10 @@ it off a balance.
 settling twice. It spans groups, because a payment can.
 
 A settlement recorded wrongly is taken back with `transactions delete <transaction-id>`,
-which balances the ledger back to what it read before. Its id comes from `groups activity`:
-the `transactions` listings read the expenses, so a settlement does not appear in
-`transactions list` and `transactions show` will not describe one.
+which balances the ledger back to what it read before. Its id comes from `groups activity`
+or `settle history`: the `transactions` listings read the expenses, so a settlement does not
+appear in `transactions list`. `transactions show <transaction-id>` does describe one given
+its id, including the period it covered when it was settled through a day.
 
 That absence is why no total from `transactions summary`, `transactions monthly` or
 `transactions shares summary` is net -- with `--group` as much as without. Do not present

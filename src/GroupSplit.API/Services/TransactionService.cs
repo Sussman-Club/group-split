@@ -592,6 +592,7 @@ public class TransactionService(
             GroupId = transaction.GroupId,
             CategoryId = expense?.CategoryId,
             MerchantId = transaction.MerchantId,
+            CoversThrough = (transaction as Transfer)?.CoversThrough,
             Splits = transaction.GroupId == null
                 ? null
                 : transaction.Splits.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList()
@@ -658,6 +659,7 @@ public class TransactionService(
             transfer.Amount = request.Amount;
             transfer.DateTime = request.DateTime.ToUniversalTime();
             transfer.Description = request.Description;
+            transfer.CoversThrough = request.CoversThrough;
 
             if (request.Splits is { Count: > 0 })
             {
@@ -699,6 +701,10 @@ public class TransactionService(
         }
 
         var expense = (Expense)transaction;
+
+        if (request.CoversThrough is not null)
+            throw new ValidationException(ErrorCodes.ValidationFailed,
+                "Only a settlement settles a period. An expense has no day it covers through.");
 
         // Asked before a single field moves, because both questions are about the expense as
         // it stands and neither can be asked afterwards: the first re-runs the division the

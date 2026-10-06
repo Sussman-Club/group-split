@@ -49,6 +49,22 @@ public record SettleWithPersonRequest
     /// <summary>What to remember about it -- "cash", "bank transfer, ref 4821".</summary>
     [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The last day of activity it settles, or null for everything. See <see cref="Cutoff"/>.
+    /// </summary>
+    /// <remarks>
+    /// Decides what is outstanding with them, and so which groups the payment is spread over
+    /// and how much each one takes; every transfer it writes remembers it.
+    /// </remarks>
+    public DateOnly? Through { get; set; }
+
+    /// <summary>
+    /// The caller's offset from UTC in minutes, which says when <see cref="Through"/> ends.
+    /// </summary>
+    [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
+        ErrorMessage = "The offset from UTC must be within 14 hours either way.")]
+    public int? UtcOffset { get; set; }
 }
 
 /// <summary>
@@ -58,6 +74,7 @@ public record SettleWithPersonRequest
 /// One entry per group a transfer was written in, with that group's part of the amount.
 /// Sums to <paramref name="Amount"/>.
 /// </param>
+/// <param name="CoversThrough">The day it was settled through, when it was given one.</param>
 public record SettleWithPersonResponse(
     Guid UserId,
     string UserName,
@@ -65,4 +82,5 @@ public record SettleWithPersonResponse(
     SettlementDirection Direction,
     DateTimeOffset Date,
     string? Description,
-    IReadOnlyList<GroupDebt> Groups);
+    IReadOnlyList<GroupDebt> Groups,
+    DateOnly? CoversThrough = null);

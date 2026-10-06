@@ -191,6 +191,11 @@ along when reporting a problem.
   I clear this?": it adds every group's balance up per person, so one payment clears a
   friend you owe in two places. `groups settle` is still right when the user means one
   group specifically.
+- **Settling a period is `--through <day>`, not arithmetic.** "Settle August" is
+  `settle plan --through 2026-08-31` (or `groups settle-up <group-id> --through ...`). It
+  counts expenses up to the day and every repayment whatever its date, so nothing already
+  paid is asked for twice. Summing a month's expenses yourself leaves the repayments out --
+  do not present that as what is owed.
 - **`groupsplit config list`** answers what the *next* command will talk to, and says which
   source each value came from. Run it before wondering why a request went somewhere
   unexpected.

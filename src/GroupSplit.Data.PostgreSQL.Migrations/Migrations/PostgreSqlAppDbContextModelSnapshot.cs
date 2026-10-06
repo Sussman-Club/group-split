@@ -17,7 +17,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1069,6 +1069,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.Transfer", b =>
                 {
                     b.HasBaseType("GroupSplit.Data.Entities.Transaction");
+
+                    b.Property<DateOnly?>("CoversThrough")
+                        .HasColumnType("date");
 
                     b.HasDiscriminator().HasValue("Transfer");
                 });

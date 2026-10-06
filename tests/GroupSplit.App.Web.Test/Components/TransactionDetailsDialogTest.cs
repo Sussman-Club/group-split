@@ -31,7 +31,7 @@ public class TransactionDetailsDialogTest : ComponentTest
     public TransactionDetailsDialogTest()
     {
         _transactions
-            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = _expense,
@@ -146,7 +146,7 @@ public class TransactionDetailsDialogTest : ComponentTest
     public async Task A_broken_merchant_logo_in_details_uses_merchant_initials()
     {
         _transactions
-            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = _expense,
@@ -194,8 +194,8 @@ public class TransactionDetailsDialogTest : ComponentTest
         };
         var reads = 0;
         _transactions
-            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<CancellationToken>()))
-            .Returns((Guid _, CancellationToken _) => Task.FromResult(reads++ == 0 ? initial : refreshed));
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .Returns((Guid _, int? _, CancellationToken _) => Task.FromResult(reads++ == 0 ? initial : refreshed));
 
         var bill = Bill() with { CanEdit = true };
         _bills.Setup(commands => commands.GetAsync(_expense, It.IsAny<CancellationToken>()))
@@ -221,7 +221,7 @@ public class TransactionDetailsDialogTest : ComponentTest
             .ClickAsync(new MouseEventArgs());
 
         dialog.WaitForAssertion(() => Assert.Contains("$18.00", dialog.Markup));
-        _transactions.Verify(client => client.GetTransactionAsync(_expense,
+        _transactions.Verify(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 }

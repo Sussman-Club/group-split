@@ -537,13 +537,17 @@ public static class GroupApi
 
         private RouteHandlerBuilder MapGetGroupUserBalance()
         {
+            // ?through=&utcOffset= gives the balances, and the plan that clears them, for
+            // everything dated up to that day after every settlement already made: what a
+            // settle dialog previews before it settles a period.
             return group.MapGet("{groupId:guid}/balances", async (
                     Guid groupId,
+                    [AsParameters] CutoffQuery cutoff,
                     IGroupService groupService,
                     IDebtCalculationService debtCalculator,
                     CancellationToken ct) =>
             {
-                var balances = await groupService.GetGroupNetBalance(groupId, ct);
+                var balances = await groupService.GetGroupNetBalance(groupId, cutoff.ToCutoff(), ct);
                 var balanceResponse = await balances.ToArrayAsync(ct);
 
                 // Every group has at least its creator, so no rows means the group is not
@@ -558,6 +562,7 @@ public static class GroupApi
             })
                 .WithName("GetGroupUserBalance")
                 .Produces<UserGroupBalanceResponse>()
+                .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 

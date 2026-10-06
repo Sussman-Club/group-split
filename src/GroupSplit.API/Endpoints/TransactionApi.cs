@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
@@ -218,20 +219,38 @@ public static class TransactionApi
                 .Produces<MonthlyExposureResponse[]>();
         }
 
+        /// <summary>
+        /// A settlement's details with what it covers attached, which the transaction
+        /// service cannot work out itself: it takes the group's balances through the day.
+        /// </summary>
+        private static async Task<TransactionDetailsResponse?> WithCoverage(TransactionDetailsResponse? details,
+            ISettlementService settlements, int utcOffset, CancellationToken ct) =>
+            details is { Kind: ActivityKind.Transfer }
+                ? details with { Coverage = await settlements.GetCoverage(details.Id, utcOffset, ct) }
+                : details;
+
         private RouteHandlerBuilder MapGetById()
         {
+            // ?utcOffset= is the reader's, for a settlement made through a day: it says when
+            // that day ends, and so which expenses its period holds and whether it is still
+            // square. Without it the day ends at midnight UTC.
             return group.MapGet("{id:guid}", async (
                     Guid id,
+                    [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes)] int? utcOffset,
                     ITransactionService transactionService,
+                    ISettlementService settlements,
                     CancellationToken ct) =>
                 {
-                    var details = await transactionService.GetDetails(id, ct);
+                    var details = await WithCoverage(await transactionService.GetDetails(id, ct), settlements,
+                        utcOffset ?? 0, ct);
+
                     return details is not null
                         ? Results.Ok(details)
                         : Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
                 })
                 .WithName("GetTransaction")
                 .Produces<TransactionDetailsResponse>()
+                .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -384,6 +403,7 @@ public static class TransactionApi
                     Guid id,
                     JsonPatchDocument<UpdateTransactionRequest> patchDocument,
                     ITransactionService transactionService,
+                    ISettlementService settlements,
                     CancellationToken ct) =>
                 {
                     var transactionUpdateRequest = await transactionService.GetUpdateModel(id, ct);
@@ -403,7 +423,10 @@ public static class TransactionApi
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
-                    var details = await transactionService.GetDetails(id, ct);
+                    // The day a corrected settlement covers is worked out in UTC here; the
+                    // PATCH carries no offset, and a reader who wants their own calendar's
+                    // answer reads the settlement again with one.
+                    var details = await WithCoverage(await transactionService.GetDetails(id, ct), settlements, 0, ct);
 
                     return Results.Ok(details);
                 })

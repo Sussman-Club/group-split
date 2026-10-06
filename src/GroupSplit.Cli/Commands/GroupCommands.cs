@@ -303,11 +303,16 @@ public static class GroupCommands
 
     private static Command Balances()
     {
-        var command = new Command("balances", "Show who owes whom in a group.") { GroupId };
+        var through = ThroughOption.Create();
+
+        var command = new Command("balances", "Show who owes whom in a group.") { GroupId, through };
 
         command.SetHandler(async (context, ct) =>
         {
-            var balances = await context.Groups.GetGroupUserBalanceAsync(context.ParseResult.GetValue(GroupId), ct);
+            var day = context.ParseResult.GetValue(through);
+
+            var balances = await context.Groups.GetGroupUserBalanceAsync(
+                context.ParseResult.GetValue(GroupId), day, ThroughOption.OffsetFor(day), ct);
 
             context.Output.Write(balances, value =>
             {
@@ -387,9 +392,14 @@ public static class GroupCommands
             Description = "What to remember about it, e.g. \"cash\" or a transfer reference."
         };
 
+        // Remembered on the repayment and nothing more: the amount is the one given. Read the
+        // balances with the same --through first to know what that period left owing.
+        var through = ThroughOption.Create(
+            "The last day of activity this repayment is for, e.g. 2026-08-31. Recorded on it; the amount is still yours.");
+
         var command = new Command("settle", "Record a repayment between you and another member or a guest.")
         {
-            GroupId, userId, amount, direction, date, note
+            GroupId, userId, amount, direction, date, note, through
         };
 
         command.SetHandler(async (context, ct) =>
@@ -401,6 +411,7 @@ public static class GroupCommands
             var side = parse.GetValue(direction);
             var when = parse.GetValue(date);
             var description = parse.GetValue(note);
+            var day = parse.GetValue(through);
 
             var members = await context.Groups.GetGroupMembersAsync(id, ct);
             var name = members.FirstOrDefault(candidate => candidate.Id == other)?.FullName
@@ -414,7 +425,7 @@ public static class GroupCommands
                     : $"Record that you paid {name} {paid:N2}?",
                 changes: [$"A transfer of {paid:N2} is written, and both balances move by it."],
                 confirmCommand: $"groupsplit groups settle {id} {other} {paid} "
-                                + $"--direction {side.ToString().ToLowerInvariant()} --yes");
+                                + $"--direction {side.ToString().ToLowerInvariant()}{ThroughOption.Flag(day)} --yes");
 
             await context.Groups.SettleGroupDebtsAsync(
                 id,
@@ -424,7 +435,8 @@ public static class GroupCommands
                     Amount = paid,
                     Direction = side,
                     Date = when,
-                    Description = description
+                    Description = description,
+                    Through = day
                 },
                 ct);
 
@@ -570,17 +582,22 @@ public static class GroupCommands
             Description = "Show what would be recorded and stop."
         };
 
+        var through = ThroughOption.Create(
+            "Square up only what is owed for activity dated up to this day, e.g. 2026-08-31.");
+
         var command = new Command("settle-up", "Square up with everybody in a group at once.")
         {
-            GroupId, date, note, dryRun
+            GroupId, date, note, dryRun, through
         };
 
         command.SetHandler(async (context, ct) =>
         {
             var parse = context.ParseResult;
             var id = parse.GetValue(GroupId);
+            var day = parse.GetValue(through);
+            var offset = ThroughOption.OffsetFor(day);
 
-            var balance = await context.Groups.GetGroupUserBalanceAsync(id, ct);
+            var balance = await context.Groups.GetGroupUserBalanceAsync(id, day, offset, ct);
 
             var payments = new List<(string Line, decimal Amount)>();
 
@@ -593,8 +610,10 @@ public static class GroupCommands
             if (payments.Count == 0)
             {
                 context.Output.Write(
-                    new { status = "already-square", groupId = id },
-                    _ => new Markup("You are already square with everybody in this group.\n"));
+                    new { status = "already-square", groupId = id, through = day },
+                    _ => new Markup(day is { } squareThrough
+                        ? $"You are already square with everybody in this group through {squareThrough:yyyy-MM-dd}.\n"
+                        : "You are already square with everybody in this group.\n"));
 
                 return ExitCodes.Success;
             }
@@ -602,7 +621,7 @@ public static class GroupCommands
             if (parse.GetValue(dryRun))
             {
                 context.Output.Write(
-                    new { groupId = id, payments = payments.Select(payment => payment.Line) },
+                    new { groupId = id, through = day, payments = payments.Select(payment => payment.Line) },
                     _ => new Rows(
                         new Markup($"[bold]{payments.Count}[/] repayments, "
                                    + $"{payments.Sum(payment => payment.Amount):N2} in all.\n"),
@@ -617,14 +636,16 @@ public static class GroupCommands
                 summary: $"Record {payments.Count} "
                          + $"{(payments.Count == 1 ? "repayment" : "repayments")} and square up?",
                 changes: [.. payments.Select(payment => payment.Line)],
-                confirmCommand: $"groupsplit groups settle-up {id} --yes");
+                confirmCommand: $"groupsplit groups settle-up {id}{ThroughOption.Flag(day)} --yes");
 
             var settled = await context.Groups.SettleUpAsync(
                 id,
                 new SettleUpRequest
                 {
                     Date = parse.GetValue(date),
-                    Description = parse.GetValue(note)
+                    Description = parse.GetValue(note),
+                    Through = day,
+                    UtcOffset = offset
                 },
                 ct);
 

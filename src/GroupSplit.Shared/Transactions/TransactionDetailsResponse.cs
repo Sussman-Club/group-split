@@ -61,4 +61,30 @@ public record TransactionDetailsResponse : TransactionResponse
     /// from when they pick something else.
     /// </remarks>
     public Guid? SplitRuleId { get; init; }
+
+    /// <summary>
+    /// On a settlement made through a day, what that period is and whether it is still
+    /// square. Null on an expense, and on a settlement that claims no period.
+    /// </summary>
+    public SettlementCoverage? Coverage { get; init; }
 }
+
+/// <summary>
+/// The period a settlement was for, worked out when it is read and never stored.
+/// </summary>
+/// <remarks>
+/// Derived rather than remembered, which is the point: an expense dated inside the period and
+/// added afterwards, or one edited or deleted, is reflected here the next time somebody
+/// looks, where a stored list of "covered" expenses would go on claiming they were paid.
+/// </remarks>
+/// <param name="Through">The last day of activity it was meant to settle.</param>
+/// <param name="From">
+/// The first day of the period: the day after the last one an earlier settlement between the
+/// same two people covered through, or null when there was none -- since the group began.
+/// </param>
+/// <param name="StillOwed">
+/// What the payer still owes the group for activity through <paramref name="Through"/>,
+/// after every settlement made since. Zero means the period is square for them; more than
+/// zero means something dated inside it has been added or changed since it was settled.
+/// </param>
+public record SettlementCoverage(DateOnly Through, DateOnly? From, decimal StillOwed);

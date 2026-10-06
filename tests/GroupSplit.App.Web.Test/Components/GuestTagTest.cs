@@ -152,7 +152,7 @@ public class GuestTagTest : ComponentTest
     private async Task<IRenderedComponent<MudDialogProvider>> OpenAsync(TransactionDetailsResponse details)
     {
         _transactions
-            .Setup(client => client.GetTransactionAsync(Expense, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetTransactionAsync(Expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(details);
 
         var provider = Render<MudDialogProvider>();

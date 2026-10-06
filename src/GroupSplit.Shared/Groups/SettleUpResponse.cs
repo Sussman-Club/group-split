@@ -36,6 +36,9 @@ public record SettleUpResponse
     /// <summary>The note they all carry, when there was one.</summary>
     public string? Description { get; init; }
 
+    /// <summary>The day they were worked out through, when one was given.</summary>
+    public DateOnly? CoversThrough { get; init; }
+
     /// <summary>What changed hands in total, both directions added up.</summary>
     public decimal Total => Payments.Sum(payment => payment.Amount);
 }
