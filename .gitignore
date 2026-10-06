@@ -491,3 +491,5 @@ aspire-output/
 # Agents folders
 .agents/
 .claude/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

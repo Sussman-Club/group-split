@@ -9,10 +9,6 @@ using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 // storage container is told to create it by the same name.
 const string receiptsBucket = "receipts";
 
-// One project behind two resources: realm-settings reconciles on every run, realm-reset runs
-// only from its dashboard command.
-const string realmWorkerProject = "../GroupSplit.RealmWorker/GroupSplit.RealmWorker.csproj";
-
 var builder = DistributedApplication.CreateBuilder(args);
 
 var dbServer = builder
@@ -66,7 +62,7 @@ var keycloak = builder.AddKeycloak("keycloak")
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
 // Its admin credentials differ by mode, so each branch below gives it its own.
-var realmSettings = builder.AddDotnetProject("realm-settings", realmWorkerProject)
+var realmSettings = builder.AddDotnetProject("realm-settings", "../GroupSplit.RealmWorker")
     .WithEnvironment("Realm__Operation", "reconcile")
     .WithReference(keycloak)
     .WaitFor(keycloak);
@@ -81,7 +77,7 @@ var migrations = db
     .PublishAsMigrationBundle(publishContainer: true)
     .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
-var api = builder.AddDotnetProject("api", "../GroupSplit.API/GroupSplit.API.csproj")
+var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WaitFor(db)
     .WithReference(db)
     .WithReference(keycloak)
@@ -101,7 +97,7 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API/GroupSplit.API.cspr
     // Do not serve traffic until the realm settings have been reconciled successfully.
     .WaitForCompletion(realmSettings);
 
-var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj")
+var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web")
     .WithReference(keycloak)
     .WaitFor(api)
     .WithReference(api)
@@ -141,7 +137,7 @@ if (builder.ExecutionContext.IsRunMode)
         .WithWebAppOrigin(webOrigin)
         .WithKeycloakAdminAccess(keycloak);
 
-    var realmReset = builder.AddDotnetProject("realm-reset", realmWorkerProject)
+    var realmReset = builder.AddDotnetProject("realm-reset", "../GroupSplit.RealmWorker")
         .WithExplicitStart()
         .WithEnvironment("Realm__Operation", "reset")
         .WithReference(keycloak)
