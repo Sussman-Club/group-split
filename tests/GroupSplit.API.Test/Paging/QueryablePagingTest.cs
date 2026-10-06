@@ -139,6 +139,21 @@ public class QueryablePagingTest : IAsyncLifetime
         Assert.Equal(1, page.Items[0].Id);
     }
 
+    /// <summary>
+    /// The offset is <c>(Page - 1) * PageSize</c> as an int. This page times the largest
+    /// size overflowed it, and the listing answered 500 instead of an empty page.
+    /// </summary>
+    [Fact]
+    public async Task A_page_far_past_the_end_is_an_empty_page_not_an_overflow()
+    {
+        var page = await Rows(30).OrderBy(row => row.Id)
+            .ToPageAsync(new PageRequest(Page: 10737420, PageSize: 200), TestContext.Current.CancellationToken);
+
+        Assert.Empty(page.Items);
+        Assert.Equal(30, page.TotalCount);
+        Assert.True(((long)page.Page - 1) * page.PageSize <= int.MaxValue);
+    }
+
     [Fact]
     public async Task A_page_size_below_one_is_one()
     {
