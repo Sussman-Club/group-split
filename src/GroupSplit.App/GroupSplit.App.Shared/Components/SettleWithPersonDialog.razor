@@ -1,6 +1,10 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
+@inject IUsersClient UsersClient
+@inject ApiErrorPresenter Errors
+@inject LocalClock Clock
 
 @*
     Recording one payment between two people, wherever the debt between them lives.
@@ -42,10 +46,10 @@
                 @* Where the figure comes from, so the arithmetic is checkable here rather
                    than by opening two groups. Shown whenever the debt spans more than one,
                    because that is exactly the case the person has never been able to see. *@
-                @if (Person.Groups.Count > 1)
+                @if (Shown.Groups.Count > 1)
                 {
                     <div class="gs-settle-breakdown">
-                        @foreach (var part in Person.Groups)
+                        @foreach (var part in Shown.Groups)
                         {
                             <div class="gs-settle-breakdown-row">
                                 <span>@part.GroupName</span>
@@ -54,7 +58,7 @@
                         }
                     </div>
                     <MudText Typo="Typo.caption">
-                        One payment, @Person.Groups.Count groups. Recording it writes a transfer in
+                        One payment, @Shown.Groups.Count groups. Recording it writes a transfer in
                         each, largest first — a balance belongs to a group and cannot be cleared
                         from outside one.
                     </MudText>
@@ -72,8 +76,30 @@
                                  Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
 
                 <MudText Typo="Typo.caption">
-                    Remaining after this: @((Person.Amount - _model.Amount).ToMoney())
+                    Remaining after this: @((Shown.Amount - _model.Amount).ToMoney())
                 </MudText>
+
+                @* A month at a time, as in SettleDialog: what activity dated up to the day
+                   left owing between the two of them, after every repayment already made.
+                   It changes the figure and the groups it lands in, so both are read again. *@
+                @if (_choosingPeriod)
+                {
+                    <MudDatePicker Date="_through" DateChanged="@ThroughChanged"
+                                   Label="Only activity up to"
+                                   Variant="Variant.Outlined"
+                                   Clearable="true"
+                                   MaxDate="@Clock.Today"
+                                   Disabled="@_readingPeriod"
+                                   HelperText="@PeriodHelp" />
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="align-self-start"
+                               StartIcon="@Icons.Material.Outlined.EventAvailable"
+                               OnClick="@(() => _choosingPeriod = true)">
+                        Settle only up to a day…
+                    </MudButton>
+                }
 
                 <MudDatePicker Date="_date" DateChanged="@DateChanged"
                                Label="When"
@@ -93,7 +119,8 @@
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit">
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit"
+                   Disabled="@(_readingPeriod || Shown.Amount <= 0)">
             @(YouPaid ? "I paid them" : "They paid me")
         </MudButton>
     </DialogActions>
@@ -114,11 +141,31 @@
     private SettleWithPersonRequest _model = new();
     private DateTime? _date;
 
+    private bool _choosingPeriod;
+    private bool _readingPeriod;
+    private DateTime? _through;
+
+    /// <summary>
+    /// The person as the plan through the picked day sees them, while one is picked: the
+    /// figure and the groups behind it are both that period's.
+    /// </summary>
+    private PersonSettlement? _forPeriod;
+
+    private PersonSettlement Shown => _forPeriod ?? Person;
+
     private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
 
-    private string Standing => YouPaid
-        ? $"You owe {Person.UserName} {Person.Amount.ToMoney()}"
-        : $"{Person.UserName} owes you {Person.Amount.ToMoney()}";
+    private string Standing => (_through, YouPaid) switch
+    {
+        ({ } day, true) => $"For activity up to {day:d MMM}, you owe {Person.UserName} {Shown.Amount.ToMoney()}",
+        ({ } day, false) => $"For activity up to {day:d MMM}, {Person.UserName} owes you {Shown.Amount.ToMoney()}",
+        (null, true) => $"You owe {Person.UserName} {Person.Amount.ToMoney()}",
+        (null, false) => $"{Person.UserName} owes you {Person.Amount.ToMoney()}"
+    };
+
+    private string PeriodHelp => _through is { } day && Shown.Amount <= 0
+        ? $"Nothing is outstanding between you for activity up to {day:d MMM}."
+        : "Repayments already made count, whatever their date. Clear it to settle everything.";
 
     protected override void OnInitialized()
     {
@@ -146,10 +193,61 @@
     /// The amount is editable, as in the per-group dialog, and the screen never suggests
     /// paying part of it. Partial payments are how balances rot.
     /// </summary>
+    /// <summary>
+    /// Reads the cross-group plan through the day on this viewer's calendar, and takes this
+    /// person's line from it -- an empty one when the period left nothing between them.
+    /// </summary>
+    private async Task ThroughChanged(DateTime? through)
+    {
+        _through = through;
+
+        if (through is not { } day)
+        {
+            _forPeriod = null;
+            _model.Through = null;
+            _model.UtcOffset = null;
+            _model.Amount = Person.Amount;
+            return;
+        }
+
+        var cutoff = DateOnly.FromDateTime(day);
+        var offset = (int)Clock.Offset.TotalMinutes;
+        _readingPeriod = true;
+
+        try
+        {
+            SettlementPlanResponse? plan = null;
+
+            var read = await Errors.TryAsync(async () =>
+                    plan = await UsersClient.GetSettlementPlanAsync(cutoff, offset),
+                "Could not read what that period left owing.");
+
+            if (!read || plan is null)
+            {
+                _through = null;
+                return;
+            }
+
+            var side = YouPaid ? plan.YouPay : plan.OwedToYou;
+
+            _forPeriod = side.FirstOrDefault(entry => entry.UserId == Person.UserId)
+                         ?? Person with { Amount = 0m, Groups = [] };
+            _model.Through = cutoff;
+            _model.UtcOffset = offset;
+            _model.Amount = _forPeriod.Amount;
+        }
+        finally
+        {
+            _readingPeriod = false;
+        }
+    }
+
     private IEnumerable<string> ValidateAmount(decimal amount)
     {
-        if (amount > Person.Amount)
-            yield return $"Amount cannot exceed what is outstanding ({Person.Amount.ToMoney()}).";
+        if (amount > Shown.Amount)
+            yield return _through is null
+                ? $"Amount cannot exceed what is outstanding ({Person.Amount.ToMoney()})."
+                : $"Amount cannot exceed what that period left owing ({Shown.Amount.ToMoney()}).";
     }
 
     private async Task Submit()

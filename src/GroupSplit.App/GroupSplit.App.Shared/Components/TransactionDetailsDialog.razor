@@ -6,6 +6,7 @@
 @using GroupSplit.App.Shared.Services.Commands
 @namespace GroupSplit.App.Shared.Components
 @inject ITransactionsClient TransactionsClient
+@inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject IUserLogin UserLogin
 @inject LocalClock Clock
@@ -48,7 +49,7 @@
                                   MerchantLogoUrl="@loaded.MerchantLogoUrl" />
                     <div style="min-width: 0">
                         <div class="gs-eyebrow">@(loaded.GroupName ?? "Personal")</div>
-                        <h2 class="gs-dialog-title">@loaded.Name</h2>
+                        <h2 class="gs-dialog-title">@Title(loaded)</h2>
                     </div>
                 </div>
             }
@@ -87,7 +88,9 @@
                         <span class="gs-figure-value gs-num">@details.Amount.ToMoney()</span>
                     </div>
 
-                    @if (MyShare is { } mine)
+                    @* A settlement has no share: its one split is the person paid, for the
+                       whole of it, and "you owe" over that would be the wrong way round. *@
+                    @if (!IsSettlement && MyShare is { } mine)
                     {
                         <div class="gs-figure">
                             <span class="gs-eyebrow">@(PaidByMe ? "Your share" : "You owe")</span>
@@ -154,9 +157,84 @@
                             }
                         </dd>
                     </div>
+
+                    @if (IsSettlement)
+                    {
+                        <div class="gs-kv-row">
+                            <dt>Paid to</dt>
+                            <dd>@(details.PaidToUserId == Me ? "You" : details.PaidToUserName)</dd>
+                        </div>
+                    }
+
+                    @if (details.Coverage is { } coverage)
+                    {
+                        <div class="gs-kv-row">
+                            <dt>Covers</dt>
+                            <dd>@Period(coverage)</dd>
+                        </div>
+                    }
                 </dl>
 
-                @if (details.Splits.Count > 0)
+                @*
+                    What a settlement made through a day covers, as things stand now -- worked
+                    out when it is read, never stored. An expense dated inside the period and
+                    added after it was settled is the case this is for: the period is no longer
+                    square, and saying so here is the only place anybody would find out.
+                *@
+                @if (details.Coverage is { } period)
+                {
+                    @if (period.StillOwed > 0)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="gs-period-owed">
+                            This period is no longer fully settled:
+                            @(details.PaidByUserId == Me ? "you still owe" : $"{details.PaidByUserName} still owes")
+                            @period.StillOwed.ToMoney() for activity up to @period.Through.ToString("d MMM").
+                        </MudAlert>
+                    }
+
+                    <div>
+                        <div class="gs-card-title" style="margin-bottom: 10px">
+                            <h3 style="margin: 0; font-size: 1rem">Expenses dated in the period</h3>
+                        </div>
+
+                        @if (_periodExpenses is null)
+                        {
+                            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+                        }
+                        else if (_periodExpenses.Count == 0)
+                        {
+                            <p class="gs-muted" style="margin: 0; font-size: .875rem">
+                                No expenses are dated in it.
+                            </p>
+                        }
+                        else
+                        {
+                            <div class="gs-splits">
+                                @foreach (var expense in _periodExpenses)
+                                {
+                                    <div class="gs-split">
+                                        <span class="gs-split-who">
+                                            <span>@expense.Name</span>
+                                            <span class="gs-muted">
+                                                @Clock.Local(expense.DateTime).ToString("d MMM") · @expense.PaidByUserName paid
+                                            </span>
+                                        </span>
+                                        <span class="gs-split-amount gs-num">@expense.Amount.ToMoney()</span>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (_periodExpenseCount > _periodExpenses.Count)
+                            {
+                                <p class="gs-muted" style="margin: 8px 0 0; font-size: .875rem">
+                                    And @(_periodExpenseCount - _periodExpenses.Count) more.
+                                </p>
+                            }
+                        }
+                    </div>
+                }
+
+                @if (!IsSettlement && details.Splits.Count > 0)
                 {
                     <div>
                         <div class="gs-card-title" style="margin-bottom: 10px">
@@ -253,6 +331,52 @@
         ? $"Split between {count} {(count == 1 ? "person" : "people")}"
         : "Split";
 
+    private bool IsSettlement => details is { Kind: ActivityKind.Transfer };
+
+    /// <summary>The most of a period's expenses listed here; the rest are counted.</summary>
+    private const int PeriodListLimit = 50;
+
+    private IReadOnlyList<TransactionResponse>? _periodExpenses;
+    private int _periodExpenseCount;
+
+    /// <summary>
+    /// What the dialog is about: the expense's name, or for a settlement who paid whom --
+    /// every settlement is called "Settlement", which names nothing.
+    /// </summary>
+    private string Title(TransactionDetailsResponse loaded) => loaded.Kind is ActivityKind.Transfer
+        ? $"{(loaded.PaidByUserId == Me ? "You" : loaded.PaidByUserName)} paid {(loaded.PaidToUserId == Me ? "you" : loaded.PaidToUserName)}"
+        : loaded.Name;
+
+    private static string Period(SettlementCoverage coverage) => coverage.From is { } from
+        ? $"Activity from {from:d MMM} to {coverage.Through:d MMM yyyy}"
+        : $"Activity up to {coverage.Through:d MMM yyyy}";
+
+    /// <summary>
+    /// The group's expenses dated in a settlement's period, through the same listing and the
+    /// same day bounds the Expenses page's date filter uses, so the two agree about which
+    /// day an expense falls on.
+    /// </summary>
+    private async Task LoadPeriodExpensesAsync(TransactionDetailsResponse loaded)
+    {
+        if (loaded is not { Coverage: { } coverage, GroupId: { } groupId })
+            return;
+
+        DateTimeOffset? from = coverage.From is { } first
+            ? Clock.At(first.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+            : null;
+        var to = Clock.At(coverage.Through.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddTicks(-1);
+
+        PagedResponseOfTransactionResponse? page = null;
+
+        await Errors.TryAsync(async () =>
+                page = await GroupsClient.GetGroupTransactionsAsync(groupId, from, to,
+                    page: 1, pageSize: PeriodListLimit),
+            "Could not load the expenses in that period.");
+
+        _periodExpenses = page?.Items ?? [];
+        _periodExpenseCount = page?.TotalCount ?? 0;
+    }
+
     // Failures go through the presenter, which names the reason the API gave; a dialog
     // that cannot load its subject has nothing to show, so it closes.
     protected override async Task OnInitializedAsync()
@@ -260,8 +384,10 @@
         // Both at once, because both only ever needed the id this dialog was opened with:
         // read one after the other, each answer grew the dialog under the reader's hand.
         var bill = Receipts.GetAsync(TransactionId);
+        // The reader's offset, which says when a settlement's period ends on their calendar.
         var loaded = await Errors.TryAsync(
-            async () => details = await TransactionsClient.GetTransactionAsync(TransactionId),
+            async () => details = await TransactionsClient.GetTransactionAsync(TransactionId,
+                (int)Clock.Offset.TotalMinutes),
             "Could not load the expense.");
 
         if (!loaded)
@@ -286,6 +412,9 @@
         // "Expense" over a body full of the thing it is refusing to name. Both go together
         // here so the heading and the figures under it appear in the same frame.
         MudDialog.StateHasChanged();
+
+        if (details is { Coverage: not null } settled)
+            await LoadPeriodExpensesAsync(settled);
     }
 
     private async Task UploadAttachment(InputFileChangeEventArgs args)
@@ -370,7 +499,8 @@
     {
         TransactionDetailsResponse? refreshed = null;
         if (await Errors.TryAsync(async () =>
-                refreshed = await TransactionsClient.GetTransactionAsync(TransactionId),
+                refreshed = await TransactionsClient.GetTransactionAsync(TransactionId,
+                    (int)Clock.Offset.TotalMinutes),
             "Could not refresh the expense after saving the receipt.")
             && refreshed is not null)
         {

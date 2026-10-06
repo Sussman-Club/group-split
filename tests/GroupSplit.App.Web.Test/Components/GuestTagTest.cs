@@ -48,6 +48,7 @@ public class GuestTagTest : ComponentTest
             .Returns(new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"));
 
         Services.AddSingleton(_transactions.Object);
+        Services.AddSingleton(Mock.Of<IGroupsClient>());
         Services.AddSingleton(_login.Object);
     }
 

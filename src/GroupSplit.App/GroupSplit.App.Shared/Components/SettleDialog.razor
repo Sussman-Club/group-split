@@ -1,5 +1,9 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Services.Errors
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject LocalClock Clock
 
 @*
     Recording a repayment, from either side.
@@ -40,8 +44,31 @@
                     Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
 
                 <MudText Typo="Typo.caption">
-                    Remaining balance: @((TotalDebt - _model.Amount).ToMoney())
+                    Remaining @(_through is null ? "balance" : "for that period"): @((Owed - _model.Amount).ToMoney())
                 </MudText>
+
+                @* A month at a time, for groups that settle that way: what activity dated up
+                   to the day left owing, after every repayment already made -- so a payment
+                   made since for that month is never asked for again. Tucked away, because
+                   settling the whole of it is still what most people want. *@
+                @if (_choosingPeriod)
+                {
+                    <MudDatePicker Date="_through" DateChanged="@ThroughChanged"
+                                   Label="Only activity up to"
+                                   Variant="Variant.Outlined"
+                                   Clearable="true"
+                                   MaxDate="@Clock.Today"
+                                   Disabled="@_readingPeriod"
+                                   HelperText="@PeriodHelp"/>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="align-self-start"
+                               StartIcon="@Icons.Material.Outlined.EventAvailable"
+                               OnClick="@(() => _choosingPeriod = true)">
+                        Settle only up to a day…
+                    </MudButton>
+                }
 
                 @* Both optional, and deliberately: recording a repayment has to stay quick.
                    The date is what lets a payment made on the 30th and typed in on the 3rd
@@ -65,7 +92,8 @@
 
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit">
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit"
+                   Disabled="@(_readingPeriod || Owed <= 0)">
             Confirm
         </MudButton>
     </DialogActions>
@@ -76,6 +104,12 @@
 
     [Parameter] public string Username { get; set; } = null!;
     [Parameter] public Guid UserId { get; set; }
+
+    /// <summary>
+    /// The group it is recorded in, which is where the balances through a day are read from
+    /// when one is picked.
+    /// </summary>
+    [Parameter] public Guid GroupId { get; set; }
 
     /// <summary>What stands between the two of them, whichever way round it is.</summary>
     [Parameter] public decimal TotalDebt { get; set; }
@@ -92,11 +126,29 @@
 
     private DateTime? _date;
 
+    private bool _choosingPeriod;
+    private bool _readingPeriod;
+    private DateTime? _through;
+
+    /// <summary>What was owed for the period picked, while one is.</summary>
+    private decimal? _owedForPeriod;
+
+    /// <summary>What this payment can settle: the period's figure when one is picked, the whole otherwise.</summary>
+    private decimal Owed => _owedForPeriod ?? TotalDebt;
+
     private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
 
-    private string Standing => YouPaid
-        ? $"You owe {Username} {TotalDebt.ToMoney()}"
-        : $"{Username} owes you {TotalDebt.ToMoney()}";
+    private string Standing => (_through, YouPaid) switch
+    {
+        ({ } day, true) => $"For activity up to {day:d MMM}, you owe {Username} {Owed.ToMoney()}",
+        ({ } day, false) => $"For activity up to {day:d MMM}, {Username} owes you {Owed.ToMoney()}",
+        (null, true) => $"You owe {Username} {TotalDebt.ToMoney()}",
+        (null, false) => $"{Username} owes you {TotalDebt.ToMoney()}"
+    };
+
+    private string PeriodHelp => _through is { } day && Owed <= 0
+        ? $"Nothing is outstanding between you for activity up to {day:d MMM}."
+        : "Repayments already made count, whatever their date. Clear it to settle everything.";
 
     protected override void OnInitialized()
     {
@@ -122,10 +174,63 @@
             : null;
     }
 
+    /// <summary>
+    /// Reads what the period left owing between the two of them, from the group's balances
+    /// through the day on this viewer's calendar.
+    /// </summary>
+    /// <remarks>
+    /// Read here, not worked out: the balance through a day counts every repayment whatever
+    /// its date, which is the half a client summing its own expenses would leave out. The day
+    /// goes onto the request as well, so the repayment remembers what it was for.
+    /// </remarks>
+    private async Task ThroughChanged(DateTime? through)
+    {
+        _through = through;
+
+        if (through is not { } day)
+        {
+            _owedForPeriod = null;
+            _model.Through = null;
+            _model.Amount = TotalDebt;
+            return;
+        }
+
+        var cutoff = DateOnly.FromDateTime(day);
+        _readingPeriod = true;
+
+        try
+        {
+            UserGroupBalanceResponse? balance = null;
+
+            var read = await Errors.TryAsync(async () =>
+                    balance = await GroupsClient.GetGroupUserBalanceAsync(
+                        GroupId, cutoff, (int)Clock.Offset.TotalMinutes),
+                "Could not read the balances for that period.");
+
+            if (!read || balance is null)
+            {
+                _through = null;
+                return;
+            }
+
+            var side = YouPaid ? balance.YouOwed : balance.OwedToYou;
+
+            _owedForPeriod = side.FirstOrDefault(debt => debt.UserId == UserId)?.Amount ?? 0m;
+            _model.Through = cutoff;
+            _model.Amount = _owedForPeriod.Value;
+        }
+        finally
+        {
+            _readingPeriod = false;
+        }
+    }
+
     IEnumerable<string> ValidateAmount(decimal amount)
     {
-       if (amount > TotalDebt)
-            yield return $"Amount cannot exceed the total debt ({TotalDebt.ToMoney()})";
+        if (amount > Owed)
+            yield return _through is null
+                ? $"Amount cannot exceed the total debt ({TotalDebt.ToMoney()})"
+                : $"Amount cannot exceed what that period left owing ({Owed.ToMoney()})";
     }
 
     private async Task Submit()

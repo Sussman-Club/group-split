@@ -24,6 +24,7 @@ public class TransactionDetailsDialogTest : ComponentTest
 {
     private static readonly Guid Me = Guid.NewGuid();
     private readonly Mock<ITransactionsClient> _transactions = new();
+    private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<IReceiptCommands> _bills = new();
     private readonly Mock<IUserLogin> _login = new();
     private readonly Guid _expense = Guid.NewGuid();
@@ -45,6 +46,7 @@ public class TransactionDetailsDialogTest : ComponentTest
             });
 
         Services.AddSingleton(_transactions.Object);
+        Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_bills.Object);
         _login.SetupGet(login => login.User)
             .Returns(new UserInfo(Me, "Ana", "Benitez", "ana@example.com"));
@@ -223,5 +225,93 @@ public class TransactionDetailsDialogTest : ComponentTest
         dialog.WaitForAssertion(() => Assert.Contains("$18.00", dialog.Markup));
         _transactions.Verify(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    // ---- A settlement ------------------------------------------------------------------
+
+    private static readonly Guid Flat = Guid.NewGuid();
+
+    private void ASettlement(SettlementCoverage? coverage)
+    {
+        _transactions
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = _expense,
+                Kind = ActivityKind.Transfer,
+                Name = "Settlement",
+                Amount = 50m,
+                DateTime = new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.Zero),
+                GroupId = Flat,
+                GroupName = "Flat",
+                PaidByUserId = Guid.NewGuid(),
+                PaidByUserName = "Loraine",
+                PaidToUserId = Me,
+                PaidToUserName = "Ana Benitez",
+                Splits = [new TransactionSplitResponse(Me, "Ana Benitez", 50m)],
+                Coverage = coverage
+            });
+
+        _groups
+            .Setup(client => client.GetGroupTransactionsAsync(Flat, It.IsAny<DateTimeOffset?>(),
+                It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+                It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(),
+                It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PagedResponseOfTransactionResponse(
+                [
+                    new TransactionResponse
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "Groceries",
+                        Amount = 80m,
+                        DateTime = new DateTimeOffset(2026, 8, 20, 12, 0, 0, TimeSpan.Zero),
+                        PaidByUserName = "Ana Benitez"
+                    }
+                ], 1, 50, 1));
+    }
+
+    /// <summary>
+    /// A settlement is who paid whom -- every one is named "Settlement", which says nothing --
+    /// and it has no share for the reader to owe.
+    /// </summary>
+    [Fact]
+    public async Task A_settlement_is_headed_by_who_paid_whom_and_shows_no_share()
+    {
+        ASettlement(coverage: null);
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("Loraine paid you", dialog.Markup));
+        Assert.DoesNotContain("You owe", dialog.Markup);
+        Assert.DoesNotContain("Split between", dialog.Markup);
+        Assert.DoesNotContain("Expenses dated in the period", dialog.Markup);
+    }
+
+    [Fact]
+    public async Task A_settlement_made_through_a_day_lists_the_expenses_in_its_period()
+    {
+        ASettlement(new SettlementCoverage(new DateOnly(2026, 8, 31), new DateOnly(2026, 8, 1), 0m));
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("Groceries", dialog.Markup));
+        Assert.Contains("Activity from 1 Aug to 31 Aug 2026", dialog.Markup);
+        Assert.DoesNotContain("no longer fully settled", dialog.Markup);
+    }
+
+    /// <summary>
+    /// The case a stored list of covered expenses gets wrong: something dated inside the
+    /// period and added after it was settled. The dialog is the only place that says so.
+    /// </summary>
+    [Fact]
+    public async Task A_period_that_is_no_longer_square_says_what_is_still_owed()
+    {
+        ASettlement(new SettlementCoverage(new DateOnly(2026, 8, 31), null, 12.50m));
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("no longer fully settled", dialog.Markup));
+        Assert.Contains("Loraine still owes", dialog.Markup);
+        Assert.Contains("$12.50", dialog.Markup);
     }
 }
