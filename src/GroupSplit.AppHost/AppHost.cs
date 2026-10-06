@@ -130,7 +130,9 @@ if (builder.ExecutionContext.IsRunMode)
     // ever sends. HTTPS when the web app has it, which is every profile but the AppHost's plain
     // "http" one.
     var webScheme = web.Resource.Annotations.OfType<EndpointAnnotation>()
-        .Any(endpoint => endpoint.Name == "https") ? "https" : "http";
+        .Any(endpoint => endpoint.Name == "https")
+        ? "https"
+        : "http";
     var webOrigin = web.GetEndpoint(webScheme, KnownNetworkIdentifiers.LocalhostNetwork);
     keycloak.WithWebAppOrigin(webOrigin);
     realmSettings
