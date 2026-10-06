@@ -201,6 +201,20 @@ public static class ErrorCodes
     public const string SplitsInvalid = "SPLITS_INVALID";
     public const string ReceiptAttachmentInvalid = "RECEIPT_ATTACHMENT_INVALID";
 
+    /// <summary>
+    /// A JSON Patch that cannot be applied to what it was sent to: a path the model does not
+    /// have, a value of the wrong type for the member it replaces, a <c>test</c> that did not
+    /// hold. Nothing was written. Distinct from <see cref="ValidationFailed"/>, which is a
+    /// patch that applied cleanly and left a model that does not hold up.
+    /// </summary>
+    public const string PatchInvalid = "PATCH_INVALID";
+
+    /// <summary>
+    /// A settlement's amount was edited to zero or less. A repayment moves money one way, so
+    /// a negative one is a debt written in the column for paying them back.
+    /// </summary>
+    public const string SettlementAmountNotPositive = "SETTLEMENT_AMOUNT_NOT_POSITIVE";
+
 
     /// <summary>
     /// A receipt was sent that could not describe a bill at all -- no items, a line with no

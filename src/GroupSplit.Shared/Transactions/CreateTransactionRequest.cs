@@ -86,5 +86,6 @@ public record CreateTransactionRequest
     public decimal Amount { get; set; }
 
     [Required(ErrorMessage = "Date is required.")]
+    [NotDefault(ErrorMessage = "Date is required.")]
     public DateTimeOffset DateTime { get; set; }
 };

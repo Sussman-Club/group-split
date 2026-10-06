@@ -435,6 +435,16 @@ public class ExpenseSplitter(
             throw new ConflictException(ErrorCodes.SplitUserNotInGroup,
                 "A split names somebody who is neither a member of the group nor invited to it.");
 
+        // Every share goes the way the money went: a cost on an expense, money back on a
+        // refund. A share the other way is a repayment folded into a row that says it is an
+        // expense -- {A: 150, B: -100} on 50 sums correctly and moves 100 between two people
+        // that nobody recorded as a payment.
+        if (given.Any(split => Math.Sign(split.Amount) == -Math.Sign(amount)))
+            throw new ValidationException(ErrorCodes.SplitsInvalid,
+                amount > 0
+                    ? "A share of an expense cannot be negative."
+                    : "A share of a refund cannot be positive.");
+
         var total = given.Sum(split => split.Amount);
 
         if (total != amount)

@@ -146,7 +146,10 @@ public static class ErrorMessages
         [ErrorCodes.MerchantInUse] = "This merchant still has transactions pointing at it. Move them first.",
 
         [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
-        [ErrorCodes.SplitsInvalid] = "The shares are not valid. Each person can appear only once.",
+        [ErrorCodes.SplitsInvalid] =
+            "The shares are not valid. Each person can appear only once, and every share goes the same way as the amount.",
+        [ErrorCodes.PatchInvalid] = "That change could not be applied. Reload and try again.",
+        [ErrorCodes.SettlementAmountNotPositive] = "A settlement has to be for more than zero.",
         [ErrorCodes.SplitOnAPersonalExpense] = "A personal expense is not shared with anybody, so it cannot be split.",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares have to add up to the amount of the expense.",
         [ErrorCodes.RuleUsersNotInGroup] = "The rule names someone who is not in the group.",

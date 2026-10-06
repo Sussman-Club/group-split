@@ -396,7 +396,7 @@ public static class TransactionApi
                         transactionUpdateRequest.Splits = null;
                     }
 
-                    patchDocument.ApplyTo(transactionUpdateRequest);
+                    patchDocument.ApplyOrRefuse(transactionUpdateRequest);
 
                     if (!PatchedModel.IsValid(transactionUpdateRequest, out var invalid))
                         return invalid;

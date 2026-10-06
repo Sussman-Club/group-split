@@ -98,10 +98,16 @@ public record UpdateTransactionRequest
     [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]
     public string? Description { get; set; }
 
+    /// <summary>
+    /// What it came to. Never zero, as on create; a settlement must also be more than zero,
+    /// which is checked once the service knows it is editing one.
+    /// </summary>
     [Required(ErrorMessage = "Amount is required.")]
+    [NotZero(ErrorMessage = "Amount cannot be zero.")]
     [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
     public decimal Amount { get; set; }
 
     [Required(ErrorMessage = "Date is required.")]
+    [NotDefault(ErrorMessage = "Date is required.")]
     public DateTimeOffset DateTime { get; set; }
 };

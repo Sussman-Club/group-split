@@ -340,6 +340,28 @@ public class ProblemResponseTest : IAsyncLifetime
         Assert.Contains("Amount", errors.Keys);
     }
 
+    /// <summary>
+    /// A patch that cannot be applied at all is a different failure from one that applies
+    /// and leaves an invalid model, and has its own code. It used to be an unmapped
+    /// exception, so a 500.
+    /// </summary>
+    [Fact]
+    public async Task A_patch_that_cannot_be_applied_is_a_problem_with_its_own_code()
+    {
+        var transactionId = await CreateTransaction();
+
+        var patch = new StringContent(
+            """[{"op":"replace","path":"/amount","value":"abc"}]""",
+            Encoding.UTF8,
+            "application/json-patch+json");
+
+        var response = await Client.PatchAsync($"/transactions/{transactionId}", patch, Ct);
+
+        var problem = await ReadProblem(response, HttpStatusCode.BadRequest);
+        Assert.Equal(ErrorCodes.PatchInvalid, problem.Code);
+        Assert.False(string.IsNullOrEmpty(problem.Detail));
+    }
+
     // ---- Produced by the framework, not the domain -----------------------------------------
 
     [Fact]

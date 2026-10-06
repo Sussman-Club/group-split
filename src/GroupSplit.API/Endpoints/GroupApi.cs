@@ -132,7 +132,16 @@ public static class GroupApi
                     if (groupUpdateRequest is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
 
-                    patchDocument.ApplyTo(groupUpdateRequest);
+                    patchDocument.ApplyOrRefuse(groupUpdateRequest);
+
+                    // Null in the model means "the patch said nothing about it", which keeps
+                    // the default a caller from before the field existed never knew about.
+                    // A patch that names the field and leaves it null is asking for no
+                    // default at all, and every group divides by one -- so it is refused
+                    // rather than read as silence and quietly ignored.
+                    if (patchDocument.Touches("/defaultSplitRuleId") && groupUpdateRequest.DefaultSplitRuleId is null)
+                        throw new ValidationException(ErrorCodes.SplitRuleInvalid,
+                            "A group always has a default rule. Name the one to use instead.");
 
                     if (!PatchedModel.IsValid(groupUpdateRequest, out var invalid))
                         return invalid;
