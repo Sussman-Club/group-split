@@ -131,9 +131,11 @@ groupsplit groups settle-up <group-id> --through 2026-08-31 --dry-run
 Through a day, what is owed counts the expenses dated up to the end of it and **every
 repayment, whatever its date**. Money paid goes against the oldest debt first, so somebody
 who paid August's share in mid-September is not asked for it again when August is settled in
-October, and settling the same period twice finds nothing the second time. The day ends at
-midnight on this machine's calendar: the CLI sends its UTC offset at that moment beside the
-day.
+October, and settling the same period twice finds nothing the second time. Each payment is
+also capped at what the two people owe each other on the whole balance, so a period never asks
+for money that is not owed overall -- paying a September expense in September does not turn
+into being owed it back for August. The day ends at midnight on this machine's calendar: the
+CLI sends its current UTC offset beside the day, as the web app does.
 
 The repayments it records remember the day. `settle history` shows it on the row, and
 `transactions show <settlement-id>` says what period the settlement covered and whether that

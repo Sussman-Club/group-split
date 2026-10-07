@@ -217,7 +217,7 @@ public static class TransactionCommands
             // the same calendar the person running this is on.
             var transaction = await context.Transactions.GetTransactionAsync(
                 context.ParseResult.GetValue(TransactionId),
-                (int)TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes,
+                ThroughOption.LocalOffsetMinutes,
                 ct);
 
             context.Output.Write(transaction, value =>
@@ -717,7 +717,7 @@ public static class TransactionCommands
 
                 CoversThrough = from.GetValue(noCoversThrough)
                     ? null
-                    : from.GetValue(coversThrough) ?? current.Coverage?.Through
+                    : from.GetValue(coversThrough) ?? current.CoversThrough
             };
         });
 
@@ -757,9 +757,7 @@ public static class TransactionCommands
         if (current.PaidByUserId != edited.PaidByUserId)
             patch.Replace(request => request.PaidByUserId, edited.PaidByUserId);
 
-        // A settlement's period, read back from its coverage: the detail carries the stored
-        // day there and nowhere else.
-        if (current.Coverage?.Through != edited.CoversThrough)
+        if (current.CoversThrough != edited.CoversThrough)
             patch.Replace(request => request.CoversThrough, edited.CoversThrough);
 
         // Sent only when somebody named one. Like the shares below it is read as an

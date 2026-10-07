@@ -543,22 +543,17 @@ public static class GroupApi
             return group.MapGet("{groupId:guid}/balances", async (
                     Guid groupId,
                     [AsParameters] CutoffQuery cutoff,
-                    IGroupService groupService,
-                    IDebtCalculationService debtCalculator,
+                    ISettlementService settlements,
                     CancellationToken ct) =>
             {
-                var balances = await groupService.GetGroupNetBalance(groupId, cutoff.ToCutoff(), ct);
-                var balanceResponse = await balances.ToArrayAsync(ct);
+                // Null when the group is not one of the caller's: every group has at least its
+                // creator, so no rows means that. Left to the calculator, the caller's absence
+                // from the settlement would surface as a bug rather than as this.
+                var position = await settlements.GetPosition(groupId, cutoff.ToCutoff(), ct);
 
-                // Every group has at least its creator, so no rows means the group is not
-                // one of the caller's. Left to the calculator, the caller's absence from the
-                // settlement would surface as a bug rather than as this.
-                if (balanceResponse.Length == 0)
-                    return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
-
-                var groupUserBalance = await debtCalculator.GetUserBalance(balanceResponse);
-
-                return Results.Ok(groupUserBalance);
+                return position is not null
+                    ? Results.Ok(position)
+                    : Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
             })
                 .WithName("GetGroupUserBalance")
                 .Produces<UserGroupBalanceResponse>()

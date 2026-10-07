@@ -63,8 +63,15 @@ public record TransactionDetailsResponse : TransactionResponse
     public Guid? SplitRuleId { get; init; }
 
     /// <summary>
+    /// On a settlement, the last day of activity it was meant to settle, as stored. Null on
+    /// an expense, and on a settlement that claims no period.
+    /// </summary>
+    public DateOnly? CoversThrough { get; init; }
+
+    /// <summary>
     /// On a settlement made through a day, what that period is and whether it is still
-    /// square. Null on an expense, and on a settlement that claims no period.
+    /// square, on the reader's calendar. Only <c>GET /transactions/{id}</c> fills it, since
+    /// only it is told the reader's offset.
     /// </summary>
     public SettlementCoverage? Coverage { get; init; }
 }

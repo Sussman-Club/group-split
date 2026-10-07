@@ -676,7 +676,8 @@ already square is success, not a refusal: it says so and writes nothing.
 owed through a day counts the expenses dated up to the end of it and **every repayment
 whatever its date** -- money paid goes against the oldest debt first -- so a payment made in
 September for August is never asked for twice, and settling a period that is already square
-says so and writes nothing. Do not try to work out a month's figure by filtering expenses
+says so and writes nothing. Each payment is capped at what the pair owes on the whole balance,
+so a period never asks for more than is owed overall, and can ask for less. Do not try to work out a month's figure by filtering expenses
 and subtracting; that leaves out repayments and is the mistake this flag exists to prevent.
 The repayments it records remember the day, and `transactions show <settlement-id>` reports
 the period they covered and anything still owed for it -- an expense dated inside the period

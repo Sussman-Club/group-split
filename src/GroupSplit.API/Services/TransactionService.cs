@@ -566,7 +566,8 @@ public class TransactionService(
             MerchantName = transaction.Merchant?.Name,
             MerchantLogoUrl = transaction.Merchant?.LogoUrl,
             Splits = splits,
-            SplitRuleVersionId = transaction.SplitRuleVersionId
+            SplitRuleVersionId = transaction.SplitRuleVersionId,
+            CoversThrough = transfer?.CoversThrough
         };
     }
 
@@ -643,7 +644,9 @@ public class TransactionService(
             // the share it states, or -- when it removed or emptied the shares -- the one the
             // settlement already has. Asking only of a stated share let a patch that dropped
             // the shares and moved the payer onto the recipient write a payment to oneself.
-            var recipientId = request.Splits is [var stated] ? stated.UserId : transfer.Splits.First().UserId;
+            var recipientId = (request.Splits is [var stated] ? stated.UserId : transfer.Splits.FirstOrDefault()?.UserId)
+                              ?? throw new ValidationException(ErrorCodes.SplitsInvalid,
+                                  "This settlement records nobody it was paid to. Name them in /splits.");
 
             if (recipientId == payerId)
                 throw new ConflictException(ErrorCodes.SettlementWithSelf,
@@ -703,7 +706,7 @@ public class TransactionService(
         var expense = (Expense)transaction;
 
         if (request.CoversThrough is not null)
-            throw new ValidationException(ErrorCodes.ValidationFailed,
+            throw new ValidationException(ErrorCodes.NotASettlement,
                 "Only a settlement settles a period. An expense has no day it covers through.");
 
         // Asked before a single field moves, because both questions are about the expense as

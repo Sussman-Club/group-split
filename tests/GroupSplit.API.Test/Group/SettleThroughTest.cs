@@ -67,6 +67,27 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(ErrorCodes.SettlementNothingToSettle, refused.Code);
     }
 
+    /// <summary>
+    /// The other side of counting every repayment. Nothing was owed for August; in September
+    /// they paid 60 split between us and I paid them my 30. Through August, my payment reads
+    /// as a credit -- and without the cap at the whole balance, settling August had them pay
+    /// me 30 back, leaving me owing September all over again.
+    /// </summary>
+    [Fact]
+    public async Task A_repayment_for_a_later_period_is_never_owed_back_for_an_earlier_one()
+    {
+        var (group, other) = await GroupOfTwo();
+
+        await Expense(group, 60, On(9, 10), paidBy: other);
+        await IPaidThem(group, other, 30, On(9, 20));
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() =>
+            Settlements().SettleUp(group, new SettleUpRequest { Through = EndOfAugust }, Ct));
+
+        Assert.Equal(ErrorCodes.SettlementNothingToSettle, refused.Code);
+        Assert.Empty((await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct)).OwedToYou);
+    }
+
     [Fact]
     public async Task Settling_the_same_period_twice_finds_nothing_the_second_time()
     {
@@ -243,6 +264,32 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(30, coverage!.StillOwed);
     }
 
+    /// <summary>
+    /// Still owed between the two people the settlement was between, and nobody else. I owe
+    /// one member 30 and another 20 for August, and pay the first; that payment is square,
+    /// whatever I still owe the second.
+    /// </summary>
+    [Fact]
+    public async Task What_is_still_owed_is_between_the_two_of_them_only()
+    {
+        var (group, other, third) = await GroupOfThree();
+
+        await Expense(group, 60, On(8, 10), paidBy: other, between: [Me, other]);
+        await Expense(group, 40, On(8, 12), paidBy: third, between: [Me, third]);
+
+        await GetService<IGroupService>().Settle(group, new SettleRequest
+        {
+            UserId = other.Id,
+            Amount = 30,
+            Direction = SettlementDirection.YouPaidThem,
+            Through = EndOfAugust
+        }, Ct);
+
+        var coverage = await Settlements().GetCoverage(Assert.Single(await Transfers(group)).Id, 0, Ct);
+
+        Assert.Equal(0, coverage!.StillOwed);
+    }
+
     [Fact]
     public async Task A_period_starts_the_day_after_the_last_one_the_same_two_people_settled()
     {
@@ -309,7 +356,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var refused = await Assert.ThrowsAsync<ValidationException>(() => transactions.Update(id, model, Ct).AsTask());
 
-        Assert.Equal(ErrorCodes.ValidationFailed, refused.Code);
+        Assert.Equal(ErrorCodes.NotASettlement, refused.Code);
     }
 
     // ---- Fixtures --------------------------------------------------------------------------
@@ -345,8 +392,12 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         return (group.Id, other, third);
     }
 
-    /// <summary>An expense split evenly, paid by the caller unless somebody else is named.</summary>
-    private async Task Expense(Guid groupId, decimal amount, DateTimeOffset date, Data.Entities.User? paidBy = null)
+    /// <summary>
+    /// An expense split evenly -- between everybody, or between <paramref name="between"/> --
+    /// paid by the caller unless somebody else is named.
+    /// </summary>
+    private async Task Expense(Guid groupId, decimal amount, DateTimeOffset date, Data.Entities.User? paidBy = null,
+        Data.Entities.User[]? between = null)
     {
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
@@ -354,7 +405,21 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             PaidByUserId = paidBy?.Id ?? Me.Id,
             Name = "Dinner",
             Amount = amount,
-            DateTime = date
+            DateTime = date,
+            Splits = between?.Select(member => new SplitInput { UserId = member.Id, Amount = amount / between.Length })
+                .ToList()
+        }, Ct);
+    }
+
+    /// <summary>The caller paying the other member back.</summary>
+    private async Task IPaidThem(Guid groupId, Data.Entities.User other, decimal amount, DateTimeOffset date)
+    {
+        await GetService<IGroupService>().Settle(groupId, new SettleRequest
+        {
+            UserId = other.Id,
+            Amount = amount,
+            Direction = SettlementDirection.YouPaidThem,
+            Date = date
         }, Ct);
     }
 

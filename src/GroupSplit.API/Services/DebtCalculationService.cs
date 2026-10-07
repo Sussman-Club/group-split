@@ -5,13 +5,64 @@ namespace GroupSplit.API.Services;
 public interface IDebtCalculationService
 {
     Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance);
+
+    /// <summary>
+    /// The caller's position through a day, with every payment in it capped at what the same
+    /// two people owe on the whole balance.
+    /// </summary>
+    /// <remarks>
+    /// The balances through a day count every settlement whatever its date, so nothing
+    /// already paid is asked for twice. On their own they can still ask for money nobody
+    /// owes: a repayment made for a later period lands in this one as a credit -- paying a
+    /// September expense in September reads, through August, as being owed it back -- and
+    /// a member who has since left square is missing from the rows, so the period does not
+    /// add up without them. Capping each payment at the whole plan's figure for that pair,
+    /// and dropping pairs the whole plan has nothing between, means a period never records
+    /// more than is owed, never the wrong way round, and never between two people who do
+    /// not owe each other at all. It can ask for less than a ledger of who paid which
+    /// expense would, which is the safe side to be wrong on.
+    /// </remarks>
+    Task<UserGroupBalanceResponse> GetUserBalanceThrough(IEnumerable<GroupNetBalance> throughDay,
+        IEnumerable<GroupNetBalance> whole);
 }
 
 public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculationService
 {
-    public async Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance)
+    public Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance) =>
+        Task.FromResult(Mine(MinimizeTransactions(netBalance)));
+
+    public Task<UserGroupBalanceResponse> GetUserBalanceThrough(IEnumerable<GroupNetBalance> throughDay,
+        IEnumerable<GroupNetBalance> whole)
     {
-        var settlements = MinimizeTransactions(netBalance);
+        var period = Mine(MinimizeTransactions(throughDay));
+        var all = Mine(MinimizeTransactions(whole));
+
+        return Task.FromResult(period with
+        {
+            OwedToYou = Capped(period.OwedToYou, all.OwedToYou),
+            YouOwed = Capped(period.YouOwed, all.YouOwed),
+            Plan =
+            [
+                .. from payment in period.Plan
+                   let cap = all.Plan
+                       .Where(other => other.FromUserId == payment.FromUserId && other.ToUserId == payment.ToUserId)
+                       .Sum(other => other.Amount)
+                   where cap > 0
+                   select payment with { Amount = Math.Min(payment.Amount, cap) }
+            ]
+        });
+    }
+
+    private static IEnumerable<DebtInfo> Capped(IEnumerable<DebtInfo> period, IEnumerable<DebtInfo> whole) =>
+    [
+        .. from debt in period
+           let cap = whole.Where(other => other.UserId == debt.UserId).Sum(other => other.Amount)
+           where cap > 0
+           select debt with { Amount = Math.Min(debt.Amount, cap) }
+    ];
+
+    private UserGroupBalanceResponse Mine(Dictionary<Guid, UserGroupBalanceResponse> settlements)
+    {
         var user = currentUser.User;
         if (!settlements.TryGetValue(user.Id, out var balance))
             throw new InvalidOperationException($"User {user.Id} not found in settlements.");

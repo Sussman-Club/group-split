@@ -111,6 +111,17 @@ public interface ISettlementService
     /// </param>
     Task<SettlementCoverage?> GetCoverage(Guid transactionId, int utcOffsetMinutes,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The caller's position in one of their groups -- the whole of it, or through a day --
+    /// or null when the group is not one of theirs.
+    /// </summary>
+    /// <remarks>
+    /// Through a day, each payment is capped at what the whole balance says between the same
+    /// two people; see <see cref="IDebtCalculationService.GetUserBalanceThrough"/>.
+    /// </remarks>
+    Task<UserGroupBalanceResponse?> GetPosition(Guid groupId, Cutoff? cutoff,
+        CancellationToken cancellationToken = default);
 }
 
 public class SettlementService(
@@ -131,13 +142,11 @@ public class SettlementService(
 
         var cutoff = Cutoff.Of(request.Through, request.UtcOffset);
 
-        var balances = await (await groups.GetGroupNetBalance(groupId, cutoff, cancellationToken))
-            .ToArrayAsync(cancellationToken);
-
         // The same calculation the group's balances view shows, and deliberately not the
         // amounts a client might send: between somebody opening the dialog and pressing the
         // button, another expense can land.
-        var position = await debtCalculator.GetUserBalance(balances);
+        var position = await GetPosition(groupId, cutoff, cancellationToken)
+                       ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         var payments = position.Payments(userContext.User.Id);
 
@@ -371,18 +380,36 @@ public class SettlementService(
                               other.Splits.Any(split => split.UserId == transfer.PayerId))))
             .MaxAsync(other => other.CoversThrough, cancellationToken);
 
-        // Whether the payer is square for the period now: their balance through the day,
-        // counting every settlement whatever its date. A shortfall is something dated inside
-        // the period that was added or changed after it was settled.
-        var balances = await (await groups.GetGroupNetBalance(transfer.GroupId,
-                new Cutoff(through, utcOffsetMinutes), cancellationToken))
-            .Where(balance => balance.UserId == transfer.PayerId)
-            .Select(balance => balance.Balance)
-            .ToListAsync(cancellationToken);
+        // Whether the period is square between these two now: what the plan through the day
+        // still has the payer paying the recipient. Between them and nobody else -- what the
+        // payer owes a third member for the same month is not this payment's business. A
+        // shortfall is something dated inside the period added or changed since.
+        var position = await GetPosition(transfer.GroupId, new Cutoff(through, utcOffsetMinutes), cancellationToken);
 
-        var stillOwed = balances.Count > 0 ? Math.Max(0m, -balances[0]) : 0m;
+        var stillOwed = position?.Plan
+            .Where(payment => payment.FromUserId == transfer.PayerId && payment.ToUserId == transfer.RecipientId)
+            .Sum(payment => payment.Amount) ?? 0m;
 
         return new SettlementCoverage(through, previous?.AddDays(1), stillOwed);
+    }
+
+    public async Task<UserGroupBalanceResponse?> GetPosition(Guid groupId, Cutoff? cutoff,
+        CancellationToken cancellationToken = default)
+    {
+        var whole = await (await groups.GetGroupNetBalance(groupId, cancellationToken))
+            .ToArrayAsync(cancellationToken);
+
+        // Every group has at least the caller, so no rows means it is not one of theirs.
+        if (whole.Length == 0)
+            return null;
+
+        if (cutoff is null)
+            return await debtCalculator.GetUserBalance(whole);
+
+        var throughDay = await (await groups.GetGroupNetBalance(groupId, cutoff, cancellationToken))
+            .ToArrayAsync(cancellationToken);
+
+        return await debtCalculator.GetUserBalanceThrough(throughDay, whole);
     }
 
     /// <summary>
@@ -401,29 +428,27 @@ public class SettlementService(
         var rows = await (await groups.GetAllGroupNetBalances(cutoff, cancellationToken))
             .ToListAsync(cancellationToken);
 
+        // Through a day, the whole balances too: each group's payments are capped at them.
+        var wholeRows = cutoff is null
+            ? rows
+            : await (await groups.GetAllGroupNetBalances(cancellationToken)).ToListAsync(cancellationToken);
+
         var youPay = new Dictionary<Guid, PersonBuilder>();
         var owedToYou = new Dictionary<Guid, PersonBuilder>();
 
         foreach (var inGroup in rows.GroupBy(row => new { row.GroupId, row.GroupName }))
         {
-            var balances = inGroup
-                .Select(row => new GroupNetBalance
-                {
-                    UserId = row.UserId,
-                    UserName = row.UserName,
-                    AmountPaid = row.AmountPaid,
-                    AmountOwed = row.AmountOwed,
-                    Balance = row.Balance,
-                    IsGuest = row.IsGuest
-                })
-                .ToList();
+            var balances = Balances(inGroup);
 
             // Nothing outstanding here at all. Worth skipping rather than minimising an
             // all-zero group, which produces no payments anyway.
             if (balances.TrueForAll(balance => balance.Balance == 0))
                 continue;
 
-            var position = await debtCalculator.GetUserBalance(balances);
+            var position = cutoff is null
+                ? await debtCalculator.GetUserBalance(balances)
+                : await debtCalculator.GetUserBalanceThrough(balances,
+                    Balances(wholeRows.Where(row => row.GroupId == inGroup.Key.GroupId)));
 
             var guests = balances.Where(balance => balance.IsGuest).Select(balance => balance.UserId).ToHashSet();
 
@@ -436,6 +461,19 @@ public class SettlementService(
 
         return (Finish(youPay), Finish(owedToYou));
     }
+
+    private static List<GroupNetBalance> Balances(IEnumerable<GroupMemberBalance> rows) =>
+    [
+        .. rows.Select(row => new GroupNetBalance
+        {
+            UserId = row.UserId,
+            UserName = row.UserName,
+            AmountPaid = row.AmountPaid,
+            AmountOwed = row.AmountOwed,
+            Balance = row.Balance,
+            IsGuest = row.IsGuest
+        })
+    ];
 
     private static void Accumulate(Dictionary<Guid, PersonBuilder> side, DebtInfo debt,
         Guid groupId, string groupName, bool isGuest)

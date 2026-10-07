@@ -10,7 +10,9 @@ namespace GroupSplit.Shared;
 /// expense dated on or before it and <em>every settlement, whatever its date</em> -- money
 /// paid goes against the oldest debt first. Cutting settlements off at the day as well
 /// would ask somebody who paid in September to pay August again when August is settled in
-/// October, because their payment falls after the line.
+/// October, because their payment falls after the line. The payments that come out are then
+/// capped at what the whole balance says between the same two people, so a payment made for a
+/// later period never reads as being owed back for this one.
 /// <para>
 /// A day and an offset rather than an instant, because a day ends at a different moment
 /// for everybody: the offset is the caller's, the same one the date filters already turn a

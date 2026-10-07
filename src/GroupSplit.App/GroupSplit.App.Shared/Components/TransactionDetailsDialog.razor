@@ -1,5 +1,6 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Users
@@ -361,10 +362,10 @@
         if (loaded is not { Coverage: { } coverage, GroupId: { } groupId })
             return;
 
-        DateTimeOffset? from = coverage.From is { } first
-            ? Clock.At(first.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : null;
-        var to = Clock.At(coverage.Through.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddTicks(-1);
+        var (from, to) = new DateFilter(DateFilterPreset.Custom,
+                coverage.From?.ToDateTime(TimeOnly.MinValue),
+                coverage.Through.ToDateTime(TimeOnly.MinValue))
+            .Bounds(Clock.Offset, Clock.Today);
 
         PagedResponseOfTransactionResponse? page = null;
 

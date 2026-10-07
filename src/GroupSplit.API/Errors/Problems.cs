@@ -66,6 +66,7 @@ public static class Problems
         [ErrorCodes.SplitsInvalid] = "The shares are not valid",
         [ErrorCodes.PatchInvalid] = "The patch could not be applied",
         [ErrorCodes.SettlementAmountNotPositive] = "A settlement's amount must be greater than zero",
+        [ErrorCodes.NotASettlement] = "Only a settlement has that",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares do not add up to the amount",
         [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group",
         [ErrorCodes.SplitRuleHistoryInvalid] = "The history is not a chain",

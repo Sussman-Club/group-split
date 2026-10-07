@@ -219,16 +219,6 @@ public static class TransactionApi
                 .Produces<MonthlyExposureResponse[]>();
         }
 
-        /// <summary>
-        /// A settlement's details with what it covers attached, which the transaction
-        /// service cannot work out itself: it takes the group's balances through the day.
-        /// </summary>
-        private static async Task<TransactionDetailsResponse?> WithCoverage(TransactionDetailsResponse? details,
-            ISettlementService settlements, int utcOffset, CancellationToken ct) =>
-            details is { Kind: ActivityKind.Transfer }
-                ? details with { Coverage = await settlements.GetCoverage(details.Id, utcOffset, ct) }
-                : details;
-
         private RouteHandlerBuilder MapGetById()
         {
             // ?utcOffset= is the reader's, for a settlement made through a day: it says when
@@ -241,12 +231,18 @@ public static class TransactionApi
                     ISettlementService settlements,
                     CancellationToken ct) =>
                 {
-                    var details = await WithCoverage(await transactionService.GetDetails(id, ct), settlements,
-                        utcOffset ?? 0, ct);
+                    var details = await transactionService.GetDetails(id, ct);
 
-                    return details is not null
-                        ? Results.Ok(details)
-                        : Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+                    if (details is null)
+                        return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+                    // What a settlement made through a day covers, which the transaction service
+                    // cannot work out itself: it takes the group's balances through the day.
+                    // Only when there is a day, which most settlements do not have.
+                    if (details.CoversThrough is not null)
+                        details = details with { Coverage = await settlements.GetCoverage(id, utcOffset ?? 0, ct) };
+
+                    return Results.Ok(details);
                 })
                 .WithName("GetTransaction")
                 .Produces<TransactionDetailsResponse>()
@@ -403,7 +399,6 @@ public static class TransactionApi
                     Guid id,
                     JsonPatchDocument<UpdateTransactionRequest> patchDocument,
                     ITransactionService transactionService,
-                    ISettlementService settlements,
                     CancellationToken ct) =>
                 {
                     var transactionUpdateRequest = await transactionService.GetUpdateModel(id, ct);
@@ -423,10 +418,10 @@ public static class TransactionApi
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
-                    // The day a corrected settlement covers is worked out in UTC here; the
-                    // PATCH carries no offset, and a reader who wants their own calendar's
-                    // answer reads the settlement again with one.
-                    var details = await WithCoverage(await transactionService.GetDetails(id, ct), settlements, 0, ct);
+                    // The stored CoversThrough comes back, the coverage worked out from it does
+                    // not: that depends on the reader's calendar, which a PATCH is not told, and
+                    // an answer in UTC would disagree with the next GET.
+                    var details = await transactionService.GetDetails(id, ct);
 
                     return Results.Ok(details);
                 })

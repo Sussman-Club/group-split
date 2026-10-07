@@ -215,6 +215,11 @@ public static class ErrorCodes
     /// </summary>
     public const string SettlementAmountNotPositive = "SETTLEMENT_AMOUNT_NOT_POSITIVE";
 
+    /// <summary>
+    /// An edit set something only a settlement has on an expense: the day it covers through.
+    /// </summary>
+    public const string NotASettlement = "NOT_A_SETTLEMENT";
+
 
     /// <summary>
     /// A receipt was sent that could not describe a bill at all -- no items, a line with no

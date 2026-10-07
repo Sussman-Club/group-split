@@ -139,13 +139,14 @@ public class SettleThroughEndpointTest : IAsyncLifetime
             Encoding.UTF8, "application/json-patch+json"), Ct);
         patched.EnsureSuccessStatusCode();
         var afterPatch = await patched.Content.ReadFromJsonAsync<TransactionDetailsResponse>(Json, Ct);
-        Assert.Equal(new DateOnly(2026, 8, 31), afterPatch!.Coverage?.Through);
+        Assert.Equal(new DateOnly(2026, 8, 31), afterPatch!.CoversThrough);
+        Assert.Null(afterPatch.Coverage);
 
         var cleared = await Client.PatchAsync($"/transactions/{id}", new StringContent(
             """[{"op":"replace","path":"/coversThrough","value":null}]""",
             Encoding.UTF8, "application/json-patch+json"), Ct);
         cleared.EnsureSuccessStatusCode();
         var afterClear = await cleared.Content.ReadFromJsonAsync<TransactionDetailsResponse>(Json, Ct);
-        Assert.Null(afterClear!.Coverage);
+        Assert.Null(afterClear!.CoversThrough);
     }
 }

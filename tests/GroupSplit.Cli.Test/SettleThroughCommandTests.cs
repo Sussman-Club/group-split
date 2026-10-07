@@ -23,7 +23,7 @@ public sealed class SettleThroughCommandTests : IDisposable
     private static readonly DateOnly EndOfAugust = new(2026, 8, 31);
 
     private static readonly string ExpectedOffset =
-        ((int)TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 9, 1)).TotalMinutes).ToString();
+        ((int)TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes).ToString();
 
     private readonly EnvironmentFixture _environment = new();
     private readonly StubApi _api = new();
@@ -242,6 +242,7 @@ public sealed class SettleThroughCommandTests : IDisposable
         amount = 40m,
         paidByUserName = "Daniel",
         paidToUserName = "Me",
+        coversThrough = coversThrough?.ToString("yyyy-MM-dd"),
         coverage = coversThrough is { } day
             ? new { through = day.ToString("yyyy-MM-dd"), from = (string?)null, stillOwed }
             : null
