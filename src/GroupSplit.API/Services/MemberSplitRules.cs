@@ -76,11 +76,11 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         ArgumentNullException.ThrowIfNull(user);
 
         // A find-or-create with two ways to lose a race, both settled by the name index. Two
-        // calls for the same member read the same names and so choose the same one, and the
-        // loser of IX_SplitRule_GroupId_Name re-reads and finds the winner's rule. Two calls
-        // for different members who want the same name collide on it too, and the loser takes
-        // the next free name. A few tries, not a loop that assumes the other writers will
-        // stop.
+        // calls for the same member that read the names before either writes choose the same
+        // one, and the loser of IX_SplitRule_GroupId_Name re-reads and finds the winner's
+        // rule. Two calls for different members who want the same name collide on it too, and
+        // the loser takes the next free name. A few tries, not a loop that assumes the other
+        // writers will stop.
         //
         // One rule per person is the service's to keep, not a constraint's: who a rule is for
         // lives on its version, and Postgres cannot index across the two tables. A column on
@@ -93,13 +93,23 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             if (existing is not null)
                 return existing;
 
+            var name = await FreeName(group.Id, user, ct);
+
+            // A suffix means the plain name is taken -- and it can be taken by this member's
+            // own rule. A call for the same member that commits after the look above and
+            // before the names were read leaves this one choosing the next name, which
+            // collides with nothing: two rules for one person. The names read saw that
+            // commit, so looking again now finds the rule.
+            if (name != Stem(user) && await ExistingFor(group.Id, user.Id, ct) is { } written)
+                return written;
+
             var version = new SoleSplitRuleVersion { UserId = user.Id };
 
             var rule = new SplitRule
             {
                 Group = group,
                 BuiltIn = true,
-                Name = await FreeName(group.Id, user, ct),
+                Name = name,
                 Versions = { version }
             };
 
@@ -221,10 +231,7 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
     /// </remarks>
     private async Task<string> FreeName(Guid groupId, User user, CancellationToken ct, Guid? except = null)
     {
-        var known = People.Display(user) is { Length: > 0 } display ? display : "one member";
-
-        // 64 is the column, and the suffix has to fit inside it too.
-        var stem = Truncated($"All for {known}", 58);
+        var stem = Stem(user);
 
         var taken = await context.Set<SplitRule>()
             .Where(rule => rule.Group.Id == groupId && rule.Id != except && rule.Name.StartsWith(stem))
@@ -241,6 +248,15 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             if (!taken.Contains(candidate, StringComparer.OrdinalIgnoreCase))
                 return candidate;
         }
+    }
+
+    /// <summary>The name a member's rule has when nothing else in the group already holds it.</summary>
+    private static string Stem(User user)
+    {
+        var known = People.Display(user) is { Length: > 0 } display ? display : "one member";
+
+        // 64 is the column, and the suffix has to fit inside it too.
+        return Truncated($"All for {known}", 58);
     }
 
     private static string Truncated(string name, int length) =>
