@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -85,23 +86,9 @@ public static class IdentityApi
     }
 
     /// <summary>
-    /// Reduces a caller-supplied return URL to a safe local path: an absolute URL
-    /// here would bounce a freshly authenticated user to another origin.
+    /// Reduces a caller-supplied return URL to a safe local path: anything else here
+    /// would bounce a freshly authenticated user to another origin.
     /// </summary>
-    internal static string ResolveReturnUrl(string? returnUrl)
-    {
-        if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/'))
-        {
-            return "/";
-        }
-
-        // "//evil.example" and "/\evil.example" are absolute despite looking relative.
-        if (returnUrl.StartsWith("//", StringComparison.Ordinal)
-            || returnUrl.StartsWith("/\\", StringComparison.Ordinal))
-        {
-            return "/";
-        }
-
-        return returnUrl;
-    }
+    internal static string ResolveReturnUrl(string? returnUrl) =>
+        LocalUrl.IsLocal(returnUrl) ? returnUrl : "/";
 }
