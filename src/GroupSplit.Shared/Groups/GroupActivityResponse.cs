@@ -29,6 +29,12 @@ public record GroupActivityResponse
 
     public string? Description { get; init; }
 
+    /// <summary>
+    /// On a transfer settled through a day, that day -- "through 31 Aug" on the row. Null on
+    /// an expense and on a transfer that claims no period.
+    /// </summary>
+    public DateOnly? CoversThrough { get; init; }
+
     public decimal Amount { get; init; }
 
     public DateTimeOffset DateTime { get; init; }

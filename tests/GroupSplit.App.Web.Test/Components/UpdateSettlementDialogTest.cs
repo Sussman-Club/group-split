@@ -1,6 +1,9 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -80,5 +83,68 @@ public class UpdateSettlementDialogTest : ComponentTest
             Assert.Contains("Dani (guest)", popovers.Markup, StringComparison.Ordinal);
             Assert.Contains("Luz (guest)", popovers.Markup, StringComparison.Ordinal);
         });
+    }
+
+    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference Dialog)> Open(
+        DateOnly? coversThrough)
+    {
+        Render<MudPopoverProvider>();
+        var provider = Render<MudDialogProvider>();
+
+        IDialogReference dialog = null!;
+        await provider.InvokeAsync(async () =>
+            dialog = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<UpdateSettlementDialog>("Edit settlement", new DialogParameters<UpdateSettlementDialog>
+                {
+                    { d => d.Original, Repayment() },
+                    { d => d.CoversThrough, coversThrough }
+                }));
+
+        return (provider, dialog);
+    }
+
+    private static async Task<JsonPatchDocument<UpdateTransactionRequest>> SaveAsync(
+        IRenderedComponent<MudDialogProvider> provider, IDialogReference dialog)
+    {
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        return (await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>())!;
+    }
+
+    private static Operation<UpdateTransactionRequest>? CoversThroughOperation(
+        JsonPatchDocument<UpdateTransactionRequest> patch) =>
+        patch.Operations.SingleOrDefault(operation =>
+            string.Equals(operation.path, "/CoversThrough", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The day a settlement covers through is shown, and saving without touching it sends
+    /// nothing about it -- a corrected note must not restate the period.
+    /// </summary>
+    [Fact]
+    public async Task The_period_it_covers_is_kept_when_it_is_left_alone()
+    {
+        var (provider, dialog) = await Open(new DateOnly(2026, 8, 31));
+
+        provider.WaitForAssertion(() => Assert.Contains("Covers activity up to", provider.Markup));
+
+        var patch = await SaveAsync(provider, dialog);
+
+        Assert.Null(CoversThroughOperation(patch));
+    }
+
+    [Fact]
+    public async Task Clearing_the_period_sends_it_as_cleared()
+    {
+        var (provider, dialog) = await Open(new DateOnly(2026, 8, 31));
+
+        var picker = provider.FindComponents<MudDatePicker>()
+            .Single(field => field.Instance.Label == "Covers activity up to");
+        await provider.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(null));
+
+        var operation = CoversThroughOperation(await SaveAsync(provider, dialog));
+
+        Assert.NotNull(operation);
+        Assert.Null(operation.value);
     }
 }

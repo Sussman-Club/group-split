@@ -140,7 +140,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var gone = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = transactionId,
@@ -204,7 +204,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var transactionId = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = transactionId,
@@ -260,7 +260,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var transactionId = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = transactionId,
@@ -328,7 +328,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             .ReturnsAsync([attachment]);
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = transactionId,
@@ -372,7 +372,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             .ReturnsAsync(new MerchantResponse(lidl, "Lidl", null, DateTimeOffset.UtcNow, 3));
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId, merchantId: lidl));
 
         var original = Row(transactionId);
@@ -423,7 +423,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         // has no rule to have moved on. The dialog opens on the automatic division for
         // exactly those, and that branch is where the notice lives.
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId, splitRuleVersionId: Guid.NewGuid()));
 
         _commands
@@ -463,7 +463,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var departed = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         _splitRules
@@ -490,7 +490,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var departedRule = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId) with { SplitRuleId = departedRule });
 
         _splitRules
@@ -529,7 +529,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var transactionId = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         var (provider, _) = await OpenAsync(Row(transactionId));
@@ -569,7 +569,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var transactionId = Guid.NewGuid();
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         _commands
@@ -625,7 +625,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             new CategoryResponse(RentCategoryId, GroupId, "Rent", Guid.NewGuid(), "By room size"));
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         // The options live in a popover, which needs its host rendered: without one the
@@ -666,7 +666,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         WithCategories(new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null));
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         _commands
@@ -719,7 +719,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             new CategoryResponse(RentCategoryId, GroupId, "Rent", Guid.NewGuid(), "By room size"));
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         _commands
@@ -774,7 +774,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             new CategoryResponse(RentCategoryId, GroupId, "Rent", Guid.NewGuid(), "By room size"));
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         _commands
@@ -849,7 +849,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         // Shares with no rule behind them, which is what the dialog opens on "By hand" for
         // and what the latch threw away.
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Details(transactionId));
 
         _commands
@@ -964,7 +964,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         };
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(details);
 
         var (provider, _) = await OpenAsync(Row(transactionId));
@@ -1022,7 +1022,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             .Returns(() => AsyncEnumerable.Empty<CategoryResponse>());
 
         _transactions
-            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<CancellationToken>()))
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = transactionId,

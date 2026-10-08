@@ -240,6 +240,35 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
             .ToPageAsync(new PageRequest(), Ct);
     }
 
+    /// <summary>
+    /// Through a day, both sums leave out expenses after it and keep every settlement --
+    /// a type test on the discriminator inside each correlated subquery, which the
+    /// in-memory provider evaluates without ever asking whether SQL can.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_balances_and_the_plan_through_a_day_translate()
+    {
+        var cutoff = new Cutoff(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-30), -240);
+
+        await (await Service<IGroupService>().GetGroupNetBalance(await AGroupOfTheirs(), cutoff, Ct)).ToListAsync(Ct);
+        await (await Service<IGroupService>().GetAllGroupNetBalances(cutoff, Ct)).ToListAsync(Ct);
+        await Service<ISettlementService>().GetPlan(cutoff, Ct);
+    }
+
+    /// <summary>
+    /// What a settlement covers: the previous day the same two people settled through, and
+    /// the payer's balance through this one.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task A_settlements_coverage_translates()
+    {
+        var anyTransfer = await Service<AppDbContext>().Set<Transfer>()
+            .Select(transfer => transfer.Id)
+            .FirstOrDefaultAsync(Ct);
+
+        await Service<ISettlementService>().GetCoverage(anyTransfer, -240, Ct);
+    }
+
     [Fact(Timeout = 120_000)]
     public async Task A_groups_own_expense_listing_translates()
     {

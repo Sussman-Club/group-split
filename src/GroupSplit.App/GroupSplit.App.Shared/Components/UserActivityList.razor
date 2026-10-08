@@ -29,12 +29,13 @@
         {
             var item = entry;
             var expense = item.Kind is ActivityKind.Expense;
+            var opens = expense || item.CoversThrough is not null;
 
             <a class="gs-row gs-reveal" style="--i: @(i++)"
-               role="@(expense ? "button" : null)"
-               tabindex="@(expense ? 0 : -1)"
-               @onclick="@(() => expense ? ViewAsync(item) : Task.CompletedTask)"
-               @onkeydown="@(e => expense && e.Key is "Enter" or " " ? ViewAsync(item) : Task.CompletedTask)">
+               role="@(opens ? "button" : null)"
+               tabindex="@(opens ? 0 : -1)"
+               @onclick="@(() => opens ? ViewAsync(item) : Task.CompletedTask)"
+               @onkeydown="@(e => opens && e.Key is "Enter" or " " ? ViewAsync(item) : Task.CompletedTask)">
                 @if (expense)
                 {
                     <MerchantMark PaidByUserName="@item.PaidByUserName"
@@ -87,7 +88,7 @@
         var parts = new List<string>(3)
         {
             entry.Kind is ActivityKind.Transfer
-                ? entry.Description is { Length: > 0 } note ? note : "Settling up"
+                ? (entry.Description is { Length: > 0 } note ? note : "Settling up") + entry.CoversThrough.ThroughSuffix()
                 : $"{entry.PaidByUserName} paid",
             entry.GroupName ?? "Personal"
         };
@@ -117,8 +118,8 @@
     }
 
     /// <summary>
-    /// Expenses only. A settlement has no detail worth a dialog -- who paid whom and how
-    /// much is the whole of it, and all three are already on the row.
+    /// Expenses, and settlements made through a day. Any other settlement has no detail worth a
+    /// dialog -- who paid whom and how much is the whole of it, and all three are on the row.
     /// </summary>
     private async Task ViewAsync(UserActivityResponse entry)
     {

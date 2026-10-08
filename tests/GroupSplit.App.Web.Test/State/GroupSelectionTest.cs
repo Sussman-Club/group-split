@@ -61,8 +61,8 @@ public class GroupSelectionTest
             });
 
         _groupsClient
-            .Setup(c => c.GetGroupUserBalanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Guid id, CancellationToken _) =>
+            .Setup(c => c.GetGroupUserBalanceAsync(It.IsAny<Guid>(), It.IsAny<DateOnly?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (Guid id, DateOnly? _, int? _, CancellationToken _) =>
             {
                 await WaitIfSlowAsync(id);
                 return BalanceOf(id);
@@ -286,7 +286,7 @@ public class GroupSelectionTest
         await page.IsReadyTask;
 
         _groupsClient
-            .Setup(c => c.GetGroupUserBalanceAsync(Trip.Id, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetGroupUserBalanceAsync(Trip.Id, It.IsAny<DateOnly?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("down", 503, "", new Dictionary<string, IEnumerable<string>>(), null));
 
         page.SelectedGroup = Trip;
@@ -297,7 +297,7 @@ public class GroupSelectionTest
         Assert.False(page.IsLoading);
 
         _groupsClient
-            .Setup(c => c.GetGroupUserBalanceAsync(Trip.Id, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetGroupUserBalanceAsync(Trip.Id, It.IsAny<DateOnly?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(BalanceOf(Trip.Id));
 
         // The page opening again asks again, because nothing it holds is the trip's.

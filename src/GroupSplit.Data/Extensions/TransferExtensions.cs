@@ -35,12 +35,16 @@ public static class TransferExtensions
         /// The column was always here and nothing ever set it, so a group's activity could
         /// say that Loraine paid Daniel 40 and never how.
         /// </param>
+        /// <param name="coversThrough">
+        /// The last day of activity it settles, when it was worked out through one. See
+        /// <see cref="Transfer.CoversThrough"/>.
+        /// </param>
         /// <exception cref="ArgumentException">
         /// <paramref name="from"/> and <paramref name="to"/> are the same person, which is
         /// not a payment.
         /// </exception>
         public Transfer SettlementBetween(User from, User to, decimal amount, DateTimeOffset date,
-            string? description = null)
+            string? description = null, DateOnly? coversThrough = null)
         {
             ArgumentNullException.ThrowIfNull(group);
             ArgumentNullException.ThrowIfNull(from);
@@ -57,7 +61,8 @@ public static class TransferExtensions
                 DateTime = date,
                 Name = "Settlement",
                 Description = description,
-                User = from
+                User = from,
+                CoversThrough = coversThrough
             };
 
             transfer.Splits.Add(new TransactionSplit { User = to, Amount = amount });

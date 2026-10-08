@@ -283,7 +283,7 @@ public class ReceiptService(
             IsTaxable = stored.IsTaxable,
             SplitRuleVersionId = stored.SplitRuleVersionId
         };
-        patch.ApplyTo(model);
+        patch.ApplyOrRefuse(model);
 
         var validation = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
         if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(

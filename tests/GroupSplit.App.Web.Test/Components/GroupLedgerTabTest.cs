@@ -822,6 +822,38 @@ public class GroupLedgerTabTest : ComponentTest
     }
 
     /// <summary>
+    /// A settlement made through a day does open: what its period held, and whether it is
+    /// still square, are not on the row. Its row says which period it was for.
+    /// </summary>
+    [Fact]
+    public async Task A_settlement_made_through_a_day_opens_and_names_its_period()
+    {
+        var settled = Transfer(Guid.NewGuid()) with { CoversThrough = new DateOnly(2026, 8, 31) };
+        _entries = [settled];
+
+        Guid? viewed = null;
+
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<TransactionDetailsDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<TransactionDetailsDialog>>(),
+                It.IsAny<DialogOptions>()))
+            .ReturnsAsync((string _, DialogParameters<TransactionDetailsDialog> parameters, DialogOptions _) =>
+            {
+                viewed = parameters.Get<Guid>(nameof(TransactionDetailsDialog.TransactionId));
+
+                return new DialogReference(Guid.NewGuid(), _dialogs.Object);
+            });
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Contains("Settling up · through 31 Aug", tab.Markup));
+        Assert.Contains("is-openable", SettlementRow(tab).ClassName);
+
+        await SettlementRow(tab).ClickAsync(new());
+        Assert.Equal(settled.Id, viewed);
+    }
+
+    /// <summary>
     /// The entry's name is a button, so the details are reachable without a pointer.
     /// </summary>
     /// <remarks>

@@ -41,6 +41,12 @@ public record SettlementResponse
     /// "You paid Daniel" and "Omar paid you" are the same record read from two ends.
     /// </summary>
     public bool PaidByYou { get; init; }
+
+    /// <summary>
+    /// The last day of activity it was meant to settle, when it was settled through one --
+    /// "through 31 Aug" on the row.
+    /// </summary>
+    public DateOnly? CoversThrough { get; init; }
 }
 
 /// <summary>

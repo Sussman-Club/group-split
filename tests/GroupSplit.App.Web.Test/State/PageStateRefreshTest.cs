@@ -241,8 +241,8 @@ public class PageStateRefreshTest
             .ReturnsAsync((Guid id, CancellationToken _) => SetArchived(id, archived: false));
 
         _groupsClient
-            .Setup(c => c.GetGroupUserBalanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id, CancellationToken _) => BalanceOf(id));
+            .Setup(c => c.GetGroupUserBalanceAsync(It.IsAny<Guid>(), It.IsAny<DateOnly?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, DateOnly? _, int? _, CancellationToken _) => BalanceOf(id));
 
         _groupsClient
             .Setup(c => c.CreateGroupAsync(It.IsAny<CreateGroupRequest>(), It.IsAny<CancellationToken>()))

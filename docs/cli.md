@@ -116,6 +116,41 @@ groupsplit settle history --json
 Every repayment you were party to, in any group, newest first. It answers "did I already pay
 this?", which used to mean opening each group's activity in turn.
 
+### Settling through a day
+
+Groups that square up month by month want "clear August" while September stays open.
+`--through <day>` does that on every command that reads or settles what is owed:
+
+```bash
+groupsplit settle plan --through 2026-08-31 --json
+groupsplit settle pay <user-id> --through 2026-08-31 --dry-run
+groupsplit groups balances <group-id> --through 2026-08-31
+groupsplit groups settle-up <group-id> --through 2026-08-31 --dry-run
+```
+
+Through a day, what is owed counts the expenses dated up to the end of it and **every
+repayment, whatever its date**. Money paid goes against the oldest debt first, so somebody
+who paid August's share in mid-September is not asked for it again when August is settled in
+October, and settling the same period twice finds nothing the second time. Each payment is
+also capped at what the two people owe each other on the whole balance, so a period never asks
+for money that is not owed overall -- paying a September expense in September does not turn
+into being owed it back for August. The day ends at midnight on this machine's calendar: the
+CLI sends its current UTC offset beside the day, as the web app does.
+
+The repayments it records remember the day. `settle history` shows it on the row, and
+`transactions show <settlement-id>` says what period the settlement covered and whether that
+period is still square -- an expense dated inside it and added afterwards shows up there as
+still owed. `groups settle` takes `--through` too, but only to record it: the amount there is
+always the one you give.
+
+```bash
+groupsplit transactions update <settlement-id> --covers-through 2026-08-31
+groupsplit transactions update <settlement-id> --no-covers-through
+```
+
+A settlement's day can be corrected or cleared afterwards. An expense has no period, and
+naming one on it is refused before anything is sent.
+
 ## Guests
 
 A group names whoever is sharing the costs. Somebody with no account in it is a **guest**:

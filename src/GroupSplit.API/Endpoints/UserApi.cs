@@ -79,11 +79,13 @@ public static class UserApi
         private RouteHandlerBuilder MapGetSettlementPlan()
         {
             return group.MapGet("/me/settlement-plan", async (
+                    [AsParameters] CutoffQuery cutoff,
                     ISettlementService settlements,
                     CancellationToken ct) =>
-                Results.Ok(await settlements.GetPlan(ct)))
+                Results.Ok(await settlements.GetPlan(cutoff.ToCutoff(), ct)))
                 .WithName("GetSettlementPlan")
-                .Produces<SettlementPlanResponse>();
+                .Produces<SettlementPlanResponse>()
+                .ProducesValidationProblem();
         }
 
         /// <summary>

@@ -233,4 +233,45 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
 
         Assert.Equal(ErrorCodes.SettlementWithSelf, ex.Code);
     }
+
+    /// <summary>
+    /// A settlement row that has lost its one split -- a hand repair, an old import -- is
+    /// refused by name when edited without naming a recipient, where it used to throw out of
+    /// <c>First()</c> as a 500.
+    /// </summary>
+    [Fact]
+    public async Task UpdateSettlement_WithNoRecipientAnywhere_IsRefused()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var db = GetService<AppDbContext>();
+        var currentUser = GetService<ICurrentUser>().User;
+
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Flat" }, ct);
+        var otherUser = await CreateNewUser();
+        await JoinGroup(group.Id, otherUser);
+
+        await GetService<ISettlementService>().RecordRepayment(group.Id, new RecordRepaymentRequest
+        {
+            FromUserId = currentUser.Id,
+            ToUserId = otherUser.Id,
+            Amount = 30m
+        }, ct);
+
+        var transfer = await db.Set<Transfer>().Include(t => t.Splits).FirstAsync(t => t.GroupId == group.Id, ct);
+        db.RemoveRange(transfer.Splits);
+        await db.SaveChangesAsync(ct);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(async () =>
+            await GetService<ITransactionService>().Update(transfer.Id, new UpdateTransactionRequest
+            {
+                Name = "Settlement",
+                Amount = 30m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserId = currentUser.Id,
+                GroupId = group.Id,
+                Description = "cash"
+            }, ct));
+
+        Assert.Equal(ErrorCodes.SplitsInvalid, ex.Code);
+    }
 }

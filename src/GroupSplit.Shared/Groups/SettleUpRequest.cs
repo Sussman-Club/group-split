@@ -11,14 +11,28 @@ namespace GroupSplit.Shared;
 /// you paid and what you were paid are things you were there for, and money moving between
 /// two other members is not yours to record.
 /// <para>
-/// It settles the whole of what you owe and are owed, which is why it takes no dates to
-/// narrow it by. A balance is cumulative: whatever a group's habits are about when they
-/// square up, what is outstanding at the moment somebody presses this is what settling up
-/// means.
+/// It settles the whole of what you owe and are owed, unless it is given a day to settle
+/// through. A balance stays cumulative either way: through a day it counts the expenses
+/// dated up to it and every settlement ever made, so what comes out is what is still owed
+/// for that period after everything already paid -- and settling the same period twice
+/// finds nothing left the second time.
 /// </para>
 /// </remarks>
 public record SettleUpRequest
 {
+    /// <summary>
+    /// The last day of activity to settle, or null for everything. See <see cref="Cutoff"/>.
+    /// Every payment it records remembers it.
+    /// </summary>
+    public DateOnly? Through { get; set; }
+
+    /// <summary>
+    /// The caller's offset from UTC in minutes, which says when <see cref="Through"/> ends.
+    /// </summary>
+    [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
+        ErrorMessage = "The offset from UTC must be within 14 hours either way.")]
+    public int? UtcOffset { get; set; }
+
     /// <summary>
     /// When the money moved. Null means now.
     /// </summary>

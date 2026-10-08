@@ -55,4 +55,15 @@ public record SettleRequest
     /// </remarks>
     [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The last day of activity this payment is for, or null when it is not for a period.
+    /// </summary>
+    /// <remarks>
+    /// Remembered on the settlement and nothing more: the amount is whatever was typed, as
+    /// it always is here. A client that wants the amount owed through a day reads the
+    /// group's balances through it first -- which is what the Settle dialog does when a day
+    /// is picked.
+    /// </remarks>
+    public DateOnly? Through { get; set; }
 }

@@ -1,12 +1,17 @@
+using GroupSplit.API.Errors;
+using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
+using Microsoft.AspNetCore.JsonPatch.SystemTextJson.Exceptions;
 
 namespace GroupSplit.API.Extensions;
 
 /// <summary>
-/// Reading a patch rather than applying it.
+/// Reading a patch rather than applying it -- and applying one so that a malformed patch
+/// is refused rather than thrown.
 /// </summary>
 /// <remarks>
-/// Needed in exactly one place, and it is the place that matters most. A patch is the one
+/// <see cref="Touches"/> is needed in exactly one place, and it is the place that matters
+/// most. A patch is the one
 /// verb that can change <em>part</em> of a model, so for a field the API would otherwise
 /// recompute -- an expense's splits -- "absent from the patch" and "set to nothing by the
 /// patch" are different instructions, and the applied model cannot tell them apart: both
@@ -41,6 +46,39 @@ public static class PatchDocumentExtensions
         {
             return patch.Operations.Any(operation =>
                 Addresses(operation.path, pointer) || Addresses(operation.from, pointer));
+        }
+
+        /// <summary>
+        /// Applies the patch to <paramref name="model"/>, or refuses it as the client's
+        /// mistake it is.
+        /// </summary>
+        /// <exception cref="ValidationException">
+        /// <see cref="ErrorCodes.PatchInvalid"/>, carrying what the library said.
+        /// </exception>
+        /// <remarks>
+        /// The bare <c>ApplyTo(model)</c> throws <see cref="JsonPatchException"/> for a path
+        /// the model does not have, a value of the wrong type or a <c>test</c> that fails --
+        /// all of them a malformed request, and all of them answered 500 because nothing
+        /// mapped the exception. The overload taking an error callback reports most of them
+        /// there instead, and the exception is caught as well for whatever it still throws.
+        /// The model is a scratch copy built for the patch, so one left half-applied is
+        /// thrown away with the refusal.
+        /// </remarks>
+        public void ApplyOrRefuse(T model)
+        {
+            var errors = new List<string>();
+
+            try
+            {
+                patch.ApplyTo(model, error => errors.Add(error.ErrorMessage));
+            }
+            catch (JsonPatchException exception)
+            {
+                errors.Add(exception.Message);
+            }
+
+            if (errors.Count > 0)
+                throw new ValidationException(ErrorCodes.PatchInvalid, string.Join(" ", errors));
         }
     }
 

@@ -34,11 +34,18 @@ public static class SettleCommands
     /// </summary>
     private static Command Plan()
     {
-        var command = new Command("plan", "Show the fewest payments that leave you square everywhere.");
+        var through = ThroughOption.Create();
+
+        var command = new Command("plan", "Show the fewest payments that leave you square everywhere.")
+        {
+            through
+        };
 
         command.SetHandler(async (context, ct) =>
         {
-            var plan = await context.Users.GetSettlementPlanAsync(ct);
+            var day = context.ParseResult.GetValue(through);
+
+            var plan = await context.Users.GetSettlementPlanAsync(day, ThroughOption.OffsetFor(day), ct);
 
             context.Output.Write(plan, value => new Rows(
                 new Markup(
@@ -100,9 +107,12 @@ public static class SettleCommands
             Description = "Show what would be recorded and stop."
         };
 
+        var through = ThroughOption.Create(
+            "Settle only what is owed for activity dated up to this day, e.g. 2026-08-31.");
+
         var command = new Command("pay", "Record one payment between you and one person.")
         {
-            user, amount, direction, date, note, dryRun
+            user, amount, direction, date, note, dryRun, through
         };
 
         command.SetHandler(async (context, ct) =>
@@ -110,8 +120,12 @@ public static class SettleCommands
             var parse = context.ParseResult;
             var userId = parse.GetValue(user);
             var chosen = parse.GetValue(direction);
+            var day = parse.GetValue(through);
+            var offset = ThroughOption.OffsetFor(day);
 
-            var plan = await context.Users.GetSettlementPlanAsync(ct);
+            // Through a day, what is outstanding -- and so the default amount and where it
+            // lands -- is what is owed for that period after everything already paid.
+            var plan = await context.Users.GetSettlementPlanAsync(day, offset, ct);
 
             var side = chosen is SettlementDirection.YouPaidThem ? plan.YouPay : plan.OwedToYou;
             var person = side.FirstOrDefault(entry => entry.UserId == userId);
@@ -137,7 +151,7 @@ public static class SettleCommands
             if (parse.GetValue(dryRun))
             {
                 context.Output.Write(
-                    new { userId, person.UserName, amount = paying, groups = lines },
+                    new { userId, person.UserName, amount = paying, groups = lines, through = day },
                     _ => new Rows(
                         new Markup($"[bold]{paying:N2}[/] to {Markup.Escape(person.UserName)}, "
                                    + $"across {lines.Count} {(lines.Count == 1 ? "group" : "groups")}.\n"),
@@ -154,7 +168,7 @@ public static class SettleCommands
                     : $"Record {paying:N2} received from {person.UserName}?",
                 changes: lines,
                 confirmCommand: $"groupsplit settle pay {userId} --amount {paying:0.##} "
-                                + $"--direction {chosen} --yes");
+                                + $"--direction {chosen}{ThroughOption.Flag(day)} --yes");
 
             var recorded = await context.Users.SettleWithPersonAsync(
                 new SettleWithPersonRequest
@@ -163,7 +177,9 @@ public static class SettleCommands
                     Amount = paying,
                     Direction = chosen,
                     Date = parse.GetValue(date),
-                    Description = parse.GetValue(note)
+                    Description = parse.GetValue(note),
+                    Through = day,
+                    UtcOffset = offset
                 },
                 ct);
 
@@ -214,9 +230,12 @@ public static class SettleCommands
                 {
                     table.AddRow(
                         settlement.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
-                        Markup.Escape(settlement.PaidByYou
-                            ? $"You paid {settlement.ToUserName}"
-                            : $"{settlement.FromUserName} paid you"),
+                        Markup.Escape((settlement.PaidByYou
+                                          ? $"You paid {settlement.ToUserName}"
+                                          : $"{settlement.FromUserName} paid you")
+                                      + (settlement.CoversThrough is { } covers
+                                          ? $" (through {covers:yyyy-MM-dd})"
+                                          : string.Empty)),
                         Markup.Escape(settlement.GroupName),
                         $"{settlement.Amount:N2}");
                 }

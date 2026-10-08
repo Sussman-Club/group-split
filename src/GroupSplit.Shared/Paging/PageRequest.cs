@@ -18,5 +18,16 @@ public record PageRequest(int Page = 1, int PageSize = PageRequest.DefaultPageSi
     public const int MaxPageSize = 200;
 
     /// <summary>This request with both values brought inside their bounds.</summary>
-    public PageRequest Normalized() => new(Math.Max(Page, 1), Math.Clamp(PageSize, 1, MaxPageSize));
+    /// <remarks>
+    /// The page has a ceiling as well as a floor: the rows skipped are
+    /// <c>(Page - 1) * PageSize</c> as an <c>int</c>, and a page far enough out overflowed
+    /// it into a negative offset and an exception. Past the ceiling there are no rows anyway,
+    /// so clamping to it answers the same empty page the request was asking for.
+    /// </remarks>
+    public PageRequest Normalized()
+    {
+        var size = Math.Clamp(PageSize, 1, MaxPageSize);
+
+        return new(Math.Clamp(Page, 1, int.MaxValue / size), size);
+    }
 }

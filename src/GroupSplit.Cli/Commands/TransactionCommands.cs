@@ -213,8 +213,12 @@ public static class TransactionCommands
 
         command.SetHandler(async (context, ct) =>
         {
+            // This machine's offset, so a settlement made through a day reads its period on
+            // the same calendar the person running this is on.
             var transaction = await context.Transactions.GetTransactionAsync(
-                context.ParseResult.GetValue(TransactionId), ct);
+                context.ParseResult.GetValue(TransactionId),
+                ThroughOption.LocalOffsetMinutes,
+                ct);
 
             context.Output.Write(transaction, value =>
             {
@@ -231,6 +235,16 @@ public static class TransactionCommands
                 // logo the web app badges onto the row, but it has the name the logo stands
                 // for -- and "-" for the expenses nobody imported.
                 table.AddRow("Where", Markup.Escape(value.MerchantName ?? "-"));
+
+                if (value.Coverage is { } coverage)
+                {
+                    table.AddRow("Covers", coverage.From is { } from
+                        ? $"{from:yyyy-MM-dd} to {coverage.Through:yyyy-MM-dd}"
+                        : $"everything through {coverage.Through:yyyy-MM-dd}");
+                    table.AddRow("Still owed", coverage.StillOwed > 0
+                        ? $"[yellow]{coverage.StillOwed:N2}[/] for that period"
+                        : "nothing -- the period is square");
+                }
 
                 if (value.Splits.Count == 0)
                 {
@@ -429,13 +443,22 @@ public static class TransactionCommands
         {
             Description = "Record which version of a rule divided it, from `groupsplit split-rules versions <rule-id>`."
         };
+        var coversThrough = new Option<DateOnly?>("--covers-through")
+        {
+            Description = "On a settlement, the last day of activity it was for, e.g. 2026-08-31."
+        };
+        var noCoversThrough = new Option<bool>("--no-covers-through")
+        {
+            Description = "On a settlement, say it was not for any particular period."
+        };
 
-        var command = new Command("update", "Change an expense. Only what you name is sent.")
+        var command = new Command("update", "Change an expense or a settlement. Only what you name is sent.")
         {
             TransactionId, name, amount, date, description,
             group, personal, category, noCategory, merchant, noMerchant, paidBy,
             splitRule, splits, redivide,
-            handSplit, dividedBy, preview
+            handSplit, dividedBy, preview,
+            coversThrough, noCoversThrough
         };
 
         command.SetHandler(async (context, ct) =>
@@ -463,6 +486,15 @@ public static class TransactionCommands
                     "--merchant-id and --no-merchant contradict each other.",
                     "Pass one or the other.");
             }
+
+            if (parse.GetResult(coversThrough) is not null && parse.GetValue(noCoversThrough))
+            {
+                throw CliException.Input(
+                    "--covers-through and --no-covers-through contradict each other.",
+                    "Pass one or the other.");
+            }
+
+            var namesAPeriod = parse.GetResult(coversThrough) is not null || parse.GetValue(noCoversThrough);
 
             if (parse.GetResult(splitRule) is not null && parse.GetValue(redivide))
             {
@@ -536,6 +568,7 @@ public static class TransactionCommands
                 parse.GetValue(splits) is { Length: > 0 } ||
                 parse.GetValue(redivide) ||
                 recordsTheSource ||
+                namesAPeriod ||
 
                 // On its own, because "how would this divide if I saved it as it stands"
                 // is a real question and the only place the answer is available: a save
@@ -550,13 +583,20 @@ public static class TransactionCommands
                     + "See: groupsplit transactions update --help");
             }
 
-            var current = await context.Transactions.GetTransactionAsync(id, ct);
+            var current = await context.Transactions.GetTransactionAsync(id, cancellationToken: ct);
 
             if (parse.GetValue(preview) && current.Kind is ActivityKind.Transfer)
             {
                 throw CliException.Input(
                     "A settlement is not divided, so there is nothing to preview.",
                     "Drop --preview to make the change, or see: groupsplit settlements --help");
+            }
+
+            if (namesAPeriod && current.Kind is not ActivityKind.Transfer)
+            {
+                throw CliException.Input(
+                    "Only a settlement covers a period.",
+                    "Drop --covers-through and --no-covers-through; an expense has no day it covers through.");
             }
 
             var edited = Edited(parse);
@@ -673,7 +713,11 @@ public static class TransactionCommands
                 // it becomes.
                 Splits = from.GetValue(splits) is { Length: > 0 } given
                     ? Pairs.Splits("--split", given)
-                    : null
+                    : null,
+
+                CoversThrough = from.GetValue(noCoversThrough)
+                    ? null
+                    : from.GetValue(coversThrough) ?? current.CoversThrough
             };
         });
 
@@ -712,6 +756,9 @@ public static class TransactionCommands
 
         if (current.PaidByUserId != edited.PaidByUserId)
             patch.Replace(request => request.PaidByUserId, edited.PaidByUserId);
+
+        if (current.CoversThrough != edited.CoversThrough)
+            patch.Replace(request => request.CoversThrough, edited.CoversThrough);
 
         // Sent only when somebody named one. Like the shares below it is read as an
         // instruction rather than compared against a stored value, because there is no
@@ -1239,7 +1286,7 @@ public static class TransactionCommands
     {
         try
         {
-            return await context.Transactions.GetTransactionAsync(id, ct);
+            return await context.Transactions.GetTransactionAsync(id, cancellationToken: ct);
         }
         catch (ApiException api) when (api.StatusCode is (int)HttpStatusCode.NotFound)
         {
