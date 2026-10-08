@@ -4,8 +4,9 @@ using GroupSplit.Keycloak;
 namespace GroupSplit.RealmWorker;
 
 /// <summary>
-/// Brings the allowlisted realm and client settings back to the checked-in realm export, and,
-/// when an admin console address is configured, points the admin realm at it.
+/// Brings the allowlisted realm, client and identity provider settings, and the first broker
+/// login flow, back to the checked-in realm export, and, when an admin console address is
+/// configured, points the admin realm at it.
 /// </summary>
 /// <param name="environment">
 /// Resolves the <c>${...}</c> placeholders the export carries, from the same variables the
@@ -33,6 +34,11 @@ public sealed class RealmSettingsReconciler(
         foreach (var managed in KeycloakRealmDefinition.ManagedClients)
         {
             await ReconcileClientAsync(desired, managed, ct);
+        }
+
+        foreach (var managed in KeycloakRealmDefinition.ManagedIdentityProviders)
+        {
+            await ReconcileIdentityProviderAsync(desired, managed, ct);
         }
 
         if (environment(AdminConsoleUrlKey) is { Length: > 0 } adminConsoleUrl)
@@ -103,6 +109,25 @@ public sealed class RealmSettingsReconciler(
 
         managed["clients"] = clients;
 
+        var providers = new JsonArray();
+        var flows = new JsonArray();
+
+        foreach (var provider in KeycloakRealmDefinition.ManagedIdentityProviders)
+        {
+            var source = KeycloakRealmDefinition.IdentityProvider(definition, provider.Alias)!;
+            var picked = Pick(source, provider.Properties);
+
+            picked["alias"] = provider.Alias;
+            picked["config"] = Pick((JsonObject)source["config"]!, provider.Config);
+            providers.Add(picked);
+
+            var flowAlias = source["firstBrokerLoginFlowAlias"]!.GetValue<string>();
+            flows.Add(KeycloakRealmDefinition.Flow(definition, flowAlias)!.DeepClone());
+        }
+
+        managed["identityProviders"] = providers;
+        managed["authenticationFlows"] = flows;
+
         return (JsonObject)KeycloakPlaceholders.Expand(managed, environment)!;
 
         static JsonObject Pick(JsonObject source, IEnumerable<string> names) =>
@@ -163,6 +188,136 @@ public sealed class RealmSettingsReconciler(
         logger.LogInformation(
             "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
             changed.Count, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+    }
+
+    private async Task ReconcileIdentityProviderAsync(
+        JsonObject desired, ManagedIdentityProvider managed, CancellationToken ct)
+    {
+        var wanted = KeycloakRealmDefinition.IdentityProvider(desired, managed.Alias)!;
+        var flowAlias = wanted["firstBrokerLoginFlowAlias"]!.GetValue<string>();
+
+        // The flow before the provider, so the provider is only ever pointed at a flow that
+        // already says what the file says.
+        await ReconcileFlowAsync(KeycloakRealmDefinition.Flow(desired, flowAlias)!, ct);
+
+        // Not created when missing: its client id and secret are the container's, and a realm
+        // without the provider has nobody signing in through it, so there is nothing to secure.
+        var current = await keycloak.GetIdentityProviderAsync(managed.Alias, ct);
+
+        if (current is null)
+        {
+            logger.LogWarning(
+                "Keycloak realm {Realm} has no identity provider {Alias}; its settings were not reconciled.",
+                keycloak.Realm, managed.Alias);
+            return;
+        }
+
+        var changed = Apply(current, wanted, managed.Properties);
+
+        if (current["config"] is not JsonObject config)
+        {
+            current["config"] = config = new JsonObject();
+        }
+
+        changed.AddRange(Apply(config, (JsonObject)wanted["config"]!, managed.Config)
+            .Select(name => $"config.{name}"));
+
+        if (changed.Count == 0)
+        {
+            logger.LogInformation(
+                "Identity provider {Alias} on Keycloak realm {Realm} already matches the repository settings.",
+                managed.Alias, keycloak.Realm);
+            return;
+        }
+
+        await keycloak.UpdateIdentityProviderAsync(current, ct);
+        logger.LogInformation(
+            "Updated {Count} settings on identity provider {Alias} of Keycloak realm {Realm}: {Settings}.",
+            changed.Count, managed.Alias, keycloak.Realm, string.Join(", ", changed));
+    }
+
+    /// <summary>
+    /// Makes a flow run exactly the file's authenticators, in its order, with its requirements.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Rebuilt rather than patched: a flow that differs at all is emptied and refilled. Keycloak
+    /// can only append an execution and nudge it one place at a time, so patching a reordered
+    /// or nested flow into shape would be most of an importer. The definition is held to a flat
+    /// list of authenticators, which keeps the rebuild to a handful of calls.
+    /// </para>
+    /// <para>
+    /// A sign-in arriving mid-rebuild meets a flow that is empty or short of its last step, so
+    /// it ends with no account chosen and fails. It cannot land in the wrong account.
+    /// </para>
+    /// </remarks>
+    private async Task ReconcileFlowAsync(JsonObject flow, CancellationToken ct)
+    {
+        var alias = flow["alias"]!.GetValue<string>();
+        var wanted = KeycloakRealmDefinition.Steps(flow);
+
+        if (!await keycloak.FlowExistsAsync(alias, ct))
+        {
+            await keycloak.CreateFlowAsync(alias, flow["description"]?.GetValue<string>() ?? "", ct);
+            logger.LogInformation("Created authentication flow {Flow} on Keycloak realm {Realm}.", alias, keycloak.Realm);
+        }
+
+        var current = await keycloak.GetFlowExecutionsAsync(alias, ct);
+
+        if (Matches(current, wanted))
+        {
+            logger.LogInformation(
+                "Authentication flow {Flow} on Keycloak realm {Realm} already matches the repository.",
+                alias, keycloak.Realm);
+            return;
+        }
+
+        // Only the top level: removing a subflow's execution takes the subflow with it.
+        foreach (var execution in current.Where(execution => Level(execution) == 0))
+        {
+            await keycloak.DeleteExecutionAsync(execution["id"]!.GetValue<string>(), ct);
+        }
+
+        foreach (var step in wanted)
+        {
+            await keycloak.AddExecutionAsync(alias, step.Authenticator, ct);
+        }
+
+        var added = await keycloak.GetFlowExecutionsAsync(alias, ct);
+
+        if (added.Count != wanted.Count
+            || added.Zip(wanted).Any(pair => pair.First["providerId"]?.GetValue<string>() != pair.Second.Authenticator))
+        {
+            throw new InvalidOperationException(
+                $"Rebuilt authentication flow '{alias}' on Keycloak realm {keycloak.Realm}, but it reads back as "
+                + $"[{Describe(added)}] rather than [{string.Join(", ", wanted)}].");
+        }
+
+        foreach (var (execution, step) in added.Zip(wanted))
+        {
+            if (execution["requirement"]?.GetValue<string>() == step.Requirement) continue;
+
+            execution["requirement"] = step.Requirement;
+            await keycloak.UpdateExecutionAsync(alias, execution, ct);
+        }
+
+        logger.LogInformation(
+            "Rebuilt authentication flow {Flow} on Keycloak realm {Realm}. It ran [{Previous}]; it now runs [{Current}].",
+            alias, keycloak.Realm, Describe(current), string.Join(", ", wanted));
+
+        static bool Matches(IReadOnlyList<JsonObject> current, IReadOnlyList<FlowStep> wanted) =>
+            current.Count == wanted.Count
+            && current.Zip(wanted).All(pair =>
+                Level(pair.First) == 0
+                && pair.First["authenticationFlow"]?.GetValue<bool>() != true
+                && pair.First["providerId"]?.GetValue<string>() == pair.Second.Authenticator
+                && pair.First["requirement"]?.GetValue<string>() == pair.Second.Requirement);
+
+        static int Level(JsonObject execution) => execution["level"]?.GetValue<int>() ?? 0;
+
+        static string Describe(IEnumerable<JsonObject> executions) =>
+            string.Join(", ", executions.Select(execution =>
+                $"{execution["providerId"] ?? execution["displayName"]} {execution["requirement"]}"));
     }
 
     /// <summary>Copies each named value that differs from <paramref name="desired"/> onto <paramref name="current"/>.</summary>

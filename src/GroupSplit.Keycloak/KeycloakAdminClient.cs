@@ -80,6 +80,92 @@ public sealed class KeycloakAdminClient(
         await ThrowOnFailure(response, $"update client {client["clientId"]} on realm {Realm}", ct);
     }
 
+    public async Task<JsonObject?> GetIdentityProviderAsync(string alias, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(
+            HttpMethod.Get, $"admin/realms/{Realm}/identity-provider/instances/{Uri.EscapeDataString(alias)}", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+
+        await ThrowOnFailure(response, $"read identity provider {alias} on realm {Realm}", ct);
+
+        return await response.Content.ReadFromJsonAsync<JsonObject>(Json, ct);
+    }
+
+    public async Task UpdateIdentityProviderAsync(JsonObject provider, CancellationToken ct = default)
+    {
+        var alias = provider["alias"]?.GetValue<string>()
+                    ?? throw new ArgumentException("The identity provider representation carries no alias.", nameof(provider));
+
+        await SendAsync(HttpMethod.Put, $"admin/realms/{Realm}/identity-provider/instances/{Uri.EscapeDataString(alias)}",
+            provider, $"update identity provider {alias} on realm {Realm}", ct);
+    }
+
+    public async Task<bool> FlowExistsAsync(string alias, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}/authentication/flows", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"list the authentication flows of realm {Realm}", ct);
+
+        var flows = await response.Content.ReadFromJsonAsync<List<JsonObject>>(Json, ct) ?? [];
+
+        return flows.Any(flow => flow["alias"]?.GetValue<string>() == alias);
+    }
+
+    public Task CreateFlowAsync(string alias, string description, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/authentication/flows",
+            new JsonObject
+            {
+                ["alias"] = alias,
+                ["description"] = description,
+                ["providerId"] = "basic-flow",
+                ["topLevel"] = true,
+                ["builtIn"] = false
+            },
+            $"create authentication flow {alias} on realm {Realm}", ct);
+
+    public async Task<IReadOnlyList<JsonObject>> GetFlowExecutionsAsync(string alias, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, FlowExecutions(alias), ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the executions of flow {alias} on realm {Realm}", ct);
+
+        return await response.Content.ReadFromJsonAsync<List<JsonObject>>(Json, ct) ?? [];
+    }
+
+    public Task DeleteExecutionAsync(string executionId, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"admin/realms/{Realm}/authentication/executions/{executionId}",
+            content: null, $"delete execution {executionId} on realm {Realm}", ct);
+
+    public Task AddExecutionAsync(string flowAlias, string authenticator, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"{FlowExecutions(flowAlias)}/execution",
+            new JsonObject { ["provider"] = authenticator },
+            $"add {authenticator} to flow {flowAlias} on realm {Realm}", ct);
+
+    public Task UpdateExecutionAsync(string flowAlias, JsonObject execution, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Put, FlowExecutions(flowAlias), execution,
+            $"update execution {execution["providerId"]} of flow {flowAlias} on realm {Realm}", ct);
+
+    private string FlowExecutions(string alias) =>
+        $"admin/realms/{Realm}/authentication/flows/{Uri.EscapeDataString(alias)}/executions";
+
+    private async Task SendAsync(HttpMethod method, string uri, JsonObject? content, string attempt, CancellationToken ct)
+    {
+        using var request = await AuthorizedAsync(method, uri, ct);
+
+        if (content is not null)
+        {
+            request.Content = JsonContent.Create(content, options: Json);
+        }
+
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, attempt, ct);
+    }
+
     private async Task<JsonObject> ReadRealmAsync(string realm, CancellationToken ct)
     {
         using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{realm}", ct);

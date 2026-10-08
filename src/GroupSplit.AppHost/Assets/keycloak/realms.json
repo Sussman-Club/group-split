@@ -131,48 +131,19 @@
         "clientSecret": "${GOOGLE_CLIENT_SECRET}",
         "defaultScope": "openid profile email",
         "syncMode": "IMPORT",
-        "useJwksUrl": "true"
-      }
-    }
-  ],
-  "authenticatorConfig": [
-    {
-      "alias": "link only review profile config",
-      "config": {
-        "update.profile.on.first.login": "missing"
+        "useJwksUrl": "true",
+        "filteredByClaim": "true",
+        "claimFilterName": "email_verified",
+        "claimFilterValue": "true"
       }
     }
   ],
   "authenticationFlows": [
     {
       "alias": "link only first broker login",
-      "description": "Google may sign in an existing account or attach itself to one, but never create one. Keycloak's documented flow for that: detect, then set. Registration is off on this realm, so brokered creation was the one way around it.",
+      "description": "Google signs in an existing account or links to one, never creates one. It matches only the address Google verified, an essential claim on the provider; no profile form runs first, since a form is where an address could be typed.",
       "providerId": "basic-flow",
       "topLevel": true,
-      "builtIn": false,
-      "authenticationExecutions": [
-        {
-          "authenticator": "idp-review-profile",
-          "authenticatorConfig": "link only review profile config",
-          "requirement": "REQUIRED",
-          "priority": 10,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "flowAlias": "link only first broker login user creation or linking",
-          "requirement": "REQUIRED",
-          "priority": 20,
-          "autheticatorFlow": true,
-          "userSetupAllowed": false
-        }
-      ]
-    },
-    {
-      "alias": "link only first broker login user creation or linking",
-      "description": "Detect errors when no account carries the address, which is what refuses a sign-up; auto-link adopts the one it found. Safe only while account creation stays curated: with self-registration on, someone could claim an address they do not own.",
-      "providerId": "basic-flow",
-      "topLevel": false,
       "builtIn": false,
       "authenticationExecutions": [
         {
