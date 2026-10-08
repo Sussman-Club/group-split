@@ -63,12 +63,13 @@ jobs:
           KOMODO_URL: ${{ secrets.KOMODO_URL }}
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_REGISTRY_ACCOUNT: ${{ vars.KOMODO_REGISTRY_ACCOUNT }}
         shell: bash
         run: |
           set -euo pipefail
 
           missing=0
-          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET; do
+          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET KOMODO_REGISTRY_ACCOUNT; do
             if [ -z "${!name:-}" ]; then
               echo "${name} is not set on the production environment" >&2
               missing=1
@@ -438,7 +439,11 @@ jobs:
           KOMODO_URL: ${{ secrets.KOMODO_URL }}
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
-          STACK: group-split
+          # The name of a ghcr.io account in Komodo's registry providers, holding a token
+          # that can read this organisation's packages. A variable so that changing who
+          # holds that token needs no commit.
+          KOMODO_REGISTRY_ACCOUNT: ${{ vars.KOMODO_REGISTRY_ACCOUNT }}
+          STACK: ${{ vars.KOMODO_STACK || 'group-split' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -541,15 +546,17 @@ jobs:
 
           # jq rather than string interpolation: the YAML is full of quotes and newlines.
           jq -n --arg stack "$STACK" \
+                --arg registry_account "$KOMODO_REGISTRY_ACCOUNT" \
                 --rawfile yaml docker-compose.yaml \
                 --rawfile env .env.production '{
             type: "UpdateStack",
             params: { id: $stack,
                       config: { file_contents: $yaml, environment: $env,
                                 # Komodo logs in to GHCR before compose up, with the
-                                # read-only account stored in its config.
+                                # read-only account stored in its config. The provider
+                                # is the registry the AppHost pushes to, so it stays here.
                                 registry_provider: "ghcr.io",
-                                registry_account: "lorainemg" } }
+                                registry_account: $registry_account } }
           }' > payload.json
           curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @payload.json > /dev/null
 
@@ -603,7 +610,7 @@ jobs:
       # web app uses for OIDC discovery.
       - name: Smoke-test the deployed endpoints
         env:
-          WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME || secrets.WEB_HOSTNAME }}
+          WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME }}
         shell: bash
         run: |
           set -euo pipefail
