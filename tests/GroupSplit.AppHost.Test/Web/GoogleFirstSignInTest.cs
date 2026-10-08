@@ -27,6 +27,7 @@ namespace GroupSplit.AppHost.Test.Web;
 /// still runs the profile review shows its form -- and the form is the attack.
 /// </para>
 /// </remarks>
+[Collection(GoogleFirstBrokerLogin.Collection)]
 public class GoogleFirstSignInTest(AppHostFixture appHost) : WebPageTest(appHost)
 {
     private readonly AppHostFixture _appHost = appHost;
