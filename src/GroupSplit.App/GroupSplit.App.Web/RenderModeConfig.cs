@@ -31,7 +31,11 @@ public static class RenderModeConfig
         switch (Preference)
         {
             case RenderModePreference.ServerFirst:
-                builder.AddInteractiveServerComponents();
+                builder.AddInteractiveServerComponents().AddHubOptions(options =>
+                {
+                    // StartCircuit includes encrypted persisted tracker state, which can exceed 32 KiB.
+                    options.MaximumReceiveMessageSize = 256 * 1024;
+                });
                 break;
             case RenderModePreference.WebAssemblyFirst:
                 builder.AddInteractiveWebAssemblyComponents();
