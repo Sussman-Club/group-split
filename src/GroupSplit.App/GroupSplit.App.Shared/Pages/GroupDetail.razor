@@ -275,6 +275,7 @@ else if (NotFound)
 
         var parameters = new DialogParameters<SettleDialog>
         {
+            { x => x.GroupId, GroupId },
             { x => x.UserId, debt.UserId },
             { x => x.Username, debt.UserName },
             { x => x.TotalDebt, debt.Amount },

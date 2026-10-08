@@ -211,6 +211,82 @@
 }
 
 
+/* --------------------------------------------- a settlement's period ---- */
+
+/*
+    The expenses dated in a settlement's period. Not .gs-split: that row is a person and a
+    share, one short name long, and an expense needs its name, its date and who paid --
+    squeezed onto the one line they clipped the name to a few letters and pushed the amount
+    off the edge of a phone. Two lines on the left, and an amount that never shrinks.
+*/
+.gs-period-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.gs-period-head h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.gs-period-count {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--gs-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.gs-period-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-period-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--gs-line);
+}
+
+.gs-period-row:last-child {
+    border-bottom: 0;
+}
+
+.gs-period-what {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.gs-period-name,
+.gs-period-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-period-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.gs-period-meta {
+    font-size: 0.75rem;
+    color: var(--gs-muted);
+}
+
+.gs-period-amount {
+    font-size: 0.875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 /* ------------------------------------------------------- quiet captions ---- */
 
 /*

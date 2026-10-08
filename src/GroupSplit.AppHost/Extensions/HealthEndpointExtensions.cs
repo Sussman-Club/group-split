@@ -13,7 +13,8 @@ public static class HealthEndpointExtensions
     /// </summary>
     public const string ManagementEndpointName = "management";
 
-    extension(IResourceBuilder<ProjectResource> project)
+    extension<T>(IResourceBuilder<T> project)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IResourceWithProbes, IComputeResource
     {
         /// <summary>
         /// Puts the health endpoints on their own endpoint, and points the probes at it.
@@ -31,7 +32,7 @@ public static class HealthEndpointExtensions
         /// the endpoints to it; the framework only hands out the port it allocated.
         /// </para>
         /// </summary>
-        public IResourceBuilder<ProjectResource> WithHealthEndpoints()
+        public IResourceBuilder<T> WithHealthEndpoints()
             => project
                 .WithHttpEndpoint(name: ManagementEndpointName)
                 .WithEnvironment(context =>
@@ -62,7 +63,7 @@ public static class HealthEndpointExtensions
         /// apart.
         /// </para>
         /// </summary>
-        public IResourceBuilder<ProjectResource> WithManagementHealthcheck()
+        public IResourceBuilder<T> WithManagementHealthcheck()
             => project.WithComposeHealthcheck(new Healthcheck
             {
                 Test =

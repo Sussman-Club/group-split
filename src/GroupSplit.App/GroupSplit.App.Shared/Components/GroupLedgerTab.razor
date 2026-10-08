@@ -520,14 +520,17 @@
     }
 
     /// <summary>
-    /// Whether clicking a row opens anything: expenses do, settlements do not.
+    /// Whether clicking a row opens anything: expenses do, and settlements made through a
+    /// day do.
     /// </summary>
     /// <remarks>
     /// The same line the home page's lists take. A settlement is who paid whom and how
-    /// much, and all three of those are already on the row: there is no division to go and
-    /// look at, and the dialog is mostly the division.
+    /// much, and all three of those are already on the row -- unless it was for a period,
+    /// when what that period held and whether it is still square are not, and are worth
+    /// opening it for.
     /// </remarks>
-    private static bool Opens(GroupLedgerEntryResponse entry) => entry.Kind is not ActivityKind.Transfer;
+    private static bool Opens(GroupLedgerEntryResponse entry) =>
+        entry.Kind is not ActivityKind.Transfer || entry.CoversThrough is not null;
 
     /// <summary>The pointer says which rows open, so the cursor is not a lie over a settlement.</summary>
     private static string RowClass(GroupLedgerEntryResponse entry, int _) => Opens(entry) ? "is-openable" : "";
@@ -582,7 +585,11 @@
             PaidToUserName = entry.PaidToUserName
         };
 
-        var parameters = new DialogParameters<UpdateSettlementDialog> { { x => x.Original, original } };
+        var parameters = new DialogParameters<UpdateSettlementDialog>
+        {
+            { x => x.Original, original },
+            { x => x.CoversThrough, entry.CoversThrough }
+        };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
 
         var dialog = await DialogService.ShowAsync<UpdateSettlementDialog>("Edit Settlement", parameters, options);
@@ -673,7 +680,7 @@
     /// </summary>
     private static string Detail(GroupLedgerEntryResponse entry) =>
         entry.Kind is ActivityKind.Transfer
-            ? entry.Description is { Length: > 0 } note ? note : "Settling up"
+            ? (entry.Description is { Length: > 0 } note ? note : "Settling up") + entry.CoversThrough.ThroughSuffix()
             : $"{entry.PaidByUserName} paid";
 
     private async Task OnDataChangedAsync()

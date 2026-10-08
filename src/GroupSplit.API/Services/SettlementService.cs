@@ -29,10 +29,14 @@ namespace GroupSplit.API.Services;
 /// something you had to mean.
 /// </para>
 /// <para>
-/// It settles the caller's whole outstanding position and nothing narrower, which is what
-/// lets it keep no bookkeeping of its own. Balances are cumulative and self-correcting: pay
-/// what the balance says, and it goes to zero. Nothing has to remember that this happened,
-/// because a second settling-up over a position already at zero has nothing left to write.
+/// It settles the caller's whole outstanding position, or the position through a day, and it
+/// keeps no bookkeeping of its own either way. Balances are cumulative and self-correcting:
+/// pay what the balance says, and it goes to zero. Through a day the balance counts the
+/// expenses dated up to it and every settlement whatever its date, so paying it zeroes that
+/// period and a second settling-up of the same period has nothing left to write. The day is
+/// remembered on the payments as <see cref="Transfer.CoversThrough"/>, as a statement of
+/// what they were for -- never as a list of expenses they paid, which an edit, a deletion
+/// or a back-dated expense would quietly make untrue.
 /// </para>
 /// </remarks>
 public interface ISettlementService
@@ -73,6 +77,12 @@ public interface ISettlementService
     Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The same plan through a day: what clears everything dated up to it, after every
+    /// settlement already made. Null is the whole of it, as the overload without it is.
+    /// </summary>
+    Task<SettlementPlanResponse> GetPlan(Cutoff? cutoff, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Records one payment between the caller and one other person, spread over whichever
     /// groups the debt between them lives in, in a single save.
     /// </summary>
@@ -91,6 +101,27 @@ public interface ISettlementService
     /// activity in turn.
     /// </remarks>
     Task<IQueryable<SettlementResponse>> GetHistory(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What a settlement made through a day covers, as things stand now -- or null when it
+    /// claims no period, is not a settlement, or is not one the caller can see.
+    /// </summary>
+    /// <param name="utcOffsetMinutes">
+    /// The reader's offset from UTC, which says when the day ends. See <see cref="Cutoff"/>.
+    /// </param>
+    Task<SettlementCoverage?> GetCoverage(Guid transactionId, int utcOffsetMinutes,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The caller's position in one of their groups -- the whole of it, or through a day --
+    /// or null when the group is not one of theirs.
+    /// </summary>
+    /// <remarks>
+    /// Through a day, each payment is capped at what the whole balance says between the same
+    /// two people; see <see cref="IDebtCalculationService.GetUserBalanceThrough"/>.
+    /// </remarks>
+    Task<UserGroupBalanceResponse?> GetPosition(Guid groupId, Cutoff? cutoff,
+        CancellationToken cancellationToken = default);
 }
 
 public class SettlementService(
@@ -109,19 +140,20 @@ public class SettlementService(
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
-        var balances = await (await groups.GetGroupNetBalance(groupId, cancellationToken))
-            .ToArrayAsync(cancellationToken);
+        var cutoff = Cutoff.Of(request.Through, request.UtcOffset);
 
         // The same calculation the group's balances view shows, and deliberately not the
         // amounts a client might send: between somebody opening the dialog and pressing the
         // button, another expense can land.
-        var position = await debtCalculator.GetUserBalance(balances);
+        var position = await GetPosition(groupId, cutoff, cancellationToken)
+                       ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         var payments = position.Payments(userContext.User.Id);
 
         if (payments.Count is 0)
-            throw new ConflictException(ErrorCodes.SettlementNothingToSettle,
-                "You are already square with everybody in this group.");
+            throw new ConflictException(ErrorCodes.SettlementNothingToSettle, cutoff is null
+                ? "You are already square with everybody in this group."
+                : $"You are already square with everybody in this group for everything through {cutoff.Through:d MMM yyyy}.");
 
         var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
 
@@ -132,7 +164,7 @@ public class SettlementService(
         foreach (var payment in payments)
         {
             context.Add(group.SettlementBetween(members[payment.FromUserId], members[payment.ToUserId],
-                payment.Amount, date, description));
+                payment.Amount, date, description, cutoff?.Through));
         }
 
         // One save. Half a settling-up would leave somebody looking at a balance that had
@@ -143,7 +175,8 @@ public class SettlementService(
         {
             Payments = payments,
             Date = date,
-            Description = description
+            Description = description,
+            CoversThrough = cutoff?.Through
         };
     }
 
@@ -192,9 +225,12 @@ public class SettlementService(
         };
     }
 
-    public async Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default)
+    public Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default) =>
+        GetPlan(null, cancellationToken);
+
+    public async Task<SettlementPlanResponse> GetPlan(Cutoff? cutoff, CancellationToken cancellationToken = default)
     {
-        var (youPay, owedToYou) = await PlanSides(cancellationToken);
+        var (youPay, owedToYou) = await PlanSides(cutoff, cancellationToken);
 
         var youOwe = youPay.Sum(person => person.Amount);
         var owed = owedToYou.Sum(person => person.Amount);
@@ -223,7 +259,12 @@ public class SettlementService(
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
                 "A settlement needs two different people.");
 
-        var (youPay, owedToYou) = await PlanSides(cancellationToken);
+        var cutoff = Cutoff.Of(request.Through, request.UtcOffset);
+
+        // Through a day, what is outstanding with them -- and so which groups the payment is
+        // spread over, and how much each takes -- is what is owed for that period after
+        // everything already paid.
+        var (youPay, owedToYou) = await PlanSides(cutoff, cancellationToken);
 
         // Which list the person has to be in follows from the direction stated on the
         // request, not from a balance read a second time: somebody recording "I paid them"
@@ -231,8 +272,9 @@ public class SettlementService(
         var side = request.Direction is SettlementDirection.YouPaidThem ? youPay : owedToYou;
 
         var person = side.FirstOrDefault(entry => entry.UserId == request.UserId)
-                     ?? throw new ConflictException(ErrorCodes.SettlementNothingToSettle,
-                         "There is nothing outstanding between the two of you in that direction.");
+                     ?? throw new ConflictException(ErrorCodes.SettlementNothingToSettle, cutoff is null
+                         ? "There is nothing outstanding between the two of you in that direction."
+                         : $"There is nothing outstanding between the two of you in that direction for everything through {cutoff.Through:d MMM yyyy}.");
 
         var allocations = Allocate(request.Amount, person.Groups);
 
@@ -255,7 +297,7 @@ public class SettlementService(
         foreach (var allocation in allocations)
         {
             context.Add(groups[allocation.GroupId].SettlementBetween(from, to, allocation.Amount, date,
-                description));
+                description, cutoff?.Through));
         }
 
         // One save for the whole payment. Two groups disagreeing about whether a single
@@ -269,7 +311,8 @@ public class SettlementService(
             request.Direction,
             date,
             description,
-            allocations);
+            allocations,
+            cutoff?.Through);
     }
 
     public async Task<IQueryable<SettlementResponse>> GetHistory(
@@ -300,8 +343,73 @@ public class SettlementService(
                    Amount = transfer.Amount,
                    DateTime = transfer.DateTime,
                    Description = transfer.Description,
-                   PaidByYou = transfer.UserId == callerId
+                   PaidByYou = transfer.UserId == callerId,
+                   CoversThrough = transfer.CoversThrough
                };
+    }
+
+    public async Task<SettlementCoverage?> GetCoverage(Guid transactionId, int utcOffsetMinutes,
+        CancellationToken cancellationToken = default)
+    {
+        var mine = await groups.GetAllGroups(cancellationToken);
+
+        var transfer = await context.Set<Transfer>()
+            .Where(candidate => candidate.Id == transactionId && mine.Any(@group => @group.Id == candidate.GroupId))
+            .Select(candidate => new
+            {
+                GroupId = candidate.GroupId!.Value,
+                candidate.CoversThrough,
+                PayerId = candidate.UserId,
+                RecipientId = candidate.Splits.Select(split => split.UserId).FirstOrDefault()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (transfer?.CoversThrough is not { } through)
+            return null;
+
+        // Where the period starts: after the last day an earlier settlement between the same
+        // two people covered, whichever way it went. The pair and not the group, because
+        // settling up is personal -- somebody else squaring August says nothing about what
+        // these two were settling.
+        var previous = await context.Set<Transfer>()
+            .Where(other => other.GroupId == transfer.GroupId &&
+                            other.CoversThrough != null && other.CoversThrough < through &&
+                            ((other.UserId == transfer.PayerId &&
+                              other.Splits.Any(split => split.UserId == transfer.RecipientId)) ||
+                             (other.UserId == transfer.RecipientId &&
+                              other.Splits.Any(split => split.UserId == transfer.PayerId))))
+            .MaxAsync(other => other.CoversThrough, cancellationToken);
+
+        // Whether the period is square between these two now: what the plan through the day
+        // still has the payer paying the recipient. Between them and nobody else -- what the
+        // payer owes a third member for the same month is not this payment's business. A
+        // shortfall is something dated inside the period added or changed since.
+        var position = await GetPosition(transfer.GroupId, new Cutoff(through, utcOffsetMinutes), cancellationToken);
+
+        var stillOwed = position?.Plan
+            .Where(payment => payment.FromUserId == transfer.PayerId && payment.ToUserId == transfer.RecipientId)
+            .Sum(payment => payment.Amount) ?? 0m;
+
+        return new SettlementCoverage(through, previous?.AddDays(1), stillOwed);
+    }
+
+    public async Task<UserGroupBalanceResponse?> GetPosition(Guid groupId, Cutoff? cutoff,
+        CancellationToken cancellationToken = default)
+    {
+        var whole = await (await groups.GetGroupNetBalance(groupId, cancellationToken))
+            .ToArrayAsync(cancellationToken);
+
+        // Every group has at least the caller, so no rows means it is not one of theirs.
+        if (whole.Length == 0)
+            return null;
+
+        if (cutoff is null)
+            return await debtCalculator.GetUserBalance(whole);
+
+        var throughDay = await (await groups.GetGroupNetBalance(groupId, cutoff, cancellationToken))
+            .ToArrayAsync(cancellationToken);
+
+        return await debtCalculator.GetUserBalanceThrough(throughDay, whole);
     }
 
     /// <summary>
@@ -315,34 +423,32 @@ public class SettlementService(
     /// have no reason to be moving money to each other.
     /// </remarks>
     private async Task<(IReadOnlyList<PersonSettlement> YouPay, IReadOnlyList<PersonSettlement> OwedToYou)>
-        PlanSides(CancellationToken cancellationToken)
+        PlanSides(Cutoff? cutoff, CancellationToken cancellationToken)
     {
-        var rows = await (await groups.GetAllGroupNetBalances(cancellationToken))
+        var rows = await (await groups.GetAllGroupNetBalances(cutoff, cancellationToken))
             .ToListAsync(cancellationToken);
+
+        // Through a day, the whole balances too: each group's payments are capped at them.
+        var wholeRows = cutoff is null
+            ? rows
+            : await (await groups.GetAllGroupNetBalances(cancellationToken)).ToListAsync(cancellationToken);
 
         var youPay = new Dictionary<Guid, PersonBuilder>();
         var owedToYou = new Dictionary<Guid, PersonBuilder>();
 
         foreach (var inGroup in rows.GroupBy(row => new { row.GroupId, row.GroupName }))
         {
-            var balances = inGroup
-                .Select(row => new GroupNetBalance
-                {
-                    UserId = row.UserId,
-                    UserName = row.UserName,
-                    AmountPaid = row.AmountPaid,
-                    AmountOwed = row.AmountOwed,
-                    Balance = row.Balance,
-                    IsGuest = row.IsGuest
-                })
-                .ToList();
+            var balances = Balances(inGroup);
 
             // Nothing outstanding here at all. Worth skipping rather than minimising an
             // all-zero group, which produces no payments anyway.
             if (balances.TrueForAll(balance => balance.Balance == 0))
                 continue;
 
-            var position = await debtCalculator.GetUserBalance(balances);
+            var position = cutoff is null
+                ? await debtCalculator.GetUserBalance(balances)
+                : await debtCalculator.GetUserBalanceThrough(balances,
+                    Balances(wholeRows.Where(row => row.GroupId == inGroup.Key.GroupId)));
 
             var guests = balances.Where(balance => balance.IsGuest).Select(balance => balance.UserId).ToHashSet();
 
@@ -355,6 +461,19 @@ public class SettlementService(
 
         return (Finish(youPay), Finish(owedToYou));
     }
+
+    private static List<GroupNetBalance> Balances(IEnumerable<GroupMemberBalance> rows) =>
+    [
+        .. rows.Select(row => new GroupNetBalance
+        {
+            UserId = row.UserId,
+            UserName = row.UserName,
+            AmountPaid = row.AmountPaid,
+            AmountOwed = row.AmountOwed,
+            Balance = row.Balance,
+            IsGuest = row.IsGuest
+        })
+    ];
 
     private static void Accumulate(Dictionary<Guid, PersonBuilder> side, DebtInfo debt,
         Guid groupId, string groupName, bool isGuest)

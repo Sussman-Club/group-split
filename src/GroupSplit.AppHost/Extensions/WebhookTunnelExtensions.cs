@@ -21,6 +21,18 @@ public static class WebhookTunnelExtensions
     /// </remarks>
     public const string EnabledKey = "WebhookTunnel";
 
+    /// <summary>
+    /// How long the tunnel may sit unhosted before the dev tunnels service deletes it.
+    /// </summary>
+    /// <remarks>
+    /// Stopping the AppHost stops hosting the tunnel but does not delete it, and left alone
+    /// the service keeps it for 30 days: an anonymous-access tunnel to this machine's web app,
+    /// registered to the developer's account, long after the webhook work is done. A day
+    /// covers a working session; the next run after that just creates it again and hands its
+    /// address to the API through <c>Banking__PublicOrigin</c> as before.
+    /// </remarks>
+    public const int IdleExpirationHours = 24;
+
     extension<T>(IResourceBuilder<T> api) where T : IResourceWithEnvironment
     {
         /// <summary>
@@ -90,6 +102,7 @@ public static class WebhookTunnelExtensions
                     Description = "Bank provider webhooks to a development machine",
                     Labels = ["groupsplit", "webhooks"]
                 })
+                .WithExpiration(IdleExpirationHours)
                 .WithReference(web.GetEndpoint(Reachable(web)), allowAnonymous: true);
 
             // The same setting a deployment fills from its public origin, so nothing below

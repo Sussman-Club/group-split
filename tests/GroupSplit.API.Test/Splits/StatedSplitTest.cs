@@ -119,20 +119,43 @@ public class StatedSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// Somebody may be owed money back on a single expense, so a share is allowed to be
-    /// negative. It is the total that has to come out right, not each part.
+    /// A share used to be allowed to go against the amount, so long as the total came out
+    /// right -- "somebody is owed ten back on this one". That sums correctly and moves money
+    /// between two people that nobody recorded as a payment (#315), so it is refused: money
+    /// owed back is a settlement.
     /// </summary>
     [Fact]
-    public async Task A_share_may_be_negative_as_long_as_the_total_is_right()
+    public async Task A_share_going_against_the_amount_is_refused_even_when_the_total_is_right()
     {
         var (groupId, self, other) = await GroupOfTwo();
 
-        var created = await Create(groupId, 50m, [Share(self, 60m), Share(other, -10m)]);
+        var failure = await Assert.ThrowsAsync<ValidationException>(() =>
+            Create(groupId, 50m, [Share(self, 60m), Share(other, -10m)]));
+
+        Assert.Equal(ErrorCodes.SplitsInvalid, failure.Code);
+    }
+
+    [Fact]
+    public async Task A_refund_divides_into_shares_that_are_all_money_back()
+    {
+        var (groupId, self, other) = await GroupOfTwo();
+
+        var created = await Create(groupId, -50m, [Share(self, -30m), Share(other, -20m)]);
 
         var splits = await SplitsOf(created.Id);
 
-        Assert.Equal(50m, splits.Sum(split => split.Amount));
-        Assert.Equal(-10m, splits.Single(split => split.UserId == other).Amount);
+        Assert.Equal(-50m, splits.Sum(split => split.Amount));
+    }
+
+    [Fact]
+    public async Task A_share_of_a_refund_going_the_other_way_is_refused()
+    {
+        var (groupId, self, other) = await GroupOfTwo();
+
+        var failure = await Assert.ThrowsAsync<ValidationException>(() =>
+            Create(groupId, -50m, [Share(self, -60m), Share(other, 10m)]));
+
+        Assert.Equal(ErrorCodes.SplitsInvalid, failure.Code);
     }
 
     [Fact]

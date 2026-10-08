@@ -223,9 +223,9 @@
     /// the fact this list is here to supply -- the plan above deliberately hides it.
     /// </summary>
     private static string Detail(SettlementResponse settlement) =>
-        settlement.Description is { Length: > 0 } note
+        (settlement.Description is { Length: > 0 } note
             ? $"{settlement.GroupName} · {note}"
-            : settlement.GroupName;
+            : settlement.GroupName) + settlement.CoversThrough.ThroughSuffix();
 
     private async Task RecordAsync(PersonSettlement person, SettlementDirection direction)
     {

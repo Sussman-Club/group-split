@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
@@ -220,18 +221,32 @@ public static class TransactionApi
 
         private RouteHandlerBuilder MapGetById()
         {
+            // ?utcOffset= is the reader's, for a settlement made through a day: it says when
+            // that day ends, and so which expenses its period holds and whether it is still
+            // square. Without it the day ends at midnight UTC.
             return group.MapGet("{id:guid}", async (
                     Guid id,
+                    [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes)] int? utcOffset,
                     ITransactionService transactionService,
+                    ISettlementService settlements,
                     CancellationToken ct) =>
                 {
                     var details = await transactionService.GetDetails(id, ct);
-                    return details is not null
-                        ? Results.Ok(details)
-                        : Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+                    if (details is null)
+                        return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+
+                    // What a settlement made through a day covers, which the transaction service
+                    // cannot work out itself: it takes the group's balances through the day.
+                    // Only when there is a day, which most settlements do not have.
+                    if (details.CoversThrough is not null)
+                        details = details with { Coverage = await settlements.GetCoverage(id, utcOffset ?? 0, ct) };
+
+                    return Results.Ok(details);
                 })
                 .WithName("GetTransaction")
                 .Produces<TransactionDetailsResponse>()
+                .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
@@ -396,13 +411,16 @@ public static class TransactionApi
                         transactionUpdateRequest.Splits = null;
                     }
 
-                    patchDocument.ApplyTo(transactionUpdateRequest);
+                    patchDocument.ApplyOrRefuse(transactionUpdateRequest);
 
                     if (!PatchedModel.IsValid(transactionUpdateRequest, out var invalid))
                         return invalid;
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
+                    // The stored CoversThrough comes back, the coverage worked out from it does
+                    // not: that depends on the reader's calendar, which a PATCH is not told, and
+                    // an answer in UTC would disagree with the next GET.
                     var details = await transactionService.GetDetails(id, ct);
 
                     return Results.Ok(details);

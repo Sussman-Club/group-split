@@ -228,6 +228,35 @@ public class ReceiptEndpointTest : IAsyncLifetime
     }
 
     /// <summary>
+    /// A patch the line cannot take is the caller's mistake. It threw out of
+    /// <c>ApplyTo</c> unmapped and answered 500.
+    /// </summary>
+    [Theory]
+    [InlineData("[{\"op\":\"replace\",\"path\":\"/nothingHere\",\"value\":1}]")]
+    [InlineData("[{\"op\":\"replace\",\"path\":\"/totalPrice\",\"value\":\"abc\"}]")]
+    [InlineData("[{\"op\":\"test\",\"path\":\"/name\",\"value\":\"Not the name\"}]")]
+    public async Task A_line_patch_that_cannot_apply_is_refused_as_malformed(string operations)
+    {
+        var expense = await AGroupExpense();
+        var saved = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new
+        {
+            subtotal = 30m,
+            total = 30m,
+            items = new[] { new { name = "Everything", totalPrice = 30m } }
+        }, Json, Ct);
+        saved.EnsureSuccessStatusCode();
+        var itemId = (await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct))
+            .GetProperty("items")[0].GetProperty("id").GetGuid();
+
+        using var patch = new StringContent(operations, Encoding.UTF8, "application/json-patch+json");
+        var response = await Client.PatchAsync($"/transactions/{expense}/receipt/items/{itemId}", patch, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        Assert.Equal("PATCH_INVALID", problem.GetProperty("code").GetString());
+    }
+
+    /// <summary>
     /// A bill on an expense that does not exist, or belongs to somebody else, is a 404 and
     /// not a 403: whether it exists is not the caller's to learn.
     /// </summary>

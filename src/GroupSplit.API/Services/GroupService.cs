@@ -136,6 +136,18 @@ public interface IGroupService
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The same balances through a day: expenses dated up to the end of it, and every
+    /// settlement whatever its date. Null counts everything, as the overload without it does.
+    /// </summary>
+    /// <remarks>
+    /// What settling up through a day pays, and what a settlement made through one is
+    /// checked against afterwards. See <see cref="Cutoff"/> for why settlements are not cut
+    /// off too.
+    /// </remarks>
+    Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, Cutoff? cutoff,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The same balances, for a group <paramref name="memberId"/> belongs to rather than
     /// one the caller belongs to.
     /// <para>
@@ -164,6 +176,12 @@ public interface IGroupService
     /// </para>
     /// </remarks>
     Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The same rows through a day. See <see cref="GetGroupNetBalance(Guid, Cutoff?, CancellationToken)"/>.
+    /// </summary>
+    Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(Cutoff? cutoff,
+        CancellationToken cancellationToken = default);
 
     Task Settle(Guid groupId, SettleRequest request,
         CancellationToken cancellationToken = default);
@@ -549,10 +567,14 @@ public class GroupService(
                select transaction;
     }
 
-    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
+    public Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId,
+        CancellationToken cancellationToken = default) =>
+        GetGroupNetBalance(groupId, null, cancellationToken);
+
+    public async Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, Cutoff? cutoff,
         CancellationToken cancellationToken = default)
     {
-        return NetBalances(await GetGroupById(groupId, cancellationToken));
+        return NetBalances(await GetGroupById(groupId, cancellationToken), cutoff?.End);
     }
 
     public Task<IQueryable<GroupNetBalance>> GetGroupNetBalanceFor(Guid groupId, Guid memberId,
@@ -563,10 +585,15 @@ public class GroupService(
         return Task.FromResult(NetBalances(groupQuery));
     }
 
-    public async Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(
+    public Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(
+        CancellationToken cancellationToken = default) =>
+        GetAllGroupNetBalances(null, cancellationToken);
+
+    public async Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(Cutoff? cutoff,
         CancellationToken cancellationToken = default)
     {
         var groups = await GetAllGroups(cancellationToken);
+        var before = cutoff?.End;
 
         // The same two sums <see cref="NetBalances"/> takes, with the group carried through.
         // Transfers are in both of them, because a transfer is a transaction with one split:
@@ -587,10 +614,12 @@ public class GroupService(
                        ? user.Email ?? ""
                        : user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
                    (from transaction in context.Set<Transaction>()
-                    where transaction.GroupId == @group.Id && transaction.UserId == user.Id
+                    where transaction.GroupId == @group.Id && transaction.UserId == user.Id &&
+                          (before == null || transaction is Transfer || transaction.DateTime < before)
                     select transaction.Amount).Sum(),
                    (from split in context.Set<TransactionSplit>()
-                    where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
+                    where split.Transaction.GroupId == @group.Id && split.UserId == user.Id &&
+                          (before == null || split.Transaction is Transfer || split.Transaction.DateTime < before)
                     select split.Amount).Sum(),
                    !user.Groups.Any(candidate => candidate.Id == @group.Id));
     }
@@ -600,7 +629,11 @@ public class GroupService(
     /// arithmetic -- and the truncation it depends on -- has one home no matter who is
     /// asking or on whose behalf.
     /// </summary>
-    private IQueryable<GroupNetBalance> NetBalances(IQueryable<Group> groupQuery)
+    /// <param name="before">
+    /// When given, expenses dated at or after it are left out. Settlements never are: money
+    /// paid counts against what is owed whatever day it was paid on (see <see cref="Cutoff"/>).
+    /// </param>
+    private IQueryable<GroupNetBalance> NetBalances(IQueryable<Group> groupQuery, DateTimeOffset? before = null)
     {
         // Participants and not members, because the column has to add up. Shares are
         // recorded against guests like anybody else, so a listing of members alone would show
@@ -623,10 +656,14 @@ public class GroupService(
                             ? user.Email ?? ""
                             : user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
                         AmountPaid = (from transaction in context.Set<Transaction>()
-                                      where transaction.GroupId == @group.Id && transaction.User == user
+                                      where transaction.GroupId == @group.Id && transaction.User == user &&
+                                            (before == null || transaction is Transfer ||
+                                             transaction.DateTime < before)
                                       select transaction.Amount).Sum(),
                         AmountOwed = (from split in context.Set<TransactionSplit>()
-                                      where split.Transaction.GroupId == @group.Id && split.User == user
+                                      where split.Transaction.GroupId == @group.Id && split.User == user &&
+                                            (before == null || split.Transaction is Transfer ||
+                                             split.Transaction.DateTime < before)
                                       select split.Amount).Sum(),
                         IsGuest = !user.Groups.Any(candidate => candidate.Id == @group.Id)
                     } into balance
@@ -682,7 +719,7 @@ public class GroupService(
         var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
 
         var transfer = resultGroup.SettlementBetween(from, to, request.Amount, date,
-            request.Description?.Trim() is { Length: > 0 } note ? note : null);
+            request.Description?.Trim() is { Length: > 0 } note ? note : null, request.Through);
 
         context.Add(transfer);
         await context.SaveChangesAsync(cancellationToken);

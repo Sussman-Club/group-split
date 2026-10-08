@@ -29,7 +29,7 @@ each mode carries that shape as a pair of extension methods next to the code tha
 | --- | --- | --- |
 | Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
 | Realm settings | `realm-settings` waits for healthy Keycloak, then reconciles the managed settings from the realm export; the API waits for the worker to finish | The same worker runs as a one-shot Compose service and waits for Keycloak's healthcheck; the API starts only after it exits successfully |
-| Postgres | `WithPostgresMcp` on each database (Aspire's own) | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
+| Postgres | `WithPostgresMcp` on each database (Aspire's own); DBX and a `psql` REPL in the dashboard's terminal dock on the server, as on the Redis cache | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
 | API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
 | Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithPrepareOnPush`, which makes `aspire do push` also write the Compose artifacts |
 
@@ -268,8 +268,11 @@ token, and what stands in for one is its signature over the bytes it sent, which
 checks before reading them. That reasoning covers `/webhooks` and only `/webhooks`: the
 tunnel fronts the web app's root, so for as long as the run lasts the whole local app --
 sign-in page, dev data and all -- answers to anybody holding the address. Turn it on while
-you are working on webhooks and off again afterwards. Aspire creates the tunnel with the run
-and tears it down after.
+you are working on webhooks and off again afterwards. Aspire hosts the tunnel only while the
+run lasts, but stopping the run does not delete it: the dev tunnels service keeps it, anonymous
+access and all, until it has gone unhosted for its expiration. The AppHost sets that to a day
+rather than the service's 30, so a tunnel left over from webhook work goes away on its own
+(`devtunnel list` shows any that are still there).
 
 ## The sign-in key ring
 
@@ -484,6 +487,23 @@ which is the price of the sessions surviving anything else. And running more tha
 replica would still race: the refresh concurrency control is in-process, so two replicas
 could exchange one refresh token at once -- and the Data Protection volume above is per-host,
 so a second host would need a shared ring as well.
+
+## A dashboard for the integration tests
+
+`GroupSplit.AppHost.Test` starts the whole AppHost without a dashboard, which leaves a test
+stopped at a breakpoint, or a stack that will not come up, with nothing to look at but the
+resource states the fixture prints. Set `GROUPSPLIT_TEST_DASHBOARD=1` and the fixture runs
+the Aspire dashboard beside it, on loopback ports of its own choosing rather than the fixed
+ones a normal run's dashboard takes, and writes its sign-in URL to standard output once the
+application has started:
+
+```bash
+GROUPSPLIT_TEST_DASHBOARD=1 dotnet test --project tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj
+```
+
+The URL carries the dashboard's browser token, which is why it is opt-in and never set in CI.
+Nothing else about the run changes: a wait on a resource that fails still stops rather than
+waiting for somebody to fix it from the dashboard. The dashboard goes away with the test run.
 
 ## Building in a sandbox that has no SDK
 

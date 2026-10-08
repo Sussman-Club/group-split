@@ -183,7 +183,7 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
             SettlementPlanResponse? plan = null;
 
             var loaded = await _guard.RunAsync(async () =>
-                    plan = await _users.GetSettlementPlanAsync(cancellationToken),
+                    plan = await _users.GetSettlementPlanAsync(cancellationToken: cancellationToken),
                 "your settlement plan");
 
             if (loaded && version == _planVersion)

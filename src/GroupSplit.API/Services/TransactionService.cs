@@ -566,7 +566,8 @@ public class TransactionService(
             MerchantName = transaction.Merchant?.Name,
             MerchantLogoUrl = transaction.Merchant?.LogoUrl,
             Splits = splits,
-            SplitRuleVersionId = transaction.SplitRuleVersionId
+            SplitRuleVersionId = transaction.SplitRuleVersionId,
+            CoversThrough = transfer?.CoversThrough
         };
     }
 
@@ -592,6 +593,7 @@ public class TransactionService(
             GroupId = transaction.GroupId,
             CategoryId = expense?.CategoryId,
             MerchantId = transaction.MerchantId,
+            CoversThrough = (transaction as Transfer)?.CoversThrough,
             Splits = transaction.GroupId == null
                 ? null
                 : transaction.Splits.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList()
@@ -627,6 +629,29 @@ public class TransactionService(
             // they have gone.
             var payerId = request.PaidByUserId;
 
+            // The checks creating one makes, made again here because the edit model is the
+            // one expenses use and cannot carry them: a refund is a negative expense, while
+            // a negative repayment is a debt filed as paying one back.
+            if (request.Amount <= 0)
+                throw new ValidationException(ErrorCodes.SettlementAmountNotPositive,
+                    "A settlement's amount must be greater than 0.");
+
+            if (request.Splits is { Count: > 1 })
+                throw new ValidationException(ErrorCodes.SplitsInvalid,
+                    "A settlement is paid to exactly one person.");
+
+            // Whoever ends up on the receiving end, asked whichever way the patch got there:
+            // the share it states, or -- when it removed or emptied the shares -- the one the
+            // settlement already has. Asking only of a stated share let a patch that dropped
+            // the shares and moved the payer onto the recipient write a payment to oneself.
+            var recipientId = (request.Splits is [var stated] ? stated.UserId : transfer.Splits.FirstOrDefault()?.UserId)
+                              ?? throw new ValidationException(ErrorCodes.SplitsInvalid,
+                                  "This settlement records nobody it was paid to. Name them in /splits.");
+
+            if (recipientId == payerId)
+                throw new ConflictException(ErrorCodes.SettlementWithSelf,
+                    "A settlement needs two different people.");
+
             if (payerId != transfer.UserId)
             {
                 transfer.User = await ParticipantOf(transfer.Group, payerId, ct)
@@ -637,15 +662,11 @@ public class TransactionService(
             transfer.Amount = request.Amount;
             transfer.DateTime = request.DateTime.ToUniversalTime();
             transfer.Description = request.Description;
+            transfer.CoversThrough = request.CoversThrough;
 
-            if (request.Splits is { Count: > 0 } splits)
+            if (request.Splits is { Count: > 0 })
             {
-                var recipientId = splits[0].UserId;
                 var existingSplit = transfer.Splits.FirstOrDefault();
-
-                if (recipientId == payerId)
-                    throw new ConflictException(ErrorCodes.SettlementWithSelf,
-                        "A settlement needs two different people.");
 
                 if (existingSplit?.UserId != recipientId)
                 {
@@ -683,6 +704,10 @@ public class TransactionService(
         }
 
         var expense = (Expense)transaction;
+
+        if (request.CoversThrough is not null)
+            throw new ValidationException(ErrorCodes.NotASettlement,
+                "Only a settlement settles a period. An expense has no day it covers through.");
 
         // Asked before a single field moves, because both questions are about the expense as
         // it stands and neither can be asked afterwards: the first re-runs the division the

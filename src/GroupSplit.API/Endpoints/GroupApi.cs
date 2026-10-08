@@ -132,7 +132,16 @@ public static class GroupApi
                     if (groupUpdateRequest is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
 
-                    patchDocument.ApplyTo(groupUpdateRequest);
+                    patchDocument.ApplyOrRefuse(groupUpdateRequest);
+
+                    // Null in the model means "the patch said nothing about it", which keeps
+                    // the default a caller from before the field existed never knew about.
+                    // A patch that names the field and leaves it null is asking for no
+                    // default at all, and every group divides by one -- so it is refused
+                    // rather than read as silence and quietly ignored.
+                    if (patchDocument.Touches("/defaultSplitRuleId") && groupUpdateRequest.DefaultSplitRuleId is null)
+                        throw new ValidationException(ErrorCodes.SplitRuleInvalid,
+                            "A group always has a default rule. Name the one to use instead.");
 
                     if (!PatchedModel.IsValid(groupUpdateRequest, out var invalid))
                         return invalid;
@@ -528,27 +537,27 @@ public static class GroupApi
 
         private RouteHandlerBuilder MapGetGroupUserBalance()
         {
+            // ?through=&utcOffset= gives the balances, and the plan that clears them, for
+            // everything dated up to that day after every settlement already made: what a
+            // settle dialog previews before it settles a period.
             return group.MapGet("{groupId:guid}/balances", async (
                     Guid groupId,
-                    IGroupService groupService,
-                    IDebtCalculationService debtCalculator,
+                    [AsParameters] CutoffQuery cutoff,
+                    ISettlementService settlements,
                     CancellationToken ct) =>
             {
-                var balances = await groupService.GetGroupNetBalance(groupId, ct);
-                var balanceResponse = await balances.ToArrayAsync(ct);
+                // Null when the group is not one of the caller's: every group has at least its
+                // creator, so no rows means that. Left to the calculator, the caller's absence
+                // from the settlement would surface as a bug rather than as this.
+                var position = await settlements.GetPosition(groupId, cutoff.ToCutoff(), ct);
 
-                // Every group has at least its creator, so no rows means the group is not
-                // one of the caller's. Left to the calculator, the caller's absence from the
-                // settlement would surface as a bug rather than as this.
-                if (balanceResponse.Length == 0)
-                    return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
-
-                var groupUserBalance = await debtCalculator.GetUserBalance(balanceResponse);
-
-                return Results.Ok(groupUserBalance);
+                return position is not null
+                    ? Results.Ok(position)
+                    : Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
             })
                 .WithName("GetGroupUserBalance")
                 .Produces<UserGroupBalanceResponse>()
+                .ProducesValidationProblem()
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 

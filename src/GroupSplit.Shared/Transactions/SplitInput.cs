@@ -23,8 +23,9 @@ public record SplitInput
     public Guid UserId { get; init; }
 
     /// <summary>
-    /// May be negative, so that "Omar is owed ten back on this one" has a way to be said.
-    /// It is the sum that has to come out right, not each part.
+    /// Goes the same way as the amount: zero or more on an expense, zero or less on a
+    /// refund. Somebody owed money back is a settlement, not a negative share of a cost --
+    /// a share the other way sums correctly and moves money nobody recorded as a payment.
     /// </summary>
     [MaxDecimalPlaces(2, ErrorMessage = "A share must be a number with no more than 2 decimal places.")]
     public decimal Amount { get; init; }

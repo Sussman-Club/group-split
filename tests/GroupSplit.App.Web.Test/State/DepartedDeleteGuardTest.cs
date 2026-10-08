@@ -40,7 +40,7 @@ public class DepartedDeleteGuardTest
         var id = Guid.NewGuid();
 
         _transactions
-            .Setup(client => client.GetTransactionAsync(id, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetTransactionAsync(id, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TransactionDetailsResponse
             {
                 Id = id,
@@ -111,7 +111,7 @@ public class DepartedDeleteGuardTest
         var id = Guid.NewGuid();
 
         _transactions
-            .Setup(client => client.GetTransactionAsync(id, It.IsAny<CancellationToken>()))
+            .Setup(client => client.GetTransactionAsync(id, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("Not found", 404, null, new Dictionary<string, IEnumerable<string>>(), null));
 
         Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));

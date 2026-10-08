@@ -40,7 +40,7 @@ public sealed class DepartedDeleteGuard(ITransactionsClient transactions, IGroup
         {
             // Both at once: the roster does not depend on the answer about the transaction,
             // only on which group it is in, and the row already says that.
-            var reading = transactions.GetTransactionAsync(transactionId, ct);
+            var reading = transactions.GetTransactionAsync(transactionId, cancellationToken: ct);
             var rostering = groups.GetGroupMembersAsync(expected, ct);
 
             // Together, so a failure of either is caught below rather than left unobserved.
