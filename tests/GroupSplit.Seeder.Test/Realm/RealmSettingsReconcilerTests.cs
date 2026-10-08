@@ -48,6 +48,7 @@ public sealed class RealmSettingsReconcilerTests
 
         Assert.Equal(0, admin.RealmUpdates);
         Assert.Equal(0, admin.ClientUpdates);
+        Assert.Empty(admin.Writes);
     }
 
     /// <summary>
@@ -194,10 +195,172 @@ public sealed class RealmSettingsReconcilerTests
         var admin = new StubRealmAdmin(current);
 
         await Reconcile(admin);
+        var writes = admin.Writes.Count;
         await Reconcile(admin);
 
         Assert.Equal(1, admin.RealmUpdates);
         Assert.Equal(1, admin.ClientUpdates);
+        Assert.Equal(writes, admin.Writes.Count);
+    }
+
+    private const string BrokerFlow = "link only first broker login";
+
+    /// <summary>
+    /// The realm every deployment so far was created with: a profile form in front of the link,
+    /// whose email field went straight into the lookup, and a Google provider that accepted an
+    /// address Google had not verified.
+    /// </summary>
+    private static JsonObject ImportedBeforeTheFix()
+    {
+        var realm = Imported();
+
+        realm["authenticationFlows"] = JsonNode.Parse(
+            $$"""
+            [
+              { "alias": "{{BrokerFlow}}", "topLevel": true, "authenticationExecutions": [
+                { "authenticator": "idp-review-profile", "requirement": "REQUIRED", "priority": 10 },
+                { "flowAlias": "{{BrokerFlow}} user creation or linking", "requirement": "REQUIRED", "priority": 20 } ] },
+              { "alias": "{{BrokerFlow}} user creation or linking", "topLevel": false, "authenticationExecutions": [
+                { "authenticator": "idp-detect-existing-broker-user", "requirement": "REQUIRED", "priority": 10 },
+                { "authenticator": "idp-auto-link", "requirement": "REQUIRED", "priority": 20 } ] }
+            ]
+            """);
+
+        var config = Google(realm)["config"]!.AsObject();
+        config.Remove("filteredByClaim");
+        config.Remove("claimFilterName");
+        config.Remove("claimFilterValue");
+
+        return realm;
+    }
+
+    private static JsonObject Google(JsonObject realm) => KeycloakRealmDefinition.IdentityProvider(realm, "google")!;
+
+    private static string[] Steps(StubRealmAdmin admin) =>
+        admin.Flows[BrokerFlow].Select(execution =>
+            $"{execution["level"]} {execution["providerId"] ?? execution["displayName"]} {execution["requirement"]}").ToArray();
+
+    [Fact]
+    public async Task The_profile_form_in_front_of_the_link_is_taken_out_of_an_existing_realm()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheFix());
+
+        await Reconcile(admin);
+
+        Assert.Equal(
+            ["0 idp-detect-existing-broker-user REQUIRED", "0 idp-auto-link REQUIRED"],
+            Steps(admin));
+    }
+
+    [Fact]
+    public async Task An_existing_google_provider_is_made_to_require_an_address_google_verified()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheFix());
+
+        await Reconcile(admin);
+
+        var config = admin.IdentityProviders["google"]["config"]!;
+        Assert.Equal(1, admin.IdentityProviderUpdates);
+        Assert.Equal("true", config["filteredByClaim"]!.GetValue<string>());
+        Assert.Equal("email_verified", config["claimFilterName"]!.GetValue<string>());
+        Assert.Equal("true", config["claimFilterValue"]!.GetValue<string>());
+        Assert.Equal(BrokerFlow, admin.IdentityProviders["google"]["firstBrokerLoginFlowAlias"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The provider's credentials and switch belong to the container. The secret only ever
+    /// reaches the worker masked, and has to survive being written back that way.
+    /// </summary>
+    [Fact]
+    public async Task The_google_provider_keeps_its_credentials_and_its_switch()
+    {
+        var current = ImportedBeforeTheFix();
+        Google(current)["enabled"] = false;
+        Google(current)["config"]!["clientId"] = "deployed-client-id";
+        Google(current)["config"]!["clientSecret"] = "deployed-secret";
+        Google(current)["config"]!["hostedDomain"] = "edited.example";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var google = admin.IdentityProviders["google"];
+        Assert.False(google["enabled"]!.GetValue<bool>());
+        Assert.Equal("deployed-client-id", google["config"]!["clientId"]!.GetValue<string>());
+        Assert.Equal("deployed-secret", google["config"]!["clientSecret"]!.GetValue<string>());
+        Assert.Equal("edited.example", google["config"]!["hostedDomain"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_step_switched_off_by_hand_is_switched_back_on()
+    {
+        var admin = new StubRealmAdmin(Imported());
+        admin.Flows[BrokerFlow][0]["requirement"] = "DISABLED";
+
+        await Reconcile(admin);
+
+        Assert.Equal(
+            ["0 idp-detect-existing-broker-user REQUIRED", "0 idp-auto-link REQUIRED"],
+            Steps(admin));
+    }
+
+    /// <summary>
+    /// Pointing the provider at a flow that does not exist yet, or not in its final shape,
+    /// would leave a moment where Google sign-in runs something else.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_flow_is_built_before_the_provider_is_pointed_at_it()
+    {
+        var current = Imported();
+        current["authenticationFlows"] = new JsonArray();
+        Google(current)["firstBrokerLoginFlowAlias"] = "first broker login";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(
+            [
+                $"create {BrokerFlow}",
+                "add idp-detect-existing-broker-user",
+                "add idp-auto-link",
+                "require idp-detect-existing-broker-user REQUIRED",
+                "require idp-auto-link REQUIRED",
+                "provider google"
+            ],
+            admin.Writes);
+        Assert.Equal(BrokerFlow, admin.IdentityProviders["google"]["firstBrokerLoginFlowAlias"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Creating the provider would need the client id and secret, which only the container is
+    /// given. Without it nobody signs in through Google, so there is nothing to protect, and
+    /// failing the run would only hold the API back.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_without_google_is_not_given_one()
+    {
+        var current = ImportedBeforeTheFix();
+        current["identityProviders"] = new JsonArray();
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Empty(admin.IdentityProviders);
+        Assert.Equal(
+            ["0 idp-detect-existing-broker-user REQUIRED", "0 idp-auto-link REQUIRED"],
+            Steps(admin));
+    }
+
+    [Fact]
+    public async Task A_second_run_over_the_old_flow_changes_nothing()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheFix());
+
+        await Reconcile(admin);
+        var writes = admin.Writes.Count;
+        await Reconcile(admin);
+
+        Assert.Equal(writes, admin.Writes.Count);
+        Assert.Equal(1, admin.IdentityProviderUpdates);
     }
 
     /// <summary>
@@ -246,7 +409,158 @@ public sealed class RealmSettingsReconcilerTests
                 copy["id"] = Guid.NewGuid().ToString();
                 Clients[copy["clientId"]!.GetValue<string>()] = copy;
             }
+
+            foreach (var provider in realm["identityProviders"]?.AsArray().OfType<JsonObject>() ?? [])
+            {
+                IdentityProviders[provider["alias"]!.GetValue<string>()] = (JsonObject)provider.DeepClone();
+            }
+
+            var flows = realm["authenticationFlows"]?.AsArray().OfType<JsonObject>().ToList() ?? [];
+
+            foreach (var flow in flows.Where(flow => flow["topLevel"]?.GetValue<bool>() == true))
+            {
+                Flows[flow["alias"]!.GetValue<string>()] = Executions(flow, flows, level: 0).ToList();
+            }
         }
+
+        /// <summary>
+        /// Flattens an imported flow the way Keycloak's executions endpoint lists it: a subflow
+        /// is one row, followed by its own executions one level deeper.
+        /// </summary>
+        private static IEnumerable<JsonObject> Executions(JsonObject flow, List<JsonObject> flows, int level)
+        {
+            foreach (var execution in flow["authenticationExecutions"]!.AsArray().OfType<JsonObject>()
+                         .OrderBy(execution => execution["priority"]!.GetValue<int>()))
+            {
+                var row = new JsonObject
+                {
+                    ["id"] = Guid.NewGuid().ToString(),
+                    ["requirement"] = execution["requirement"]!.GetValue<string>(),
+                    ["level"] = level
+                };
+
+                if (execution["flowAlias"]?.GetValue<string>() is { } subflowAlias)
+                {
+                    row["displayName"] = subflowAlias;
+                    row["authenticationFlow"] = true;
+                    yield return row;
+
+                    var subflow = flows.Single(candidate => candidate["alias"]!.GetValue<string>() == subflowAlias);
+
+                    foreach (var child in Executions(subflow, flows, level + 1))
+                    {
+                        yield return child;
+                    }
+                }
+                else
+                {
+                    row["providerId"] = execution["authenticator"]!.GetValue<string>();
+                    yield return row;
+                }
+            }
+        }
+
+        public Dictionary<string, JsonObject> IdentityProviders { get; } = [];
+
+        public Dictionary<string, List<JsonObject>> Flows { get; } = [];
+
+        public int IdentityProviderUpdates { get; private set; }
+
+        /// <summary>Every call that changed a flow, plus the provider updates, in order.</summary>
+        public List<string> Writes { get; } = [];
+
+        public int FlowWrites => Writes.Count(write => !write.StartsWith("provider", StringComparison.Ordinal));
+
+        private const string MaskedSecret = "**********";
+
+        public Task<JsonObject?> GetIdentityProviderAsync(string alias, CancellationToken ct = default)
+        {
+            if (!IdentityProviders.TryGetValue(alias, out var provider)) return Task.FromResult<JsonObject?>(null);
+
+            var copy = (JsonObject)provider.DeepClone();
+
+            if (copy["config"]?["clientSecret"] is not null)
+            {
+                copy["config"]!["clientSecret"] = MaskedSecret;
+            }
+
+            return Task.FromResult<JsonObject?>(copy);
+        }
+
+        /// <summary>Keeps the stored secret when the mask comes back, as Keycloak does.</summary>
+        public Task UpdateIdentityProviderAsync(JsonObject provider, CancellationToken ct = default)
+        {
+            var alias = provider["alias"]!.GetValue<string>();
+            var copy = (JsonObject)provider.DeepClone();
+
+            if (copy["config"]?["clientSecret"]?.GetValue<string>() == MaskedSecret)
+            {
+                copy["config"]!["clientSecret"] = IdentityProviders[alias]["config"]!["clientSecret"]!.DeepClone();
+            }
+
+            IdentityProviders[alias] = copy;
+            IdentityProviderUpdates++;
+            Writes.Add($"provider {alias}");
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> FlowExistsAsync(string alias, CancellationToken ct = default) =>
+            Task.FromResult(Flows.ContainsKey(alias));
+
+        public Task CreateFlowAsync(string alias, string description, CancellationToken ct = default)
+        {
+            Assert.False(Flows.ContainsKey(alias), $"Flow '{alias}' already exists.");
+
+            Flows[alias] = [];
+            Writes.Add($"create {alias}");
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<JsonObject>> GetFlowExecutionsAsync(string alias, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<JsonObject>>(
+                Flows[alias].Select(execution => (JsonObject)execution.DeepClone()).ToList());
+
+        public Task DeleteExecutionAsync(string executionId, CancellationToken ct = default)
+        {
+            var flow = Flows.Values.Single(executions => executions.Any(execution => Id(execution) == executionId));
+            var index = flow.FindIndex(execution => Id(execution) == executionId);
+            var level = flow[index]["level"]!.GetValue<int>();
+            var count = 1;
+
+            while (index + count < flow.Count && flow[index + count]["level"]!.GetValue<int>() > level)
+            {
+                count++;
+            }
+
+            flow.RemoveRange(index, count);
+            Writes.Add($"delete {executionId}");
+            return Task.CompletedTask;
+        }
+
+        public Task AddExecutionAsync(string flowAlias, string authenticator, CancellationToken ct = default)
+        {
+            Flows[flowAlias].Add(new JsonObject
+            {
+                ["id"] = Guid.NewGuid().ToString(),
+                ["providerId"] = authenticator,
+                ["requirement"] = "DISABLED",
+                ["level"] = 0
+            });
+            Writes.Add($"add {authenticator}");
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateExecutionAsync(string flowAlias, JsonObject execution, CancellationToken ct = default)
+        {
+            var flow = Flows[flowAlias];
+            var index = flow.FindIndex(existing => Id(existing) == Id(execution));
+
+            flow[index] = (JsonObject)execution.DeepClone();
+            Writes.Add($"require {execution["providerId"]} {execution["requirement"]}");
+            return Task.CompletedTask;
+        }
+
+        private static string Id(JsonObject execution) => execution["id"]!.GetValue<string>();
 
         public string Realm => "group-split";
 

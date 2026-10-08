@@ -4,9 +4,10 @@ namespace GroupSplit.Keycloak;
 
 /// <summary>
 /// Reads the same realm export Keycloak imports on first boot. The allowlists define what
-/// the application owns: realm-level properties, and the handful of client properties that
-/// decide where a sign-in may be sent back to.
-/// Everything else -- the rest of each client, protocol mappers, flows, identity providers,
+/// the application owns: realm-level properties, the handful of client properties that
+/// decide where a sign-in may be sent back to, and the identity provider settings and first
+/// broker login flow that decide which account a brokered sign-in may land in.
+/// Everything else -- the rest of each client and provider, protocol mappers, other flows,
 /// roles, users, and the environment-substituted SMTP settings -- is intentionally outside
 /// reconciliation.
 /// </summary>
@@ -33,11 +34,53 @@ public static class KeycloakRealmDefinition
     ];
 
 
+    /// <summary>
+    /// Identity provider settings reconciled onto an existing realm, by alias -- together with
+    /// the first broker login flow each one names, which is reconciled whole.
+    /// </summary>
+    /// <remarks>
+    /// The part of a provider that decides which account a stranger's sign-in lands in. A
+    /// realm imported while that flow showed a profile form before auto-linking let someone
+    /// type another person's address into it and inherit their account, and the import never
+    /// ran again to take the form away. Not <c>enabled</c>, the client id or the secret: those
+    /// are the container's, from variables this worker is not given.
+    /// </remarks>
+    public static readonly ManagedIdentityProvider[] ManagedIdentityProviders =
+    [
+        new("google",
+            Properties: ["trustEmail", "firstBrokerLoginFlowAlias"],
+            Config: ["filteredByClaim", "claimFilterName", "claimFilterValue"])
+    ];
+
     /// <summary>The client in <paramref name="definition"/> with this <c>clientId</c>, or null.</summary>
     public static JsonObject? Client(JsonObject definition, string clientId) =>
         definition["clients"]?.AsArray()
             .OfType<JsonObject>()
             .FirstOrDefault(client => client["clientId"]?.GetValue<string>() == clientId);
+
+    /// <summary>The identity provider in <paramref name="definition"/> with this alias, or null.</summary>
+    public static JsonObject? IdentityProvider(JsonObject definition, string alias) =>
+        definition["identityProviders"]?.AsArray()
+            .OfType<JsonObject>()
+            .FirstOrDefault(provider => provider["alias"]?.GetValue<string>() == alias);
+
+    /// <summary>The authentication flow in <paramref name="definition"/> with this alias, or null.</summary>
+    public static JsonObject? Flow(JsonObject definition, string alias) =>
+        definition["authenticationFlows"]?.AsArray()
+            .OfType<JsonObject>()
+            .FirstOrDefault(flow => flow["alias"]?.GetValue<string>() == alias);
+
+    /// <summary>
+    /// The authenticators of a flow in the order Keycloak runs them, each with its requirement.
+    /// </summary>
+    public static IReadOnlyList<FlowStep> Steps(JsonObject flow) =>
+        flow["authenticationExecutions"]!.AsArray()
+            .OfType<JsonObject>()
+            .OrderBy(execution => execution["priority"]?.GetValue<int>() ?? 0)
+            .Select(execution => new FlowStep(
+                execution["authenticator"]!.GetValue<string>(),
+                execution["requirement"]!.GetValue<string>()))
+            .ToList();
 
     public static readonly string[] ManagedSettings =
     [
@@ -115,9 +158,72 @@ public static class KeycloakRealmDefinition
             }
         }
 
+        foreach (var managed in ManagedIdentityProviders)
+        {
+            var provider = IdentityProvider(definition, managed.Alias)
+                ?? throw new InvalidOperationException(
+                    $"The Keycloak realm definition has no identity provider '{managed.Alias}'.");
+
+            foreach (var name in managed.Properties.Where(name => !provider.ContainsKey(name)))
+            {
+                throw new InvalidOperationException(
+                    $"Identity provider '{managed.Alias}' in the Keycloak realm definition is missing managed property '{name}'.");
+            }
+
+            var config = provider["config"] as JsonObject;
+
+            foreach (var name in managed.Config.Where(name => config?.ContainsKey(name) != true))
+            {
+                throw new InvalidOperationException(
+                    $"Identity provider '{managed.Alias}' in the Keycloak realm definition is missing managed config '{name}'.");
+            }
+
+            ValidateManagedFlow(definition, provider["firstBrokerLoginFlowAlias"]!.GetValue<string>());
+        }
+
         return definition;
+    }
+
+    /// <summary>
+    /// A reconciled flow is a flat list of authenticators and nothing else. Subflows and
+    /// authenticator configs are what the import is for; this worker would have to become a
+    /// second importer to keep them in step.
+    /// </summary>
+    private static void ValidateManagedFlow(JsonObject definition, string alias)
+    {
+        var flow = Flow(definition, alias)
+            ?? throw new InvalidOperationException(
+                $"The Keycloak realm definition has no authentication flow '{alias}'.");
+
+        if (flow["topLevel"]?.GetValue<bool>() != true)
+        {
+            throw new InvalidOperationException($"Authentication flow '{alias}' must be a top-level flow.");
+        }
+
+        foreach (var execution in flow["authenticationExecutions"]?.AsArray().OfType<JsonObject>() ?? [])
+        {
+            if (execution["authenticator"] is null || execution["requirement"] is null
+                || execution.ContainsKey("flowAlias") || execution.ContainsKey("authenticatorConfig"))
+            {
+                throw new InvalidOperationException(
+                    $"Authentication flow '{alias}' is reconciled onto existing realms, so it may hold only "
+                    + "authenticators with a requirement: no subflows and no authenticator configs.");
+            }
+        }
     }
 }
 
 /// <summary>A client whose listed properties and attributes are reconciled onto an existing realm.</summary>
 public sealed record ManagedClient(string ClientId, string[] Properties, string[] Attributes);
+
+/// <summary>
+/// An identity provider whose listed properties and config entries are reconciled onto an
+/// existing realm, along with its first broker login flow.
+/// </summary>
+public sealed record ManagedIdentityProvider(string Alias, string[] Properties, string[] Config);
+
+/// <summary>One authenticator of a flow and its requirement, e.g. <c>REQUIRED</c>.</summary>
+public sealed record FlowStep(string Authenticator, string Requirement)
+{
+    public override string ToString() => $"{Authenticator} {Requirement}";
+}

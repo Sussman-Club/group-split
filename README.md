@@ -251,8 +251,18 @@ endpoint. Keycloak refuses a sign-in from any other origin, including the web ap
 endpoint locally. If the variable is missing, the worker fails rather than store the
 placeholder.
 
-The worker deliberately does not manage SMTP settings, the rest of each client, protocol
-mappers, authentication flows, identity providers, roles, or users. Those remain governed by
+It also manages which account a first Google sign-in may land in. The `google` provider's
+`trustEmail`, its first broker login flow, and its essential-claim filter are reconciled,
+and so is that flow. The flow is rebuilt whole if it differs at all. It runs exactly two
+steps: find the account that holds the email Google sent, then link to it. Before them there
+is no profile form, because the email field on that form was what got looked up. Typing
+somebody else's address there linked your Google account to theirs. The filter makes Keycloak
+refuse any Google ID token whose `email_verified` is not `true`, so an address Google never
+checked cannot match an account either. The provider's switch, client ID and secret stay
+with the container. A realm without a `google` provider is not given one.
+
+The worker deliberately does not manage SMTP settings, the rest of each client and provider,
+protocol mappers, other authentication flows, roles, or users. Those remain governed by
 realm import and their existing seeders. This boundary is explicit in
 [`KeycloakRealmDefinition`](src/GroupSplit.Keycloak/KeycloakRealmDefinition.cs).
 

@@ -93,6 +93,34 @@ public sealed class KeycloakAdmin(HttpClient client, string username, string pas
         return payload.RootElement.Clone();
     }
 
+    /// <summary>Whether an admin REST resource, relative to Keycloak's root, exists.</summary>
+    public async Task<bool> ExistsAsync(string path, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", await TokenAsync(ct));
+
+        using var response = await client.SendAsync(request, ct);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+
+        response.EnsureSuccessStatusCode();
+        return true;
+    }
+
+    /// <summary>Sends a JSON body to an admin REST resource, relative to Keycloak's root.</summary>
+    public async Task SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(method, path);
+
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+
+        (await SendAsync(request, ct)).Dispose();
+    }
+
     /// <summary>
     /// Attaches a fresh admin token and reports the body on failure, because Keycloak
     /// explains a rejected realm or user in it and says nothing useful in the status.
