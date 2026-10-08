@@ -167,11 +167,23 @@
                         </div>
                     }
 
+                    @* The period and, beside it, whether it is still square -- the one-word
+                       answer to what somebody opened this for. *@
                     @if (details.Coverage is { } coverage)
                     {
                         <div class="gs-kv-row">
                             <dt>Covers</dt>
-                            <dd>@Period(coverage)</dd>
+                            <dd class="gs-kv-tagged">
+                                <span>@Period(coverage)</span>
+                                @if (coverage.StillOwed > 0)
+                                {
+                                    <span class="gs-tag clay">open</span>
+                                }
+                                else
+                                {
+                                    <span class="gs-tag">square</span>
+                                }
+                            </dd>
                         </div>
                     }
                 </dl>
@@ -180,22 +192,33 @@
                     What a settlement made through a day covers, as things stand now -- worked
                     out when it is read, never stored. An expense dated inside the period and
                     added after it was settled is the case this is for: the period is no longer
-                    square, and saying so here is the only place anybody would find out.
+                    square, and saying so here is the only place anybody would find out. The
+                    period itself is on the row above, so this says what happened and who owes
+                    whom rather than repeating the dates.
                 *@
                 @if (details.Coverage is { } period)
                 {
                     @if (period.StillOwed > 0)
                     {
-                        <MudAlert Severity="Severity.Warning" Dense="true" Class="gs-period-owed">
-                            This period is no longer fully settled:
-                            @(details.PaidByUserId == Me ? "you still owe" : $"{details.PaidByUserName} still owes")
-                            @period.StillOwed.ToMoney() for activity up to @period.Through.ToString("d MMM").
-                        </MudAlert>
+                        <div class="gs-notice is-warn" role="status">
+                            <MudIcon Icon="@Icons.Material.Outlined.Warning" />
+                            <div class="gs-notice-body">
+                                <strong>No longer fully settled</strong>
+                                <span>Something dated in this period was added or changed since. @StillOwedSentence(details, period)</span>
+                            </div>
+                        </div>
                     }
 
-                    <div>
-                        <div class="gs-card-title" style="margin-bottom: 10px">
-                            <h3 style="margin: 0; font-size: 1rem">Expenses dated in the period</h3>
+                    @* Newest few, then the rest on request. With no earlier settlement between
+                       the two of them the period runs back to the group's first expense, and
+                       a phone's worth of rows under a dialog's facts buries them. *@
+                    <section aria-label="Expenses in the period">
+                        <div class="gs-period-head">
+                            <h3>Expenses in the period</h3>
+                            @if (_periodExpenseCount > 0)
+                            {
+                                <span class="gs-period-count">@_periodExpenseCount</span>
+                            }
                         </div>
 
                         @if (_periodExpenses is null)
@@ -210,29 +233,38 @@
                         }
                         else
                         {
-                            <div class="gs-splits">
-                                @foreach (var expense in _periodExpenses)
+                            <div class="gs-period-list">
+                                @foreach (var expense in _showAllPeriod ? _periodExpenses : _periodExpenses.Take(PeriodPreview))
                                 {
-                                    <div class="gs-split">
-                                        <span class="gs-split-who">
-                                            <span>@expense.Name</span>
-                                            <span class="gs-muted">
-                                                @Clock.Local(expense.DateTime).ToString("d MMM") · @expense.PaidByUserName paid
+                                    <div class="gs-period-row">
+                                        <div class="gs-period-what">
+                                            <span class="gs-period-name">@expense.Name</span>
+                                            <span class="gs-period-meta">
+                                                @Clock.Local(expense.DateTime).ToString("d MMM yyyy") · @(expense.PaidByUserId == Me ? "you" : expense.PaidByUserName) paid
                                             </span>
-                                        </span>
-                                        <span class="gs-split-amount gs-num">@expense.Amount.ToMoney()</span>
+                                        </div>
+                                        <span class="gs-period-amount">@expense.Amount.ToMoney()</span>
                                     </div>
                                 }
                             </div>
 
-                            @if (_periodExpenseCount > _periodExpenses.Count)
+                            @if (_periodExpenses.Count > PeriodPreview)
                             {
-                                <p class="gs-muted" style="margin: 8px 0 0; font-size: .875rem">
-                                    And @(_periodExpenseCount - _periodExpenses.Count) more.
+                                <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-quiet mt-1"
+                                           aria-expanded="@(_showAllPeriod ? "true" : "false")"
+                                           OnClick="@(() => _showAllPeriod = !_showAllPeriod)">
+                                    @(_showAllPeriod ? "Show fewer" : $"Show all {_periodExpenses.Count}")
+                                </MudButton>
+                            }
+
+                            @if (_showAllPeriod && _periodExpenseCount > _periodExpenses.Count)
+                            {
+                                <p class="gs-muted" style="margin: 4px 0 0; font-size: .8125rem">
+                                    And @(_periodExpenseCount - _periodExpenses.Count) older, on the group's Expenses tab.
                                 </p>
                             }
                         }
-                    </div>
+                    </section>
                 }
 
                 @if (!IsSettlement && details.Splits.Count > 0)
@@ -348,9 +380,23 @@
         ? $"{(loaded.PaidByUserId == Me ? "You" : loaded.PaidByUserName)} paid {(loaded.PaidToUserId == Me ? "you" : loaded.PaidToUserName)}"
         : loaded.Name;
 
+    /// <summary>How many of a period's expenses show before "Show all".</summary>
+    private const int PeriodPreview = 5;
+
+    private bool _showAllPeriod;
+
     private static string Period(SettlementCoverage coverage) => coverage.From is { } from
-        ? $"Activity from {from:d MMM} to {coverage.Through:d MMM yyyy}"
-        : $"Activity up to {coverage.Through:d MMM yyyy}";
+        ? $"{from:d MMM} – {coverage.Through:d MMM yyyy}"
+        : $"Up to {coverage.Through:d MMM yyyy}";
+
+    /// <summary>Who still owes whom for the period, named from where the reader sits.</summary>
+    private string StillOwedSentence(TransactionDetailsResponse loaded, SettlementCoverage coverage) =>
+        (loaded.PaidByUserId == Me, loaded.PaidToUserId == Me) switch
+        {
+            (true, _) => $"You still owe {loaded.PaidToUserName} {coverage.StillOwed.ToMoney()}.",
+            (_, true) => $"{loaded.PaidByUserName} still owes you {coverage.StillOwed.ToMoney()}.",
+            _ => $"{loaded.PaidByUserName} still owes {loaded.PaidToUserName} {coverage.StillOwed.ToMoney()}."
+        };
 
     /// <summary>
     /// The group's expenses dated in a settlement's period, through the same listing and the

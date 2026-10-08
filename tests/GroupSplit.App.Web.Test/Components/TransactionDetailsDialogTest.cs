@@ -284,7 +284,7 @@ public class TransactionDetailsDialogTest : ComponentTest
         dialog.WaitForAssertion(() => Assert.Contains("Loraine paid you", dialog.Markup));
         Assert.DoesNotContain("You owe", dialog.Markup);
         Assert.DoesNotContain("Split between", dialog.Markup);
-        Assert.DoesNotContain("Expenses dated in the period", dialog.Markup);
+        Assert.DoesNotContain("Expenses in the period", dialog.Markup);
     }
 
     [Fact]
@@ -295,8 +295,9 @@ public class TransactionDetailsDialogTest : ComponentTest
         var dialog = await Open(bill: null);
 
         dialog.WaitForAssertion(() => Assert.Contains("Groceries", dialog.Markup));
-        Assert.Contains("Activity from 1 Aug to 31 Aug 2026", dialog.Markup);
-        Assert.DoesNotContain("no longer fully settled", dialog.Markup);
+        Assert.Contains("1 Aug – 31 Aug 2026", dialog.Markup);
+        Assert.Contains(">square<", dialog.Markup);
+        Assert.DoesNotContain("No longer fully settled", dialog.Markup);
     }
 
     /// <summary>
@@ -310,8 +311,9 @@ public class TransactionDetailsDialogTest : ComponentTest
 
         var dialog = await Open(bill: null);
 
-        dialog.WaitForAssertion(() => Assert.Contains("no longer fully settled", dialog.Markup));
-        Assert.Contains("Loraine still owes", dialog.Markup);
+        dialog.WaitForAssertion(() => Assert.Contains("No longer fully settled", dialog.Markup));
+        Assert.Contains("Loraine still owes you", dialog.Markup);
+        Assert.Contains(">open<", dialog.Markup);
         Assert.Contains("$12.50", dialog.Markup);
     }
 }
