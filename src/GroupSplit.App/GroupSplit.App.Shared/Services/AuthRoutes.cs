@@ -52,7 +52,7 @@ public static class AuthRoutes
     /// </summary>
     private static string WithReturnUrl(string path, string? returnUrl)
     {
-        if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//", StringComparison.Ordinal))
+        if (!LocalUrl.IsLocal(returnUrl))
         {
             return path;
         }

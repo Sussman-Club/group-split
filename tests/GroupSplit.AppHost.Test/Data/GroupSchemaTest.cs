@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Aspire.Hosting.Testing;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
@@ -8,6 +9,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.PostgreSQL;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -233,16 +235,7 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
         var owner = await Someone();
         var (groupId, _) = await AGroupWaitingOnSomebody(owner, "Twice");
 
-        Guid newcomer;
-
-        using (var scope = _services!.CreateScope())
-        {
-            var context = Service<AppDbContext>(scope);
-            var user = new User { FirstName = "Racing", Kind = UserKind.StandIn };
-            context.Add(user);
-            await context.SaveChangesAsync(Ct);
-            newcomer = user.Id;
-        }
+        var newcomer = await AStandIn("Racing");
 
         var gate = new TaskCompletionSource();
 
@@ -264,13 +257,102 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
         var made = await Task.WhenAll(calls);
 
         Assert.Equal(made[0], made[1]);
+        Assert.Equal(1, await RulesFor(groupId, newcomer));
+    }
 
+    /// <summary>
+    /// The order the test above only catches when the timing happens to fall that way: the
+    /// other call's rule is committed after this one has looked for a rule and before it
+    /// reads which names are taken. It then finds its own name taken, and used to take the
+    /// next one -- "All for Racing (2)" -- which nothing collides with, leaving the person
+    /// two rules.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task A_rule_written_between_the_look_and_the_naming_is_the_one_returned()
+    {
+        var owner = await Someone();
+        var (groupId, _) = await AGroupWaitingOnSomebody(owner, "Between");
+        var newcomer = await AStandIn("Between");
+
+        Guid? theirs = null;
+
+        var beforeNaming = new BeforeNaming(async () =>
+        {
+            using var scope = _services!.CreateScope();
+            var context = Service<AppDbContext>(scope);
+
+            var group = await context.Set<Group>().FirstAsync(candidate => candidate.Id == groupId, Ct);
+            var user = await context.Set<User>().FirstAsync(candidate => candidate.Id == newcomer, Ct);
+
+            theirs = (await Service<IMemberSplitRules>(scope).EnsureFor(group, user, Ct)).Id;
+        });
+
+        var options = new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
+            .UseNpgsql(await _appHost.Application.GetConnectionStringAsync("db", Ct))
+            .AddInterceptors(beforeNaming)
+            .Options;
+
+        await using (var context = new PostgreSqlAppDbContext(options))
+        {
+            var group = await context.Set<Group>().FirstAsync(candidate => candidate.Id == groupId, Ct);
+            var user = await context.Set<User>().FirstAsync(candidate => candidate.Id == newcomer, Ct);
+
+            var mine = await new MemberSplitRules(context).EnsureFor(group, user, Ct);
+
+            Assert.True(beforeNaming.Fired, "The other call never ran, so the order under test was not produced.");
+            Assert.Equal(theirs, mine.Id);
+        }
+
+        Assert.Equal(1, await RulesFor(groupId, newcomer));
+    }
+
+    private async Task<Guid> AStandIn(string name)
+    {
+        using var scope = _services!.CreateScope();
+        var context = Service<AppDbContext>(scope);
+
+        var user = new User { FirstName = name, Kind = UserKind.StandIn };
+        context.Add(user);
+        await context.SaveChangesAsync(Ct);
+
+        return user.Id;
+    }
+
+    /// <summary>The built-in rules currently dividing everything to <paramref name="userId"/>.</summary>
+    private async Task<int> RulesFor(Guid groupId, Guid userId)
+    {
         using var check = _services!.CreateScope();
 
-        Assert.Equal(1, await Service<AppDbContext>(check).Set<SplitRule>()
+        return await Service<AppDbContext>(check).Set<SplitRule>()
             .CountAsync(rule => rule.Group.Id == groupId && rule.BuiltIn &&
                                 rule.Versions.OfType<SoleSplitRuleVersion>()
-                                    .Any(version => version.SupersededAt == null && version.UserId == newcomer), Ct));
+                                    .Any(version => version.SupersededAt == null && version.UserId == userId), Ct);
+    }
+
+    /// <summary>
+    /// Runs something once, just before the query that reads which rule names are taken --
+    /// the only one in a find-or-create that matches names by prefix.
+    /// </summary>
+    private sealed class BeforeNaming(Func<Task> run) : DbCommandInterceptor
+    {
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!Fired && command.CommandText.Contains("\"SplitRule\"", StringComparison.Ordinal)
+                       && (command.CommandText.Contains("LIKE", StringComparison.Ordinal)
+                           || command.CommandText.Contains("starts_with", StringComparison.Ordinal)))
+            {
+                Fired = true;
+                await run();
+            }
+
+            return result;
+        }
     }
 
     /// <summary>

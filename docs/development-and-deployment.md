@@ -104,8 +104,13 @@ whether an integration is active, while validation steps check cross-field rules
 Aspire's `process-parameters` step has resolved the values and before `build-prereq`, which
 every image build waits on.
 
-`KOMODO_*` and `REGISTRY_*` configure the workflow itself and are not exported as
-parameters.
+`KOMODO_*` configure the workflow itself and are not exported as parameters:
+
+| GitHub entry | Required | Purpose |
+| --- | --- | --- |
+| secrets `KOMODO_URL`, `KOMODO_API_KEY`, `KOMODO_API_SECRET` | yes | Where Komodo's API is and the key the workflow calls it with. |
+| variable `KOMODO_REGISTRY_ACCOUNT` | yes | The name of the `ghcr.io` account in Komodo's registry providers (Settings -> Providers) that Komodo logs in with before it pulls the images. Its token is a classic personal access token with `read:packages` on an account that can read the organisation's packages. When that token expires, every deploy fails at Komodo's "Login to Registry" stage; renewing it is a change in Komodo, and moving to somebody else's account is that plus this variable. |
+| variable `KOMODO_STACK` | no, defaults to `group-split` | The Komodo stack the Compose file is written into. |
 
 Run mode uses AppHost parameters from user secrets or environment variables. The passwords
 are generated and kept in the AppHost's user secrets, Mailpit replaces the relay, and a
@@ -400,9 +405,11 @@ Realm import only creates a realm that does not exist yet. The `realm-settings` 
 reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
 in both run and publish modes. It does the same for the `web-app` client's redirect URIs, web
 origins and post-logout redirect URIs, resolving `${WEB_HOSTNAME}` from its environment.
-It leaves SMTP configuration,
-the rest of each client, protocol mappers, authentication flows, identity providers, roles,
-and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
+It also reconciles the `google` provider's `trustEmail`, its essential-claim filter on
+`email_verified`, and the first broker login flow it names, which is rebuilt whole when it
+differs. See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
+It leaves SMTP configuration, the rest of each client and provider, protocol mappers, other
+authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
 restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
 retroactive either:
 sessions created while it was on keep their extended lifetime until they expire
@@ -615,7 +622,8 @@ never touches the deployed stack.
 | --- | --- |
 | The `production` environment allows `main` | The job runs `environment: production`, and the run happens at `refs/heads/main`, so the environment needs a deployment **branch** policy for `main`. |
 | Every required secret and variable on that environment | See [Deployment parameters](#deployment-parameters). Checked before anything is built. |
-| A Komodo stack named `group-split` in `file_contents` mode | The workflow writes the generated Compose file into it. It does not create the stack. |
+| A Komodo stack named `group-split` (or `KOMODO_STACK`) in `file_contents` mode | The workflow writes the generated Compose file into it. It does not create the stack. |
+| The `KOMODO_REGISTRY_ACCOUNT` account in Komodo's registry providers | Komodo logs in to `ghcr.io` with it before pulling, and the images are private. |
 
 ### What the workflow does
 
