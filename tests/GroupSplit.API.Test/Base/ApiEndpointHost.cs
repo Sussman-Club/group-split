@@ -80,6 +80,19 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         return client;
     }
 
+    /// <summary>
+    /// A client signed in as a subject of the test's choosing, with the email it names --
+    /// for the cases where the two have to disagree with what is stored: somebody recreated
+    /// in Keycloak, with a new subject and an address an existing row already holds.
+    /// </summary>
+    public HttpClient ClientFor(string subject, string email)
+    {
+        var client = _app.GetTestServer().CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.SubjectHeader, subject);
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.EmailHeader, email);
+        return client;
+    }
+
     /// <summary>A client with no credentials at all.</summary>
     public HttpClient AnonymousClient() => _app.GetTestServer().CreateClient();
 
@@ -180,6 +193,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         public const string SchemeName = "Test";
         public const string SubjectHeader = "X-Test-Subject";
 
+        /// <summary>The email claim, when a test needs one other than the subject's own.</summary>
+        public const string EmailHeader = "X-Test-Email";
+
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue(SubjectHeader, out var subject)
@@ -188,10 +204,15 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
+            var email = Request.Headers.TryGetValue(EmailHeader, out var given)
+                        && !string.IsNullOrWhiteSpace(given)
+                ? given.ToString()
+                : $"{subject}@example.test";
+
             var identity = new ClaimsIdentity(
                 [
                     new Claim(ClaimTypes.NameIdentifier, subject!),
-                    new Claim(ClaimTypes.Email, $"{subject}@example.test")
+                    new Claim(ClaimTypes.Email, email)
                 ],
                 SchemeName);
 

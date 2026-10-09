@@ -101,6 +101,7 @@ ones worth handling by name:
 | `GROUP_INVITATION_NOT_FOUND` | The personal link was claimed, declined or withdrawn -- possibly a moment ago, by somebody else. |
 | `CURRENCY_MISMATCH` | The amount is not in the group's currency. |
 | `CATEGORY_IN_USE`, `SPLIT_RULE_IN_USE` | Something still points at it. Move those first. |
+| `IDENTITY_EMAIL_IN_USE` | Exit code 2, on every command: the server refuses this sign-in because its email belongs to another account (somebody deleted and recreated in Keycloak). Running `auth login` again as the same person will not fix it. Stop and tell your user to contact support with the `traceId`. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | An expense with no group cannot be divided. |
 | `SPLIT_RULE_NOT_EDITABLE` | The rule is one the group was given per member -- all of it is for them -- and nothing renames, restates or deletes one. Create a rule of your own instead. |
 | `SPLIT_RULE_NOT_IN_GROUP` | The `--split-rule` id belongs to another group, or the expense has no group for a rule to divide. |

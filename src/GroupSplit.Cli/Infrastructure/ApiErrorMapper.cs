@@ -18,7 +18,9 @@ public static class ApiErrorMapper
         var status = (HttpStatusCode)exception.StatusCode;
 
         var code = problem?.Code ?? FallbackCode(status);
-        var message = Describe(problem, status);
+        var message = code == Shared.Errors.ErrorCodes.IdentityEmailInUse
+            ? IdentityEmailInUseMessage
+            : Describe(problem, status);
         var details = ValidationMessages(problem, exception.Response);
 
         var error = new CliError(message, code, Remediation(status, code), details)
@@ -26,16 +28,30 @@ public static class ApiErrorMapper
             TraceId = problem?.TraceId
         };
 
-        return new CliException(error, ExitCodeFor(status), exception);
+        return new CliException(error, ExitCodeFor(status, code), exception);
     }
+
+    /// <summary>
+    /// Worded here rather than taken from the API's detail, because it is the one refusal
+    /// whose wording decides what the caller does next: nothing about the command was
+    /// wrong, and nothing the caller can run will fix it.
+    /// </summary>
+    public const string IdentityEmailInUseMessage =
+        "The email on the account you are signed in as already belongs to another GroupSplit account, "
+        + "so the server will not let this sign-in in. Every command will be refused the same way.";
 
     /// <summary>
     /// Status to exit code. 401 and 403 both mean "your identity is the problem", which is
     /// the distinction exit code 2 exists to make; everything a caller could fix by
     /// changing arguments is 3; the rest is a plain failure.
     /// </summary>
-    private static int ExitCodeFor(HttpStatusCode status) => status switch
+    /// <remarks>
+    /// <c>IDENTITY_EMAIL_IN_USE</c> arrives as a 409 and is still 2: it is the sign-in that
+    /// is refused, on every request, and not the arguments of this one.
+    /// </remarks>
+    private static int ExitCodeFor(HttpStatusCode status, string code) => status switch
     {
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.IdentityEmailInUse => ExitCodes.AuthRequired,
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => ExitCodes.AuthRequired,
         HttpStatusCode.BadRequest or HttpStatusCode.NotFound
             or HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity => ExitCodes.InvalidInput,
@@ -111,6 +127,11 @@ public static class ApiErrorMapper
                + "Record a repayment with you on one end: groupsplit groups settle <group-id> <user-id> <amount>   "
                + "or between two other people (a guest included): "
                + "groupsplit groups settle-between <group-id> <from> <to> <amount>",
+        // Signing in again brings back the same sign-in, so the hint says so before the one
+        // thing that would help, and points at the trace id support finds the log line by.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.IdentityEmailInUse
+            => "Signing in again as the same person will not help. Contact support and quote the traceId; "
+               + "they resolve it on the server. To use a different account: groupsplit auth login",
         // Lost a race with another member over the same guest; nothing was written.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupGuestChanged
             => "Look at the guest again, then retry if it still makes sense: groupsplit groups guests <group-id>",

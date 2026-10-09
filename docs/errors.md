@@ -130,6 +130,7 @@ routing, authentication, model binding, an unhandled exception.
 | `TRANSACTION_ALREADY_IMPORTED` | The expense an imported row is being attached to already came from one. An expense carries at most one bank row, which is what the unique index says. | |
 | `MERCHANT_NAME_TAKEN` | **Retired; never sent.** Adding a merchant that already exists now hands back the one there is, and renaming one is `MERCHANT_EDIT_FORBIDDEN`. | |
 | `MERCHANT_IN_USE` | **Retired; never sent.** Deleting a merchant is `MERCHANT_EDIT_FORBIDDEN`. | |
+| `IDENTITY_EMAIL_IN_USE` | The caller signed in with a Keycloak subject this app has never seen, and the email on it is already on another user row -- almost always somebody deleted and recreated in Keycloak, which gives them a new subject and the old address. Refused rather than linked: an address is not proof of being the person the old row belonged to. Answered by every request until support resolves it, from the middleware that provisions the caller, so any route can return it. The web app shows a page saying so with the trace id; the CLI exits `2`. What support does is in [identities.md](identities.md). An address *change* that collides with another row is not refused: the person is already known by their subject, so the request goes on under the address already stored, and a warning carrying this code is logged. | |
 
 ### Validation (400)
 

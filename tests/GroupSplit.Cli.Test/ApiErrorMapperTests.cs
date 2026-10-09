@@ -149,6 +149,31 @@ public sealed class ApiErrorMapperTests
         Assert.DoesNotContain("them", remediation);
     }
 
+    /// <summary>
+    /// Somebody recreated in Keycloak: the server refuses the sign-in itself, on every
+    /// command. A 409, but not something the arguments can fix, so it exits as an identity
+    /// problem -- and says that signing in again as the same person is not the way out, the
+    /// one thing an agent seeing exit code 2 would otherwise try first.
+    /// </summary>
+    [Fact]
+    public void A_sign_in_whose_email_another_account_holds_is_an_identity_problem_that_names_support()
+    {
+        var mapped = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            detail = "A detail for developers.",
+            code = SharedErrorCodes.IdentityEmailInUse,
+            traceId = "00-abc-def-01"
+        }));
+
+        Assert.Equal(SharedErrorCodes.IdentityEmailInUse, mapped.Error.Code);
+        Assert.Equal(ExitCodes.AuthRequired, mapped.ExitCode);
+        Assert.Equal(ApiErrorMapper.IdentityEmailInUseMessage, mapped.Error.Message);
+        Assert.Equal("00-abc-def-01", mapped.Error.TraceId);
+        Assert.Contains("will not help", mapped.Error.Remediation);
+        Assert.Contains("support", mapped.Error.Remediation);
+    }
+
     [Fact]
     public void Losing_a_race_over_a_guest_says_to_look_again()
     {

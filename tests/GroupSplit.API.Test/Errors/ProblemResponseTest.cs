@@ -298,6 +298,30 @@ public class ProblemResponseTest : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
 
+    /// <summary>
+    /// Somebody deleted and recreated in Keycloak signs in with a new subject and the
+    /// address the old row still holds. That used to be a 500 on every request, from the
+    /// middleware, before any endpoint ran. It is a refusal with a code support can act on,
+    /// and it stays one: the same answer on the next request, not a different failure.
+    /// </summary>
+    [Fact]
+    public async Task A_new_sign_in_with_an_email_another_account_holds_is_a_conflict_not_a_500()
+    {
+        var existing = await WhoAmI(Client);
+        using var recreated = _host.ClientFor(Guid.NewGuid().ToString(), existing.Email!);
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var response = await recreated.GetAsync("/users/me", Ct);
+
+            var problem = await ReadProblem(response, HttpStatusCode.Conflict);
+            Assert.Equal(ErrorCodes.IdentityEmailInUse, problem.Code);
+        }
+
+        // The account that holds the address is untouched by it.
+        Assert.Equal(existing.Id, (await WhoAmI(Client)).Id);
+    }
+
     // ---- Validation ---------------------------------------------------------------------
 
     /// <summary>A rule the annotations cannot express, thrown from the service.</summary>
