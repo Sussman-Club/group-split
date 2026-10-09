@@ -356,6 +356,9 @@
     /// </remarks>
     private async Task RecordBetweenGuestsAsync(SettlementPayment payment)
     {
+        // The group the question is about, kept for the answer (#323).
+        var groupId = GroupId;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             {
@@ -374,7 +377,7 @@
         if (!await dialog.ConfirmedAsync())
             return;
 
-        await GroupsService.RecordRepaymentAsync(new RecordRepaymentRequest
+        await GroupsService.RecordRepaymentAsync(groupId, new RecordRepaymentRequest
         {
             FromUserId = payment.FromUserId,
             ToUserId = payment.ToUserId,
