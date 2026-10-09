@@ -334,7 +334,7 @@
     private string? _failedMerchantLogoUrl;
 
     private bool HasUsableMerchantLogo => details?.MerchantLogoUrl is { } logo
-        && !string.IsNullOrWhiteSpace(logo)
+        && MerchantLogos.IsAllowed(logo)
         && logo != _failedMerchantLogoUrl;
 
     private void HandleMerchantLogoError() => _failedMerchantLogoUrl = details?.MerchantLogoUrl;

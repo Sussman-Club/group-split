@@ -4,6 +4,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders;
 using GroupSplit.Seeder.Seeders.DTOs;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -34,6 +35,10 @@ public class MerchantSeederTest
         Assert.NotNull(merchant);
         Assert.Equal("Lidl", merchant.Name);
         Assert.Equal("/_content/GroupSplit.App.Shared/merchants/lidl.svg", merchant.LogoUrl);
+
+        // A logo the app would refuse to render is as broken as one that 404s, so every
+        // seeded mark has to be one the host check lets through.
+        Assert.True(MerchantLogos.IsAllowed(merchant.LogoUrl));
     }
 
     [Fact]

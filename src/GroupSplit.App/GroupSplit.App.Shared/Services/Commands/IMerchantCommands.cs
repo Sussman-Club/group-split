@@ -9,7 +9,8 @@ namespace GroupSplit.App.Shared.Services.Commands;
 /// <remarks>
 /// A merchant belongs to nobody -- "Lidl" is not a fact about a group, and two groups that
 /// both shop there share the row -- so unlike a category there is no group to scope these
-/// to and nothing here takes one.
+/// to and nothing here takes one. The API scopes the reads to the caller instead: the
+/// places they already have an expense or an imported bank row at.
 /// <para>
 /// The two reads say nothing when they fail. They feed a type-ahead, and a snackbar per
 /// keystroke on a flaky connection is a stream of them; the field simply offers nothing,
@@ -19,7 +20,10 @@ namespace GroupSplit.App.Shared.Services.Commands;
 /// </remarks>
 public interface IMerchantCommands
 {
-    /// <summary>Places whose name contains <paramref name="search"/>, for a type-ahead.</summary>
+    /// <summary>
+    /// The caller's places whose name contains <paramref name="search"/>, for a type-ahead:
+    /// at most twenty, and only for a search of two characters or more.
+    /// </summary>
     /// <returns>Empty when the read failed; the field offers nothing either way.</returns>
     Task<IReadOnlyList<MerchantResponse>> SearchAsync(string? search, CancellationToken ct = default);
 

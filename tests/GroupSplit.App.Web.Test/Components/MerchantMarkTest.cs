@@ -34,10 +34,10 @@ public class MerchantMarkTest : ComponentTest
         var mark = Render<MerchantMark>(parameters => parameters
             .Add(component => component.PaidByUserName, "Omar Silva")
             .Add(component => component.MerchantName, "Lidl")
-            .Add(component => component.MerchantLogoUrl, "https://logos/lidl.png"));
+            .Add(component => component.MerchantLogoUrl, "https://plaid-merchant-logos.plaid.com/lidl.png"));
 
         var place = mark.Find("img.gs-mark-place");
-        Assert.Equal("https://logos/lidl.png", place.GetAttribute("src"));
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", place.GetAttribute("src"));
 
         // Decorative: the expense is named for the shop beside it, and a screen reader
         // being told "Lidl" twice per row is worse than being told it once.
@@ -48,6 +48,36 @@ public class MerchantMarkTest : ComponentTest
         // to the objection the old arrangement was built on.
         Assert.Equal("OS", mark.Find(".gs-mark-who").TextContent.Trim());
         Assert.Equal("Omar Silva", mark.Find(".gs-mark-who").GetAttribute("title"));
+    }
+
+    /// <summary>
+    /// A stored logo off the provider's image hosts is not loaded: every viewer of the row
+    /// would otherwise be reporting to whoever runs the server it names. The row falls back
+    /// to what a place with no logo looks like.
+    /// </summary>
+    [Theory]
+    [InlineData("https://tracker.example.com/pixel.png")]
+    [InlineData("http://plaid-merchant-logos.plaid.com/lidl.png")]
+    public void A_logo_from_a_host_that_is_not_the_providers_is_not_rendered(string logo)
+    {
+        var mark = Render<MerchantMark>(parameters => parameters
+            .Add(component => component.PaidByUserName, "Omar Silva")
+            .Add(component => component.MerchantName, "Lidl")
+            .Add(component => component.MerchantLogoUrl, logo));
+
+        Assert.Empty(mark.FindAll("img"));
+        Assert.DoesNotContain("tracker.example.com", mark.Markup);
+    }
+
+    [Fact]
+    public void An_inbox_row_with_a_disallowed_logo_shows_the_places_initials()
+    {
+        var mark = Render<MerchantMark>(parameters => parameters
+            .Add(component => component.MerchantName, "Blue Bottle")
+            .Add(component => component.MerchantLogoUrl, "https://tracker.example.com/pixel.png"));
+
+        Assert.Empty(mark.FindAll("img"));
+        Assert.Contains("BB", mark.Markup);
     }
 
     /// <summary>
@@ -64,7 +94,7 @@ public class MerchantMarkTest : ComponentTest
     {
         var badge = Render<MerchantMark>(parameters => parameters
                 .Add(component => component.PaidByUserName, "Omar Silva")
-                .Add(component => component.MerchantLogoUrl, "https://logos/lidl.png"))
+                .Add(component => component.MerchantLogoUrl, "https://plaid-merchant-logos.plaid.com/lidl.png"))
             .Find(".gs-mark-who");
 
         var avatar = Render<Avatar>(parameters => parameters
@@ -120,11 +150,11 @@ public class MerchantMarkTest : ComponentTest
         // decision nobody has made yet. Same tile as a filed row, minus the corner.
         var mark = Render<MerchantMark>(parameters => parameters
             .Add(component => component.MerchantName, "Lidl")
-            .Add(component => component.MerchantLogoUrl, "https://logos/lidl.png"));
+            .Add(component => component.MerchantLogoUrl, "https://plaid-merchant-logos.plaid.com/lidl.png"));
 
         Assert.Empty(mark.FindAll(".gs-avatar"));
         Assert.Empty(mark.FindAll(".gs-mark-who"));
-        Assert.Equal("https://logos/lidl.png", mark.Find("img.gs-mark-place").GetAttribute("src"));
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", mark.Find("img.gs-mark-place").GetAttribute("src"));
     }
 
     [Fact]
@@ -162,7 +192,7 @@ public class MerchantMarkTest : ComponentTest
         var mark = Render<MerchantMark>(parameters => parameters
             .Add(component => component.PaidByUserName, "Omar Silva")
             .Add(component => component.MerchantName, "Lidl")
-            .Add(component => component.MerchantLogoUrl, "https://logos/lidl.png"));
+            .Add(component => component.MerchantLogoUrl, "https://plaid-merchant-logos.plaid.com/lidl.png"));
 
         mark.Find("img.gs-mark-place").TriggerEvent("onerror", new EventArgs());
 

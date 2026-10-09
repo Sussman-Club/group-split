@@ -52,16 +52,22 @@ arguments, so this table can go stale and that one cannot.
 
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
-`groups settle`. `bank unlink`, `categories delete`, `split-rules delete`,
-`merchants delete` and `receipts delete` do the same. The roster read also lets
+`groups settle`. `bank unlink`, `categories delete`, `split-rules delete`
+and `receipts delete` do the same. The roster read also lets
 `groups remove-member` refuse before asking: somebody not on it is an error
 straight away rather than a confirmation the server would then refuse. `receipts divide` goes further and
 reads the division itself, so the prompt lists what each person ends up owing rather than
 saying the shares will change -- it is money moving between people's balances, and the
-figures are the thing worth reading before agreeing to them. `merchants update` is the one command whose confirmation is
-conditional on which field is being changed: a merchant belongs to no group, so renaming one
-is felt by every group that has spent there and the prompt carries the count, while giving
-one a logo needs no agreement from anybody.
+figures are the thing worth reading before agreeing to them.
+`merchants update` and `merchants delete` ask nothing: a merchant belongs to no group, so a
+rename, a new logo or a deletion would change what every group that has spent there sees,
+and the server refuses all three for every account (`MERCHANT_EDIT_FORBIDDEN`, exit code 2,
+with a remediation that says so rather than pointing at `auth status`). The commands stay so
+that the refusal comes back with its code. `merchants list` and `merchants show` see only the
+places you already have an expense or an imported bank row at, at most 20 to a listing, and
+`--search` needs at least 2 characters (`MERCHANT_SEARCH_TOO_SHORT`). `merchants create`
+hands back the existing merchant when the name is already taken, and its `--logo-url` has to
+be on the bank provider's logo hosts (`MERCHANT_LOGO_NOT_ALLOWED`).
 `groups settle-up` reads the balances for the same reason, so its confirmation lists the
 repayments it is about to write rather than describing them. `settle pay` reads the
 cross-group plan for the same reason and one more: the payment it records can span two

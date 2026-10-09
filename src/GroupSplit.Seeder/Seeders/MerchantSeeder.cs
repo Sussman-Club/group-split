@@ -3,6 +3,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
+using GroupSplit.Shared;
 
 namespace GroupSplit.Seeder.Seeders;
 
@@ -35,13 +36,6 @@ public class MerchantSeeder(
     ISeedDataSource<MerchantSeedDto> source)
     : AppDbContextSeeder<Merchant, MerchantSeedDto>(db, source, logger)
 {
-    /// <summary>
-    /// Where the shared project's static files are served from, in every client: the web
-    /// app and the MAUI one both address a razor class library's <c>wwwroot</c> this way.
-    /// Root-relative, so it resolves against whichever of them is doing the rendering.
-    /// </summary>
-    private const string MarkPath = "/_content/GroupSplit.App.Shared/merchants";
-
     protected override Task<Merchant?> MapAsync(MerchantSeedDto dto, CancellationToken ct = default)
     {
         var name = dto.Name.Trim();
@@ -53,7 +47,9 @@ public class MerchantSeeder(
             // Folded the same way the resolver folds a provider's name, so a real sync that
             // later meets one of these shops finds the seeded row instead of a second one.
             NormalizedName = name.ToLowerInvariant(),
-            LogoUrl = dto.Logo is { Length: > 0 } mark ? $"{MarkPath}/{mark}.svg" : null,
+            // Where the shared project's static files are served from, in every client, and
+            // the one local path a merchant's logo is allowed to name.
+            LogoUrl = dto.Logo is { Length: > 0 } mark ? $"{MerchantLogos.BundledPath}{mark}.svg" : null,
             FirstSeenAt = clock.GetUtcNow().AddDays(-30)
         });
     }

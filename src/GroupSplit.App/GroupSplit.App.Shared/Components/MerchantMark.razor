@@ -1,5 +1,6 @@
 @namespace GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.Shared
 
 @*
     What a row leads with: where the money went, and who paid.
@@ -74,9 +75,11 @@ else
     /// <summary>
     /// Whitespace is no logo. The API sends null for a merchant without one and an empty
     /// string is nobody's URL, so both take the same path rather than rendering an img that
-    /// resolves to this page.
+    /// resolves to this page. Nor is an address off the provider's image hosts: a row
+    /// written before the API checked would otherwise have every viewer's browser load
+    /// whatever it names. See <see cref="MerchantLogos"/>.
     /// </summary>
-    private string? Logo => string.IsNullOrWhiteSpace(MerchantLogoUrl) ? null : MerchantLogoUrl;
+    private string? Logo => MerchantLogos.Usable(MerchantLogoUrl);
 
     private string? _failedLogo;
 
